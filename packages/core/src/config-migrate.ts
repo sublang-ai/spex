@@ -16,8 +16,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isMap, isScalar, parseDocument } from "yaml";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { migrateApplicationFile } from "./app-storage.js";
+import { i18n } from "./i18n.js";
 import type { Document, Pair, Scalar, YAMLMap } from "yaml";
 
+// English, deliberately (core-service-111): this is written into the
+// shared config file itself, which every host and the playbook CLI read,
+// not text the interface shows.
 const MIGRATION_NOTE =
   " Migrated by playbook 3.0.0: the top-level `profiles` map was removed and\n" +
   " each agent now carries its settings inline. The pre-migration file is\n" +
@@ -114,8 +118,12 @@ export function migrateRetiredProfiles(text: string): string | undefined {
       const settings = profileSettings(named);
       if (settings === undefined) {
         throw new Error(
-          `${path.join(".")}.profile names "${String(named)}", which no ` +
-            "profiles entry defines",
+          i18n._({
+            id: "{path}.profile names \"{name}\", which no profiles entry defines",
+            comment:
+              "Config migration failure; `profile` and `profiles` are the file's own retired field names",
+            values: { path: path.join("."), name: String(named) },
+          }),
         );
       }
       // Fill the block from its profile in place — never rebuild it —
@@ -187,9 +195,12 @@ export function migrateConfigFileIfRetired(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `cannot migrate the retired profiles config at ${configPath}: ` +
-        `${message} — edit it by hand: each agent takes its own ` +
-        "adapter, model, effort, and permissions",
+      i18n._({
+        id: "cannot migrate the retired profiles config at {path}: {cause} — edit it by hand: each agent takes its own adapter, model, effort, and permissions",
+        comment:
+          "Config migration failure; `cause` is the migration's own reason and the field names are the config file's",
+        values: { path: configPath, cause: message },
+      }),
     );
   }
   if (migrated === undefined) return { migrated: false };

@@ -24,6 +24,7 @@ import { createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
 import { StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
+import { i18n } from "./i18n.js";
 import { sanitizeRecord } from "./stream-fold.js";
 import type {
   ClarificationQuestion,
@@ -74,49 +75,153 @@ function need(condition: unknown, file: string, reason: string): asserts conditi
 }
 
 function closedKeys(value: Record<string, unknown>, required: string[], optional: string[], file: string): void {
+  // The field names are the file format's own and stay as they are;
+  // one message per case, so neither reads as a fragment.
+  const reason = optional.length
+    ? i18n._({
+        id: "expected fields {required}; optional {optional}",
+        values: { required: required.join(", "), optional: optional.join(", ") },
+        comment: "Diagnostic for a damaged draft file: the fields it must and may carry, named as the file names them",
+      })
+    : i18n._({
+        id: "expected fields {required}",
+        values: { required: required.join(", ") },
+        comment: "Diagnostic for a damaged draft file: the fields it must carry, named as the file names them",
+      });
   need(
     required.every((key) => Object.hasOwn(value, key)) &&
       Object.keys(value).every((key) => required.includes(key) || optional.includes(key)),
     file,
-    `expected fields ${required.join(", ")}${optional.length ? `; optional ${optional.join(", ")}` : ""}`,
+    reason,
   );
 }
 
 function validateQuestion(value: unknown, file: string): asserts value is ClarificationQuestion {
-  need(isObject(value), file, "invalid clarification question");
+  const invalid = (): string =>
+    i18n._({
+      id: "invalid clarification question",
+      comment: "Diagnostic for a damaged draft file: one of the compiler's recorded questions will not read",
+    });
+  need(isObject(value), file, invalid());
   closedKeys(value, ["id", "question", "reason", "evidence"], ["choices"], file);
-  need(isText(value.id) && isText(value.question) && isText(value.reason) && isText(value.evidence), file, "invalid clarification question");
-  if (value.choices !== undefined) need(isStringArray(value.choices), file, "invalid clarification choices");
+  need(isText(value.id) && isText(value.question) && isText(value.reason) && isText(value.evidence), file, invalid());
+  if (value.choices !== undefined) {
+    need(
+      isStringArray(value.choices),
+      file,
+      i18n._({
+        id: "invalid clarification choices",
+        comment: "Diagnostic for a damaged draft file: a recorded question's answer choices will not read",
+      }),
+    );
+  }
 }
 
 /** Validate one `draft.json` document against storage-23 exactly. */
 export function parseStoredDraft(value: unknown, file: string, id?: string): StoredDraft {
-  need(isObject(value), file, "expected an object");
+  // Each reason is the reader's: it stands in the draft's row as the
+  // diagnostic that blocks it (playbook-library-70, DR-079).
+  const invalidCompile = (): string =>
+    i18n._({
+      id: "invalid compile",
+      comment: "Diagnostic for a damaged draft file: the recorded compile will not read",
+    });
+  const invalidProposal = (): string =>
+    i18n._({
+      id: "invalid proposal",
+      comment: "Diagnostic for a damaged draft file: the agent's recorded registration proposal will not read",
+    });
+  need(
+    isObject(value),
+    file,
+    i18n._({ id: "expected an object", comment: "Diagnostic for a damaged file: its top level is not an object" }),
+  );
   closedKeys(value, ["v", "id", "createdAt", "touchedAt", "queued", "failures"], ["compile", "proposal"], file);
-  need(value.v === 1, file, "unsupported draft version");
-  need(isText(value.id) && DRAFT_ID.test(value.id) && (id === undefined || value.id === id), file, "draft id disagrees with its directory");
-  need(isTimestamp(value.createdAt) && isTimestamp(value.touchedAt), file, "invalid timestamps");
-  need(isStringArray(value.queued), file, "invalid queue");
-  need(Number.isSafeInteger(value.failures) && (value.failures as number) >= 0, file, "invalid failure count");
+  need(
+    value.v === 1,
+    file,
+    i18n._({ id: "unsupported draft version", comment: "Diagnostic for a draft file this Spex cannot read" }),
+  );
+  need(
+    isText(value.id) && DRAFT_ID.test(value.id) && (id === undefined || value.id === id),
+    file,
+    i18n._({
+      id: "draft id disagrees with its directory",
+      comment: "Diagnostic for a damaged draft file: the id it names is not the one its folder does",
+    }),
+  );
+  need(
+    isTimestamp(value.createdAt) && isTimestamp(value.touchedAt),
+    file,
+    i18n._({ id: "invalid timestamps", comment: "Diagnostic for a damaged draft file: its recorded times will not read" }),
+  );
+  need(
+    isStringArray(value.queued),
+    file,
+    i18n._({ id: "invalid queue", comment: "Diagnostic for a damaged draft file: its queued messages will not read" }),
+  );
+  need(
+    Number.isSafeInteger(value.failures) && (value.failures as number) >= 0,
+    file,
+    i18n._({
+      id: "invalid failure count",
+      comment: "Diagnostic for a damaged draft file: its count of consecutive failed compiles will not read",
+    }),
+  );
   if (value.compile !== undefined) {
     const compile = value.compile;
-    need(isObject(compile), file, "invalid compile");
+    need(isObject(compile), file, invalidCompile());
     closedKeys(compile, ["at", "by", "outcome"], ["phase", "output", "questions", "roles", "sourceSha256"], file);
-    need(isTimestamp(compile.at) && (compile.by === "boss" || compile.by === "agent") && OUTCOMES.includes(String(compile.outcome)), file, "invalid compile");
-    need(compile.phase === undefined || isText(compile.phase), file, "invalid compile phase");
-    need(compile.output === undefined || isText(compile.output), file, "invalid compile output");
-    need(compile.roles === undefined || isStringArray(compile.roles), file, "invalid compile roles");
-    need(compile.sourceSha256 === undefined || isText(compile.sourceSha256), file, "invalid source digest");
+    need(isTimestamp(compile.at) && (compile.by === "boss" || compile.by === "agent") && OUTCOMES.includes(String(compile.outcome)), file, invalidCompile());
+    need(
+      compile.phase === undefined || isText(compile.phase),
+      file,
+      i18n._({
+        id: "invalid compile phase",
+        comment: "Diagnostic for a damaged draft file: the pipeline stage the compile reached will not read",
+      }),
+    );
+    need(
+      compile.output === undefined || isText(compile.output),
+      file,
+      i18n._({
+        id: "invalid compile output",
+        comment: "Diagnostic for a damaged draft file: the compiler's kept output will not read",
+      }),
+    );
+    need(
+      compile.roles === undefined || isStringArray(compile.roles),
+      file,
+      i18n._({
+        id: "invalid compile roles",
+        comment: "Diagnostic for a damaged draft file: the roles the compile derived will not read",
+      }),
+    );
+    need(
+      compile.sourceSha256 === undefined || isText(compile.sourceSha256),
+      file,
+      i18n._({
+        id: "invalid source digest",
+        comment: "Diagnostic for a damaged draft file: the digest of the compiled source will not read",
+      }),
+    );
     if (compile.questions !== undefined) {
-      need(Array.isArray(compile.questions), file, "invalid clarification questions");
+      need(
+        Array.isArray(compile.questions),
+        file,
+        i18n._({
+          id: "invalid clarification questions",
+          comment: "Diagnostic for a damaged draft file: the compiler's recorded questions will not read",
+        }),
+      );
       for (const question of compile.questions) validateQuestion(question, file);
     }
   }
   if (value.proposal !== undefined) {
     const proposal = value.proposal;
-    need(isObject(proposal), file, "invalid proposal");
+    need(isObject(proposal), file, invalidProposal());
     closedKeys(proposal, ["command", "intent", "players"], [], file);
-    need(isText(proposal.command) && isText(proposal.intent) && isObject(proposal.players) && Object.values(proposal.players).every(isText), file, "invalid proposal");
+    need(isText(proposal.command) && isText(proposal.intent) && isObject(proposal.players) && Object.values(proposal.players).every(isText), file, invalidProposal());
   }
   return value as unknown as StoredDraft;
 }
@@ -288,7 +393,15 @@ export class DraftStore {
     const current = existsSync(path) ? readFileSync(path) : undefined;
     const currentVersion = current ? sourceVersion(current) : undefined;
     if (baseVersion !== undefined && baseVersion !== currentVersion) {
-      return { ok: false, code: "conflict", message: `${id}.md changed on disk since it was read` };
+      return {
+        ok: false,
+        code: "conflict",
+        message: i18n._({
+          id: "{file} changed on disk since it was read",
+          values: { file: `${id}.md` },
+          comment: "Refusal: the file moved under the write the reader asked for",
+        }),
+      };
     }
     const next = Buffer.from(content, "utf8");
     if (current && next.equals(current)) {

@@ -4,8 +4,9 @@
 // The Space surface's words and groupings (DR-057): the home's path
 // in the reader's shorthand, a remote with no user in it, the kinds'
 // order and labels (space-7), the sync steps' names (space-12), the
-// catalog's sharing marks and the families that stay on this device
-// (space-23, space-25). Pure functions; the surface renders them.
+// catalog's sharing marks, each entry's family word, and the families
+// that stay on this device (space-23, space-25). Pure functions; the
+// surface renders them.
 //
 // Every word here is a message of the catalog (localization-4), so a
 // table of phrases holds thunks read at render — a table of strings
@@ -145,6 +146,50 @@ export const SHARING_LABELS: Record<SpaceEntry["sync"], () => string> = {
   local: () => i18n._({ id: "Stays here", comment: "entry mark: this file never leaves the device" }),
   git: () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
 };
+
+/** The word this interface calls each catalog family by, keyed by the
+ * family the core sends (space-23): the core names the family in one
+ * closed English vocabulary the page holds against it (storage-1), so
+ * every comparison stays on that raw value and only the reading passes
+ * through here, whose English is the core's own word. Thunks, never
+ * strings: a table read at module load would freeze the language it
+ * was imported in. */
+export const FAMILY_LABELS: Record<string, () => string> = {
+  "Git data": () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
+  lease: () => i18n._({ id: "lease", comment: "catalog family: the lock naming the process writing now" }),
+  "temporary write": () => i18n._({ id: "temporary write", comment: "catalog family: a copy made while writing" }),
+  "config backup": () => i18n._({ id: "config backup", comment: "catalog family: a copy of the config kept before a write" }),
+  "session bundles": () => i18n._({ id: "session bundles", comment: "catalog family: the folder holding every session's files" }),
+  "session manifest": () => i18n._({ id: "session manifest", comment: "catalog family: one session's manifest file" }),
+  "session records": () => i18n._({ id: "session records", comment: "catalog family: one session's record stream" }),
+  "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
+  "legacy session sidecar": () => i18n._({ id: "legacy session sidecar", comment: "catalog family: a session file an earlier release wrote" }),
+  "project queues": () => i18n._({ id: "project queues", comment: "catalog family: the folder holding the projects' queues" }),
+  "project queue": () => i18n._({ id: "project queue", comment: "catalog family: one project's queue of intents" }),
+  "project registry": () => i18n._({ id: "project registry", comment: "catalog family: the file listing the registered projects" }),
+  Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
+  "playbook library": () => i18n._({ id: "playbook library", comment: "catalog family: the folder holding the playbooks" }),
+  "playbook sources": () => i18n._({ id: "playbook sources", comment: "catalog family: a playbook's source files" }),
+  "playbook output": () => i18n._({ id: "playbook output", comment: "catalog family: a playbook's compiled files" }),
+  "local data": () => i18n._({ id: "local data", comment: "catalog family: the folder of files that stay on this device" }),
+  "local project paths": () => i18n._({ id: "local project paths", comment: "a file family that stays on this device" }),
+  "sync repair marker": () => i18n._({ id: "sync repair marker", comment: "catalog family: the mark of a repair this device acknowledged" }),
+  "migration receipts": () => i18n._({ id: "migration receipts", comment: "catalog family: what an upgrade recorded" }),
+  "migration inputs": () => i18n._({ id: "migration inputs", comment: "catalog family: original files an upgrade kept" }),
+  preferences: () => i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
+  "forge cache": () => i18n._({ id: "forge cache", comment: "a file family that stays on this device" }),
+  "migration record": () => i18n._({ id: "migration record", comment: "catalog family: the home's own migration state" }),
+  "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),
+  "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "catalog family: a folder Spex did not write" }),
+  "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "catalog family: a file Spex did not write" }),
+};
+
+/** The word an entry's family reads as; a family this interface does
+ * not know reads as the core sent it, so a family a later core adds is
+ * never renamed into nonsense. */
+export function familyName(family: string): string {
+  return FAMILY_LABELS[family]?.() ?? family;
+}
 
 /** Every ignored family with its one plain reason (space-25); read at
  * render, never at module load. */

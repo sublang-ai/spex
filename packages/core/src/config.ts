@@ -37,6 +37,7 @@ import {
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
+import { i18n } from "./i18n.js";
 
 import type {
   AdapterName,
@@ -371,6 +372,8 @@ export function playbookPackageRoot(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const entry = resolveModulePath("@sublang/playbook/runtime", env);
+  // English, deliberately (core-service-111): the app ships this
+  // package, so its absence is a broken installation, not the reader's.
   if (!entry) throw new Error("@sublang/playbook is not installed");
   return dirname(dirname(entry));
 }
@@ -475,17 +478,38 @@ function validateAgentBlock(
 ): void {
   for (const key of Object.keys(block)) {
     if (!AGENT_FIELDS.has(key)) {
-      throw new Error(`Unknown config field ${path}.${key}`);
+      throw new Error(
+        i18n._({
+          id: "Unknown config field {field}",
+          comment:
+            "Config error; the field's dotted path is the config file's own",
+          values: { field: `${path}.${key}` },
+        }),
+      );
     }
   }
   if (block.permissions !== undefined) {
     if (!isPlainObject(block.permissions)) {
-      throw new Error(`${path}.permissions must be an object`);
+      throw new Error(
+        i18n._({
+          id: "{path}.permissions must be an object",
+          comment:
+            "Config error; `permissions` is the config file's own field name",
+          values: { path },
+        }),
+      );
     }
     const permissions = block.permissions;
     for (const key of Object.keys(permissions)) {
       if (!PERMISSION_FIELDS.has(key)) {
-        throw new Error(`Unknown config field ${path}.permissions.${key}`);
+        throw new Error(
+          i18n._({
+            id: "Unknown config field {field}",
+            comment:
+              "Config error; the field's dotted path is the config file's own",
+            values: { field: `${path}.permissions.${key}` },
+          }),
+        );
       }
     }
     if (
@@ -493,13 +517,25 @@ function validateAgentBlock(
       permissions.mode !== "auto" &&
       permissions.mode !== "bypass"
     ) {
-      throw new Error(`${path}.permissions.mode must be auto or bypass`);
+      throw new Error(
+        i18n._({
+          id: "{path}.permissions.mode must be auto or bypass",
+          comment:
+            "Config error; `permissions.mode`, `auto` and `bypass` are the config file's own words",
+          values: { path },
+        }),
+      );
     }
     for (const policy of ["fileWrite", "shellExecute", "networkAccess"]) {
       const value = permissions[policy];
       if (value !== undefined && !["allow", "ask", "deny"].includes(String(value))) {
         throw new Error(
-          `${path}.permissions.${policy} must be allow, ask, or deny`,
+          i18n._({
+            id: "{path}.permissions.{policy} must be allow, ask, or deny",
+            comment:
+              "Config error; the policy's name and `allow`/`ask`/`deny` are the config file's own words",
+            values: { path, policy },
+          }),
         );
       }
     }
@@ -508,12 +544,24 @@ function validateAgentBlock(
       (!Array.isArray(permissions.writablePaths) ||
         permissions.writablePaths.some((p) => typeof p !== "string"))
     ) {
-      throw new Error(`${path}.permissions.writablePaths must be a string list`);
+      throw new Error(
+        i18n._({
+          id: "{path}.permissions.writablePaths must be a string list",
+          comment:
+            "Config error; `permissions.writablePaths` is the config file's own field name",
+          values: { path },
+        }),
+      );
     }
   }
   if (block.effort !== undefined && block.reasoningEffort !== undefined) {
     throw new Error(
-      `${path} must not set both effort and its legacy alias reasoningEffort`,
+      i18n._({
+        id: "{path} must not set both effort and its legacy alias reasoningEffort",
+        comment:
+          "Config error; `effort` and `reasoningEffort` are the config file's own field names",
+        values: { path },
+      }),
     );
   }
   // Effort values are validated adapter-scoped in toResolvedAgent,
@@ -543,13 +591,23 @@ export function resolveAgent(
       // Retired with the profiles model (playbook 3.0); the load path
       // migrates old files, so a survivor here is a hand-typed edit.
       throw new Error(
-        `${path}.profile is retired: agents carry their own adapter, model, effort, and permissions`,
+        i18n._({
+          id: "{path}.profile is retired: agents carry their own adapter, model, effort, and permissions",
+          comment:
+            "Config error; `profile`, `adapter`, `model`, `effort` and `permissions` are the config file's own field names",
+          values: { path },
+        }),
       );
     }
     return { ...value };
   }
   throw new Error(
-    `${path} must be an adapter shorthand or an agent block`,
+    i18n._({
+      id: "{path} must be an adapter shorthand or an agent block",
+      comment:
+        "Config error: the value is neither an adapter's name nor a block of agent settings",
+      values: { path },
+    }),
   );
 }
 
@@ -560,9 +618,18 @@ function toResolvedAgent(
   validateAgentBlock(block, path);
   const adapter = block.adapter;
   if (typeof adapter !== "string" || adapter.length === 0) {
-    throw new Error(`${path} must resolve an adapter`);
+    throw new Error(
+      i18n._({
+        id: "{path} must resolve an adapter",
+        comment: "Config error: the agent names no adapter to run on",
+        values: { path },
+      }),
+    );
   }
   if (!(KNOWN_ADAPTERS as readonly string[]).includes(adapter)) {
+    // English, deliberately (core-service-111): the page matches
+    // `Unknown adapter "<name>"` to phrase this failure in its own
+    // words, so these are wire text, not the core's own prose.
     throw new Error(
       `Unknown adapter "${adapter}" for ${path}. Valid adapters: ${KNOWN_ADAPTERS.join(", ")}`,
     );
@@ -579,12 +646,24 @@ function toResolvedAgent(
         ", ",
       );
       throw new Error(
-        `${path}.effort "${effort}" is not supported by the "${adapter}" adapter (valid: ${values})`,
+        i18n._({
+          id: "{path}.effort \"{effort}\" is not supported by the \"{adapter}\" adapter (valid: {values})",
+          comment:
+            "Config error; the effort, the adapter's name and the valid values are the runtime's own words",
+          values: { path, effort, adapter, values },
+        }),
       );
     }
   }
   if (rest.fastMode !== undefined && typeof rest.fastMode !== "boolean") {
-    throw new Error(`${path}.fastMode must be a boolean`);
+    throw new Error(
+      i18n._({
+        id: "{path}.fastMode must be a boolean",
+        comment:
+          "Config error; `fastMode` is the config file's own field name",
+        values: { path },
+      }),
+    );
   }
   return rest as unknown as ResolvedAgent;
 }
@@ -647,23 +726,47 @@ export function isValidRegistryEntry(
 function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (typeof value === "string") {
     if (!PLAYER_ID_PATTERN.test(value)) {
-      throw new Error(`${path} is not a canonical player id`);
+      throw new Error(
+        i18n._({
+          id: "{path} is not a canonical player id",
+          comment: "Config error: a role is bound to a malformed player id",
+          values: { path },
+        }),
+      );
     }
     return { playerId: value };
   }
   if (!isPlainObject(value)) {
-    throw new Error(`${path} must be a player id or a binding block`);
+    throw new Error(
+      i18n._({
+        id: "{path} must be a player id or a binding block",
+        comment: "Config error: a role's binding is neither form",
+        values: { path },
+      }),
+    );
   }
   const allowed = new Set(["player", "model", "effort", "fastMode"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
     throw new Error(
-      `${path}.${key} is not a role binding key: adapter, permissions, instruction and workspace belong to the session player`,
+      i18n._({
+        id: "{path}.{key} is not a role binding key: adapter, permissions, instruction and workspace belong to the session player",
+        comment:
+          "Config error; the key and `adapter`/`permissions`/`instruction`/`workspace` are the config file's own field names",
+        values: { path, key },
+      }),
     );
   }
   const playerId = value.player;
   if (typeof playerId !== "string" || !PLAYER_ID_PATTERN.test(playerId)) {
-    throw new Error(`${path}.player must name a canonical player id`);
+    throw new Error(
+      i18n._({
+        id: "{path}.player must name a canonical player id",
+        comment:
+          "Config error; `player` is the config file's own field name",
+        values: { path },
+      }),
+    );
   }
   const tuning = (key: "model" | "effort"): string | false | undefined => {
     const raw = value[key];
@@ -673,14 +776,26 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     if (raw === false) return false;
     if (typeof raw === "string" && raw.length > 0) return raw;
     throw new Error(
-      `${path}.${key} must be a string or false (the provider default)`,
+      i18n._({
+        id: "{path}.{key} must be a string or false (the provider default)",
+        comment:
+          "Config error; `key` is the config file's own field name and `false` its own value",
+        values: { path, key },
+      }),
     );
   };
   const fastMode = value.fastMode;
   if (fastMode !== undefined && typeof fastMode !== "boolean") {
     // Unlike model and effort, fast mode carries no provider-default
     // sentinel: omission inherits the player's, `false` is a literal request.
-    throw new Error(`${path}.fastMode must be a boolean`);
+    throw new Error(
+      i18n._({
+        id: "{path}.fastMode must be a boolean",
+        comment:
+          "Config error; `fastMode` is the config file's own field name",
+        values: { path },
+      }),
+    );
   }
   return {
     playerId,
@@ -713,23 +828,44 @@ export async function composeConfig(
   configPath?: string,
 ): Promise<ComposedConfig> {
   if (!isPlainObject(top)) {
-    throw new Error("config must be a YAML mapping");
+    throw new Error(
+      i18n._({
+        id: "config must be a YAML mapping",
+        comment: "Config error: the file's top level is not a mapping",
+      }),
+    );
   }
 
   if (top.profiles !== undefined) {
     // The load path migrates profiles-era files (DR-019); a map
     // arriving here came through an edit or a raw compose.
     throw new Error(
-      "profiles is retired (playbook 3.0): agents carry their settings inline",
+      i18n._({
+        id: "profiles is retired (playbook 3.0): agents carry their settings inline",
+        comment:
+          "Config error; `profiles` is the config file's own retired field name",
+      }),
     );
   }
 
   if (!isPlainObject(top.playbooks)) {
-    throw new Error("playbooks must be an object");
+    throw new Error(
+      i18n._({
+        id: "playbooks must be an object",
+        comment:
+          "Config error; `playbooks` is the config file's own field name",
+      }),
+    );
   }
   const playbookBlocks = top.playbooks;
   if (Object.keys(playbookBlocks).length === 0) {
-    throw new Error("playbooks must enable at least one playbook");
+    throw new Error(
+      i18n._({
+        id: "playbooks must enable at least one playbook",
+        comment:
+          "Config error; `playbooks` is the config file's own field name and stays as it is",
+      }),
+    );
   }
 
   const captainBlock = resolveAgent(top.captain, "captain");
@@ -737,7 +873,13 @@ export async function composeConfig(
     typeof captainBlock.adapter !== "string" ||
     captainBlock.adapter.length === 0
   ) {
-    throw new Error("captain must resolve an adapter");
+    throw new Error(
+      i18n._({
+        id: "captain must resolve an adapter",
+        comment:
+          "Config error; `captain` is the config file's own field name",
+      }),
+    );
   }
   const captainAgent = toResolvedAgent(captainBlock, "captain");
 
@@ -757,18 +899,32 @@ export async function composeConfig(
   const sessionPlayers = new Map<string, ResolvedAgent>();
   if (top.players !== undefined) {
     if (!isPlainObject(top.players)) {
-      throw new Error("players must be an object");
+      throw new Error(
+        i18n._({
+          id: "players must be an object",
+          comment:
+            "Config error; `players` is the config file's own field name",
+        }),
+      );
     }
     for (const [playerId, value] of Object.entries(top.players)) {
       const path = `players.${playerId}`;
       if (!PLAYER_ID_PATTERN.test(playerId)) {
         throw new Error(
-          `${path} is not a canonical player id (lowercase segments, dots optional)`,
+          i18n._({
+            id: "{path} is not a canonical player id (lowercase segments, dots optional)",
+            comment: "Config error: a session player's id is malformed",
+            values: { path },
+          }),
         );
       }
       if (playerId === RESERVED_CAPTAIN_ROLE_ID) {
         throw new Error(
-          `players.captain is reserved for the session Captain, which is configured at the top level`,
+          i18n._({
+            id: "players.captain is reserved for the session Captain, which is configured at the top level",
+            comment:
+              "Config error; `players.captain` is the config file's own field name",
+          }),
         );
       }
       const resolved = resolveAgent(value, path);
@@ -776,7 +932,13 @@ export async function composeConfig(
         typeof resolved.adapter !== "string" ||
         resolved.adapter.length === 0
       ) {
-        throw new Error(`${path} must resolve an adapter`);
+        throw new Error(
+          i18n._({
+            id: "{path} must resolve an adapter",
+            comment: "Config error: the agent names no adapter to run on",
+            values: { path },
+          }),
+        );
       }
       sessionPlayers.set(playerId, toResolvedAgent(resolved, path));
     }
@@ -793,12 +955,26 @@ export async function composeConfig(
 
   for (const [id, blockValue] of Object.entries(playbookBlocks)) {
     if (!isPlainObject(blockValue)) {
-      throw new Error(`playbooks.${id} must be an object`);
+      throw new Error(
+        i18n._({
+          id: "playbooks.{id} must be an object",
+          comment:
+            "Config error; `playbooks` is the config file's own field name and the id its key",
+          values: { id },
+        }),
+      );
     }
     const block = blockValue;
     const configuredFrom = block.from;
     if (typeof configuredFrom !== "string" || configuredFrom.length === 0) {
-      throw new Error(`playbooks.${id}.from must be a module specifier`);
+      throw new Error(
+        i18n._({
+          id: "playbooks.{id}.from must be a module specifier",
+          comment:
+            "Config error; `playbooks.<id>.from` is the config file's own field name",
+          values: { id },
+        }),
+      );
     }
 
     const from = configPath ? resolveConfigModule(configuredFrom, configPath) : configuredFrom;
@@ -808,13 +984,23 @@ export async function composeConfig(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `playbooks.${id}.from "${from}" failed to import: ${message}`,
+        i18n._({
+          id: "playbooks.{id}.from \"{from}\" failed to import: {message}",
+          comment:
+            "Config error; `message` is the import failure's own words, relayed",
+          values: { id, from, message },
+        }),
       );
     }
     const entry = (moduleValue as { default?: unknown } | undefined)?.default;
     if (!isValidRegistryEntry(entry)) {
       throw new Error(
-        `playbooks.${id}.from "${from}" exposes no valid registry entry`,
+        i18n._({
+          id: "playbooks.{id}.from \"{from}\" exposes no valid registry entry",
+          comment:
+            "Config error: the module the config names is no compiled playbook",
+          values: { id, from },
+        }),
       );
     }
     // File-path registries are Spex-generated bundles; one without the
@@ -828,16 +1014,32 @@ export async function composeConfig(
         REGISTRY_CONTRACT
     ) {
       throw new Error(
-        `playbooks.${id}.from "${from}" was generated by an older Spex toolchain; recompile "${id}" in the Playbooks surface to re-enable it`,
+        i18n._({
+          id: "playbooks.{id}.from \"{from}\" was generated by an older Spex toolchain; recompile \"{id}\" in the Playbooks surface to re-enable it",
+          comment:
+            "Config error; \"the Playbooks surface\" is the app's own Library surface",
+          values: { id, from },
+        }),
       );
     }
     if (entry.id !== id) {
       throw new Error(
-        `playbooks.${id} key must equal the module manifest id "${entry.id}"`,
+        i18n._({
+          id: "playbooks.{id} key must equal the module manifest id \"{manifestId}\"",
+          comment:
+            "Config error: the key enabling a playbook differs from the id its module declares",
+          values: { id, manifestId: entry.id },
+        }),
       );
     }
     if (seenIds.has(entry.id)) {
-      throw new Error(`duplicate playbook id "${entry.id}"`);
+      throw new Error(
+        i18n._({
+          id: "duplicate playbook id \"{playbookId}\"",
+          comment: "Config error: two entries enable the same playbook",
+          values: { playbookId: entry.id },
+        }),
+      );
     }
     seenIds.add(entry.id);
 
@@ -847,13 +1049,25 @@ export async function composeConfig(
         : undefined;
     const command = commandOverride ?? entry.command;
     if (seenCommands.has(command)) {
-      throw new Error(`duplicate effective command "${command}"`);
+      throw new Error(
+        i18n._({
+          id: "duplicate effective command \"{command}\"",
+          comment:
+            "Config error: two playbooks answer to the same slash command",
+          values: { command },
+        }),
+      );
     }
     seenCommands.add(command);
 
     if (entry.requiredRoleIds.includes(RESERVED_CAPTAIN_ROLE_ID)) {
       throw new Error(
-        `playbooks.${id} requires local role "captain", which is reserved for the tmux-play Captain`,
+        i18n._({
+          id: "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain",
+          comment:
+            "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
+          values: { id },
+        }),
       );
     }
 
@@ -862,19 +1076,33 @@ export async function composeConfig(
     // the launcher's own wording rather than a paraphrase.
     if (block.players !== undefined) {
       throw new Error(
-        `playbooks.${id}.players was removed in the explicit-session-player major release: ` +
-          "define stable ids in top-level players and bind them explicitly under " +
-          "playbooks.<id>.roles; automatic migration would choose which prior " +
-          "conversations share a session",
+        i18n._({
+          id: "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session",
+          comment:
+            "Config error; `players`, `playbooks.<id>.roles` are the config file's own field names",
+          values: { id },
+        }),
       );
     }
     if (!isPlainObject(block.roles)) {
-      throw new Error(`playbooks.${id}.roles must be an object`);
+      throw new Error(
+        i18n._({
+          id: "playbooks.{id}.roles must be an object",
+          comment:
+            "Config error; `playbooks.<id>.roles` is the config file's own field name",
+          values: { id },
+        }),
+      );
     }
     const roleBlocks = block.roles;
     if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
       throw new Error(
-        `playbooks.${id}.roles.captain binds local role "captain", which is reserved for the tmux-play Captain`,
+        i18n._({
+          id: "playbooks.{id}.roles.captain binds local role \"captain\", which is reserved for the tmux-play Captain",
+          comment:
+            "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
+          values: { id },
+        }),
       );
     }
     // Bindings cover requiredRoleIds exactly: a missing role has no
@@ -884,10 +1112,37 @@ export async function composeConfig(
     const missing = entry.requiredRoleIds.filter((role) => !(role in roleBlocks));
     const extra = bound.filter((role) => !required.has(role));
     if (missing.length > 0 || extra.length > 0) {
+      // The two clauses are messages of their own, so a language can
+      // punctuate its own list (core-service-111); English is unchanged.
+      const listed = (roles: string[]): string =>
+        roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
       throw new Error(
-        `playbooks.${id}.roles must exactly cover requiredRoleIds` +
-          (missing.length > 0 ? `; missing ${missing.join(", ")}` : "") +
-          (extra.length > 0 ? `; unknown ${extra.join(", ")}` : ""),
+        i18n._({
+          id: "playbooks.{id}.roles must exactly cover requiredRoleIds{missing}{unknown}",
+          comment:
+            "Config error; `requiredRoleIds` is the manifest's own field name, and the two clauses are themselves messages",
+          values: {
+            id,
+            missing:
+              missing.length > 0
+                ? i18n._({
+                    id: "; missing {roles}",
+                    comment:
+                      "Clause of the role-coverage config error: the roles no binding names",
+                    values: { roles: listed(missing) },
+                  })
+                : "",
+            unknown:
+              extra.length > 0
+                ? i18n._({
+                    id: "; unknown {roles}",
+                    comment:
+                      "Clause of the role-coverage config error: the bound roles the manifest never declares",
+                    values: { roles: listed(extra) },
+                  })
+                : "",
+          },
+        }),
       );
     }
 
@@ -898,7 +1153,12 @@ export async function composeConfig(
       const binding = resolveBinding(roleBlocks[role], path);
       if (!sessionPlayers.has(binding.playerId)) {
         throw new Error(
-          `${path} names absent session player "${binding.playerId}"`,
+          i18n._({
+            id: "{path} names absent session player \"{playerId}\"",
+            comment:
+              "Config error: a role binds a player the roster does not define",
+            values: { path, playerId: binding.playerId },
+          }),
         );
       }
       roleBindings[role] = binding;
@@ -937,7 +1197,17 @@ export async function composeConfig(
       );
       if (distinct.size < ids.length) {
         throw new Error(
-          `playbooks.${id} runs roles ${set.join(", ")} concurrently, so they must bind to distinct players`,
+          i18n._({
+            id: "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players",
+            comment:
+              "Config error: two roles that run at once are bound to one player",
+            values: {
+              id,
+              roles: set.join(
+                i18n._({ id: ", ", comment: "Separates names listed in one message" }),
+              ),
+            },
+          }),
         );
       }
     }
@@ -1150,11 +1420,30 @@ export function describeRuntimeFault(verdict: RuntimeReadiness): string {
   if (verdict.target.kind === "cli") {
     const steps =
       verdict.repair.steps.length > 0
-        ? `; then: ${verdict.repair.steps.join("; ")}`
+        ? i18n._({
+            id: "; then: {steps}",
+            comment:
+              "Tail of an adapter's requirement: the steps no install performs, in the runtime's own words",
+            values: {
+              steps: verdict.repair.steps.join(
+                i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+              ),
+            },
+          })
         : "";
-    return `${described} — install with: npm install -g ${verdict.repair.spec}${steps}`;
+    return i18n._({
+      id: "{described} — install with: npm install -g {spec}{steps}",
+      comment:
+        "Adapter requirement; `described` is the runtime's own verdict and the npm line is the command to run",
+      values: { described, spec: verdict.repair.spec, steps },
+    });
   }
-  return `${described} — bundled with Spex; reinstall the app, or run npm install in a checkout`;
+  return i18n._({
+    id: "{described} — bundled with Spex; reinstall the app, or run npm install in a checkout",
+    comment:
+      "Adapter requirement; `described` is the runtime's own verdict and `npm install` the command to run",
+    values: { described },
+  });
 }
 
 // DR-024: availability is cligent's own answer — the same load a session
@@ -1194,8 +1483,15 @@ export async function checkAdapterRuntime(
     usable: false,
     requirement:
       faults.length > 0
-        ? faults.join("; ")
-        : `the ${adapter} runtime failed to load — reinstall the app, or run npm install in a checkout`,
+        ? faults.join(
+            i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+          )
+        : i18n._({
+            id: "the {adapter} runtime failed to load — reinstall the app, or run npm install in a checkout",
+            comment:
+              "Adapter requirement; the adapter's name and `npm install` stay as they are",
+            values: { adapter },
+          }),
   };
 }
 
@@ -1221,7 +1517,7 @@ export async function checkAdapterReadiness(
       Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
     if (!credentialReady) {
       faults.push(
-        "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY",
+        i18n._("sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"),
       );
     }
   } else if (adapter === "codex") {
@@ -1229,12 +1525,22 @@ export async function checkAdapterReadiness(
       Boolean(env.OPENAI_API_KEY) || existsSync(join(home, ".codex"));
     if (!credentialReady) {
       faults.push(
-        "sign in by running codex in a terminal, or set OPENAI_API_KEY",
+        i18n._({
+          id: "sign in by running codex in a terminal, or set OPENAI_API_KEY",
+          comment:
+            "Adapter requirement; `codex` is the command to run and OPENAI_API_KEY an environment variable",
+        }),
       );
     }
   }
   if (faults.length > 0) {
-    return { adapter, ready: false, requirement: faults.join("; ") };
+    return {
+      adapter,
+      ready: false,
+      requirement: faults.join(
+        i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+      ),
+    };
   }
   // The null class survives only over a usable runtime (settings-14): no
   // credential rule exists, so the UI shows verify-yourself guidance.

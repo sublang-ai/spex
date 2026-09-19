@@ -1469,6 +1469,11 @@ msgstr "Config {status} — open Settings"
 msgid "Config {status} →"
 msgstr "Config {status} →"
 
+#. catalog family: a copy of the config kept before a write
+#: src/lib/space.ts
+msgid "config backup"
+msgstr "config backup"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "config backups and temporary files"
@@ -2251,6 +2256,7 @@ msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
 #. a file family that stays on this device
+#. a file family that stays on this device
 #: src/lib/space.ts
 msgid "forge cache"
 msgstr "forge cache"
@@ -2304,6 +2310,7 @@ msgstr "From the remote ({count})"
 msgid "Gears"
 msgstr "Gears"
 
+#. entry mark: the repository's own files
 #. entry mark: the repository's own files
 #. entry mark: the repository's own files
 #: src/components/SpaceExplorer.tsx
@@ -2629,10 +2636,20 @@ msgstr "Last active {when}"
 msgid "last output {age}"
 msgstr "last output {age}"
 
+#. catalog family: the lock naming the process writing now
+#: src/lib/space.ts
+msgid "lease"
+msgstr "lease"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "leases and locks"
+
+#. catalog family: a session file an earlier release wrote
+#: src/lib/space.ts
+msgid "legacy session sidecar"
+msgstr "legacy session sidecar"
 
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
@@ -2686,6 +2703,12 @@ msgstr "Loading…"
 msgid "Local changes ({count})"
 msgstr "Local changes ({count})"
 
+#. catalog family: the folder of files that stay on this device
+#: src/lib/space.ts
+msgid "local data"
+msgstr "local data"
+
+#. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "local project paths"
@@ -2734,10 +2757,25 @@ msgstr "May hold provider tokens — not shown"
 msgid "Message the Captain…"
 msgstr "Message the Captain…"
 
+#. catalog family: original files an upgrade kept
+#: src/lib/space.ts
+msgid "migration inputs"
+msgstr "migration inputs"
+
+#. catalog family: what an upgrade recorded
+#: src/lib/space.ts
+msgid "migration receipts"
+msgstr "migration receipts"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "migration receipts and inputs"
 msgstr "migration receipts and inputs"
+
+#. catalog family: the home's own migration state
+#: src/lib/space.ts
+msgid "migration record"
+msgstr "migration record"
 
 #: src/components/LibrarySurface.tsx
 msgid "missing stages: {stages}"
@@ -3011,6 +3049,16 @@ msgstr "not a repository"
 #: src/components/SpaceSurface.tsx
 msgid "Not a repository yet"
 msgstr "Not a repository yet"
+
+#. catalog family: a file Spex did not write
+#: src/lib/space.ts
+msgid "Not a Spex file"
+msgstr "Not a Spex file"
+
+#. catalog family: a folder Spex did not write
+#: src/lib/space.ts
+msgid "Not a Spex folder"
+msgstr "Not a Spex folder"
 
 #: src/components/SpaceSync.tsx
 msgid "Not checked yet"
@@ -3373,6 +3421,21 @@ msgstr "Playbook"
 msgid "Playbook id"
 msgstr "Playbook id"
 
+#. catalog family: the folder holding the playbooks
+#: src/lib/space.ts
+msgid "playbook library"
+msgstr "playbook library"
+
+#. catalog family: a playbook's compiled files
+#: src/lib/space.ts
+msgid "playbook output"
+msgstr "playbook output"
+
+#. catalog family: a playbook's source files
+#: src/lib/space.ts
+msgid "playbook sources"
+msgstr "playbook sources"
+
 #. tooltip: which workflow the parked run belongs to
 #: src/components/ParkedRun.tsx
 msgid "playbook: {playbookId}"
@@ -3411,6 +3474,7 @@ msgstr "PR #{ref} ↗"
 msgid "Prefer your own?"
 msgstr "Prefer your own?"
 
+#. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "preferences"
@@ -3451,6 +3515,21 @@ msgstr "Project"
 msgid "Project path"
 msgstr "Project path"
 
+#. catalog family: one project's queue of intents
+#: src/lib/space.ts
+msgid "project queue"
+msgstr "project queue"
+
+#. catalog family: the folder holding the projects' queues
+#: src/lib/space.ts
+msgid "project queues"
+msgstr "project queues"
+
+#. catalog family: the file listing the registered projects
+#: src/lib/space.ts
+msgid "project registry"
+msgstr "project registry"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -3482,6 +3561,7 @@ msgstr "provider default"
 msgid "Provider default"
 msgstr "Provider default"
 
+#. a file family that stays on this device
 #. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
@@ -4133,9 +4213,19 @@ msgstr "sent to the agent"
 msgid "Session"
 msgstr "Session"
 
+#. catalog family: the folder holding every session's files
+#: src/lib/space.ts
+msgid "session bundles"
+msgstr "session bundles"
+
 #: src/components/RunView.tsx
 msgid "Session is in use elsewhere"
 msgstr "Session is in use elsewhere"
+
+#. catalog family: one session's manifest file
+#: src/lib/space.ts
+msgid "session manifest"
+msgstr "session manifest"
 
 #: src/components/RunView.tsx
 msgid "Session ownership is unknown · controls are unavailable"
@@ -4156,6 +4246,11 @@ msgstr "Session ownership must be idle before sending a message."
 #: src/components/SettingsSurface.tsx
 msgid "Session players"
 msgstr "Session players"
+
+#. catalog family: one session's record stream
+#: src/lib/space.ts
+msgid "session records"
+msgstr "session records"
 
 #: src/state/reducer.ts
 msgid "session shut down"
@@ -4192,6 +4287,7 @@ msgstr "Setting"
 msgid "Setting up…"
 msgstr "Setting up…"
 
+#. catalog family: the shared config the Settings surface edits
 #: src/components/NavRail.tsx
 #: src/components/SettingsSurface.tsx
 #: src/lib/space.ts
@@ -4562,10 +4658,20 @@ msgstr "Switch to a project…"
 msgid "Sync"
 msgstr "Sync"
 
+#. catalog family: the mark of a repair this device acknowledged
+#: src/lib/space.ts
+msgid "sync repair marker"
+msgstr "sync repair marker"
+
 #. one unit's kind: a sync rule file
 #: src/lib/space.ts
 msgid "Sync rule"
 msgstr "Sync rule"
+
+#. catalog family: the files saying what syncs
+#: src/lib/space.ts
+msgid "sync rules"
+msgstr "sync rules"
 
 #: src/lib/space.ts
 msgid "Sync rules"
@@ -4625,6 +4731,11 @@ msgstr "Take this task out of the queue — Undo puts it back"
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "Tell the agent what the playbook does, who does what, and when it is done"
+
+#. catalog family: a copy made while writing
+#: src/lib/space.ts
+msgid "temporary write"
+msgstr "temporary write"
 
 #: src/components/SettingsSurface.tsx
 msgid "Terminal pane theme"

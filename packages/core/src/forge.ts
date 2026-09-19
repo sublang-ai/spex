@@ -11,6 +11,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync } from "node:f
 import { resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { i18n } from "./i18n.js";
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
 
 export type { ForgeItem, ForgeState };
@@ -98,7 +99,10 @@ export async function repoStatus(
     ahead = Number(aheadText) || 0;
   }
   return {
-    branch: branchName || "(unknown)",
+    branch: branchName || i18n._({
+      id: "(unknown)",
+      comment: "Stands in the branch's place where git names none",
+    }),
     dirty: porcelain.code === 0 && porcelain.stdout.trim().length > 0,
     ahead,
     behind,
@@ -192,7 +196,11 @@ export async function seedExampleProject(
   const target = resolvePath(options.path);
   if (existsSync(target) && readdirSync(target).length > 0) {
     throw new Error(
-      `${target} is not empty; the example seeds only a new or empty directory`,
+      i18n._({
+        id: "{target} is not empty; the example seeds only a new or empty directory",
+        values: { target },
+        comment: "Refusal where the folder chosen for the example already holds files",
+      }),
     );
   }
   const corpus = options.corpusDir ?? academyCorpusDir();
@@ -289,8 +297,10 @@ export class GitHubForgeAdapter implements ForgeAdapter {
         authenticated: null,
         issues: [],
         prs: [],
-        guidance:
-          "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+        guidance: i18n._({
+          id: "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+          comment: "Forge guidance where the project names no GitHub origin; the command stays as it is",
+        }),
       };
     }
     const auth = await this.run("gh", ["auth", "status"], projectPath);
@@ -301,8 +311,10 @@ export class GitHubForgeAdapter implements ForgeAdapter {
         repo,
         issues: [],
         prs: [],
-        guidance:
-          "GitHub CLI (gh) is not installed. Install it and run `gh auth login`.",
+        guidance: i18n._({
+          id: "GitHub CLI (gh) is not installed. Install it and run `gh auth login`.",
+          comment: "Forge guidance where the gh command is absent; the command stays as it is",
+        }),
       };
     }
     if (auth.code !== 0) {
@@ -312,7 +324,10 @@ export class GitHubForgeAdapter implements ForgeAdapter {
         repo,
         issues: [],
         prs: [],
-        guidance: "GitHub CLI is not authenticated. Run `gh auth login`.",
+        guidance: i18n._({
+          id: "GitHub CLI is not authenticated. Run `gh auth login`.",
+          comment: "Forge guidance where gh is installed but signed in to nothing; the command stays as it is",
+        }),
       };
     }
     const [issues, prs] = await Promise.all([
@@ -334,7 +349,10 @@ export class GitHubForgeAdapter implements ForgeAdapter {
       issues: issues.code === 0 ? toForgeItems(issues.stdout) : [],
       prs: prs.code === 0 ? toForgeItems(prs.stdout) : [],
       ...(issues.code !== 0 || prs.code !== 0
-        ? { guidance: "Some forge data could not be loaded from gh." }
+        ? { guidance: i18n._({
+            id: "Some forge data could not be loaded from gh.",
+            comment: "Forge guidance where a gh listing failed; gh is the command's own name",
+          }) }
         : {}),
     };
   }

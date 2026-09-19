@@ -27,6 +27,7 @@ import {
   type IntentAct, type RebindProjectOptions, type StorageDiagnostic,
 } from "./app-storage.js";
 import { createRequire } from "node:module";
+import { i18n } from "./i18n.js";
 import { isLanguage, type Language } from "./language.js";
 
 import type {
@@ -65,8 +66,12 @@ export class StateRootHeldError extends Error {
     dir: string,
   ) {
     super(
-      `state root ${dir} is held by pid ${holder.pid} on ${holder.hostname}; ` +
-        "one core serves a root at a time (DR-036)",
+      i18n._({
+        id: "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)",
+        comment:
+          "Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are",
+        values: { dir, pid: holder.pid, host: holder.hostname },
+      }),
     );
     this.name = "StateRootHeldError";
   }
@@ -98,7 +103,11 @@ interface SessionMeta {
   /** Shared directory used to detect removal by another host. */
   originDir?: string;
   continuable?: boolean;
+  /** The shared store's own words for why this session cannot continue. */
   continuationReason?: string;
+  /** The core's own reason instead, phrased when the session is read
+   * (core-service-111) rather than when the scan recorded it. */
+  continuationRecovery?: true;
   recovery?: SessionInfo["recovery"];
 }
 
@@ -156,13 +165,38 @@ function sessionInfo(
       : {}),
     ...(meta.foreign ? { foreign: true } : {}),
     ...(!meta.live && !meta.externalWriter && meta.continuable ? { continuable: true } : {}),
-    ...(meta.externalWriter ? {continuationReason: meta.externalWriter === "active" ? "Session is active in another host" : "Session ownership cannot be verified"}
-      : meta.continuationReason ? { continuationReason: meta.continuationReason } : {}),
+    // Phrased here, when the session is read (core-service-111): a
+    // reason the core owns follows the home's language, while one the
+    // shared store gave is that store's own words, kept as they are.
+    ...(meta.externalWriter
+      ? {continuationReason: meta.externalWriter === "active"
+          ? i18n._({
+              id: "Session is active in another host",
+              comment: "Why a session cannot continue here: another host is writing it",
+            })
+          : i18n._({
+              id: "Session ownership cannot be verified",
+              comment: "Why a session cannot continue here: its lease cannot be read",
+            })}
+      : meta.continuationReason ? { continuationReason: meta.continuationReason }
+      : meta.continuationRecovery ? { continuationReason: i18n._({
+          id: "Recover the interrupted turn with Retry or Discard",
+          comment: "Why a session cannot continue; Retry and Discard are the interface's controls",
+        }) }
+      : {}),
     ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
     ...(agentSettings && Object.keys(agentSettings).length > 0 ? { agentSettings } : {}),
     ...(parked ? { parked } : {}),
   };
 }
+
+/** One diagnostic two scans share, phrased where it is composed. */
+const duplicateQueue = (intentId: string): string =>
+  i18n._({
+    id: "duplicate queue {intentId}",
+    comment: "Storage diagnostic: two act logs queue the same intent",
+    values: { intentId },
+  });
 
 const agentSettingsKey = (sessionId: string): string => `session:${sessionId}:agents`;
 const parkedRunKey = (sessionId: string): string => `session:${sessionId}:parked`;
@@ -328,7 +362,10 @@ export class Store {
       this.meta = existsSync(this.metaFile()) ? readJsonFile(this.metaFile()) as StoreMeta : { version: 0 };
       if (!this.meta || typeof this.meta !== "object" || Array.isArray(this.meta) || ![0, META_VERSION].includes(this.meta.version) || Object.keys(this.meta).some((key) => !["version", "importedLegacy"].includes(key)) ||
           (this.meta.importedLegacy !== undefined && (!Array.isArray(this.meta.importedLegacy) || !this.meta.importedLegacy.every((value) => typeof value === "string")))) {
-        throw new StorageFormatError(this.metaFile(), "unsupported migration metadata; original bytes preserved");
+        throw new StorageFormatError(this.metaFile(), i18n._({
+          id: "unsupported migration metadata; original bytes preserved",
+          comment: "Storage diagnostic: the state root's own metadata file cannot be read",
+        }));
       }
       this.importLegacy(options.legacyDbPath);
       this.meta.version = META_VERSION;
@@ -384,8 +421,12 @@ export class Store {
           // A published lock always carries its owner; an unreadable
           // one is fail-closed — deleting it is the operator's call.
           throw new Error(
-            `state root ${dir} holds an unreadable lock at ${lock}; ` +
-              "delete it if no other Spex core is running (DR-036)",
+            i18n._({
+              id: "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)",
+              comment:
+                "Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are",
+              values: { dir, lock },
+            }),
           );
         }
         // A foreign host's lease is never broken (DR-036): liveness
@@ -403,7 +444,11 @@ export class Store {
         }
       }
     }
-    throw new Error(`state root ${dir} lease could not be acquired`);
+    throw new Error(i18n._({
+      id: "state root {dir} lease could not be acquired",
+      comment: "Startup refusal the shell shows in a dialog",
+      values: { dir },
+    }));
   }
 
   private releaseRootLease(): void {
@@ -471,7 +516,10 @@ export class Store {
     const file = this.intentsFile(projectId);
     if (existsSync(file)) {
       const contents = readFileSync(file, "utf8");
-      if (contents && !contents.endsWith("\n")) throw new StorageFormatError(file, "incomplete final act; restore or remove the incomplete tail before writing");
+      if (contents && !contents.endsWith("\n")) throw new StorageFormatError(file, i18n._({
+        id: "incomplete final act; restore or remove the incomplete tail before writing",
+        comment: "Storage diagnostic: an act log ends mid-line, so nothing may be appended",
+      }));
     }
     parseIntentLog(`${JSON.stringify({ v: 1, ...act })}\n`, projectId, file);
     appendFileSync(
@@ -522,7 +570,11 @@ export class Store {
         readJson<{ entries: Record<string, { at: number; state: ForgeState }> }>(cacheFile)?.entries ?? {},
       )) this.forgeCache.set(projectId, entry);
     } catch (error) {
-      this.cacheProblem = {file:cacheFile, reason:`Unreadable cache; refresh to rebuild: ${String(error)}`, blocking:false};
+      this.cacheProblem = {file:cacheFile, reason:i18n._({
+        id: "Unreadable cache; refresh to rebuild: {cause}",
+        comment: "Storage diagnostic; `cause` is the read failure's own words",
+        values: { cause: String(error) },
+      }), blocking:false};
     }
     for (const file of readdirSync(join(dir, "intents"))) {
       if (!file.endsWith(".jsonl")) continue;
@@ -533,8 +585,8 @@ export class Store {
         for (const [id, intent] of folded.intents) {
           const prior = this.intents.get(id);
           if (prior) {
-            this.intentProblems.set(prior.projectId, {file:this.intentsFile(prior.projectId), reason:`duplicate queue ${id}`, blocking:true});
-            throw new StorageFormatError(filename, `duplicate queue ${id}`);
+            this.intentProblems.set(prior.projectId, {file:this.intentsFile(prior.projectId), reason:duplicateQueue(id), blocking:true});
+            throw new StorageFormatError(filename, duplicateQueue(id));
           }
         }
         for (const [id, intent] of folded.intents) this.intents.set(id, intent);
@@ -633,19 +685,29 @@ export class Store {
     let stored: StoredRecord[];
     let continuable = false;
     let reason: string | undefined;
+    // The core's own reason is kept as a fact and phrased when read.
+    let recoveryReason = false;
     let incompleteAfterSeq: number | undefined;
     let problem: StorageDiagnostic | undefined;
     try {
       const checked = await shared.validate(id);
       if (live === false && this.localSessions.has(id)) return;
       manifest = checked.manifest as SessionManifest;
-      if (manifest.schemaVersion === 7 && !checked.integrityValid) problem = {file:join(shared.sessionsDir, `${id}.json`), reason:checked.reasons.join("; ") || "session checkpoint and replay disagree", blocking:true};
+      if (manifest.schemaVersion === 7 && !checked.integrityValid) problem = {file:join(shared.sessionsDir, `${id}.json`), reason:checked.reasons.join(
+        i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+      ) || i18n._({
+        id: "session checkpoint and replay disagree",
+        comment: "Session diagnostic: the stored checkpoint and its replay do not match",
+      }), blocking:true};
       stored = checked.history.entries.map(({ v: _v, ...entry }) => entry as unknown as StoredRecord);
       // Continuation follows Playbook's own validation (core-service-73,
       // DR-074): unresolved effects are evidence a restored session
       // fences, never a refusal of the core's own invention.
       continuable = manifest.schemaVersion === 7 && checked.resumable && manifest.state === "settled";
-      reason = checked.reasons.join("; ") || (manifest.state === "uncertain" ? "Recover the interrupted turn with Retry or Discard" : undefined);
+      reason = checked.reasons.join(
+        i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+      ) || undefined;
+      recoveryReason = reason === undefined && manifest.state === "uncertain";
       if (checked.history.incomplete || checked.history.pendingTail || (manifest.schemaVersion === 7 && manifest.replay.incomplete)) {
         incompleteAfterSeq = Math.min(checked.history.lastReadableSeq, manifest.schemaVersion === 7 ? manifest.replay.seq : checked.history.lastReadableSeq);
       }
@@ -670,12 +732,19 @@ export class Store {
     if (live === false && this.localSessions.has(id)) return;
     if (manifest.schemaVersion === 7 && !problem) this.untrackedSessions.delete(id);
     if (typeof manifest.cwd !== "string") {
-      this.sessionProblems.set(id, {file:join(shared.sessionsDir, `${id}.json`),reason:"session working directory is missing or invalid",blocking:manifest.schemaVersion === 7});
+      this.sessionProblems.set(id, {file:join(shared.sessionsDir, `${id}.json`),reason:i18n._({
+        id: "session working directory is missing or invalid",
+        comment: "Session diagnostic: the session names no readable project folder",
+      }),blocking:manifest.schemaVersion === 7});
       return;
     }
     const project = this.getProjectByPath(manifest.cwd);
     if (!project) {
-      this.sessionProblems.set(id, problem ?? {file:join(shared.sessionsDir, `${id}.json`), reason:`No project binding for ${manifest.cwd}`, blocking:false, repair:{kind:"directory", directories:[manifest.cwd], sessions:1, key:repairKey(undefined,[manifest.cwd])}});
+      this.sessionProblems.set(id, problem ?? {file:join(shared.sessionsDir, `${id}.json`), reason:i18n._({
+        id: "No project binding for {cwd}",
+        comment: "Session diagnostic: no project on this device holds the session's folder",
+        values: { cwd: manifest.cwd },
+      }), blocking:false, repair:{kind:"directory", directories:[manifest.cwd], sessions:1, key:repairKey(undefined,[manifest.cwd])}});
       const prior = this.sessions.get(id);
       if (prior) {
         this.sessions.delete(id);
@@ -718,7 +787,7 @@ export class Store {
       ...(writer !== "idle" ? {externalWriter: writer} : {}),
       players, initialVisible, originDir: shared.sessionsDir,
       ...(continuable ? { continuable: true } : {}),
-      ...(reason ? { continuationReason: reason } : {}),
+      ...(reason ? { continuationReason: reason } : recoveryReason ? { continuationRecovery: true } : {}),
       ...(manifest.state === "uncertain" && manifest.uncertain
         ? { recovery: {state: "uncertain", input: manifest.uncertain.input} as const } : {}),
       ...(incompleteAfterSeq !== undefined ? { streamIncompleteAfterSeq: incompleteAfterSeq } : {}),
@@ -873,7 +942,10 @@ export class Store {
       // imported state or anything written since.
       const current = readJson<{ v: number; projects: ProjectInfo[] }>(join(dir, "projects.json"));
       const portable = current?.v === 2 ? new ApplicationRegistry(dir) : undefined;
-      if (current && current.v !== 1 && current.v !== 2) throw new StorageFormatError("projects.json", "unsupported registry version");
+      if (current && current.v !== 1 && current.v !== 2) throw new StorageFormatError("projects.json", i18n._({
+        id: "unsupported registry version",
+        comment: "Storage diagnostic: the project registry was written by a later Spex",
+      }));
       const existingProjects = portable ? [...portable.identities.keys()].map((id) => portable.project(id)).filter((project): project is ProjectInfo => project !== undefined) : current?.projects ?? [];
       const takenIds = new Set(portable ? portable.identities.keys() : existingProjects.map((project) => project.id));
       const takenPaths = new Set(existingProjects.map((project) => project.path));
@@ -1007,14 +1079,23 @@ export class Store {
   rebindProject(options: RebindProjectOptions): ProjectInfo {
     let identity = this.application.identities.get(options.id);
     if (options.revision !== undefined) {
+      // English, deliberately (core-service-111): a memory-only core
+      // offers no restore, so this names a programming failure.
       if (!this.dir) throw new Error("restoring a project requires a disk store");
       const revision = execFileSync("git", ["-C", this.dir, "rev-parse", "--verify", `${options.revision}^{commit}`], { encoding: "utf8" }).trim();
       const ancestor = execFileSync("git", ["-C", this.dir, "merge-base", revision, "HEAD"], { encoding: "utf8" }).trim();
-      if (ancestor !== revision) throw new Error("project restoration requires an ancestor of the current branch");
+      if (ancestor !== revision) throw new Error(i18n._({
+        id: "project restoration requires an ancestor of the current branch",
+        comment: "Refusal: the revision chosen to restore a project is not in this history",
+      }));
       const bytes = execFileSync("git", ["-C", this.dir, "show", `${revision}:projects.json`], { encoding: "utf8" });
       identity = parseRegistry(JSON.parse(bytes)).find((project) => project.id === options.id);
     }
-    if (!identity) throw new Error(`project ${options.id} is absent; select its registry revision to restore it`);
+    if (!identity) throw new Error(i18n._({
+      id: "project {projectId} is absent; select its registry revision to restore it",
+      comment: "Refusal: the registry holds no such project at the revision read",
+      values: { projectId: options.id },
+    }));
     const project = this.application.bind(identity, options.path, options.aliases);
     this.refreshProjects();
     return project;
@@ -1023,7 +1104,11 @@ export class Store {
   storageDiagnostics(): StorageDiagnostic[] {
     const reports = [...this.application.diagnostics(), ...this.projectProblems().values(), ...(this.prefsProblem ? [this.prefsProblem] : []), ...(this.cacheProblem ? [this.cacheProblem] : [])];
     const absent = new Set([...this.intents.values()].filter((intent) => !this.application.identities.has(intent.projectId)).map((intent) => intent.projectId));
-    for (const id of absent) reports.push({ file: `intents/${id}.jsonl`, reason: `unregistered project ${id}`, blocking: false });
+    for (const id of absent) reports.push({ file: `intents/${id}.jsonl`, reason: i18n._({
+      id: "unregistered project {projectId}",
+      comment: "Storage diagnostic: a file names a project the registry does not hold",
+      values: { projectId: id },
+    }), blocking: false });
     return reports;
   }
 
@@ -1049,7 +1134,12 @@ export class Store {
         const predecessor = intent.afterId ? intents.get(intent.afterId) : undefined;
         const problem = predecessor ? problems.get(predecessor.projectId) : undefined;
         if (!removed.has(intent.id) && intent.closedAt === undefined && problem && !problems.has(intent.projectId)) {
-          problems.set(intent.projectId, {file:this.intentsFile(intent.projectId), reason:`depends on invalid ${problem.file}: ${problem.reason}`, blocking:true});
+          problems.set(intent.projectId, {file:this.intentsFile(intent.projectId), reason:i18n._({
+            id: "depends on invalid {file}: {reason}",
+            comment:
+              "Storage diagnostic; `reason` is the other file's own diagnostic, relayed",
+            values: { file: problem.file, reason: problem.reason },
+          }), blocking:true});
           changed = true;
         }
       }
@@ -1111,7 +1201,10 @@ export class Store {
 
   /** Shared lease and manifest-last deletion, followed by index cleanup. */
   async deleteSession(id: string): Promise<void> {
-    if (this.sessions.get(id)?.live) throw new Error("wait for the running turn to finish, or abort it, before deleting");
+    if (this.sessions.get(id)?.live) throw new Error(i18n._({
+      id: "wait for the running turn to finish, or abort it, before deleting",
+      comment: "Refusal: the session being deleted has a turn in flight",
+    }));
     if (this.shared || this.sessionsDir) await this.sessionStore().delete(id);
     this.dropSession(id);
   }

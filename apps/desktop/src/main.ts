@@ -157,6 +157,10 @@ async function main(): Promise<void> {
     dataDir,
     legacyDbPath: join(app.getPath("userData"), "spex.db"),
     port: 0,
+    // The shell's OS is the reader's device, so the core it embeds
+    // resolves the reader's system exactly as the shell does
+    // (app-shell-29, core-service-111).
+    systemLanguages: app.getPreferredSystemLanguages(),
   });
 
   // The menu waits for the core: its one item of the shell's own text

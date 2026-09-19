@@ -28,6 +28,7 @@ import {
 import {
   SHARING_LABELS,
   absolutePath,
+  familyName,
   formatSize,
   prettyJson,
   previewKindOf,
@@ -146,8 +147,9 @@ function entryAnnotation(entry: SpaceEntry): string {
   if (entry.kind === "git") {
     return i18n._({ id: "Git data", comment: "entry mark: the repository's own files" });
   }
-  // The family is the core's own word for the entry (space-23).
-  return entry.family;
+  // The core names the entry's family in its own closed vocabulary;
+  // the word the row reads is this interface's own (space-23).
+  return familyName(entry.family);
 }
 
 function entrySize(entry: SpaceEntry): string | undefined {

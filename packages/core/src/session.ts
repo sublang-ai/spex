@@ -16,6 +16,7 @@ import {
   type ReplayStreamEntry,
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
+import { i18n } from "./i18n.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
@@ -90,11 +91,35 @@ export function storedMembers(structure: SessionStructuralProjection): StoredMem
   };
 }
 
+/** The drift lines two paths share, each phrased when it is composed
+ * (core-service-111); the ids stay as the config writes them. */
+const playbookGone = (playbookId: string): string =>
+  i18n._({
+    id: "playbook {playbookId} is no longer enabled",
+    comment: "One settings drift: a stored playbook left the config",
+    values: { playbookId },
+  });
+const playerNamed = (playerId: string): string =>
+  i18n._({
+    id: "player {playerId}",
+    comment: "A session player, named inside a settings-drift line",
+    values: { playerId },
+  });
+
 /** A drift the projection itself cannot express — a stored member the
  * current config no longer holds (core-service-92). */
 export class SettingsDriftError extends Error {
   constructor(readonly changes: string[]) {
-    super(`Settings changed since this session started: ${changes.join("; ")}. Start a new session for the new settings, or change them back.`);
+    super(i18n._({
+      id: "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back.",
+      comment:
+        "Refusal to continue a session; `changes` are the drift lines, themselves messages",
+      values: {
+        changes: changes.join(
+          i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+        ),
+      },
+    }));
     this.name = "SettingsDriftError";
   }
 }
@@ -127,8 +152,12 @@ export function executionConfig(composed: ComposedConfig, cwd: string, members?:
   const missingPlayers = playerIds.filter((id) => !composed.captainOptions.sessionAgents.players[id]);
   if (missingPlaybooks.length || missingPlayers.length) {
     throw new SettingsDriftError([
-      ...missingPlaybooks.map((id) => `playbook ${id} is no longer enabled`),
-      ...missingPlayers.map((id) => `player ${id} is no longer bound by the session's playbooks`),
+      ...missingPlaybooks.map((id) => playbookGone(id)),
+      ...missingPlayers.map((id) => i18n._({
+        id: "player {playerId} is no longer bound by the session's playbooks",
+        comment: "One settings drift: a stored player no longer serves any role",
+        values: { playerId: id },
+      })),
     ]);
   }
   return validateCaptainSessionExecutionProjection({
@@ -162,40 +191,84 @@ export function describeStructuralDrift(stored: SessionStructuralProjection, cur
   const changes: string[] = [];
   const agentDrift = (who: string, before: Record<string, unknown>, after: Record<string, unknown>): void => {
     for (const field of ["adapter", "instruction", "permissions"]) {
-      if (!isDeepStrictEqual(before[field], after[field])) changes.push(`${who}'s ${field} changed`);
+      if (!isDeepStrictEqual(before[field], after[field])) changes.push(i18n._({
+        id: "{who}'s {field} changed",
+        comment:
+          "One settings drift; `who` is itself a message and `field` the config file's own field name",
+        values: { who, field },
+      }));
     }
   };
-  agentDrift("the Captain", stored.captain, current.captain);
+  agentDrift(i18n._({
+    id: "the Captain",
+    comment: "The session's Captain, named inside a settings-drift line",
+  }), stored.captain, current.captain);
   const currentPlayers = current.players.map((player) => player as Record<string, unknown>);
   stored.players.forEach((entry, index) => {
     const before = entry as Record<string, unknown>;
     const after = currentPlayers.find((player) => player.id === before.id);
-    if (!after) changes.push(`player ${String(before.id)} is gone`);
+    if (!after) changes.push(i18n._({
+      id: "player {playerId} is gone",
+      comment: "One settings drift: a stored player left the config",
+      values: { playerId: String(before.id) },
+    }));
     else {
-      agentDrift(`player ${String(before.id)}`, before, after);
-      if (currentPlayers[index]?.id !== before.id) changes.push(`player ${String(before.id)} changed its place in the roster`);
+      agentDrift(playerNamed(String(before.id)), before, after);
+      if (currentPlayers[index]?.id !== before.id) changes.push(i18n._({
+        id: "player {playerId} changed its place in the roster",
+        comment: "One settings drift: the players' order changed",
+        values: { playerId: String(before.id) },
+      }));
     }
   });
   for (const player of currentPlayers) {
-    if (!stored.players.some((entry) => (entry as {id: unknown}).id === player.id)) changes.push(`player ${String(player.id)} joined the roster`);
+    if (!stored.players.some((entry) => (entry as {id: unknown}).id === player.id)) changes.push(i18n._({
+      id: "player {playerId} joined the roster",
+      comment: "One settings drift: the config added a player",
+      values: { playerId: String(player.id) },
+    }));
   }
   for (const [id, before] of Object.entries(stored.catalog as Record<string, Record<string, unknown>>)) {
     const after = (current.catalog as Record<string, Record<string, unknown>>)[id];
-    if (!after) { changes.push(`playbook ${id} is no longer enabled`); continue; }
+    if (!after) { changes.push(playbookGone(id)); continue; }
     for (const field of ["from", "manifestCommand", "command", "intent", "artifactSchema", "requiredRoleIds", "concurrentRoleSets", "options"]) {
-      if (!isDeepStrictEqual(before[field], after[field])) changes.push(`playbook ${id}'s ${field} changed`);
+      if (!isDeepStrictEqual(before[field], after[field])) changes.push(i18n._({
+        id: "playbook {playbookId}'s {field} changed",
+        comment:
+          "One settings drift; `field` is the manifest's own field name",
+        values: { playbookId: id, field },
+      }));
     }
     const beforeRoles = (before.roles ?? {}) as Record<string, {playerId?: unknown}>;
     const afterRoles = (after.roles ?? {}) as Record<string, {playerId?: unknown}>;
     for (const [role, binding] of Object.entries(beforeRoles)) {
       const now = afterRoles[role]?.playerId;
-      if (now !== binding.playerId) changes.push(`playbook ${id}'s ${role} role now binds ${String(now ?? "no one")} instead of ${String(binding.playerId)}`);
+      if (now !== binding.playerId) changes.push(i18n._({
+        id: "playbook {playbookId}'s {role} role now binds {player} instead of {before}",
+        comment:
+          "One settings drift: a role changed lanes; the ids are the config file's own",
+        values: {
+          playbookId: id,
+          role,
+          player: now === undefined || now === null
+            ? i18n._({ id: "no one", comment: "Stands where a role binds no player at all" })
+            : String(now),
+          before: String(binding.playerId),
+        },
+      }));
     }
   }
   for (const id of Object.keys(current.catalog)) {
-    if (!(id in stored.catalog)) changes.push(`playbook ${id} joined the session`);
+    if (!(id in stored.catalog)) changes.push(i18n._({
+      id: "playbook {playbookId} joined the session",
+      comment: "One settings drift: the config enabled another playbook",
+      values: { playbookId: id },
+    }));
   }
-  return changes.length ? changes : ["the session's structure no longer matches its stored one"];
+  return changes.length ? changes : [i18n._({
+    id: "the session's structure no longer matches its stored one",
+    comment: "The settings drift where no single field names itself",
+  })];
 }
 
 /** A project's current conversation (core-service-93, DR-051): its live
@@ -284,9 +357,16 @@ export class SessionManager {
     this.startTurn(this.requireLive(sessionId), undefined, true);
   }
   async discardSession(sessionId: string): Promise<{removed: boolean}> {
-    if (this.live.has(sessionId) || this.recovering.has(sessionId)) throw new CoreError("busy", "the session is active");
+    if (this.live.has(sessionId) || this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
+      id: "the session is active",
+      comment: "Refusal: the session is held, so it cannot be discarded now",
+    }));
     const info = this.store.describeSession(sessionId);
-    if (!info) throw new CoreError("not_found", `no session ${sessionId}`);
+    if (!info) throw new CoreError("not_found", i18n._({
+      id: "no session {sessionId}",
+      comment: "Refusal: no session of this id is known",
+      values: { sessionId },
+    }));
     this.recovering.add(sessionId);
     try {
       const restored = await discardSessionUncertain(this.store.sessionStore(), sessionId);
@@ -305,14 +385,38 @@ export class SessionManager {
     // sibling mid-release is waited out first.
     await this.projectSettled(project.id);
     const holder = this.store.listSessions().find((session) => session.projectId === project.id && (session.live || session.externalWriter));
-    if (this.opening.has(project.id)) throw new CoreError("busy", `a session is starting in ${project.name} — wait a moment`);
+    if (this.opening.has(project.id)) throw new CoreError("busy", i18n._({
+      id: "a session is starting in {project} — wait a moment",
+      comment: "Refusal: another session of this project is opening",
+      values: { project: project.name },
+    }));
     if (holder) {
-      const name = holder.title ? `“${holder.title}”` : "a session";
+      const name = holder.title
+        ? i18n._({
+            id: "“{title}”",
+            comment: "A session's own title, quoted",
+            values: { title: holder.title },
+          })
+        : i18n._({
+            id: "a session",
+            comment: "Stands in for the title of a session that has none",
+          });
       throw new CoreError("busy", holder.externalWriter
-        ? `${name} is in use elsewhere in ${project.name}`
-        : `${name} is still working in ${project.name} — wait for it to finish, or abort it`);
+        ? i18n._({
+            id: "{name} is in use elsewhere in {project}",
+            comment: "Refusal: another host holds this project's conversation",
+            values: { name, project: project.name },
+          })
+        : i18n._({
+            id: "{name} is still working in {project} — wait for it to finish, or abort it",
+            comment: "Refusal: one working turn per project",
+            values: { name, project: project.name },
+          }));
     }
-    if (this.recovering.has(sessionId)) throw new CoreError("busy", "the session is recovering");
+    if (this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
+      id: "the session is recovering",
+      comment: "Refusal: a Retry or Discard of this session is still running",
+    }));
     this.opening.add(project.id);
     this.store.setLocalSession(sessionId, true);
     let entry: LiveSession | undefined;
@@ -363,6 +467,9 @@ export class SessionManager {
         onStoredRecord: async (record) => {
           this.record(sessionId, record, entry);
           const result = record.record.type === "captain_finished" ? record.record.result as {status?: string; error?: string; finalText?: string} : undefined;
+          // English, deliberately (core-service-111): the page matches
+          // this record's text to phrase the failure itself, and the
+          // reason is the runtime's own words.
           if (entry && result?.status === "error") await this.appendError(entry, `The Captain's turn failed: ${result.error ?? result.finalText ?? "unknown error"}`);
         },
         onCheckpoint: async () => {
@@ -372,6 +479,8 @@ export class SessionManager {
       });
       await this.store.refreshSession(sessionId, true);
       const info = this.store.describeSession(sessionId);
+      // English, deliberately (core-service-111): the shared store just
+      // wrote this session, so an unreadable one is an internal failure.
       if (!info) throw new Error("shared session has no readable project history");
       entry = {info, controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
       this.live.set(sessionId, entry);
@@ -500,8 +609,14 @@ export class SessionManager {
   /** core-service-98: run one advertised control as the next turn. */
   submitControl(sessionId: string, kind: "recovery" | "ending", actionId?: string): void {
     const entry = this.requireLive(sessionId);
-    if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
-    if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", "Recover the interrupted turn with Retry or Discard first");
+    if (entry.turnActive) throw new CoreError("busy", i18n._({
+      id: "a turn is already running in this session",
+      comment: "Refusal: this conversation is mid-turn",
+    }));
+    if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
+      id: "Recover the interrupted turn with Retry or Discard first",
+      comment: "Refusal; Retry and Discard are the controls the interface offers",
+    }));
     // The runtime is held only for a turn (core-service-91), so what a
     // run advertises can be read only while the session is open — which
     // it is by the time this runs. The named control is validated here,
@@ -514,11 +629,27 @@ export class SessionManager {
         "invalid_request",
         actionId !== undefined
           ? kind === "recovery"
-            ? `This run no longer offers “${actionId}”.`
-            : `This session no longer offers “${actionId}” to end its run.`
+            ? i18n._({
+                id: "This run no longer offers “{actionId}”.",
+                comment:
+                  "Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own",
+                values: { actionId },
+              })
+            : i18n._({
+                id: "This session no longer offers “{actionId}” to end its run.",
+                comment:
+                  "Refusal: the ending the reader activated is no longer advertised; the id is the runtime's own",
+                values: { actionId },
+              })
           : kind === "recovery"
-            ? "This run offers no recovery to rerun."
-            : "This session offers no way to end its run.",
+            ? i18n._({
+                id: "This run offers no recovery to rerun.",
+                comment: "Refusal: the run advertises no recovery action",
+              })
+            : i18n._({
+                id: "This session offers no way to end its run.",
+                comment: "Refusal: the run advertises no ending action",
+              }),
       );
     }
     this.startTurn(entry, undefined, false, { kind, controlId: control.id });
@@ -535,8 +666,14 @@ export class SessionManager {
 
   submitTurn(sessionId: string, text: string, intentId?: string): void {
     const entry = this.requireLive(sessionId);
-    if (entry.turnActive) throw new CoreError("busy", "a turn is already running in this session");
-    if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", "Recover the interrupted turn with Retry or Discard first");
+    if (entry.turnActive) throw new CoreError("busy", i18n._({
+      id: "a turn is already running in this session",
+      comment: "Refusal: this conversation is mid-turn",
+    }));
+    if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
+      id: "Recover the interrupted turn with Retry or Discard first",
+      comment: "Refusal; Retry and Discard are the controls the interface offers",
+    }));
     entry.pendingIntentId = intentId;
     this.startTurn(entry, text, false);
   }
@@ -653,7 +790,11 @@ export class SessionManager {
 
   private requireLive(sessionId: string): LiveSession {
     const entry = this.live.get(sessionId);
-    if (!entry) throw new CoreError("not_found", `no live session ${sessionId}`);
+    if (!entry) throw new CoreError("not_found", i18n._({
+      id: "no live session {sessionId}",
+      comment: "Refusal: the session named holds no runtime right now",
+      values: { sessionId },
+    }));
     return entry;
   }
   private failure(error: unknown, fallback: CoreError["code"] = "invalid_request"): CoreError {

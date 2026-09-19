@@ -3279,3 +3279,100 @@ test("core-service-110: the home's language is one stored choice every client re
   assert.equal(storedLanguage(), undefined, "the cleared choice is no key at all");
   assert.equal(harness.service.language(), null);
 });
+
+// ---------------------------------------------------------------------------
+// core-service-112: the core's own prose speaks the home's language (DR-079)
+// ---------------------------------------------------------------------------
+
+test("core-service-112: the core's own prose re-derives in the home's language", async (t) => {
+  // The catalog's own phrases (src/locales/zh/messages.po): the test
+  // reads what a Chinese reader reads, not what the source states.
+  const REQUIREMENT_EN =
+    "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY";
+  const REQUIREMENT_ZH = "在终端运行 claude 登录，或设置 ANTHROPIC_API_KEY";
+  const CONFIG_ERROR_EN = "playbooks must enable at least one playbook";
+  const CONFIG_ERROR_ZH = "playbooks 必须至少启用一个规程";
+  const BROKEN_CONFIG = "playbooks: {}\n";
+
+  const dir = mkdtempSync(join(tmpdir(), "spex-core-prose-"));
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, VALID_CONFIG);
+  const { imports } = fakeAdapterImports({});
+  const service = await CoreService.start({
+    token: "test",
+    configPath,
+    dataDir: join(dir, "state"),
+    adapterImports: imports,
+    // The runtime half is usable and the credential half is not, so the
+    // claude adapter's one requirement is the phrase the core itself
+    // composes — never a runtime's own words.
+    adapterRuntime: () => ({ usable: true }),
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: false,
+    // Tests speak English (DR-079): with no choice stored the core
+    // resolves these, never the host's own locale.
+    systemLanguages: ["en"],
+  });
+  t.after(async () => {
+    await service.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+
+  const requirement = (message: ServerMessage): string | undefined =>
+    message.type === "readiness.state"
+      ? message.entries.find((entry: ReadinessEntry) => entry.adapter === "claude")
+          ?.requirement
+      : undefined;
+  const configErrors = (message: ServerMessage): string[] =>
+    message.type === "config.state" && message.state.status === "invalid"
+      ? message.state.errors
+      : [];
+  const refusal = async (): Promise<string> => {
+    const reply = await client.command("project.register", {
+      path: join(dir, "nowhere"),
+    });
+    assert.ok(!reply.ok, "registering a path that is no directory is refused");
+    return reply.error.message;
+  };
+
+  // English, as the system languages the host passed resolve.
+  const before = await client.expectOk("readiness.get", {});
+  assert.equal(
+    before.find((entry: ReadinessEntry) => entry.adapter === "claude")?.requirement,
+    REQUIREMENT_EN,
+    "the readiness requirement reads the source's English",
+  );
+  assert.equal(await refusal(), `${join(dir, "nowhere")} is not a directory`);
+
+  // The choice alone re-derives the states the core caches: the client
+  // asks for nothing and reads the requirement in Chinese.
+  await client.expectOk("language.set", { language: "zh" });
+  await client.waitFor((m) => requirement(m) === REQUIREMENT_ZH);
+  await client.waitFor((m) => m.type === "config.state" && m.state.status === "valid");
+  assert.equal(await refusal(), `${join(dir, "nowhere")} 不是目录`);
+
+  // A config error the core words is the reader's too. An invalid
+  // config empties readiness by the core's own rule, so the two states
+  // are proven one after the other rather than both at once.
+  writeFileSync(configPath, BROKEN_CONFIG);
+  await service.reloadConfig();
+  const broken = await client.waitFor((m) => configErrors(m).length > 0);
+  assert.deepEqual(configErrors(broken), [CONFIG_ERROR_ZH]);
+
+  // None returns the home to the system's language, and the error the
+  // core still holds re-derives into English with nothing asked for.
+  await client.expectOk("language.set", { language: null });
+  const restored = await client.waitFor((m) => configErrors(m).includes(CONFIG_ERROR_EN));
+  assert.deepEqual(configErrors(restored), [CONFIG_ERROR_EN]);
+  assert.equal(await refusal(), `${join(dir, "nowhere")} is not a directory`);
+
+  // And so does the readiness requirement, once a valid config carries
+  // one again.
+  writeFileSync(configPath, VALID_CONFIG);
+  await service.reloadConfig();
+  await client.waitFor((m) => requirement(m) === REQUIREMENT_EN);
+});

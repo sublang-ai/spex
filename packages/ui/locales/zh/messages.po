@@ -1469,6 +1469,11 @@ msgstr "配置 {status} — 打开设置"
 msgid "Config {status} →"
 msgstr "配置 {status} →"
 
+#. catalog family: a copy of the config kept before a write
+#: src/lib/space.ts
+msgid "config backup"
+msgstr "配置备份"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "config backups and temporary files"
@@ -2251,6 +2256,7 @@ msgid "Fix the player in Settings"
 msgstr "在设置中修复 Player"
 
 #. a file family that stays on this device
+#. a file family that stays on this device
 #: src/lib/space.ts
 msgid "forge cache"
 msgstr "GitHub 缓存"
@@ -2304,6 +2310,7 @@ msgstr "来自远程仓库（{count}）"
 msgid "Gears"
 msgstr "Gears"
 
+#. entry mark: the repository's own files
 #. entry mark: the repository's own files
 #. entry mark: the repository's own files
 #: src/components/SpaceExplorer.tsx
@@ -2629,10 +2636,20 @@ msgstr "最后活动：{when}"
 msgid "last output {age}"
 msgstr "最后输出：{age}"
 
+#. catalog family: the lock naming the process writing now
+#: src/lib/space.ts
+msgid "lease"
+msgstr "租约"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "leases and locks"
 msgstr "租约与锁"
+
+#. catalog family: a session file an earlier release wrote
+#: src/lib/space.ts
+msgid "legacy session sidecar"
+msgstr "旧版会话附属文件"
 
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
@@ -2686,6 +2703,12 @@ msgstr "加载中…"
 msgid "Local changes ({count})"
 msgstr "本地更改（{count}）"
 
+#. catalog family: the folder of files that stay on this device
+#: src/lib/space.ts
+msgid "local data"
+msgstr "本地数据"
+
+#. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "local project paths"
@@ -2734,10 +2757,25 @@ msgstr "可能包含提供方令牌 — 不予显示"
 msgid "Message the Captain…"
 msgstr "给 Captain 发消息…"
 
+#. catalog family: original files an upgrade kept
+#: src/lib/space.ts
+msgid "migration inputs"
+msgstr "迁移输入文件"
+
+#. catalog family: what an upgrade recorded
+#: src/lib/space.ts
+msgid "migration receipts"
+msgstr "迁移回执"
+
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "migration receipts and inputs"
 msgstr "迁移回执与输入文件"
+
+#. catalog family: the home's own migration state
+#: src/lib/space.ts
+msgid "migration record"
+msgstr "迁移记录"
 
 #: src/components/LibrarySurface.tsx
 msgid "missing stages: {stages}"
@@ -3011,6 +3049,16 @@ msgstr "不是仓库"
 #: src/components/SpaceSurface.tsx
 msgid "Not a repository yet"
 msgstr "还不是仓库"
+
+#. catalog family: a file Spex did not write
+#: src/lib/space.ts
+msgid "Not a Spex file"
+msgstr "非 Spex 文件"
+
+#. catalog family: a folder Spex did not write
+#: src/lib/space.ts
+msgid "Not a Spex folder"
+msgstr "非 Spex 文件夹"
 
 #: src/components/SpaceSync.tsx
 msgid "Not checked yet"
@@ -3373,6 +3421,21 @@ msgstr "规程"
 msgid "Playbook id"
 msgstr "规程 id"
 
+#. catalog family: the folder holding the playbooks
+#: src/lib/space.ts
+msgid "playbook library"
+msgstr "规程库"
+
+#. catalog family: a playbook's compiled files
+#: src/lib/space.ts
+msgid "playbook output"
+msgstr "规程输出"
+
+#. catalog family: a playbook's source files
+#: src/lib/space.ts
+msgid "playbook sources"
+msgstr "规程源文"
+
 #. tooltip: which workflow the parked run belongs to
 #: src/components/ParkedRun.tsx
 msgid "playbook: {playbookId}"
@@ -3411,6 +3474,7 @@ msgstr "PR #{ref} ↗"
 msgid "Prefer your own?"
 msgstr "想用自己的？"
 
+#. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "preferences"
@@ -3451,6 +3515,21 @@ msgstr "项目"
 msgid "Project path"
 msgstr "项目路径"
 
+#. catalog family: one project's queue of intents
+#: src/lib/space.ts
+msgid "project queue"
+msgstr "项目队列"
+
+#. catalog family: the folder holding the projects' queues
+#: src/lib/space.ts
+msgid "project queues"
+msgstr "项目队列"
+
+#. catalog family: the file listing the registered projects
+#: src/lib/space.ts
+msgid "project registry"
+msgstr "项目注册表"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -3482,6 +3561,7 @@ msgstr "提供方默认"
 msgid "Provider default"
 msgstr "提供方默认"
 
+#. a file family that stays on this device
 #. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
@@ -4133,9 +4213,19 @@ msgstr "已发送给智能体"
 msgid "Session"
 msgstr "会话"
 
+#. catalog family: the folder holding every session's files
+#: src/lib/space.ts
+msgid "session bundles"
+msgstr "会话包"
+
 #: src/components/RunView.tsx
 msgid "Session is in use elsewhere"
 msgstr "会话正在别处使用"
+
+#. catalog family: one session's manifest file
+#: src/lib/space.ts
+msgid "session manifest"
+msgstr "会话清单"
 
 #: src/components/RunView.tsx
 msgid "Session ownership is unknown · controls are unavailable"
@@ -4156,6 +4246,11 @@ msgstr "发送消息前，会话归属须处于空闲状态。"
 #: src/components/SettingsSurface.tsx
 msgid "Session players"
 msgstr "会话 Player"
+
+#. catalog family: one session's record stream
+#: src/lib/space.ts
+msgid "session records"
+msgstr "会话记录"
 
 #: src/state/reducer.ts
 msgid "session shut down"
@@ -4192,6 +4287,7 @@ msgstr "设置"
 msgid "Setting up…"
 msgstr "设置中…"
 
+#. catalog family: the shared config the Settings surface edits
 #: src/components/NavRail.tsx
 #: src/components/SettingsSurface.tsx
 #: src/lib/space.ts
@@ -4562,9 +4658,19 @@ msgstr "切换到项目…"
 msgid "Sync"
 msgstr "同步"
 
+#. catalog family: the mark of a repair this device acknowledged
+#: src/lib/space.ts
+msgid "sync repair marker"
+msgstr "同步修复标记"
+
 #. one unit's kind: a sync rule file
 #: src/lib/space.ts
 msgid "Sync rule"
+msgstr "同步规则"
+
+#. catalog family: the files saying what syncs
+#: src/lib/space.ts
+msgid "sync rules"
 msgstr "同步规则"
 
 #: src/lib/space.ts
@@ -4625,6 +4731,11 @@ msgstr "将此任务移出队列 — 撤销可放回"
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "告诉智能体这个规程做什么、谁做什么、何时算完成"
+
+#. catalog family: a copy made while writing
+#: src/lib/space.ts
+msgid "temporary write"
+msgstr "临时写入"
 
 #: src/components/SettingsSurface.tsx
 msgid "Terminal pane theme"

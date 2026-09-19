@@ -25,15 +25,18 @@
     "assets/"
   ],
   "scripts": {
-    "build": "node scripts/stage-academy.mjs && tsc",
+    "build": "npm run i18n:check && lingui compile --strict --typescript && node scripts/stage-academy.mjs && tsc",
     "dev:fake": "npm run build && node dist/bin/dev-core.js --fake",
-    "test": "node scripts/stage-academy.mjs && node scripts/run-tests.cjs",
+    "i18n:extract": "lingui extract --clean",
+    "i18n:check": "node ../../scripts/i18n-check.mjs",
+    "test": "npm run i18n:check && node scripts/stage-academy.mjs && node scripts/run-tests.cjs",
     "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {
-    "node": ">=20.6.0"
+    "node": ">=22.19"
   },
   "dependencies": {
+    "@lingui/core": "^6.7.0",
     "@sublang/cligent": "^0.26.0",
     "@sublang/playbook": "^14.1.0",
     "better-sqlite3": "^12.11.1",
@@ -42,6 +45,8 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@lingui/cli": "^6.7.0",
+    "@lingui/format-po": "^6.7.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.4.0",
     "@types/ws": "^8.18.0",

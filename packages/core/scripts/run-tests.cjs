@@ -40,5 +40,12 @@ execFileSync(
   {
     stdio: "inherit",
     cwd: root,
+    // Tests speak English (DR-079). A core started without system
+    // languages reads its own process locale, which ICU takes from
+    // these variables, so pinning them here makes every service the
+    // suite starts — and every child process it spawns — speak the
+    // one language the assertions are written in, whatever the host
+    // reads. "C" is the one locale every POSIX host has.
+    env: { ...process.env, LC_ALL: "C", LANG: "C" },
   },
 );

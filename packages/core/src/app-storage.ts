@@ -4,6 +4,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, resolve, win32 } from "node:path";
+import { i18n } from "./i18n.js";
 import type { DiagnosticRepair, IntentInfo, ProjectInfo, RepairChecked } from "./protocol.js";
 
 export type { DiagnosticRepair, RepairChecked };
@@ -11,6 +12,26 @@ export type { DiagnosticRepair, RepairChecked };
 export interface ProjectIdentity { id: string; name: string; registeredAt: number }
 export interface ProjectBinding { id: string; path: string; aliases: string[] }
 export interface StorageDiagnostic { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }
+/** A list a language punctuates its own way (core-service-111). */
+const listed = (names: readonly string[]): string =>
+  names.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
+/** The one diagnostic two scans share, phrased where it is composed. */
+const duplicateQueue = (intentId: string): string =>
+  i18n._({ id: "duplicate queue {intentId}", comment: "Storage diagnostic: two acts queue the same intent",
+    values: { intentId } });
+/** The folder a project lost, named the same way wherever it is found. */
+const noFolder = (name: string): string =>
+  i18n._({ id: "{name} has no folder on this device", comment: "Repair row: the project is registered, but nothing here holds it",
+    values: { name } });
+const unregisteredProject = (projectId: string): string =>
+  i18n._({ id: "unregistered project {projectId}", comment: "Storage diagnostic: a file names a project the registry does not hold",
+    values: { projectId } });
+const ambiguousPath = (path: string): string =>
+  i18n._({ id: "ambiguous project path {path}", comment: "Storage diagnostic: two projects claim one folder",
+    values: { path } });
+const divergedDestination = (): string =>
+  i18n._({ id: "migration destination diverged; preserved unchanged",
+    comment: "Migration diagnostic: the file changed under the migration, which wrote nothing" });
 /** A repair's identity is the facts it names (space-49). */
 export function repairKey(projectId: string | undefined, directories: string[]): string {
   return `${projectId ?? ""}|${[...directories].sort().join(",")}`;
@@ -57,7 +78,7 @@ export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagno
     const sessions = directories.reduce((total, directory) => total + (byDirectory.get(directory)?.sessions ?? 0), 0);
     repairs.push({
       file: project.file,
-      reason: `${project.name} has no folder on this device`,
+      reason: noFolder(project.name),
       blocking: false,
       repair: { kind: "project", projectId: project.id, projectName: project.name, directories, sessions, key: repairKey(project.id, directories) },
     });
@@ -66,7 +87,9 @@ export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagno
     if (paired.has(entry.directory)) continue;
     repairs.push({
       file: entry.file,
-      reason: `${entry.directory} has no project on this device`,
+      reason: i18n._({ id: "{directory} has no project on this device",
+        comment: "Repair row: sessions name a folder no registered project holds",
+        values: { directory: entry.directory } }),
       blocking: false,
       repair: { kind: "directory", directories: [entry.directory], sessions: entry.sessions, key: repairKey(undefined, [entry.directory]) },
     });
@@ -101,82 +124,119 @@ const recordedPath = (value: unknown): value is string => text(value) && !value.
   (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\")) && win32.isAbsolute(value) && win32.resolve(value) === value
 );
 
+const invalidPredecessor = (): string =>
+  i18n._({ id: "invalid predecessor", comment: "Storage diagnostic: the intent an act waits on is no valid id" });
+const invalidDispatch = (): string =>
+  i18n._({ id: "invalid dispatch", comment: "Storage diagnostic: a dispatch names no valid session and turn" });
+const invalidClose = (): string =>
+  i18n._({ id: "invalid close", comment: "Storage diagnostic: a verdict is neither done nor dropped" });
+const unsupportedRegistry = (): string =>
+  i18n._({ id: "unsupported registry version; preserved unchanged",
+    comment: "Migration diagnostic: the registry's version is not one this Spex migrates" });
+
 export class StorageFormatError extends Error {
-  constructor(readonly file: string, readonly reason: string) { super(`${file}: ${reason}`); this.name = "StorageFormatError"; }
+  constructor(readonly file: string, readonly reason: string) {
+    super(i18n._({ id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
+      values: { file, reason } }));
+    this.name = "StorageFormatError";
+  }
 }
 class StorageMigrationError extends StorageFormatError {}
 function need(condition: unknown, file: string, reason: string): asserts condition {
   if (!condition) throw new StorageFormatError(file, reason);
 }
 function closed(value: unknown, required: string[], optional: string[], file: string): asserts value is Record<string, unknown> {
-  need(object(value), file, "expected an object");
-  need(required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key)), file, `expected fields ${required.join(", ")}${optional.length ? `; optional ${optional.join(", ")}` : ""}`);
+  need(object(value), file, i18n._({ id: "expected an object", comment: "Storage diagnostic: a record in the file is not an object" }));
+  need(required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key)), file,
+    i18n._({ id: "expected fields {required}{optional}",
+      comment: "Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message",
+      values: { required: listed(required), optional: optional.length
+        ? i18n._({ id: "; optional {fields}", comment: "Clause naming the fields a record may also carry", values: { fields: listed(optional) } })
+        : "" } }));
 }
 export function parseRegistry(value: unknown, file = "projects.json"): ProjectIdentity[] {
   closed(value, ["v", "projects"], [], file);
-  need(value.v === 2 && Array.isArray(value.projects), file, "unsupported registry version or projects array");
+  need(value.v === 2 && Array.isArray(value.projects), file, i18n._({ id: "unsupported registry version or projects array",
+    comment: "Storage diagnostic: the project registry's version or shape is not one this Spex reads" }));
   const ids = new Set<string>();
   for (const p of value.projects) {
     closed(p, ["id", "name", "registeredAt"], [], file);
-    need(uuid(p.id) && text(p.name) && timestamp(p.registeredAt), file, "invalid project identity");
-    need(!ids.has(p.id), file, `duplicate project ${p.id}`); ids.add(p.id);
+    need(uuid(p.id) && text(p.name) && timestamp(p.registeredAt), file, i18n._({ id: "invalid project identity",
+      comment: "Storage diagnostic: a project's id, name or registration time is malformed" }));
+    need(!ids.has(p.id), file, i18n._({ id: "duplicate project {projectId}", comment: "Storage diagnostic: the registry lists one project twice",
+      values: { projectId: p.id } })); ids.add(p.id);
   }
   return value.projects as unknown as ProjectIdentity[];
 }
 export function parseBindings(value: unknown, file = "local/project-paths.json"): ProjectBinding[] {
   closed(value, ["v", "bindings"], [], file);
-  need(value.v === 1 && Array.isArray(value.bindings), file, "unsupported path-map version or bindings array");
+  need(value.v === 1 && Array.isArray(value.bindings), file, i18n._({ id: "unsupported path-map version or bindings array",
+    comment: "Storage diagnostic: this device's project-to-folder map is not one this Spex reads" }));
   const ids = new Set<string>();
   for (const b of value.bindings) {
     closed(b, ["id", "path", "aliases"], [], file);
-    need(uuid(b.id) && localPath(b.path) && Array.isArray(b.aliases) && b.aliases.every(recordedPath) && new Set(b.aliases).size === b.aliases.length, file, "invalid project binding");
-    need(!ids.has(b.id), file, `duplicate binding ${b.id}`); ids.add(b.id);
+    need(uuid(b.id) && localPath(b.path) && Array.isArray(b.aliases) && b.aliases.every(recordedPath) && new Set(b.aliases).size === b.aliases.length, file,
+      i18n._({ id: "invalid project binding", comment: "Storage diagnostic: a project's folder or its recorded aliases are malformed" }));
+    need(!ids.has(b.id), file, i18n._({ id: "duplicate binding {projectId}", comment: "Storage diagnostic: one project is bound twice",
+      values: { projectId: b.id } })); ids.add(b.id);
   }
   return value.bindings as unknown as ProjectBinding[];
 }
 export function parsePrefs(value: unknown, file = "prefs.json"): Record<string, unknown> {
   closed(value, ["v", "prefs"], [], file);
-  need(value.v === 1 && object(value.prefs), file, "unsupported preference version or prefs object");
+  need(value.v === 1 && object(value.prefs), file, i18n._({ id: "unsupported preference version or prefs object",
+    comment: "Storage diagnostic: the preferences file is not one this Spex reads" }));
   for (const [key, value_] of Object.entries(value.prefs)) {
-    if (key.startsWith("viewed:")) need(timestamp(value_), file, `invalid viewed marker ${key}`);
+    if (key.startsWith("viewed:")) need(timestamp(value_), file, i18n._({ id: "invalid viewed marker {key}",
+      comment: "Storage diagnostic: a read marker's value is no turn number; the key stays as it is",
+      values: { key } }));
   }
   return value.prefs;
 }
 function validateIntent(value: unknown, projectId: string, file: string): asserts value is IntentInfo {
   closed(value, ["id", "projectId", "text", "rank", "createdAt"], ["source", "afterId", "dispatched", "closedAt", "closedAs"], file);
-  need(uuid(value.id) && value.projectId === projectId && typeof value.text === "string" && text(value.rank) && timestamp(value.createdAt), file, "invalid queued intent");
-  if (value.afterId !== undefined) need(uuid(value.afterId), file, "invalid predecessor");
+  need(uuid(value.id) && value.projectId === projectId && typeof value.text === "string" && text(value.rank) && timestamp(value.createdAt), file,
+    i18n._({ id: "invalid queued intent", comment: "Storage diagnostic: a queued intent's own fields are malformed" }));
+  if (value.afterId !== undefined) need(uuid(value.afterId), file, invalidPredecessor());
   if (value.source !== undefined) {
     closed(value.source, ["kind", "ref"], ["url", "labels"], file);
-    need(["issue", "pr", "record", "chat"].includes(String(value.source.kind)) && text(value.source.ref) && (value.source.url === undefined || typeof value.source.url === "string") && (value.source.labels === undefined || Array.isArray(value.source.labels) && value.source.labels.every((x) => typeof x === "string")), file, "invalid source");
+    need(["issue", "pr", "record", "chat"].includes(String(value.source.kind)) && text(value.source.ref) && (value.source.url === undefined || typeof value.source.url === "string") && (value.source.labels === undefined || Array.isArray(value.source.labels) && value.source.labels.every((x) => typeof x === "string")), file,
+      i18n._({ id: "invalid source", comment: "Storage diagnostic: the issue or pull request an intent came from is malformed" }));
   }
   if (value.dispatched !== undefined) {
     closed(value.dispatched, ["sessionId", "turnId", "at"], [], file);
-    need(uuid(value.dispatched.sessionId) && Number.isSafeInteger(value.dispatched.turnId) && (value.dispatched.turnId as number) > 0 && timestamp(value.dispatched.at), file, "invalid dispatch");
+    need(uuid(value.dispatched.sessionId) && Number.isSafeInteger(value.dispatched.turnId) && (value.dispatched.turnId as number) > 0 && timestamp(value.dispatched.at), file, invalidDispatch());
   }
-  need((value.closedAt === undefined) === (value.closedAs === undefined), file, "incomplete closed intent");
-  if (value.closedAt !== undefined) need(timestamp(value.closedAt) && ["done", "dropped"].includes(String(value.closedAs)), file, "invalid close");
+  need((value.closedAt === undefined) === (value.closedAs === undefined), file, i18n._({ id: "incomplete closed intent",
+    comment: "Storage diagnostic: an intent carries a close time without its verdict, or the other way round" }));
+  if (value.closedAt !== undefined) need(timestamp(value.closedAt) && ["done", "dropped"].includes(String(value.closedAs)), file, invalidClose());
 }
 export function parseIntentLog(contents: string, projectId: string, file = `intents/${projectId}.jsonl`): IntentAct[] {
-  need(uuid(projectId), file, "filename must be a project UUID");
+  need(uuid(projectId), file, i18n._({ id: "filename must be a project UUID",
+    comment: "Storage diagnostic: an act log's filename is no project id" }));
   const lines = contents.split("\n"); lines.pop(); // only newline-terminated acts exist
   const acts: IntentAct[] = [];
   const fields: Record<string, string[]> = { queue: ["intent"], edit: ["id", "text"], move: ["id", "rank"], link: ["id", "afterId"], dispatch: ["id", "sessionId", "turnId", "at"], close: ["id", "as", "at"], remove: ["id", "at"] };
   for (let i = 0; i < lines.length; i++) {
     const location = `${file}:${i + 1}`;
     let value: unknown;
-    try { value = JSON.parse(lines[i]); } catch { throw new StorageFormatError(location, "invalid completed JSON line"); }
-    need(object(value) && value.v === 1 && typeof value.act === "string" && Object.hasOwn(fields, value.act), location, "unsupported act/version");
+    try { value = JSON.parse(lines[i]); } catch { throw new StorageFormatError(location, i18n._({ id: "invalid completed JSON line",
+      comment: "Storage diagnostic: one line of an act log is not readable JSON" })); }
+    need(object(value) && value.v === 1 && typeof value.act === "string" && Object.hasOwn(fields, value.act), location, i18n._({ id: "unsupported act/version",
+      comment: "Storage diagnostic: an act's kind or version is not one this Spex reads" }));
     closed(value, ["v", "act", ...fields[value.act]], [], location);
     if (value.act === "queue") validateIntent(value.intent, projectId, location);
     else {
-      need(uuid(value.id), location, "invalid intent ID");
-      if (value.act === "edit") need(typeof value.text === "string", location, "invalid text");
-      if (value.act === "move") need(text(value.rank), location, "invalid rank");
-      if (value.act === "link") need(value.afterId === null || uuid(value.afterId), location, "invalid predecessor");
-      if (["dispatch", "close", "remove"].includes(value.act)) need(timestamp(value.at), location, "invalid timestamp");
-      if (value.act === "dispatch") need(uuid(value.sessionId) && Number.isSafeInteger(value.turnId) && (value.turnId as number) > 0, location, "invalid dispatch");
-      if (value.act === "close") need(value.as === "done" || value.as === "dropped", location, "invalid close");
+      need(uuid(value.id), location, i18n._({ id: "invalid intent ID", comment: "Storage diagnostic: an act names no valid intent id" }));
+      if (value.act === "edit") need(typeof value.text === "string", location, i18n._({ id: "invalid text",
+        comment: "Storage diagnostic: an edit act carries no text" }));
+      if (value.act === "move") need(text(value.rank), location, i18n._({ id: "invalid rank",
+        comment: "Storage diagnostic: a move act carries no queue position" }));
+      if (value.act === "link") need(value.afterId === null || uuid(value.afterId), location, invalidPredecessor());
+      if (["dispatch", "close", "remove"].includes(value.act)) need(timestamp(value.at), location, i18n._({ id: "invalid timestamp",
+        comment: "Storage diagnostic: an act carries no readable time" }));
+      if (value.act === "dispatch") need(uuid(value.sessionId) && Number.isSafeInteger(value.turnId) && (value.turnId as number) > 0, location, invalidDispatch());
+      if (value.act === "close") need(value.as === "done" || value.as === "dropped", location, invalidClose());
     }
     const { v: _v, ...act } = value; acts.push(act as IntentAct);
   }
@@ -185,12 +245,14 @@ export function parseIntentLog(contents: string, projectId: string, file = `inte
 export function foldIntentActs(acts: IntentAct[], file: string, intents = new Map<string, IntentInfo>(), removed = new Set<string>()): { intents: Map<string, IntentInfo>; removed: Set<string> } {
   for (const act of acts) {
     if (act.act === "queue") {
-      need(!intents.has(act.intent.id), file, `duplicate queue ${act.intent.id}`);
+      need(!intents.has(act.intent.id), file, duplicateQueue(act.intent.id));
       intents.set(act.intent.id, structuredClone(act.intent)); continue;
     }
     const intent = intents.get(act.id);
-    need(intent, file, `act targets unknown intent ${act.id}`);
-    need(!removed.has(act.id), file, `act targets removed intent ${act.id}`);
+    need(intent, file, i18n._({ id: "act targets unknown intent {intentId}",
+      comment: "Storage diagnostic: an act names an intent no queue act created", values: { intentId: act.id } }));
+    need(!removed.has(act.id), file, i18n._({ id: "act targets removed intent {intentId}",
+      comment: "Storage diagnostic: an act follows the intent's removal", values: { intentId: act.id } }));
     switch (act.act) {
       case "edit": intent.text = act.text; break;
       case "move": intent.rank = act.rank; break;
@@ -208,16 +270,20 @@ export function validateIntentRelations(intents: Map<string, IntentInfo>, remove
     if (removed.has(intent.id) || projectId !== undefined && intent.projectId !== projectId) continue;
     if (intent.closedAt === undefined) {
       const rank = `${intent.projectId}\0${intent.rank}`;
-      need(!ranks.has(rank), file, `duplicate open rank ${intent.rank}`); ranks.add(rank);
+      need(!ranks.has(rank), file, i18n._({ id: "duplicate open rank {rank}",
+        comment: "Storage diagnostic: two open intents claim one queue position", values: { rank: intent.rank } })); ranks.add(rank);
       if (intent.source && intent.source.kind !== "chat") {
         const source = `${intent.projectId}\0${intent.source.kind}\0${intent.source.ref}`;
-        need(!sources.has(source), file, `duplicate open source ${intent.source.ref}`); sources.add(source);
+        need(!sources.has(source), file, i18n._({ id: "duplicate open source {source}",
+          comment: "Storage diagnostic: two open intents hold one issue or pull request", values: { source: intent.source.ref } })); sources.add(source);
       }
     }
     const seen = new Set([intent.id]); let next = intent.afterId;
     while (next !== undefined) {
-      need(intents.has(next), file, `missing predecessor ${next}`);
-      need(!seen.has(next), file, `dependency cycle at ${next}`); seen.add(next);
+      need(intents.has(next), file, i18n._({ id: "missing predecessor {intentId}",
+        comment: "Storage diagnostic: an intent waits on one the log never queued", values: { intentId: next } }));
+      need(!seen.has(next), file, i18n._({ id: "dependency cycle at {intentId}",
+        comment: "Storage diagnostic: the queue's waiting chain loops", values: { intentId: next } })); seen.add(next);
       next = intents.get(next)?.afterId;
     }
   }
@@ -232,7 +298,8 @@ export function validateIntentDispatches(
     const session = sessions.get(intent.dispatched.sessionId);
     if (!session) continue; // Deleted targets retain ledger derivation.
     need((session.projectId === undefined || session.projectId === intent.projectId) && session.turns.has(intent.dispatched.turnId),
-      `intents/${intent.projectId}.jsonl`, `invalid dispatch for ${intent.id}`);
+      `intents/${intent.projectId}.jsonl`, i18n._({ id: "invalid dispatch for {intentId}",
+        comment: "Storage diagnostic: an intent names a turn its session never ran", values: { intentId: intent.id } }));
   }
 }
 export function readJsonFile(file: string): unknown {
@@ -270,17 +337,20 @@ export function migrateApplicationRegistry(home: string): void {
   const original = receipt ? readFileSync(join(receiptDir!, "inputs", "0")) : readFileSync(file);
   let before: Record<string, unknown>;
   try { before = JSON.parse(original.toString("utf8")) as Record<string, unknown>; }
-  catch { throw new StorageFormatError(receipt ? join(receiptDir!, "inputs", "0") : file, "invalid JSON"); }
-  need(object(before), receipt ? join(receiptDir!, "inputs", "0") : file, "expected a registry object");
+  catch { throw new StorageFormatError(receipt ? join(receiptDir!, "inputs", "0") : file, i18n._({ id: "invalid JSON",
+    comment: "Migration diagnostic: the file to migrate is not readable JSON" })); }
+  need(object(before), receipt ? join(receiptDir!, "inputs", "0") : file, i18n._({ id: "expected a registry object",
+    comment: "Migration diagnostic: the project registry's top level is not an object" }));
   if (before.v === 2 && !receipt) { parseRegistry(before, file); return; }
-  if (!receipt && before.v !== 1) throw new StorageFormatError(file, "unsupported registry version; preserved unchanged");
+  if (!receipt && before.v !== 1) throw new StorageFormatError(file, unsupportedRegistry());
   try {
     closed(before, ["v", "projects"], [], file);
-    need(before.v === 1 && Array.isArray(before.projects), file, "unsupported registry version; preserved unchanged");
+    need(before.v === 1 && Array.isArray(before.projects), file, unsupportedRegistry());
     const identities: ProjectIdentity[] = []; const bindings: ProjectBinding[] = [];
     for (const p of before.projects) {
       closed(p, ["id", "path", "name", "registeredAt"], [], file);
-      need(localPath(p.path), file, "invalid legacy project path");
+      need(localPath(p.path), file, i18n._({ id: "invalid legacy project path",
+        comment: "Migration diagnostic: a project's recorded folder is no absolute local path" }));
       identities.push({ id: p.id as string, name: p.name as string, registeredAt: p.registeredAt as number });
       bindings.push({ id: p.id as string, path: p.path, aliases: [] });
     }
@@ -292,13 +362,15 @@ export function migrateApplicationRegistry(home: string): void {
       receipt = { v: 1, id, inputs: [{ path: file, sha256: sha256(original) }], complete: false };
       writeApplicationFile(join(receiptDir, "receipt.json"), receipt);
     }
-    need(receipt.v === 1 && receipt.id === receiptDir!.split(/[\\/]/).at(-1) && receipt.inputs[0].sha256 === sha256(original), file, "invalid migration receipt or retained input");
+    need(receipt.v === 1 && receipt.id === receiptDir!.split(/[\\/]/).at(-1) && receipt.inputs[0].sha256 === sha256(original), file,
+      i18n._({ id: "invalid migration receipt or retained input",
+        comment: "Migration diagnostic: the kept original no longer matches its receipt" }));
     for (const [target, expected, allowed] of [[bindingsFile, mapping, undefined], [file, registry, original]] as const) {
       const bytes = Buffer.from(JSON.stringify(expected));
       if (existsSync(target)) {
         const current = readFileSync(target);
         if (current.equals(bytes)) continue;
-        need(allowed !== undefined && current.equals(allowed), target, "migration destination diverged; preserved unchanged");
+        need(allowed !== undefined && current.equals(allowed), target, divergedDestination());
       }
       writeApplicationFile(target, expected);
     }
@@ -334,15 +406,15 @@ export class ApplicationRegistry {
   diagnostics(): StorageDiagnostic[] {
     const reports: StorageDiagnostic[] = [...this.problems]; const paths = new Map<string, Set<string>>();
     for (const binding of this.bindings.values()) {
-      if (!this.identities.has(binding.id)) reports.push({ file: "local/project-paths.json", reason: `unregistered project ${binding.id}`, blocking: false });
+      if (!this.identities.has(binding.id)) reports.push({ file: "local/project-paths.json", reason: unregisteredProject(binding.id), blocking: false });
       for (const p of [binding.path, ...binding.aliases]) { const ids = paths.get(p) ?? new Set<string>(); ids.add(binding.id); paths.set(p, ids); }
     }
-    for (const [p, ids] of paths) if (ids.size > 1) reports.push({ file: "local/project-paths.json", reason: `ambiguous project path ${p}`, blocking: false });
+    for (const [p, ids] of paths) if (ids.size > 1) reports.push({ file: "local/project-paths.json", reason: ambiguousPath(p), blocking: false });
     for (const [id, identity] of this.identities) {
       if (this.bindings.has(id)) continue;
       reports.push({
         file: "projects.json",
-        reason: `${identity.name} has no folder on this device`,
+        reason: noFolder(identity.name),
         blocking: false,
         repair: { kind: "project", projectId: id, projectName: identity.name, directories: [], sessions: 0, key: repairKey(id, []) },
       });
@@ -364,7 +436,9 @@ export class ApplicationRegistry {
     this.assertWritable();
     const normalized = resolve(p);
     const existing = this.resolvePath(normalized); if (existing) return existing;
-    need(![...this.bindings.values()].some((b) => b.path === normalized || b.aliases.includes(normalized)), "local/project-paths.json", `path ${normalized} needs explicit rebinding`);
+    need(![...this.bindings.values()].some((b) => b.path === normalized || b.aliases.includes(normalized)), "local/project-paths.json",
+      i18n._({ id: "path {path} needs explicit rebinding", comment: "Refusal: the folder is recorded for a project already, so Add cannot claim it",
+        values: { path: normalized } }));
     const id = randomUUID(); return this.bind({ id, name, registeredAt: at }, normalized, []);
   }
   bind(identity: ProjectIdentity, p: string, aliases?: string[]): ProjectInfo {
@@ -374,7 +448,9 @@ export class ApplicationRegistry {
     const retained = aliases ?? [...(prior?.aliases ?? []), ...(prior && prior.path !== resolve(p) ? [prior.path] : [])];
     const binding = { id: identity.id, path: resolve(p), aliases: [...new Set(retained)].filter((a) => a !== resolve(p)) };
     parseBindings({ v: 1, bindings: [binding] });
-    need(![...this.bindings.values()].some((b) => b.id !== identity.id && [b.path, ...b.aliases].some((x) => [binding.path, ...binding.aliases].includes(x))), "local/project-paths.json", "path or alias already belongs to another project");
+    need(![...this.bindings.values()].some((b) => b.id !== identity.id && [b.path, ...b.aliases].some((x) => [binding.path, ...binding.aliases].includes(x))), "local/project-paths.json",
+      i18n._({ id: "path or alias already belongs to another project",
+        comment: "Refusal: another project holds the folder this binding names" }));
     this.identities.set(identity.id, identity); this.bindings.set(identity.id, binding); this.save(); return { ...identity, path: binding.path };
   }
   remove(id: string): boolean { this.assertWritable(); const found = this.identities.delete(id); if (found) { this.bindings.delete(id); this.save(); } return found; }
@@ -404,7 +480,7 @@ export function validateApplicationTree(home: string): {
     const full = join(intentsDir, file);
     const folded = foldIntentActs(parseIntentLog(readFileSync(full, "utf8"), file.slice(0, -6), full), full);
     for (const [id, intent] of folded.intents) {
-      need(!intents.has(id), full, `duplicate queue ${id}`);
+      need(!intents.has(id), full, duplicateQueue(id));
       intents.set(id, intent);
     }
     for (const id of folded.removed) removed.add(id);
@@ -412,11 +488,11 @@ export function validateApplicationTree(home: string): {
   validateIntentRelations(intents, removed);
   const ids = new Set(projects.map((p) => p.id));
   const diagnostics: StorageDiagnostic[] = [];
-  for (const binding of bindings) if (!ids.has(binding.id)) diagnostics.push({ file: mapping, reason: `unregistered project ${binding.id}`, blocking: false });
+  for (const binding of bindings) if (!ids.has(binding.id)) diagnostics.push({ file: mapping, reason: unregisteredProject(binding.id), blocking: false });
   const paths = new Map<string, Set<string>>();
   for (const binding of bindings) for (const p of [binding.path, ...binding.aliases]) { const found = paths.get(p) ?? new Set<string>(); found.add(binding.id); paths.set(p, found); }
-  for (const [p, found] of paths) if (found.size > 1) diagnostics.push({ file: mapping, reason: `ambiguous project path ${p}`, blocking: false });
-  for (const id of new Set([...intents.values()].map((i) => i.projectId))) if (!ids.has(id)) diagnostics.push({ file: join(intentsDir, `${id}.jsonl`), reason: `unregistered project ${id}`, blocking: false });
+  for (const [p, found] of paths) if (found.size > 1) diagnostics.push({ file: mapping, reason: ambiguousPath(p), blocking: false });
+  for (const id of new Set([...intents.values()].map((i) => i.projectId))) if (!ids.has(id)) diagnostics.push({ file: join(intentsDir, `${id}.jsonl`), reason: unregisteredProject(id), blocking: false });
   return { projects, bindings, intents, removed, diagnostics };
 }
 
@@ -439,10 +515,12 @@ export function migrateApplicationFile(home: string, source: string, convert: (o
     receipt = { v: 1, id, inputs: [{ path: source, sha256: sha256(original) }], complete: false };
     writeApplicationFile(join(directory, "receipt.json"), receipt);
   }
-  need(receipt.v === 1 && receipt.inputs[0].sha256 === sha256(original), source, "invalid migration receipt or input");
+  need(receipt.v === 1 && receipt.inputs[0].sha256 === sha256(original), source, i18n._({ id: "invalid migration receipt or input",
+    comment: "Migration diagnostic: the kept original no longer matches its receipt" }));
   const current = readFileSync(source);
-  need(current.equals(original) || current.equals(expected), source, "migration destination diverged; preserved unchanged");
+  need(current.equals(original) || current.equals(expected), source, divergedDestination());
   if (!current.equals(expected)) writeApplicationBytes(source, expected);
-  need(readFileSync(source).equals(expected), source, "migration output verification failed");
+  need(readFileSync(source).equals(expected), source, i18n._({ id: "migration output verification failed",
+    comment: "Migration diagnostic: the file read back differs from what was written" }));
   receipt.complete = true; writeApplicationFile(join(directory!, "receipt.json"), receipt);
 }

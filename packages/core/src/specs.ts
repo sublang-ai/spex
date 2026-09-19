@@ -22,6 +22,7 @@ import {
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
+import { i18n } from "./i18n.js";
 import type {
   SpecFileInfo,
   SpecGroup,
@@ -191,10 +192,22 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
       // verification sections; the file notice flags the surprise.
       group = "external";
       if (open.section === undefined) {
-        file.notices.push(`item ${open.id} appears before any ## section`);
+        file.notices.push(
+          i18n._({
+            id: "item {item} appears before any ## section",
+            values: { item: open.id },
+            comment: "Spec notice; `##` is the markdown heading level and stays as it is",
+          }),
+        );
       } else if (!unexpectedSections.has(open.section)) {
         unexpectedSections.add(open.section);
-        file.notices.push(`items under unexpected section "${open.section}"`);
+        file.notices.push(
+          i18n._({
+            id: 'items under unexpected section "{section}"',
+            values: { section: open.section },
+            comment: "Spec notice: the section heading is the file's own words",
+          }),
+        );
       }
     }
     file.items.push({
@@ -294,7 +307,11 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
     file.title = headed[2].trim();
     if (headed[1] !== file.basename) {
       file.notices.push(
-        `H1 identifier "${headed[1]}" disagrees with basename "${file.basename}"`,
+        i18n._({
+          id: 'H1 identifier "{identifier}" disagrees with basename "{basename}"',
+          values: { identifier: headed[1], basename: file.basename },
+          comment: "Spec notice; `H1` is the markdown top heading and both names are the file's own",
+        }),
       );
     }
   } else if (h1 !== undefined) {
@@ -306,7 +323,11 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
     if (prefix === file.basename || noticedPrefixes.has(prefix)) continue;
     noticedPrefixes.add(prefix);
     file.notices.push(
-      `item-ID prefix "${prefix}" disagrees with basename "${file.basename}"`,
+      i18n._({
+        id: 'item-ID prefix "{prefix}" disagrees with basename "{basename}"',
+        values: { prefix, basename: file.basename },
+        comment: "Spec notice: the prefix an item's ID carries and the file's basename are both the file's own",
+      }),
     );
   }
 
@@ -319,14 +340,30 @@ export function parseSpecFile(absPath: string, key: string): SpecFileInfo {
   try {
     text = readFileSync(absPath, "utf8");
   } catch (error) {
+    // The core's own words; what the filesystem or the parse said is
+    // relayed as it came.
     const message = error instanceof Error ? error.message : String(error);
-    return { ...fileShell(key), error: `cannot read file: ${message}` };
+    return {
+      ...fileShell(key),
+      error: i18n._({
+        id: "cannot read file: {message}",
+        values: { message },
+        comment: "Spec file error: the filesystem's own reason follows",
+      }),
+    };
   }
   try {
     return parseSpecFileText(text, key);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ...fileShell(key), error: `parse failed: ${message}` };
+    return {
+      ...fileShell(key),
+      error: i18n._({
+        id: "parse failed: {message}",
+        values: { message },
+        comment: "Spec file error: the parser's own reason follows",
+      }),
+    };
   }
 }
 
@@ -362,6 +399,16 @@ interface WalkedFile {
   abs: string;
 }
 
+/** One notice for every skipped symlink, wherever it stood: the path
+ * is a value, so the sentence is written once. */
+function skippedSymlinkNotice(path: string): string {
+  return i18n._({
+    id: "skipped symlink escaping the project: {path}",
+    values: { path },
+    comment: "Spec notice: a link under specs/ pointed outside the project and was not read",
+  });
+}
+
 function walkCollection(
   collectionDir: string,
   baseReal: string,
@@ -373,9 +420,7 @@ function walkCollection(
       const abs = join(dir, entry.name);
       const relPath = rel === "" ? entry.name : `${rel}/${entry.name}`;
       if (entry.isSymbolicLink() && realInside(abs, baseReal) === undefined) {
-        notices.push(
-          `skipped symlink escaping the project: specs/packages/${relPath}`,
-        );
+        notices.push(skippedSymlinkNotice(`specs/packages/${relPath}`));
         continue;
       }
       let stats;
@@ -413,7 +458,11 @@ function noticeDuplicateRecordIds(
       firstById.set(record.id, record.path);
     } else {
       notices.push(
-        `duplicate record id ${record.id}: ${first} and ${record.path}`,
+        i18n._({
+          id: "duplicate record id {id}: {first} and {second}",
+          values: { id: record.id, first, second: record.path },
+          comment: "Spec notice: two record files carry one id; the values are that id and both paths",
+        }),
       );
     }
   }
@@ -437,7 +486,10 @@ function parseIntentRecords(
   if (legacy.length === 0) return noticeDuplicateRecordIds(current, notices);
   if (current.length === 0) return noticeDuplicateRecordIds(legacy, notices);
   notices.push(
-    "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies",
+    i18n._({
+      id: "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies",
+      comment: "Spec notice; the two directory paths and the `spex scaffold --update` command stay as they are",
+    }),
   );
   const currentNames = new Set(
     current.map((record) => posix.basename(record.path)),
@@ -445,7 +497,11 @@ function parseIntentRecords(
   const kept = legacy.filter((record) => {
     if (!currentNames.has(posix.basename(record.path))) return true;
     notices.push(
-      `${record.path} is shadowed by the same-named file under intents/`,
+      i18n._({
+        id: "{path} is shadowed by the same-named file under intents/",
+        values: { path: record.path },
+        comment: "Spec notice; `intents/` is a directory name and stays as it is",
+      }),
     );
     return false;
   });
@@ -521,9 +577,7 @@ function parseRecords(
     if (!numbered) continue;
     const abs = join(dir, entry.name);
     if (entry.isSymbolicLink() && realInside(abs, baseReal) === undefined) {
-      notices.push(
-        `skipped symlink escaping the project: specs/${sub}/${entry.name}`,
-      );
+      notices.push(skippedSymlinkNotice(`specs/${sub}/${entry.name}`));
       continue;
     }
     let stats;
@@ -622,7 +676,13 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     .map((entry) => entry.name)
     .filter((name) => !KNOWN_TOP_LEVEL.has(name) && !name.startsWith("."));
   if (unknown.length > 0) {
-    notices.push(`unknown entries under specs/: ${unknown.join(", ")}`);
+    notices.push(
+      i18n._({
+        id: "unknown entries under specs/: {entries}",
+        values: { entries: unknown.join(", ") },
+        comment: "Spec notice: the entry names follow, as the tree spells them",
+      }),
+    );
   }
 
   // Walk the packages collection; subdirectories are navigation only
@@ -665,7 +725,10 @@ export function resolveSpecPath(
     return {
       ok: false,
       code: "invalid_request",
-      message: "path must be relative to specs/",
+      message: i18n._({
+        id: "path must be relative to specs/",
+        comment: "Refusal; `specs/` is the directory's name and stays as it is",
+      }),
     };
   }
   const segments = relPath.split(/[\\/]+/).filter((segment) => segment !== "");
@@ -673,37 +736,59 @@ export function resolveSpecPath(
     return {
       ok: false,
       code: "invalid_request",
-      message: "path may not escape specs/",
+      message: i18n._({
+        id: "path may not escape specs/",
+        comment: "Refusal: the path asked for leads out of the specs/ directory",
+      }),
     };
   }
   if (!relPath.endsWith(".md")) {
     return {
       ok: false,
       code: "invalid_request",
-      message: "only .md files under specs/ can be read",
+      message: i18n._({
+        id: "only .md files under specs/ can be read",
+        comment: "Refusal; `.md` is the markdown file extension and stays as it is",
+      }),
     };
   }
   let baseReal: string;
   try {
     baseReal = realpathSync(projectPath);
   } catch {
-    return { ok: false, code: "not_found", message: "project directory is missing" };
+    return {
+      ok: false,
+      code: "not_found",
+      message: i18n._({
+        id: "project directory is missing",
+        comment: "Refusal: the project's own folder is not on this device",
+      }),
+    };
   }
+  const missing = (): string =>
+    i18n._({
+      id: "no spec file at specs/{path}",
+      values: { path: relPath },
+      comment: "Refusal: nothing readable stands at the path under specs/",
+    });
   const abs = join(projectPath, "specs", ...segments);
   let stats;
   try {
     stats = statSync(abs);
   } catch {
-    return { ok: false, code: "not_found", message: `no spec file at specs/${relPath}` };
+    return { ok: false, code: "not_found", message: missing() };
   }
   if (!stats.isFile()) {
-    return { ok: false, code: "not_found", message: `no spec file at specs/${relPath}` };
+    return { ok: false, code: "not_found", message: missing() };
   }
   if (realInside(abs, baseReal) === undefined) {
     return {
       ok: false,
       code: "invalid_request",
-      message: "path resolves outside the project",
+      message: i18n._({
+        id: "path resolves outside the project",
+        comment: "Refusal: a link made the path leave the project",
+      }),
     };
   }
   return { ok: true, path: abs };
@@ -769,7 +854,13 @@ export function writeSpecFile(
     return {
       ok: false,
       code: "conflict",
-      message: `specs/${relPath} changed on disk since it was read`,
+      // The draft store words its own conflict the same way: one
+      // message, the file named as a value.
+      message: i18n._({
+        id: "{file} changed on disk since it was read",
+        values: { file: `specs/${relPath}` },
+        comment: "Refusal: the file moved under the write the reader asked for",
+      }),
     };
   }
   const next = Buffer.from(content, "utf8");

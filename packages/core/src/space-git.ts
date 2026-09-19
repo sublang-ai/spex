@@ -8,6 +8,7 @@
 
 import { spawn } from "node:child_process";
 import { hostname } from "node:os";
+import { i18n } from "./i18n.js";
 import type { SyncCause } from "./protocol.js";
 
 export interface GitRun {
@@ -32,7 +33,10 @@ export interface GitRunOptions {
 /** `git` itself is not runnable: absent from PATH or not executable. */
 export class GitMissingError extends Error {
   constructor(cause: unknown) {
-    super("Git is not installed. Install Git, then reopen Space.");
+    super(i18n._({
+      id: "Git is not installed. Install Git, then reopen Space.",
+      comment: "Guidance where the git command cannot be run at all",
+    }));
     this.name = "GitMissingError";
     this.cause = cause;
   }
@@ -65,7 +69,12 @@ export function lastLines(text: string, count = 3): string {
 /** The host a remote URL addresses, for the messages of space-15; a
  * local path is its own host. */
 export function remoteHost(url: string | null): string {
-  if (!url) return "the remote";
+  if (!url) {
+    return i18n._({
+      id: "the remote",
+      comment: "Stands where a message names the remote's host and no URL says which",
+    });
+  }
   const scheme = /^[a-z][a-z0-9+.-]*:\/\/([^/]*)/i.exec(url);
   if (scheme) {
     const authority = scheme[1];
@@ -77,22 +86,85 @@ export function remoteHost(url: string | null): string {
   return url;
 }
 
-/** What gives this machine access to a remote (space-50), read from the
- * URL alone: the act the reader performs, with the command where one
- * serves it — the app runs none, and no probe answers what the
+/** Which act gives this machine access to a remote (space-50), read
+ * from the URL alone — the app runs no probe, and none answers what the
  * transport already did. */
-export function remoteAccess(remote: string | null): string {
-  if (!remote) return "give this machine access to it";
-  if (/^\//.test(remote) || /^file:\/\//i.test(remote)) return "make sure this user can read the folder";
+type AccessAct = "folder" | "github" | "web" | "ssh" | "any";
+
+function accessAct(remote: string | null): AccessAct {
+  if (!remote) return "any";
+  if (/^\//.test(remote) || /^file:\/\//i.test(remote)) return "folder";
   if (/^https?:\/\//i.test(remote)) {
-    return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote)
-      ? "in a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
-      : "sign this machine in at that host as an account that can see it";
+    return /^https?:\/\/(?:[^/@]*@)?(?:[^/:]*\.)?github\.com(?:[:/]|$)/i.test(remote) ? "github" : "web";
   }
-  if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) {
-    return "add this machine's SSH key to an account that can see it";
+  if (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote)) return "ssh";
+  return "any";
+}
+
+/** The act the reader performs, with the command where one serves it,
+ * inside a sentence of the guidance (space-15). Its opening form is
+ * separate, because a sentence's first word is the language's own
+ * business, never a transform applied to a phrase (DR-079). */
+export function remoteAccess(remote: string | null): string {
+  switch (accessAct(remote)) {
+    case "folder":
+      return i18n._({
+        id: "make sure this user can read the folder",
+        comment: "The act that gives access to a local-path remote, inside a sentence",
+      });
+    case "github":
+      return i18n._({
+        id: "in a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it",
+        comment: "The act that gives access to a GitHub remote, inside a sentence; gh auth status and gh auth login are commands and stay as they are",
+      });
+    case "web":
+      return i18n._({
+        id: "sign this machine in at that host as an account that can see it",
+        comment: "The act that gives access to an http(s) remote, inside a sentence",
+      });
+    case "ssh":
+      return i18n._({
+        id: "add this machine's SSH key to an account that can see it",
+        comment: "The act that gives access to an SSH remote, inside a sentence",
+      });
+    default:
+      return i18n._({
+        id: "give this machine access to it",
+        comment: "The act that gives access to a remote of an unread form, inside a sentence",
+      });
   }
-  return "give this machine access to it";
+}
+
+/** The same act, opening its own sentence; a language that cases no
+ * differently writes it exactly as [[remoteAccess]]. */
+function remoteAccessOpening(remote: string | null): string {
+  switch (accessAct(remote)) {
+    case "folder":
+      return i18n._({
+        id: "Make sure this user can read the folder",
+        comment: "The act that gives access to a local-path remote, opening a sentence",
+      });
+    case "github":
+      return i18n._({
+        id: "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it",
+        comment: "The act that gives access to a GitHub remote, opening a sentence; gh auth status and gh auth login are commands and stay as they are",
+      });
+    case "web":
+      return i18n._({
+        id: "Sign this machine in at that host as an account that can see it",
+        comment: "The act that gives access to an http(s) remote, opening a sentence",
+      });
+    case "ssh":
+      return i18n._({
+        id: "Add this machine's SSH key to an account that can see it",
+        comment: "The act that gives access to an SSH remote, opening a sentence",
+      });
+    default:
+      return i18n._({
+        id: "Give this machine access to it",
+        comment: "The act that gives access to a remote of an unread form, opening a sentence",
+      });
+  }
 }
 
 /** An SSH form, which alone can stop on an unknown host key. */
@@ -111,16 +183,28 @@ export function displayRemote(url: string): string {
  * whitespace or control characters, and never an embedded credential. */
 export function validateRemoteUrl(url: string): { ok: true } | { ok: false; reason: string } {
   if (url.length === 0 || /\s/.test(url) || /[\x00-\x1f\x7f]/.test(url)) {
-    return { ok: false, reason: "The remote URL is malformed: it must be one word with no spaces or control characters." };
+    return { ok: false, reason: i18n._({
+      id: "The remote URL is malformed: it must be one word with no spaces or control characters.",
+      comment: "Refusal of a remote URL",
+    }) };
   }
   if (/^https?:\/\/[^/]*@/i.test(url)) {
-    return { ok: false, reason: "The app stores no credential: remove everything before the host from the URL and use an SSH key or the machine's credential helper instead." };
+    return { ok: false, reason: i18n._({
+      id: "The app stores no credential: remove everything before the host from the URL and use an SSH key or the machine's credential helper instead.",
+      comment: "Refusal of a remote URL carrying a user before the host",
+    }) };
   }
   if (/^[a-z][a-z0-9+.-]*:\/\/[^/@]*:[^/@]*@/i.test(url)) {
-    return { ok: false, reason: "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead." };
+    return { ok: false, reason: i18n._({
+      id: "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead.",
+      comment: "Refusal of a remote URL carrying a user and a secret",
+    }) };
   }
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !/^[^@/:\s]+@[^/:\s]+:/.test(url) && !url.startsWith("/")) {
-    return { ok: false, reason: "The remote URL is malformed: use ssh://, git@host:path, https://, http:// or an absolute local path." };
+    return { ok: false, reason: i18n._({
+      id: "The remote URL is malformed: use ssh://, git@host:path, https://, http:// or an absolute local path.",
+      comment: "Refusal of a remote URL of no accepted form; the forms themselves stay as they are",
+    }) };
   }
   return { ok: true };
 }
@@ -132,25 +216,63 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   if (run.killed) {
     return {
       cause: run.killed,
-      message: `No answer from ${host}`,
+      message: i18n._({
+        id: "No answer from {host}",
+        values: { host },
+        comment: "A stopped transfer's message; {host} is the remote's host",
+      }),
       guidance: run.killed === "stopped"
-        ? "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging."
-        : "Git runs without prompts, so a helper that prompts fails instead of hanging. Check the connection, then try again.",
+        ? i18n._({
+            id: "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging.",
+            comment: "Guidance after the reader stopped a transfer",
+          })
+        : i18n._({
+            id: "Git runs without prompts, so a helper that prompts fails instead of hanging. Check the connection, then try again.",
+            comment: "Guidance after a transfer ran past its time limit",
+          }),
       retry: true,
     };
   }
   const text = run.stderr;
   if (/Could not resolve host|Connection refused|Network is unreachable|Connection timed out|No route to host|Could not resolve hostname/i.test(text)) {
-    return { cause: "unreachable", message: `Could not reach ${host}`, guidance: "Check the network or the remote URL, then try again.", retry: true };
+    return {
+      cause: "unreachable",
+      message: i18n._({
+        id: "Could not reach {host}",
+        values: { host },
+        comment: "A stopped transfer's message; {host} is the remote's host",
+      }),
+      guidance: i18n._({
+        id: "Check the network or the remote URL, then try again.",
+        comment: "Guidance where the remote's host could not be reached",
+      }),
+      retry: true,
+    };
   }
   if (/Permission denied|Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 40[13]|HTTP (?:401|403)/i.test(text)) {
     // The act that gives access is the remote form's (space-50), and an
-    // SSH form alone can stop on a host key it has never seen.
-    const act = remoteAccess(remote);
+    // SSH form alone can stop on a host key it has never seen. Each
+    // guidance is one whole sentence carrying the act, never a frame
+    // assembled around a fragment (DR-079).
+    const act = remoteAccessOpening(remote);
     return {
       cause: "unauthorized",
-      message: `${host} refused this machine's access`,
-      guidance: `${act[0].toUpperCase()}${act.slice(1)}${isSsh(remote) ? "; on a first connection, accept the host key in a terminal" : ""}. Then Retry.`,
+      message: i18n._({
+        id: "{host} refused this machine's access",
+        values: { host },
+        comment: "A stopped transfer's message; {host} is the remote's host",
+      }),
+      guidance: isSsh(remote)
+        ? i18n._({
+            id: "{act}; on a first connection, accept the host key in a terminal. Then Retry.",
+            values: { act },
+            comment: "Guidance where an SSH remote refused access; {act} is the act that gives this machine access, already opening the sentence",
+          })
+        : i18n._({
+            id: "{act}. Then Retry.",
+            values: { act },
+            comment: "Guidance where the remote refused access; {act} is the act that gives this machine access, already opening the sentence",
+          }),
       retry: true,
     };
   }
@@ -159,20 +281,58 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
     // private one this machine may not see (space-15), so the guidance is
     // the remedies for both — every one outside the app, hence Retry —
     // the access one named as this remote's form gives it (space-50).
+    const act = remoteAccess(remote);
     return {
       cause: "not-found",
-      message: `No repository this machine can see at ${remote ? displayRemote(remote) : host}`,
-      guidance: `Check the ${remote && /^\//.test(remote) ? "path" : "URL"}, create the repository if it is not there yet, or ${remoteAccess(remote)}. Then Retry.`,
+      message: i18n._({
+        id: "No repository this machine can see at {target}",
+        values: { target: remote ? displayRemote(remote) : host },
+        comment: "A stopped transfer's message; {target} is the remote URL, or its host where no URL is known",
+      }),
+      guidance: remote && /^\//.test(remote)
+        ? i18n._({
+            id: "Check the path, create the repository if it is not there yet, or {act}. Then Retry.",
+            values: { act },
+            comment: "Guidance where a local-path remote holds no repository this machine can see; {act} is the act that gives this machine access",
+          })
+        : i18n._({
+            id: "Check the URL, create the repository if it is not there yet, or {act}. Then Retry.",
+            values: { act },
+            comment: "Guidance where the remote holds no repository this machine can see; {act} is the act that gives this machine access",
+          }),
       retry: true,
     };
   }
   if (/\[rejected\]|non-fast-forward|fetch first/i.test(text)) {
-    return { cause: "rejected", message: "The remote changed again", guidance: "Sync again to merge what the remote received meanwhile.", retry: true };
+    return {
+      cause: "rejected",
+      message: i18n._({
+        id: "The remote changed again",
+        comment: "A stopped transfer's message: the remote moved while this machine was sending",
+      }),
+      guidance: i18n._({
+        id: "Sync again to merge what the remote received meanwhile.",
+        comment: "Guidance where the remote rejected the push",
+      }),
+      retry: true,
+    };
   }
   return {
     cause: "git",
-    message: lastLines(text) || `git exited with ${run.code ?? "a signal"}`,
-    guidance: "Retry; if it fails again, run the same step in a terminal for detail.",
+    message: lastLines(text) || (run.code === null
+      ? i18n._({
+          id: "git exited with a signal",
+          comment: "A stopped step's message where git failed and printed nothing, ended by a signal",
+        })
+      : i18n._({
+          id: "git exited with {code}",
+          values: { code: run.code },
+          comment: "A stopped step's message where git failed and printed nothing; {code} is its exit code",
+        })),
+    guidance: i18n._({
+      id: "Retry; if it fails again, run the same step in a terminal for detail.",
+      comment: "Guidance under a step git failed for a reason the app does not classify",
+    }),
     retry: true,
   };
 }
@@ -295,7 +455,11 @@ export class SpaceGit {
       const out = await this.ok(["--version"]);
       return { ok: true, version: out.replace(/^git version\s*/, "") };
     } catch (error) {
-      return { ok: false, guidance: error instanceof GitMissingError ? error.message : `Git could not run: ${error instanceof Error ? error.message : String(error)}` };
+      return { ok: false, guidance: error instanceof GitMissingError ? error.message : i18n._({
+        id: "Git could not run: {detail}",
+        values: { detail: error instanceof Error ? error.message : String(error) },
+        comment: "Guidance where git exists but failed to run; {detail} is the failure's own text, relayed",
+      }) };
     }
   }
 

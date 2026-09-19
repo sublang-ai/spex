@@ -11,6 +11,12 @@
 // streamed at tool-call granularity (playbook-library-71). The runner
 // holds the runtime only for a turn (DR-051): no Cligent instance
 // outlives one, and the provider token is an in-memory hint.
+//
+// The thread's own lines — a ◇ status, a refusal, a system turn's
+// shown prompt — are the Boss's and read in the home's language
+// (core-service-111, DR-079); what this runner composes for the agent
+// — the preamble, the relay, the reseed digest — is the agent's
+// prompt and stays as it is.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -24,7 +30,7 @@ import { compilePlaybook, type CompileResult, type LineSpawner } from "./compile
 import type { ComposedConfig, ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
-import { phaseLabel } from "./phases.js";
+import { i18n } from "./i18n.js";
 import type {
   AdapterName,
   AgentSummary,
@@ -51,6 +57,34 @@ const RELAY_OUTPUT_LINES = 200;
 /** Consecutive failed compiles with no Boss message between them that
  * end the automation (playbook-library-68). */
 const RELAY_BOUND = 3;
+
+/** Spex's own packaging step, which a compile reports under either
+ * id: one word, so one message. */
+const packageStage = () =>
+  i18n._({ id: "Package", comment: "compile phase: Spex packages the artifacts" });
+
+/** The word a thread line calls each stage by, keyed by the compiler's
+ * phase id: the Boss's own text, read when the line is composed
+ * (core-service-111), whose English is the pipeline table's name for
+ * that phase (playbook-library-57). Thunks, never strings: a table read
+ * at module load would freeze the language it was imported in; the ids
+ * and their labels stay data on the protocol. */
+const STAGE_NAMES: Record<string, () => string> = {
+  normalize: () => i18n._({ id: "Normalize", comment: "compile phase: slc normalizes the source" }),
+  text2gears: () => i18n._({ id: "Spec items", comment: "compile phase: slc derives the spec items" }),
+  optimize: () => i18n._({ id: "Optimize", comment: "compile phase: slc optimizes the spec items" }),
+  gears2fsm: () => i18n._({ id: "Machine", comment: "pipeline stage: the compiled state machine" }),
+  link: () => i18n._({ id: "Link", comment: "compile phase: slc links the machine" }),
+  spex: packageStage,
+  packaging: packageStage,
+};
+
+/** The stage's name for a thread line; an unknown id reads as itself,
+ * as the pipeline table's own label does, so a phase a later slc adds
+ * is never renamed into nonsense. */
+function stageName(id: string): string {
+  return STAGE_NAMES[id]?.() ?? id;
+}
 
 export interface AuthorManagerOptions {
   store: Store;
@@ -255,6 +289,24 @@ function firstLineOf(markdown: string): string | null {
   return line === undefined ? null : line.trim();
 }
 
+/** The refusal for a draft whose compile is already under way. */
+function compileRunning(id: string): string {
+  return i18n._({
+    id: "a compile is already running for {id}",
+    values: { id },
+    comment: "Refusal: that draft's one compile is under way",
+  });
+}
+
+/** The refusal for an id no draft holds, worded once. */
+function noDraft(id: string): string {
+  return i18n._({
+    id: "no draft {id}",
+    values: { id },
+    comment: "Refusal: no draft on this device carries that id",
+  });
+}
+
 /** The source's first prose paragraph — the Register tab's default intent. */
 export function firstProseParagraph(markdown: string): string | undefined {
   const paragraphs = markdown.split(/\r?\n\s*\r?\n/);
@@ -307,7 +359,16 @@ export class AuthorManager {
         draft.compile = { ...draft.compile, outcome: "interrupted" };
         draft.touchedAt = this.now();
         this.drafts.write(draft);
-        if (!live.damaged) this.status(id, live, "◇ Compile interrupted when Spex closed");
+        if (!live.damaged) {
+          this.status(
+            id,
+            live,
+            i18n._({
+              id: "◇ Compile interrupted when Spex closed",
+              comment: "Draft thread status line; the ◇ opens every one of them and stays",
+            }),
+          );
+        }
       }
     }
   }
@@ -392,7 +453,7 @@ export class AuthorManager {
   }
 
   private read(id: string): StoredDraft {
-    if (!this.drafts.exists(id)) throw new CoreError("not_found", `no draft ${id}`);
+    if (!this.drafts.exists(id)) throw new CoreError("not_found", noDraft(id));
     try {
       const draft = this.drafts.read(id);
       this.problems.delete(id);
@@ -489,10 +550,18 @@ export class AuthorManager {
       if (read.incompleteAfterSeq !== undefined) {
         // Nothing appends after damage: the draft is blocked, alone,
         // until it is deleted or the file repaired (playbook-library-70).
-        live.damaged = `${this.drafts.recordsFile(id)}: damaged transcript after record ${read.incompleteAfterSeq}`;
+        live.damaged = i18n._({
+          id: "{file}: damaged transcript after record {seq}",
+          values: { file: this.drafts.recordsFile(id), seq: read.incompleteAfterSeq },
+          comment: "Draft diagnostic: the transcript file, then the last record that still read",
+        });
         this.problems.set(id, {
           file: this.drafts.recordsFile(id),
-          reason: `damaged transcript after record ${read.incompleteAfterSeq}; the draft refuses everything but Delete`,
+          reason: i18n._({
+            id: "damaged transcript after record {seq}; the draft refuses everything but Delete",
+            values: { seq: read.incompleteAfterSeq },
+            comment: "Storage diagnostic; Delete is the control's own name on the draft's row",
+          }),
           blocking: false,
         });
       }
@@ -505,7 +574,14 @@ export class AuthorManager {
     const live = this.liveOf(id);
     this.recordsOf(id, live);
     if (live.damaged) {
-      throw new CoreError("invalid_request", `${live.damaged}; delete the draft, or repair the file and restart Spex`);
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "{diagnostic}; delete the draft, or repair the file and restart Spex",
+          values: { diagnostic: live.damaged },
+          comment: "Refusal on a damaged draft: the diagnostic already composed, then the way out",
+        }),
+      );
     }
   }
 
@@ -595,9 +671,25 @@ export class AuthorManager {
 
   create(id: string): DraftInfo {
     if (this.options.reservedIds().includes(id)) {
-      throw new CoreError("invalid_request", `${id} is already a configured playbook or a built-in; pick another id`);
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "{id} is already a configured playbook or a built-in; pick another id",
+          values: { id },
+          comment: "Refusal: the id offered for a new draft is taken by a playbook already",
+        }),
+      );
     }
-    if (this.drafts.exists(id)) throw new CoreError("conflict", `draft ${id} already exists; open it`);
+    if (this.drafts.exists(id)) {
+      throw new CoreError(
+        "conflict",
+        i18n._({
+          id: "draft {id} already exists; open it",
+          values: { id },
+          comment: "Refusal: a draft with that id is already on this device",
+        }),
+      );
+    }
     const draft = this.drafts.create(id, this.now());
     const live = this.liveOf(id);
     live.records = [];
@@ -645,17 +737,40 @@ export class AuthorManager {
     this.assertReadable(id);
     this.assertIdle(id);
     if ((input.content === undefined) === (input.sourcePath === undefined)) {
-      throw new CoreError("invalid_request", "send either the source text or a file path");
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "send either the source text or a file path",
+          comment: "Refusal: a source write must carry one of the two, not both and not neither",
+        }),
+      );
     }
     let content: string;
     if (input.sourcePath !== undefined) {
       const path = resolve(input.sourcePath);
-      if (!existsSync(path) || !statSync(path).isFile()) throw new CoreError("invalid_request", `${path} is not a file`);
+      if (!existsSync(path) || !statSync(path).isFile()) {
+        throw new CoreError(
+          "invalid_request",
+          i18n._({
+            id: "{path} is not a file",
+            values: { path },
+            comment: "Refusal: the path offered as a draft's source is no file on this device",
+          }),
+        );
+      }
       content = readFileSync(path, "utf8");
     } else {
       content = input.content as string;
     }
-    if (content.trim() === "") throw new CoreError("invalid_request", "the source is empty; nothing was written");
+    if (content.trim() === "") {
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "the source is empty; nothing was written",
+          comment: "Refusal: the draft's source would have been emptied",
+        }),
+      );
+    }
     const written = this.drafts.writeSource(id, content, input.baseVersion);
     if (!written.ok) throw new CoreError(written.code, written.message);
     const live = this.liveOf(id);
@@ -675,7 +790,12 @@ export class AuthorManager {
     if (!started.ok) throw new CoreError(started.code, started.message);
     const settled = await started.done;
     if (settled.outcome === "ok") return { ok: true, roles: settled.roles };
-    if (settled.outcome === "canceled") throw new CoreError("aborted", "compile canceled");
+    if (settled.outcome === "canceled") {
+      throw new CoreError(
+        "aborted",
+        i18n._({ id: "compile canceled", comment: "Refusal: the compile the Boss awaited was canceled" }),
+      );
+    }
     throw new CoreError("invalid_request", settled.message);
   }
 
@@ -700,9 +820,15 @@ export class AuthorManager {
     this.assertReadable(id);
     this.assertIdle(id);
     if (draft.compile?.outcome !== "ok" || !draft.compile.roles) {
-      throw new CoreError("invalid_request", "compile the draft successfully before registering it");
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "compile the draft successfully before registering it",
+          comment: "Refusal: registration needs a compile that succeeded",
+        }),
+      );
     }
-    if (this.options.activeCompiles.has(id)) throw new CoreError("busy", `a compile is already running for ${id}`);
+    if (this.options.activeCompiles.has(id)) throw new CoreError("busy", compileRunning(id));
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
     try {
@@ -746,18 +872,48 @@ export class AuthorManager {
     const draft = this.read(id);
     this.assertReadable(id);
     const live = this.liveOf(id);
-    if (live.turn) throw new CoreError("busy", "wait for the reply before switching the agent");
+    if (live.turn) {
+      throw new CoreError(
+        "busy",
+        i18n._({
+          id: "wait for the reply before switching the agent",
+          comment: "Refusal: the draft's agent is answering, so its agent cannot change now",
+        }),
+      );
+    }
     const key = `draft:${id}:player`;
     if (playerId === null) {
       this.options.store.deletePref(key);
     } else {
       const composed = this.options.composed();
       if (!composed?.players.some((player) => player.id === playerId)) {
-        throw new CoreError("invalid_request", `no roster player ${playerId}`);
+        throw new CoreError(
+          "invalid_request",
+          i18n._({
+            id: "no roster player {playerId}",
+            values: { playerId },
+            comment: "Refusal: the config's roster holds no player with that id",
+          }),
+        );
       }
       this.options.store.setPref(key, playerId);
     }
-    this.status(id, live, `◇ Now answering: ${playerId ?? "Captain"} — the conversation so far was replayed to it`);
+    // One message per case, so the Captain is named in the reader's
+    // language and a player by its own id.
+    this.status(
+      id,
+      live,
+      playerId === null
+        ? i18n._({
+            id: "◇ Now answering: Captain — the conversation so far was replayed to it",
+            comment: "Draft thread status line: the draft fell back to the Captain; the ◇ stays",
+          })
+        : i18n._({
+            id: "◇ Now answering: {playerId} — the conversation so far was replayed to it",
+            values: { playerId },
+            comment: "Draft thread status line: a roster player now answers, named by its id; the ◇ stays",
+          }),
+    );
     this.save(draft);
     const info = this.describe(id);
     this.events.onState(info);
@@ -766,7 +922,7 @@ export class AuthorManager {
 
   delete(id: string): void {
     // A damaged draft is still deleted: its record need not read.
-    if (!this.drafts.exists(id)) throw new CoreError("not_found", `no draft ${id}`);
+    if (!this.drafts.exists(id)) throw new CoreError("not_found", noDraft(id));
     this.assertIdle(id);
     this.drafts.delete(id);
     this.options.store.deletePref(`draft:${id}:player`);
@@ -777,8 +933,25 @@ export class AuthorManager {
 
   private assertIdle(id: string): void {
     const activity = this.activity(id);
-    if (activity === "turn") throw new CoreError("busy", "wait for the reply, or abort it, first");
-    if (activity === "compiling") throw new CoreError("busy", `a compile is running for ${id}; cancel it first`);
+    if (activity === "turn") {
+      throw new CoreError(
+        "busy",
+        i18n._({
+          id: "wait for the reply, or abort it, first",
+          comment: "Refusal: the draft's agent is answering",
+        }),
+      );
+    }
+    if (activity === "compiling") {
+      throw new CoreError(
+        "busy",
+        i18n._({
+          id: "a compile is running for {id}; cancel it first",
+          values: { id },
+          comment: "Refusal: the draft's compile must end before this act",
+        }),
+      );
+    }
   }
 
   // -- the agent ------------------------------------------------------------
@@ -828,7 +1001,16 @@ export class AuthorManager {
       const draft = this.read(id);
       const resolved = this.resolveAgent(id);
       const composed = this.options.composed();
-      if (!composed) throw new Error("the config is not valid; fix it in Settings before the agent can answer");
+      // The thread shows this one as its runtime error line, so it is
+      // the reader's text, not a developer's.
+      if (!composed) {
+        throw new Error(
+          i18n._({
+            id: "the config is not valid; fix it in Settings before the agent can answer",
+            comment: "Draft thread error; Settings is the surface's own name",
+          }),
+        );
+      }
       const Adapter = await this.loadAdapter(resolved.agent.adapter);
       // A conversation continues only within one run and one agent
       // (DR-051): anything else starts fresh, reseeded from the transcript.
@@ -854,7 +1036,15 @@ export class AuthorManager {
           resume = undefined;
           reseeded = true;
           mode = "reseed";
-          this.status(id, live, "◇ The provider rejected the resumed conversation — replaying it", turnId);
+          this.status(
+            id,
+            live,
+            i18n._({
+              id: "◇ The provider rejected the resumed conversation — replaying it",
+              comment: "Draft thread status line: the agent's provider dropped the conversation; the ◇ stays",
+            }),
+            turnId,
+          );
           continue;
         }
         if (run.resumeToken) live.resume = { key: resolved.key, token: run.resumeToken };
@@ -955,7 +1145,19 @@ export class AuthorManager {
         status: status === "success" ? "ok" : status === "interrupted" ? "aborted" : "error",
         playerId: AUTHOR_PLAYER, turnId,
         ...(finalText ? { finalText } : {}),
-        ...(status !== "success" && status !== "interrupted" ? { error: error ?? `the agent ended with status ${status}` } : {}),
+        // The adapter's own message where it gave one; with none, this
+        // package's own words, which the Boss reads (core-service-111).
+        ...(status !== "success" && status !== "interrupted"
+          ? {
+              error:
+                error ??
+                i18n._({
+                  id: "the agent ended with status {status}",
+                  values: { status },
+                  comment: "A failed authoring turn that carried no message; {status} is the runtime's own status word and stays as it is",
+                }),
+            }
+          : {}),
         ...(errorCode ? { errorCode } : {}),
       },
     } as TmuxPlayRecord);
@@ -977,7 +1179,17 @@ export class AuthorManager {
     }
     if (parsed.compile) {
       const started = this.beginCompile(id, "agent");
-      if (!started.ok) this.status(id, live, `◇ Compile skipped: ${started.message}`);
+      if (!started.ok) {
+        this.status(
+          id,
+          live,
+          i18n._({
+            id: "◇ Compile skipped: {reason}",
+            values: { reason: started.message },
+            comment: "Draft thread status line: the agent asked for a compile that could not start; the ◇ stays",
+          }),
+        );
+      }
     }
   }
 
@@ -1114,11 +1326,29 @@ export class AuthorManager {
     const live = this.liveOf(id);
     this.recordsOf(id, live);
     if (live.damaged) return { ok: false, code: "invalid_request", message: live.damaged };
-    if (live.turn) return { ok: false, code: "busy", message: "Waits for the reply" };
-    if (live.compile || this.options.activeCompiles.has(id)) {
-      return { ok: false, code: "busy", message: `a compile is already running for ${id}` };
+    if (live.turn) {
+      return {
+        ok: false,
+        code: "busy",
+        message: i18n._({
+          id: "Waits for the reply",
+          comment: "Why a compile cannot start: the draft's agent is answering",
+        }),
+      };
     }
-    if (!existsSync(this.drafts.sourcePath(id))) return { ok: false, code: "invalid_request", message: "No source yet" };
+    if (live.compile || this.options.activeCompiles.has(id)) {
+      return { ok: false, code: "busy", message: compileRunning(id) };
+    }
+    if (!existsSync(this.drafts.sourcePath(id))) {
+      return {
+        ok: false,
+        code: "invalid_request",
+        message: i18n._({
+          id: "No source yet",
+          comment: "Why a compile cannot start: the draft has no source file written yet",
+        }),
+      };
+    }
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
     const entry: NonNullable<LiveDraft["compile"]> = { controller, by };
@@ -1138,7 +1368,19 @@ export class AuthorManager {
       const draft = this.read(id);
       draft.compile = { at: startedAt, by, outcome: "running" };
       this.save(draft);
-      this.status(id, live, `◇ Compiling — asked by ${by === "boss" ? "you" : "the agent"}`);
+      this.status(
+        id,
+        live,
+        by === "boss"
+          ? i18n._({
+              id: "◇ Compiling — asked by you",
+              comment: "Draft thread status line: the Boss started this compile; the ◇ stays",
+            })
+          : i18n._({
+              id: "◇ Compiling — asked by the agent",
+              comment: "Draft thread status line: the draft's agent started this compile; the ◇ stays",
+            }),
+      );
       this.publish(id);
       const result = await compilePlaybook({
         playbookId: id,
@@ -1174,7 +1416,19 @@ export class AuthorManager {
         const phase =
           clarification?.phase ?? failed?.phase ??
           (sawPackaging ? "packaging" : sawCompiler ? (openPhaseOf(lines) ?? "slc") : "toolchain");
-        settled = { outcome: "failed", phase, message: phase === "toolchain" ? message : `compile failed at ${phase}: ${message}` };
+        settled = {
+          outcome: "failed",
+          phase,
+          // The Boss reads this one as the refusal his Compile earns;
+          // the compiler's own phase id and words are relayed.
+          message: phase === "toolchain"
+            ? message
+            : i18n._({
+                id: "compile failed at {phase}: {message}",
+                values: { phase, message },
+                comment: "Refusal: the compiler's own stage id, then what it said",
+              }),
+        };
       }
     } finally {
       this.options.activeCompiles.delete(id);
@@ -1201,13 +1455,28 @@ export class AuthorManager {
       draft.compile = { at: base.at, by: base.by, outcome: "ok", roles: settled.roles, ...(source ? { sourceSha256: source.sha256 } : {}) };
       draft.failures = 0;
       live.changes.push(`a compile succeeded with the roles ${settled.roles.join(", ")}`);
-      this.status(id, live, `◇ Compiled — roles: ${settled.roles.join(", ")}`);
+      this.status(
+        id,
+        live,
+        i18n._({
+          id: "◇ Compiled — roles: {roles}",
+          values: { roles: settled.roles.join(", ") },
+          comment: "Draft thread status line: the compile succeeded; the roles are the source's own names, the ◇ stays",
+        }),
+      );
       preface = successText(id, settled.roles);
       relay = true;
     } else if (settled.outcome === "canceled") {
       draft.compile = { at: base.at, by: base.by, outcome: "canceled" };
       live.changes.push("a compile was canceled");
-      this.status(id, live, "◇ Compile canceled");
+      this.status(
+        id,
+        live,
+        i18n._({
+          id: "◇ Compile canceled",
+          comment: "Draft thread status line: the compile was canceled; the ◇ stays",
+        }),
+      );
     } else {
       const clarification = clarificationOf(lines);
       const failed = failedPhaseOf(lines);
@@ -1219,20 +1488,54 @@ export class AuthorManager {
       };
       if (settled.phase === "toolchain") {
         live.changes.push("a compile failed before the compiler ran");
-        this.status(id, live, `◇ Compile failed before the compiler ran: ${settled.message}`);
+        this.status(
+          id,
+          live,
+          i18n._({
+            id: "◇ Compile failed before the compiler ran: {reason}",
+            values: { reason: settled.message },
+            comment: "Draft thread status line: the toolchain's own guidance follows; the ◇ stays",
+          }),
+        );
       } else {
         draft.failures += 1;
         // The agent reads the compiler's own phase id; the Boss reads
         // the row's human word (DR-010 §2, playbook-library-57).
         live.changes.push(`a compile failed at ${settled.phase}`);
         preface = relayText(id, draft.compile, failed?.elapsed ?? formatElapsed(this.now() - startedAt));
-        const where = phaseLabel(settled.phase);
+        // The stage's human name is the catalog's, passed as a value:
+        // one phase, one word, wherever it is read (playbook-library-57).
+        const where = stageName(settled.phase);
         if (draft.queued.length > 0) {
-          this.status(id, live, `◇ Compile failed at ${where} — waiting for your queued message`);
+          this.status(
+            id,
+            live,
+            i18n._({
+              id: "◇ Compile failed at {where} — waiting for your queued message",
+              values: { where },
+              comment: "Draft thread status line; {where} is the pipeline stage's name and the ◇ stays",
+            }),
+          );
         } else if (draft.failures >= RELAY_BOUND) {
-          this.status(id, live, `◇ Compile failed at ${where} — three in a row; tell the agent how to proceed`);
+          this.status(
+            id,
+            live,
+            i18n._({
+              id: "◇ Compile failed at {where} — three in a row; tell the agent how to proceed",
+              values: { where },
+              comment: "Draft thread status line; {where} is the pipeline stage's name and the ◇ stays",
+            }),
+          );
         } else {
-          this.status(id, live, `◇ Compile failed at ${where} — sent to the agent`);
+          this.status(
+            id,
+            live,
+            i18n._({
+              id: "◇ Compile failed at {where} — sent to the agent",
+              values: { where },
+              comment: "Draft thread status line; {where} is the pipeline stage's name and the ◇ stays",
+            }),
+          );
           relay = true;
         }
       }
@@ -1246,10 +1549,28 @@ export class AuthorManager {
       return;
     }
     if (!relay || !preface) return;
+    // The label is the line the thread shows for this turn; `text` is
+    // the prompt the agent reads and stays as it is.
     if (settled.outcome === "ok") {
-      this.startTurn(id, live, { kind: "system", label: "Spex: the compile succeeded — asking for a registration proposal", text: preface });
+      this.startTurn(id, live, {
+        kind: "system",
+        label: i18n._({
+          id: "Spex: the compile succeeded — asking for a registration proposal",
+          comment: "Draft thread line for a turn Spex started; keep the `Spex: ` opening, which marks it as Spex's own",
+        }),
+        text: preface,
+      });
     } else if (settled.outcome === "failed") {
-      this.startTurn(id, live, { kind: "system", label: `Spex: the compile failed at ${phaseLabel(settled.phase)} — asking the agent to fix the source`, text: preface });
+      this.startTurn(id, live, {
+        kind: "system",
+        label: i18n._({
+          id: "Spex: the compile failed at {where} — asking the agent to fix the source",
+          values: { where: stageName(settled.phase) },
+          comment:
+            "Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening",
+        }),
+        text: preface,
+      });
     }
   }
 }

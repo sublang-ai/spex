@@ -57,7 +57,8 @@ import {
   type SessionInfo,
   type SessionAgentSettingsMap,
 } from "./protocol.js";
-import type { Language } from "./language.js";
+import { resolveLanguage, type Language } from "./language.js";
+import { i18n, speak } from "./i18n.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import type { TurnControlKind } from "./control-record.js";
@@ -159,6 +160,14 @@ export interface CoreServiceOptions {
   token?: string;
   /** Injectable line-streaming spawner for compile runs (tests). */
   compileSpawner?: LineSpawner;
+  /**
+   * The reader's system languages, as the embedding shell knows them
+   * (core-service-111, localization-2): the desktop shell passes the
+   * operating system's preferred languages, since its OS is the
+   * reader's device. With none passed — a served core, whose page may
+   * sit elsewhere — the core reads its own process locale.
+   */
+  systemLanguages?: readonly string[];
   /** Test seam (space-32): the Space transport limit; 120 s by default. */
   spaceTransportTimeoutMs?: number;
   /** Test seam: awaited before each Space step runs, so a suite can act
@@ -198,6 +207,50 @@ function channelKey(channel: Channel): string {
     ? `draft:${channel.draftId}`
     : `${channel.kind}:${channel.sessionId}`;
 }
+
+/** A session named as the reader sees it, so a language can quote its
+ * own way (core-service-111). */
+const titled = (title: string): string =>
+  i18n._({ id: "“{title}”", comment: "A session's own title, quoted", values: { title } });
+const inUseElsewhere = (name: string): string =>
+  i18n._({
+    id: "{name} is in use elsewhere",
+    comment: "A session another host is writing right now",
+    values: { name },
+  });
+const unverifiedOwner = (name: string): string =>
+  i18n._({
+    id: "{name} ownership cannot be verified",
+    comment: "A session whose lease this host cannot read",
+    values: { name },
+  });
+
+/** The not-found refusals the command paths share, each phrased when
+ * it is raised (core-service-111); the id itself is never translated. */
+const noProject = (projectId: string): CoreError =>
+  new CoreError("not_found", i18n._({
+    id: "no project {projectId}",
+    comment: "Refusal: no project of this id is registered",
+    values: { projectId },
+  }));
+const noSession = (sessionId: string): CoreError =>
+  new CoreError("not_found", i18n._({
+    id: "no session {sessionId}",
+    comment: "Refusal: no session of this id is known",
+    values: { sessionId },
+  }));
+const noIntent = (intentId: string): CoreError =>
+  new CoreError("not_found", i18n._({
+    id: "no intent {intentId}",
+    comment: "Refusal: no intent of this id is in the ledger",
+    values: { intentId },
+  }));
+const noDraft = (draftId: string): CoreError =>
+  new CoreError("not_found", i18n._({
+    id: "no draft {draftId}",
+    comment: "Refusal: no playbook draft of this id is open",
+    values: { draftId },
+  }));
 
 /** Expand a leading ~ so the most natural path spelling works. */
 function expandPath(input: string, home: string): string {
@@ -328,6 +381,10 @@ export class CoreService {
   private readonly space?: SpaceManager;
   /** A sync's Apply through Refresh pauses the watchers (space-31). */
   private watchersPaused = false;
+  /** The language the core is composing in (core-service-111): the
+   * resolution in force, kept so a choice that resolves to the same
+   * language re-derives nothing. */
+  private spoken: Language = "en";
 
   private constructor(options: CoreServiceOptions) {
     this.options = options;
@@ -439,6 +496,25 @@ export class CoreService {
     this.authors.events.onSource = (message) => this.broadcast(message);
     this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
     this.authors.events.onRemoved = (draftId) => this.broadcast({ type: "draft.removed", draftId });
+    // The core speaks before it composes its first text (core-service-111):
+    // the config error a start may raise, and the readiness requirement
+    // that follows it, already read in the home's language.
+    this.spoken = this.speakHomeLanguage();
+  }
+
+  /**
+   * Resolve the home's interface language and speak it from here on
+   * (core-service-111, localization-2): the stored choice, or with none
+   * the reader's system — the languages the embedding shell passed at
+   * start, or this process's own locale where a shell passed none.
+   */
+  private speakHomeLanguage(): Language {
+    const preferred =
+      this.options.systemLanguages ??
+      [Intl.DateTimeFormat().resolvedOptions().locale];
+    const language = resolveLanguage(this.store.interfaceLanguage(), preferred);
+    speak(language);
+    return language;
   }
 
   /**
@@ -449,30 +525,54 @@ export class CoreService {
   private async spaceBlocker(): Promise<string | undefined> {
     const sessions = this.sessions.listSessions();
     for (const session of sessions) {
-      const project = this.store.getProject(session.projectId)?.name ?? "the project";
-      const name = session.title ? `“${session.title}”` : "a new session";
-      if (session.externalWriter === "active") return `${name} is in use elsewhere`;
-      if (session.externalWriter === "unknown") return `${name} ownership cannot be verified`;
-      if (session.live || session.turnActive || this.submitting.has(session.id)) return `Wait for ${name} in ${project}`;
+      const project = this.store.getProject(session.projectId)?.name ?? i18n._({
+        id: "the project",
+        comment: "Stands in for a project's name where the core has none",
+      });
+      const name = session.title ? titled(session.title) : i18n._({
+        id: "a new session",
+        comment: "Stands in for the title of a session that has none yet",
+      });
+      if (session.externalWriter === "active") return inUseElsewhere(name);
+      if (session.externalWriter === "unknown") return unverifiedOwner(name);
+      if (session.live || session.turnActive || this.submitting.has(session.id)) return i18n._({
+        id: "Wait for {name} in {project}",
+        comment:
+          "What blocks a Space operation: a session of this project is working",
+        values: { name, project },
+      });
     }
-    if (this.submitting.size > 0) return "Wait for the turn being submitted";
+    if (this.submitting.size > 0) return i18n._({
+      id: "Wait for the turn being submitted",
+      comment: "What blocks a Space operation: a turn is being admitted",
+    });
     const compiling = this.activeCompiles.keys().next();
-    if (!compiling.done) return `${compiling.value} is compiling`;
+    if (!compiling.done) return i18n._({
+      id: "{playbookId} is compiling",
+      comment: "What blocks a Space operation: a playbook compile is running",
+      values: { playbookId: compiling.value },
+    });
     // A lease taken since the last rescan is still a held session.
     const shared = this.store.sessionStore();
     for (const session of sessions) {
       if (this.sessions.getLive(session.id)) continue;
-      const name = session.title ? `“${session.title}”` : "a session";
+      const name = session.title ? titled(session.title) : i18n._({
+        id: "a session",
+        comment: "Stands in for the title of a session that has none",
+      });
       let lease: "active" | "idle" | "unknown";
       try { lease = await shared.readLeaseState(session.id); } catch { lease = "unknown"; }
-      if (lease === "active") return `${name} is in use elsewhere`;
-      if (lease === "unknown") return `${name} ownership cannot be verified`;
+      if (lease === "active") return inUseElsewhere(name);
+      if (lease === "unknown") return unverifiedOwner(name);
     }
     return undefined;
   }
 
   private requireSpace(): SpaceManager {
-    if (!this.space) throw new CoreError("invalid_request", "the core runs without a state root; Space needs one");
+    if (!this.space) throw new CoreError("invalid_request", i18n._({
+      id: "the core runs without a state root; Space needs one",
+      comment: "Refusal: this core keeps no state on disk, so it has no Space",
+    }));
     return this.space;
   }
 
@@ -514,7 +614,10 @@ export class CoreService {
 
   static async start(options: CoreServiceOptions = {}): Promise<CoreService> {
     if (process.platform !== "darwin" && process.platform !== "linux") {
-      throw new Error("Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.");
+      throw new Error(i18n._({
+        id: "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.",
+        comment: "Startup refusal shown in the shell's dialog on an unsupported host",
+      }));
     }
     const service = new CoreService(options);
     try {
@@ -706,6 +809,27 @@ export class CoreService {
     return this.configState;
   }
 
+  /** The config's own refusal (core-service-111): the core's frame
+   * around the errors it composed, or the missing file — phrased when
+   * the refusal is raised, never when the file was read. */
+  private configRefusal(): string {
+    return this.configState.status === "invalid"
+      ? i18n._({
+          id: "config is invalid: {errors}",
+          comment:
+            "Refusal: the config file failed to load; `errors` are the config errors themselves",
+          values: {
+            errors: this.configState.errors.join(
+              i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
+            ),
+          },
+        })
+      : i18n._({
+          id: "config file is missing",
+          comment: "Refusal: no config file exists at the path the core reads",
+        });
+  }
+
   /** The home's interface language, or null for the reader's system
    * (core-service-108, DR-078): the embedding shell reads it in
    * process for the text it composes itself, so its notifications and
@@ -783,15 +907,23 @@ export class CoreService {
    * (DR-067, DR-068). */
   private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<SessionInfo> {
     const session = this.store.describeSession(command.sessionId);
-    if (!session) throw new CoreError("not_found", `no session ${command.sessionId}`);
+    if (!session) throw noSession(command.sessionId);
     const project = this.store.getProject(session.projectId);
-    if (!project) throw new CoreError("invalid_request", "bind the existing project before changing its session's agents");
+    if (!project) throw new CoreError("invalid_request", i18n._({
+      id: "bind the existing project before changing its session's agents",
+      comment:
+        "Refusal: the session's project has no folder on this device yet",
+    }));
     await this.settledConfig();
     if (this.configState.status !== "valid" || !this.composed) {
-      throw new CoreError("invalid_config", this.configState.status === "invalid" ? `config is invalid: ${this.configState.errors.join("; ")}` : "config file is missing");
+      throw new CoreError("invalid_config", this.configRefusal());
     }
     const known = command.agentId === CAPTAIN_AGENT_ID || session.players.some(({id}) => id === command.agentId);
-    if (!known) throw new CoreError("invalid_request", `session ${session.id} has no agent "${command.agentId}"`);
+    if (!known) throw new CoreError("invalid_request", i18n._({
+      id: "session {sessionId} has no agent \"{agentId}\"",
+      comment: "Refusal: the session holds no agent of that id",
+      values: { sessionId: session.id, agentId: command.agentId },
+    }));
 
     // Every await this change needs happens before the stored settings
     // are read, so read, validate and write run without one between them:
@@ -823,7 +955,7 @@ export class CoreService {
     }
     this.store.setSessionAgentSettingsMap(session.id, next);
     const updated = this.sessions.listSessions().find(({id}) => id === session.id) ?? this.store.describeSession(session.id);
-    if (!updated) throw new CoreError("not_found", `no session ${session.id}`);
+    if (!updated) throw noSession(session.id);
     this.broadcast({ type: "session.state", session: updated });
     this.events.onSessionState?.(updated);
     return updated;
@@ -1090,10 +1222,17 @@ export class CoreService {
         if (!existsSync(path) || !statSync(path).isDirectory()) {
           throw new CoreError(
             "invalid_request",
-            `${path} is not a directory`,
+            i18n._({
+              id: "{path} is not a directory",
+              comment:
+                "Refusal: the path offered as a project is no directory on this device",
+              values: { path },
+            }),
           );
         }
         if (!(await isWorkTreeRoot(path, this.runCommand))) {
+          // English, deliberately (core-service-111): the page matches
+          // this phrase to offer Create instead, so it is wire text.
           throw new CoreError(
             "invalid_request",
             `${path} is not the root of a git work tree (run git init first, or use project.create)`,
@@ -1108,10 +1247,17 @@ export class CoreService {
       case "project.rebind": {
         const path = expandPath(command.path, this.home);
         if (!(await isWorkTreeRoot(path, this.runCommand))) {
-          throw new CoreError("invalid_request", `${path} is not the root of a git work tree`);
+          throw new CoreError("invalid_request", i18n._({
+            id: "{path} is not the root of a git work tree",
+            comment: "Refusal: the folder offered for rebinding is no git repository",
+            values: { path },
+          }));
         }
         if (this.sessions.listSessions().some((session) => session.projectId === command.projectId && session.live)) {
-          throw new CoreError("busy", "wait for the project's running turn to finish, or abort it, before rebinding");
+          throw new CoreError("busy", i18n._({
+            id: "wait for the project's running turn to finish, or abort it, before rebinding",
+            comment: "Refusal: a turn is running in the project being rebound",
+          }));
         }
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}),
@@ -1124,9 +1270,15 @@ export class CoreService {
       case "project.create": {
         const path = expandPath(command.path, this.home);
         if (this.store.getProjectByPath(path)) {
-          throw new CoreError("conflict", `${path} is already registered`);
+          throw new CoreError("conflict", i18n._({
+            id: "{path} is already registered",
+            comment: "Refusal: a project already holds this folder",
+            values: { path },
+          }));
         }
         if (command.example && command.scaffold) {
+          // English, deliberately (core-service-111): no surface offers
+          // both, so this names a caller's programming failure.
           throw new CoreError(
             "invalid_request",
             "example seeding and scaffold are mutually exclusive",
@@ -1154,14 +1306,14 @@ export class CoreService {
       case "project.status": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         return repoStatus(project.path, this.runCommand);
       }
       case "forge.items": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
@@ -1180,7 +1332,7 @@ export class CoreService {
       }
       case "project.remove": {
         if (!this.store.removeProject(command.projectId)) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         return null;
       }
@@ -1189,16 +1341,11 @@ export class CoreService {
       case "session.create": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         await this.settledConfig();
         if (this.configState.status !== "valid" || !this.composed) {
-          throw new CoreError(
-            "invalid_config",
-            this.configState.status === "invalid"
-              ? `config is invalid: ${this.configState.errors.join("; ")}`
-              : "config file is missing",
-          );
+          throw new CoreError("invalid_config", this.configRefusal());
         }
         return this.sessions.createSession(project, this.composed);
       }
@@ -1212,15 +1359,19 @@ export class CoreService {
         return await this.setSessionAgent(command);
       case "session.retry": {
         const session = this.store.describeSession(command.sessionId);
-        if (!session) throw new CoreError("not_found", `no session ${command.sessionId}`);
+        if (!session) throw noSession(command.sessionId);
         const project = this.store.getProject(session.projectId);
-        if (!project) throw new CoreError("invalid_request", "bind the existing project before retrying");
+        if (!project) throw new CoreError("invalid_request", i18n._({
+          id: "bind the existing project before retrying",
+          comment:
+            "Refusal: the session's project has no folder on this device yet",
+        }));
         await this.sessions.retrySession(project, session.id);
         return {accepted: true};
       }
       case "session.discard": {
         const session = this.store.describeSession(command.sessionId);
-        if (!session) throw new CoreError("not_found", `no session ${command.sessionId}`);
+        if (!session) throw noSession(command.sessionId);
         const result = await this.sessions.discardSession(session.id);
         if (result.removed) this.broadcast({type:"session.removed", sessionId:session.id, projectId:session.projectId});
         return result;
@@ -1228,12 +1379,15 @@ export class CoreService {
       case "session.delete": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) {
-          throw new CoreError("not_found", `no session ${command.sessionId}`);
+          throw noSession(command.sessionId);
         }
         // A turn in flight finishes or aborts first (core-service-70):
         // deleting under a running runtime would orphan its agents.
         if (this.sessions.getLive(session.id)) {
-          throw new CoreError("busy", "wait for the running turn to finish, or abort it, before deleting");
+          throw new CoreError("busy", i18n._({
+            id: "wait for the running turn to finish, or abort it, before deleting",
+            comment: "Refusal: the session being deleted has a turn in flight",
+          }));
         }
         await this.store.deleteSession(session.id);
         this.broadcast({
@@ -1286,7 +1440,7 @@ export class CoreService {
           // An unknown draft is refused as every draft command refuses
           // it (core-service-96), never subscribed to in advance.
           if (!this.authors.has(command.channel.draftId)) {
-            throw new CoreError("not_found", `no draft ${command.channel.draftId}`);
+            throw noDraft(command.channel.draftId);
           }
         } else {
           this.requireKnownSession(command.channel.sessionId);
@@ -1311,7 +1465,10 @@ export class CoreService {
         return this.store.usageByDay();
       case "config.edit": {
         if (!existsSync(this.configPath)) {
-          throw new CoreError("invalid_config", "config file is missing");
+          throw new CoreError("invalid_config", i18n._({
+            id: "config file is missing",
+            comment: "Refusal: no config file exists at the path the core reads",
+          }));
         }
         const op = command.op as ConfigEditOp;
         const result = await editConfigFile(
@@ -1322,7 +1479,11 @@ export class CoreService {
         if (!result.ok) {
           throw new CoreError(
             "invalid_config",
-            result.error ?? "edit rejected",
+            // The composition's own words where it gave any, relayed.
+            result.error ?? i18n._({
+              id: "edit rejected",
+              comment: "Refusal: a config edit failed validation with no reason given",
+            }),
           );
         }
         await this.reloadConfig();
@@ -1332,7 +1493,10 @@ export class CoreService {
         return checkToolchain(this.env, this.options.compileSpawner);
       case "playbook.artifacts": {
         if (this.configState.status !== "valid" || !this.composed) {
-          throw new CoreError("invalid_config", "config is not valid");
+          throw new CoreError("invalid_config", i18n._({
+            id: "config is not valid",
+            comment: "Refusal: the loaded config carries errors",
+          }));
         }
         const playbook = this.composed.playbooks.find(
           (entry) => entry.id === command.playbookId,
@@ -1340,7 +1504,11 @@ export class CoreService {
         if (!playbook) {
           throw new CoreError(
             "not_found",
-            `no configured playbook ${command.playbookId}`,
+            i18n._({
+              id: "no configured playbook {playbookId}",
+              comment: "Refusal: the config enables no playbook of this id",
+              values: { playbookId: command.playbookId },
+            }),
           );
         }
         return resolveArtifacts(
@@ -1361,14 +1529,21 @@ export class CoreService {
       }
       case "compile.run": {
         if (!existsSync(this.configPath)) {
-          throw new CoreError("invalid_config", "config file is missing");
+          throw new CoreError("invalid_config", i18n._({
+            id: "config file is missing",
+            comment: "Refusal: no config file exists at the path the core reads",
+          }));
         }
         // One compile per playbook id, fail-closed (DR-010 §5): a
         // duplicate submission is rejected, never queued or merged.
         if (this.activeCompiles.has(command.playbookId)) {
           throw new CoreError(
             "busy",
-            `a compile is already running for ${command.playbookId}`,
+            i18n._({
+              id: "a compile is already running for {playbookId}",
+              comment: "Refusal: one compile per playbook at a time",
+              values: { playbookId: command.playbookId },
+            }),
           );
         }
         const controller = new AbortController();
@@ -1408,7 +1583,10 @@ export class CoreService {
             });
           } catch (error) {
             if (controller.signal.aborted) {
-              throw new CoreError("aborted", "compile canceled");
+              throw new CoreError("aborted", i18n._({
+                id: "compile canceled",
+                comment: "The outcome of a compile the reader stopped",
+              }));
             }
             const message =
               error instanceof Error ? error.message : String(error);
@@ -1426,11 +1604,18 @@ export class CoreService {
         if (!controller) {
           throw new CoreError(
             "not_found",
-            `no compile is running for ${command.playbookId}`,
+            i18n._({
+              id: "no compile is running for {playbookId}",
+              comment: "Refusal: nothing to abort for this playbook",
+              values: { playbookId: command.playbookId },
+            }),
           );
         }
         controller.abort();
         this.broadcast({
+          // English, deliberately (core-service-111): the page reads the
+          // compile's progress lines, and this one tells it the run was
+          // canceled, so it is wire text rather than the core's prose.
           type: "compile.progress",
           playbookId: command.playbookId,
           line: "◇ compile canceled",
@@ -1440,14 +1625,14 @@ export class CoreService {
       case "specs.get": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         return parseSpecTree(project.path);
       }
       case "specs.read": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         const resolved = resolveSpecPath(project.path, command.path);
         if (!resolved.ok) throw new CoreError(resolved.code, resolved.message);
@@ -1456,7 +1641,7 @@ export class CoreService {
       case "specs.write": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         const written = writeSpecFile(
           project.path,
@@ -1470,7 +1655,7 @@ export class CoreService {
       case "intent.queue": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         if (command.source && command.source.kind !== "chat") {
           const holder = this.store.openIntentBySource(
@@ -1481,7 +1666,12 @@ export class CoreService {
           if (holder) {
             throw new CoreError(
               "conflict",
-              `an open intent already holds this source: "${intentTitle(holder)}"`,
+              i18n._({
+                id: "an open intent already holds this source: \"{title}\"",
+                comment:
+                  "Refusal: the issue or pull request is already queued; the title is the reader's own text",
+                values: { title: intentTitle(holder) },
+              }),
             );
           }
         }
@@ -1513,7 +1703,10 @@ export class CoreService {
         if (this.deriveIntentState(intent.id) !== "queued") {
           throw new CoreError(
             "conflict",
-            "a dispatched intent's text is history",
+            i18n._({
+              id: "a dispatched intent's text is history",
+              comment: "Refusal: work already sent cannot be reworded",
+            }),
           );
         }
         this.store.setIntentText(intent.id, command.text);
@@ -1531,7 +1724,10 @@ export class CoreService {
           if (target.projectId !== intent.projectId) {
             throw new CoreError(
               "invalid_request",
-              "an intent reorders only within its own project",
+              i18n._({
+                id: "an intent reorders only within its own project",
+                comment: "Refusal: a move named a row in another project's queue",
+              }),
             );
           }
           const ranks = this.projectRanks(intent.projectId, intent.id);
@@ -1546,7 +1742,10 @@ export class CoreService {
         const intent = this.requireOpenIntent(command.intentId);
         if (command.afterIntentId !== null) {
           if (command.afterIntentId === intent.id) {
-            throw new CoreError("invalid_request", "an intent cannot wait on itself");
+            throw new CoreError("invalid_request", i18n._({
+              id: "an intent cannot wait on itself",
+              comment: "Refusal: a row was linked after itself",
+            }));
           }
           const target = this.requireOpenIntent(command.afterIntentId);
           // Cycles are refused fail-closed (DR-035): walk the chain
@@ -1556,7 +1755,10 @@ export class CoreService {
             if (cursor === intent.id) {
               throw new CoreError(
                 "conflict",
-                "that link would close a waiting cycle",
+                i18n._({
+                  id: "that link would close a waiting cycle",
+                  comment: "Refusal: the queue's waiting chain would loop",
+                }),
               );
             }
             const next = this.store.getIntent(cursor);
@@ -1576,7 +1778,10 @@ export class CoreService {
         ) {
           throw new CoreError(
             "conflict",
-            "only a finished intent confirms done",
+            i18n._({
+              id: "only a finished intent confirms done",
+              comment: "Refusal: the work has not finished, so Done is not offered",
+            }),
           );
         }
         // Letting go ends the parked run (DR-073): a Drop taken on work
@@ -1595,7 +1800,10 @@ export class CoreService {
           if (this.parkedRun(intent.id)) {
             throw new CoreError(
               "conflict",
-              "the run is still parked, so the intent stays open",
+              i18n._({
+                id: "the run is still parked, so the intent stays open",
+                comment: "Refusal: ending the parked run did not settle it",
+              }),
             );
           }
         }
@@ -1613,12 +1821,15 @@ export class CoreService {
         // intent is still the ledger's, and its own act closes it.
         const intent = this.store.getIntent(command.intentId);
         if (!intent) {
-          throw new CoreError("not_found", `no intent ${command.intentId}`);
+          throw noIntent(command.intentId);
         }
         if (intent.closedAt === undefined) {
           throw new CoreError(
             "conflict",
-            "only a closed intent leaves history",
+            i18n._({
+              id: "only a closed intent leaves history",
+              comment: "Refusal: open work cannot be removed from History",
+            }),
           );
         }
         this.store.removeIntent(intent.id, Date.now());
@@ -1630,7 +1841,7 @@ export class CoreService {
       case "ledger.history": {
         const project = this.store.getProject(command.projectId);
         if (!project) {
-          throw new CoreError("not_found", `no project ${command.projectId}`);
+          throw noProject(command.projectId);
         }
         // History is done work (DR-038): closed done, or dropped after
         // a turn of the intent's ended finished; a drop before any work
@@ -1667,7 +1878,10 @@ export class CoreService {
         if (!ended) {
           throw new CoreError(
             "invalid_request",
-            "That turn has not ended, so it cannot be marked as read.",
+            i18n._({
+              id: "That turn has not ended, so it cannot be marked as read.",
+              comment: "Refusal: a summons is marked read only once its turn ended",
+            }),
           );
         }
         const key = `viewed:${command.sessionId}`;
@@ -1686,8 +1900,21 @@ export class CoreService {
         return { language: this.language() };
       case "language.set": {
         this.store.setInterfaceLanguage(command.language);
+        // The core speaks the new choice before it answers or tells
+        // anyone (core-service-111), so every text it composes from
+        // here on reads in it.
+        const before = this.spoken;
+        this.spoken = this.speakHomeLanguage();
         const language = this.language();
         this.broadcast({ type: "language.state", language });
+        // A change of language re-derives the states the core caches
+        // and broadcasts them, so a page reads the core's prose in the
+        // new language without asking for it (core-service-111,
+        // localization-11). The config's errors and the adapter
+        // readiness requirements are the two the core holds; the Space,
+        // the storage diagnostics and every reply are composed at the
+        // moment they are read.
+        if (this.spoken !== before) void this.reloadConfig();
         return { language };
       }
       // The Space surface (space-29): the core performs every Git
@@ -1737,7 +1964,10 @@ export class CoreService {
         return this.authors.compile(command.draftId);
       case "draft.register": {
         if (!existsSync(this.configPath)) {
-          throw new CoreError("invalid_config", "config file is missing");
+          throw new CoreError("invalid_config", i18n._({
+            id: "config file is missing",
+            comment: "Refusal: no config file exists at the path the core reads",
+          }));
         }
         // Re-package with the confirmed command and intent, register
         // through the shared path, then retire the draft — the draft
@@ -1759,7 +1989,7 @@ export class CoreService {
         return null;
       case "draft.artifacts": {
         if (!this.authors.has(command.draftId)) {
-          throw new CoreError("not_found", `no draft ${command.draftId}`);
+          throw noDraft(command.draftId);
         }
         return resolveArtifacts(
           { id: command.draftId, from: join(this.libraryDir(), command.draftId, `${command.draftId}.registry.mjs`) },
@@ -1799,9 +2029,16 @@ export class CoreService {
       else roles[role] = playerId;
     }
     if (unmatched.length > 0) {
+      const listed = (roles: string[]): string =>
+        roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
       throw new CoreError(
         "invalid_request",
-        `compiled, but the playbook's derived roles are [${result.roles.join(", ")}] and no player was bound for: ${unmatched.join(", ")}. Re-submit with a binding per derived role; the compiled artifacts are kept.`,
+        i18n._({
+          id: "compiled, but the playbook's derived roles are [{roles}] and no player was bound for: {unbound}. Re-submit with a binding per derived role; the compiled artifacts are kept.",
+          comment:
+            "Refusal after a successful compile; the role ids are the manifest's own",
+          values: { roles: listed(result.roles), unbound: listed(unmatched) },
+        }),
       );
     }
     // Lanes the bindings name but the roster lacks are created first,
@@ -1815,7 +2052,12 @@ export class CoreService {
       if (!minted.ok) {
         throw new CoreError(
           "invalid_config",
-          `compiled, but creating session player "${playerId}" was refused: ${minted.error}`,
+          i18n._({
+            id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
+            comment:
+              "Refusal after a successful compile; `error` is the config validation's own words",
+            values: { playerId, error: minted.error },
+          }),
         );
       }
     }
@@ -1825,7 +2067,12 @@ export class CoreService {
       this.options.loadModule,
     );
     if (!edit.ok) {
-      throw new CoreError("invalid_config", `compiled, but registration was refused: ${edit.error}`);
+      throw new CoreError("invalid_config", i18n._({
+        id: "compiled, but registration was refused: {error}",
+        comment:
+          "Refusal after a successful compile; `error` is the config validation's own words",
+        values: { error: edit.error },
+      }));
     }
     await this.reloadConfig();
     return this.configState;
@@ -1981,7 +2228,10 @@ export class CoreService {
   }
 
   private admitSubmission(sessionId: string): () => void {
-    if (this.submitting.has(sessionId)) throw new CoreError("busy", "a turn is being submitted in this session");
+    if (this.submitting.has(sessionId)) throw new CoreError("busy", i18n._({
+      id: "a turn is being submitted in this session",
+      comment: "Refusal: another send is already being admitted here",
+    }));
     let settled!: () => void;
     this.submitting.set(sessionId, new Promise<void>((resolve) => { settled = resolve; }));
     return () => { this.submitting.delete(sessionId); settled(); };
@@ -1991,37 +2241,51 @@ export class CoreService {
     const intent = this.requireOpenIntent(intentId);
     const session = this.store.describeSession(sessionId);
     if (!session || session.projectId !== intent.projectId) {
-      throw new CoreError("invalid_request", "the intent belongs to another project");
+      throw new CoreError("invalid_request", i18n._({
+        id: "the intent belongs to another project",
+        comment: "Refusal: the work named is not this session's project's",
+      }));
     }
     if (this.deriveIntentState(intent.id) !== "queued") {
-      throw new CoreError("conflict", "the intent is already dispatched");
+      throw new CoreError("conflict", i18n._({
+        id: "the intent is already dispatched",
+        comment: "Refusal: this work was already sent to a turn",
+      }));
     }
     const predecessor = intent.afterId ? this.store.getIntent(intent.afterId) : undefined;
     if (predecessor && predecessor.closedAt === undefined) {
-      throw new CoreError("conflict", `the intent waits on "${intentTitle(predecessor)}"`);
+      throw new CoreError("conflict", i18n._({
+        id: "the intent waits on \"{title}\"",
+        comment:
+          "Refusal: an earlier row must close first; the title is the reader's own text",
+        values: { title: intentTitle(predecessor) },
+      }));
     }
   }
 
   /** Continue either host's checkpoint through the shared lifecycle. */
   private async continueSession(sessionId: string): Promise<void> {
     const session = this.store.describeSession(sessionId);
-    if (!session) throw new CoreError("not_found", `no session ${sessionId}`);
+    if (!session) throw noSession(sessionId);
     if (!session.continuable) {
       throw new CoreError("invalid_request", session.recovery
-        ? "Recover the interrupted turn with Retry or Discard first"
-        : session.continuationReason ?? "this session has no compatible checkpoint");
+        ? i18n._({
+            id: "Recover the interrupted turn with Retry or Discard first",
+            comment:
+              "Refusal; Retry and Discard are the controls the interface offers",
+          })
+        // The stored reason where the session carries one, its own words.
+        : session.continuationReason ?? i18n._({
+            id: "this session has no compatible checkpoint",
+            comment: "Refusal: nothing in the session's history can be continued",
+          }));
     }
     const project = this.store.getProject(session.projectId);
     if (!project) {
-      throw new CoreError("not_found", `no project ${session.projectId}`);
+      throw noProject(session.projectId);
     }
     if (this.configState.status !== "valid" || !this.composed) {
-      throw new CoreError(
-        "invalid_config",
-        this.configState.status === "invalid"
-          ? `config is invalid: ${this.configState.errors.join("; ")}`
-          : "config file is missing",
-      );
+      throw new CoreError("invalid_config", this.configRefusal());
     }
     await this.sessions.continueSession(project, this.composed, session);
   }
@@ -2029,10 +2293,13 @@ export class CoreService {
   /** The intent named must exist and still be open (DR-035). */
   private requireOpenIntent(intentId: string) {
     const intent = this.store.getIntent(intentId);
-    if (!intent) throw new CoreError("not_found", `no intent ${intentId}`);
+    if (!intent) throw noIntent(intentId);
     this.store.assertWritable({projectId:intent.projectId});
     if (intent.closedAt !== undefined) {
-      throw new CoreError("conflict", "the intent is already closed");
+      throw new CoreError("conflict", i18n._({
+        id: "the intent is already closed",
+        comment: "Refusal: the work already carries a verdict",
+      }));
     }
     return intent;
   }
@@ -2109,7 +2376,7 @@ export class CoreService {
     const known = this.store
       .listSessions()
       .some((session) => session.id === sessionId);
-    if (!known) throw new CoreError("not_found", `no session ${sessionId}`);
+    if (!known) throw noSession(sessionId);
   }
 }
 

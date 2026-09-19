@@ -31,6 +31,7 @@ function bundleNodePaths(): string[] {
 }
 
 import { freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
+import { i18n } from "./i18n.js";
 
 export const MIN_NODE_MAJOR = 23;
 export const MIN_NODE_MINOR = 6;
@@ -108,7 +109,21 @@ export async function checkToolchain(
     ...(nodeOk
       ? {}
       : {
-          guidance: `Compiling playbooks needs Node >= ${MIN_NODE_MAJOR}.${MIN_NODE_MINOR} on your system (found ${nodeVersion || "none"}). Install it from nodejs.org or set SPEX_NODE.`,
+          // Two messages, one per case: the version found is a value,
+          // and "none" is the core's own word for finding none.
+          guidance: nodeVersion
+            ? i18n._({
+                id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found {found}). Install it from nodejs.org or set SPEX_NODE.",
+                values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR, found: nodeVersion },
+                comment:
+                  "The toolchain's guidance; `nodejs.org` is a site and `SPEX_NODE` an environment variable, both as they are",
+              })
+            : i18n._({
+                id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found none). Install it from nodejs.org or set SPEX_NODE.",
+                values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR },
+                comment:
+                  "The toolchain's guidance when no Node answered at all; `nodejs.org` is a site and `SPEX_NODE` an environment variable",
+              }),
         }),
   };
 
@@ -130,13 +145,19 @@ export async function checkToolchain(
         ? {
             ok: true,
             command: [nodeCommand === "node" ? "npx" : nodeCommand, "--yes", "@sublang/slc"],
-            guidance:
-              "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it.",
+            guidance: i18n._({
+              id: "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it.",
+              comment:
+                "The toolchain's guidance; `slc`, `npx` and `@sublang/slc` are commands and a package name, all as they are",
+            }),
           }
         : {
             ok: false,
             command: [],
-            guidance: "Install Node >= 23.6 first; slc runs on it.",
+            guidance: i18n._({
+              id: "Install Node >= 23.6 first; slc runs on it.",
+              comment: "The toolchain's guidance when Node itself is missing; `slc` is the compiler's command",
+            }),
           };
   }
   return { node, slc };
@@ -513,6 +534,11 @@ export async function compilePlaybook(
     if (!toolchain.node.ok) throw new Error(toolchain.node.guidance);
     if (!toolchain.slc.ok) throw new Error(toolchain.slc.guidance);
     const [slcCommand, ...slcArgs] = toolchain.slc.command;
+    // The pipeline's own progress lines — `running:`, `packaging:`,
+    // `introspected states:`, `derived roles:`, `compile complete` —
+    // are wire texts the compile band matches to name its phases, read
+    // its roles and know the run finished; they stay as they are, and
+    // the page phrases what it shows (localization-4, DR-079).
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
     // Bare invocation (DR-019): slc >= 0.2 links against the installed
     // @sublang/playbook runtime contract by default.

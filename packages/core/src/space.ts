@@ -13,6 +13,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, readdi
 import { hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { UUID, parseRegistry, readJsonFile, StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
+import { i18n } from "./i18n.js";
 import type {
   SpaceChange,
   SpaceChoice,
@@ -82,12 +83,40 @@ export interface SpaceHost {
 
 const KIND_ORDER: SpaceUnitKind[] = ["session", "queue", "projects", "settings", "playbook", "rules", "other"];
 const WITHHELD_FAMILIES = new Set(["provider hints", "migration inputs", "config backup"]);
-const WITHHELD_REASON = "May hold provider tokens — not shown";
 const READ_CAP_BYTES = 256 * 1024;
 const READ_CAP_LINES = 2_000;
 const DIFF_CAP_BYTES = 256 * 1024;
 const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|toml|ini|cfg|csv|gitignore|gitattributes)$/i;
-const MERGE_PENDING_REASON = "a Git merge is pending; finish or abort it in a terminal before syncing";
+
+// The reader's own words are composed where they are read, never held
+// in a constant a module's first evaluation would freeze in whichever
+// language was current then (core-service-111).
+
+/** Why a file of a withheld family is shown without its text (space-35). */
+const withheldReason = (): string => i18n._({
+  id: "May hold provider tokens — not shown",
+  comment: "Why the explorer offers no preview of a file that may hold a provider's secret",
+});
+
+/** The refusal every act meets before the home is a repository. */
+const initializeFirst = (): string => i18n._({
+  id: "Initialize the repository first",
+  comment: "Refusal: the home is not a Git repository yet",
+});
+
+/** The diagnostic a pending Git merge stands as (space-1). */
+const mergePendingReason = (): string => i18n._({
+  id: "a Git merge is pending; finish or abort it in a terminal before syncing",
+  comment: "A diagnostic's reason, read after the file it names",
+});
+
+/** Why an interrupted sync's repair failed (space-31); {cause} is the
+ * failure's own text, relayed. */
+const repairFailureReason = (cause: string): string => i18n._({
+  id: "an interrupted sync could not be repaired: {cause}",
+  values: { cause },
+  comment: "A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed",
+});
 
 type RepositoryInfo =
   | { git: { ok: false; guidance: string }; root: false }
@@ -216,7 +245,30 @@ function timeSeconds(text: string): number | undefined {
   const value = Number.parseInt(text.trim(), 10);
   return Number.isFinite(value) && value > 0 ? value * 1000 : undefined;
 }
-function plural(count: number, noun: string): string { return `${count} ${noun}${count === 1 ? "" : "s"}`; }
+/** A session's turns, as a unit's detail counts them (space-34). */
+function turnCount(count: number): string {
+  return i18n._({
+    id: "{count, plural, one {# turn} other {# turns}}",
+    values: { count },
+    comment: "A session unit's detail: how many turns it holds",
+  });
+}
+/** A unit or a side this change removed (space-34). */
+function deletedDetail(): string {
+  return i18n._({ id: "deleted", comment: "A unit's detail: this side removed it" });
+}
+/** A queue one side rewrote rather than appended to (space-34). */
+function queueReplaced(): string {
+  return i18n._({ id: "queue replaced", comment: "A queue unit's detail: this side rewrote the queue instead of appending" });
+}
+/** A queue's acts, as a side's detail counts them (space-34). */
+function actCount(count: number): string {
+  return i18n._({
+    id: "{count, plural, one {# act} other {# acts}}",
+    values: { count },
+    comment: "A queue unit side's detail: how many acts this side adds",
+  });
+}
 function lines(text: string): string[] { const out = text.split("\n"); if (out[out.length - 1] === "") out.pop(); return out; }
 function sameLinesPrefix(prefix: string[], whole: string[]): boolean { return prefix.length <= whole.length && prefix.every((line, i) => whole[i] === line); }
 
@@ -263,14 +315,38 @@ function registryEntries(bytes: Buffer | undefined): Map<string, string> | undef
   try { return new Map(parseRegistry(JSON.parse(bytes.toString("utf8"))).map((p) => [p.id, p.name])); } catch { return undefined; }
 }
 function registryLines(side: Map<string, string> | undefined, base: Map<string, string> | undefined): string[] {
-  if (!side || !base) return ["Projects changed"];
+  const changed = (): string => i18n._({
+    id: "Projects changed",
+    comment: "The project registry's label where its change cannot be named",
+  });
+  if (!side || !base) return [changed()];
   const out: string[] = [];
   for (const [id, name] of side) {
-    if (!base.has(id)) out.push(`Registered "${name}"`);
-    else if (base.get(id) !== name) out.push(`Renamed "${base.get(id)}" to "${name}"`);
+    const before = base.get(id);
+    if (before === undefined) {
+      out.push(i18n._({
+        id: "Registered \"{name}\"",
+        values: { name },
+        comment: "A project registry line: a project this side added, by its name",
+      }));
+    } else if (before !== name) {
+      out.push(i18n._({
+        id: "Renamed \"{before}\" to \"{name}\"",
+        values: { before, name },
+        comment: "A project registry line: a project this side renamed",
+      }));
+    }
   }
-  for (const [id, name] of base) if (!side.has(id)) out.push(`Removed "${name}"`);
-  return out.length ? out : ["Projects changed"];
+  for (const [id, name] of base) {
+    if (!side.has(id)) {
+      out.push(i18n._({
+        id: "Removed \"{name}\"",
+        values: { name },
+        comment: "A project registry line: a project this side removed, by its name",
+      }));
+    }
+  }
+  return out.length ? out : [changed()];
 }
 
 /** What the header counts (space-1): a repair the reader has not
@@ -282,6 +358,32 @@ function countIssues(diagnostics: StorageDiagnostic[]): number {
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
+
+/** The marker an interrupted apply leaves, as a diagnostic names it. */
+const REPAIR_MARKER_FILE = "local/space-apply.json";
+
+/** The explorer's refusals of a path outside what it browses (space-35). */
+const escapesTheHome = (): string => i18n._({
+  id: "the path escapes the home",
+  comment: "Refusal: the explorer was given a path leading outside the home",
+});
+const noFileAt = (path: string): string => i18n._({
+  id: "no file at {path}",
+  values: { path },
+  comment: "Refusal: nothing to read at the path the explorer was given",
+});
+const noFolderAt = (path: string): string => i18n._({
+  id: "no folder at {path}",
+  values: { path },
+  comment: "Refusal: nothing to list at the path the explorer was given",
+});
+
+/** The refusal an act naming a unit no plan holds meets. */
+const unknownUnit = (unit: string): string => i18n._({
+  id: "unknown unit {unit}",
+  comment: "Refusal: the act names a unit the current plan does not hold",
+  values: { unit },
+});
 
 export class SpaceManager {
   private readonly git: SpaceGit;
@@ -295,7 +397,9 @@ export class SpaceManager {
   private operation?: Promise<void>;
   private applied?: Applied;
   private holding?: { leases: { release(): Promise<unknown> }[]; umask: number };
-  private repairProblem?: StorageDiagnostic;
+  /** The text of the failure that stopped an interrupted sync's repair;
+   * its diagnostic is phrased where it is read (core-service-111). */
+  private repairFailure?: string;
   private refreshProblem?: StorageDiagnostic;
 
   constructor(private readonly host: SpaceHost) {
@@ -307,12 +411,21 @@ export class SpaceManager {
   /** The busy message while an operation runs, else undefined. */
   busy(): string | undefined {
     if (this.phase.phase !== "running") return undefined;
-    const verb = this.phase.op === "sync" ? "syncing" : this.phase.op === "check" ? "checking the remote" : "initializing";
-    return `Space is ${verb}; wait for it to finish`;
+    // One whole sentence per operation: a verb dropped into a frame
+    // carries to no other language (core-service-111).
+    if (this.phase.op === "sync") {
+      return i18n._({ id: "Space is syncing; wait for it to finish", comment: "Refusal while the Space syncs" });
+    }
+    if (this.phase.op === "check") {
+      return i18n._({ id: "Space is checking the remote; wait for it to finish", comment: "Refusal while the Space checks the remote" });
+    }
+    return i18n._({ id: "Space is initializing; wait for it to finish", comment: "Refusal while the Space initializes the home" });
   }
 
   private assertNotRunning(): void {
-    if (this.phase.phase === "running") throw new CoreError("busy", "Space is busy");
+    if (this.phase.phase === "running") {
+      throw new CoreError("busy", i18n._({ id: "Space is busy", comment: "Refusal while a Space operation runs" }));
+    }
   }
 
   // -- state (space-1, space-29, space-30) -----------------------------------
@@ -331,7 +444,13 @@ export class SpaceManager {
   async decline(repair: string, declined: boolean): Promise<SpaceState> {
     const known = this.diagnostics(this.cached?.repository?.mergePending ?? false)
       .some((entry) => entry.repair?.key === repair);
-    if (!known) throw new CoreError("invalid_request", `no repair named ${repair} stands`);
+    if (!known) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "no repair named {repair} stands",
+        values: { repair },
+        comment: "Refusal: the answer names a repair the core does not report; {repair} is its key",
+      }));
+    }
     if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
     else this.host.store.deletePref(repairPref(repair));
     return this.state();
@@ -349,9 +468,10 @@ export class SpaceManager {
     };
     const reported = [
       ...this.host.diagnostics().map(mark),
-      ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: MERGE_PENDING_REASON, blocking: false }] : []),
+      ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: mergePendingReason(), blocking: false }] : []),
       ...(this.refreshProblem ? [this.refreshProblem] : []),
-      ...(this.repairProblem ? [this.repairProblem] : []),
+      // Phrased here, where it is read, from the failure's own text.
+      ...(this.repairFailure !== undefined ? [{ file: REPAIR_MARKER_FILE, reason: repairFailureReason(this.repairFailure), blocking: true }] : []),
     ];
     this.pruneAnswers(reported);
     return reported;
@@ -534,7 +654,11 @@ export class SpaceManager {
     const known = this.host.store.getProject(id)?.name;
     if (known) return known;
     const parsed = registryEntries(registry);
-    return parsed?.get(id) ?? `project ${id.slice(0, 8)}`;
+    return parsed?.get(id) ?? i18n._({
+      id: "project {id}",
+      values: { id: id.slice(0, 8) },
+      comment: "A project no registry names, by the head of its identifier",
+    });
   }
 
   private async describeUnit(
@@ -558,8 +682,9 @@ export class SpaceManager {
           cwd = manifest ? (JSON.parse(manifest.toString("utf8")) as { cwd?: unknown }).cwd as string | undefined : undefined;
         } catch { cwd = undefined; }
         const project = typeof cwd === "string" ? this.host.store.getProjectByPath(cwd) : undefined;
-        const detail = [project ? undefined : cwd, plural(summary.turns, "turn")].filter((x): x is string => typeof x === "string").join(" · ");
-        return { ...common, label: summary.title ?? "untitled session", detail, sessionId: id, diff: false, ...(project ? { project: { id: project.id, name: project.name } } : {}) };
+        const detail = [project ? undefined : cwd, turnCount(summary.turns)].filter((x): x is string => typeof x === "string").join(" · ");
+        const untitled = i18n._({ id: "untitled session", comment: "A session unit's label where the session carries no title" });
+        return { ...common, label: summary.title ?? untitled, detail, sessionId: id, diff: false, ...(project ? { project: { id: project.id, name: project.name } } : {}) };
       }
       case "queue": {
         const projectId = unit.name.slice("intents/".length, -".jsonl".length);
@@ -568,21 +693,39 @@ export class SpaceManager {
         const baseLines = lines(((await blob(trees.base.get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
         const prefix = sameLinesPrefix(baseLines, sideLines);
         const count = change === "deleted" ? 0 : prefix ? sideLines.length - baseLines.length : sideLines.length;
-        const detail = change === "deleted" ? "deleted" : prefix ? `${plural(count, "act")} appended` : "queue replaced";
-        return { ...common, label: `${plural(count, "change")} in ${name}'s queue`, detail, project: { id: projectId, name }, diff: false };
+        const detail = change === "deleted"
+          ? deletedDetail()
+          : prefix
+            ? i18n._({
+                id: "{count, plural, one {# act appended} other {# acts appended}}",
+                values: { count },
+                comment: "A queue unit's detail: how many acts this side adds to the end",
+              })
+            : queueReplaced();
+        const label = i18n._({
+          id: "{count, plural, one {# change in {name}'s queue} other {# changes in {name}'s queue}}",
+          values: { count, name },
+          comment: "A queue unit's label; {name} is the project whose queue changed",
+        });
+        return { ...common, label, detail, project: { id: projectId, name }, diff: false };
       }
       case "projects": {
         const summary = registryLines(change === "deleted" ? new Map() : registryEntries(await blob(trees[side].get(unit.name))), registryEntries(await blob(trees.base.get(unit.name))));
         return { ...common, label: summary.join("\n"), diff: false };
       }
       case "settings":
-        return { ...common, label: "Settings changed", diff: true };
+        return { ...common, label: i18n._({ id: "Settings changed", comment: "The settings unit's label" }), diff: true };
       case "playbook": {
         const changed = unit.paths.filter((p) => trees[side].get(p) !== trees.base.get(p)).map((p) => p.slice(unit.name.length + 1));
-        return { ...common, label: `Playbook ${unit.name.slice("playbooks/".length)}`, detail: changed.join(", "), diff: true };
+        const label = i18n._({
+          id: "Playbook {name}",
+          values: { name: unit.name.slice("playbooks/".length) },
+          comment: "A playbook unit's label; {name} is the playbook's own id",
+        });
+        return { ...common, label, detail: changed.join(", "), diff: true };
       }
       case "rules":
-        return { ...common, label: "Sync rules updated", diff: true };
+        return { ...common, label: i18n._({ id: "Sync rules updated", comment: "The sync-rules unit's label" }), diff: true };
       default:
         return { ...common, label: unit.name, diff: true };
     }
@@ -596,17 +739,17 @@ export class SpaceManager {
     const { trees, revs, blob } = context;
     const kind = spaceUnitKind(unit.name);
     const change = this.changeOf(unit, side, trees);
-    if (change === "deleted") return { change, detail: "deleted", diff: false };
+    if (change === "deleted") return { change, detail: deletedDetail(), diff: false };
     switch (kind) {
       case "session": {
         const summary = sessionSummary(await blob(trees[side].get(`${unit.name}.records.jsonl`)));
-        return { change, ...(summary.at !== undefined ? { at: summary.at } : {}), detail: plural(summary.turns, "turn"), diff: false };
+        return { change, ...(summary.at !== undefined ? { at: summary.at } : {}), detail: turnCount(summary.turns), diff: false };
       }
       case "queue": {
         const sideLines = lines(((await blob(trees[side].get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
         const baseLines = lines(((await blob(trees.base.get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
         const prefix = sameLinesPrefix(baseLines, sideLines);
-        return { change, detail: prefix ? plural(sideLines.length - baseLines.length, "act") : "queue replaced", diff: false };
+        return { change, detail: prefix ? actCount(sideLines.length - baseLines.length) : queueReplaced(), diff: false };
       }
       case "projects":
         return { change, detail: registryLines(registryEntries(await blob(trees[side].get(unit.name))), registryEntries(await blob(trees.base.get(unit.name)))).join("\n"), diff: false };
@@ -641,11 +784,37 @@ export class SpaceManager {
   private async requireReady(): Promise<ReadyRepository> {
     const repo = await this.readRepository();
     this.requireGit(repo);
-    if (!repo.root) throw new CoreError("invalid_request", "Initialize the repository first");
-    if (repo.remote === null) throw new CoreError("invalid_request", "Add a remote first");
-    if (repo.branch !== "main") throw new CoreError("invalid_request", repo.branch ? `On ${repo.branch}; check out main in a terminal` : "Not on a branch; check out main in a terminal");
-    if (repo.mergePending) throw new CoreError("invalid_request", "Finish or abort the merge in your terminal");
-    if (repo.head === null) throw new CoreError("invalid_request", "The repository holds no commit yet; initialize it again");
+    if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
+    if (repo.remote === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Add a remote first",
+        comment: "Refusal: the home names no remote to sync with",
+      }));
+    }
+    if (repo.branch !== "main") {
+      throw new CoreError("invalid_request", repo.branch
+        ? i18n._({
+            id: "On {branch}; check out main in a terminal",
+            values: { branch: repo.branch },
+            comment: "Refusal: the home sits on another branch; main is a branch's own name",
+          })
+        : i18n._({
+            id: "Not on a branch; check out main in a terminal",
+            comment: "Refusal: the home's HEAD names no branch; main is a branch's own name",
+          }));
+    }
+    if (repo.mergePending) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Finish or abort the merge in your terminal",
+        comment: "Refusal: a Git merge is pending in the home",
+      }));
+    }
+    if (repo.head === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "The repository holds no commit yet; initialize it again",
+        comment: "Refusal: the home's repository holds no commit to sync",
+      }));
+    }
     return repo as ReadyRepository;
   }
 
@@ -659,7 +828,12 @@ export class SpaceManager {
       if (blocker) throw new CoreError("busy", blocker);
       const repo = await this.readRepository();
       this.requireGit(repo);
-      if (repo.root) throw new CoreError("invalid_request", "The home is already a repository");
+      if (repo.root) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "The home is already a repository",
+          comment: "Refusal: Initialize was asked of a home Git already holds",
+        }));
+      }
       if (remote !== undefined) {
         const checked = validateRemoteUrl(remote);
         if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
@@ -674,7 +848,13 @@ export class SpaceManager {
         if (!existsSync(receipt)) continue;
         let complete = false;
         try { complete = (readJsonFile(receipt) as { complete?: unknown }).complete === true; } catch { complete = false; }
-        if (!complete) throw new CoreError("invalid_request", `local/migrations/${id}/receipt.json: the migration is incomplete; finish or remove it before initializing`);
+        if (!complete) {
+          // The file names itself; the sentence after it is the core's.
+          throw new CoreError("invalid_request", `local/migrations/${id}/receipt.json: ${i18n._({
+            id: "the migration is incomplete; finish or remove it before initializing",
+            comment: "Refusal, read after the file it names",
+          })}`);
+        }
       }
       const hadGitDir = existsSync(join(home, ".git"));
       const previousUmask = process.umask(0o077);
@@ -689,7 +869,13 @@ export class SpaceManager {
           await this.git.ok(["add", "-A", "--", "."]);
           const staged = (await this.git.ok(["diff", "--cached", "--name-only", "-z"])).split("\0").filter(Boolean);
           const leak = staged.find((p) => !portable(p));
-          if (leak) throw new CoreError("invalid_request", `Refusing to share ${leak}: it belongs to a family that stays on this device`);
+          if (leak) {
+            throw new CoreError("invalid_request", i18n._({
+              id: "Refusing to share {leak}: it belongs to a family that stays on this device",
+              values: { leak },
+              comment: "Refusal: a staged file belongs to a family the home never shares; {leak} is its path",
+            }));
+          }
           await this.git.ok([...(await this.git.committerArgs()), "commit", "-q", "-m", `Initialize Spex space on ${hostname()}`]);
           if (remote !== undefined) await this.git.ok(["remote", "add", "origin", remote]);
         } catch (error) {
@@ -715,7 +901,7 @@ export class SpaceManager {
     this.assertNotRunning();
     const repo = await this.readRepository();
     this.requireGit(repo);
-    if (!repo.root) throw new CoreError("invalid_request", "Initialize the repository first");
+    if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
     if (url === null) {
       if (repo.remote !== null) await this.git.ok(["remote", "remove", "origin"]);
     } else {
@@ -745,7 +931,10 @@ export class SpaceManager {
         if (error instanceof SpaceStopped) this.phase = { phase: "stopped", op, step: error.step, ...error.failure };
         else {
           const message = error instanceof Error ? error.message : String(error);
-          this.phase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: "Retry; if it fails again, run the step in a terminal for detail.", retry: true };
+          this.phase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: i18n._({
+            id: "Retry; if it fails again, run the step in a terminal for detail.",
+            comment: "Guidance under a step that stopped for a reason the app does not classify",
+          }), retry: true };
         }
       } finally {
         await this.releaseHoldings();
@@ -797,10 +986,14 @@ export class SpaceManager {
         const plan = this.lastPlan?.units ?? [];
         for (const [name, choice] of Object.entries(input.choices)) {
           const unit = plan.find((u) => u.name === name);
-          if (!unit) throw new CoreError("invalid_request", `unknown unit ${name}`);
+          if (!unit) throw new CoreError("invalid_request", unknownUnit(name));
           if (unit.choice !== "conflict") {
             const label = [...this.lists.local, ...this.lists.incoming].find((u) => u.unit === name)?.label ?? name;
-            throw new CoreError("invalid_request", `${label} has no divergent change`);
+            throw new CoreError("invalid_request", i18n._({
+              id: "{label} has no divergent change",
+              values: { label },
+              comment: "Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label",
+            }));
           }
           choices[name] = choice === "mine" ? "ours" : "theirs";
         }
@@ -866,7 +1059,20 @@ export class SpaceManager {
           await this.enter(op, "apply", false);
           const applied = await this.apply(pending as Pending);
           if (applied === "restart") {
-            if (restarts >= 1) throw new SpaceStopped("apply", { cause: "writer", message: "The space changed twice while syncing", guidance: "Another process is writing to the home; wait for it to finish, then Retry.", retry: true });
+            if (restarts >= 1) {
+              throw new SpaceStopped("apply", {
+                cause: "writer",
+                message: i18n._({
+                  id: "The space changed twice while syncing",
+                  comment: "A stopped sync's message: the home was written to twice under the sync",
+                }),
+                guidance: i18n._({
+                  id: "Another process is writing to the home; wait for it to finish, then Retry.",
+                  comment: "Guidance under a sync another writer keeps restarting",
+                }),
+                retry: true,
+              });
+            }
             restarts += 1;
             next = "save";
             break;
@@ -884,7 +1090,20 @@ export class SpaceManager {
           await this.enter(op, "push", true);
           const pushed = await this.push(repo.remote, upstream);
           if (pushed === "rejected") {
-            if (rechecks >= 1) throw new SpaceStopped("push", { cause: "rejected", message: "The remote changed again", guidance: "Your merge is saved locally; Retry to send it once the remote settles.", retry: true });
+            if (rechecks >= 1) {
+              throw new SpaceStopped("push", {
+                cause: "rejected",
+                message: i18n._({
+                  id: "The remote changed again",
+                  comment: "A stopped sync's message: the remote moved while this machine was sending",
+                }),
+                guidance: i18n._({
+                  id: "Your merge is saved locally; Retry to send it once the remote settles.",
+                  comment: "Guidance under a push the remote rejected twice",
+                }),
+                retry: true,
+              });
+            }
             rechecks += 1;
             next = "check";
             break;
@@ -906,25 +1125,58 @@ export class SpaceManager {
     const home = this.host.home;
     const stop = (message: string, guidance: string): SpaceStopped => new SpaceStopped("save", { cause: "validation", message, guidance, retry: false });
     try { prepareStorageGitFiles(home, this.host.store.untrackedSessionPaths()); }
-    catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), "Nothing was saved. Fix the sync rules file, then sync again."); }
+    catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
+      id: "Nothing was saved. Fix the sync rules file, then sync again.",
+      comment: "Guidance where the sync rules file could not be refreshed",
+    })); }
     await this.git.ok(["add", "-A", "--", "."]);
     const staged = (await this.git.ok(["diff", "--cached", "--name-only", "-z"])).split("\0").filter(Boolean);
     const leak = staged.find((p) => !portable(p));
     if (leak) {
       await this.git.run(["reset", "-q"]);
-      throw stop(`Refusing to share ${leak}`, "It belongs to a family that stays on this device; check the sync rules. Nothing was saved.");
+      throw stop(
+        i18n._({
+          id: "Refusing to share {leak}",
+          values: { leak },
+          comment: "A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path",
+        }),
+        i18n._({
+          id: "It belongs to a family that stays on this device; check the sync rules. Nothing was saved.",
+          comment: "Guidance under a save that refused to share a file",
+        }),
+      );
     }
     try { await validateStorageTree(home); }
     catch (error) {
       await this.git.run(["reset", "-q"]);
-      throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), "Nothing was saved. Fix or remove the file, then sync again.");
+      throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
+        id: "Nothing was saved. Fix or remove the file, then sync again.",
+        comment: "Guidance where a file under the home failed validation before the save",
+      }));
     }
     if (await this.git.succeeds(["diff", "--cached", "--quiet"])) return null;
     const units = [...new Set(staged.map(storageUnitName))].sort();
     const commit = await this.git.run([...(await this.git.committerArgs()), "commit", "-q", "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
+      // The pattern reads Git's own English output, so it stays.
       const identity = /tell me who you are|no email|no name/i.test(commit.stderr);
-      throw new SpaceStopped("save", { cause: identity ? "identity" : "git", message: lastLines(commit.stderr) || "Git could not commit", guidance: identity ? "Set user.name and user.email for Git on this machine, then Retry." : "Retry; if it fails again, run git commit in the home from a terminal for detail.", retry: true });
+      throw new SpaceStopped("save", {
+        cause: identity ? "identity" : "git",
+        message: lastLines(commit.stderr) || i18n._({
+          id: "Git could not commit",
+          comment: "A stopped save's message where git failed and printed nothing",
+        }),
+        guidance: identity
+          ? i18n._({
+              id: "Set user.name and user.email for Git on this machine, then Retry.",
+              comment: "Guidance where Git has no committer identity; the setting names stay as they are",
+            })
+          : i18n._({
+              id: "Retry; if it fails again, run git commit in the home from a terminal for detail.",
+              comment: "Guidance under a commit git failed; git commit is the command's own name",
+            }),
+        retry: true,
+      });
     }
     return this.git.ok(["rev-parse", "HEAD"]);
   }
@@ -1011,7 +1263,25 @@ export class SpaceManager {
       try { (this.holding as { leases: { release(): Promise<unknown> }[] }).leases.push(await shared.acquireManagement(id)); }
       catch {
         const title = store.describeSession(id)?.title;
-        throw new SpaceStopped(step, { cause: "lease", message: `${title ? `“${title}”` : `Session ${id.slice(0, 8)}`} is in use`, guidance: "Wait for the session to finish, then Retry.", retry: true });
+        throw new SpaceStopped(step, {
+          cause: "lease",
+          message: title
+            ? i18n._({
+                id: "“{title}” is in use",
+                values: { title },
+                comment: "A stopped sync's message: a session is held elsewhere, named by its title",
+              })
+            : i18n._({
+                id: "Session {id} is in use",
+                values: { id: id.slice(0, 8) },
+                comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
+              }),
+          guidance: i18n._({
+            id: "Wait for the session to finish, then Retry.",
+            comment: "Guidance under a sync a held session stopped",
+          }),
+          retry: true,
+        });
       }
     }
     // The refresh's rescan must not read the core's own leases as writers.
@@ -1042,7 +1312,17 @@ export class SpaceManager {
         },
       );
     } catch (error) {
-      if (error instanceof StorageFormatError) throw new SpaceStopped("apply", { cause: "validation", message: `${error.file}: ${error.reason}`, guidance: "Choose the other side for this unit or fix the file, then Retry.", retry: true });
+      if (error instanceof StorageFormatError) {
+        throw new SpaceStopped("apply", {
+          cause: "validation",
+          message: `${error.file}: ${error.reason}`,
+          guidance: i18n._({
+            id: "Choose the other side for this unit or fix the file, then Retry.",
+            comment: "Guidance where the selected side of a unit failed validation",
+          }),
+          retry: true,
+        });
+      }
       throw error;
     }
     const headAfter = await this.commitSelection(pending.head, pending.origin, pending.resolved);
@@ -1118,20 +1398,20 @@ export class SpaceManager {
       await this.repair();
       this.host.store.reload();
     } catch (error) {
-      this.repairProblem = { file: "local/space-apply.json", reason: `an interrupted sync could not be repaired: ${error instanceof Error ? error.message : String(error)}`, blocking: true };
+      this.repairFailure = error instanceof Error ? error.message : String(error);
     }
   }
 
   private async repairIfMarked(): Promise<void> {
-    if (!existsSync(this.markerPath())) { this.repairProblem = undefined; return; }
+    if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
     try {
       await this.repair();
-      this.repairProblem = undefined;
+      this.repairFailure = undefined;
       this.host.store.reload();
       await this.host.rescanSessions();
     } catch (error) {
-      this.repairProblem = { file: "local/space-apply.json", reason: `an interrupted sync could not be repaired: ${error instanceof Error ? error.message : String(error)}`, blocking: true };
-      throw new CoreError("invalid_request", `${this.repairProblem.file}: ${this.repairProblem.reason}`);
+      this.repairFailure = error instanceof Error ? error.message : String(error);
+      throw new CoreError("invalid_request", `${REPAIR_MARKER_FILE}: ${repairFailureReason(this.repairFailure)}`);
     }
   }
 
@@ -1139,7 +1419,12 @@ export class SpaceManager {
     const home = this.host.home;
     const marker = readJsonFile(this.markerPath()) as Partial<ApplyMarker>;
     if (marker.v !== 1 || typeof marker.ours !== "string" || typeof marker.theirs !== "string" || typeof marker.base !== "string" || typeof marker.choices !== "object" || marker.choices === null) {
-      throw new Error("the repair marker is malformed");
+      // Both failures below reach the reader as the cause inside the
+      // repair diagnostic's reason, so they are his words too.
+      throw new Error(i18n._({
+        id: "the repair marker is malformed",
+        comment: "Why an interrupted sync's repair failed: the marker file it left cannot be read",
+      }));
     }
     const version = await this.git.version();
     if (!version.ok) throw new Error(version.guidance);
@@ -1151,7 +1436,10 @@ export class SpaceManager {
       const parents = (await this.git.ok(["log", "-1", "--format=%P", "HEAD"])).split(/\s+/).filter(Boolean);
       const landed = head === marker.theirs || (parents.includes(marker.ours) && parents.includes(marker.theirs));
       if (landed) { rmSync(this.markerPath(), { force: true }); return; }
-      throw new Error("main moved since the interrupted sync; resolve it in a terminal");
+      throw new Error(i18n._({
+        id: "main moved since the interrupted sync; resolve it in a terminal",
+        comment: "Why an interrupted sync's repair failed; main is the branch's own name",
+      }));
     }
     const trees: StorageTrees = { ours: readStorageTree(home, marker.ours), theirs: readStorageTree(home, marker.theirs), base: readStorageTree(home, marker.base) };
     const units = planStorageUnits(trees);
@@ -1170,16 +1458,37 @@ export class SpaceManager {
   async diff(unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
     if (!this.lastPlan) await this.snapshot(true);
     const plan = this.lastPlan;
-    if (!plan) throw new CoreError("invalid_request", "Initialize the repository first");
+    if (!plan) throw new CoreError("invalid_request", initializeFirst());
     const found = plan.units.find((u) => u.name === unit);
-    if (!found) throw new CoreError("invalid_request", `unknown unit ${unit}`);
+    if (!found) throw new CoreError("invalid_request", unknownUnit(unit));
     const kind = spaceUnitKind(unit);
-    if (kind === "session" || kind === "queue") throw new CoreError("invalid_request", "a session or queue offers no text diff");
-    if (!found.paths.includes(path)) throw new CoreError("invalid_request", `unknown path ${path} in ${unit}`);
-    if (side === "remote" && this.checkedAt === null) throw new CoreError("invalid_request", "Check the remote first");
+    if (kind === "session" || kind === "queue") {
+      throw new CoreError("invalid_request", i18n._({
+        id: "a session or queue offers no text diff",
+        comment: "Refusal: a diff was asked of a unit that is read as a summary, not as text",
+      }));
+    }
+    if (!found.paths.includes(path)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "unknown path {path} in {unit}",
+        values: { path, unit },
+        comment: "Refusal: the diff names a path the unit does not hold",
+      }));
+    }
+    if (side === "remote" && this.checkedAt === null) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Check the remote first",
+        comment: "Refusal: the remote's side was asked for before the remote was checked",
+      }));
+    }
     const args = ["diff", "--no-color", plan.base, side === "remote" ? plan.theirs : plan.oursTree, "--", path];
     const run = await this.git.run(args);
-    if (run.code !== 0 && run.code !== 1) throw new CoreError("invalid_request", lastLines(run.stderr) || "Git could not diff");
+    if (run.code !== 0 && run.code !== 1) {
+      throw new CoreError("invalid_request", lastLines(run.stderr) || i18n._({
+        id: "Git could not diff",
+        comment: "Refusal where git failed to diff and printed nothing",
+      }));
+    }
     const cut = capText(run.stdout.toString("utf8"), DIFF_CAP_BYTES, Number.MAX_SAFE_INTEGER);
     return { patch: cut.text, truncated: cut.truncated };
   }
@@ -1191,18 +1500,33 @@ export class SpaceManager {
   private confine(rel: string | undefined, forRead: boolean): { rel: string; abs: string } {
     const home = realPath(this.host.home);
     const given = rel ?? "";
-    if (given.includes("\0") || isAbsolute(given)) throw new CoreError("invalid_request", "the path must be relative to the home");
+    if (given.includes("\0") || isAbsolute(given)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "the path must be relative to the home",
+        comment: "Refusal: the explorer was given an absolute path",
+      }));
+    }
     const parts = given.split(/[\\/]+/).filter((part) => part !== "" && part !== ".");
-    if (parts.some((part) => part === "..")) throw new CoreError("invalid_request", "the path escapes the home");
-    if (parts[0] === ".git") throw new CoreError("invalid_request", "Git data is not browsed");
+    if (parts.some((part) => part === "..")) throw new CoreError("invalid_request", escapesTheHome());
+    if (parts[0] === ".git") {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Git data is not browsed",
+        comment: "Refusal: the explorer offers no view of the repository's own files",
+      }));
+    }
     let current = home;
     for (const part of parts) {
       current = join(current, part);
       let stat;
-      try { stat = lstatSync(current); } catch { throw new CoreError("not_found", `no ${forRead ? "file" : "folder"} at ${parts.join("/")}`); }
-      if (stat.isSymbolicLink()) throw new CoreError("invalid_request", "the path goes through a symbolic link");
+      try { stat = lstatSync(current); } catch { throw new CoreError("not_found", forRead ? noFileAt(parts.join("/")) : noFolderAt(parts.join("/"))); }
+      if (stat.isSymbolicLink()) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "the path goes through a symbolic link",
+          comment: "Refusal: the explorer follows no symbolic link",
+        }));
+      }
     }
-    if (!inside(current, home)) throw new CoreError("invalid_request", "the path escapes the home");
+    if (!inside(current, home)) throw new CoreError("invalid_request", escapesTheHome());
     return { rel: parts.join("/"), abs: current };
   }
 
@@ -1227,8 +1551,19 @@ export class SpaceManager {
   async tree(path?: string): Promise<{ path: string; entries: SpaceEntry[] }> {
     const { rel, abs } = this.confine(path, false);
     let stat;
-    try { stat = statSync(abs); } catch { throw new CoreError("not_found", `no folder at ${rel}`); }
-    if (!stat.isDirectory()) throw new CoreError("invalid_request", `${rel || "the home"} is not a folder`);
+    try { stat = statSync(abs); } catch { throw new CoreError("not_found", noFolderAt(rel)); }
+    if (!stat.isDirectory()) {
+      throw new CoreError("invalid_request", rel
+        ? i18n._({
+            id: "{path} is not a folder",
+            values: { path: rel },
+            comment: "Refusal: the explorer was asked to list something that is no folder",
+          })
+        : i18n._({
+            id: "the home is not a folder",
+            comment: "Refusal: the home itself is no folder",
+          }));
+    }
     const dirents = readdirSync(abs, { withFileTypes: true });
     const marks = await this.sharingMarks(rel, dirents.filter((d) => d.name !== ".git").map((d) => ({ name: d.name, directory: d.isDirectory() })));
     const entries: SpaceEntry[] = [];
@@ -1294,10 +1629,16 @@ export class SpaceManager {
   async read(path: string): Promise<SpaceReadResult> {
     const { rel, abs } = this.confine(path, true);
     let stat;
-    try { stat = statSync(abs); } catch { throw new CoreError("not_found", `no file at ${rel}`); }
-    if (!stat.isFile()) throw new CoreError("invalid_request", `${rel} is not a file`);
+    try { stat = statSync(abs); } catch { throw new CoreError("not_found", noFileAt(rel)); }
+    if (!stat.isFile()) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{path} is not a file",
+        values: { path: rel },
+        comment: "Refusal: the explorer was asked to read something that is no file",
+      }));
+    }
     const family = spaceFamily(rel, false);
-    if (WITHHELD_FAMILIES.has(family)) return { kind: "withheld", reason: WITHHELD_REASON };
+    if (WITHHELD_FAMILIES.has(family)) return { kind: "withheld", reason: withheldReason() };
     const fd = openSync(abs, "r");
     let bytes: Buffer;
     try {
