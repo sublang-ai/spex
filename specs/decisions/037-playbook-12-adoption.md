@@ -11,6 +11,7 @@ Amends [DR-034](034-playbook-9-adoption.md) (the playbook floor moves to ^12.2.0
 Amends [DR-025](025-playbook-7-adoption.md)'s built-in catalog by adding `dev`.
 Amended by [DR-045](045-unified-session-storage.md): shared host lifecycle and durable effect-ledger authority.
 Amended by [DR-050](050-shared-storage-cutover.md): Playbook ^13.0.0 and Cligent ^0.25.0 floors.
+Amended by [DR-080](080-the-config-directory-is-named-config.md): the config relocation serves the home's former `playbook/` location and removes a former file inside the home.
 
 ## Context
 

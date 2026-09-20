@@ -186,7 +186,7 @@ While the home is a repository, the Sync tab shall list the local units — thos
 | Sessions | `sessions/<id>` bundle | the session's title, or "untitled session" | project name; new, updated or deleted; turn count |
 | Queues | `intents/<projectId>.jsonl` | "N changes in <project>'s queue" | N acts appended since the ancestor; "queue replaced" where earlier lines are gone |
 | Projects | `projects.json` | one line per difference: registered, renamed, removed, naming the project | — |
-| Settings | `playbook/playbook.config.yaml` | "Settings changed" | a View diff control [[space-10](#space-10)] |
+| Settings | `config/playbook.config.yaml` | "Settings changed" | a View diff control [[space-10](#space-10)] |
 | Playbooks | `playbooks/<id>/` | "Playbook <id>" | the changed files; a View diff control [[space-10](#space-10)] |
 | Sync rules | `.gitignore`, `.gitattributes` | "Sync rules updated" | a View diff control [[space-10](#space-10)] |
 | Other | any other tracked path | the path | new, updated or deleted |
@@ -568,7 +568,7 @@ The core shall build each `space.tree` level by reading one directory of the hom
 | `.lock*`, `sessions/.<uuid>.lock*`, `*.lock`, `*.lock.*` | lease |
 | `intents/<uuid>.jsonl` | project queue |
 | `projects.json` | project registry |
-| `playbook/playbook.config.yaml`; `*.bak*`, `*.backup*` | Settings; config backup |
+| `config/playbook.config.yaml`; `*.bak*`, `*.backup*` | Settings; config backup |
 | `playbooks/<id>/<id>.md`, `.ts`, `.playbook/` | playbook sources |
 | `playbooks/<id>/<id>.registry.ts`, `.registry.mjs`, `.fsm.bundle.mjs` | playbook output |
 | `local/project-paths.json`; `local/migrations/`; `local/space-apply.json` | local project paths; migration receipts; sync repair marker |

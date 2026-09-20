@@ -105,6 +105,7 @@ meta.md       The spec of specs
 | [DR-077](decisions/077-up-next-is-a-committed-queue.md) | 077-up-next-is-a-committed-queue.md | Up next is one committed queue: every row reads Queued, the next states what precedes it, and clean settled turns hand off without typed success proof |
 | [DR-078](decisions/078-the-interface-speaks-the-readers-language.md) | 078-the-interface-speaks-the-readers-language.md | The interface speaks the reader's language: English source, Simplified Chinese, one choice per home following the system by default, open PO catalogs a human edits, a build that refuses an incomplete language; amends DR-010, DR-041 and DR-013; extended by DR-079 |
 | [DR-079](decisions/079-the-core-speaks-the-homes-language.md) | 079-the-core-speaks-the-homes-language.md | The core speaks the home's language: reader-facing prose the core composes phrased from its own catalog, live state re-read on a change, records keeping theirs, Node 22 for every package; extends DR-078 |
+| [DR-080](decisions/080-the-config-directory-is-named-config.md) | 080-the-config-directory-is-named-config.md | The config directory is named config: `config/playbook.config.yaml` under the home, relocated once from the former `playbook/` location ahead of the XDG one, the former file inside the home removed; amends DR-037 |
 
 ## Packages
 

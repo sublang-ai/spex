@@ -21,7 +21,7 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `playbook/playbook.config.yaml` | Shared launcher configuration | Tracked |
+| `config/playbook.config.yaml` | Shared launcher configuration | Tracked |
 | `projects.json` | Project identities [[storage-2](#storage-2)] | Tracked |
 | `intents/<projectId>.jsonl` | Ordered intent changes [[storage-4](#storage-4)] | Tracked |
 | `sessions/<id>.json`, `sessions/<id>.records.jsonl` | Playbook session bundle [[1]] | Tracked |

@@ -61,10 +61,11 @@ Where no config file exists at the shared config path, when the core service sta
 
 #### core-service-66
 
-Where the shared config path is the default one and holds nothing, when the core service starts and a config file exists at the previous XDG location, the core service shall relocate it once into the shared config path before seeding — bytes and permission bits preserved, published with an exclusive link so a canonical file appearing concurrently wins, the previous file left in place ([DR-037](../decisions/037-playbook-12-adoption.md)):
+Where the shared config path is the default one and holds nothing, when the core service starts and a config file exists at a former location — the home's `playbook/playbook.config.yaml`, else the previous XDG location — the core service shall relocate it once into the shared config path before seeding — bytes and permission bits preserved, published with an exclusive link so a canonical file appearing concurrently wins ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-080](../decisions/080-the-config-directory-is-named-config.md)):
 
 - An explicit config path given by the shell moves nothing.
-- A previous file naming a relative sessions directory is left where it is and reported, since moving it would retarget the locator.
+- A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
+- A former file whose relative `sessions` or path-shaped `playbooks.<id>.from` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator.
 
 ### Sessions
 
@@ -761,7 +762,7 @@ While a core service is serving a state root, the test suite shall start a secon
 
 #### core-service-68
 
-Where a config file with a comment and a non-default mode sits at the previous XDG location and the shared config path is absent, the test suite shall start the core service with a default config path and assert the relocation contract of [[core-service-66](#core-service-66)]: the shared path holds the same bytes and mode, the previous file is untouched, the active config is reported valid and not seeded, and an edit to the shared file survives a second start.
+Where a config file with a comment and a non-default mode sits at a former location and the shared config path is absent, the test suite shall start the core service with a default config path and assert the relocation contract of [[core-service-66](#core-service-66)] from each former location: the shared path holds the same bytes and mode, the active config is reported valid and not seeded, and an edit to the shared file survives a second start; from the home's `playbook/` location, a relative `sessions` locator keeps its target, the former file and its emptied directory are gone, and an XDG file beside it is untouched; from the XDG location, the previous file is untouched.
 
 #### core-service-69
 
