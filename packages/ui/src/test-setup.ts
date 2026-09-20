@@ -7,6 +7,21 @@
 // report is pure noise in test output — drop exactly that one
 // message and let every other error through.
 
+import { afterEach } from "vitest";
+
+// The page mirrors a few choices into the browser's storage, and jsdom
+// keeps that storage for the whole file, so one test's choice would
+// become the next test's stored precondition. Each test starts with an
+// empty mirror; where the host's storage refuses (Node 25's own global
+// stands in for jsdom's and answers no call), there is nothing to clear.
+afterEach(() => {
+  try {
+    window.localStorage.clear();
+  } catch {
+    // no storage to clear
+  }
+});
+
 const realError = console.error;
 
 console.error = (...args: unknown[]) => {

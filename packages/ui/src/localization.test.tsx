@@ -29,6 +29,7 @@ vi.mock("./state/store.js", async (importOriginal) => {
 
 import { Root } from "./Root.js";
 import {
+  LANGUAGE_KEY,
   SURFACE_KEY,
   deliverServerMessageForTests,
   safeStorageRemove,
@@ -610,6 +611,12 @@ describe("localization-2: with no stored choice the client's own languages decid
     [["fr"], "en"],
     [["en-GB", "zh-CN"], "en"],
   ];
+
+  // The case is a first load with no stored choice: whatever an earlier
+  // test chose must not stand in the mirror the fresh store reads.
+  beforeEach(() => {
+    safeStorageRemove(LANGUAGE_KEY);
+  });
 
   afterEach(() => {
     vi.unstubAllGlobals();
