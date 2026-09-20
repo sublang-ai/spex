@@ -58,7 +58,7 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
   await mkdir(cwd);
   await exec("git", ["init", "-q", cwd]);
-  const configPath = join(dataDir, "playbook", "playbook.config.yaml");
+  const configPath = join(dataDir, "config", "playbook.config.yaml");
   await mkdir(dirname(configPath), { mode: 0o700 });
   await writeFile(configPath, CONFIG, { mode: 0o600 });
   let service: CoreService | undefined;

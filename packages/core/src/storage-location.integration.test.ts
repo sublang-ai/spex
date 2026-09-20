@@ -15,7 +15,7 @@ import { stubSlcSource } from "./testing/stub-slc.js";
 
 test("home defaults agree and only explicit session paths replace the shared default", () => {
   const scratch = mkdtempSync(join(tmpdir(), "spex-locations-")); const home = join(scratch, "home"); const config = join(scratch, "elsewhere", "config.yaml"); mkdirSync(join(scratch, "elsewhere"));
-  assert.equal(resolveConfigPath({ SPEX_HOME: home }, scratch), join(home, "playbook", "playbook.config.yaml"));
+  assert.equal(resolveConfigPath({ SPEX_HOME: home }, scratch), join(home, "config", "playbook.config.yaml"));
   assert.equal(resolveSessionsDir(config, { SPEX_HOME: home, XDG_STATE_HOME: "/ignored" }, scratch), join(home, "sessions"));
   assert.equal(resolveSessionsDir(config, { SPEX_HOME: "  " }, scratch), join(scratch, ".spex", "sessions"));
   writeFileSync(config, "sessions: ./records\n"); assert.equal(resolveSessionsDir(config, { SPEX_HOME: home }, scratch), join(scratch, "elsewhere", "records"));
@@ -25,7 +25,7 @@ test("home defaults agree and only explicit session paths replace the shared def
 
 test("managed config, executable modules and graphs relocate; omitted bundles rebuild from retained inputs", async () => {
   const scratch = mkdtempSync(join(tmpdir(), "spex-library-move-")); const original = join(scratch, "first"); const moved = join(scratch, "second");
-  const config = join(original, "playbook", "playbook.config.yaml"); const library = join(original, "playbooks"); mkdirSync(join(original, "playbook"), { recursive: true });
+  const config = join(original, "config", "playbook.config.yaml"); const library = join(original, "playbooks"); mkdirSync(join(original, "config"), { recursive: true });
   const stub = join(scratch, "slc.cjs"); writeFileSync(stub, stubSlcSource());
   const result = await compilePlaybook({ playbookId: "demo", source: { text: "# Demo\n\nA portable workflow.\n" }, roles: ["Helper"], command: "special", intent: "Retained custom intent", libraryDir: library, configPath: config, env: { SPEX_SLC: `${process.execPath} ${stub}` }, spawner: async (cmd, args, cwd, line, signal) => { if (args[0] === "--version") { line("v25.5.0"); return 0; } return defaultSpawner(cmd, args, cwd, line, signal); } });
   assert.equal(result.from, "../playbooks/demo/demo.registry.mjs");
@@ -36,7 +36,7 @@ test("managed config, executable modules and graphs relocate; omitted bundles re
   assert.match(readFileSync(config, "utf8"), /retained comment/);
   const loaded = await loadConfig(config); assert.equal(loaded.composed.playbooks[0].manifestCommand, "special");
   cpSync(original, moved, { recursive: true }); rmSync(original, { recursive: true, force: true });
-  const movedConfig = join(moved, "playbook", "playbook.config.yaml"); const movedLibrary = join(moved, "playbooks");
+  const movedConfig = join(moved, "config", "playbook.config.yaml"); const movedLibrary = join(moved, "playbooks");
   const copied = await loadConfig(movedConfig); assert.equal(copied.composed.playbooks[0].from, resolve(movedLibrary, "demo", "demo.registry.mjs"));
   const artifacts = await resolveArtifacts(copied.composed.playbooks[0]); assert.ok(artifacts.machine); assert.match(artifacts.source ?? "", /portable workflow/);
   rmSync(join(movedLibrary, "demo", "demo.registry.mjs")); rmSync(join(movedLibrary, "demo", "demo.fsm.bundle.mjs"));

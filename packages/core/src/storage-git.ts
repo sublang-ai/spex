@@ -116,7 +116,7 @@ function copySafe(source: string, target: string): void {
 /** Public Playbook validation is the only authority for session bytes. */
 export async function validateStorageTree(home: string, selectedSessionIds?: ReadonlySet<string>): Promise<StorageDiagnostic[]> {
   const app = validateApplicationTree(home); const diagnostics = [...app.diagnostics];
-  const config = join(home, "playbook", "playbook.config.yaml");
+  const config = join(home, "config", "playbook.config.yaml");
   if (existsSync(config)) {
     const document = parseDocument(readFileSync(config, "utf8"));
     if (document.errors.length) throw new StorageFormatError(config, document.errors[0].message);

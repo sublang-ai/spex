@@ -536,7 +536,7 @@ test("command overrides land in captain options and duplicates are rejected", as
 
 test("seedConfig creates once and never overwrites", () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-config-"));
-  const path = join(dir, "playbook", "playbook.config.yaml");
+  const path = join(dir, "config", "playbook.config.yaml");
   assert.equal(seedConfig(path), true);
   const seeded = readFileSync(path, "utf8");
   assert.match(seeded, /playbooks:/);
@@ -549,16 +549,16 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   // The launcher resolves the same root, so both hosts open one file.
   assert.equal(
     resolveConfigPath({ SPEX_HOME: "/x" }, "/home/u"),
-    join("/x", "playbook", "playbook.config.yaml"),
+    join("/x", "config", "playbook.config.yaml"),
   );
   assert.equal(
     resolveConfigPath({}, "/home/u"),
-    join("/home/u", ".spex", "playbook", "playbook.config.yaml"),
+    join("/home/u", ".spex", "config", "playbook.config.yaml"),
   );
   // A blank override is not a root; the home fallback still applies.
   assert.equal(
     resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"),
-    join("/home/u", ".spex", "playbook", "playbook.config.yaml"),
+    join("/home/u", ".spex", "config", "playbook.config.yaml"),
   );
 });
 

@@ -34,7 +34,7 @@ import {
   loadConfig,
   relocateLegacyConfig,
   resolveConfigPath,
-  resolveLegacyConfigPath,
+  resolveFormerConfigPaths,
   resolveSessionsDir,
   seedConfig,
   summarizeConfig,
@@ -622,17 +622,24 @@ export class CoreService {
     const service = new CoreService(options);
     try {
     service.store.markAllSessionsNotLive();
-    service.relocateLegacyLibrary();
-    // The launcher moved the shared config under the Spex root
-    // (playbook DR-043); a config still at the previous location
-    // relocates once before seeding could shadow it (core-service-66).
+    // A config still at a former location relocates once, nearest
+    // first, before seeding could shadow it and before the library
+    // relocation rewrites `from` paths in it (core-service-66).
     // An explicit --config is the operator's path and moves nothing.
     if (options.configPath === undefined) {
-      relocateLegacyConfig(
-        service.configPath,
-        resolveLegacyConfigPath(service.env, service.home),
+      const former = resolveFormerConfigPaths(
+        { ...service.env, SPEX_HOME: options.dataDir ?? service.env.SPEX_HOME },
+        service.home,
       );
+      for (const path of former) {
+        if (relocateLegacyConfig(service.configPath, path)) break;
+        // The nearer location answers for the home: where that path
+        // still holds something — refused, or not a file at all — no
+        // older one is published past it (core-service-66).
+        if (existsSync(path)) break;
+      }
     }
+    service.relocateLegacyLibrary();
     service.seeded = seedConfig(service.configPath);
     if (service.options.dataDir) migrateManagedLibraryConfig(service.configPath, service.libraryDir(), service.options.dataDir);
     // An apply a crash interrupted is repaired from its marker before the

@@ -41,6 +41,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The shared launcher configuration now lives at
+  `config/playbook.config.yaml` under your Spex home, the home's
+  directory of hand-written configuration ([DR-080](specs/decisions/080-the-config-directory-is-named-config.md)).
+  A config still at the former `playbook/` location, or at the older
+  XDG path, moves there once when the core starts: the file keeps its
+  name, its permissions and the target of every relative locator
+  reaching outside its directory, and the emptied `playbook/` directory
+  inside the home goes with it. The
+  Playbook CLI shares the same file again from the release that ships
+  its [DR-064](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/064-the-config-directory-is-named-config.md);
+  until a machine's CLI reaches it, that CLI seeds a file of its own at
+  the former location.
 - The app requires Node.js 22.19 or later, the floor of the catalog
   tooling ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md));
   CI drops Node 20, which reached end of life in April 2026.

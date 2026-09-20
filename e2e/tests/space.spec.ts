@@ -235,7 +235,7 @@ test.describe("daily sync", () => {
   }) => {
     test.setTimeout(180_000);
     const sessionUnit = `sessions/${app.sessionId}`;
-    const settingsUnit = "playbook/playbook.config.yaml";
+    const settingsUnit = "config/playbook.config.yaml";
     const queueUnit = `intents/${app.projectId}.jsonl`;
     const words: string[] = [];
     await open(page, app);
@@ -646,7 +646,7 @@ test.describe("fit", () => {
     // A diff open in the picker, so the diff canvas is measured too.
     const settingsGroup = tab.getByRole("radiogroup", { name: "Settings changed" });
     await settingsGroup.getByRole("button", { name: "View diff" }).first().click();
-    await expect(tab.getByTestId("space-diff-mine-playbook/playbook.config.yaml")).toContainText("This device against");
+    await expect(tab.getByTestId("space-diff-mine-config/playbook.config.yaml")).toContainText("This device against");
 
     const defects: string[] = [];
     const containers = ['[role="radiogroup"]', '[data-testid="space-picker"]', '[data-testid="space-header"]'];

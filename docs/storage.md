@@ -18,7 +18,7 @@ Ignored files can contain durable local state.
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `playbook/playbook.config.yaml` | Shared Captain, player, playbook and presentation settings; session directory. | Tracked |
+| `config/playbook.config.yaml` | Shared Captain, player, playbook and presentation settings; session directory. | Tracked |
 | `projects.json` | Project IDs, names and registration times. | Tracked |
 | `intents/<projectId>.jsonl` | Ordered intent changes. | Tracked |
 | `sessions/<id>.json` | Schema-7 manifest: identity, `cwd`, checkpoint and recovery evidence. | Tracked |

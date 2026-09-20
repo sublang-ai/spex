@@ -19,7 +19,7 @@ import { openSessionStore, createSessionStore, validateSessionManifest } from "@
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
 
 import { CoreService } from "./service.js";
-import { templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
+import { templatePath, resolveModulePath, resolveSessionsDir, REGISTRY_CONTRACT } from "./config.js";
 import { pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
@@ -2643,10 +2643,10 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
 });
 
 // ---------------------------------------------------------------------------
-// CORE-66: the shared config relocates once from its previous location
+// CORE-66: the shared config relocates once from a former location
 // ---------------------------------------------------------------------------
 
-test("core-service-66: a config at the previous location relocates once, bytes and mode kept, seeding nothing over it", async () => {
+test("core-service-66: a config at the XDG location relocates once, bytes and mode kept, seeding nothing over it", async () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-relocate-"));
   const home = join(dir, "home");
   const xdg = join(dir, "xdg");
@@ -2655,7 +2655,7 @@ test("core-service-66: a config at the previous location relocates once, bytes a
   const text = `# the user's own comment\n${VALID_CONFIG}`;
   writeFileSync(legacy, text, { mode: 0o640 });
   const env = { HOME: home, XDG_CONFIG_HOME: xdg };
-  const canonical = join(dir, "state", "playbook", "playbook.config.yaml");
+  const canonical = join(dir, "state", "config", "playbook.config.yaml");
 
   const first = await CoreService.start({
     token: "test",
@@ -2693,6 +2693,158 @@ test("core-service-66: a config at the previous location relocates once, bytes a
   });
   assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
   await second.stop();
+});
+
+test("core-service-66: the home's own former config moves ahead of the XDG one, its emptied directory going with it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-home-"));
+  const home = join(dir, "home");
+  const xdg = join(dir, "xdg");
+  // The shell passes its own data directory, so the home the former
+  // location sits in is that one, not the process environment's.
+  const dataDir = join(dir, "state");
+  const former = join(dataDir, "playbook", "playbook.config.yaml");
+  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const legacy = join(xdg, "playbook", "playbook.config.yaml");
+  mkdirSync(dirname(former), { recursive: true });
+  mkdirSync(dirname(legacy), { recursive: true });
+  // A relative locator the sibling move keeps aimed at one directory.
+  const text = `# the user's own comment\nsessions: ../sessions\n${VALID_CONFIG}`;
+  writeFileSync(former, text, { mode: 0o640 });
+  const legacyText = `# another machine's older config\n${VALID_CONFIG}`;
+  writeFileSync(legacy, legacyText, { mode: 0o600 });
+  const env = { HOME: home, XDG_CONFIG_HOME: xdg };
+  const sessionsBefore = resolveSessionsDir(former, { ...env, SPEX_HOME: dataDir }, home);
+  assert.equal(sessionsBefore, join(dataDir, "sessions"));
+
+  const first = await CoreService.start({
+    token: "test",
+    dataDir,
+    env,
+    home,
+    watchConfig: false,
+  });
+  assert.equal(readFileSync(canonical, "utf8"), text, "the nearer config moved, not the XDG one");
+  if (process.platform !== "win32") {
+    assert.equal(statSync(canonical).mode & 0o777, 0o640, "mode preserved");
+  }
+  assert.equal(
+    resolveSessionsDir(canonical, { ...env, SPEX_HOME: dataDir }, home),
+    sessionsBefore,
+    "the relative sessions locator keeps its target",
+  );
+  assert.ok(!existsSync(former), "the former file is gone");
+  assert.ok(!existsSync(dirname(former)), "and its emptied directory with it");
+  assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays in place");
+  const client = new Client(first.port());
+  await client.open();
+  const state = await client.expectOk("config.get", {});
+  assert.equal(state.status, "valid");
+  assert.equal(
+    state.status === "valid" ? state.seeded : true,
+    false,
+    "the relocated config is the user's, not a seed",
+  );
+  client.close();
+  await first.stop();
+
+  // Editing the canonical copy afterwards never pulls a former one back.
+  writeFileSync(canonical, `${text}# edited after relocation\n`);
+  const second = await CoreService.start({
+    token: "test",
+    dataDir,
+    env,
+    home,
+    watchConfig: false,
+  });
+  assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
+  assert.ok(!existsSync(dirname(former)), "nothing returns to the former directory");
+  await second.stop();
+});
+
+test("core-service-66: a former config whose locator points into its own directory stays, reported, and no older one is published past it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-refused-"));
+  const home = join(dir, "home");
+  const xdg = join(dir, "xdg");
+  const dataDir = join(dir, "state");
+  const former = join(dataDir, "playbook", "playbook.config.yaml");
+  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const legacy = join(xdg, "playbook", "playbook.config.yaml");
+  mkdirSync(dirname(former), { recursive: true });
+  mkdirSync(dirname(legacy), { recursive: true });
+  // `./records` names a directory inside the former one, which the move
+  // would leave behind: the file stays, and the reader hears why.
+  const text = `# the user's own comment\nsessions: ./records\n${VALID_CONFIG}`;
+  writeFileSync(former, text, { mode: 0o600 });
+  const legacyText = `# another machine's older config\n${VALID_CONFIG}`;
+  writeFileSync(legacy, legacyText, { mode: 0o600 });
+
+  const reported: string[] = [];
+  const wasReporting = console.error;
+  console.error = (...args: unknown[]) => { reported.push(args.map(String).join(" ")); };
+  let started: CoreService | undefined;
+  try {
+    started = await CoreService.start({
+      token: "test",
+      dataDir,
+      env: { HOME: home, XDG_CONFIG_HOME: xdg },
+      home,
+      watchConfig: false,
+    });
+  } finally {
+    console.error = wasReporting;
+  }
+  const service = started;
+  assert.ok(service);
+  assert.equal(readFileSync(former, "utf8"), text, "the former file stays where it is");
+  assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays too");
+  const published = readFileSync(canonical, "utf8");
+  assert.notEqual(published, legacyText, "no older file is published past the nearer one");
+  assert.equal(published, readFileSync(templatePath(), "utf8"), "the starter is seeded instead");
+  assert.ok(
+    reported.some((line) => line.includes(former) && line.includes("sessions")),
+    `the refusal names the file and its locator: ${reported.join(" | ")}`,
+  );
+  const client = new Client(service.port());
+  await client.open();
+  const state = await client.expectOk("config.get", {});
+  assert.equal(state.status, "valid");
+  assert.equal(
+    state.status === "valid" ? state.seeded : false,
+    true,
+    "the core reports the starter it seeded",
+  );
+  client.close();
+  await service.stop();
+});
+
+test("core-service-66: the former directory stays when another file of the reader's sits beside the config", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-kept-"));
+  const home = join(dir, "home");
+  const dataDir = join(dir, "state");
+  const former = join(dataDir, "playbook", "playbook.config.yaml");
+  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const beside = `${former}.bak`;
+  mkdirSync(dirname(former), { recursive: true });
+  const text = `# the user's own comment\n${VALID_CONFIG}`;
+  writeFileSync(former, text, { mode: 0o600 });
+  writeFileSync(beside, "# a backup the reader kept\n", { mode: 0o600 });
+
+  const service = await CoreService.start({
+    token: "test",
+    dataDir,
+    env: { HOME: home },
+    home,
+    watchConfig: false,
+  });
+  assert.equal(readFileSync(canonical, "utf8"), text, "bytes preserved");
+  assert.ok(!existsSync(former), "the former file is gone");
+  assert.ok(existsSync(dirname(former)), "its directory stays");
+  assert.equal(
+    readFileSync(beside, "utf8"),
+    "# a backup the reader kept\n",
+    "the file beside it is untouched",
+  );
+  await service.stop();
 });
 
 // ---------------------------------------------------------------------------
@@ -3108,7 +3260,7 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {
   const root=mkdtempSync(join(tmpdir(),"spex-migration-refusal-"));
   const home=join(root,"home");const dataDir=join(home,".spex");const sessionsDir=join(dataDir,"sessions");
-  const configPath=join(dataDir,"playbook","playbook.config.yaml");mkdirSync(dirname(configPath),{recursive:true});writeFileSync(configPath,VALID_CONFIG);
+  const configPath=join(dataDir,"config","playbook.config.yaml");mkdirSync(dirname(configPath),{recursive:true});writeFileSync(configPath,VALID_CONFIG);
   const projectPath=join(root,"project");mkdirSync(projectPath);execFileSync("git",["init","-q",projectPath]);
   const options={token:"test",configPath,dataDir,home,env:{},watchConfig:false};
   let service=await CoreService.start(options);let client=new Client(service.port());await client.open();

@@ -1238,7 +1238,7 @@ export type SpaceUnitKind =
  * `playbooks/<id>/` directory, or one other tracked file. */
 export interface SpaceUnit {
   /** "sessions/<id>" | "intents/<pid>.jsonl" | "projects.json" |
-   * "playbook/playbook.config.yaml" | "playbooks/<id>" | ".gitignore" |
+   * "config/playbook.config.yaml" | "playbooks/<id>" | ".gitignore" |
    * path. */
   unit: string;
   kind: SpaceUnitKind;

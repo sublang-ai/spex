@@ -17,12 +17,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmdirSync,
   rmSync,
   statSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import {
@@ -309,21 +310,25 @@ export function createModuleLoader(
 // Paths and seeding
 // ---------------------------------------------------------------------------
 
+/** The Spex home both hosts resolve: an explicit `SPEX_HOME`, else `~/.spex`. */
+function resolveRoot(env: NodeJS.ProcessEnv, home: string): string {
+  const explicit = env.SPEX_HOME;
+  return explicit !== undefined && explicit.trim().length > 0
+    ? explicit
+    : join(home, ".spex");
+}
+
 /**
  * The shared config lives under this app's own root, resolved exactly as the
- * shells resolve it, so Spex and the launcher open one file. The singular
- * `playbook/` namespace holds it; the plural `playbooks/` library is ours.
+ * shells resolve it, so Spex and the launcher open one file. `config/` is the
+ * home's directory of human-authored configuration (DR-080), and stays the
+ * directory every relative locator in the file resolves against.
  */
 export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   home: string = env.HOME ?? homedir(),
 ): string {
-  const explicit = env.SPEX_HOME;
-  const root =
-    explicit !== undefined && explicit.trim().length > 0
-      ? explicit
-      : join(home, ".spex");
-  return join(root, "playbook", "playbook.config.yaml");
+  return join(resolveRoot(env, home), "config", "playbook.config.yaml");
 }
 
 /**
@@ -404,32 +409,112 @@ export function resolveLegacyConfigPath(
 }
 
 /**
- * Relocate a config the previous location holds into the canonical one,
- * once, exactly as the launcher does (playbook DR-043): only when the
+ * The locations a shared config may still sit at, nearest first
+ * (core-service-66): the home's own pre-DR-080 `playbook/` directory,
+ * then the pre-DR-036 XDG path. The root is the one the canonical
+ * path resolves in, so a shell's own data directory is served too.
+ */
+export function resolveFormerConfigPaths(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = env.HOME ?? homedir(),
+): string[] {
+  return [
+    join(resolveRoot(env, home), "playbook", "playbook.config.yaml"),
+    resolveLegacyConfigPath(env, home),
+  ];
+}
+
+/**
+ * The relative locators a move to `configPath` would retarget — the
+ * launcher's own rule. A sibling move, both directories at one depth
+ * under the home, trips it only for a locator pointing into the
+ * directory itself.
+ */
+function retargetedLocators(
+  text: string,
+  configPath: string,
+  formerPath: string,
+): string[] {
+  let top: unknown;
+  try {
+    top = parseYaml(text);
+  } catch {
+    // Neither location can consume unparsable YAML: relocate the bytes
+    // and let config loading report the fault from the canonical path.
+    return [];
+  }
+  if (!isPlainObject(top)) return [];
+  const formerDir = dirname(formerPath);
+  const canonicalDir = dirname(configPath);
+  const retargeted = (value: string): boolean =>
+    resolve(formerDir, value) !== resolve(canonicalDir, value);
+  const affected: string[] = [];
+  const sessions = top.sessions;
+  if (
+    typeof sessions === "string" &&
+    sessions.length > 0 &&
+    !sessions.startsWith("~") &&
+    !isAbsolute(sessions) &&
+    retargeted(sessions)
+  ) {
+    affected.push("sessions");
+  }
+  if (isPlainObject(top.playbooks)) {
+    for (const [id, block] of Object.entries(top.playbooks)) {
+      const from = isPlainObject(block) ? block.from : undefined;
+      // Only a path-shaped specifier names a directory; a bare module
+      // specifier resolves the same wherever the file sits.
+      if (typeof from !== "string") continue;
+      if (!from.startsWith("./") && !from.startsWith("../")) continue;
+      if (retargeted(from)) affected.push(`playbooks.${id}.from`);
+    }
+  }
+  return affected;
+}
+
+/** Whether `path` sits under `root`. */
+function isInside(root: string, path: string): boolean {
+  const rel = relative(resolve(root), resolve(path));
+  return rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+/**
+ * Relocate a config a former location holds into the canonical one,
+ * once, exactly as the launcher does (core-service-66): only when the
  * canonical path is absent, preserving bytes and permission bits, and
  * publishing with an exclusive link so a canonical file that appears
- * concurrently wins. The legacy file stays in place untouched.
+ * concurrently wins. A former file inside the home is removed once the
+ * canonical one is published, its directory with it when that leaves
+ * the directory empty; the XDG file stays in place untouched.
  * Returns true when a relocation was published.
  */
 export function relocateLegacyConfig(
   configPath: string,
-  legacyPath: string,
+  formerPath: string,
 ): boolean {
-  if (existsSync(configPath) || legacyPath === configPath) return false;
+  if (existsSync(configPath) || formerPath === configPath) return false;
   let source: ReturnType<typeof lstatSync>;
   try {
-    source = lstatSync(legacyPath);
+    source = lstatSync(formerPath);
   } catch {
     return false;
   }
   if (!source.isFile()) return false;
   // A relative locator resolves against the config's own directory, so
-  // moving the file would retarget it; the launcher refuses too.
-  const text = readFileSync(legacyPath, "utf8");
-  if (/^sessions:\s*(?!["']?(?:\/|~))/m.test(text)) {
+  // a move that changes its target would retarget it; the launcher
+  // refuses such a move too, and reports what stands in the way.
+  const affected = retargetedLocators(
+    readFileSync(formerPath, "utf8"),
+    configPath,
+    formerPath,
+  );
+  if (affected.length > 0) {
+    // English, deliberately: the move precedes any client, so no home
+    // language is known yet, and a person at the shell acts on it.
     console.error(
-      `spex: legacy config ${legacyPath} names a relative sessions directory; ` +
-        `move it to ${configPath} by hand`,
+      `spex: left config ${formerPath} in place: its relative ` +
+        `${affected.join(", ")} would resolve elsewhere from ` +
+        `${dirname(configPath)}; move the file by hand`,
     );
     return false;
   }
@@ -437,11 +522,17 @@ export function relocateLegacyConfig(
   const staging = mkdtempSync(join(dirname(configPath), ".spex-config-relocation-"));
   const staged = join(staging, "playbook.config.yaml");
   try {
-    copyFileSync(legacyPath, staged, constants.COPYFILE_EXCL);
+    try {
+      copyFileSync(formerPath, staged, constants.COPYFILE_EXCL);
+    } catch (error) {
+      // The former file went away between inspection and the copy:
+      // another host moved it, and nothing here is left to relocate.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
+    }
     chmodSync(staged, source.mode & 0o7777);
     try {
       linkSync(staged, configPath);
-      return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
       throw error;
@@ -449,6 +540,20 @@ export function relocateLegacyConfig(
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+  // The home holds one config, so Git records a move and not a copy;
+  // the XDG file belongs to no home and stays where it is.
+  if (isInside(dirname(dirname(configPath)), formerPath)) {
+    rmSync(formerPath, { force: true });
+    try {
+      rmdirSync(dirname(formerPath));
+    } catch (error) {
+      // Something else of the reader's sits beside it, or the
+      // directory is already gone: the canonical file is published.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOTEMPTY" && code !== "ENOENT") throw error;
+    }
+  }
+  return true;
 }
 
 /**

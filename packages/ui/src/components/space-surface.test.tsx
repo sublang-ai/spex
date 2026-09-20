@@ -104,11 +104,11 @@ const MERGE_DIAGNOSTIC = {
   blocking: false,
 };
 const SETTINGS_UNIT: SpaceUnit = {
-  unit: "playbook/playbook.config.yaml",
+  unit: "config/playbook.config.yaml",
   kind: "settings",
   label: "Settings changed",
   change: "updated",
-  paths: ["playbook/playbook.config.yaml"],
+  paths: ["config/playbook.config.yaml"],
   diff: true,
 };
 const PLAYBOOK_UNIT: SpaceUnit = {
@@ -663,20 +663,20 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
 
   test("View diff shows the line diff in place for the right side and Hide diff removes it", async () => {
     await renderSpace(repoState({ incoming: [{ ...SETTINGS_UNIT }] }));
-    const row = screen.getByTestId("space-unit-mine-playbook/playbook.config.yaml");
+    const row = screen.getByTestId("space-unit-mine-config/playbook.config.yaml");
     fireEvent.click(within(row).getByRole("button", { name: "View diff" }));
-    const diffId = "space-diff-mine-playbook/playbook.config.yaml";
+    const diffId = "space-diff-mine-config/playbook.config.yaml";
     await waitFor(() => expect(screen.getByTestId(diffId).textContent).toContain("+new: 2"));
     const diff = screen.getByTestId(diffId);
     expect(diff.textContent).toContain("-old: 1");
     expect(diff.textContent).toContain("This device against the common ancestor");
-    expect(calls("space.diff")).toEqual([{ unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "mine" }]);
+    expect(calls("space.diff")).toEqual([{ unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" }]);
     fireEvent.click(within(row).getByRole("button", { name: "Hide diff" }));
-    expect(screen.queryByTestId("space-diff-mine-playbook/playbook.config.yaml")).toBeNull();
-    const incoming = screen.getByTestId("space-unit-remote-playbook/playbook.config.yaml");
+    expect(screen.queryByTestId("space-diff-mine-config/playbook.config.yaml")).toBeNull();
+    const incoming = screen.getByTestId("space-unit-remote-config/playbook.config.yaml");
     fireEvent.click(within(incoming).getByRole("button", { name: "View diff" }));
     await waitFor(() => expect(calls("space.diff")).toHaveLength(2));
-    expect(calls("space.diff")[1]).toEqual({ unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "remote" });
+    expect(calls("space.diff")[1]).toEqual({ unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
   });
 
   test("Check remote fetches, reads 'Checking…' with Stop while it runs, and marks the units this device changed too", async () => {
@@ -927,7 +927,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
-        { choices: { "sessions/s1": "remote", "playbook/playbook.config.yaml": "mine" } },
+        { choices: { "sessions/s1": "remote", "config/playbook.config.yaml": "mine" } },
       ]),
     );
   });
@@ -952,7 +952,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
     // Apply carries the choices and the join (space-13, space-18).
     await waitFor(() =>
-      expect(calls("space.sync")).toEqual([{ choices: { "playbook/playbook.config.yaml": "mine" }, join: true }]),
+      expect(calls("space.sync")).toEqual([{ choices: { "config/playbook.config.yaml": "mine" }, join: true }]),
     );
   });
 
@@ -988,13 +988,13 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
         },
       }),
     );
-    expect(screen.getByTestId("space-conflict-playbook/playbook.config.yaml").getAttribute("data-marked")).toBe("1");
+    expect(screen.getByTestId("space-conflict-config/playbook.config.yaml").getAttribute("data-marked")).toBe("1");
     expect(screen.getByTestId("space-conflict-sessions/s1").getAttribute("data-marked")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "All mine" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(calls("space.sync")).toEqual([
-        { choices: { "sessions/s1": "mine", "playbook/playbook.config.yaml": "mine" } },
+        { choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
       ]),
     );
   });

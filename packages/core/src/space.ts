@@ -161,7 +161,7 @@ export function spaceUnitKind(name: string): SpaceUnitKind {
   if (/^sessions\/[0-9a-f-]{36}$/.test(name)) return "session";
   if (/^intents\/[0-9a-f-]{36}\.jsonl$/.test(name)) return "queue";
   if (name === "projects.json") return "projects";
-  if (name === "playbook/playbook.config.yaml") return "settings";
+  if (name === "config/playbook.config.yaml") return "settings";
   if (/^playbooks\/[^/]+$/.test(name)) return "playbook";
   if (name === ".gitignore" || name === ".gitattributes") return "rules";
   return "other";
@@ -196,8 +196,8 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
     if (parts.length === 2 && queue && UUID.test(queue[1])) return "project queue";
   }
   if (rel === "projects.json") return "project registry";
-  if (rel === "playbook") return "Settings";
-  if (rel === "playbook/playbook.config.yaml") return "Settings";
+  if (rel === "config") return "Settings";
+  if (rel === "config/playbook.config.yaml") return "Settings";
   if (parts[0] === "playbooks") {
     if (parts.length === 1) return "playbook library";
     if (parts.length === 2) return "playbook sources";
@@ -1360,7 +1360,7 @@ export class SpaceManager {
         : { file: this.host.home, reason: error instanceof Error ? error.message : String(error), blocking: true };
     }
     store.reload();
-    const configChanged = !(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "playbook/playbook.config.yaml"]));
+    const configChanged = !(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"]));
     if (configChanged && inside(this.host.configPath, this.host.home)) await this.host.reloadConfig();
     await this.host.rescanSessions();
     this.host.ledgerChanged(store.listProjects().map((project) => project.id));

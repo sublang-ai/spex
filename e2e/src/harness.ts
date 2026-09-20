@@ -104,7 +104,7 @@ export interface AppOptions {
   discoverAgentModels?: NonNullable<ServerShellOptions["core"]>["discoverAgentModels"];
   /**
    * Write the configuration inside the Spex home, at
-   * `<dataDir>/playbook/playbook.config.yaml`, where the Space
+   * `<dataDir>/config/playbook.config.yaml`, where the Space
    * surface shares it (DR-057); the scratch default lies outside the
    * home and reads "outside the space". Implied by `remote`.
    */
@@ -488,7 +488,7 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
   if (options.project) seedDemoProject(projectDir);
   const homeConfig = options.homeConfig || options.remote !== undefined;
   const configPath = homeConfig
-    ? join(dataDir, "playbook", "playbook.config.yaml")
+    ? join(dataDir, "config", "playbook.config.yaml")
     : join(scratch, "config", "playbook.config.yaml");
   mkdirSync(dirname(configPath), { recursive: true });
   if ((options.config ?? "demo") === "demo") {
@@ -763,7 +763,7 @@ async function arrangePeer(app: App): Promise<void> {
     throw new Error(`the first push ended ${JSON.stringify(pushed.sync)}`);
   }
   await app.peerPush(async (dir) => {
-    writeFileSync(join(dir, "playbook", "playbook.config.yaml"), PEER_CONFIG);
+    writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_CONFIG);
     await appendHistorySession(join(dir, "sessions"), session.id, [
       { type: "turn_started", turnId: 2, turn: { id: 2, prompt: PEER_TURN }, timestamp: Date.now() },
       { type: "captain_reply", turnId: 2, timestamp: Date.now() + 1, text: "Done on the other laptop." },
@@ -796,8 +796,8 @@ async function seedRemote(app: App): Promise<void> {
   }
   const projectId = app.projectId;
   const dir = clonePeer(app);
-  mkdirSync(join(dir, "playbook"), { recursive: true });
-  writeFileSync(join(dir, "playbook", "playbook.config.yaml"), PEER_CONFIG);
+  mkdirSync(join(dir, "config"), { recursive: true });
+  writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_CONFIG);
   prepareStorageGitFiles(dir);
   app.sessionId = await seedHistorySession(join(dir, "sessions"), app.projectDir, [
     { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },

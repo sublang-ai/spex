@@ -237,8 +237,8 @@ const COMPILE_INPUT = {
 /** A real core on a scratch home whose configuration lies inside it. */
 async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
   const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
-  const configPath = join(dataDir, "playbook", "playbook.config.yaml");
-  if (!existsSync(configPath)) { mkdirSync(join(dataDir, "playbook"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
+  const configPath = join(dataDir, "config", "playbook.config.yaml");
+  if (!existsSync(configPath)) { mkdirSync(join(dataDir, "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
   const projectDir = join(scratch, `${name}-project-${randomUUID().slice(0, 8)}`);
   if (options.project !== false) { mkdirSync(projectDir); git(projectDir, "init", "-q"); }
   const { imports } = fakeAdapterImports({
@@ -397,7 +397,7 @@ test("space-37: a clean init commits only portable files with the managed rules 
   await home.client.waitSpace(from, (s) => s.repository?.branch === "main");
   const tracked = git(home.dataDir, "ls-files").split("\n");
   assert.ok(tracked.includes(".gitignore") && tracked.includes(".gitattributes"));
-  assert.ok(tracked.includes("playbook/playbook.config.yaml"));
+  assert.ok(tracked.includes("config/playbook.config.yaml"));
   assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.records.jsonl`));
   for (const file of tracked) {
     assert.doesNotMatch(file, /^local\/|^prefs\.json$|^meta\.json$|\.hints\.json$|\.lock/, `must not track ${file}`);
@@ -554,8 +554,8 @@ test("space-37: while a check runs, home-writing commands are refused naming the
 
 test("space-37: a MERGE_HEAD planted before start reads as a pending merge and refuses the sync", async (t) => {
   const dataDir = mkdtempSync(join(scratch, "merge-"));
-  mkdirSync(join(dataDir, "playbook"), { recursive: true });
-  writeFileSync(join(dataDir, "playbook", "playbook.config.yaml"), config("claude-test"));
+  mkdirSync(join(dataDir, "config"), { recursive: true });
+  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
   git(dataDir, "init", "-q", "-b", "main");
   prepareStorageGitFiles(dataDir);
   git(dataDir, "add", "-A", "--", ".");
@@ -603,7 +603,7 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
   assert.equal(choices.conflicts.length, 1);
   const conflict = choices.conflicts[0];
-  assert.equal(conflict.unit.unit, "playbook/playbook.config.yaml");
+  assert.equal(conflict.unit.unit, "config/playbook.config.yaml");
   assert.equal(conflict.unit.kind, "settings");
   assert.equal(conflict.unit.label, "Settings changed");
   assert.equal(conflict.mine.change, "new");
@@ -614,7 +614,7 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   await b.client.expectError("space.sync", { choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
   await b.client.expectError("space.sync", { choices: { [`sessions/${sessionA}`]: "mine" }, join: true }, "invalid_request", /no divergent change/);
   const mineBytes = readFileSync(b.configPath);
-  const joined = await b.client.settle("space.sync", { choices: { "playbook/playbook.config.yaml": "mine" }, join: true });
+  const joined = await b.client.settle("space.sync", { choices: { "config/playbook.config.yaml": "mine" }, join: true });
   assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
   assert.ok(joined.sync.phase === "done" && joined.sync.pushed && joined.sync.received >= 1);
   assert.deepEqual(readFileSync(b.configPath), mineBytes, "Keep mine leaves this home's file");
@@ -683,13 +683,13 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   await b.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-b2" } } });
   const diverged = await b.client.settle("space.sync", {});
   assert.equal(diverged.sync.phase, "choices");
-  assert.deepEqual(diverged.conflicts.map((c) => c.unit.unit), ["playbook/playbook.config.yaml"]);
+  assert.deepEqual(diverged.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.equal(diverged.conflicts[0].mine.change, "updated");
-  const mine = await b.client.expectOk("space.diff", { unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "mine" });
+  const mine = await b.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
   assert.match(mine.patch, /\+.*claude-test-b2/);
-  const remote = await b.client.expectOk("space.diff", { unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "remote" });
+  const remote = await b.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
   assert.match(remote.patch, /\+.*claude-test-a2/);
-  const taken = await b.client.settle("space.sync", { choices: { "playbook/playbook.config.yaml": "remote" } });
+  const taken = await b.client.settle("space.sync", { choices: { "config/playbook.config.yaml": "remote" } });
   assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
   assert.match(readFileSync(b.configPath, "utf8"), /claude-test-a2/, "Take remote replaces the file");
   const configState = await b.client.expectOk("config.get", {});
@@ -894,8 +894,8 @@ test("space-38: playbook directories, validation at Apply, a slipped writer, a r
 
 test("space-38: a marker with a half-written selection is repaired at startup into the recorded commit", async (t) => {
   const dataDir = mkdtempSync(join(scratch, "repair-"));
-  mkdirSync(join(dataDir, "playbook"), { recursive: true });
-  writeFileSync(join(dataDir, "playbook", "playbook.config.yaml"), config("claude-test"));
+  mkdirSync(join(dataDir, "config"), { recursive: true });
+  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
   mkdirSync(join(dataDir, "intents"));
   git(dataDir, "init", "-q", "-b", "main");
   prepareStorageGitFiles(dataDir);
@@ -955,8 +955,8 @@ test("space-38: a marker with a half-written selection is repaired at startup in
 
 test("space-38: a marker left after a landed fast-forward is cleared at startup with main on the remote's commit", async (t) => {
   const dataDir = mkdtempSync(join(scratch, "repair-ff-"));
-  mkdirSync(join(dataDir, "playbook"), { recursive: true });
-  writeFileSync(join(dataDir, "playbook", "playbook.config.yaml"), config("claude-test"));
+  mkdirSync(join(dataDir, "config"), { recursive: true });
+  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
   git(dataDir, "init", "-q", "-b", "main");
   prepareStorageGitFiles(dataDir);
   git(dataDir, "add", "-A", "--", ".");
@@ -1085,7 +1085,7 @@ test("space-39: local changes of every kind list in order, incoming units after 
   const second = (await home.client.expectOk("project.list", {})).find((p) => p.path === secondDir);
   assert.ok(second);
   await peerPush(peer, async (dir) => {
-    writeFileSync(join(dir, "playbook", "playbook.config.yaml"), config("claude-test-peer"));
+    writeFileSync(join(dir, "config", "playbook.config.yaml"), config("claude-test-peer"));
     await seedHistorySession(join(dir, "sessions"), home.projectDir, turnRecords("Peer's session", 1), peerSession);
     mkdirSync(join(dir, "intents"), { recursive: true });
     writeFileSync(join(dir, "intents", `${second.id}.jsonl`), ["a", "b"].map((text) => JSON.stringify({ v: 1, act: "queue", intent: { id: randomUUID(), projectId: second.id, text, rank: text, createdAt: 1 } })).join("\n") + "\n");
@@ -1100,18 +1100,18 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(checked.incoming[0].change, "new");
   assert.equal(checked.incoming[0].project?.name, name);
   assert.equal(checked.incoming[1].label, "2 changes in explorer-second's queue");
-  assert.deepEqual(checked.conflicts.map((c) => c.unit.unit), ["playbook/playbook.config.yaml"]);
+  assert.deepEqual(checked.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.ok(checked.conflicts[0].mine.diff && checked.conflicts[0].remote.diff);
   assert.deepEqual(checked.local.map((u) => u.kind), ["session", "queue", "projects", "playbook", "rules"]);
-  const mine = await home.client.expectOk("space.diff", { unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "mine" });
+  const mine = await home.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
   assert.match(mine.patch, /^\+.*claude-test-edited/m);
   assert.equal(mine.truncated, false);
-  const remote = await home.client.expectOk("space.diff", { unit: "playbook/playbook.config.yaml", path: "playbook/playbook.config.yaml", side: "remote" });
+  const remote = await home.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
   assert.match(remote.patch, /^\+.*claude-test-peer/m);
   const fresh = await home.client.expectOk("space.diff", { unit: "playbooks/demo", path: "playbooks/demo/demo.md", side: "mine" });
   assert.match(fresh.patch, /^\+# Demo$/m, "a new file diffs against the ancestor");
   await home.client.expectError("space.diff", { unit: `sessions/${sessionId}`, path: `sessions/${sessionId}.json`, side: "mine" }, "invalid_request", /no text diff/);
-  await home.client.expectError("space.diff", { unit: "playbook/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /unknown path/);
+  await home.client.expectError("space.diff", { unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /unknown path/);
   const empty = bareRepo();
   await home.client.expectOk("space.remote.set", { url: empty });
   const vacant = await home.client.settle("space.fetch", {});
@@ -1148,7 +1148,7 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(entry("projects.json").sync, "pending");
   assert.equal(entry(".gitignore").family, "sync rules");
   assert.equal(entry(".gitattributes").sync, "shared");
-  assert.equal(entry("playbook").family, "Settings");
+  assert.equal(entry("config").family, "Settings");
   assert.equal(entry("local").sync, "local");
   assert.equal(entry("big.log").preview, "text");
   assert.ok(root.entries.findIndex((e) => e.kind !== "dir" && e.kind !== "git") > root.entries.findIndex((e) => e.kind === "dir"), "directories first");
@@ -1179,7 +1179,7 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(inputs.entries[0]?.preview, "withheld");
   const pretty = await home.client.expectOk("space.read", { path: `sessions/${sessionId}.json` });
   assert.ok(pretty.kind === "text" && pretty.text.startsWith("{\n  \"") && !pretty.truncated);
-  const yaml = await home.client.expectOk("space.read", { path: "playbook/playbook.config.yaml" });
+  const yaml = await home.client.expectOk("space.read", { path: "config/playbook.config.yaml" });
   assert.ok(yaml.kind === "text" && yaml.text.includes("captain:"));
   const markdown = await home.client.expectOk("space.read", { path: "playbooks/demo/demo.md" });
   assert.ok(markdown.kind === "text" && markdown.text === "# Demo\n" && markdown.lines === 1);
@@ -1221,7 +1221,7 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(plainEntry("meta.json").sync, "local");
   assert.equal(plainEntry("forge-cache.json").sync, "local");
   assert.equal(plainEntry("projects.json").sync, "pending");
-  assert.equal(plainEntry("playbook").sync, "pending");
+  assert.equal(plainEntry("config").sync, "pending");
   const plainSessions = await plainHome.client.expectOk("space.tree", { path: "sessions" });
   const plainHints = plainSessions.entries.find((e) => e.name === `${plainSession}.hints.json`);
   assert.equal(plainHints?.family, "provider hints");
@@ -1229,6 +1229,6 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(plainSessions.entries.find((e) => e.name === `${plainSession}.json`)?.sync, "pending");
   const plainQueues = await plainHome.client.expectOk("space.tree", { path: "intents" });
   assert.equal(plainQueues.entries.find((e) => e.name === `${plainProject.id}.jsonl`)?.sync, "pending");
-  const plainConfig = await plainHome.client.expectOk("space.tree", { path: "playbook" });
+  const plainConfig = await plainHome.client.expectOk("space.tree", { path: "config" });
   assert.equal(plainConfig.entries.find((e) => e.name === "playbook.config.yaml")?.sync, "pending");
 });
