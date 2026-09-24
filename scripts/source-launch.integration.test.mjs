@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   accessSync,
   chmodSync,
@@ -10,6 +10,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -471,6 +472,135 @@ integrationTest(
       }
       harness.complete();
     }
+  },
+);
+
+const appleLibtool =
+  process.platform === "darwin"
+    ? spawnSync("xcrun", ["--find", "libtool"], { encoding: "utf8" })
+    : undefined;
+const appleLibtoolPath =
+  appleLibtool?.status === 0 ? appleLibtool.stdout.trim() : undefined;
+
+integrationTest(
+  "the native rebuilds link with Apple's libtool past a GNU one on PATH (APP-SHELL-32)",
+  { skip: appleLibtoolPath ? false : "macOS with Apple's command-line tools only" },
+  async (t) => {
+    const temporary = tempDirectory(t, "spex-native-libtool-");
+    const { directory } = temporary;
+    const log = join(directory, "rebuilds.jsonl");
+    // A libtool that answers as GNU's does: `-static` is no option of its.
+    executable(
+      directory,
+      "libtool",
+      `process.stderr.write("libtool: error: unrecognised option: '" + process.argv[2] + "'\\n");
+process.exit(1);
+`,
+    );
+    // Each stub records the libtool its PATH resolves and how it answers.
+    const probe = `import { execFileSync } from "node:child_process";
+import { accessSync, appendFileSync, constants, realpathSync } from "node:fs";
+import { delimiter, join } from "node:path";
+const record = (branch, extra = {}) => {
+  let libtool;
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    try {
+      accessSync(join(directory, "libtool"), constants.X_OK);
+      libtool = realpathSync(join(directory, "libtool"));
+      break;
+    } catch {}
+  }
+  let version;
+  try {
+    version = execFileSync("libtool", ["-V"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch (error) {
+    version = "failed: " + (error.stderr ?? error.message);
+  }
+  appendFileSync(${JSON.stringify(log)}, JSON.stringify({
+    branch,
+    libtool,
+    version,
+    path: process.env.PATH,
+    ...extra,
+  }) + "\\n");
+};
+`;
+    executable(
+      directory,
+      "npm",
+      `${probe}record("node", { args: process.argv.slice(2), cwd: process.cwd() });
+`,
+    );
+    // The Electron rebuild imports @electron/rebuild; a resolve hook
+    // hands the script this stub in its place.
+    const rebuildStub = join(directory, "electron-rebuild.mjs");
+    writeFileSync(
+      rebuildStub,
+      `${probe}export async function rebuild(options) {
+  record("electron", { onlyModules: options.onlyModules });
+}
+`,
+    );
+    const hooks = join(directory, "hooks.mjs");
+    writeFileSync(
+      hooks,
+      `export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "@electron/rebuild") {
+    return { url: ${JSON.stringify(pathToFileURL(rebuildStub).href)}, shortCircuit: true };
+  }
+  return nextResolve(specifier, context);
+}
+`,
+    );
+    const register = join(directory, "register.mjs");
+    writeFileSync(
+      register,
+      `import { register } from "node:module";
+register(${JSON.stringify(pathToFileURL(hooks).href)});
+`,
+    );
+
+    const poisoned = `${directory}${delimiter}${process.env.PATH ?? ""}`;
+    const environment = temporary.environment({ PATH: poisoned });
+    const bare = spawnSync("libtool", ["-V"], { env: environment, encoding: "utf8" });
+    assert.equal(bare.status, 1, "the fixture libtool leads the PATH");
+    assert.match(bare.stderr, /unrecognised option: '-V'/);
+
+    const script = join(desktopDir, "scripts", "rebuild-native.mjs");
+    const runs = [
+      { target: "node", env: environment },
+      {
+        target: "electron",
+        env: {
+          ...environment,
+          NODE_OPTIONS: `${environment.NODE_OPTIONS} --import ${JSON.stringify(register)}`,
+        },
+      },
+    ];
+    for (const run of runs) {
+      const rebuild = spawnSync(process.execPath, [script, run.target], {
+        cwd: root,
+        env: run.env,
+        encoding: "utf8",
+      });
+      assert.equal(rebuild.status, 0, `${run.target}: ${rebuild.stderr}`);
+      const record = readEvents(log).find(({ branch }) => branch === run.target);
+      assert.ok(record, `${run.target}: the stub ran`);
+      assert.equal(record.libtool, realpathSync(appleLibtoolPath));
+      assert.match(record.version, /^Apple Inc\. version/);
+      const [shim, ...rest] = record.path.split(delimiter);
+      assert.equal(rest.join(delimiter), poisoned);
+      assert.equal(existsSync(shim), false, `${run.target}: the shim is released`);
+    }
+    const [node, electron] = ["node", "electron"].map((branch) =>
+      readEvents(log).find((record) => record.branch === branch),
+    );
+    assert.deepEqual(node.args, ["rebuild", "better-sqlite3"]);
+    assert.equal(node.cwd, root);
+    assert.deepEqual(electron.onlyModules, ["better-sqlite3"]);
   },
 );
 

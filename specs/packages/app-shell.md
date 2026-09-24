@@ -99,6 +99,12 @@ Where `npm ci` has installed the repository dependencies and built `better-sqlit
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
 4. A failed Node rebuild reports the restore failure with an actionable warning and any preceding stage failure, then selects the command outcome in this order: a signal that interrupted an active stage returns 130 or 143; otherwise, a preceding stage failure keeps its status; otherwise, a signal first received during restoration returns 130 or 143 even when restoration fails; otherwise, the restore failure returns 1.
 
+#### app-shell-31
+
+Where the host is macOS, when `better-sqlite3` is rebuilt for either ABI [[app-shell-26](#app-shell-26)], the rebuild shall run its build with the bare name `libtool` resolving to the Apple toolchain's `libtool` — the one `xcrun --find libtool` names — even when another `libtool` precedes it on the contributor's PATH, with the rest of the environment as the contributor set it:
+
+- Where `xcrun` names no `libtool`, the rebuild runs with the environment as the contributor set it.
+
 ### Process Topology
 
 #### app-shell-10
@@ -220,6 +226,10 @@ Where executable npm and Electron fixtures stand in for their external effects, 
 - build, Electron-rebuild, launch, and restore failures take the required restore path, report both a stage and restore failure when they coincide, and return the required status [[app-shell-26](#app-shell-26)];
 - on a POSIX host, real SIGINT and SIGTERM delivery during launch terminates the detached fixture app and its grandchild, leaves neither orphaned, runs the Node restore, and returns 130 and 143 respectively [[app-shell-26](#app-shell-26)];
 - on a POSIX host, a signal first delivered during a failing restore waits for the restore and reports its failure; after otherwise successful stages it returns the signal status, while after an app-launch failure it also reports that failure and preserves its status [[app-shell-26](#app-shell-26)].
+
+#### app-shell-32
+
+Where the host is macOS with Apple's command-line tools installed, when the source-run integration suite runs each ABI rebuild — the Node restore with a stub `npm`, the Electron rebuild with a stub `@electron/rebuild` — on a PATH led by the stubs' directory and a fixture `libtool` that rejects every option, the suite shall assert for each rebuild that the `libtool` the stub resolves is the file `xcrun --find libtool` names and answers `-V` as Apple's while the fixture answers on the same PATH outside the rebuild, that the contributor's PATH follows the one directory the rebuild prepends, and that the directory is gone once the rebuild returns [[app-shell-31](#app-shell-31)].
 
 ## References
 

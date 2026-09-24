@@ -75,6 +75,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   continuable, as Playbook's own validation says. The core's own refusal
   "reconcile unresolved effects before continuation" is gone.
 
+### Fixed
+
+- `npm start` on a Mac whose PATH leads with a GNU `libtool` (Homebrew's
+  `libtool` formula): the native rebuild of `better-sqlite3` now links
+  with the Apple `libtool` that `xcrun` names instead of failing on
+  `-static`.
+
 ## [0.8.0] - 2026-09-14
 
 ### Added
