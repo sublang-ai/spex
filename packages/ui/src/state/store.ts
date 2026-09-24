@@ -340,6 +340,9 @@ export interface AppState {
   setDraftEditor(draftId: string, editor: SpecEditorState | undefined): void;
   setDraftForm(draftId: string, form: DraftRegisterForm): void;
   clearDraftError(draftId: string): void;
+  /** A refused draft command the page ran itself, shown above the
+   * composer as any refused dispatch is (playbook-library-84). */
+  reportDraftError(draftId: string, message: string): void;
   setDraftSplit(percent: number): void;
   setDraftStackSplit(percent: number): void;
   requestNewPlaybook(): void;
@@ -2342,6 +2345,9 @@ export const useAppStore = create<AppState>((set, get) => {
     clearDraftError(draftId: string): void {
       const { [draftId]: _dropped, ...rest } = get().draftErrors;
       set({ draftErrors: rest });
+    },
+    reportDraftError(draftId: string, message: string): void {
+      setDraftError(draftId, message);
     },
 
     setDraftSplit(percent: number): void {

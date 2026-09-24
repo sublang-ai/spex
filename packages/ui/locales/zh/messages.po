@@ -721,8 +721,8 @@ msgid "active · {span}"
 msgstr "活跃 · {span}"
 
 #: src/components/DraftConversation.tsx
-msgid "Adapt a SKILL.md"
-msgstr "改编一个 SKILL.md"
+msgid "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done"
+msgstr "把这个文件改编成规程：保留它做什么，写明谁做什么，以及何时算完成"
 
 #. which agent runtime an agent runs on
 #. which agent runtime an agent runs on
@@ -1066,6 +1066,10 @@ msgstr "尚未绑定任何角色"
 #: src/components/SpaceSurface.tsx
 msgid "branch {branch} · {status}"
 msgstr "分支 {branch} · {status}"
+
+#: src/components/DraftConversation.tsx
+msgid "Brings a file in as the source, then asks to adapt it"
+msgstr "把文件引入为源文，再请求改编它"
 
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
@@ -1789,10 +1793,6 @@ msgstr "删除中…"
 #: src/components/PlayerPane.tsx
 msgid "denied"
 msgstr "已拒绝"
-
-#: src/components/DraftConversation.tsx
-msgid "Describe a workflow"
-msgstr "描述一个工作流"
 
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
@@ -3411,6 +3411,10 @@ msgstr "选择文件"
 msgid "pin a value…"
 msgstr "指定一个值…"
 
+#: src/components/DraftConversation.tsx
+msgid "Places slc's six-line demo as your first message"
+msgstr "把 slc 的六行示例放为你的第一条消息"
+
 #. one unit's kind: a playbook source
 #: src/lib/space.ts
 msgid "Playbook"
@@ -4343,10 +4347,6 @@ msgstr "在文件夹中显示"
 msgid "Show log"
 msgstr "显示日志"
 
-#: src/components/DraftConversation.tsx
-msgid "Show me an example"
-msgstr "给我看个例子"
-
 #: src/components/NavRail.tsx
 msgid "Show sessions in {project}"
 msgstr "显示 {project} 的会话"
@@ -5025,6 +5025,11 @@ msgstr "重试"
 msgid "Try the Academy example"
 msgstr "试试 Academy 示例"
 
+#. opener on the empty draft conversation: places slc's demo prose in the composer
+#: src/components/DraftConversation.tsx
+msgid "Try the example"
+msgstr "试试示例"
+
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 msgid "Turn off fast mode for this model."
@@ -5132,6 +5137,11 @@ msgstr "{age}由智能体更新"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "{age}由你更新"
+
+#. opener on the empty draft conversation: brings a file in as the source
+#: src/components/DraftConversation.tsx
+msgid "Use a SKILL.md…"
+msgstr "使用 SKILL.md…"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Use as source"

@@ -175,6 +175,7 @@ export function AuthoringWorkspace({
   const setDraftEditor = useAppStore((state) => state.setDraftEditor);
   const setDraftForm = useAppStore((state) => state.setDraftForm);
   const clearDraftError = useAppStore((state) => state.clearDraftError);
+  const reportDraftError = useAppStore((state) => state.reportDraftError);
 
   const [tab, setTab] = useState<Tab>("source");
   const [toolchain, setToolchain] = useState<Toolchain>();
@@ -361,6 +362,30 @@ export function AuthoringWorkspace({
               onPickAgent={(playerId) => setDraftPlayer(draftId, playerId)}
               onDismissError={() => clearDraftError(draftId)}
               onOpenRegister={() => setTab("register")}
+              onUseSkill={async () => {
+                // playbook-library-84: a picked file is the source when
+                // the draft has none, else the paste mode's path for
+                // "Use as source" to confirm; with no pick to run, the
+                // paste mode with its text focused.
+                if (!pickFile) {
+                  setDraftSourceMode(draftId, { mode: "paste" });
+                  setTab("source");
+                  return "paste";
+                }
+                const picked = await pickFile();
+                if (!picked) return null;
+                setTab("source");
+                if (draft.state === "no-source") {
+                  try {
+                    await writeDraftSource(draftId, { sourcePath: picked });
+                  } catch (cause) {
+                    reportDraftError(draftId, (cause as Error).message);
+                  }
+                  return "field";
+                }
+                setDraftSourceMode(draftId, { mode: "paste", pastePath: picked, pasteText: "" });
+                return "paste";
+              }}
             />
           </div>
           <div className="hidden @2xl:contents">
