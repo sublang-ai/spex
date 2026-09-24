@@ -133,8 +133,18 @@ While a draft's workspace is open, the composer beneath the conversation — of 
 - while the draft is idle a submission dispatches, the primary reading "Send";
 - while a turn or a compile runs a submission queues with the queued indicator, the primary reading "Send next" and the placeholder "Sends after the reply…" or "Sends after the compile…", and the queue dispatches in order when the draft is idle [[playbook-library-68](#playbook-library-68)];
 - "Abort" stands in the action row while a turn runs and ends it, leaving the transcript as far as it got; a canceled turn leaves the queue standing;
-- a refused dispatch keeps the text with the refusal shown; the composer's draft and the queue survive leaving and reopening the workspace while the app runs;
-- an empty transcript shows one caption above the composer: "Tell the agent what the playbook does, who does what, and when it is done" with three starter chips — "Describe a workflow", "Adapt a SKILL.md", "Show me an example" — each placing its text in the field without sending.
+- a refused dispatch keeps the text with the refusal shown; the composer's draft and the queue survive leaving and reopening the workspace while the app runs.
+
+#### playbook-library-84
+
+While a draft's workspace is open with an empty transcript, the conversation pane shall show one caption above the composer [[playbook-library-54](#playbook-library-54)] — "Tell the agent what the playbook does, who does what, and when it is done" — with two openers, each an act whose outcome its label names, neither sending ([DR-082](../decisions/082-the-first-move-in-a-draft-is-an-act.md)):
+
+| Opener | Act |
+| --- | --- |
+| "Use a SKILL.md…" | where the shell offers a file pick, runs it — a canceled pick changes nothing; a draft with no source takes the picked file as its source [[playbook-library-5](#playbook-library-5)], and one with a source gets the path placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)] for "Use as source" to confirm — else opens the paste mode; in every case places "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done" in the field, focus landing on the paste text where that mode opened and on the field otherwise |
+| "Try the example" | places slc's six-line demo prose [[playbook-library-35](#playbook-library-35)] in the field and focuses it |
+
+- a write the core refuses keeps the field's text and shows the refusal above the composer [[playbook-library-54](#playbook-library-54)].
 
 #### playbook-library-55
 
@@ -409,7 +419,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
 | Success | "The compile succeeded; the roles are ⟨roles⟩. Propose the registration in a register block" as a system-origin message |
 
-- the preamble names the absolute source path, tells the agent to write and edit only that file, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending;
+- the preamble names the absolute source path, tells the agent to write and edit only that file, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending, and says that a source the Boss placed may be a SKILL.md — YAML frontmatter `name` and `description`, then instructions — or other workflow markdown, to rewrite in place into a source with the description as the title and the registration intent, the instructions as the prompts, and the actors as the roles ([DR-082](../decisions/082-the-first-move-in-a-draft-is-an-act.md));
 - the shape of a source is at most twenty lines: an H1, a `Roles:` list of capitalized unique names, behaviors as `When ⟨condition⟩, Captain shall prompt ⟨Role⟩:` with blockquoted prompts one point per line or a fenced `markdown` instruction block, runtime values relayed in quotes (`>`) as `<placeholders>`, `Results:` bullets only for several outcomes or a consumed value with `<field>: <verbatim final text>` for a relayed whole reply, nested calls as ``Captain shall call playbook `id`:``, at most two or three roles;
 - the documents are the installed package's `slc/text2gears.md`, `reference/sdlc/review.md`, `reference/sdlc/code.md`, and `reference/sdlc/review.playbook/review.gears.md`, resolved from the package the core depends on;
 - the draft state names the id, the source path or "none", the last compile's outcome, and the roster players with adapter and model; a malformed directive from the previous reply is named at the head of the prompt, before anything else;
@@ -606,7 +616,8 @@ When the integration suite copies a registered library to a differently located 
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` named as the configured compiler, when the journey works a new playbook through the page, the test suite shall assert:
 
-- "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the starter chips, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-54](#playbook-library-54)] [[playbook-library-50](#playbook-library-50)];
+- "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the two openers, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-84](#playbook-library-84)] [[playbook-library-50](#playbook-library-50)];
+- "Try the example" places the demo's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a draft with no source writes the picked file as the source, shown in the Source tab, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
 - the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
 - a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
