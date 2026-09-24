@@ -29,6 +29,7 @@
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
+    "@sublang/slc": "^0.10.0",
     "@sublang/spex-core": "*"
   },
   "devDependencies": {

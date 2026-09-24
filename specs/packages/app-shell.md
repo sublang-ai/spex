@@ -131,6 +131,12 @@ When the app starts, the shell shall capture the user's login-shell environment 
 
 - The shell persists no captured environment values and does not refresh the snapshot while running, so shell-profile changes take effect on the next launch.
 
+### Supplied Runtimes
+
+#### app-shell-33
+
+The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)) and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], so compiles run on the app's own Node and find the compiler and the SDKs the app ships.
+
 ### Packaging
 
 #### app-shell-13
@@ -215,6 +221,12 @@ Where a packaged build launches with its user-data directory and state root redi
 #### app-shell-19
 
 Where an environment variable consulted by an adapter readiness check (for example, `ANTHROPIC_API_KEY`) is exported only in the user's login-shell profile and absent from the app's launch environment, when the test suite starts the app and queries adapter readiness, the test suite shall assert that the check reports the adapter ready, proving the captured login-shell environment reached the core before readiness checks ran [[app-shell-12](#app-shell-12)].
+
+### Supplied Runtime Coverage
+
+#### app-shell-34
+
+When the desktop's test suite reads the package manifest and resolves the compile toolchain with the desktop's Electron binary as the runtime over the module directories above the desktop's own module, the test suite shall assert that the three SDKs and the compiler are declared and that the resolved compiler is the app's own copy run on that binary [[app-shell-33](#app-shell-33)].
 
 ### Source-Run Coverage
 

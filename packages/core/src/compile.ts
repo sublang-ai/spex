@@ -1,25 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Playbook compilation via the external slc toolchain (DR-005):
-// resolve system Node >= 23.6 and the slc CLI, run the pipeline in a
-// managed library directory, then package the TypeScript artifacts
-// with esbuild (type stripping + dependency inlining) so the
-// registry loads in any Node — including Electron's — and derive the
+// Playbook compilation via the external slc toolchain (DR-005,
+// DR-081): run the app-supplied compiler on the app's own runtime —
+// Electron's Node in the desktop, the server's Node — or a Node
+// meeting slc's floor, in a managed library directory, then package
+// the TypeScript artifacts with esbuild (type stripping + dependency
+// inlining) so the registry loads in any Node and derive the
 // registry's state ids by FSM introspection.
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-/** node_modules dirs up-tree from this package, so bundling artifacts
- * in the external library dir still resolves xstate and friends. */
-function bundleNodePaths(): string[] {
+/** The node_modules directories up-tree from a module, nearest first:
+ * where a shell finds the compiler it declares (playbook-library-11). */
+export function moduleDirectoriesAbove(fromUrl: string): string[] {
   const paths: string[] = [];
-  let current = dirname(fileURLToPath(import.meta.url));
+  let current = dirname(fileURLToPath(fromUrl));
   for (let depth = 0; depth < 6; depth += 1) {
     const candidate = join(current, "node_modules");
     if (existsSync(candidate)) paths.push(candidate);
@@ -30,15 +32,189 @@ function bundleNodePaths(): string[] {
   return paths;
 }
 
-import { freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
+/** node_modules dirs up-tree from this package, so bundling artifacts
+ * in the external library dir still resolves xstate and friends. */
+function bundleNodePaths(): string[] {
+  return moduleDirectoriesAbove(import.meta.url);
+}
+
+import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
+
+import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
 import { i18n } from "./i18n.js";
 
 export const MIN_NODE_MAJOR = 23;
 export const MIN_NODE_MINOR = 6;
 
 export interface ToolchainStatus {
-  node: { ok: boolean; version?: string; command: string; guidance?: string };
-  slc: { ok: boolean; command: string[]; guidance?: string };
+  node: {
+    ok: boolean;
+    version?: string;
+    command: string;
+    /** Variables the command needs beside the caller's environment. */
+    env?: Record<string, string>;
+    guidance?: string;
+  };
+  slc: {
+    ok: boolean;
+    command: string[];
+    /** Variables the command needs beside the caller's environment. */
+    env?: Record<string, string>;
+    guidance?: string;
+  };
+}
+
+/** Where a compile runs (playbook-library-11): the executable running
+ * this process, whether it is Electron's — run as Node through
+ * ELECTRON_RUN_AS_NODE — and the node_modules directories searched
+ * for the app-supplied compiler. */
+export interface ToolchainRuntime {
+  execPath: string;
+  electron: boolean;
+  modulePaths?: string[];
+}
+
+const ownRuntime = (): ToolchainRuntime => ({
+  execPath: process.execPath,
+  electron: Boolean(process.versions.electron),
+});
+
+/** The app-supplied compiler: `@sublang/slc` in the first node_modules
+ * directory of the given ones that holds it, with its bin (DR-081). */
+export function suppliedCompiler(
+  modulePaths: string[] = bundleNodePaths(),
+): { packageDir: string; cli: string } | undefined {
+  for (const dir of modulePaths) {
+    const packageDir = join(dir, "@sublang", "slc");
+    const manifest = join(packageDir, "package.json");
+    if (!existsSync(manifest)) continue;
+    const { bin } = JSON.parse(readFileSync(manifest, "utf8")) as {
+      bin?: string | { slc?: string };
+    };
+    const relative = typeof bin === "string" ? bin : bin?.slc;
+    const cli = relative ? join(packageDir, relative) : undefined;
+    if (cli && existsSync(cli)) return { packageDir, cli };
+  }
+  return undefined;
+}
+
+/** What a playbook engine declares it runs (Playbook DR-022). */
+interface EngineDeclaration {
+  runtimeAbi: number;
+  artifactSchemas: readonly number[];
+}
+
+const appEngine: EngineDeclaration = {
+  runtimeAbi: RUNTIME_ABI,
+  artifactSchemas: ARTIFACT_SCHEMAS,
+};
+
+/** The engine module the app itself runs artifacts on. */
+const appEnginePath = createRequire(import.meta.url).resolve("@sublang/playbook/xstate-runtime");
+
+/** The engine the supplied compiler links artifacts against: the
+ * `@sublang/playbook` Node resolves from the compiler's own package —
+ * the app's when npm shares one copy — read as the compiler reads it. */
+async function compilerEngine(packageDir: string): Promise<EngineDeclaration | "unreadable"> {
+  let enginePath: string;
+  try {
+    enginePath = createRequire(join(packageDir, "package.json")).resolve(
+      "@sublang/playbook/xstate-runtime",
+    );
+  } catch {
+    return "unreadable";
+  }
+  if (enginePath === appEnginePath) return appEngine;
+  try {
+    const engine = (await import(pathToFileURL(enginePath).href)) as {
+      RUNTIME_ABI?: unknown;
+      SUPPORTED_ARTIFACT_SCHEMAS?: unknown;
+    };
+    if (
+      typeof engine.RUNTIME_ABI !== "number" ||
+      !Array.isArray(engine.SUPPORTED_ARTIFACT_SCHEMAS)
+    ) {
+      return "unreadable";
+    }
+    return {
+      runtimeAbi: engine.RUNTIME_ABI,
+      artifactSchemas: engine.SUPPORTED_ARTIFACT_SCHEMAS as number[],
+    };
+  } catch {
+    return "unreadable";
+  }
+}
+
+/** The app runs what the compiler emits: one runtime ABI, and every
+ * artifact schema the compiler's engine supports among the app's. */
+function enginesAgree(compiler: EngineDeclaration, app: EngineDeclaration): boolean {
+  return (
+    compiler.runtimeAbi === app.runtimeAbi &&
+    compiler.artifactSchemas.every((schema) => app.artifactSchemas.includes(schema))
+  );
+}
+
+const describeEngine = (engine: EngineDeclaration | "unreadable"): string =>
+  engine === "unreadable"
+    ? "unreadable"
+    : `ABI ${engine.runtimeAbi}, schemas ${engine.artifactSchemas.join("/")}`;
+
+/** The module run before the compiler on Electron as Node, dropping
+ * the variable that would otherwise reach every agent it spawns. */
+const ELECTRON_PRELOAD = new URL("./compile-preload.js", import.meta.url).href;
+
+/** slc's ids for the adapters it drives; an adapter absent here leaves
+ * slc's own configuration to choose (playbook-library-42). */
+const SLC_AGENT_IDS: Readonly<Record<string, string>> = {
+  claude: "claude-code",
+  codex: "codex",
+  gemini: "gemini",
+  opencode: "opencode",
+};
+
+/** The block a compile's agent is resolved from. */
+export interface CompilerAgent {
+  adapter: string;
+  model?: string;
+  effort?: string;
+  /** `false` is a literal request, not omission. */
+  fastMode?: boolean;
+}
+
+/** The compile-relevant part of a resolved agent block. */
+export function compilerAgentOf(agent: {
+  adapter: string;
+  model?: string;
+  effort?: string;
+  fastMode?: boolean;
+}): CompilerAgent {
+  return {
+    adapter: agent.adapter,
+    ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.effort ? { effort: agent.effort } : {}),
+    ...(typeof agent.fastMode === "boolean" ? { fastMode: agent.fastMode } : {}),
+  };
+}
+
+/** The variables slc reads its agent from. */
+const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE"] as const;
+
+/** The compile's agent handed to slc — SLC_AGENT, SLC_MODEL, SLC_EFFORT
+ * and SLC_FAST_MODE from the block — unless the environment configures
+ * slc itself with any of those variables (playbook-library-42). */
+export function compilerAgentEnv(
+  env: NodeJS.ProcessEnv,
+  agent?: CompilerAgent,
+): Record<string, string> {
+  if (!agent || SLC_AGENT_VARIABLES.some((variable) => env[variable])) return {};
+  const id = SLC_AGENT_IDS[agent.adapter];
+  if (!id) return {};
+  return {
+    SLC_AGENT: id,
+    ...(agent.model ? { SLC_MODEL: agent.model } : {}),
+    ...(agent.effort ? { SLC_EFFORT: agent.effort } : {}),
+    ...(typeof agent.fastMode === "boolean" ? { SLC_FAST_MODE: String(agent.fastMode) } : {}),
+  };
 }
 
 export type LineSpawner = (
@@ -86,44 +262,74 @@ function nodeSatisfies(version: string): boolean {
   return major > MIN_NODE_MAJOR || (major === MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR);
 }
 
-/** Resolve the toolchain (PBLIB-11): env overrides, then PATH, then npx. */
+interface NodeCandidate {
+  command: string;
+  env?: Record<string, string>;
+}
+
+/** Resolve the toolchain (playbook-library-11): the configured Node,
+ * else the app's own runtime when it meets slc's floor, else a PATH
+ * `node` that does; the configured compiler, else the app-supplied one. */
 export async function checkToolchain(
   env: NodeJS.ProcessEnv = process.env,
   spawner: LineSpawner = defaultSpawner,
+  runtime: ToolchainRuntime = ownRuntime(),
 ): Promise<ToolchainStatus> {
-  const nodeCommand = env.SPEX_NODE ?? "node";
-  let nodeVersion = "";
-  let nodeOk = false;
-  try {
-    await spawner(nodeCommand, ["--version"], ".", (line) => {
-      nodeVersion = line.trim();
-    });
-    nodeOk = nodeSatisfies(nodeVersion);
-  } catch {
-    nodeOk = false;
+  const candidates: NodeCandidate[] = env.SPEX_NODE
+    ? [{ command: env.SPEX_NODE }]
+    : [
+        runtime.electron
+          ? { command: runtime.execPath, env: { ELECTRON_RUN_AS_NODE: "1" } }
+          : { command: runtime.execPath },
+        { command: "node" },
+      ];
+  let node: ToolchainStatus["node"] | undefined;
+  let seen: string | undefined;
+  for (const candidate of candidates) {
+    let version = "";
+    try {
+      await spawner(
+        candidate.command,
+        ["--version"],
+        ".",
+        (line) => {
+          version = line.trim();
+        },
+        undefined,
+        candidate.env ? { ...env, ...candidate.env } : undefined,
+      );
+    } catch {
+      continue;
+    }
+    if (nodeSatisfies(version)) {
+      node = {
+        ok: true,
+        version,
+        command: candidate.command,
+        ...(candidate.env ? { env: candidate.env } : {}),
+      };
+      break;
+    }
+    seen ??= version || undefined;
   }
-  const node: ToolchainStatus["node"] = {
-    ok: nodeOk,
-    command: nodeCommand,
-    ...(nodeVersion ? { version: nodeVersion } : {}),
-    ...(nodeOk
-      ? {}
-      : {
-          // Two messages, one per case: the version found is a value,
-          // and "none" is the core's own word for finding none.
-          guidance: nodeVersion
-            ? i18n._({
-                id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found {found}). Install it from nodejs.org or set SPEX_NODE.",
-                values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR, found: nodeVersion },
-                comment:
-                  "The toolchain's guidance; `nodejs.org` is a site and `SPEX_NODE` an environment variable, both as they are",
-              })
-            : i18n._({
-                id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found none). Install it from nodejs.org or set SPEX_NODE.",
-                values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR },
-                comment:
-                  "The toolchain's guidance when no Node answered at all; `nodejs.org` is a site and `SPEX_NODE` an environment variable",
-              }),
+  node ??= {
+    ok: false,
+    command: candidates[0].command,
+    ...(seen ? { version: seen } : {}),
+    // Two messages, one per case: the version found is a value, and
+    // "none" is the core's own word for finding none.
+    guidance: seen
+      ? i18n._({
+          id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found {found}). Install it from nodejs.org or set SPEX_NODE.",
+          values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR, found: seen },
+          comment:
+            "The toolchain's guidance; `nodejs.org` is a site and `SPEX_NODE` an environment variable, both as they are",
+        })
+      : i18n._({
+          id: "Compiling playbooks needs Node >= {major}.{minor} on your system (found none). Install it from nodejs.org or set SPEX_NODE.",
+          values: { major: MIN_NODE_MAJOR, minor: MIN_NODE_MINOR },
+          comment:
+            "The toolchain's guidance when no Node answered at all; `nodejs.org` is a site and `SPEX_NODE` an environment variable",
         }),
   };
 
@@ -132,33 +338,51 @@ export async function checkToolchain(
   if (configured && configured.length > 0) {
     slc = { ok: true, command: configured };
   } else {
-    let found = false;
-    try {
-      await spawner("slc", ["--version"], ".", () => {});
-      found = true;
-    } catch {
-      found = false;
-    }
-    slc = found
-      ? { ok: true, command: ["slc"] }
-      : node.ok
+    const supplied = suppliedCompiler(runtime.modulePaths);
+    const engine = supplied ? await compilerEngine(supplied.packageDir) : undefined;
+    if (!supplied) {
+      slc = {
+        ok: false,
+        command: [],
+        guidance: i18n._({
+          id: "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it.",
+          comment:
+            "The toolchain's guidance when the compiler the app ships is not installed; `@sublang/slc` is a package name and `npm ci` a command, both as they are",
+        }),
+      };
+    } else if (engine === "unreadable" || !enginesAgree(engine!, appEngine)) {
+      slc = {
+        ok: false,
+        command: [],
+        guidance: i18n._({
+          id: "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together.",
+          values: { compiler: describeEngine(engine!), app: describeEngine(appEngine) },
+          comment:
+            "The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are",
+        }),
+      };
+    } else if (!node.ok) {
+      slc = {
+        ok: false,
+        command: [],
+        guidance: i18n._({
+          id: "Install Node >= 23.6 first; slc runs on it.",
+          comment: "The toolchain's guidance when Node itself is missing; `slc` is the compiler's command",
+        }),
+      };
+    } else {
+      // On Electron as Node the preload drops the variable that made
+      // the process a Node before the compiler and its agents run;
+      // the variable travels with this command alone, never with a
+      // compiler SPEX_SLC names.
+      slc = node.env?.ELECTRON_RUN_AS_NODE
         ? {
             ok: true,
-            command: [nodeCommand === "node" ? "npx" : nodeCommand, "--yes", "@sublang/slc"],
-            guidance: i18n._({
-              id: "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it.",
-              comment:
-                "The toolchain's guidance; `slc`, `npx` and `@sublang/slc` are commands and a package name, all as they are",
-            }),
+            command: [node.command, "--import", ELECTRON_PRELOAD, supplied.cli],
+            env: node.env,
           }
-        : {
-            ok: false,
-            command: [],
-            guidance: i18n._({
-              id: "Install Node >= 23.6 first; slc runs on it.",
-              comment: "The toolchain's guidance when Node itself is missing; `slc` is the compiler's command",
-            }),
-          };
+        : { ok: true, command: [node.command, supplied.cli] };
+    }
   }
   return { node, slc };
 }
@@ -180,6 +404,10 @@ export interface CompileOptions {
   onProgress?: (line: string) => void;
   /** Skip the slc run when artifacts already exist (re-package). */
   skipSlc?: boolean;
+  /** The block the compile's agent is resolved from (playbook-library-42). */
+  agent?: CompilerAgent;
+  /** Where the compile runs; this process's own runtime by default. */
+  runtime?: ToolchainRuntime;
   /** Cancels the run: the slc child is killed and the pipeline
    * rejects with an abort error at the next stage boundary. */
   signal?: AbortSignal;
@@ -530,15 +758,35 @@ export async function compilePlaybook(
   const entryModulePath = join(dir, `${id}.ts`);
 
   if (!options.skipSlc) {
-    const toolchain = await checkToolchain(env, spawner);
+    const toolchain = await checkToolchain(env, spawner, options.runtime);
     if (!toolchain.node.ok) throw new Error(toolchain.node.guidance);
     if (!toolchain.slc.ok) throw new Error(toolchain.slc.guidance);
     const [slcCommand, ...slcArgs] = toolchain.slc.command;
+    // The compile's agent (playbook-library-42): the block's, unless the
+    // environment configures slc; an adapter slc cannot drive is refused
+    // here rather than left to slc's seeded default.
+    const configured = SLC_AGENT_VARIABLES.some((variable) => env[variable]);
+    const agentEnv = compilerAgentEnv(env, options.agent);
+    if (options.agent && !configured && !SLC_AGENT_IDS[options.agent.adapter]) {
+      throw new Error(
+        i18n._({
+          id: "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT.",
+          values: { adapter: options.agent.adapter },
+          comment:
+            "Refusal before the compiler runs: the block's adapter has no slc id; the adapter names and `SLC_AGENT` stay as they are",
+        }),
+      );
+    }
     // The pipeline's own progress lines — `running:`, `packaging:`,
     // `introspected states:`, `derived roles:`, `compile complete` —
     // are wire texts the compile band matches to name its phases, read
     // its roles and know the run finished; they stay as they are, and
     // the page phrases what it shows (localization-4, DR-079).
+    if (configured) {
+      progress(`agent: ${env.SLC_AGENT ?? "slc's configuration"} from the environment`);
+    } else if (agentEnv.SLC_AGENT) {
+      progress(`agent: ${agentEnv.SLC_AGENT} from the block`);
+    }
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
     // Bare invocation (DR-019): slc >= 0.2 links against the installed
     // @sublang/playbook runtime contract by default.
@@ -551,7 +799,12 @@ export async function compilePlaybook(
       dir,
       progress,
       signal,
-      { ...env, SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT ?? "2400" },
+      {
+        ...env,
+        ...toolchain.slc.env,
+        ...agentEnv,
+        SLC_STALL_TIMEOUT: env.SLC_STALL_TIMEOUT ?? "2400",
+      },
     );
     signal?.throwIfAborted();
     if (code !== 0) {

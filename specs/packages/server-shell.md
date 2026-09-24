@@ -114,7 +114,7 @@ Where `npm ci` has installed the repository dependencies, when a contributor inv
 
 #### server-shell-7
 
-The `apps/server` workspace package shall declare the `claude`, `codex`, and `opencode` agent SDKs as its own dependencies at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — so SDK-backed adapters resolve when its embedded core loads them.
+The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], so SDK-backed adapters and the compiler resolve when its embedded core loads or runs them.
 
 #### server-shell-8
 
@@ -205,6 +205,12 @@ Where the server shell serves mutable fixture assets, when the integration suite
 - a fresh launch does not reuse an earlier launch's cache entry [[server-shell-18](#server-shell-18)];
 - an index edit that preserves size and modification time is still observed because the index remains uncached [[server-shell-18](#server-shell-18)], and distinct Host values produce independently retargeted bodies [[server-shell-4](#server-shell-4)] after content coding [[server-shell-16](#server-shell-16)];
 - a populated path later resolving outside the bundle is rejected [[server-shell-4](#server-shell-4)] before cache reuse [[server-shell-18](#server-shell-18)].
+
+### Supplied Runtime Coverage
+
+#### server-shell-22
+
+When the server's test suite reads the package manifest and resolves the compiler over the module directories above the server's own module, the test suite shall assert that the three SDKs and the compiler are declared and that the compiler resolved is the app's own copy [[server-shell-7](#server-shell-7)].
 
 ### Browser Journey Coverage
 

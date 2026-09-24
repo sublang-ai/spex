@@ -74,6 +74,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
   a restart; and a session whose run was ended over unresolved effects is
   continuable, as Playbook's own validation says. The core's own refusal
   "reconcile unresolved effects before continuation" is gone.
+- Playbook compilation runs the compiler Spex ships ([DR-081](specs/decisions/081-the-app-supplies-the-compiler.md)):
+  both shells declare `@sublang/slc`, so its agent SDKs are the app's
+  own, and the desktop compiles on its bundled Electron Node — no
+  global `slc`, no `npx`, no system Node; the server shell still needs
+  Node 23.6 or later to compile. A compiler whose playbook engine the
+  app cannot run is refused with both engines named. The compile's
+  agent follows the draft's, or the Captain's, block — adapter, model,
+  effort and fast mode — unless the environment sets any `SLC_*`
+  variable, in which case it configures slc itself; an agent on an
+  adapter the compiler cannot drive is refused before it runs, and the
+  compile log names the agent and where it came from.
 
 ### Fixed
 
@@ -81,6 +92,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `libtool` formula): the native rebuild of `better-sqlite3` now links
   with the Apple `libtool` that `xcrun` names instead of failing on
   `-static`.
+- Compiling on a machine without the agent SDKs beside a global or `npx`
+  `slc` failed at the first agent call with a missing-package error;
+  the shipped compiler resolves the app's SDKs.
 
 ## [0.8.0] - 2026-09-14
 

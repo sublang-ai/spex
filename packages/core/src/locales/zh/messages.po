@@ -1516,11 +1516,6 @@ msgstr "在该主机上用有权访问它的账号为本机登录"
 msgid "skipped symlink escaping the project: {path}"
 msgstr "已跳过越出项目的符号链接：{path}"
 
-#. The toolchain's guidance; `slc`, `npx` and `@sublang/slc` are commands and a package name, all as they are
-#: src/compile.ts
-msgid "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it."
-msgstr "未安装 slc；Spex 将通过 npx 运行它（首次使用时下载）。全局安装 @sublang/slc 可固定版本。"
-
 #. Forge guidance where a gh listing failed; gh is the command's own name
 #: src/forge.ts
 msgid "Some forge data could not be loaded from gh."
@@ -1621,10 +1616,25 @@ msgstr "应用不保存任何凭据：请从 URL 中删去主机之前的全部�
 msgid "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead."
 msgstr "应用不保存任何凭据：请从 URL 中删去用户名和密钥，改用 SSH 密钥或本机的凭据助手。"
 
+#. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
+#: src/compile.ts
+msgid "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together."
+msgstr "应用自带的编译器面向规程引擎 {compiler}，而应用运行的是 {app}；请同时更新 @sublang/slc 与 @sublang/playbook。"
+
+#. The toolchain's guidance when the compiler the app ships is not installed; `@sublang/slc` is a package name and `npm ci` a command, both as they are
+#: src/compile.ts
+msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
+msgstr "应用自带的 @sublang/slc 副本缺失；请在 Spex 检出目录中运行 npm ci 以恢复。"
+
 #. The session's Captain, named inside a settings-drift line
 #: src/session.ts
 msgid "the Captain"
 msgstr "Captain"
+
+#. Refusal before the compiler runs: the block's adapter has no slc id; the adapter names and `SLC_AGENT` stay as they are
+#: src/compile.ts
+msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
+msgstr "编译所用的智能体运行在 {adapter} 上，而编译器无法驱动它；请选用 claude、codex、gemini 或 opencode 上的智能体，或设置 SLC_AGENT。"
 
 #. Draft thread error; Settings is the surface's own name
 #: src/authoring.ts

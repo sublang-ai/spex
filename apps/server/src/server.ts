@@ -38,7 +38,7 @@ import {
   gzipSync,
 } from "node:zlib";
 
-import { CoreService, type CoreServiceOptions } from "@sublang/spex-core";
+import { CoreService, moduleDirectoriesAbove, type CoreServiceOptions } from "@sublang/spex-core";
 
 export interface ServerShellOptions {
   host: string;
@@ -462,6 +462,13 @@ export async function startServer(
     dataDir: options.dataDir,
     ...(existsSync(legacy) ? { legacyDbPath: legacy } : {}),
     ...(options.configPath ? { configPath: options.configPath } : {}),
+    // Compiles run on this shell's own Node, with the compiler and the
+    // SDKs this package declares (server-shell-7, DR-081).
+    compileRuntime: {
+      execPath: process.execPath,
+      electron: false,
+      modulePaths: moduleDirectoriesAbove(import.meta.url),
+    },
     ...(options.core ?? {}),
   });
   try {

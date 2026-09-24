@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers the Spex Library surface — presented to the user as **Playbooks** — across its user-visible behavior, the implementation behind it, and the integration coverage that verifies it: browsing and enabling configured playbooks, mapping playbook roles to player agents, and authoring new playbooks as drafts in a chat-assisted workspace that compiles and registers them, backed by an authoring conversation runner, a draft store, compile execution, registry generation, and shared-config writes.
-Playbook entries live in the shared playbook config file, which remains the source of truth under its fail-closed validation rules; compilation runs the external `slc` toolchain with its Node.js version floor and compiled outputs.
+Playbook entries live in the shared playbook config file, which remains the source of truth under its fail-closed validation rules; compilation runs the app's own copy of the external `slc` toolchain, on the app's runtime or a Node.js meeting the compiler's floor, with its compiled outputs.
 Verification requires integration coverage of the Library surface's compile, registration, and shared-config write paths, where correctness spans the external `slc` process, generated registry artifacts, and the shared config file.
 
 ## External Behavior
@@ -75,7 +75,11 @@ When a draft's compile succeeds, the Library shall present the Register tab [[pl
 
 #### playbook-library-8
 
-Where the compile toolchain cannot be resolved — no `slc`, or no Node.js meeting the version floor [[playbook-library-11](#playbook-library-11)] — the Library shall mark the compile flow unavailable, shall show guidance naming each missing prerequisite and how to install or configure it, and shall not start a compile.
+Where the compile toolchain cannot be resolved — the app's own `slc` missing, or no runtime meeting the version floor [[playbook-library-11](#playbook-library-11)] — the Library shall mark the compile flow unavailable, shall show guidance naming each missing prerequisite and how to restore or configure it, and shall not start a compile.
+
+#### playbook-library-83
+
+When a shell starts the core naming a compile runtime — its own executable, whether that is Electron, and the module directories holding the compiler it declares — the Library shall compile on that runtime with the compiler found there [[playbook-library-11](#playbook-library-11)], so the shell that declares the compiler names where it lives ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
 
 #### playbook-library-9
 
@@ -296,9 +300,16 @@ While the shared config is missing or invalid, the Library shall replace its con
 
 #### playbook-library-11
 
-When toolchain resolution is requested, the toolchain resolver shall locate `slc` and `node` in this order — (1) an explicitly configured toolchain path in app settings ([DR-004](../decisions/004-config-and-persistence.md)), then (2) the captured login-shell `PATH` ([DR-004](../decisions/004-config-and-persistence.md)) — and shall verify that the resolved Node.js satisfies the version floor required by `slc` ([DR-005](../decisions/005-compilation-integration.md)):
+When toolchain resolution is requested, the toolchain resolver shall locate the compiler and the Node.js it runs on in this order, probing each Node.js candidate with `--version` in the caller's environment, and shall verify that the Node.js chosen satisfies the version floor `slc` requires ([DR-005](../decisions/005-compilation-integration.md), [DR-081](../decisions/081-the-app-supplies-the-compiler.md)):
 
-- Any prerequisite unresolvable: the resolver returns an unavailability result naming that prerequisite and the locations attempted, and spawns no process.
+| Prerequisite | Order |
+| --- | --- |
+| Node.js | (1) the command `SPEX_NODE` names, the only candidate when set; else (2) the app's own runtime the shell handed the core [[playbook-library-83](#playbook-library-83)] — its Electron binary run as Node with `ELECTRON_RUN_AS_NODE=1`, or its Node — when it meets the floor; else (3) a `node` on the caller's `PATH` that meets it |
+| `slc` | (1) the command `SPEX_SLC` names; else (2) the app's own copy of `@sublang/slc` in the module directories the shell handed the core [[playbook-library-83](#playbook-library-83)], those above the core's own package when none were handed |
+
+- The resolved command for the app's copy is the Node.js chosen running the copy's CLI — on Electron with `--import` of the core's preload ahead of the CLI, and the variable travelling with that command alone — so the copy's nested `@sublang/cligent` resolves the agent SDKs the shells supply ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-081](../decisions/081-the-app-supplies-the-compiler.md)).
+- The app's copy resolves as unavailable, the guidance naming both engines, when the playbook engine Node resolves from the copy's own package is not the app's and declares another runtime ABI or an artifact schema the app does not support, or cannot be read; the app's own engine resolved from the copy agrees by construction.
+- Any prerequisite unresolvable: the resolver returns an unavailability result naming that prerequisite — the version found when a Node.js answered below the floor, the restore command when the app's copy is missing — and spawns no compiler.
 
 ### Compile Execution
 
@@ -307,7 +318,16 @@ When toolchain resolution is requested, the toolchain resolver shall locate `slc
 When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in a per-playbook directory `<library-root>/<id>/` under the app-managed library root ([DR-004](../decisions/004-config-and-persistence.md)) — materializing in-app source text as a markdown file there and linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
 
 - The runner grants `slc` a stall budget of 2400 seconds through `SLC_STALL_TIMEOUT` unless the environment already sets that variable, because agent-driven phases stay silent longer than `slc`'s ten-minute default.
+- The compiler runs on the Node.js the resolver chose [[playbook-library-11](#playbook-library-11)], with the variable that runtime needs beside the caller's environment — `ELECTRON_RUN_AS_NODE=1` for Electron's, dropped again by the compiler's preload before it starts — so the compiler runs as Node while the agents it spawns inherit no such variable.
 - Compiled outputs of a previously successful compile for the same id are replaced only after the new compile succeeds.
+
+#### playbook-library-42
+
+When a compile is started, the compile runner shall hand `slc` the block the compile's agent is resolved from — the draft's answering agent for a draft compile [[playbook-library-64](#playbook-library-64)], the Captain's block for a compile from the registry form — as `SLC_AGENT` (`claude` as `claude-code`; `codex`, `gemini` and `opencode` as named), with `SLC_MODEL`, `SLC_EFFORT` and `SLC_FAST_MODE` where the block sets them, unless the environment sets any of those four variables, in which case the runner sets none of them ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)):
+
+- an adapter `slc` does not drive (`kimi`), with none of those variables in the environment, refuses the compile before the compiler runs, the guidance naming the adapters `slc` drives and `SLC_AGENT`;
+- fast mode travels as the literal `true` or `false` the block holds;
+- the progress log names the agent and its source before the compiler runs — `agent: <id> from the block`, or `agent: <SLC_AGENT, else slc's configuration> from the environment`.
 
 ### Registry Generation
 
@@ -462,15 +482,31 @@ When the conversation runner observes a `tool_result` event or the turn ends, it
 
 #### playbook-library-17
 
-Where a stub `slc` executable that emits a valid compiled playbook output is placed on the toolchain resolution path, when the compile flow is driven end to end — source provided [[playbook-library-5](#playbook-library-5)], role names entered, registry form submitted [[playbook-library-7](#playbook-library-7)] — the test suite shall assert that the stub ran as an external process in the per-id library directory [[playbook-library-12](#playbook-library-12)], that a registry manifest was emitted whose entry passes the fail-closed registry validation [[playbook-library-15](#playbook-library-15)], that the shared config gained a `playbooks.<id>` entry whose `from` resolves to that manifest [[playbook-library-14](#playbook-library-14)] and whose role bindings are keyed by the entry's derived role ids however the submission cased them [[playbook-library-32](#playbook-library-32)], and that the Library lists the new playbook [[playbook-library-10](#playbook-library-10)].
+Where a stub `slc` executable that emits a valid compiled playbook output is named as the configured compiler [[playbook-library-11](#playbook-library-11)], when the compile flow is driven end to end — source provided [[playbook-library-5](#playbook-library-5)], role names entered, registry form submitted [[playbook-library-7](#playbook-library-7)] — the test suite shall assert that the stub ran as an external process in the per-id library directory [[playbook-library-12](#playbook-library-12)], that a registry manifest was emitted whose entry passes the fail-closed registry validation [[playbook-library-15](#playbook-library-15)], that the shared config gained a `playbooks.<id>` entry whose `from` resolves to that manifest [[playbook-library-14](#playbook-library-14)] and whose role bindings are keyed by the entry's derived role ids however the submission cased them [[playbook-library-32](#playbook-library-32)], that the Library lists the new playbook [[playbook-library-10](#playbook-library-10)], and that the stub ran with the Captain's block as `SLC_AGENT` and `SLC_MODEL` [[playbook-library-42](#playbook-library-42)].
 
 #### playbook-library-18
 
-Where no `slc` is resolvable, or the resolved Node.js fails the version floor [[playbook-library-11](#playbook-library-11)], the test suite shall assert that the compile flow is reported unavailable with guidance naming the missing prerequisite [[playbook-library-8](#playbook-library-8)], that no external process is spawned, and that the shared config file is unmodified.
+Where the app's own `slc` is missing from the module trees the test names, its playbook engine disagrees with the app's, or every Node.js candidate fails the version floor [[playbook-library-11](#playbook-library-11)], the test suite shall assert that the compile flow is reported unavailable with guidance naming the missing prerequisite — the restore command, both engines, or the version found [[playbook-library-8](#playbook-library-8)] — and that no compiler process is spawned.
 
 #### playbook-library-19
 
 Where a stub `slc` fails at a known pipeline phase with error output, when a compile is run, the test suite shall assert that the failing phase is identified, that the phase's captured output is surfaced [[playbook-library-9](#playbook-library-9)], that no config write occurs, and that previously compiled outputs for the same playbook id remain unchanged [[playbook-library-12](#playbook-library-12)].
+
+#### playbook-library-79
+
+Where the core runs from a checkout whose app shells declare `@sublang/slc`, when the test suite resolves the toolchain with neither `SPEX_SLC` nor `SPEX_NODE` set, the test suite shall assert that the compiler is the checkout's own copy, run on the Node.js chosen when one meets the floor [[playbook-library-11](#playbook-library-11)], and that from that copy's own `@sublang/cligent` the Claude agent SDK the shells declare loads — the import a compiler installed globally or through `npx` fails on a fresh machine [[playbook-library-11](#playbook-library-11)].
+
+#### playbook-library-80
+
+Where the desktop's Electron binary is at hand, when the test suite resolves the toolchain with that binary handed as the app's own runtime with the desktop's module directories, the test suite shall assert that it answers the probe as Node at or above the floor with `ELECTRON_RUN_AS_NODE=1` and that the compiler resolved is the app's copy from those directories [[playbook-library-83](#playbook-library-83)] [[playbook-library-11](#playbook-library-11)], that the supplied compiler's `--version` runs on it, and that a probe in the compiler's place sees that Node with the variable gone [[playbook-library-11](#playbook-library-11)].
+
+#### playbook-library-81
+
+When the test suite compiles through a stub `slc` named as the configured compiler, the test suite shall assert the compile's agent per case [[playbook-library-42](#playbook-library-42)]: a block naming `codex` at effort `medium` in an environment setting no `SLC_*` variable reaches the stub as `SLC_AGENT=codex` and `SLC_EFFORT=medium` with neither `SLC_MODEL` nor `SLC_FAST_MODE`, the stall budget beside them and a progress line naming the agent from the block ahead of the compiler; with `SLC_AGENT` set in the environment nothing of the block reaches the stub and the line names the environment; a block naming `kimi` is refused before the stub runs, the guidance naming the adapters `slc` drives; and a block's fast mode reaches the stub as its literal.
+
+#### playbook-library-82
+
+When the test suite resolves the toolchain through a probe answering each command with its own version, the test suite shall assert the order of [[playbook-library-11](#playbook-library-11)]: an Electron runtime meeting the floor is chosen, probed with `ELECTRON_RUN_AS_NODE=1` in the caller's environment, and runs the compiler behind the preload ahead of any `PATH` Node, an own runtime below the floor yields to a `PATH` Node meeting it with both probed in that order, and a configured `SPEX_NODE` is the only candidate probed; and that a compile on the Electron runtime spawns the copy's CLI behind the preload with `ELECTRON_RUN_AS_NODE=1` beside the caller's environment [[playbook-library-12](#playbook-library-12)] [[playbook-library-83](#playbook-library-83)] while a compiler `SPEX_SLC` names runs without it [[playbook-library-11](#playbook-library-11)].
 
 ### Registration and Config Coverage
 
@@ -529,7 +565,7 @@ Where the shared config state is missing or invalid, the test suite shall assert
 
 #### playbook-library-72
 
-Where the core runs with the scripted fake adapter — its first reply writing a `Roles:`-led `<id>.md` into its working directory and ending in a compile block, its next reply a register block — and a stub `slc` on the toolchain path emitting a two-role entry, when a draft is created and one message sent over the protocol, the test suite shall assert that the fake ran with the draft directory as `cwd`, `{ mode: "auto" }` as its permissions, no tool lists, and no resume [[playbook-library-64](#playbook-library-64)]; that the prompt carried the source path, the four document paths, and both directive kinds [[playbook-library-65](#playbook-library-65)]; that the records streamed as `author` player records and a Boss turn [[playbook-library-64](#playbook-library-64)]; that the source broadcast after the write [[playbook-library-71](#playbook-library-71)]; that a compile started without a further command, its progress lines streamed, and no config write occurred [[playbook-library-66](#playbook-library-66)] [[playbook-library-67](#playbook-library-67)]; that the success turn's prompt named the roles and the proposal landed with the block's fields [[playbook-library-68](#playbook-library-68)] [[playbook-library-66](#playbook-library-66)]; and that `draft.register` wrote the new player first, then `playbooks.<id>` keyed by the derived roles with the confirmed command and intent in the wrapper, after which the draft is gone from the list and the playbook is configured [[playbook-library-69](#playbook-library-69)] [[playbook-library-70](#playbook-library-70)].
+Where the core runs with the scripted fake adapter — its first reply writing a `Roles:`-led `<id>.md` into its working directory and ending in a compile block, its next reply a register block — and a stub `slc` named as the configured compiler emitting a two-role entry, when a draft is created and one message sent over the protocol, the test suite shall assert that the fake ran with the draft directory as `cwd`, `{ mode: "auto" }` as its permissions, no tool lists, and no resume [[playbook-library-64](#playbook-library-64)]; that the prompt carried the source path, the four document paths, and both directive kinds [[playbook-library-65](#playbook-library-65)]; that the records streamed as `author` player records and a Boss turn [[playbook-library-64](#playbook-library-64)]; that the source broadcast after the write [[playbook-library-71](#playbook-library-71)]; that a compile started without a further command, its progress lines streamed, and no config write occurred [[playbook-library-66](#playbook-library-66)] [[playbook-library-67](#playbook-library-67)]; that the stub `slc` ran with the draft's answering agent as `SLC_AGENT` and `SLC_MODEL` [[playbook-library-42](#playbook-library-42)]; that the success turn's prompt named the roles and the proposal landed with the block's fields [[playbook-library-68](#playbook-library-68)] [[playbook-library-66](#playbook-library-66)]; and that `draft.register` wrote the new player first, then `playbooks.<id>` keyed by the derived roles with the confirmed command and intent in the wrapper, after which the draft is gone from the list and the playbook is configured [[playbook-library-69](#playbook-library-69)] [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-73
 
@@ -568,7 +604,7 @@ When the integration suite copies a registered library to a differently located 
 
 #### playbook-library-77
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` on the toolchain path, when the journey works a new playbook through the page, the test suite shall assert:
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` named as the configured compiler, when the journey works a new playbook through the page, the test suite shall assert:
 
 - "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the starter chips, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-54](#playbook-library-54)] [[playbook-library-50](#playbook-library-50)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];

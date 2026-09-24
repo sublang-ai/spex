@@ -106,12 +106,13 @@ meta.md       The spec of specs
 | [DR-078](decisions/078-the-interface-speaks-the-readers-language.md) | 078-the-interface-speaks-the-readers-language.md | The interface speaks the reader's language: English source, Simplified Chinese, one choice per home following the system by default, open PO catalogs a human edits, a build that refuses an incomplete language; amends DR-010, DR-041 and DR-013; extended by DR-079 |
 | [DR-079](decisions/079-the-core-speaks-the-homes-language.md) | 079-the-core-speaks-the-homes-language.md | The core speaks the home's language: reader-facing prose the core composes phrased from its own catalog, live state re-read on a change, records keeping theirs, Node 22 for every package; extends DR-078 |
 | [DR-080](decisions/080-the-config-directory-is-named-config.md) | 080-the-config-directory-is-named-config.md | The config directory is named config: `config/playbook.config.yaml` under the home, relocated once from the former `playbook/` location ahead of the XDG one, the former file inside the home removed; amends DR-037 |
+| [DR-081](decisions/081-the-app-supplies-the-compiler.md) | 081-the-app-supplies-the-compiler.md | The app supplies the compiler: both shells declare `@sublang/slc`, the core runs that copy on the app's own runtime (Electron's Node or the server's) or a Node meeting the floor, the compile's agent follows the draft's or the Captain's block; amends DR-005, extends DR-024 |
 
 ## Packages
 
 | File | Summary |
 | --- | --- |
-| [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging; packaged-app acceptance |
+| [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler and agent SDKs; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core: WebSocket protocol, shared session lifecycle/recovery/deletion, scoped storage diagnostics, config, records and readiness |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, Running band, per-project History/Now/Up next/Sources groups, one-gesture capture, and shared queued-intent standing presentation; one deterministic core fold |
 | [desktop-session.md](packages/desktop-session.md) | A Boss session in the packaged app: shell process topology, core streaming, and run-view rendering over one protocol |
@@ -125,7 +126,7 @@ meta.md       The spec of specs
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, end-user and live migration smokes |
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, paused sessions a message continues, protocol-only rendering, fixture-stream and browser-journey coverage |
 | [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
-| [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection |
+| [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection; supplied compiler and agent SDKs |
 | [storage.md](packages/storage.md) | Spex home catalog, file encodings, local project bindings, migration and Git selection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |

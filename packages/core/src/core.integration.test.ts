@@ -2859,17 +2859,21 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   // slc emits the ids as the gears declared them (DR-032): `Coder`
   // and `Reviewer`, not their lowercase forms.
   writeFileSync(stubPath, stubSlcSource("['Coder', 'Reviewer']"));
+  const slcEnvs: (NodeJS.ProcessEnv | undefined)[] = [];
   const harness = await startHarness(VALID_CONFIG, {
     env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
     // The toolchain probe wants a system Node slc can run on; the
     // runner's own Node is whatever CI installed, so the probe is
-    // answered here and every other spawn — the stub slc — is real.
-    compileSpawner: (command, args, cwd, onLine, signal) => {
-      if (args.length === 1 && args[0] === "--version" && command !== process.execPath) {
+    // answered here and every other spawn — the stub slc — is real,
+    // its env recorded.
+    compileSpawner: (command, args, cwd, onLine, signal, env) => {
+      const probe = args.length === 1 && args[0] === "--version";
+      if (probe && command !== process.execPath) {
         onLine("v24.1.0");
         return Promise.resolve(0);
       }
-      return defaultSpawner(command, args, cwd, onLine, signal);
+      if (!probe) slcEnvs.push(env);
+      return defaultSpawner(command, args, cwd, onLine, signal, env);
     },
   });
   const client = new Client(harness.service.port());
@@ -2892,6 +2896,11 @@ test("playbook-library-32: compile.run binds derived roles however the form case
       ? state.summary.playbooks.find((p) => p.id === "pair")
       : undefined;
   assert.ok(registered, "the compiled playbook is configured");
+  // The form's compile ran on the Captain's block (playbook-library-17, playbook-library-42).
+  assert.equal(slcEnvs.length, 1, "one stub slc run");
+  assert.equal(slcEnvs[0]?.SLC_AGENT, "claude-code");
+  assert.equal(slcEnvs[0]?.SLC_MODEL, "claude-test");
+  assert.equal(slcEnvs[0]?.SLC_EFFORT, undefined);
   assert.ok(
     registered.from.startsWith(join(harness.dataDir, "playbooks", "pair")),
     `manifest under the library: ${registered.from}`,

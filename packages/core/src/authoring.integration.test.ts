@@ -189,17 +189,23 @@ interface Harness {
   dir: string;
   dataDir: string;
   configPath: string;
+  /** Every spawn but a `--version` probe — the stub slc — with its env. */
+  slcCalls: { argv: string[]; env?: NodeJS.ProcessEnv }[];
 }
 
 /** The toolchain probe wants a system Node; every other spawn — the
- * stub slc — is real. */
-const probeSpawner: LineSpawner = (command, args, cwd, onLine, signal) => {
-  if (args.length === 1 && args[0] === "--version" && command !== process.execPath) {
-    onLine("v24.1.0");
-    return Promise.resolve(0);
-  }
-  return defaultSpawner(command, args, cwd, onLine, signal);
-};
+ * stub slc — is real, and recorded with its env. */
+function probeSpawner(slcCalls: Harness["slcCalls"]): LineSpawner {
+  return (command, args, cwd, onLine, signal, env) => {
+    const probe = args.length === 1 && args[0] === "--version";
+    if (probe && command !== process.execPath) {
+      onLine("v24.1.0");
+      return Promise.resolve(0);
+    }
+    if (!probe) slcCalls.push({ argv: [command, ...args], env });
+    return defaultSpawner(command, args, cwd, onLine, signal, env);
+  };
+}
 
 async function startHarness(options: { script: FakeScript; slc: string; dir?: string }): Promise<Harness> {
   const dir = options.dir ?? mkdtempSync(join(tmpdir(), "spex-authoring-it-"));
@@ -209,6 +215,7 @@ async function startHarness(options: { script: FakeScript; slc: string; dir?: st
   writeFileSync(stubPath, options.slc);
   const dataDir = join(dir, "state");
   const { imports, stats } = fakeAdapterImports(options.script);
+  const slcCalls: Harness["slcCalls"] = [];
   const service = await CoreService.start({
     token: "test",
     configPath,
@@ -218,9 +225,9 @@ async function startHarness(options: { script: FakeScript; slc: string; dir?: st
     env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
     home: join(dir, "home"),
     watchConfig: false,
-    compileSpawner: probeSpawner,
+    compileSpawner: probeSpawner(slcCalls),
   });
-  return { service, stats, dir, dataDir, configPath };
+  return { service, stats, dir, dataDir, configPath, slcCalls };
 }
 
 const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
@@ -310,6 +317,11 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(compiled.state, "compiled");
   assert.deepEqual(compiled.compile?.roles, ["Triager", "Verifier"]);
   assert.equal(compiled.compile?.by, "agent");
+  // The compile ran on the draft's answering agent, the Captain's block (playbook-library-72, playbook-library-42).
+  assert.equal(harness.slcCalls.length, 1, "one stub slc run");
+  assert.equal(harness.slcCalls[0].env?.SLC_AGENT, "claude-code");
+  assert.equal(harness.slcCalls[0].env?.SLC_MODEL, "claude-test");
+  assert.equal(harness.slcCalls[0].env?.SLC_STALL_TIMEOUT, "2400");
 
   // playbook-library-68/66: the success turn named the roles; the
   // proposal landed with the block's fields.
