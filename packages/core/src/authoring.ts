@@ -26,7 +26,7 @@ import { Cligent, type AgentAdapter, type AgentEvent, type CligentOptions } from
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 import { stripLeadingComments } from "./artifacts.js";
-import { compilePlaybook, type CompileResult, type LineSpawner } from "./compile.js";
+import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import type { ComposedConfig, ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
@@ -93,6 +93,7 @@ export interface AuthorManagerOptions {
   env: NodeJS.ProcessEnv;
   adapterImports?: PlayerAdapterImports;
   compileSpawner?: LineSpawner;
+  compileRuntime?: ToolchainRuntime;
   /** Shared with `compile.run`: one compile per playbook id. */
   activeCompiles: Map<string, AbortController>;
   composed: () => ComposedConfig | undefined;
@@ -1392,6 +1393,10 @@ export class AuthorManager {
         intent: "(draft)",
         libraryDir: this.drafts.libraryDir,
         env: this.options.env,
+        // The compile runs on the block that answers the draft
+        // (playbook-library-42).
+        agent: compilerAgentOf(this.resolveAgent(id).agent),
+        ...(this.options.compileRuntime ? { runtime: this.options.compileRuntime } : {}),
         signal: controller.signal,
         ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
         onProgress: (line) => {

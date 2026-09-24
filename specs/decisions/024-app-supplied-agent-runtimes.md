@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; [DR-033](033-remote-gui-serving.md) extends the SDK-supply duty to the server shell.
+Extended by [DR-081](081-the-app-supplies-the-compiler.md): the playbook compiler joins the runtimes both shells supply.
 
 ## Context
 

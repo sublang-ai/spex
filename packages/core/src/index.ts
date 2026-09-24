@@ -14,3 +14,12 @@ export {
   type SessionManagerOptions,
 } from "./session.js";
 export { CoreService, createCoreService, type CoreServiceOptions } from "./service.js";
+export {
+  checkToolchain,
+  compilerAgentEnv,
+  moduleDirectoriesAbove,
+  suppliedCompiler,
+  type CompilerAgent,
+  type ToolchainRuntime,
+  type ToolchainStatus,
+} from "./compile.js";

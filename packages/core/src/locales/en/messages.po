@@ -1516,11 +1516,6 @@ msgstr "Sign this machine in at that host as an account that can see it"
 msgid "skipped symlink escaping the project: {path}"
 msgstr "skipped symlink escaping the project: {path}"
 
-#. The toolchain's guidance; `slc`, `npx` and `@sublang/slc` are commands and a package name, all as they are
-#: src/compile.ts
-msgid "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it."
-msgstr "slc is not installed; Spex will run it via npx (downloads on first use). Install @sublang/slc globally to pin it."
-
 #. Forge guidance where a gh listing failed; gh is the command's own name
 #: src/forge.ts
 msgid "Some forge data could not be loaded from gh."
@@ -1621,10 +1616,25 @@ msgstr "The app stores no credential: remove everything before the host from the
 msgid "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead."
 msgstr "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead."
 
+#. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
+#: src/compile.ts
+msgid "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together."
+msgstr "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together."
+
+#. The toolchain's guidance when the compiler the app ships is not installed; `@sublang/slc` is a package name and `npm ci` a command, both as they are
+#: src/compile.ts
+msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
+msgstr "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
+
 #. The session's Captain, named inside a settings-drift line
 #: src/session.ts
 msgid "the Captain"
 msgstr "the Captain"
+
+#. Refusal before the compiler runs: the block's adapter has no slc id; the adapter names and `SLC_AGENT` stay as they are
+#: src/compile.ts
+msgid "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
+msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT."
 
 #. Draft thread error; Settings is the surface's own name
 #: src/authoring.ts

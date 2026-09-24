@@ -19,7 +19,7 @@ import {
   Notification as ElectronNotification,
   shell,
 } from "electron";
-import { CoreService } from "@sublang/spex-core";
+import { CoreService, moduleDirectoriesAbove } from "@sublang/spex-core";
 import { resolveLanguage } from "@sublang/spex-core/language";
 import type { I18n } from "@lingui/core";
 
@@ -161,6 +161,13 @@ async function main(): Promise<void> {
     // resolves the reader's system exactly as the shell does
     // (app-shell-29, core-service-111).
     systemLanguages: app.getPreferredSystemLanguages(),
+    // Compiles run on this Electron as Node, with the compiler and
+    // the SDKs this package declares (app-shell-33, DR-081).
+    compileRuntime: {
+      execPath: process.execPath,
+      electron: true,
+      modulePaths: moduleDirectoriesAbove(import.meta.url),
+    },
   });
 
   // The menu waits for the core: its one item of the shell's own text

@@ -43,7 +43,9 @@ Spex answers each with one systematic design:
 
 ## Getting started
 
-Requires Node.js 22 or later.
+Requires Node.js 22 or later. The desktop compiles playbooks on the Node
+inside its Electron; the server shell compiles them only when its Node, or a
+`node` on `PATH`, is 23.6 or later.
 
 **1. Scaffold `specs/` in your project.**
 
@@ -73,7 +75,7 @@ spex 0.x tree ([scaffold-11](specs/packages/scaffold.md#scaffold-11),
 **2. Develop through playbook workflows that keep the specs in sync.**
 Use the built-ins, typically `/decide` to record a decision and `/code` to
 implement an intent under review, or compile your own workflow from prose
-with [`slc`](https://github.com/sublang-ai/slc).
+in the IDE with the [`slc`](https://github.com/sublang-ai/slc) it ships.
 
 **3. Work in the Spex IDE**, where specs, playbook runs and compilation, and
 the intent Dashboard live together. Desktop and server hosts require macOS
@@ -90,7 +92,8 @@ npm start
 
 `npm start` builds the workspaces and launches the desktop app. Real
 playbook runs need a ready coding-agent adapter; issue and PR panels need
-an authenticated `gh` CLI; compiling playbooks needs `slc`.
+an authenticated `gh` CLI; compiling playbooks needs only a ready adapter, since
+the compiler is installed in this checkout.
 Claude and Codex run through SDK dependencies installed in this checkout.
 Updating a separate CLI or desktop app does not update those copies.
 If a model requires a newer runtime, run

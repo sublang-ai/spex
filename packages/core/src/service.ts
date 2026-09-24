@@ -93,7 +93,7 @@ import {
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { checkToolchain, compilePlaybook, type CompileResult, type LineSpawner } from "./compile.js";
+import { checkToolchain, compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager } from "./space.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
@@ -160,6 +160,9 @@ export interface CoreServiceOptions {
   token?: string;
   /** Injectable line-streaming spawner for compile runs (tests). */
   compileSpawner?: LineSpawner;
+  /** Where compiles run: the shell's own runtime and the module tree
+   * it declares the compiler in (playbook-library-11). */
+  compileRuntime?: ToolchainRuntime;
   /**
    * The reader's system languages, as the embedding shell knows them
    * (core-service-111, localization-2): the desktop shell passes the
@@ -479,6 +482,7 @@ export class CoreService {
       env: this.env,
       adapterImports: options.adapterImports,
       compileSpawner: options.compileSpawner,
+      compileRuntime: options.compileRuntime,
       activeCompiles: this.activeCompiles,
       composed: () => this.composed,
       readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
@@ -1497,7 +1501,7 @@ export class CoreService {
         return this.configState;
       }
       case "compile.check":
-        return checkToolchain(this.env, this.options.compileSpawner);
+        return checkToolchain(this.env, this.options.compileSpawner, this.options.compileRuntime);
       case "playbook.artifacts": {
         if (this.configState.status !== "valid" || !this.composed) {
           throw new CoreError("invalid_config", i18n._({
@@ -1573,6 +1577,12 @@ export class CoreService {
               intent: command.intent,
               libraryDir,
               env: this.env,
+              // The form's compile runs on the Captain's block
+              // (playbook-library-42).
+              ...(this.composed
+                ? { agent: compilerAgentOf(this.composed.captainAgent) }
+                : {}),
+              ...(this.options.compileRuntime ? { runtime: this.options.compileRuntime } : {}),
               signal: controller.signal,
               ...(this.options.compileSpawner
                 ? { spawner: this.options.compileSpawner }
