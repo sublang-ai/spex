@@ -8,6 +8,7 @@
 Accepted (2026-09-12) on the owner's direction: a two-pane authoring workspace — a conversation with an agent on the left, the generated source and its compilation watched on the right — modeled on Claude Design's layout.
 Amends [DR-005](005-compilation-integration.md): compile inputs may come from a draft directory an agent writes, and compilation and registration become two steps, registration confirmed by the user after the compile derives the roles.
 Amends [DR-015](015-reference-content.md): the slc example's prefill opens a draft workspace in paste mode instead of filling a form.
+Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md) in the workspace's empty conversation alone: the phrase chips become two acts and the prompt teaches the agent what a SKILL.md is.
 
 ## Context
 
