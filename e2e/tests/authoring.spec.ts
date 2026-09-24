@@ -7,7 +7,7 @@
 // from "New playbook" to a registered `/triage`, with the workspace
 // measured stacked at the 320px floor along the way.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { AUTHORING_SOURCE, seedInterruptedDraft } from "@sublang/spex-core/testing";
@@ -32,6 +32,9 @@ const FIXED_SOURCE = AUTHORING_SOURCE.replace(
 
 const FIRST_MESSAGE = "I want a playbook that triages new issues into labels.";
 const QUEUED_MESSAGE = "Also make the Verifier cite the label definitions.";
+/** What "Use a SKILL.md…" places in the composer (playbook-library-84). */
+const ADAPT_ASK =
+  "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done";
 
 /** The accessible names of the workspace's buttons, in document order. */
 async function workspaceNames(page: Page): Promise<string[]> {
@@ -93,14 +96,27 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await expect(compile).toBeDisabled();
   await expect(compile).toHaveAttribute("title", "No source yet");
   await expect(page.getByTestId("source-empty")).toContainText("triage.md");
-  const starters = page.getByTestId("starter-chip");
-  await expect(starters).toHaveCount(3);
-  await expect(starters.nth(0)).toHaveText("Describe a workflow");
-  // A chip places its text in the field without sending.
-  await starters.nth(0).click();
-  await expect(page.getByTestId("draft-composer")).toHaveValue("Describe a workflow");
+  // ── The two openers (playbook-library-84): the example placed as the
+  //    first message; a SKILL.md brought in through the paste mode, the
+  //    page having no file pick of its own. Neither sends.
+  const openers = page.getByTestId("draft-openers");
+  await expect(openers).toContainText(
+    "Tell the agent what the playbook does, who does what, and when it is done",
+  );
+  await expect(openers.getByRole("button")).toHaveText(["Use a SKILL.md…", "Try the example"]);
+  const composer = page.getByTestId("draft-composer");
+  await page.getByTestId("opener-example").click();
+  await expect(composer).toHaveValue(/^Before work begins, ensure the current directory/);
+  await expect(composer).toBeFocused();
   await expect(page.getByTestId("boss-bubble")).toHaveCount(0);
-  await page.getByTestId("draft-composer").fill("");
+  await composer.fill("");
+  await page.getByTestId("opener-skill").click();
+  await expect(page.getByTestId("paste-text")).toBeFocused();
+  await expect(composer).toHaveValue(ADAPT_ASK);
+  await expect(page.getByTestId("boss-bubble")).toHaveCount(0);
+  await page.getByTestId("paste-cancel").click();
+  await expect(page.getByTestId("source-empty")).toBeVisible();
+  await composer.fill("");
 
   // Returning shows the Drafts row; Open comes back to the workspace
   // with nothing ended (playbook-library-50).
@@ -115,14 +131,13 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   // ── The first message: a Boss bubble, the agent's write as a tool
   //    card, the source in the tab before the turn ends, the compile
   //    block as a card (playbook-library-53/56).
-  const composer = page.getByTestId("draft-composer");
   const send = page.getByTestId("draft-send");
   await expect(send).toHaveText("Send");
   await composer.fill(FIRST_MESSAGE);
   await send.click();
   await expect(page.getByTestId("boss-bubble").first()).toContainText(FIRST_MESSAGE);
   await expect(page.getByTestId("draft-working")).toContainText("working");
-  await expect(page.getByTestId("draft-starters")).toHaveCount(0);
+  await expect(page.getByTestId("draft-openers")).toHaveCount(0);
   const source = page.getByTestId("source-markdown");
   await expect(source).toContainText("Triager");
   await expect(source).toContainText("Verifier");
@@ -434,4 +449,44 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await expect(thread.getByTestId("system-line").filter({ hasText: "sent to the agent" })).toHaveCount(0);
   await expect(page.getByTestId("draft-working")).toHaveCount(0);
   await expect(source).toContainText("Triager");
+});
+
+test("playbook-library-84: a picked SKILL.md becomes the source of a draft with none", async ({
+  page,
+  app,
+}) => {
+  // The page supplies the pick the desktop shell would (DR-008): the
+  // picked file is written as the source at once, shown in the Source
+  // tab, and the ask stands in the focused composer — nothing sent.
+  const skillPath = join(app.home, "SKILL.md");
+  writeFileSync(
+    skillPath,
+    "---\nname: triage\ndescription: Label new issues by their text\n---\n\nRead the issue and choose labels from the repository's list.\n",
+  );
+  await page.addInitScript((path: string) => {
+    (window as unknown as { spexNative: unknown }).spexNative = {
+      pickDirectory: async () => null,
+      pickFile: async () => path,
+    };
+  }, skillPath);
+  await open(page, app);
+  await nav(page, "Playbooks").click();
+  const idField = page.getByTestId("new-playbook-id");
+  await idField.fill("triage");
+  await idField.press("Enter");
+  await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+  await expect(page.getByTestId("draft-chip")).toContainText("No source");
+  await page.getByTestId("opener-skill").click();
+  await expect(page.getByTestId("source-markdown")).toContainText(
+    "Read the issue and choose labels from the repository's list.",
+  );
+  await expect(page.getByTestId("draft-chip")).toContainText("Draft");
+  await expect(page.getByTestId("paste-text")).toHaveCount(0);
+  const composer = page.getByTestId("draft-composer");
+  await expect(composer).toHaveValue(ADAPT_ASK);
+  await expect(composer).toBeFocused();
+  await expect(page.getByTestId("boss-bubble")).toHaveCount(0);
+  expect(readFileSync(join(app.draftDir("triage"), "triage.md"), "utf8")).toContain(
+    "description: Label new issues by their text",
+  );
 });

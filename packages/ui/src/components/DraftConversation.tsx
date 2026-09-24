@@ -20,6 +20,7 @@ import type { CaptainLine, TranscriptSegment } from "../state/reducer.js";
 import { AUTHOR_PLAYER, type DraftView } from "../state/store.js";
 import { splitDirectives, type TextPart } from "../lib/directives.js";
 import { i18n } from "../i18n.js";
+import { SLC_DEMO } from "../examples/slc-demo.js";
 import { absoluteTitle, duration } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { usePopover } from "../lib/usePopover.js";
@@ -39,21 +40,28 @@ import { RunningMark } from "./RunningMark.js";
 
 const RENDER_WINDOW = 200;
 
-/** The starter chips an empty thread offers (playbook-library-54):
- * each places its text in the field without sending. Each is a thunk,
- * never a string: a table read at module load would freeze the
- * language the module was imported in (localization-4). */
-export const STARTER_CHIPS: readonly (() => string)[] = [
-  () => i18n._("Describe a workflow"),
-  () => i18n._("Adapt a SKILL.md"),
-  () => i18n._("Show me an example"),
-];
-
+/** What the empty thread offers (playbook-library-84): the caption
+ * naming a source's three ingredients, and two openers that act — a
+ * file brought in as the source, or the demo placed as the first
+ * message. Read at render, so they follow the resolved language
+ * (localization-4). */
 export function emptyThreadCaption(): string {
   return i18n._(
     "Tell the agent what the playbook does, who does what, and when it is done",
   );
 }
+
+/** The ask placed in the composer once a file is brought in: the
+ * caption's three ingredients as one instruction the agent can act on
+ * with one Enter (playbook-library-84). */
+export function adaptFileAsk(): string {
+  return i18n._(
+    "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done",
+  );
+}
+
+const OPENER_CLASS =
+  "rounded-full border border-neutral-300 px-2.5 py-0.5 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800";
 
 type ThreadEntry =
   | { kind: "line"; seq: number; line: CaptainLine }
@@ -337,6 +345,7 @@ export function DraftConversation({
   onPickAgent,
   onDismissError,
   onOpenRegister,
+  onUseSkill,
 }: {
   draft: DraftInfo;
   draftView?: DraftView;
@@ -354,6 +363,10 @@ export function DraftConversation({
   onPickAgent: (playerId: string | null) => Promise<void>;
   onDismissError: () => void;
   onOpenRegister: () => void;
+  /** "Use a SKILL.md…" (playbook-library-84): brings a file in — the
+   * shell's pick and a write, or the paste mode — and says where focus
+   * belongs afterwards; null when a canceled pick changed nothing. */
+  onUseSkill: () => Promise<"field" | "paste" | null>;
 }) {
   const entries = useMemo(() => threadEntries(draftView), [draftView]);
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
@@ -547,25 +560,44 @@ export function DraftConversation({
         ) : null}
         {empty ? (
           <div
-            data-testid="draft-starters"
+            data-testid="draft-openers"
             className="flex flex-col gap-1.5 px-1 text-xs text-neutral-500 dark:text-neutral-400"
           >
             <span>{emptyThreadCaption()}</span>
             <div className="flex flex-wrap gap-1.5">
-              {STARTER_CHIPS.map((chip) => chip()).map((starter) => (
-                <button
-                  key={starter}
-                  type="button"
-                  data-testid="starter-chip"
-                  onClick={() => {
-                    onComposerChange(starter);
-                    fieldRef.current?.focus();
-                  }}
-                  className="rounded-full border border-neutral-300 px-2.5 py-0.5 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-                >
-                  {starter}
-                </button>
-              ))}
+              <button
+                type="button"
+                data-testid="opener-skill"
+                title={i18n._("Brings a file in as the source, then asks to adapt it")}
+                onClick={() => {
+                  void onUseSkill().then((focus) => {
+                    if (!focus) return;
+                    onComposerChange(adaptFileAsk());
+                    if (focus === "field") fieldRef.current?.focus();
+                  });
+                }}
+                className={OPENER_CLASS}
+              >
+                {i18n._({
+                  id: "Use a SKILL.md…",
+                  comment: "opener on the empty draft conversation: brings a file in as the source",
+                })}
+              </button>
+              <button
+                type="button"
+                data-testid="opener-example"
+                title={i18n._("Places slc's six-line demo as your first message")}
+                onClick={() => {
+                  onComposerChange(SLC_DEMO.stages.source.trimEnd());
+                  fieldRef.current?.focus();
+                }}
+                className={OPENER_CLASS}
+              >
+                {i18n._({
+                  id: "Try the example",
+                  comment: "opener on the empty draft conversation: places slc's demo prose in the composer",
+                })}
+              </button>
             </div>
           </div>
         ) : null}

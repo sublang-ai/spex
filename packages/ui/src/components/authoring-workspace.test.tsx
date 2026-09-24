@@ -162,6 +162,10 @@ function draftInfo(overrides: Partial<DraftInfo> = {}): DraftInfo {
   };
 }
 
+/** What "Use a SKILL.md…" places in the composer (playbook-library-84). */
+const ADAPT_ASK =
+  "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done";
+
 const COMPILED = draftInfo({
   state: "compiled",
   compile: { at: now - 2 * 60_000, by: "agent", outcome: "ok", roles: ["Triager", "Verifier"] },
@@ -826,7 +830,7 @@ describe("playbook-library-53: the conversation pane", () => {
     renderWorkspace(draftInfo({ activity: "turn" }), { view });
     expect(screen.getByTestId("draft-running").getAttribute("data-running")).toBe("true");
     expect(screen.getByTestId("draft-working").textContent).toMatch(/^working · \d+m/);
-    expect(screen.queryByTestId("draft-starters")).toBeNull();
+    expect(screen.queryByTestId("draft-openers")).toBeNull();
   });
 
   test("an unreadable transcript is a scoped diagnostic in place of the thread", () => {
@@ -841,7 +845,7 @@ describe("playbook-library-53: the conversation pane", () => {
     const diagnostic = "/home/local/drafts/triage/records.jsonl: damaged transcript after record 4";
     renderWorkspace(draftInfo({ diagnostic }), { view: foldView([]) });
     expect(screen.getByTestId("draft-load-error").textContent).toBe(diagnostic);
-    expect(screen.queryByTestId("draft-starters")).toBeNull();
+    expect(screen.queryByTestId("draft-openers")).toBeNull();
     expect(screen.getByTestId("source-markdown")).toBeTruthy();
     fireEvent.change(screen.getByTestId("draft-composer"), { target: { value: "hello?" } });
     const send = screen.getByTestId("draft-send") as HTMLButtonElement;
@@ -872,24 +876,32 @@ describe("playbook-library-53: the conversation pane", () => {
 });
 
 describe("playbook-library-54: the composer", () => {
-  test("idle: Send, the placeholder, the caption, the starter chips, and Enter sends", async () => {
+  test("idle: Send, the placeholder, the caption, the two openers, and Enter sends", async () => {
     renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { source: null });
     const field = screen.getByTestId("draft-composer") as HTMLTextAreaElement;
     expect(field.placeholder).toBe("Describe the playbook…");
     expect(screen.getByTestId("composer-caption").textContent).toBe("Enter sends");
     expect(screen.getByTestId("draft-send").textContent).toBe("Send");
     expect(screen.queryByTestId("draft-abort")).toBeNull();
-    const starters = screen.getByTestId("draft-starters");
-    expect(starters.textContent).toContain("Tell the agent what the playbook does, who does what, and when it is done");
-    const chips = within(starters).getAllByTestId("starter-chip");
-    expect(chips.map((chip) => chip.textContent)).toEqual([
-      "Describe a workflow",
-      "Adapt a SKILL.md",
-      "Show me an example",
+    const openers = screen.getByTestId("draft-openers");
+    expect(openers.textContent).toContain("Tell the agent what the playbook does, who does what, and when it is done");
+    expect(within(openers).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Use a SKILL.md…",
+      "Try the example",
     ]);
-    fireEvent.click(chips[1]);
-    expect(field.value).toBe("Adapt a SKILL.md");
+    // "Try the example" places the demo's six lines, focused, without
+    // sending (playbook-library-84).
+    fireEvent.click(screen.getByTestId("opener-example"));
+    expect(field.value).toMatch(/^Before work begins, ensure the current directory/);
+    expect(field.value.split("\n")).toHaveLength(6);
+    expect(document.activeElement).toBe(field);
     expect(commandMock).not.toHaveBeenCalledWith("draft.send", expect.anything());
+    // "Use a SKILL.md…" with no bridge: the paste mode opens with its
+    // text focused and the ask is placed, nothing written.
+    fireEvent.click(screen.getByTestId("opener-skill"));
+    await vi.waitFor(() => expect(field.value).toBe(ADAPT_ASK));
+    expect(document.activeElement).toBe(screen.getByTestId("paste-text"));
+    expect(commandMock).not.toHaveBeenCalledWith("draft.source.write", expect.anything());
     fireEvent.change(field, { target: { value: "Triage issues into labels" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await vi.waitFor(() =>
@@ -1079,6 +1091,48 @@ describe("playbook-library-56: the Source tab", () => {
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", sourcePath: "/tmp/skill.md" }),
     );
+  });
+
+  test("Use a SKILL.md… with the bridge: a draft with no source takes the picked file at once", async () => {
+    const pickFile = vi.fn(async () => "/Users/dev/skill/SKILL.md");
+    window.spexNative = { pickDirectory: async () => null, pickFile };
+    try {
+      renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { source: null });
+      fireEvent.click(screen.getByTestId("opener-skill"));
+      await vi.waitFor(() =>
+        expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", sourcePath: "/Users/dev/skill/SKILL.md" }),
+      );
+      const field = screen.getByTestId("draft-composer") as HTMLTextAreaElement;
+      await vi.waitFor(() => expect(field.value).toBe(ADAPT_ASK));
+      expect(document.activeElement).toBe(field);
+      expect(screen.queryByTestId("paste-text")).toBeNull();
+      expect(commandMock).not.toHaveBeenCalledWith("draft.send", expect.anything());
+    } finally {
+      delete window.spexNative;
+    }
+  });
+
+  test("Use a SKILL.md… with the bridge: a draft with a source gets the path placed to confirm; a canceled pick changes nothing", async () => {
+    let picked: string | null = null;
+    const pickFile = vi.fn(async () => picked);
+    window.spexNative = { pickDirectory: async () => null, pickFile };
+    try {
+      renderWorkspace(draftInfo(), { view: foldView([]) });
+      const field = screen.getByTestId("draft-composer") as HTMLTextAreaElement;
+      fireEvent.click(screen.getByTestId("opener-skill"));
+      await vi.waitFor(() => expect(pickFile).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(field.value).toBe("");
+      expect(screen.queryByTestId("paste-text")).toBeNull();
+      picked = "/Users/dev/skill/SKILL.md";
+      fireEvent.click(screen.getByTestId("opener-skill"));
+      await vi.waitFor(() => expect(field.value).toBe(ADAPT_ASK));
+      expect((screen.getByTestId("paste-path") as HTMLInputElement).value).toBe("/Users/dev/skill/SKILL.md");
+      expect(document.activeElement).toBe(screen.getByTestId("paste-text"));
+      expect(commandMock).not.toHaveBeenCalledWith("draft.source.write", expect.anything());
+    } finally {
+      delete window.spexNative;
+    }
   });
 
   test("Pick file stands only where the native bridge offers it", () => {

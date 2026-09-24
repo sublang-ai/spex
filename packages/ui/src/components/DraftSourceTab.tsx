@@ -127,6 +127,8 @@ export function DraftSourceTab({
           <span className="text-xs text-neutral-500">{i18n._("Workflow source")}</span>
           <textarea
             data-testid="paste-text"
+            // The mode opens for text to land in it (playbook-library-84).
+            autoFocus
             value={mode.pasteText}
             onChange={(event) => onMode({ pasteText: event.target.value })}
             rows={6}

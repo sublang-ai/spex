@@ -721,8 +721,8 @@ msgid "active · {span}"
 msgstr "active · {span}"
 
 #: src/components/DraftConversation.tsx
-msgid "Adapt a SKILL.md"
-msgstr "Adapt a SKILL.md"
+msgid "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done"
+msgstr "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done"
 
 #. which agent runtime an agent runs on
 #. which agent runtime an agent runs on
@@ -1066,6 +1066,10 @@ msgstr "bound to no role yet"
 #: src/components/SpaceSurface.tsx
 msgid "branch {branch} · {status}"
 msgstr "branch {branch} · {status}"
+
+#: src/components/DraftConversation.tsx
+msgid "Brings a file in as the source, then asks to adapt it"
+msgstr "Brings a file in as the source, then asks to adapt it"
 
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
@@ -1789,10 +1793,6 @@ msgstr "Deleting…"
 #: src/components/PlayerPane.tsx
 msgid "denied"
 msgstr "denied"
-
-#: src/components/DraftConversation.tsx
-msgid "Describe a workflow"
-msgstr "Describe a workflow"
 
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
@@ -3411,6 +3411,10 @@ msgstr "Pick file"
 msgid "pin a value…"
 msgstr "pin a value…"
 
+#: src/components/DraftConversation.tsx
+msgid "Places slc's six-line demo as your first message"
+msgstr "Places slc's six-line demo as your first message"
+
 #. one unit's kind: a playbook source
 #: src/lib/space.ts
 msgid "Playbook"
@@ -4343,10 +4347,6 @@ msgstr "Show in folder"
 msgid "Show log"
 msgstr "Show log"
 
-#: src/components/DraftConversation.tsx
-msgid "Show me an example"
-msgstr "Show me an example"
-
 #: src/components/NavRail.tsx
 msgid "Show sessions in {project}"
 msgstr "Show sessions in {project}"
@@ -5025,6 +5025,11 @@ msgstr "Try again"
 msgid "Try the Academy example"
 msgstr "Try the Academy example"
 
+#. opener on the empty draft conversation: places slc's demo prose in the composer
+#: src/components/DraftConversation.tsx
+msgid "Try the example"
+msgstr "Try the example"
+
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 msgid "Turn off fast mode for this model."
@@ -5132,6 +5137,11 @@ msgstr "Updated {age} by the agent"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "Updated {age} by you"
+
+#. opener on the empty draft conversation: brings a file in as the source
+#: src/components/DraftConversation.tsx
+msgid "Use a SKILL.md…"
+msgstr "Use a SKILL.md…"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Use as source"
