@@ -282,6 +282,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.match(first.prompt, /kind: register/);
   assert.match(first.prompt, /Boss: I want a playbook that triages/);
   assert.match(first.prompt, /Before work begins, ensure the current directory/);
+  assert.match(first.prompt, /A source the Boss placed may be a SKILL\.md/);
 
   // playbook-library-64: author player records and a Boss turn, in sequence.
   const records = client.records("triage");
