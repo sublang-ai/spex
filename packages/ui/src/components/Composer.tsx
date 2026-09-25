@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The single Boss composer (RUN-3/6/7/8): free text and /commands,
-// queueing while a turn is active, awaitBossReply banner, abort.
+// input between turns, a pending-question banner, and abort.
 // Failed submissions keep the draft and surface the error here.
 // Drafts live in the store so tab/surface switches never eat text.
 //
@@ -221,7 +221,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queueRef = useRef<HTMLDivElement>(null);
   const slashItems = slashMatches(text, playbooks);
-  const slash = slashDismissed ? undefined : slashItems;
+  const slash = slashDismissed || view.turnActive ? undefined : slashItems;
 
   function insertCommand(command: string) {
     setText(`/${command} `);
@@ -236,7 +236,7 @@ export function Composer({
   // player question arrives.
   useEffect(() => {
     textareaRef.current?.focus();
-  }, [awaiting]);
+  }, [awaiting, view.turnActive]);
 
   // The newest queued message is the one the Boss just wrote, so the
   // frame stays at its end as the queue grows (run-view-8).
@@ -256,7 +256,7 @@ export function Composer({
 
   function submit() {
     const trimmed = text.trim();
-    if (!trimmed || sending || !connected || blockedReason) return;
+    if (!trimmed || sending || !connected || blockedReason || view.turnActive) return;
     setSending(true);
     onSubmit(trimmed)
       .then(() => setText(""))
@@ -271,10 +271,10 @@ export function Composer({
 
   const placeholder = !connected
     ? i18n._("Connecting…")
-    : awaiting
-      ? replyPlaceholder(view.pendingQuestionPlayer)
-      : view.turnActive
-        ? i18n._("Sends after this turn…")
+    : view.turnActive
+      ? i18n._("Captain is working…")
+      : awaiting
+        ? replyPlaceholder(view.pendingQuestionPlayer)
         : i18n._("Message the Captain…");
 
   return (
@@ -310,7 +310,7 @@ export function Composer({
             // a language may put the name where it belongs.
             <Rich
               text={i18n._(
-                "<0>{player}</0> is waiting for your reply — your next message answers it.",
+                "<0>{player}</0> is waiting. Answer or ask Captain to explain.",
                 { player: view.pendingQuestionPlayer },
               )}
               components={[
@@ -318,7 +318,7 @@ export function Composer({
               ]}
             />
           ) : (
-            i18n._("Waiting for your reply — your next message answers it.")
+            i18n._("A reply is needed. Answer or ask Captain to explain.")
           )}
         </div>
       ) : null}
@@ -437,7 +437,7 @@ export function Composer({
                 }
               }}
               placeholder={placeholder}
-              disabled={!connected}
+              disabled={!connected || view.turnActive || !!blockedReason}
             />
           }
           caption={
@@ -472,7 +472,7 @@ export function Composer({
                       textareaRef.current?.focus();
                     });
                 }}
-                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason}
+                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason || view.turnActive}
                 className={SECONDARY_CLASS}
               >
                 {i18n._("Add to Up next")}
@@ -491,7 +491,8 @@ export function Composer({
                     // The control leaves with the turn it stops; focus
                     // stays in the conversation, never on <body>
                     // (run-view-50).
-                    textareaRef.current?.focus();
+                    textareaRef.current?.closest('[data-testid="captain-column"]')
+                      ?.querySelector<HTMLElement>('[data-testid="captain-pane"]')?.focus();
                   }}
                   disabled={aborting || !connected}
                   title={!connected ? i18n._("Not connected") : undefined}
@@ -507,22 +508,18 @@ export function Composer({
                 data-testid="send-button"
                 onClick={submit}
                 className={PRIMARY_CLASS}
-                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason}
+                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason || view.turnActive}
                 title={
                   !connected
                     ? i18n._("Not connected")
                     : view.turnActive
-                      ? i18n._("Sends when this turn ends · {keys}", {
-                          keys: sendKeys(),
-                        })
+                      ? i18n._("Captain is working…")
                       : sendKeys()
                 }
               >
                 {sending
                   ? i18n._("Sending…")
-                  : view.turnActive
-                    ? i18n._("Send next")
-                    : i18n._({ id: "Send", comment: "act: send the typed message" })}
+                  : i18n._({ id: "Send", comment: "act: send the typed message" })}
               </button>
             </>
           }

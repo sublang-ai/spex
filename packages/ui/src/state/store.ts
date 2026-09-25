@@ -804,7 +804,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const view = state.views[sessionId];
     const composer = state.composers[sessionId];
     const next = composer?.queued[0];
-    if (!view || view.turnActive || next === undefined) return;
+    if (!view || view.turnActive || view.pendingQuestion !== undefined || next === undefined) return;
     const session = state.sessions.find((s) => s.id === sessionId);
     if (session?.externalWriter || session?.turnActive || session?.recovery) return;
     if (session && !session.live && (cause !== "turn-ended" || !session.continuable)) return;
@@ -1883,24 +1883,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const consumeStaged = () => {
         if (staged) get().clearStagedIntent(sessionId);
       };
-      const enqueue = () => {
-        const composer = get().composers[sessionId] ?? { queued: [] };
-        set({
-          composers: {
-            ...get().composers,
-            [sessionId]: {
-              queued: [
-                ...composer.queued,
-                { text, ...(intentId !== undefined ? { intentId } : {}) },
-              ],
-            },
-          },
-        });
-        consumeStaged();
-      };
       if (session?.live !== false && (session?.turnActive ?? view?.turnActive)) {
-        enqueue();
-        return;
+        throw new Error(i18n._("Captain is working. Wait for the turn to finish."));
       }
       try {
         // The runtime is held only for a turn (DR-051): a message to a
@@ -1916,14 +1900,6 @@ export const useAppStore = create<AppState>((set, get) => {
         consumeStaged();
       } catch (cause) {
         const error = cause as { code?: string; message: string };
-        if (error.code === "busy" && session?.live !== false) {
-          // The view lagged reality (e.g. right after a reconnect):
-          // queueing is what the user meant. An idle session's busy
-          // names the sibling still working instead, and is shown as
-          // said.
-          enqueue();
-          return;
-        }
         setRunError(sessionId, error.message);
         throw cause;
       }

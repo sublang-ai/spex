@@ -5,6 +5,8 @@
 
 ## Status
 
+Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
+
 Accepted.
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
 A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).

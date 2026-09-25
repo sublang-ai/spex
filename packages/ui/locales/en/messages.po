@@ -582,8 +582,8 @@ msgid "<0>{id}</0> — not in the tree"
 msgstr "<0>{id}</0> — not in the tree"
 
 #: src/components/Composer.tsx
-msgid "<0>{player}</0> is waiting for your reply — your next message answers it."
-msgstr "<0>{player}</0> is waiting for your reply — your next message answers it."
+msgid "<0>{player}</0> is waiting. Answer or ask Captain to explain."
+msgstr "<0>{player}</0> is waiting. Answer or ask Captain to explain."
 
 #. a span shorter than one second
 #: src/lib/time.ts
@@ -665,6 +665,10 @@ msgstr "A player is waiting for your reply: {detail}"
 #: src/components/SettingsSurface.tsx
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "A player named {id} already exists — edit it above instead."
+
+#: src/components/Composer.tsx
+msgid "A reply is needed. Answer or ask Captain to explain."
+msgstr "A reply is needed. Answer or ask Captain to explain."
 
 #: src/state/dashboard.ts
 msgid "A session failed"
@@ -1157,6 +1161,14 @@ msgstr "Captain agent"
 #: src/components/CaptainPane.tsx
 msgid "Captain is thinking…"
 msgstr "Captain is thinking…"
+
+#: src/state/store.ts
+msgid "Captain is working. Wait for the turn to finish."
+msgstr "Captain is working. Wait for the turn to finish."
+
+#: src/components/Composer.tsx
+msgid "Captain is working…"
+msgstr "Captain is working…"
 
 #. label before the Captain agent's own chip
 #: src/components/CaptainHome.tsx
@@ -4153,7 +4165,6 @@ msgid "Send a message to pick it up, or drop the run"
 msgstr "Send a message to pick it up, or drop the run"
 
 #. queue this message behind the work in flight
-#: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
 msgid "Send next"
 msgstr "Send next"
@@ -4193,16 +4204,8 @@ msgid "Sends after the reply…"
 msgstr "Sends after the reply…"
 
 #: src/components/Composer.tsx
-msgid "Sends after this turn…"
-msgstr "Sends after this turn…"
-
-#: src/components/Composer.tsx
 msgid "sends when this turn ends"
 msgstr "sends when this turn ends"
-
-#: src/components/Composer.tsx
-msgid "Sends when this turn ends · {keys}"
-msgstr "Sends when this turn ends · {keys}"
 
 #: src/components/CompileBand.tsx
 msgid "sent to the agent"
@@ -5208,10 +5211,6 @@ msgstr "waiting for your queued message"
 #: src/lib/labels.ts
 msgid "waiting for your reply"
 msgstr "waiting for your reply"
-
-#: src/components/Composer.tsx
-msgid "Waiting for your reply — your next message answers it."
-msgstr "Waiting for your reply — your next message answers it."
 
 #. session row: work delivered, a verdict is owed
 #: src/components/NavRail.tsx

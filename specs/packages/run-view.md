@@ -171,14 +171,14 @@ While a session tab is shown, the run view shall present each agent's core-folde
 
 #### run-view-8
 
-The Boss composer shall accept free text and `/`-prefixed command text, be the only input control in the run view, and dispatch or queue each Boss submission by the core's published turn state [[core-service-32](core-service.md#core-service-32)]:
+The Boss composer shall accept free text and `/`-prefixed command text, be the only input control in the run view, and dispatch each Boss submission by the core's published turn state [[core-service-32](core-service.md#core-service-32)]:
 
 - while no turn is active, a submission dispatches without queueing, the primary control reading "Send";
-- while a turn is active, a submission queues with a visible queued indicator until the queued submission is dispatched, the primary control reading "Send next" ([DR-041](../decisions/041-chrome-that-fits.md));
-- when the active turn settles, the queued submission dispatches; a refused submission preserves its queued text and draft with the error shown, and uncertainty holds the queue until explicit recovery [[run-view-110](#run-view-110)];
-- a reply or replayed turn-start record does not establish settlement or current activity; a non-live session has no active turn, including after recovery, and its queued submissions dispatch once its turn has settled — the runtime is held only for a turn [[core-service-91](core-service.md#core-service-91)];
+- while a turn is active, the field and Send are disabled with the draft preserved and Abort available; a late busy rejection preserves the draft instead of queueing it ([DR-085](../decisions/085-boss-talks-through-captain.md));
+- when the active turn settles with no pending question, an already saved queued submission dispatches; a refused submission preserves its queued text and draft with the error shown, and uncertainty holds the queue until explicit recovery [[run-view-110](#run-view-110)];
+- a reply or replayed turn-start record does not establish settlement or current activity; a non-live session has no active turn, including after recovery, and its already saved queued submissions dispatch once its turn has settled without a pending question — the runtime is held only for a turn [[core-service-91](core-service.md#core-service-91)];
 - while a submission is being sent — the runtime opening on the current settings [[core-service-92](core-service.md#core-service-92)], then the turn starting — the primary control reads "Sending…" and stays disabled ([DR-010](../decisions/010-interface-craft.md) §3), and a refusal lands in the composer's frame with the draft kept;
-- the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line — and, while a turn is active, opens by saying the message sends when this turn ends.
+- the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line — and, while a turn is active, says Captain is working.
 
 #### run-view-106
 
@@ -189,17 +189,18 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 | Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
 | Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
-| Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Sends after this turn…" while a turn runs, "Connecting…" without the core |
+| Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Captain is working…" while a turn runs, "Connecting…" without the core |
 | Queued indicator | above the field, the queued submissions [[run-view-8](#run-view-8)] in their own positioned scrolling frame a few entries tall, kept at its end so the newest shows; the composer yields around it, so the field, the caption, and the action row keep their place at any queue length and the pane the composer sits in is never pushed out of the window |
 
 #### run-view-9
 
-While an engagement awaits a Boss reply, the run view shall present the waiting question as a first-class chat moment and route the next Boss submission to it:
+While an engagement awaits one or more Boss replies, the run view shall display Captain's explanation and keep the wait visible until the runtime reports that the questions are gone ([DR-085](../decisions/085-boss-talks-through-captain.md)):
 
-- the Captain thread renders the question as a first-class incoming message bubble naming the asking player (one identity: the player's pane id), replacing — not duplicating — the runtime's status-line narration of the same question;
-- a compact banner above the Boss composer names the waiting player without repeating the question;
-- when the Boss submits, the Boss composer sends the submission as the reply to the waiting question — not as a new Boss prompt — and clears the banner;
-- the question stands until the parked machine itself leaves its park — a state report of any other machine, the Captain's own controller machine included, never clears it.
+- Captain's reply is the question's visible wording; raw question telemetry creates no additional message;
+- a compact banner names the waiting player when exactly one asks and explains that Boss can answer or ask Captain for clarification;
+- every submission goes to Captain through the ordinary Boss input route; a submission or Captain reply never clears the banner;
+- pending questions are read from runtime question data, including lists and keyed parallel questions, without requiring a particular state name; controller state changes alone never clear a question;
+- an already saved queued message never automatically answers a pending question [[run-view-8](#run-view-8)].
 
 ### Turn Control
 
@@ -656,7 +657,7 @@ The app shall fail loudly and stay accessible:
 - one glyph carries one meaning across the app ([DR-010](../decisions/010-interface-craft.md) §8): the gear names the Settings surface, and an in-place editor wears the pencil;
 - color is never the only channel: a player pane's running mark says "running" in text, a tool card's outcome is a mark with its word — ✓ ok, ✗ failed, ✗ denied — and a failure count and a tab's attention dot each carry their meaning in text;
 - a box the reader can scroll that holds nothing focusable of its own takes the keyboard stop itself, with an accessible name for what it holds, so what a pointer can reach the keyboard reaches too;
-- no action strands focus on the document body: ending a session lands focus on the session's tab, backing out of the end confirm returns it to the end control, and aborting a turn keeps it in the composer.
+- no action strands focus on the document body: ending a session lands focus on the session's tab, backing out of the end confirm returns it to the end control, and aborting a turn keeps it in the Captain pane until input becomes available.
 
 #### run-view-51
 
@@ -764,7 +765,7 @@ When the workspace opens a session from an attention entry [[dashboard-1](dashbo
 While the working line names an open intent [[run-view-90](#run-view-90)], the run view shall offer Drop on the line, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped over the protocol while the turn keeps running ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the outcome — the drop, or the refusal with its reason — announces in a status line where the working line stood, lasting six seconds;
-- Keep returns focus to the control; a drop hands it to the composer once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6).
+- Keep returns focus to the control; a drop hands it to the enabled composer, or to its outcome notice while input is disabled, once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6).
 
 #### run-view-114
 
@@ -898,8 +899,8 @@ Where a fixture stream contains records marked hidden (judge or router traffic),
 
 Where a replayed fixture stream ends in an await-Boss-reply state carrying a player question, the test suite shall assert the await-reply round trip:
 
-- the question appears above the Boss composer and inside the asking player's pane [[run-view-9](#run-view-9)];
-- when text is then submitted in the composer, the submission is sent over the protocol as the reply to the waiting question — not as a new Boss prompt — and the question display clears [[run-view-9](#run-view-9)].
+- Captain's explanation appears above the Boss composer, without requiring the player pane [[run-view-9](#run-view-9)];
+- a clarification goes to Captain and leaves the question waiting; a later answer goes through Captain and clears the wait only when the runtime reports its departure [[run-view-9](#run-view-9)].
 
 #### run-view-23
 
@@ -907,10 +908,7 @@ While a replayed fixture stream holds a turn active, when the abort control is a
 
 #### run-view-24
 
-While a replayed fixture stream holds a turn active, the test suite shall assert the queue-and-release flow:
-
-- when text is submitted in the Boss composer, the submission is queued with a visible queued indicator and no Boss prompt is dispatched over the protocol [[run-view-8](#run-view-8)];
-- when the turn-finished record is then delivered, the queued submission is dispatched and the indicator clears [[run-view-8](#run-view-8)].
+While a replayed fixture stream holds a turn active, the test suite shall assert disabled input, preserved drafts, refusal without queueing on a stale busy view, and re-enabled input after settlement, including a question that arrives before settlement [[run-view-8](#run-view-8)].
 
 #### run-view-29
 
@@ -939,7 +937,7 @@ Where a fixture holds one history-only session with a stored transcript and one 
 
 #### run-view-52
 
-When the awaitBossReply fixture stream is replayed, the test suite shall assert the question renders as one incoming bubble naming the asking player by its pane id, that no status-line duplicate of the question survives — in either arrival order of the narration and the telemetry — and that the banner names the player without repeating the question [[run-view-9](#run-view-9)].
+When the awaitBossReply fixture stream is replayed, the test suite shall assert the question renders as one incoming Captain bubble from Captain reply records, that question telemetry creates no raw duplicate, and that the banner names the player without repeating the question [[run-view-9](#run-view-9)].
 
 #### run-view-80
 
@@ -1025,7 +1023,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 - the bound turn's bubble wears the intent's source chip, and a trailing line repeating the source's URL leaves the bubble [[run-view-89](#run-view-89)];
 - while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
-- Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the composer; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
+- Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the enabled composer or the outcome notice while busy; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
 - the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];
 - while a clean-settlement successor runs, the earlier card retains Confirm and Drop, loses its follow-up note, and confirming it neither starts another turn nor changes the successor's attribution [[run-view-87](#run-view-87)];
 - giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent carrying `Queued` and its published scheduling phrase, with Start only in a manual-ready fixture and its accessible name identifying that intent [[run-view-87](#run-view-87)];
@@ -1103,12 +1101,12 @@ Where the harness boots the served shell with the demo project registered and th
 - a session tab opens titled by the task and the sidebar row reads the same title [[run-view-48](#run-view-48)] [[run-view-73](#run-view-73)];
 - the Captain pane shows the run's status lines and a machine card for the code run with its review call nested [[run-view-1](#run-view-1)] [[run-view-60](#run-view-60)] [[run-view-63](#run-view-63)];
 - one pane per roster player stands, the coder's streaming text and collapsed tool cards, then its usage [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)] [[run-view-4](#run-view-4)] [[run-view-6](#run-view-6)];
-- a message sent during the turn reads queued, never sent, and goes out when the turn ends [[run-view-38](#run-view-38)];
+- the composer refuses input while work runs, then accepts a follow-up after settlement [[run-view-8](#run-view-8)];
 - the turn settling leaves the composer ready with no end control and no ended word, the sidebar row reading idle [[run-view-69](#run-view-69)] [[run-view-73](#run-view-73)].
 
 #### run-view-99
 
-Where the harness boots with the demo project registered, when the journey sends a prompt the scripted Captain parks on a player question, the test suite shall assert the reply round trip through the page: the question renders as an incoming bubble naming the player with the composer inviting the answer [[run-view-9](#run-view-9)], the state chip reads waiting in amber [[run-view-59](#run-view-59)], and the reply goes out as the next turn, after which the chip settles [[run-view-9](#run-view-9)].
+Where the harness boots with the demo project registered, when the journey sends a prompt the scripted Captain parks on a player question, the test suite shall assert the reply round trip through the page: the question renders as an incoming Captain bubble naming the player, with the composer inviting an answer or clarification [[run-view-9](#run-view-9)], the state chip reads waiting in amber [[run-view-59](#run-view-59)], and the reply goes out as the next turn, after which the chip settles [[run-view-9](#run-view-9)].
 
 #### run-view-100
 
@@ -1140,7 +1138,7 @@ Where the live lane runs with the machine's signed-in agents ([DR-039](../decisi
 
 #### run-view-115
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the composer [[run-view-113](#run-view-113)].
+Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)].
 
 #### run-view-118
 
@@ -1171,7 +1169,7 @@ Where the harness boots with the demo project registered and carrying closed wor
 - as the measured player pane narrows, its resting active-time phrase yields at a wider measured pane width than its live elapsed reading, each is visible in the roomy pane and has yielded at the pane floor, and agent identity and header controls remain without overlap throughout [[run-view-7](#run-view-7)] [[run-view-143](#run-view-143)]; every yielded active-time reading remains in the pane's accessible description [[run-view-143](#run-view-143)];
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
-- a composer standing behind six queued submissions keeps its frame a few entries tall and its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
+- a disabled composer during a long turn keeps its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
 - an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it with its fields reachable and the page unmoved [[run-view-138](#run-view-138)].
 
 #### run-view-146

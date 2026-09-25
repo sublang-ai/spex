@@ -110,6 +110,7 @@ meta.md       The spec of specs
 | [DR-082](decisions/082-the-first-move-in-a-draft-is-an-act.md) | 082-the-first-move-in-a-draft-is-an-act.md | The first move in a draft is an act: two openers on the empty conversation, a SKILL.md brought in as the source, the example placed as the first message, the preamble taught what a skill is; amends DR-058 |
 | [DR-083](decisions/083-a-finished-operations-words-keep-their-language.md) | 083-a-finished-operations-words-keep-their-language.md | A finished operation's words keep their language: load-time diagnostics and Space stops until the operation runs again, the start speaking the stored choice first, a page re-reading on any change of the choice and keeping its state; amends DR-079 |
 | [DR-084](decisions/084-the-block-is-the-whole-compiler-agent.md) | 084-the-block-is-the-whole-compiler-agent.md | The block is the whole compiler agent: `--config` names an empty configuration when the block drives the compile, so what it leaves unset is the adapter's default; amends DR-081 |
+| [DR-085](decisions/085-boss-talks-through-captain.md) | 085-boss-talks-through-captain.md | Captain owns question wording; Boss sends only between turns |
 
 ## Packages
 

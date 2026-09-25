@@ -401,10 +401,10 @@ describe("RUN-20: hidden records never appear", () => {
 });
 
 describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
-  test("the question renders as an incoming bubble from the player", () => {
+  test("the question renders as Captain speech", () => {
     renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
     const bubble = screen.getByTestId("question-bubble");
-    expect(bubble.textContent).toContain("dev.reviewer");
+    expect(bubble.textContent).toContain("Captain");
     expect(bubble.textContent).toContain(
       "Which auth flow should I prioritize?",
     );
@@ -419,7 +419,7 @@ describe("RUN-21: awaitBossReply as a first-class chat moment", () => {
     renderRun([...TURN_ONE, ...TURN_TWO_QUESTION]);
     const banner = screen.getByTestId("boss-reply-banner");
     expect(banner.textContent).toContain(
-      "dev.reviewer is waiting for your reply",
+      "dev.reviewer is waiting. Answer or ask Captain to explain.",
     );
   });
 
@@ -1629,7 +1629,7 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
     const note = screen.getByTestId("working-note");
     expect(note.getAttribute("role")).toBe("status");
     expect(note.textContent).toContain("Dropped “Address #7: fix the login bug”");
-    expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
+    expect(document.activeElement).toBe(note);
     setClientForTests(undefined);
   });
 
@@ -2157,19 +2157,19 @@ describe("run-view-8/38: the composer says what a send does mid-turn", () => {
     );
     // The busy form stays within the label budget (DR-041); the
     // sentence rides the tooltip ahead of the keys.
-    const send = screen.getByRole("button", { name: "Send next" });
+    const send = screen.getByRole("button", { name: "Send" });
     expect(send.title).toBe(
-      "Sends when this turn ends · Enter to send · Shift+Enter for a new line",
+      "Captain is working…",
     );
     expect(
       screen.getByTestId("boss-composer").getAttribute("placeholder"),
-    ).toBe("Sends after this turn…");
+    ).toBe("Captain is working…");
     expect(screen.getByTestId("queue-indicator").textContent).toContain(
       "sends when this turn ends",
     );
     // Abort stands beside the primary in the action row, which wraps.
     const row = screen.getByTestId("abort-button").parentElement!;
-    expect(row.textContent).toBe("AbortSend next");
+    expect(row.textContent).toBe("AbortSend");
     expect(row.parentElement?.className).toContain("flex-wrap");
     // The remove control is a real hit target (run-view-50).
     const remove = screen.getByRole("button", {
@@ -2205,7 +2205,7 @@ describe("run-view-8/38: the composer says what a send does mid-turn", () => {
     render(
       <RunView
         session={SESSION}
-        view={{ ...view, pendingQuestion: "Migrate?", pendingQuestionPlayer: "coder" }}
+        view={{ ...view, turnActive: false, pendingQuestion: "Migrate?", pendingQuestionPlayer: "coder" }}
         composer={{ queued: [] }}
         connected
         onSubmit={async () => {}}
@@ -2490,12 +2490,12 @@ describe("run-view-83/87: links leave the page, never replace it", () => {
 });
 
 describe("run-view-50: focus is never stranded", () => {
-  test("abort keeps focus in the composer", () => {
+  test("abort keeps focus in the Captain pane", () => {
     renderRun(TURN_ONLY_STARTED);
     const abort = screen.getByTestId("abort-button");
     abort.focus();
     fireEvent.click(abort);
-    expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
+    expect(document.activeElement).toBe(screen.getByTestId("captain-pane"));
   });
 
 });
@@ -2807,7 +2807,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
       expect(command).not.toHaveBeenCalled();
       expect(useAppStore.getState().views.s1.turnActive).toBe(true);
       expect(screen.getByTestId("working-indicator")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Send next" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
       act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, live: false, recovery: { state: "uncertain", input: "saved" } } }));
       expect(command).not.toHaveBeenCalled();
       expect(useAppStore.getState().composers.s1.queued).toHaveLength(1);
@@ -3777,5 +3777,45 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     expect(within(editor).queryByTestId("agent-save-dev.coder")).toBeNull();
     useAppStore.setState(previous, true);
     setClientForTests(undefined);
+  });
+});
+
+
+describe("Captain conversation between turns", () => {
+  test("busy input stays unavailable until settlement, including an early question", () => {
+    const onSubmit = vi.fn(async () => {});
+    const active = { ...initialSessionView(PLAYERS), turnActive: true,
+      pendingQuestion: "Which option?", pendingQuestionPlayer: "coder" };
+    const props = { session: SESSION, view: active, composer: { queued: [], draft: "Please explain" },
+      connected: true, onDraftChange: vi.fn(), onSubmit, onAbort: vi.fn(),
+      onRemoveQueued: vi.fn(), onDismissError: vi.fn() };
+    const rendered = render(<RunView {...props} />);
+    const field = screen.getByTestId("boss-composer") as HTMLTextAreaElement;
+    expect(field.disabled).toBe(true);
+    expect(field.value).toBe("Please explain");
+    expect((screen.getByTestId("send-button") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.click(screen.getByTestId("send-button"));
+    expect(onSubmit).not.toHaveBeenCalled();
+    rendered.rerender(<RunView {...props} view={{ ...active, turnActive: false }} />);
+    expect(field.disabled).toBe(false);
+    expect(field.value).toBe("Please explain");
+    expect(screen.getByTestId("boss-reply-banner").textContent).toContain("ask Captain to explain");
+    fireEvent.click(screen.getByTestId("send-button"));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith("Please explain");
+    expect(screen.getByTestId("boss-reply-banner")).toBeTruthy();
+  });
+
+  test.each(["known", "late"])("a %s busy refusal preserves the draft without queueing it", async (kind) => {
+    const command = vi.fn(async () => { throw { code: "busy", message: "Captain is working." }; });
+    setClientForTests({ command } as never);
+    useAppStore.setState({ sessions: [{ ...SESSION, live: true, turnActive: kind === "known" }],
+      views: { s1: initialSessionView(PLAYERS) },
+      composers: { s1: { queued: [], draft: "Do not lose this" } }, stagedIntents: {} });
+    try {
+      await expect(useAppStore.getState().submitBossText("s1", "Do not lose this")).rejects.toBeDefined();
+      expect(useAppStore.getState().composers.s1).toEqual({ queued: [], draft: "Do not lose this" });
+      expect(command).toHaveBeenCalledTimes(kind === "known" ? 0 : 1);
+    } finally { setClientForTests(undefined); }
   });
 });

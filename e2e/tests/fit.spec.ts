@@ -1201,29 +1201,16 @@ test.describe("chrome the sweep does not open", () => {
       }
     }
 
-    // (ii) A queue standing behind a long turn, measured at every
-    // width and height (run-view-106).
+    // (ii) Disabled input during a long turn, measured at every size.
     await page.setViewportSize({ width: 1280, height: TALL });
     await send(page, TASK);
     await expect(page.getByTestId("abort-button")).toBeVisible();
-    const queue = page.getByTestId("queue-indicator");
-    const field = page.getByTestId("boss-composer");
-    for (let index = 1; index <= 6; index += 1) {
-      await field.fill(`Queued ${index}: ${TASK}`);
-      await page.getByRole("button", { name: "Send next", exact: true }).click();
-      await expect(queue).toContainText(`Queued ${index}:`);
-    }
+    await expect(page.getByTestId("boss-composer")).toBeDisabled();
+    await expect(page.getByTestId("send-button")).toBeDisabled();
     for (const width of WIDTHS) {
       for (const height of HEIGHTS) {
         await page.setViewportSize({ width, height });
-        const where = `queue · ${width}×${height}`;
-        // The frame stays a few entries tall however much is queued;
-        // in a window too short for the composer alone it yields the
-        // rest of the way, which is the ladder, not a defect.
-        const frame = await queue.boundingBox();
-        if (frame && frame.height > 200) {
-          defects.push(`${where}: the queue frame is ${Math.round(frame.height)} tall`);
-        }
+        const where = `busy composer · ${width}×${height}`;
         const primary = (await page.getByTestId("send-button").boundingBox())!;
         if (primary.y + primary.height > height + 1) {
           defects.push(

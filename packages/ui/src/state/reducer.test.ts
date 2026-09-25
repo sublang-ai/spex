@@ -84,12 +84,12 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
     expect(view.pendingQuestionPlayer).toBe("dev.reviewer");
   });
 
-  test("the question becomes a bubble, replacing its status echo", () => {
+  test("Captain supplies the question bubble while telemetry only keeps the wait", () => {
     const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
     const questions = view.captain.filter((line) => line.kind === "question");
     expect(questions).toHaveLength(1);
     expect(questions[0].text).toBe("Which auth flow should I prioritize?");
-    expect(questions[0].player).toBe("dev.reviewer");
+    expect(questions[0].player).toBe("Captain");
     // The "◆ … asks:" status narration is replaced, not duplicated.
     expect(
       view.captain.some(
@@ -561,4 +561,34 @@ describe("run-view-9: a parked question outlives other machines' reports", () =>
     ] as never);
     expect(view.pendingQuestion).toBeUndefined();
   });
+});
+
+
+test.each(["list", "keyed"])("%s parallel questions survive Captain clarification until the runtime clears each one", (shape) => {
+  const view = fresh();
+  let seq = 0;
+  const emit = (record: Record<string, unknown>) => applyRecords(view, [{ seq: ++seq, record: { timestamp: seq, turnId: 1, ...record } as unknown as TmuxPlayRecord }]);
+  const question = (roleId: string, text: string) => ({ questionId: roleId, asker: { kind: "role", roleId }, question: text });
+  const a = question("coder", "RAW: choose the execution topology");
+  const b = question("reviewer", "RAW: select a retention horizon");
+  emit({ type: "captain_telemetry", topic: "playbook.fsm.state", payload: { state: { value: { proposals: { coder: "waiting", reviewer: "waiting" } } }, pendingBossQuestions: shape === "list" ? [a, b] : { coder: a, reviewer: b } } });
+  expect(view.pendingQuestion).toBe(a.question);
+  expect(view.pendingQuestionPlayer).toBeUndefined();
+  expect(view.captain).toHaveLength(0);
+  emit({ type: "captain_reply", text: "Coder asks where to run it. Reviewer asks how long to keep the data." });
+  emit({ type: "turn_finished" });
+  expect(view.captain.at(-1)?.kind).toBe("question");
+  expect(view.captain.at(-1)?.player).toBe("Captain");
+  expect(view.captain.some(line => line.text.includes("RAW:"))).toBe(false);
+  emit({ type: "turn_started", turn: { id: 2, prompt: "Captain, explain the choices" } });
+  emit({ type: "captain_telemetry", topic: "playbook.captain.fsm.state", payload: { from: "deciding", to: "hub" } });
+  emit({ type: "captain_reply", text: "Location and retention are separate choices." });
+  emit({ type: "turn_finished" });
+  expect(view.pendingQuestion).toBe(a.question);
+  expect(view.turnActive).toBe(false);
+  emit({ type: "captain_telemetry", topic: "playbook.fsm.state", payload: { pendingBossQuestions: [b] } });
+  expect(view.pendingQuestion).toBe(b.question);
+  expect(view.pendingQuestionPlayer).toBe("reviewer");
+  emit({ type: "captain_telemetry", topic: "playbook.fsm.state", payload: { pendingBossQuestions: [] } });
+  expect(view.pendingQuestion).toBeUndefined();
 });

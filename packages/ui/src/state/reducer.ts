@@ -230,13 +230,14 @@ export function parseBossQuestion(
 ): { question: string; player?: string } | undefined {
   if (typeof value === "string") return { question: value };
   if (typeof value === "object" && value !== null) {
-    const shaped = value as { player?: unknown; question?: unknown };
+    const shaped = value as { player?: unknown; question?: unknown; asker?: { kind?: string; roleId?: string } };
     const question =
       typeof shaped.question === "string" ? shaped.question : undefined;
     if (question === undefined) return undefined;
-    return typeof shaped.player === "string"
-      ? { question, player: shaped.player }
-      : { question };
+    const player = shaped.asker?.kind === "captain" ? "Captain"
+      : shaped.asker?.kind === "role" && typeof shaped.asker.roleId === "string" ? shaped.asker.roleId
+      : typeof shaped.player === "string" ? shaped.player : undefined;
+    return { question, ...(player === undefined ? {} : { player }) };
   }
   return undefined;
 }
@@ -492,7 +493,8 @@ export function applyRecord(
       const text = String((r as { text?: unknown }).text ?? "");
       if (text) {
         pushCaptain(view, {
-          kind: "speech",
+          kind: view.pendingQuestion === undefined ? "speech" : "question",
+          ...(view.pendingQuestion === undefined ? {} : { player: "Captain" }),
           text,
           turnId: r.turnId,
           at: r.timestamp,
@@ -532,6 +534,7 @@ export function applyRecord(
     }
     case "captain_status": {
       const message = String(r.message);
+      if ((r.data as { kind?: string } | undefined)?.kind === "boss-question") break;
       // While a machine frame is open, the run's progress is drawn,
       // not narrated: the card absorbs it (run-view-60). Only the ◇
       // engagement and ◆ failure vocabularies stay in the thread
@@ -564,7 +567,7 @@ export function applyRecord(
     }
     case "captain_telemetry": {
       const topic = String(r.topic);
-      const payload = r.payload as { from?: unknown; to?: unknown; state?: unknown; pendingBossQuestion?: unknown; };
+      const payload = r.payload as { from?: unknown; to?: unknown; state?: unknown; pendingBossQuestion?: unknown; pendingBossQuestions?: unknown; };
       // The playbook 2.0 shell reports states as rich objects
       // ({stateId, value, tags, …}); the fake harness and older
       // playbooks report bare strings. Accept both — never hand a
@@ -580,33 +583,16 @@ export function applyRecord(
       };
       if (topic === "playbook.fsm.state") {
         view.fsmState = stateText(payload?.to) ?? stateText(payload?.state);
-        if (view.fsmState === "awaitBossReply") {
-          const parsed = parseBossQuestion(payload?.pendingBossQuestion);
-          view.pendingQuestion = parsed?.question ?? view.pendingQuestion ?? "";
-          view.pendingQuestionPlayer = resolvePlayerId(view, parsed?.player);
-          if (parsed) {
-            // The status narration of the same question may have
-            // landed just before this record: replace it with the
-            // first-class question bubble.
-            for (let i = view.captain.length - 1; i >= 0; i -= 1) {
-              const line = view.captain[i];
-              if (line.kind === "boss") break;
-              if (
-                line.kind === "status" &&
-                line.text.includes(parsed.question)
-              ) {
-                view.captain.splice(i, 1);
-                break;
-              }
-            }
-            pushCaptain(view, {
-              kind: "question",
-              text: parsed.question,
-              player: view.pendingQuestionPlayer,
-              turnId: r.turnId,
-              at: r.timestamp,
-            });
-          }
+        const questions = payload?.pendingBossQuestions;
+        const hasQuestions = payload != null &&
+          (Object.hasOwn(payload, "pendingBossQuestions") || Object.hasOwn(payload, "pendingBossQuestion"));
+        if (hasQuestions || view.fsmState === "awaitBossReply") {
+          const list = Array.isArray(questions) ? questions
+            : questions && typeof questions === "object" ? Object.values(questions)
+            : [payload?.pendingBossQuestion];
+          const parsed = list.map(parseBossQuestion).filter((question) => question !== undefined);
+          view.pendingQuestion = parsed[0]?.question ?? (hasQuestions ? undefined : "");
+          view.pendingQuestionPlayer = parsed.length === 1 ? resolvePlayerId(view, parsed[0]?.player) : undefined;
         } else if (stateText(payload?.from) === "awaitBossReply") {
           // Only the parked machine leaving its park answers the
           // question; the Captain's own machine reports its states

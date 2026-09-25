@@ -258,6 +258,19 @@ export function demoScript(options: { delayMs?: number } = {}): FakeScript {
   const delay = options.delayMs ?? 1;
   return {
     rules: [
+      // The fixture narrates work, but the real session Captain still owns
+      // its single reply and durable settlement (core-service-91).
+      { match: /Select exactly one action[\s\S]*\[Boss message\]\nCaptain, explain/, response: {
+        result: JSON.stringify({ action: "respond", text: "Coder needs to know whether the old sessions should also be migrated. The question is still open." }),
+      } },
+      { match: /Select exactly one action[\s\S]*\[Boss message\]\nask before migrating/, response: {
+        result: JSON.stringify({ action: "respond", text: "Coder asks: Should I also migrate the legacy sessions?" }),
+      } },
+      { match: "Select exactly one action from the closed set", response: {
+        result: JSON.stringify({ action: "respond", text: "Done — the requested change is ready." }),
+      } },
+      { match: "An action just settled for the current Boss turn", response: { result: "Done — the requested change is ready." } },
+
       {
         match: "route:",
         response: { result: '{"decision":"dispatch"}' },
@@ -385,6 +398,10 @@ export function demoCaptain(
     });
   };
   return createScriptedCaptain(async (turn, context, session) => {
+    if (isParked() && turn.prompt.startsWith("Captain, explain")) {
+      await context.emitReply("Coder needs to know whether the old sessions should also be migrated. The question is still open.");
+      return;
+    }
     if (isParked() && !turn.prompt.toLowerCase().startsWith("ask")) {
       setParked(false);
       await askTrace(session, "awaitBossReply", "coding", "BOSS_REPLY", [
@@ -397,9 +414,6 @@ export function demoCaptain(
     }
     if (turn.prompt.toLowerCase().startsWith("ask")) {
       setParked(true);
-      await session.emitStatus(
-        "◆ code-coder asks: Should I also migrate the legacy sessions?",
-      );
       await askTrace(session, "coding", "awaitBossReply", "NEEDS_BOSS", [
         "playbook.parked",
       ]);
@@ -416,6 +430,7 @@ export function demoCaptain(
           },
         },
       });
+      await context.emitReply("Coder asks: Should I also migrate the legacy sessions?");
       return;
     }
     // A recovery turn walks the parked run out of `failed`; anything

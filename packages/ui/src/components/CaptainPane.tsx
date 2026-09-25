@@ -461,6 +461,7 @@ export function CaptainPane({
   return (
     <section
       data-testid="captain-pane"
+      tabIndex={-1}
       className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       <header

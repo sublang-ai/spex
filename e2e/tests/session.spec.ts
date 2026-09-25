@@ -27,7 +27,7 @@ test("server-shell-21: the token URL connects, scrubs, and reloads", async ({
   await expect(page.getByText(/not ready|aren't ready/i)).toHaveCount(0);
 });
 
-test("run-view-98: the first task runs, queues, and ends", async ({ page, app }) => {
+test("run-view-98: the first task runs, settles, and accepts a follow-up", async ({ page, app }) => {
   await open(page, app);
   const home = page.getByTestId("captain-home");
   await expect(home).toContainText("demo-project");
@@ -55,24 +55,20 @@ test("run-view-98: the first task runs, queues, and ends", async ({ page, app })
   await expect(coder).toContainText(/editing/i);
   await expect(coder).toContainText(/Edit|Read/);
 
-  // A message during the turn queues — never reads as sent — and
-  // goes out when the turn ends.
+  // Input is unavailable while work runs, then the same composer accepts a follow-up.
   const box = page.getByTestId("boss-composer");
-  await expect(box).toHaveAttribute("placeholder", /sends after this turn/i);
-  await box.fill("Also add a test for expiry skew");
-  await page.getByRole("button", { name: "Send next", exact: true }).click();
-  await expect(page.getByTestId("queue-indicator")).toBeVisible();
-  await expect(page.getByTestId("queue-indicator")).toContainText(/expiry skew/i);
-  await expect(page.getByTestId("queue-indicator")).toContainText(
-    "sends when this turn ends",
-  );
-  await expect(captain).toContainText("/code finished");
-  await expect(captain).toContainText(/review/i);
-  await expect(coder).toContainText(/\$0\.12|2,?400/);
-  // The queued message became the next turn.
-  await expect(captain.getByTestId("boss-bubble").filter({ hasText: /expiry skew/i })).toBeVisible();
+  await expect(box).toHaveAttribute("placeholder", "Captain is working…");
+  await expect(box).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
   await expect(captain).toContainText("/code finished");
+  await expect(box).toBeEnabled();
+  await box.fill("Also add a test for expiry skew");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(captain.getByTestId("boss-bubble").filter({ hasText: /expiry skew/i })).toBeVisible();
+  await expect(box).toBeEnabled();
+  await expect(captain).toContainText(/review/i);
+  await expect(coder).toContainText(/\$0\.12|2,?400/);
 
   // Text shelved instead of sent (run-view-85): the control and its
   // note name where it went, and the Overview's Up next holds it.
@@ -120,6 +116,11 @@ test("run-view-99: a player question parks the session until the Boss replies", 
   await expect(box).toBeEnabled();
   await expect(page.getByTestId("session-external-owner")).toHaveCount(0);
 
+  await box.fill("Captain, explain the question. I am not answering yet.");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByTestId("captain-pane")).toContainText("The question is still open.");
+  await expect(box).toBeEnabled();
+  await expect(page.getByTestId("boss-reply-banner")).toBeVisible();
   await box.fill("Yes, migrate them too");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const captain = page.getByTestId("captain-pane");
@@ -247,10 +248,10 @@ test("run-view-121: showing the sidebar keeps the draft whole and the thread at 
 // used to push the transcript to two pixels and carry the composer out
 // of the window with the page growing behind it. The turn is long
 // enough that every message queues.
-test.describe("a turn long enough to queue behind", () => {
+test.describe("a long active turn", () => {
   test.use({ appOptions: { project: true, agentDelayMs: 120_000 } });
 
-  test("run-view-106: a long queue keeps the composer in the window", async ({
+  test("run-view-106: disabled input stays in the window during a long turn", async ({
     page,
     app,
   }) => {
@@ -260,25 +261,9 @@ test.describe("a turn long enough to queue behind", () => {
     await send(page, "/code add a hello world function");
     await expect(page.getByTestId("abort-button")).toBeVisible();
 
-    const queue = page.getByTestId("queue-indicator");
-    const box = page.getByTestId("boss-composer");
-    for (let index = 1; index <= 6; index += 1) {
-      await box.fill(
-        `Queued ${index}: also update the readme, the changelog, and the migration notes so the next reader knows why`,
-      );
-      await page.getByRole("button", { name: "Send next", exact: true }).click();
-      await expect(queue).toContainText(`Queued ${index}:`);
-    }
-
-    // The queue is a frame a few entries tall, showing its end.
-    const frame = (await queue.boundingBox())!;
-    expect(frame.height).toBeLessThanOrEqual(200);
-    const newest = (await queue
-      .locator("> div")
-      .last()
-      .boundingBox())!;
-    expect(newest.y).toBeGreaterThanOrEqual(frame.y - 1);
-    expect(newest.y + newest.height).toBeLessThanOrEqual(frame.y + frame.height + 1);
+    await expect(page.getByTestId("boss-composer")).toBeDisabled();
+    await expect(page.getByTestId("send-button")).toBeDisabled();
+    await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
 
     // The transcript keeps a readable share, and the action row is
     // still in the window with the page unmoved (DR-041 §9).

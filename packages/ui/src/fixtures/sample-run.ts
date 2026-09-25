@@ -311,12 +311,6 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
     },
   }),
   rec(23, {
-    type: "captain_status",
-    turnId: 2,
-    timestamp: t + 23,
-    message: "◆ dev.reviewer asks: Which auth flow should I prioritize?",
-  }),
-  rec(24, {
     type: "captain_telemetry",
     turnId: 2,
     timestamp: t + 24,
@@ -332,6 +326,7 @@ export const TURN_TWO_QUESTION: FixtureEntry[] = [
       },
     },
   }),
+  rec(24, { type: "captain_reply", turnId: 2, timestamp: t + 24, text: "Which auth flow should I prioritize?" }),
   rec(25, { type: "turn_finished", turnId: 2, timestamp: t + 25 }),
 ];
 
@@ -695,12 +690,6 @@ export const MACHINE_ASKED: FixtureEntry[] = [
   trace(735, 20_010, "t-ask", "code", "fsm.transition",
     moved("runFirstPhase", "awaitBossReply", "NEEDS_BOSS", "active", ["playbook.parked"])),
   rec(736, {
-    type: "captain_status",
-    turnId: 20,
-    timestamp: 20_011,
-    message: "◆ code-coder asks: Should I also migrate the legacy sessions?",
-  }),
-  rec(737, {
     type: "captain_telemetry",
     turnId: 20,
     timestamp: 20_012,
@@ -716,6 +705,7 @@ export const MACHINE_ASKED: FixtureEntry[] = [
       },
     },
   }),
+  rec(737, { type: "captain_reply", turnId: 20, timestamp: 20_012, text: "Should I also migrate the legacy sessions?" }),
   rec(738, { type: "turn_finished", turnId: 20, timestamp: 20_013 }),
 ];
 

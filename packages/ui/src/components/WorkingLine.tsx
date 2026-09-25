@@ -53,10 +53,9 @@ export function WorkingLine({
     }
     // The line left with its control: the composer below is the next
     // sensible place (DR-010 §6).
-    noteRef.current
-      ?.closest('[data-testid="captain-column"]')
-      ?.querySelector("textarea")
-      ?.focus();
+    const field = noteRef.current?.closest('[data-testid="captain-column"]')?.querySelector("textarea");
+    if (field && !field.disabled) field.focus();
+    else noteRef.current?.focus();
   }, [refocus, confirming]);
   useEffect(
     () => () => {
@@ -148,6 +147,7 @@ export function WorkingLine({
       {note ? (
         <div
           ref={noteRef}
+          tabIndex={-1}
           role="status"
           data-testid="working-note"
           className={`rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900 ${
