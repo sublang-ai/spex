@@ -179,6 +179,7 @@ While a draft is idle and has a source, when the Boss activates Compile or the a
 While a draft's compile is running, when a phase fails or the compiler asks for clarification [[playbook-library-9](#playbook-library-9)], the Library shall mark that phase failed in the band with its captured output — or the questions with their reasons, evidence, and choices — opened beneath, set the chip "Failed", and show in the thread what the agent was told [[playbook-library-68](#playbook-library-68)]:
 
 - the system line reads "Compile failed at ⟨phase⟩ — sent to the agent", or "Compile failed at ⟨phase⟩ — three in a row; tell the agent how to proceed" when the relay stopped, or "Compile failed at ⟨phase⟩ — waiting for your queued message" when a Boss message carries the output instead — ⟨phase⟩ in the row's human words [[playbook-library-57](#playbook-library-57)];
+- the band's caption names the same disposition — sent to the agent, three in a row, waiting for the queued message — read from the compile record the draft publishes [[playbook-library-70](#playbook-library-70)], never from the line's words;
 - a compile the Boss canceled reads "Compile canceled" and sends nothing;
 - a failure before the compiler ran — the toolchain — shows its guidance in the band and sends nothing;
 - Gears and Machine keep the last successful compile's artifacts, captioned "from the last good compile".
@@ -333,7 +334,9 @@ When a compile is started for playbook id `<id>`, the compile runner shall run `
 
 #### playbook-library-42
 
-When a compile is started, the compile runner shall hand `slc` the block the compile's agent is resolved from — the draft's answering agent for a draft compile [[playbook-library-64](#playbook-library-64)], the Captain's block for a compile from the registry form — as `SLC_AGENT` (`claude` as `claude-code`; `codex`, `gemini` and `opencode` as named), with `SLC_MODEL`, `SLC_EFFORT` and `SLC_FAST_MODE` where the block sets them, unless the environment sets any of those four variables, in which case the runner sets none of them ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)):
+When a compile is started, the compile runner shall hand `slc` the block the compile's agent is resolved from — the draft's answering agent for a draft compile [[playbook-library-64](#playbook-library-64)], the Captain's block for a compile from the registry form — as `SLC_AGENT` (`claude` as `claude-code`; `codex`, `gemini` and `opencode` as named), with `SLC_MODEL`, `SLC_EFFORT` and `SLC_FAST_MODE` where the block sets them and `--config` naming an empty configuration the core ships, so nothing `slc` would discover fills what the block leaves unset, unless the environment sets any of those four variables, in which case the runner sets none of them and names no configuration ([DR-081](../decisions/081-the-app-supplies-the-compiler.md), [DR-084](../decisions/084-the-block-is-the-whole-compiler-agent.md)):
+
+- a model, an effort or fast mode the block leaves unset stays unset for `slc`, which applies the adapter's own default;
 
 - an adapter `slc` does not drive (`kimi`), with none of those variables in the environment, refuses the compile before the compiler runs, the guidance naming the adapters `slc` drives and `SLC_AGENT`;
 - fast mode travels as the literal `true` or `false` the block holds;
@@ -475,7 +478,7 @@ When a draft is created, opened, written, recorded, listed, retired, or deleted,
 | create | make `<library-root>/<id>/` and `local/drafts/<id>/draft.json`; refuse an id a configured playbook, a built-in, or a draft holds |
 | open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
 | write source | replace `<id>.md` atomically under the token; refused while a turn or compile runs |
-| record | append each record as it is streamed; keep the compile outcome, the queue, the failure count, and the proposal in `draft.json`; a compile running at core start is rewritten as interrupted |
+| record | append each record as it is streamed; keep the compile outcome — with what became of a failure: relayed, stopped, or carried by a queued message — the queue, the failure count, and the proposal in `draft.json`; a compile running at core start is rewritten as interrupted |
 | list | every `draft.json` under `local/drafts/`, with the source's first line and "source missing" when the directory is gone |
 | retire | remove the record and the preference, leaving the directory to the registered playbook |
 | delete | remove the record, the preference, and the library directory |
@@ -512,7 +515,7 @@ Where the desktop's Electron binary is at hand, when the test suite resolves the
 
 #### playbook-library-81
 
-When the test suite compiles through a stub `slc` named as the configured compiler, the test suite shall assert the compile's agent per case [[playbook-library-42](#playbook-library-42)]: a block naming `codex` at effort `medium` in an environment setting no `SLC_*` variable reaches the stub as `SLC_AGENT=codex` and `SLC_EFFORT=medium` with neither `SLC_MODEL` nor `SLC_FAST_MODE`, the stall budget beside them and a progress line naming the agent from the block ahead of the compiler; with `SLC_AGENT` set in the environment nothing of the block reaches the stub and the line names the environment; a block naming `kimi` is refused before the stub runs, the guidance naming the adapters `slc` drives; and a block's fast mode reaches the stub as its literal.
+When the test suite compiles through a stub `slc` named as the configured compiler, the test suite shall assert the compile's agent per case [[playbook-library-42](#playbook-library-42)]: a block naming `codex` at effort `medium` in an environment setting no `SLC_*` variable reaches the stub as `SLC_AGENT=codex` and `SLC_EFFORT=medium` with neither `SLC_MODEL` nor `SLC_FAST_MODE`, `--config` naming a file that holds no setting, the stall budget beside them and a progress line naming the agent from the block ahead of the compiler; with `SLC_AGENT` set in the environment nothing of the block and no `--config` reaches the stub and the line names the environment; a block naming `kimi` is refused before the stub runs, the guidance naming the adapters `slc` drives; and a block's fast mode reaches the stub as its literal.
 
 #### playbook-library-82
 
@@ -579,7 +582,7 @@ Where the core runs with the scripted fake adapter — its first reply writing a
 
 #### playbook-library-73
 
-Where the stub `slc` fails at `gears2fsm` on its first two runs and exits 2 with a `SLC_CLARIFICATION:` report on the third, and the fake replies with a compile block on every relay, when a draft compile is started, the test suite shall assert that each failure recorded the phase and output [[playbook-library-67](#playbook-library-67)]; that a relay turn followed each of the first two with the phase, elapsed time, and output tail in its prompt, and the third carried the questions with reasons and choices [[playbook-library-65](#playbook-library-65)] [[playbook-library-68](#playbook-library-68)]; that after the third failure no turn started and the draft's state says so [[playbook-library-68](#playbook-library-68)]; that a Boss message reset the count and the next failure relayed again [[playbook-library-68](#playbook-library-68)]; that a `draft.send` queued during a compile dispatched before any relay with the failure as its preface [[playbook-library-65](#playbook-library-65)]; and that no config write occurred throughout [[playbook-library-67](#playbook-library-67)].
+Where the stub `slc` fails at `gears2fsm` on its first two runs and exits 2 with a `SLC_CLARIFICATION:` report on the third, and the fake replies with a compile block on every relay, when a draft compile is started, the test suite shall assert that each failure recorded the phase and output [[playbook-library-67](#playbook-library-67)]; that a relay turn followed each of the first two with the phase, elapsed time, and output tail in its prompt, and the third carried the questions with reasons and choices [[playbook-library-65](#playbook-library-65)] [[playbook-library-68](#playbook-library-68)]; that after the third failure no turn started and the draft's state says so [[playbook-library-68](#playbook-library-68)]; that the draft's compile record names what became of each failure — sent, sent, stopped, and queued for the one a queued message carried [[playbook-library-70](#playbook-library-70)]; that a Boss message reset the count and the next failure relayed again [[playbook-library-68](#playbook-library-68)]; that a `draft.send` queued during a compile dispatched before any relay with the failure as its preface [[playbook-library-65](#playbook-library-65)]; and that no config write occurred throughout [[playbook-library-67](#playbook-library-67)].
 
 #### playbook-library-74
 

@@ -34,6 +34,8 @@ export class SpexCommandError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** The refusal's facts, apart from its words (core-service-111). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "SpexCommandError";
@@ -80,7 +82,11 @@ export class SpexClient {
           if (message.ok) pending.resolve(message.result);
           else
             pending.reject(
-              new SpexCommandError(message.error.code, message.error.message),
+              new SpexCommandError(
+                message.error.code,
+                message.error.message,
+                message.error.details,
+              ),
             );
         }
       }

@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { Store } from "./store.js";
 import { ApplicationRegistry, sha256 } from "./app-storage.js";
+import { templatePath } from "./config.js";
+import { speak } from "./i18n.js";
 import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
 
 const git = (home: string, ...args: string[]): string => execFileSync("git", ["-C", home, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -267,4 +269,25 @@ test("Git rules replace stale generated session ignores after successful validat
     prepareStorageGitFiles(home,[]); assert.equal(readFileSync(file,"utf8"),after,"preparation is idempotent");
     git(home,"add","--",`sessions/${sessionId}.json`,`sessions/${sessionId}.records.jsonl`);
   } finally {store.close();rmSync(home,{recursive:true,force:true});}
+});
+
+test("a config naming a missing registry stays a nonblocking diagnostic whatever language the core speaks", async () => {
+  const { home } = setup();
+  const template = readFileSync(templatePath(), "utf8");
+  assert.ok(template.includes('"@sublang/playbook/code/registry"'));
+  mkdirSync(join(home, "config"), { recursive: true, mode: 0o700 });
+  writeFileSync(join(home, "config", "playbook.config.yaml"), template.replace('"@sublang/playbook/code/registry"', '"@sublang/definitely-missing"'), { mode: 0o600 });
+  const configDiagnostic = async () => (await validateStorageTree(home)).find((entry) => entry.file.endsWith(join("config", "playbook.config.yaml")));
+  try {
+    const english = await configDiagnostic();
+    assert.ok(english); assert.equal(english.blocking, false); assert.match(english.reason, /failed to import/);
+    // The kind, not the words, decides: a Chinese reason stays nonblocking.
+    speak("zh");
+    try {
+      const chinese = await configDiagnostic();
+      assert.ok(chinese); assert.equal(chinese.blocking, false);
+      assert.doesNotMatch(chinese.reason, /failed to import/);
+      assert.match(chinese.reason, /导入失败/);
+    } finally { speak("en"); }
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });

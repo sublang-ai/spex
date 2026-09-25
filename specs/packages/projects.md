@@ -44,6 +44,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 When the user picks the palette's Academy-example action ([DR-015](../decisions/015-reference-content.md)), the palette shall create the project from the bundled Academy corpus — into a new or empty directory only — initialize a git repository with one seed commit of the corpus, and register the project and make it the workspace's current project:
 
 - Target directory not empty: the palette reports the refusal and registers nothing.
+- Target already registered: the core's `conflict` names the registered path as a detail of the refusal, apart from its words, and the palette makes that project current.
 
 ### The Overview Tab
 
@@ -179,7 +180,7 @@ When a forge adapter operation fails — executable missing, not authenticated, 
 
 Where a fixture git repository exists with a named branch checked out, an uncommitted change, and a local upstream remote that it is ahead of and behind by known commit counts, when the repository is registered through the registration flow [[projects-1](#projects-1)], the test suite shall assert that a project card appears showing the project name, the absolute path, the branch name, a dirty indicator, and the expected ahead/behind counts [[projects-4](#projects-4)], collected without any network access [[projects-11](#projects-11)], and shall assert the palette cases below:
 
-- Confirming the same path again creates no duplicate entry [[projects-2](#projects-2)].
+- Confirming the same path again creates no duplicate entry [[projects-2](#projects-2)], the core's `conflict` carrying the registered path as a detail of its reply [[projects-27](#projects-27)].
 - Explicit rebinding selects an existing ID or restores its exact registration from Git ancestry; a missing or conflicting binding prompts selection without silently minting or registering an identity [[projects-10](#projects-10)].
 - Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
 - Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].

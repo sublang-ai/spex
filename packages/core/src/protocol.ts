@@ -1007,9 +1007,15 @@ export interface DraftCompileInfo {
   /** The failed phase's captured output. */
   output?: string;
   questions?: ClarificationQuestion[];
+  /** On failure, what became of it: relayed to the agent, the relay
+   * stopped after three in a row, or carried by the Boss's queued
+   * message — the page phrases it (playbook-library-58). */
+  relay?: DraftCompileRelay;
   /** The compiled entry's derived roles, on success. */
   roles?: string[];
 }
+
+export type DraftCompileRelay = "sent" | "stopped" | "queued";
 
 /** The agent's latest register block (playbook-library-66). */
 export interface DraftProposal {
@@ -1361,7 +1367,9 @@ export type ReplyMessage =
       type: "reply";
       id: string;
       ok: false;
-      error: { code: ErrorCode; message: string };
+      /** `details` carries the facts a page acts on — never its words
+       * (core-service-111): a conflict's registered path, for one. */
+      error: { code: ErrorCode; message: string; details?: Record<string, unknown> };
     };
 
 export interface RecordMessage {

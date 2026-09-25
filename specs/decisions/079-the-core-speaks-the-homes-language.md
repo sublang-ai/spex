@@ -7,6 +7,7 @@
 
 Accepted (2026-09-18) on the owner's rule: text a reader sees in normal operation, and any message that informs or instructs the reader, is translated; an exceptional internal error keeps English.
 Extends [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: the prose the core authors, and the Node 22 floor for every package, the scaffold CLI included; everything else in it stands.
+Amended by [DR-083](083-a-finished-operations-words-keep-their-language.md) in the re-derivation alone: what a finished operation composed keeps its language until it runs again, and the start speaks the stored choice before the store loads.
 
 ## Context
 

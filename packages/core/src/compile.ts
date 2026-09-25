@@ -196,6 +196,11 @@ export function compilerAgentOf(agent: {
   };
 }
 
+/** An empty slc configuration, shipped with the core: handed to slc
+ * as `--config` when the block drives the compile, so slc discovers no
+ * configuration file of its own (playbook-library-42). */
+const SLC_EMPTY_CONFIG = fileURLToPath(new URL("../assets/slc/empty.config.yaml", import.meta.url));
+
 /** The variables slc reads its agent from. */
 const SLC_AGENT_VARIABLES = ["SLC_AGENT", "SLC_MODEL", "SLC_EFFORT", "SLC_FAST_MODE"] as const;
 
@@ -793,9 +798,11 @@ export async function compilePlaybook(
     // slc aborts an agent call after its ten-minute default silence; the
     // agent-driven phases routinely stay quieter, so the runner grants the
     // 2400s budget IR-053 settled on, unless the env already sets it (DR-005).
+    // The block is the whole agent: no slc configuration file adds to it.
+    const configArgs = agentEnv.SLC_AGENT ? ["--config", SLC_EMPTY_CONFIG] : [];
     const code = await spawner(
       slcCommand,
-      [...slcArgs, "playbook", sourcePath],
+      [...slcArgs, ...configArgs, "playbook", sourcePath],
       dir,
       progress,
       signal,

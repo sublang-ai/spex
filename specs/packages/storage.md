@@ -189,6 +189,7 @@ Before reopening selected state, the validator shall validate the complete selec
 - incompatible modules or unsupported checkpoint relocation permit history only;
 - invalid session data blocks that session's execution and recovery, preserving lease-checked deletion; invalid intent data blocks affected projects and dependent queues;
 - invalid shared files block operations that require them; diagnostics name the failing file and reason, while startup, unrelated valid projects and independent configuration or preference edits remain available.
+- a config whose playbook registry cannot be loaded — the module missing, or older than the toolchain — is reported without blocking, the validator telling that case by the failure's kind rather than by its reason's words, so the reason's language decides nothing.
 
 ### storage-13
 
@@ -202,7 +203,7 @@ The core shall remain the sole writer of Spex-owned files, using atomic same-dir
 
 The draft store shall encode `local/drafts/<id>/draft.json` as exactly `{v:1,id,createdAt,touchedAt,queued,failures,compile?,proposal?}` and `records.jsonl` as newline-terminated `{seq,record}` objects in sequence order:
 
-- `queued` is an array of strings; `failures` a nonnegative integer; `compile` is `{at,by:'boss'|'agent',outcome:'running'|'ok'|'failed'|'canceled'|'interrupted',phase?,output?,questions?,roles?,sourceSha256?}`; `proposal` is `{command,intent,players}`;
+- `queued` is an array of strings; `failures` a nonnegative integer; `compile` is `{at,by:'boss'|'agent',outcome:'running'|'ok'|'failed'|'canceled'|'interrupted',phase?,output?,questions?,relay?:'sent'|'stopped'|'queued',roles?,sourceSha256?}`; `proposal` is `{command,intent,players}`;
 - timestamps use the registry's millisecond encoding [[storage-2](#storage-2)]; no provider token enters either file; an incomplete final record line is not a record;
 - the `local/` family is already excluded by the managed ignore block [[storage-17](#storage-17)].
 
@@ -235,7 +236,7 @@ When an integration suite merges two real Git branches containing sessions, proj
 - restored identity and aliases through the rebind command [[storage-22](#storage-22)];
 - every whole-unit choice, including clean text merges and deletion [[storage-11](#storage-11)];
 - the playbook-directory unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-19](#storage-19)];
-- reports of unmatched projects and sessions, and rejection of duplicate sources/ranks, cycles, invalid dispatches and damaged bundles [[storage-12](#storage-12)];
+- reports of unmatched projects and sessions, and rejection of duplicate sources/ranks, cycles, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook registry that cannot be loaded is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - leases blocking competing writes [[storage-14](#storage-14)].
 

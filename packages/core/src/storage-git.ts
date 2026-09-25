@@ -120,11 +120,11 @@ export async function validateStorageTree(home: string, selectedSessionIds?: Rea
   if (existsSync(config)) {
     const document = parseDocument(readFileSync(config, "utf8"));
     if (document.errors.length) throw new StorageFormatError(config, document.errors[0].message);
-    const { composeConfig } = await import("./config.js");
+    const { composeConfig, RegistryError } = await import("./config.js");
     try { await composeConfig(document.toJS(), undefined, config); }
     catch (error) {
       const reason = (error as Error).message;
-      if (reason.includes("failed to import") || reason.includes("recompile")) diagnostics.push({ file: config, reason, blocking: false });
+      if (error instanceof RegistryError) diagnostics.push({ file: config, reason, blocking: false });
       else throw new StorageFormatError(config, reason);
     }
   }

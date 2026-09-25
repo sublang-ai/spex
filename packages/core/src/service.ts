@@ -63,7 +63,7 @@ import { CoreError, SessionManager, currentSession, executionConfig, storedMembe
 import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import type { TurnControlKind } from "./control-record.js";
 import { rankBetween } from "./rank.js";
-import { Store } from "./store.js";
+import { readStoredLanguage, Store } from "./store.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
@@ -402,6 +402,10 @@ export class CoreService {
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
+    // The store's load composes diagnostics, so the home's stored
+    // language is spoken before it opens (core-service-111); the full
+    // resolution below re-reads it through the opened store.
+    if (options.dataDir) speak(resolveLanguage(readStoredLanguage(options.dataDir), this.preferredLanguages()));
     this.store = new Store({
       ...(options.dataDir ? { dir: options.dataDir } : {}),
       sessionsDir: options.sessionsDir ?? resolveSessionsDir(this.configPath, { ...this.env, HOME: this.home, SPEX_HOME: options.dataDir ?? this.env.SPEX_HOME }),
@@ -513,12 +517,15 @@ export class CoreService {
    * start, or this process's own locale where a shell passed none.
    */
   private speakHomeLanguage(): Language {
-    const preferred =
-      this.options.systemLanguages ??
-      [Intl.DateTimeFormat().resolvedOptions().locale];
-    const language = resolveLanguage(this.store.interfaceLanguage(), preferred);
+    const language = resolveLanguage(this.store.interfaceLanguage(), this.preferredLanguages());
     speak(language);
     return language;
+  }
+
+  /** The reader's system languages: those the embedding shell passed
+   * at start, or this process's own locale where a shell passed none. */
+  private preferredLanguages(): readonly string[] {
+    return this.options.systemLanguages ?? [Intl.DateTimeFormat().resolvedOptions().locale];
   }
 
   /**
@@ -1203,7 +1210,11 @@ export class CoreService {
         type: "reply",
         id: command.id,
         ok: false,
-        error: { code, message },
+        error: {
+          code,
+          message,
+          ...(error instanceof CoreError && error.details ? { details: error.details } : {}),
+        },
       });
     }
   }
@@ -1280,12 +1291,15 @@ export class CoreService {
         return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]);
       case "project.create": {
         const path = expandPath(command.path, this.home);
-        if (this.store.getProjectByPath(path)) {
+        const registered = this.store.getProjectByPath(path);
+        if (registered) {
+          // The registered path travels as a fact, so the page acts on
+          // it without reading the refusal's words (core-service-111).
           throw new CoreError("conflict", i18n._({
             id: "{path} is already registered",
             comment: "Refusal: a project already holds this folder",
             values: { path },
-          }));
+          }), { path: registered.path });
         }
         if (command.example && command.scaffold) {
           // English, deliberately (core-service-111): no surface offers

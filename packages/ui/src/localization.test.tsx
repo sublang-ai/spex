@@ -100,6 +100,17 @@ const PROJECTS = [
   { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0 },
 ];
 
+/** A spec tree the page holds for p1: a re-read replaces it in place. */
+const SPEC_TREE = {
+  present: false,
+  legacy: false,
+  files: [],
+  decisions: [],
+  intents: [],
+  notices: [],
+  readAt: 0,
+};
+
 function seed(): void {
   useAppStore.setState({
     connection: "open",
@@ -160,6 +171,16 @@ function serveLedger(ledger: unknown): void {
       if (type === "project.list") return PROJECTS;
       if (type === "session.list") return [];
       if (type === "draft.list") return [];
+      if (type === "specs.get") return SPEC_TREE;
+      // The agent editor a form under edit opens asks what it offers.
+      if (type === "agent.options") {
+        return {
+          adapter: fields.adapter,
+          effortValues: ["high"],
+          fastModeSupported: false,
+          discovery: { status: "unavailable", reason: "Fixture" },
+        };
+      }
       if (type === "project.status") {
         return { branch: "main", dirty: false, ahead: 0, behind: 0 };
       }
@@ -486,13 +507,35 @@ describe("localization-3: a change of choice re-renders the whole root", () => {
     expect(railLabels()).toContain("Dashboard");
     expect(useAppStore.getState().language.choice).toBeNull();
   });
+
+  test("the re-render keeps what the page holds: a form under edit survives the change", async () => {
+    speak("en", null);
+    render(<Root />);
+    // The surface the reader stands on and the form below are both the
+    // page's own React state — this environment keeps no storage to
+    // restore either from, so only a re-render, never a remount, keeps
+    // them.
+    await goTo("Settings");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("player-add"));
+    });
+    const typed = "qa.keeps-its-words";
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("player-add-id"), {
+        target: { value: typed },
+      });
+    });
+    await act(() => useAppStore.getState().setLanguage("zh"));
+    expect(railLabels()).toContain("仪表盘");
+    expect(within(screen.getByTestId("language-section")).getByLabelText("界面语言")).toBeTruthy();
+    expect((screen.getByTestId("player-add-id") as HTMLInputElement).value).toBe(typed);
+  });
 });
 
 describe("settings-37: the Saved mark outlives the re-rendering", () => {
   // A page keeps the surface the reader stands on in its own storage,
-  // which this environment does not provide: without one, the app that
-  // the language change mounts anew would land on the Workspace and
-  // there would be no section to tick.
+  // which this environment does not provide: this stands in for it, as
+  // a reload between the write and its tick would read it.
   let realStorage: PropertyDescriptor | undefined;
   beforeEach(() => {
     realStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
@@ -526,8 +569,8 @@ describe("settings-37: the Saved mark outlives the re-rendering", () => {
     await act(async () => {
       fireEvent.change(select, { target: { value: "zh" } });
     });
-    // The whole app repainted in Chinese, so the section that ticks is
-    // not the one the reader changed: the mark rides the store.
+    // The whole app repainted in Chinese, the section the reader
+    // changed among it: the mark rides the store, so it ticks there.
     const section = screen.getByTestId("language-section");
     expect(within(section).getByLabelText("界面语言")).toBeTruthy();
     expect(within(section).getByTestId("language-saved").textContent).toBe(
@@ -580,25 +623,52 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     }
   });
 
-  test("the same resolution re-reads nothing", async () => {
-    speak("en", null);
-    useAppStore.setState({ space: SPACE });
-    render(<Root />);
-    await quiet();
-    // System to English: the home's choice moved, the language the core
-    // composes in did not.
-    await broadcast("en");
-    expect(useAppStore.getState().language.choice).toBe("en");
-    const asked = commandMock.mock.calls.map(([type]) => type as string);
-    for (const command of [
-      "config.get",
-      "readiness.get",
-      "project.list",
-      "session.list",
-      "space.get",
-    ]) {
-      expect(asked, `${command} left alone`).not.toContain(command);
-    }
+  describe("a page whose browser asks for Chinese", () => {
+    // The page resolves zh from its own browser with nothing stored, so
+    // the home's choice can move to zh while this page's language stays.
+    beforeEach(() => {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        get: () => ["zh-CN"],
+      });
+    });
+    afterEach(() => {
+      delete (navigator as { languages?: readonly string[] }).languages;
+    });
+
+    test("a choice that moves while the resolution stays re-reads the live state and the cached spec trees", async () => {
+      speak("zh", null);
+      useAppStore.setState({ space: SPACE, specTrees: { p1: SPEC_TREE } as never });
+      render(<Root />);
+      await quiet();
+      // System to 简体中文: this page already speaks Chinese, but the
+      // core composed its prose for a home that chose nothing.
+      await broadcast("zh");
+      expect(useAppStore.getState().language).toMatchObject({ choice: "zh", resolved: "zh" });
+      const asked = commandMock.mock.calls.map(([type]) => type as string);
+      for (const command of [
+        "config.get",
+        "readiness.get",
+        "project.list",
+        "session.list",
+        "space.get",
+      ]) {
+        expect(asked, `${command} re-read`).toContain(command);
+      }
+      expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
+      // Re-read in place: the cached tree never blanks on the way.
+      expect(useAppStore.getState().specTrees.p1).toBeDefined();
+    });
+
+    test("a broadcast that moves neither the choice nor the resolution sends nothing", async () => {
+      speak("zh", "zh");
+      homeLanguage = "zh";
+      useAppStore.setState({ space: SPACE, specTrees: { p1: SPEC_TREE } as never });
+      render(<Root />);
+      await quiet();
+      await broadcast("zh");
+      expect(commandMock).not.toHaveBeenCalled();
+    });
   });
 });
 

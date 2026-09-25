@@ -9,9 +9,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -24,6 +24,7 @@ import {
   type LineSpawner,
 } from "./compile.js";
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
+import { parse as parseYaml } from "yaml";
 
 import type { RegistryEntryLike } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
@@ -561,6 +562,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
   writeFileSync(stubPath, STUB_SLC);
   const stub = `${process.execPath} ${stubPath}`;
   const lines: string[] = [];
+  let argv: string[] = [];
   const compileWith = async (
     id: string,
     env: NodeJS.ProcessEnv,
@@ -581,6 +583,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
       onProgress: (line) => lines.push(line),
     });
     assert.equal(slcCalls.length, 1);
+    argv = slcCalls[0].argv;
     return slcCalls[0].env ?? {};
   };
   const pick = (env: NodeJS.ProcessEnv) => ({
@@ -603,6 +606,18 @@ test("the compile's agent reaches slc unless the environment configures it (play
     lines.indexOf("agent: codex from the block") < lines.findIndex((line) => line.startsWith("running:")),
     lines.join("\n"),
   );
+  // The block is the whole agent: slc is handed an empty configuration
+  // ahead of its command, so it discovers none of its own.
+  const configAt = argv.indexOf("--config");
+  assert.ok(configAt > 0 && configAt < argv.indexOf("playbook"), argv.join(" "));
+  const emptyConfig = argv[configAt + 1];
+  assert.ok(isAbsolute(emptyConfig) && existsSync(emptyConfig), emptyConfig);
+  const configText = readFileSync(emptyConfig, "utf8");
+  assert.ok(
+    configText.split("\n").every((line) => line.trim() === "" || line.trimStart().startsWith("#")),
+    "the configuration is only comments",
+  );
+  assert.equal(parseYaml(configText), null, "slc reads it as an empty configuration");
   // An environment naming an agent configures slc itself: the block stays out.
   assert.deepEqual(
     pick(await compileWith("preset", { SLC_AGENT: "gemini" }, { adapter: "codex", effort: "medium" })),
@@ -615,6 +630,8 @@ test("the compile's agent reaches slc unless the environment configures it (play
     },
   );
   assert.ok(lines.includes("agent: gemini from the environment"), lines.join("\n"));
+  // The environment configures slc, whose own configuration then stands.
+  assert.ok(!argv.includes("--config"), argv.join(" "));
   // An adapter slc does not drive is refused before the compiler runs.
   const refusedCalls: SlcCall[] = [];
   const refusedLines: string[] = [];

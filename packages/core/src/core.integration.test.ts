@@ -19,6 +19,7 @@ import { openSessionStore, createSessionStore, validateSessionManifest } from "@
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
 
 import { CoreService } from "./service.js";
+import { speak } from "./i18n.js";
 import { templatePath, resolveModulePath, resolveSessionsDir, REGISTRY_CONTRACT } from "./config.js";
 import { pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
@@ -98,7 +99,7 @@ class Client {
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
   ): Promise<
     | { ok: true; result: CommandResults[T] }
-    | { ok: false; error: { code: string; message: string } }
+    | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } }
   > {
     const id = `c${(this.nextId += 1)}`;
     this.socket.send(JSON.stringify({ type, id, ...fields }));
@@ -1070,6 +1071,15 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   });
   assert.ok(status.branch.length > 0);
   assert.equal(status.dirty, false);
+
+  // Creating on a registered folder is a conflict carrying the
+  // registered path as a fact, apart from its words (core-service-111).
+  const again = await client.command("project.create", {
+    path: join(harness.dir, "fresh"),
+  });
+  assert.ok(!again.ok);
+  assert.equal(again.error.code, "conflict");
+  assert.deepEqual(again.error.details, { path: created.path });
 
   // Forge state via the stubbed gh (PROJ-5/6): bind an origin first.
   execFileSync("git", [
@@ -3536,4 +3546,48 @@ test("core-service-112: the core's own prose re-derives in the home's language",
   writeFileSync(configPath, VALID_CONFIG);
   await service.reloadConfig();
   await client.waitFor((m) => requirement(m) === REQUIREMENT_EN);
+});
+
+test("core-service-112: a start speaks the stored language before its store loads", async (t) => {
+  // The catalog's own phrase (src/locales/zh/messages.po) for a forge
+  // cache the store cannot read at load; the cause after it is relayed.
+  const CACHE_EN = "Unreadable cache; refresh to rebuild: ";
+  const CACHE_ZH = "缓存无法读取；刷新可重建：";
+  const dir = mkdtempSync(join(tmpdir(), "spex-core-load-language-"));
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, VALID_CONFIG);
+  const dataDir = join(dir, "state");
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(join(dataDir, "prefs.json"), JSON.stringify({ v: 1, prefs: { language: "zh" } }));
+  writeFileSync(join(dataDir, "forge-cache.json"), "{broken");
+  const { imports } = fakeAdapterImports({});
+  const service = await CoreService.start({
+    token: "test",
+    configPath,
+    dataDir,
+    adapterImports: imports,
+    adapterRuntime: () => ({ usable: true }),
+    env: {},
+    home: join(dir, "home"),
+    watchConfig: false,
+    systemLanguages: ["en"],
+  });
+  t.after(async () => {
+    await service.stop();
+    // The language is the process's: later tests speak English again.
+    speak("en");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+
+  assert.equal(service.language(), "zh");
+  // The diagnostic the store raised at load already reads Chinese: the
+  // start spoke the stored choice before the store composed it.
+  const cache = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file.endsWith("forge-cache.json"));
+  assert.ok(cache, "the unreadable cache is reported");
+  assert.equal(cache.blocking, false);
+  assert.ok(cache.reason.startsWith(CACHE_ZH), cache.reason);
+  assert.ok(!cache.reason.includes(CACHE_EN), cache.reason);
 });

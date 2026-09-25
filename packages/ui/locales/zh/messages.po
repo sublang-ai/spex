@@ -5198,6 +5198,10 @@ msgstr "等待 — 前序工作已停止"
 msgid "waiting — your reply"
 msgstr "等待 — 你的回复"
 
+#: src/components/CompileBand.tsx
+msgid "waiting for your queued message"
+msgstr "等待你已排队的消息"
+
 #. session row: the run parked on a question
 #. session status: a player asked the Boss a question
 #: src/components/NavRail.tsx

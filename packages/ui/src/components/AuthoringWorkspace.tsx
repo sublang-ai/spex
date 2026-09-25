@@ -11,7 +11,7 @@
 // DR-041 §9); each pane scrolls in its own box and the page never
 // does. Both splits are app preferences.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   CommandResults,
   DraftInfo,
@@ -120,21 +120,6 @@ export function DraftStateChip({ draft }: { draft: DraftInfo }) {
   );
 }
 
-/** What the thread's last compile line said about the failure, so the
- * band repeats it rather than guessing (playbook-library-58). The line
- * is the core's, printed verbatim, so both the pattern and what it
- * yields are data, never texts of the catalog. */
-function threadCompileCaption(lines: readonly { kind: string; text: string }[]): string | undefined {
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index];
-    if (line.kind !== "status") continue;
-    const match = /^◇\s*Compile failed at [^—]+—\s*(.+)$/u.exec(line.text);
-    if (match) return match[1].trim();
-    if (/^◇\s*Compil(?:ing|ed)/u.test(line.text)) return undefined;
-  }
-  return undefined;
-}
-
 export function AuthoringWorkspace({
   draftId,
   onBack,
@@ -222,11 +207,6 @@ export function AuthoringWorkspace({
     if ((tab === "gears" || tab === "machine") && !artifactsReady) setTab("source");
     if (tab === "register" && !compiledOk) setTab("source");
   }, [tab, artifactsReady, compiledOk]);
-
-  const threadCaption = useMemo(
-    () => (draftView ? threadCompileCaption(draftView.view.captain) : undefined),
-    [draftView],
-  );
 
   if (!draft) return null;
   const summary = configState?.status === "valid" ? configState.summary : undefined;
@@ -487,7 +467,6 @@ export function AuthoringWorkspace({
               draft={draft}
               lines={lines ?? []}
               times={times ?? []}
-              threadCaption={threadCaption}
               connected={connected}
               onCancel={() => void abortDraftCompile(draftId)}
             />

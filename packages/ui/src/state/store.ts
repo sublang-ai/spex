@@ -38,7 +38,12 @@ import type {
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
 
-import { SpexClient, defaultCoreUrl, type ConnectionStatus } from "../lib/client.js";
+import {
+  SpexClient,
+  defaultCoreUrl,
+  type ConnectionStatus,
+  type SpexCommandError,
+} from "../lib/client.js";
 import { activateLanguage, i18n } from "../i18n.js";
 import { currentSessionOf } from "../lib/sessions.js";
 import type { SpecEditorState } from "../lib/spec-view-model.js";
@@ -765,17 +770,24 @@ export const useAppStore = create<AppState>((set, get) => {
     // Only a changed resolution reloads the catalog; the root re-renders
     // off the resolved language, so nothing else need subscribe.
     const changed = current.resolved !== resolved;
+    const choiceChanged = current.choice !== stored;
     if (changed) activateLanguage(resolved);
     set({ language: { choice: stored, resolved, savedAt } });
-    // The core composes prose in the home's language (localization-11):
-    // what this page holds of it was written in the one before, so a
-    // change re-reads it — the config, readiness, the projects and the
-    // sessions, and the Space with the diagnostics it carries, where
-    // this page holds a Space at all.
-    if (!changed || options.reread === false) return;
+    // The core composes prose in the home's language (localization-11),
+    // which is the home's choice, not this page's resolution: a choice
+    // that moves while this page keeps its language (none to 简体中文 on
+    // a page already resolving it from the browser) still changes what
+    // the core writes. So a change of either re-reads what this page
+    // holds of that prose — the config, readiness, the projects and the
+    // sessions, the Space with the diagnostics it carries where this
+    // page holds a Space at all, and every cached spec tree with its
+    // notices (a re-load replaces each tree in place, so the view never
+    // blanks).
+    if (!(changed || choiceChanged) || options.reread === false) return;
     if (get().connection !== "open") return;
     void get().refresh().catch(() => {});
     if (get().space) void get().loadSpace().catch(() => {});
+    for (const id of Object.keys(get().specTrees)) void get().loadSpecs(id);
   }
 
   /** Dispatch the next queued composer message when a turn is idle
@@ -1568,15 +1580,17 @@ export const useAppStore = create<AppState>((set, get) => {
       } catch (cause) {
         // A repeat visit: the example is already a registered
         // project — open it instead of surfacing the conflict. The
-        // error names the expanded path, which the client cannot
-        // derive itself.
-        const registered = /^(.*) is already registered$/.exec(
-          (cause as Error).message ?? "",
-        )?.[1];
+        // refusal carries the expanded path as a fact apart from its
+        // words (which follow the home's language), and the client
+        // cannot derive that path itself.
+        const refusal = cause as SpexCommandError;
+        const registered =
+          refusal.code === "conflict" && typeof refusal.details?.path === "string"
+            ? refusal.details.path
+            : undefined;
+        if (!registered) throw cause;
         const projects = await getClient().command("project.list", {});
-        const existing = registered
-          ? projects.find((entry) => entry.path === registered)
-          : undefined;
+        const existing = projects.find((entry) => entry.path === registered);
         if (!existing) throw cause;
         set({ projects });
         void get().loadProjectMeta(existing.id);

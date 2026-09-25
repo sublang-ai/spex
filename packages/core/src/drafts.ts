@@ -29,6 +29,7 @@ import { sanitizeRecord } from "./stream-fold.js";
 import type {
   ClarificationQuestion,
   DraftCompileOutcome,
+  DraftCompileRelay,
   DraftProposal,
   DraftRecord,
   DraftSource,
@@ -43,6 +44,8 @@ export interface StoredDraftCompile {
   phase?: string;
   output?: string;
   questions?: ClarificationQuestion[];
+  /** On a failed compile, what became of it (playbook-library-58). */
+  relay?: DraftCompileRelay;
   roles?: string[];
   /** The source's digest at a successful compile, from which the
    * "Changed" state derives. */
@@ -62,6 +65,7 @@ export interface StoredDraft {
 }
 
 const OUTCOMES: readonly string[] = ["running", "ok", "failed", "canceled", "interrupted"];
+const RELAYS: readonly string[] = ["sent", "stopped", "queued"];
 const DRAFT_ID = /^[a-z][a-z0-9_-]*$/;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -171,8 +175,9 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
   if (value.compile !== undefined) {
     const compile = value.compile;
     need(isObject(compile), file, invalidCompile());
-    closedKeys(compile, ["at", "by", "outcome"], ["phase", "output", "questions", "roles", "sourceSha256"], file);
+    closedKeys(compile, ["at", "by", "outcome"], ["phase", "output", "questions", "relay", "roles", "sourceSha256"], file);
     need(isTimestamp(compile.at) && (compile.by === "boss" || compile.by === "agent") && OUTCOMES.includes(String(compile.outcome)), file, invalidCompile());
+    need(compile.relay === undefined || RELAYS.includes(String(compile.relay)), file, invalidCompile());
     need(
       compile.phase === undefined || isText(compile.phase),
       file,

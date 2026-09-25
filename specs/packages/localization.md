@@ -27,11 +27,11 @@ When a client of the home — a page in either shell, the desktop shell for its 
 
 #### localization-3
 
-When a page starts, the page shall paint in the choice it last read, kept in its own storage, then read the home's choice once connected [[core-service-108](core-service.md#core-service-108)] and follow every later `language.state` [[core-service-109](core-service.md#core-service-109)], re-rendering whole whenever the resolution [[localization-2](#localization-2)] changes and declaring the resolved language as the document's language attribute, so fonts and glyph forms follow it.
+When a page starts, the page shall paint in the choice it last read, kept in its own storage, then read the home's choice once connected [[core-service-108](core-service.md#core-service-108)] and follow every later `language.state` [[core-service-109](core-service.md#core-service-109)], re-rendering whole whenever the resolution [[localization-2](#localization-2)] changes — keeping every state the page holds, an unsaved draft, a form under edit or a composer's text among them ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md)) — and declaring the resolved language as the document's language attribute, so fonts and glyph forms follow it.
 
 #### localization-11
 
-When the home's choice changes [[core-service-109](core-service.md#core-service-109)], a page shall re-read the live state it holds — the config, readiness, the Space and the diagnostics — so every phrase the core composed for it [[core-service-111](core-service.md#core-service-111)] reads in the new language, while a record already written keeps the language it was written in.
+When the home's choice changes [[core-service-109](core-service.md#core-service-109)] — whether or not this page's own resolution [[localization-2](#localization-2)] moves with it — a page shall re-read the live state it holds — the config, readiness, the Space, the diagnostics and the spec trees it caches with their notices — so every phrase the core composed for it [[core-service-111](core-service.md#core-service-111)] reads in the new language, while a record already written keeps the language it was written in ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md)).
 
 ### Rendering
 
@@ -79,7 +79,7 @@ Where the UI renders against fixture state with `zh` resolved, the test suite sh
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell, the test suite shall assert through the page:
 
 - opened with the browser language `zh-CN` and no stored choice, the page speaks Chinese and declares `zh` [[localization-2](#localization-2)] [[localization-3](#localization-3)];
-- opened with `en-US`, choosing 简体中文 in Settings re-renders the page in Chinese without a reload, a second page of the same home opens in Chinese, and choosing System returns both to English [[localization-3](#localization-3)];
+- opened with `en-US`, choosing 简体中文 in Settings re-renders the page in Chinese without a reload — a form under edit and the composer's text surviving the change — a second page of the same home opens in Chinese, and choosing System returns both to English [[localization-3](#localization-3)];
 - after choosing 简体中文, a message the core composes for the page — the Sources band's guidance with no GitHub remote — reads in Chinese without a reload [[localization-11](#localization-11)];
 - at the 320-pixel viewport with the sidebar collapsed, the Dashboard and Settings surfaces in Chinese scroll in neither direction and no two visible siblings overlap [[localization-1](#localization-1)] ([DR-041](../decisions/041-chrome-that-fits.md)).
 

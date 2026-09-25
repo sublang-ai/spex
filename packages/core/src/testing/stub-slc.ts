@@ -27,7 +27,10 @@ export const STUB_SLC_RELEASE_FILE = ".stub-slc-release";
 const STUB_RUNTIME = `
 const fs = require("node:fs");
 const path = require("node:path");
-const src = process.argv[3];
+// slc's bin-level \`--config <path>\` precedes the command; the stub
+// skips the pair, as slc splits it out before its grammar parser.
+const argv = process.argv.slice(2).filter((_, index, all) => all[index] !== "--config" && all[index - 1] !== "--config");
+const src = argv[1];
 const base = path.basename(src, ".md");
 const srcDir = path.dirname(src);
 function progress(line) { process.stderr.write(line + "\\n"); }

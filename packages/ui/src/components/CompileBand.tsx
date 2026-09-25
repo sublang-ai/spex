@@ -10,7 +10,7 @@
 // hands the next one to a person.
 
 import { useMemo } from "react";
-import type { DraftInfo } from "@sublang/spex-core/protocol";
+import type { DraftCompileRelay, DraftInfo } from "@sublang/spex-core/protocol";
 
 import { foldCompileLog, phaseLabel, type PhaseView } from "../lib/compile-log.js";
 import { i18n } from "../i18n.js";
@@ -102,12 +102,31 @@ function PhaseRow({ phases, now }: { phases: PhaseView[]; now: number }) {
   );
 }
 
+/** What became of a failed compile, phrased from the draft's state
+ * (playbook-library-58): relayed to the agent, the relay stopped after
+ * three in a row, or carried by the Boss's queued message. A record
+ * with no relay (an older one, a toolchain failure) falls back on the
+ * failure count. */
+function relayCaption(relay: DraftCompileRelay | undefined, failures: number): string {
+  switch (relay) {
+    case "sent":
+      return i18n._("sent to the agent");
+    case "stopped":
+      return i18n._("three in a row — tell the agent how to proceed");
+    case "queued":
+      return i18n._("waiting for your queued message");
+    default:
+      return failures >= 3
+        ? i18n._("three in a row — tell the agent how to proceed")
+        : i18n._("sent to the agent");
+  }
+}
+
 export function CompileBand({
   draftId,
   draft,
   lines,
   times,
-  threadCaption,
   connected,
   onCancel,
 }: {
@@ -116,10 +135,6 @@ export function CompileBand({
   /** This compile's progress lines and their arrival times. */
   lines: string[];
   times: number[];
-  /** What the thread's system line said about the failure — "sent to
-   * the agent", "three in a row; …", "waiting for your queued message"
-   * — so the band and the thread never disagree. */
-  threadCaption?: string;
   connected: boolean;
   onCancel: () => void;
 }) {
@@ -276,13 +291,9 @@ export function CompileBand({
             </ResizableFrame>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
-            {/* What the thread's own line said, where it said anything. */}
-            <span data-testid="compile-caption">
-              {threadCaption ??
-                (draft.failures >= 3
-                  ? i18n._("three in a row — tell the agent how to proceed")
-                  : i18n._("sent to the agent"))}
-            </span>
+            {/* What became of the failure, from the draft's own state
+                (playbook-library-58) — never from the thread's words. */}
+            <span data-testid="compile-caption">{relayCaption(compile?.relay, draft.failures)}</span>
             {askedBy ? <span data-testid="compile-by">{askedBy}</span> : null}
           </div>
         </>

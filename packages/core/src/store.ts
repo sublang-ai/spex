@@ -203,6 +203,23 @@ const parkedRunKey = (sessionId: string): string => `session:${sessionId}:parked
 /** The home's one interface language (storage-5). */
 const LANGUAGE_PREF = "language";
 
+/**
+ * The interface language `<dir>/prefs.json` stores, read before any
+ * store opens so the load's own diagnostics already speak it
+ * (core-service-111). A missing, unreadable or unknown value reads as
+ * none: the store's load reports a damaged file itself.
+ */
+export function readStoredLanguage(dir: string): Language | null {
+  const prefsFile = join(dir, "prefs.json");
+  try {
+    if (!existsSync(prefsFile)) return null;
+    const stored = parsePrefs(readJsonFile(prefsFile), prefsFile)[LANGUAGE_PREF];
+    return isLanguage(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A parked run's captured controls, read defensively: a hand-edited
  * or older preference never invalidates the rest of the session. */
 function readParkedRun(value: unknown): ParkedRun | undefined {

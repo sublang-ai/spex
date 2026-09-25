@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+# The block is the whole compiler agent (playbook-library-42): slc reads
+# no configuration of its own. Passed as `--config`, this file stops
+# slc's discovery of ./slc.config.yaml and ~/.config/slc/config.yaml, and
+# a comment-only file parses as an empty configuration.

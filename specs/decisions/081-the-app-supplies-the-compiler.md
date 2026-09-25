@@ -8,6 +8,7 @@
 Accepted (2026-09-24).
 Amends [DR-005](005-compilation-integration.md): the compiler is the app's own copy of `@sublang/slc`, found in the module tree the shell declares it in and run on the app's own runtime when that meets the compiler's floor; the resolution order through a global install and `npx`, the premise that Electron's Node cannot run the compiler, and the missing-toolchain guidance that asks for a system Node give way, while the never-in-process rule, the compile flow, the registry generation and the library placement stand.
 Extends [DR-024](024-app-supplied-agent-runtimes.md): the compiler joins the runtimes both shells supply, for the reason the agent SDKs did.
+Amended by [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the handoff alone: `--config` names an empty configuration when the block drives the compile, so what the block leaves unset is the adapter's default.
 
 ## Context
 

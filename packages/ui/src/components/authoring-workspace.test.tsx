@@ -730,13 +730,12 @@ describe("playbook-library-57/58: the compile band", () => {
     );
   });
 
-  test("a failed phase stands red with its output open and the thread's caption", () => {
-    const view = foldView([
-      ...THREAD,
-      rec(10, { type: "captain_status", turnId: null, timestamp: t0 + 9, message: "◇ Compile failed at Machine — sent to the agent" }),
-    ]);
+  test("a failed phase stands red with its output open and the relay's caption", () => {
+    // No thread line says what became of the failure: the caption is
+    // the draft's own relay, phrased by the page.
+    const view = foldView(THREAD);
     renderWorkspace(
-      draftInfo({ state: "failed", failures: 1, compile: { at: now - 60_000, by: "agent", outcome: "failed", phase: "gears2fsm", output: "result 'labeled' declared twice in TRIAGE-2" } }),
+      draftInfo({ state: "failed", failures: 1, compile: { at: now - 60_000, by: "agent", outcome: "failed", phase: "gears2fsm", output: "result 'labeled' declared twice in TRIAGE-2", relay: "sent" } }),
       {
         view,
         lines: [
@@ -758,11 +757,20 @@ describe("playbook-library-57/58: the compile band", () => {
 
   test("three failures in a row end the relay and the band says so; a restored failure draws its one phase", () => {
     renderWorkspace(
-      draftInfo({ state: "failed", failures: 3, compile: { at: now - 60_000, by: "boss", outcome: "failed", phase: "text2gears", output: "✗ text2gears failed\nResults: bullet is not an identifier" } }),
+      draftInfo({ state: "failed", failures: 3, compile: { at: now - 60_000, by: "boss", outcome: "failed", phase: "text2gears", output: "✗ text2gears failed\nResults: bullet is not an identifier", relay: "stopped" } }),
     );
     expect(screen.getByTestId("phase-text2gears").textContent).toContain("Spec items");
     expect(screen.getByTestId("compile-output").textContent).toContain("not an identifier");
     expect(screen.getByTestId("compile-caption").textContent).toBe("three in a row — tell the agent how to proceed");
+  });
+
+  test("a failure the Boss's queued message carries waits for that message", () => {
+    renderWorkspace(
+      draftInfo({ state: "failed", failures: 1, compile: { at: now - 60_000, by: "agent", outcome: "failed", phase: "gears2fsm", output: "result 'labeled' declared twice in TRIAGE-2", relay: "queued" } }),
+      { view: foldView(THREAD) },
+    );
+    expect(screen.getByTestId("compile-output").textContent).toContain("declared twice in TRIAGE-2");
+    expect(screen.getByTestId("compile-caption").textContent).toBe("waiting for your queued message");
   });
 
   test("the compiler's questions open beneath the phase with their reasons and choices", () => {
@@ -1299,7 +1307,7 @@ describe("playbook-library-35: the example opens a draft in paste mode", () => {
 
 describe("playbook-library-62: restore on open", () => {
   test("opening a draft replays its records and source, and the live stream continues", async () => {
-    const restored = draftInfo({ state: "failed", failures: 1, compile: { at: now - HOUR, by: "agent", outcome: "failed", phase: "gears2fsm", output: "boom" } });
+    const restored = draftInfo({ state: "failed", failures: 1, compile: { at: now - HOUR, by: "agent", outcome: "failed", phase: "gears2fsm", output: "boom", relay: "sent" } });
     seed({ drafts: { triage: restored } });
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>

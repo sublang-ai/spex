@@ -99,6 +99,10 @@ function useLedgerAttention(): Map<string, AttentionItem> {
   const ledger = useAppStore((state) => state.ledger);
   const sessions = useAppStore((state) => state.sessions);
   const views = useAppStore((state) => state.views);
+  // The mark carries a catalog phrase, and the root re-renders rather
+  // than remounts on a change of language (localization-3): the
+  // language is a dependency, so the phrase is read again.
+  const language = useAppStore((state) => state.language.resolved);
   return useMemo(() => {
     const map = new Map<string, AttentionItem>();
     for (const entry of ledger?.attention ?? []) {
@@ -125,7 +129,7 @@ function useLedgerAttention(): Map<string, AttentionItem> {
       });
     }
     return map;
-  }, [ledger, sessions, views]);
+  }, [ledger, sessions, views, language]);
 }
 
 /** How long a first boot may dial before the page raises the alarm:

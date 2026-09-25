@@ -49,7 +49,9 @@ type Node =
       kind: "session";
       id: string;
       sessionId: string;
-      title: string;
+      /** The session's own title; none reads as "untitled session",
+       * phrased at render so a change of language reaches it. */
+      title?: string;
       projectName?: string;
       path: string;
       children: Node[];
@@ -82,9 +84,7 @@ function nodesOf(entries: SpaceEntry[]): Node[] {
           kind: "session",
           id: `session:${sessionId}`,
           sessionId,
-          title:
-            entry.owner?.title?.trim() ||
-            i18n._({ id: "untitled session", comment: "a session with no title of its own" }),
+          title: entry.owner?.title?.trim() || undefined,
           projectName: entry.owner?.name,
           path: entry.path.replace(/\/[^/]*$/, ""),
           children: [],
@@ -98,6 +98,11 @@ function nodesOf(entries: SpaceEntry[]): Node[] {
     nodes.push({ kind: "entry", id: entry.path, entry });
   }
   return nodes;
+}
+
+/** A session node's title as shown: its own, else the catalog's. */
+function sessionTitle(node: Extract<Node, { kind: "session" }>): string {
+  return node.title ?? i18n._({ id: "untitled session", comment: "a session with no title of its own" });
 }
 
 function flatten(nodes: Node[], expanded: Set<string>, level = 1, parentId?: string): Row[] {
@@ -631,10 +636,10 @@ export function ExploreTab({
                     )}
                     <span
                       className="min-w-0 flex-1 truncate"
-                      title={node.kind === "session" ? node.title : node.entry.path}
+                      title={node.kind === "session" ? sessionTitle(node) : node.entry.path}
                     >
                       {node.kind === "session"
-                        ? node.title
+                        ? sessionTitle(node)
                         : row.parentId?.startsWith("session:")
                           ? sessionPartName(node.entry)
                           : node.entry.kind === "dir"
@@ -717,7 +722,7 @@ function PreviewPane({
     return (
       <>
         <PreviewHeader
-          title={node.title}
+          title={sessionTitle(node)}
           path={node.path}
           home={home}
           annotation={i18n._({ id: "Session", comment: "one unit's kind: a session" })}

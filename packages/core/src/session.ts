@@ -24,7 +24,13 @@ import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionA
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
-  constructor(readonly code: "not_found" | "busy" | "aborted" | "conflict" | "invalid_config" | "invalid_request" | "internal", message: string) {
+  /** `details` are the facts a page acts on, apart from the words it
+   * shows (core-service-111): a refusal is never matched by its prose. */
+  constructor(
+    readonly code: "not_found" | "busy" | "aborted" | "conflict" | "invalid_config" | "invalid_request" | "internal",
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "CoreError";
   }

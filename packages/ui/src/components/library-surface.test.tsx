@@ -36,6 +36,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
 import { agentChipText } from "./AgentChip.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
+import { SpexCommandError } from "../lib/client.js";
 import type {
   BuiltinPlaybookInfo,
   ConfigState,
@@ -857,7 +858,8 @@ describe("DR-015: repeated Academy seeding opens the existing project", () => {
     };
     commandMock.mockImplementation(async (type: string) => {
       if (type === "project.create") {
-        throw new Error("/Users/dev/spex-academy is already registered");
+        // The words follow the home's language; the facts do not.
+        throw new SpexCommandError("conflict", "已注册", { path: "/Users/dev/spex-academy" });
       }
       if (type === "project.list") return [academy];
       if (type === "specs.get") {

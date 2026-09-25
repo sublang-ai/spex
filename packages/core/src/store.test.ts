@@ -599,7 +599,7 @@ test("storage-23: draft record and transcript encodings are written and read bac
   assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { v: 1, id: "triage", createdAt: 1000, touchedAt: 1000, queued: [], failures: 0 });
   const full: StoredDraft = {
     ...draft, touchedAt: 2000, queued: ["next", "after"], failures: 2,
-    compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], roles: ["Coder"], sourceSha256: "ab".repeat(32) },
+    compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], relay: "stopped", roles: ["Coder"], sourceSha256: "ab".repeat(32) },
     proposal: { command: "triage", intent: "Label issues", players: { Coder: "dev.coder" } },
   };
   drafts.write(full);
@@ -622,7 +622,7 @@ test("storage-23: draft record and transcript encodings are written and read bac
   assert.deepEqual(drafts.records("triage").records.map((r) => r.seq), [1, 2]);
   assert.equal(drafts.records("triage").incompleteAfterSeq, 2);
   // Every key is closed: a stray field or a wrong version is a scoped diagnostic.
-  for (const damaged of ['{"v":2,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', '{"v":1,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0,"token":"x"}', '{"v":1,"id":"other","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', "{broken"]) {
+  for (const damaged of ['{"v":2,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', '{"v":1,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0,"token":"x"}', '{"v":1,"id":"other","createdAt":1,"touchedAt":1,"queued":[],"failures":0}', '{"v":1,"id":"triage","createdAt":1,"touchedAt":1,"queued":[],"failures":0,"compile":{"at":1,"by":"boss","outcome":"failed","relay":"lost"}}', "{broken"]) {
     writeFileSync(drafts.recordFile("triage"), damaged);
     assert.throws(() => drafts.read("triage"), StorageFormatError);
   }

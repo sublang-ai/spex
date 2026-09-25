@@ -387,13 +387,17 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
       { delayMs: 800 },
     ),
   });
-  const { stats, configPath } = harness;
+  const { stats, configPath, dataDir } = harness;
   const client = new Client(harness.service.port());
   await client.open();
   const configBefore = readFileSync(configPath, "utf8");
   await client.expectOk("draft.create", { draftId: "triage" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   await client.expectOk("draft.source.write", { draftId: "triage", content: SOURCE });
+  const failedCompiles = () => {
+    const all = client.states("triage").filter((d) => d.compile?.outcome === "failed").map((d) => d.compile!);
+    return all.filter((c, index) => index === 0 || c.at !== all[index - 1].at);
+  };
 
   const boss = await client.expectError("draft.compile", { draftId: "triage" }, "invalid_request");
   assert.match(boss.message, /gears2fsm/);
@@ -406,9 +410,13 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   assert.equal(stats.runs.length, 2, "no turn after the third failure");
 
   // playbook-library-67: each failure recorded its phase and output.
-  const failures = client.states("triage").filter((d) => d.compile?.outcome === "failed").map((d) => d.compile!);
-  const distinct = failures.filter((c, index) => index === 0 || c.at !== failures[index - 1].at);
+  const distinct = failedCompiles();
   assert.deepEqual(distinct.map((c) => c.phase), ["gears2fsm", "gears2fsm", "text2gears"]);
+  // What became of each failure travels as a fact beside its line,
+  // in the broadcast state and in the persisted record alike.
+  assert.deepEqual(distinct.map((c) => c.relay), ["sent", "sent", "stopped"]);
+  const stored = JSON.parse(readFileSync(join(dataDir, "local", "drafts", "triage", "draft.json"), "utf8")) as { compile: { relay?: string } };
+  assert.equal(stored.compile.relay, "stopped");
   assert.match(distinct[0].output ?? "", /✗ gears2fsm failed at/);
   assert.match(distinct[0].output ?? "", /result 'labeled' declared twice/);
   assert.equal(distinct[2].questions?.[0].id, "q1");
@@ -464,6 +472,9 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   assert.ok(failureAt >= 0 && bossAt > failureAt, "the queued message carries the failure as its preface");
   assert.doesNotMatch(prefaced, /You are helping the Boss/);
   assert.ok(client.statusLines("triage").includes("◇ Compile failed at Machine — waiting for your queued message"));
+  // After the reset, the clarification relayed; the queued message
+  // carried the next failure.
+  assert.deepEqual(failedCompiles().map((c) => c.relay), ["sent", "sent", "stopped", "sent", "queued"]);
   assert.ok(client.turnStarts("triage").includes("Also cite the label definitions."));
   assert.equal(client.turnStarts("triage").filter((p) => p.startsWith("Spex: the compile failed")).length, 3);
   assert.equal(client.latest("triage")?.failures, 0);

@@ -3,13 +3,17 @@
 
 // The root the language owns (localization-3). Every text is read from
 // the catalog as it renders, so a change of language must re-render
-// the whole app: the resolved language is the app's key, and nothing
-// else in the tree subscribes to it.
+// the whole app: this root subscribes to the resolved language, and a
+// change re-renders it and, with it, the whole tree beneath — nothing
+// under it is memoized, and nothing else subscribes to the language.
+// The tree is re-rendered, not remounted, so the page keeps what it
+// holds: an unsaved draft, a form under edit, a message being typed.
 
 import { App } from "./App.js";
 import { useAppStore } from "./state/store.js";
 
 export function Root() {
-  const resolved = useAppStore((state) => state.language.resolved);
-  return <App key={resolved} />;
+  // Read only to re-render on a change; the tree reads the catalog.
+  useAppStore((state) => state.language.resolved);
+  return <App />;
 }

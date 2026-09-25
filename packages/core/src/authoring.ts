@@ -1512,6 +1512,10 @@ export class AuthorManager {
         // The stage's human name is the catalog's, passed as a value:
         // one phase, one word, wherever it is read (playbook-library-57).
         const where = stageName(settled.phase);
+        // What became of the failure travels as a fact beside the
+        // line, so the page phrases it (playbook-library-58).
+        draft.compile.relay =
+          draft.queued.length > 0 ? "queued" : draft.failures >= RELAY_BOUND ? "stopped" : "sent";
         if (draft.queued.length > 0) {
           this.status(
             id,

@@ -125,7 +125,17 @@ test("localization-10: choosing 简体中文 re-renders this page and reaches a 
       true;
   });
 
+  // What this page holds when the language changes, which the change
+  // must keep (localization-3): a message typed into the Captain home's
+  // composer, and a form under edit on the surface the choice is made
+  // from — the page re-renders whole, it never remounts.
+  const typed = "a message that outlives the language";
+  await page.getByTestId("start-composer").fill(typed);
+  const playerId = "qa.keeps-its-words";
+
   await nav(page, "Settings").click();
+  await page.getByTestId("player-add").click();
+  await page.getByTestId("player-add-id").fill(playerId);
   const section = page.getByTestId("language-section");
   const select = section.getByTestId("language-select");
   await expect(select).toHaveValue("system");
@@ -136,9 +146,10 @@ test("localization-10: choosing 简体中文 re-renders this page and reaches a 
   ).resolves.toEqual(["System", "English", "简体中文"]);
 
   await select.selectOption("zh");
-  // The whole interface changes language: the resolved language keys
-  // the root, so every surface is painted anew — the language section
-  // among them, which carries its own landed-write tick (settings-37).
+  // The whole interface changes language: the root re-renders off the
+  // resolved language, so every surface is painted anew — the language
+  // section among them, which carries its own landed-write tick
+  // (settings-37).
   await expectRail(page, RAIL_ZH);
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
   // 设置 is the Settings heading; 界面语言 names the control itself.
@@ -152,6 +163,12 @@ test("localization-10: choosing 简体中文 re-renders this page and reaches a 
     ),
     "the page re-rendered without a reload",
   ).toBe(true);
+  // Re-rendered, not remounted: the form under edit still holds its
+  // id, and the composer its message.
+  await expect(page.getByTestId("player-add-id")).toHaveValue(playerId);
+  await surfaceEntry(page, "Workspace").click();
+  await expect(page.getByTestId("start-composer")).toHaveValue(typed);
+  await surfaceEntry(page, "Settings").click();
 
   // A second page of the same home, whose own browser asks for
   // English: it paints in what it prefers, then follows the home's
