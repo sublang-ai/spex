@@ -303,6 +303,9 @@ interface Surface {
   /** Hold before each measurement: the surface is drawn and in the
    * state the journey measures. */
   ready: () => Promise<void>;
+  /** Leave the surface with nothing that could change a later
+   * surface's controls while it is measured. */
+  settle?: () => Promise<void>;
 }
 
 test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar states", async ({
@@ -383,6 +386,20 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
       ready: async () => {
         await expect(page.getByTestId("captain-pane")).toBeVisible();
         await ensureTurnRunning();
+      },
+      // The turn kept in flight for this surface must not end under a
+      // later one: its finish raises a review entry and moves the
+      // Dashboard entry's attention count, which compareNames holds
+      // to the first size. Let it end here, with the session shown so
+      // its finish is viewed (DR-066), and wait for the count to stand
+      // at the ten parked questions again.
+      settle: async () => {
+        await expect(abort).toHaveCount(0, { timeout: 20_000 });
+        await expect
+          .poll(async () => (await app.core.command("ledger.get", {})).badge, {
+            timeout: 15_000,
+          })
+          .toBe(10);
       },
     },
     {
@@ -651,6 +668,7 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
       record(where, await measure(page), defects);
       log(`${where}: measured`);
     }
+    if (surface.settle) await surface.settle();
   }
 
   // The agent-local time slot has two deliberate yield points
@@ -659,7 +677,14 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
   // those thresholds against a real folded summary and the real
   // divider rather than inferring them from class names.
   await nav(page, "Projects").click();
-  await page.getByRole("tab", { name: /Fix the token refresh/i }).click();
+  // The Dashboard step reloaded the page, and a launch opens only the
+  // project's live session as a tab (run-view-57): the measured session
+  // settled under the sweep, so the sidebar brings it back.
+  const measured = (await app.core.command("session.list", {}))
+    .filter((session) => session.projectId === projectId)
+    .sort((a, b) => b.createdAt - a.createdAt)[0];
+  await page.getByTestId(`sidebar-session-${measured.id}`).click();
+  await expect(page.getByRole("tab", { name: /Fix the token refresh/i })).toBeVisible();
   await expect(page.getByTestId("captain-pane")).toBeVisible();
   await expect(abort).toHaveCount(0, { timeout: 20_000 });
   await setRail(page, false);
@@ -838,6 +863,18 @@ test.describe("committed queue rows and cards", () => {
           ?.state;
       })
       .toBe("finished");
+    // "finished" is the intent's state; the conversation that ran it
+    // settles a moment later, and the project admits no new session
+    // while its runtime is still held (DR-051). Wait for the release.
+    await expect
+      .poll(
+        async () =>
+          (await app.core.command("session.list", {})).find(
+            (session) => session.id === deliveredSession.id,
+          )?.live,
+        { timeout: 15_000 },
+      )
+      .toBe(false);
 
     // The project's current conversation carries the standing. Its
     // stored second turn parks a failed run with a real structured
