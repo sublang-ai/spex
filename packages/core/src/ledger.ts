@@ -48,7 +48,9 @@ interface Turn {
 /** A session's standing needs-you conditions, folded from its visible
  * records exactly as the run view folds them (dashboard-10). */
 export interface SessionConditions {
-  /** The captain parked at awaitBossReply and nothing moved since. */
+  /** A pending Boss question the runtime reported — a park at
+   * awaitBossReply, or a state report carrying pending questions — and
+   * has not yet reported gone (DR-085). */
   question?: { since: number; turnId: number | null };
   /**
    * A run stands parked in its failure state. Unlike a question, a
@@ -120,6 +122,28 @@ function stoppedTurnErrorSeqs(records: StoredRecord[]): Set<number> {
   return ignored;
 }
 
+/** How many questions a state report's pending set holds (DR-085): the
+ * set is an array, an object of questions, or one question, and an
+ * entry counts when it is a string or carries a string `question` —
+ * the same reading the run view's reducer gives it. */
+function pendingQuestionCount(payload: {
+  pendingBossQuestion?: unknown;
+  pendingBossQuestions?: unknown;
+}): number {
+  const questions = payload.pendingBossQuestions;
+  const list: unknown[] = Array.isArray(questions)
+    ? questions
+    : questions && typeof questions === "object"
+      ? Object.values(questions)
+      : [payload.pendingBossQuestion];
+  return list.filter((entry) =>
+    typeof entry === "string" ||
+    (entry !== null &&
+      typeof entry === "object" &&
+      typeof (entry as { question?: unknown }).question === "string")
+  ).length;
+}
+
 export function foldConditions(records: StoredRecord[]): SessionConditions {
   const abortErrors = stoppedTurnErrorSeqs(records);
   let fallbackQuestion: SessionConditions["question"];
@@ -178,10 +202,10 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
   for (const { seq, record } of records) {
     switch (record.type) {
       case "turn_started":
-        // The next Boss turn acknowledges the standing question,
-        // even when it dispatches another intent (dashboard-10).
-        fallbackQuestion = undefined;
-        parkedQuestions.clear();
+        // A Boss turn starting leaves a standing question standing: a
+        // clarification, or a turn dispatching another intent, answers
+        // nothing; only the runtime reporting the question gone clears
+        // it (DR-085, dashboard-10).
         // An unparked failure is acknowledged by the next Boss turn;
         // genuinely parked failures keep their own causes through recovery.
         unparkedFailureCause = undefined;
@@ -226,7 +250,13 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
       case "captain_telemetry": {
         const telemetry = record as {
           topic?: string;
-          payload?: { from?: unknown; to?: unknown; state?: unknown };
+          payload?: {
+            from?: unknown;
+            to?: unknown;
+            state?: unknown;
+            pendingBossQuestion?: unknown;
+            pendingBossQuestions?: unknown;
+          };
           turnId: number | null;
           timestamp: number;
         };
@@ -314,7 +344,29 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         };
         const state =
           stateText(telemetry.payload?.to) ?? stateText(telemetry.payload?.state);
-        if (state === "awaitBossReply" && parkedQuestions.size === 0) {
+        const payload = telemetry.payload;
+        if (
+          payload != null &&
+          typeof payload === "object" &&
+          (Object.hasOwn(payload, "pendingBossQuestions") ||
+            Object.hasOwn(payload, "pendingBossQuestion"))
+        ) {
+          // A report carrying the pending questions says outright
+          // whether one stands, whatever its state is named (DR-085):
+          // a non-empty set raises the question, an empty one is the
+          // runtime reporting every question gone.
+          if (pendingQuestionCount(payload) > 0) {
+            if (parkedQuestions.size === 0) {
+              fallbackQuestion ??= {
+                since: telemetry.timestamp,
+                turnId: telemetry.turnId,
+              };
+            }
+          } else {
+            fallbackQuestion = undefined;
+            parkedQuestions.clear();
+          }
+        } else if (state === "awaitBossReply" && parkedQuestions.size === 0) {
           fallbackQuestion = fallbackQuestion ?? {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
@@ -634,9 +686,10 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       continue;
     }
 
-    // The parked question, after the working check: a question is
-    // acknowledged by the Boss's next turn, so a turn already running
-    // means the Boss has replied and the park no longer stands.
+    // The parked question, after the working check (dashboard-10 ranks
+    // working above question): a Boss turn running — a clarification
+    // among them — reads working, and the question it did not clear
+    // stands again once that turn ends (DR-085).
     if (conditions.question && owns(conditions.question.turnId)) {
       derived.push({
         intent,

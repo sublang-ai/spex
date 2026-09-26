@@ -123,7 +123,7 @@ When a client sends `session.agent.set` naming a session, one of its agents — 
 
 When a client requests the session list or the ledger, the core service shall derive each project's current conversation from stored state — its live session, else its most recently active session that continues [[core-service-32](#core-service-32)] or still carries a recovery boundary, and that no other host owns — and shall fold that conversation as the project's lane: its standing conditions and stand-ins [[core-service-49](#core-service-49)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md), [DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- a disposal trace the runtime emits outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run, so a question parked at that moment stands until the next Boss turn starts.
+- a disposal trace the runtime emits outside a turn — carrying no turn id — is a pause, never the Captain dismissing a parked run, so a question parked at that moment stands until the runtime reports it gone ([DR-085](../decisions/085-boss-talks-through-captain.md)).
 
 #### core-service-72
 

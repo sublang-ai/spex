@@ -71,7 +71,7 @@ function PhaseRow({ phases, now }: { phases: PhaseView[]; now: number }) {
               data-testid={`phase-${phase.id}`}
               data-status={phase.status}
               title={i18n._("{label} — the compiler's {id} phase, {status}", {
-                label: phase.label,
+                label: phaseLabel(phase.id),
                 id: phase.id,
                 status: statusWord(phase.status),
               })}
@@ -84,7 +84,7 @@ function PhaseRow({ phases, now }: { phases: PhaseView[]; now: number }) {
               )}
               <span className="sr-only">{statusWord(phase.status)}</span>
               <span className={phase.status === "waiting" ? "" : "font-medium"}>
-                {phase.label}
+                {phaseLabel(phase.id)}
               </span>
               {elapsed ? (
                 <span className="text-neutral-500 dark:text-neutral-400">{elapsed}</span>
@@ -157,7 +157,6 @@ export function CompileBand({
         ? [
             {
               id: compile.phase,
-              label: phaseLabel(compile.phase),
               status: "failed",
               output: compile.output ? compile.output.split("\n") : [],
             },
@@ -176,7 +175,7 @@ export function CompileBand({
             const { startedAt: _started, ...rest } = phase;
             return { ...rest, status: "failed", output: phase.output.length > 0 ? phase.output : heldOutput };
           })
-        : [...folded, { id: named, label: phaseLabel(named), status: "failed", output: heldOutput }]
+        : [...folded, { id: named, status: "failed", output: heldOutput }]
       : folded;
   const failed = fold.failed ?? phases.find((phase) => phase.status === "failed");
   const output =

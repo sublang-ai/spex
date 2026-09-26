@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; amends question presentation in [DR-010](010-interface-craft.md) and active-turn input in [DR-041](041-chrome-that-fits.md).
+Amends [DR-035](035-intent-ledger.md), which remains accepted, in what clears a session question: the runtime's report that the question is gone, never the next Boss turn; the parked run's ending within a turn ([DR-073](073-letting-go-ends-the-parked-run.md)) still clears it.
 
 ## Context
 

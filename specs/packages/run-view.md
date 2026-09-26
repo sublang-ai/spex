@@ -404,7 +404,7 @@ While a turn is active and the Captain is not streaming speech, the Captain thre
 A queued Boss submission shall never read as sent:
 
 - queued submissions render as pending outgoing bubbles in full, each captioned "sends when this turn ends" and each individually removable by a control of full hit size [[run-view-50](#run-view-50)];
-- while a turn is active, the composer placeholder reads "Sends after this turn…" — the caption's words, and the primary control's tooltip's [[run-view-8](#run-view-8)].
+- while a turn is active, the composer placeholder and the primary control's tooltip read "Captain is working…" [[run-view-8](#run-view-8)] ([DR-085](../decisions/085-boss-talks-through-captain.md)); the queued bubbles keep their caption.
 
 #### run-view-39
 
@@ -957,7 +957,7 @@ Where the run view renders a player grid whose panes are wider than its box, the
 
 #### run-view-53
 
-While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)] inside a frame kept at its end that the composer's own box holds its place beside [[run-view-106](#run-view-106)], the composer renders a store-provided draft and reports edits to the store [[run-view-39](#run-view-39)], and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
+While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)] inside a frame kept at its end that the composer's own box holds its place beside [[run-view-106](#run-view-106)], the composer renders a store-provided draft — disabled while the turn runs, editable once it settles, reporting edits to the store [[run-view-39](#run-view-39)] [[run-view-8](#run-view-8)] — and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
 
 #### run-view-54
 
@@ -1015,7 +1015,7 @@ Where a fixture project holds a manually startable queued intent and an idle con
 - activating Start stages the intent's text into the session's composer, focused, under a chip carrying the intent's title [[run-view-86](#run-view-86)];
 - emptying the composer detaches the chip, and a subsequent send carries no intent id [[run-view-86](#run-view-86)];
 - staging again and sending passes the intent's id with the submission [[run-view-86](#run-view-86)];
-- while a fixture turn is active, a staged send queues with the chip riding the pending bubble [[run-view-86](#run-view-86)] [[run-view-38](#run-view-38)].
+- while a fixture turn is active, an already saved queued submission carrying an intent renders with the chip riding its pending bubble [[run-view-86](#run-view-86)] [[run-view-38](#run-view-38)].
 
 #### run-view-94
 

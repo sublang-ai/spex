@@ -1774,12 +1774,14 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
 
 /** A Captain that parks a run on a Boss question on its first turn and
  * then stays out of the way, so the fold reads a standing question while
- * the real Captain shell keeps the root its decision engaged. */
+ * the real Captain shell keeps the root its decision engaged. The next
+ * turn — a Drop's ending — narrates that parked run's disposal inside
+ * the turn, as the runtime reports a run it ends: a Boss turn starting
+ * no longer clears a question by itself (DR-085). */
 function parkingCaptain(): Parameters<typeof createScriptedCaptain>[0] {
   let turns = 0;
   return async (turn, context, session) => {
     turns += 1;
-    if (turns > 1) return;
     const trace = async (
       type: string,
       payload: Record<string, unknown>,
@@ -1800,6 +1802,10 @@ function parkingCaptain(): Parameters<typeof createScriptedCaptain>[0] {
         },
       });
     };
+    if (turns > 1) {
+      if (turns === 2) await trace("session.disposed", {}, 3);
+      return;
+    }
     await trace("session.started", {}, 1);
     await trace(
       "fsm.transition",
@@ -1926,7 +1932,8 @@ test(
     );
     assert.equal(dropped.dispatched?.turnId, 1);
     // The run it ended is disposed, inside that turn, so the fold's
-    // park stops standing for every consumer at once.
+    // park stops standing for every consumer at once. The shell's own
+    // engaged root counts here, not the fixture's narrated one.
     const { records } = await client.expectOk("history.get", {
       sessionId: session.id,
     });
@@ -1935,13 +1942,14 @@ test(
         type: string;
         topic?: string;
         turnId: number | null;
-        payload?: { type?: string; playbookId?: string };
+        payload?: { type?: string; playbookId?: string; sessionId?: string };
       };
       return (
         entry.type === "captain_telemetry" &&
         entry.topic === "playbook.trace" &&
         entry.payload?.type === "session.disposed" &&
         entry.payload.playbookId === "code" &&
+        entry.payload.sessionId !== "root-code" &&
         entry.turnId === 2
       );
     });
@@ -2670,7 +2678,7 @@ test("dashboard-10: the Captain's own machine reporting after a park leaves the 
   store.close();
 });
 
-test("dashboard-10/33: manually dispatching another intent clears the prior question at turn start", () => {
+test("dashboard-10/33: dispatching another intent in a later Boss turn leaves the prior question standing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   queueIntent(store, projectId, "D", "h");
@@ -2693,19 +2701,134 @@ test("dashboard-10/33: manually dispatching another intent clears the prior ques
   assert.equal(stateOf(ledger, "Q").reason, "question");
   assert.equal(stateOf(ledger, "D").state, "finished");
 
-  // Inspect the new dispatch before any machine state transition:
-  // its start itself acknowledges the earlier question.
+  // Inspect the new dispatch before any machine state transition: its
+  // start answers nothing, so the earlier question stands (DR-085).
   beginTurn(store, "s1", 3, "start another intent", 5000);
   store.stampIntentDispatch("N", "s1", 3, 5000);
   ledger = fold(store, [lane("s1", projectId, true)]);
   assert.equal(stateOf(ledger, "N").state, "working");
-  assert.equal(stateOf(ledger, "Q").state, "finished");
+  assert.equal(stateOf(ledger, "Q").state, "interrupted");
+  assert.equal(stateOf(ledger, "Q").reason, "question");
   assert.equal(stateOf(ledger, "D").state, "finished");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId]),
+    [["question", "Q"], ["finish", "D"]],
+  );
+
+  // Only the runtime reporting the question gone clears it.
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "awaitBossReply", to: "planAnalysis" },
+    turnId: 3,
+    timestamp: 5500,
+  });
+  ledger = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(stateOf(ledger, "N").state, "working");
+  assert.equal(stateOf(ledger, "Q").state, "finished");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId]),
     [["finish", "D"], ["finish", "Q"]],
   );
   assert.equal(store.getIntent("D")?.closedAt, undefined);
+  store.close();
+});
+
+test("dashboard-10/core-service-107: a Boss clarification turn leaves the parked question standing", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "Q", "i");
+  queueIntent(store, projectId, "N", "j");
+  beginTurn(store, "s1", 1, "plan it", 1000);
+  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "planAnalysis", to: "awaitBossReply" },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  finishTurn(store, "s1", 1, 2000);
+  let ledger = fold(store, [lane("s1", projectId, false)]);
+  assert.equal(stateOf(ledger, "Q").reason, "question");
+  assert.deepEqual(nextOf(ledger, projectId).next, {
+    standing: "question-park",
+    manualStart: false,
+  });
+
+  // The Boss asks back instead of answering, and the Captain replies;
+  // no machine reports anything, so the park stands (DR-085).
+  beginTurn(store, "s1", 2, "what do you mean by target?", 3000);
+  append(store, "s1", {
+    type: "captain_reply",
+    text: "The deployment target the plan names.",
+    turnId: 2,
+    timestamp: 3200,
+  });
+  ledger = fold(store, [lane("s1", projectId, true)]);
+  assert.equal(stateOf(ledger, "Q").state, "working");
+  finishTurn(store, "s1", 2, 3500);
+
+  ledger = fold(store, [lane("s1", projectId, false)]);
+  assert.equal(stateOf(ledger, "Q").state, "interrupted");
+  assert.equal(stateOf(ledger, "Q").reason, "question");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.since]),
+    [["question", "Q", 1500]],
+  );
+  // The queue must not hand the next intent into the parked
+  // conversation (core-service-107).
+  assert.deepEqual(nextOf(ledger, projectId).next, {
+    standing: "question-park",
+    manualStart: false,
+  });
+  store.close();
+});
+
+test("dashboard-10: a state report's pending questions raise the question under any state, and an empty set clears it", () => {
+  const { store, projectId } = newProjectStore();
+  addSession(store, projectId, "s1");
+  queueIntent(store, projectId, "Q", "i");
+  beginTurn(store, "s1", 1, "analyse it", 1000);
+  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: {
+      from: "analysing",
+      to: "clarifying",
+      pendingBossQuestions: [
+        { question: "Which target?", asker: { kind: "role", roleId: "Analyst" } },
+      ],
+    },
+    turnId: 1,
+    timestamp: 1500,
+  });
+  finishTurn(store, "s1", 1, 2000);
+  let ledger = fold(store, [lane("s1", projectId, false)]);
+  assert.equal(stateOf(ledger, "Q").state, "interrupted");
+  assert.equal(stateOf(ledger, "Q").reason, "question");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.since]),
+    [["question", "Q", 1500]],
+  );
+
+  // The Boss answers; the runtime's next report carries no question.
+  beginTurn(store, "s1", 2, "the primary target", 3000);
+  append(store, "s1", {
+    type: "captain_telemetry",
+    topic: "playbook.fsm.state",
+    payload: { from: "clarifying", to: "analysing", pendingBossQuestions: [] },
+    turnId: 2,
+    timestamp: 3200,
+  });
+  finishTurn(store, "s1", 2, 3500);
+  ledger = fold(store, [lane("s1", projectId, false)]);
+  assert.equal(stateOf(ledger, "Q").state, "finished");
+  assert.deepEqual(
+    ledger.attention.map((entry) => [entry.kind, entry.intentId]),
+    [["finish", "Q"]],
+  );
   store.close();
 });
 

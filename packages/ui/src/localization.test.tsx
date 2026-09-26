@@ -15,6 +15,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 
@@ -45,6 +46,12 @@ import {
   relativeAge,
 } from "./lib/time.js";
 import type { Language } from "@sublang/spex-core/language";
+import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
+import {
+  applyRecords,
+  initialSessionView,
+  type SessionView,
+} from "./state/reducer.js";
 
 // jsdom has no layout, so the strip's keep-in-view call needs a stub.
 Element.prototype.scrollIntoView = vi.fn();
@@ -111,6 +118,112 @@ const SPEC_TREE = {
   readAt: 0,
 };
 
+const PLAYERS = [{ id: "dev.coder", adapter: "claude" as const }];
+
+/** A conversation the core can continue: its tab shows the run view,
+ * whose Captain and player carry the agents' chips. */
+const SESSION: SessionInfo = {
+  id: "s1",
+  projectId: "p1",
+  projectPath: "/tmp/alpha",
+  createdAt: NOW - HOUR,
+  live: false,
+  endedAt: NOW - 30 * MINUTE,
+  continuable: true,
+  players: PLAYERS,
+  initialVisible: ["dev.coder"],
+  title: "fix the bug",
+  turns: 1,
+  failed: false,
+};
+
+/** Its stored records. The page phrases two of their lines as it folds
+ * them (localization-4): an error the agent reported with no words of
+ * its own reads "agent error", and a turn aborted with no reason reads
+ * "◆ turn aborted" in the Captain's thread. */
+const RECORDS = [
+  {
+    seq: 1,
+    record: {
+      type: "turn_started",
+      turnId: 1,
+      timestamp: NOW - HOUR,
+      turn: { id: 1, prompt: "fix the bug", timestamp: NOW - HOUR },
+    },
+  },
+  {
+    seq: 2,
+    record: {
+      type: "player_prompt",
+      turnId: 1,
+      timestamp: NOW - HOUR + 1000,
+      playerId: "dev.coder",
+      prompt: "Fix the bug in auth.ts",
+    },
+  },
+  {
+    seq: 3,
+    record: {
+      type: "player_event",
+      turnId: 1,
+      timestamp: NOW - HOUR + 2000,
+      playerId: "dev.coder",
+      event: {
+        type: "error",
+        agent: "claude",
+        timestamp: NOW - HOUR + 2000,
+        sessionId: "a",
+        payload: {},
+      },
+    },
+  },
+  {
+    seq: 4,
+    record: { type: "turn_aborted", turnId: 1, timestamp: NOW - HOUR + 3000 },
+  },
+] as unknown as { seq: number; record: TmuxPlayRecord }[];
+
+/** The conversation as the page folded it, in the language active now. */
+function foldedView(): SessionView {
+  return applyRecords(initialSessionView(PLAYERS), RECORDS);
+}
+
+/** What the core serves of the sessions and their stored records; a
+ * change of language re-reads both. */
+let servedSessions: SessionInfo[] = [];
+let servedHistory: Record<string, typeof RECORDS> = {};
+
+/** Stand s1 in the store, loaded and folded, with its tab the one the
+ * workspace shows when `shown`. */
+function holdConversation(shown: boolean): SessionView {
+  servedSessions = [SESSION];
+  servedHistory = { s1: RECORDS };
+  const view = foldedView();
+  useAppStore.setState({
+    sessions: [SESSION],
+    views: { s1: view },
+    ...(shown
+      ? {
+          activeSessionId: "s1",
+          openTabs: { p1: ["s1"] },
+          workspaceTabs: { p1: "s1" },
+        }
+      : {}),
+  } as never);
+  return view;
+}
+
+/** The Captain thread's lines and the coder's error, as folded. */
+function foldedWords(): { captain: string[]; coder: string[] } {
+  const view = useAppStore.getState().views.s1;
+  return {
+    captain: view.captain.map((line) => line.text),
+    coder: view.players["dev.coder"].segments.flatMap((segment) =>
+      segment.kind === "error" ? [segment.message] : [],
+    ),
+  };
+}
+
 function seed(): void {
   useAppStore.setState({
     connection: "open",
@@ -169,7 +282,10 @@ function serveLedger(ledger: unknown): void {
       if (type === "config.get") return CONFIG;
       if (type === "readiness.get") return [];
       if (type === "project.list") return PROJECTS;
-      if (type === "session.list") return [];
+      if (type === "session.list") return servedSessions;
+      if (type === "history.get") {
+        return { records: servedHistory[fields.sessionId as string] ?? [] };
+      }
       if (type === "draft.list") return [];
       if (type === "specs.get") return SPEC_TREE;
       // The agent editor a form under edit opens asks what it offers.
@@ -221,6 +337,8 @@ async function goTo(surface: "Dashboard" | "Settings"): Promise<void> {
 beforeEach(() => {
   commandMock.mockReset();
   homeLanguage = null;
+  servedSessions = [];
+  servedHistory = {};
   serveLedger(EMPTY_LEDGER);
   // Store actions resolve the module-local client, which the module
   // mock cannot reach.
@@ -623,6 +741,78 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     }
   });
 
+  test("a change of language folds each loaded conversation again in the new words", async () => {
+    speak("en", null);
+    holdConversation(true);
+    render(<Root />);
+    await quiet();
+    // Folded in English: the words are the fold's, not the render's.
+    expect(foldedWords()).toEqual({
+      captain: ["fix the bug", "◆ turn aborted"],
+      coder: ["agent error"],
+    });
+    const systemLines = () =>
+      screen
+        .getAllByTestId("system-line")
+        .map((line) => line.textContent ?? "");
+    expect(systemLines()).toContain("◆ turn aborted");
+    await broadcast("zh");
+    // The catalog's words for the same records (zh/messages.po).
+    await waitFor(() =>
+      expect(foldedWords()).toEqual({
+        captain: ["fix the bug", "◆ 本轮已中止"],
+        coder: ["智能体错误"],
+      }),
+    );
+    expect(systemLines()).toContain("◆ 本轮已中止");
+    expect(systemLines()).not.toContain("◆ turn aborted");
+    const coder = screen.getByTestId("player-pane-dev.coder").textContent ?? "";
+    expect(coder).toContain("智能体错误");
+    expect(coder).not.toContain("agent error");
+  });
+
+  test("the conversation shown keeps its mount, and an editor open in it keeps its edit", async () => {
+    speak("en", null);
+    holdConversation(true);
+    render(<Root />);
+    await quiet();
+    const pane = screen.getByTestId("captain-pane");
+    const composer = screen.getByTestId("boss-composer");
+    // The Captain's own editor, open from its chip, with a field moved
+    // and not saved: its draft is the editor's React state alone.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("agent-chip-captain"));
+    });
+    const editor = await screen.findByTestId("agent-settings-captain");
+    const mode = within(editor).getByTestId<HTMLSelectElement>(
+      "agent-captain-model-mode",
+    );
+    await act(async () => {
+      fireEvent.change(mode, { target: { value: "provider" } });
+    });
+    expect(mode.value).toBe("provider");
+
+    await broadcast("zh");
+    // The re-fold landed and the page speaks Chinese …
+    await waitFor(() =>
+      expect(foldedWords().captain).toContain("◆ 本轮已中止"),
+    );
+    expect(railLabels()).toContain("仪表盘");
+    // … over the very nodes it had: a remount would have replaced them.
+    expect(document.contains(pane)).toBe(true);
+    expect(screen.getByTestId("captain-pane")).toBe(pane);
+    expect(screen.getByTestId("boss-composer")).toBe(composer);
+    expect(screen.getByTestId("agent-settings-captain")).toBe(editor);
+    expect(
+      within(editor).getByTestId<HTMLSelectElement>("agent-captain-model-mode"),
+    ).toBe(mode);
+    expect(mode.value).toBe("provider");
+    expect(commandMock).not.toHaveBeenCalledWith(
+      "session.agent.set",
+      expect.anything(),
+    );
+  });
+
   describe("a page whose browser asks for Chinese", () => {
     // The page resolves zh from its own browser with nothing stored, so
     // the home's choice can move to zh while this page's language stays.
@@ -639,25 +829,56 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     test("a choice that moves while the resolution stays re-reads the live state and the cached spec trees", async () => {
       speak("zh", null);
       useAppStore.setState({ space: SPACE, specTrees: { p1: SPEC_TREE } as never });
+      const loaded = holdConversation(false);
       render(<Root />);
       await quiet();
-      // System to 简体中文: this page already speaks Chinese, but the
-      // core composed its prose for a home that chose nothing.
-      await broadcast("zh");
-      expect(useAppStore.getState().language).toMatchObject({ choice: "zh", resolved: "zh" });
-      const asked = commandMock.mock.calls.map(([type]) => type as string);
-      for (const command of [
-        "config.get",
-        "readiness.get",
-        "project.list",
-        "session.list",
-        "space.get",
-      ]) {
-        expect(asked, `${command} re-read`).toContain(command);
+      // Every state the store passes through from here on, as a
+      // subscriber sees it.
+      const held: boolean[] = [];
+      const unsubscribe = useAppStore.subscribe((state) => {
+        held.push(state.views.s1 !== undefined);
+      });
+      try {
+        // System to 简体中文: this page already speaks Chinese, but the
+        // core composed its prose for a home that chose nothing.
+        await broadcast("zh");
+        expect(useAppStore.getState().language).toMatchObject({ choice: "zh", resolved: "zh" });
+        const asked = commandMock.mock.calls.map(([type]) => type as string);
+        for (const command of [
+          "config.get",
+          "readiness.get",
+          "project.list",
+          "session.list",
+          "space.get",
+        ]) {
+          expect(asked, `${command} re-read`).toContain(command);
+        }
+        expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
+        // Re-read in place: the cached tree never blanks on the way.
+        expect(useAppStore.getState().specTrees.p1).toBeDefined();
+        // The loaded conversation is folded again from its first record
+        // and swapped in whole.
+        await waitFor(() => {
+          expect(commandMock).toHaveBeenCalledWith("history.get", {
+            sessionId: "s1",
+            afterSeq: 0,
+          });
+          expect(useAppStore.getState().views.s1).not.toBe(loaded);
+        });
+      } finally {
+        unsubscribe();
       }
-      expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
-      // Re-read in place: the cached tree never blanks on the way.
-      expect(useAppStore.getState().specTrees.p1).toBeDefined();
+      // In place: no state on the way lacked the conversation.
+      expect(held.length).toBeGreaterThan(0);
+      expect(held.every(Boolean)).toBe(true);
+      // The re-fold holds every record the first fold held.
+      const refolded = useAppStore.getState().views.s1;
+      expect(refolded.lastSeq).toBe(loaded.lastSeq);
+      expect(refolded.lastSeq).toBe(RECORDS.length);
+      expect(refolded.loading).toBeFalsy();
+      expect(refolded.captain.map((line) => line.kind)).toEqual(
+        loaded.captain.map((line) => line.kind),
+      );
     });
 
     test("a broadcast that moves neither the choice nor the resolution sends nothing", async () => {

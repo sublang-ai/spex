@@ -2750,6 +2750,8 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     const { props } = renderInterrupted(onRecover);
     expect(screen.getByText("Original interrupted request")).toBeTruthy();
     expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
+    // The draft stays typable while only sending is blocked (run-view-110).
+    expect((screen.getByTestId("boss-composer") as HTMLTextAreaElement).disabled).toBe(false);
     const send = screen.getAllByRole("button").find((b) => b.textContent === "Send");
     expect((send as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));

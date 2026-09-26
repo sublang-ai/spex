@@ -21,10 +21,10 @@ export type PhaseStatus = "waiting" | "running" | "done" | "failed";
 
 export interface PhaseView {
   /** The compiler's id: `normalize`, `text2gears`, …, or `spex` for
-   * Spex's own packaging step. */
+   * Spex's own packaging step. The row names it through `phaseLabel`
+   * as it renders, so a change of language reaches the name
+   * (localization-4); the fold holds no text. */
   id: string;
-  /** The name the row shows, in the language the fold was read in. */
-  label: string;
   status: PhaseStatus;
   /** The compiler's own elapsed text for a finished or failed phase
    * (`2s`, `6m40s`), or the heartbeat's last report while running. */
@@ -101,7 +101,6 @@ export function foldCompileLog(
 ): CompileLogFold {
   const phases: PhaseView[] = PIPELINE_PHASES.map((phase) => ({
     id: phase.id,
-    label: phaseLabel(phase.id),
     status: "waiting",
     output: [],
   }));
@@ -112,7 +111,7 @@ export function foldCompileLog(
     // A phase the row does not know is appended before Spex's own
     // packaging step, so the compiler's order is kept and Package
     // stays last.
-    const created: PhaseView = { id, label: id, status: "waiting", output: [] };
+    const created: PhaseView = { id, status: "waiting", output: [] };
     const packageIndex = phases.findIndex((entry) => entry.id === "spex");
     phases.splice(packageIndex === -1 ? phases.length : packageIndex, 0, created);
     byId.set(id, created);

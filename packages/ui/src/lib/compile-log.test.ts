@@ -20,7 +20,8 @@ describe("foldCompileLog", () => {
       "→ text2gears (writing triage.playbook/triage.gears.md)",
     ];
     const fold = foldCompileLog(lines, [t, t + 1000, t + 3000, t + 3500]);
-    expect(fold.phases.map((phase) => phase.label)).toEqual([
+    // The fold holds ids only; the row names each as it renders.
+    expect(fold.phases.map((phase) => phaseLabel(phase.id))).toEqual([
       "Normalize",
       "Spec items",
       "Optimize",
@@ -63,7 +64,7 @@ describe("foldCompileLog", () => {
       "  at Results: bullet 3",
     ]);
     expect(fold.failed?.id).toBe("gears2fsm");
-    expect(fold.failed?.label).toBe("Machine");
+    expect(phaseLabel(fold.failed!.id)).toBe("Machine");
     expect(fold.failed).toMatchObject({ status: "failed", elapsed: "6m40s" });
     expect(fold.failed?.output).toEqual([
       "result 'labeled' declared twice in TRIAGE-2",
@@ -108,7 +109,7 @@ describe("foldCompileLog", () => {
     ]);
     // An unknown id reads as itself rather than a made-up word.
     const lint = fold.phases.find((phase) => phase.id === "lint")!;
-    expect(lint.label).toBe("lint");
+    expect(phaseLabel(lint.id)).toBe("lint");
     expect(lint).toMatchObject({ status: "done", elapsed: "3s" });
     expect(fold.phases[fold.phases.length - 1].id).toBe("spex");
   });

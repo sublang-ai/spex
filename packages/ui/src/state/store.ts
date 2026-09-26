@@ -361,6 +361,13 @@ export interface AppState {
   setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<void>;
   connect(url?: string): void;
   refresh(): Promise<void>;
+  /** Re-read the core's prose after the home's choice of language
+   * changed (localization-11): the config, readiness, the projects and
+   * the sessions, the ledger, each project's forge guidance, the
+   * drafts, and every loaded conversation folded again in place —
+   * never cleared, so the conversation shown keeps its mount and every
+   * editor open in it keeps its state. */
+  rereadProse(): Promise<void>;
   setCurrentProject(projectId: string | undefined): void;
   setWorkspaceTab(projectId: string, tab: string): void;
   /** Add a session to a project's working set (idempotent). */
@@ -779,13 +786,16 @@ export const useAppStore = create<AppState>((set, get) => {
     // a page already resolving it from the browser) still changes what
     // the core writes. So a change of either re-reads what this page
     // holds of that prose — the config, readiness, the projects and the
-    // sessions, the Space with the diagnostics it carries where this
-    // page holds a Space at all, and every cached spec tree with its
-    // notices (a re-load replaces each tree in place, so the view never
-    // blanks).
+    // sessions, the ledger and each project's guidance, the drafts,
+    // every loaded conversation folded again in place, the Space with
+    // the diagnostics it carries where this page holds a Space at all,
+    // and every cached spec tree with its notices. Each re-load
+    // replaces what it read in place, so no view blanks and nothing
+    // the reader has open loses its state; a reconnect's refresh, which
+    // clears the views, is not what a language change needs.
     if (!(changed || choiceChanged) || options.reread === false) return;
     if (get().connection !== "open") return;
-    void get().refresh().catch(() => {});
+    void get().rereadProse().catch(() => {});
     if (get().space) void get().loadSpace().catch(() => {});
     for (const id of Object.keys(get().specTrees)) void get().loadSpecs(id);
   }
@@ -854,6 +864,38 @@ export const useAppStore = create<AppState>((set, get) => {
   /** Subscribe and backfill a session's view (idempotent). Live
    * records arriving mid-backfill buffer and apply afterwards, so a
    * reconnect can never lose the gap. */
+  /** Fold a loaded conversation again from its first record and swap
+   * the result in. The page phrases some lines at fold time — a run's
+   * "finished" stand-in, an aborted turn, an agent error — in the
+   * language of that moment, so a change of language reads them again
+   * (localization-11) without the view ever leaving the store: the
+   * conversation shown keeps its mount, and every editor open in it
+   * its state. Live records arriving meanwhile buffer as for a
+   * backfill, so nothing is lost across the swap; lane folds are not
+   * touched, since no record is new. */
+  async function refoldView(sessionId: string): Promise<void> {
+    if (!get().views[sessionId]) return;
+    const pending: {seq: number; record: TmuxPlayRecord; role?: string}[] = [];
+    backfilling.set(sessionId, pending);
+    try {
+      const history = await getClient().command("history.get", { sessionId, afterSeq: 0 });
+      const fresh = get();
+      if (!fresh.views[sessionId] || backfilling.get(sessionId) !== pending) return;
+      const session = fresh.sessions.find((s) => s.id === sessionId);
+      const view = initialSessionView(session?.players ?? []);
+      for (const entry of history.records) {
+        applyRecord(view, entry.seq, permissionAsFailure(entry.record), entry.role);
+      }
+      for (const entry of backfilling.get(sessionId) ?? []) {
+        if (entry.seq > view.lastSeq) applyRecord(view, entry.seq, permissionAsFailure(entry.record), entry.role);
+      }
+      view.loading = false;
+      set({ views: { ...get().views, [sessionId]: sessionActivity(view, session) } });
+    } finally {
+      if (backfilling.get(sessionId) === pending) backfilling.delete(sessionId);
+    }
+  }
+
   async function ensureSubscribed(sessionId: string): Promise<void> {
     const state = get();
     const session = state.sessions.find((s) => s.id === sessionId);
@@ -1370,6 +1412,20 @@ export const useAppStore = create<AppState>((set, get) => {
         },
       });
       client.connect();
+    },
+
+    async rereadProse(): Promise<void> {
+      const [configState, readiness, projects, sessions] = await Promise.all([
+        getClient().command("config.get", {}),
+        getClient().command("readiness.get", {}),
+        getClient().command("project.list", {}),
+        getClient().command("session.list", {}),
+      ]);
+      set({ configState, readiness, projects, sessions });
+      void get().loadLedger();
+      for (const project of projects) void get().loadProjectMeta(project.id);
+      void get().listDrafts().catch(() => {});
+      for (const sessionId of Object.keys(get().views)) void refoldView(sessionId).catch(() => {});
     },
 
     async refresh(): Promise<void> {
