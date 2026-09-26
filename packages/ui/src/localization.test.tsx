@@ -249,6 +249,7 @@ function seed(): void {
     ledgerError: undefined,
     space: undefined,
     foldedSources: {},
+    collapsedLanes: {},
     dashboardGroupsCollapsed: {},
     configState: CONFIG,
   } as never);
@@ -811,6 +812,252 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
       "session.agent.set",
       expect.anything(),
     );
+  });
+
+  /** Hold the re-fold's read of the history until the test answers or
+   * fails it; every other command is served as before. */
+  function holdHistory(): {
+    answer(records: typeof RECORDS): Promise<void>;
+    fail(cause: Error): Promise<void>;
+  } {
+    let answer!: (history: { records: typeof RECORDS }) => void;
+    let fail!: (cause: Error) => void;
+    const read = new Promise<{ records: typeof RECORDS }>((resolve, reject) => {
+      answer = resolve;
+      fail = reject;
+    });
+    const serve = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, fields?: Record<string, unknown>) =>
+      type === "history.get" ? read : serve(type, fields),
+    );
+    return {
+      answer: async (records) => {
+        await act(async () => answer({ records }));
+      },
+      fail: async (cause) => {
+        await act(async () => fail(cause));
+      },
+    };
+  }
+
+  /** The core pushing one of s1's records as it lands. */
+  async function push(
+    entry: { seq: number; record: Record<string, unknown> },
+    role?: string,
+  ): Promise<void> {
+    await act(async () => {
+      deliverServerMessageForTests({
+        type: "record",
+        channel: "session",
+        sessionId: "s1",
+        seq: entry.seq,
+        record: entry.record as unknown as TmuxPlayRecord,
+        ...(role !== undefined ? { role } : {}),
+      });
+    });
+  }
+
+  /** Move the home's choice to 简体中文 and wait until the re-fold asks
+   * for the conversation from its first record. */
+  async function changeLanguageUntilRead(): Promise<void> {
+    await broadcast("zh");
+    await waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("history.get", {
+        sessionId: "s1",
+        afterSeq: 0,
+      }),
+    );
+  }
+
+  /** The coder lane's prompts, in the order it received them. */
+  function coderPrompts(view: SessionView): { text: string; role?: string }[] {
+    return view.players["dev.coder"].segments.flatMap((segment) =>
+      segment.kind === "prompt"
+        ? [{ text: segment.text, ...(segment.role !== undefined ? { role: segment.role } : {}) }]
+        : [],
+    );
+  }
+
+  test("live records keep acting on the shown view while its history is read", async () => {
+    speak("en", null);
+    holdConversation(true);
+    // The runtime holds the session for a turn, and the Boss has a
+    // message queued behind it.
+    const running: SessionInfo = { ...SESSION, live: true, endedAt: null };
+    servedSessions = [running];
+    useAppStore.setState({
+      sessions: [running],
+      composers: { s1: { queued: [{ text: "then write the docs" }] } },
+    } as never);
+    render(<Root />);
+    await quiet();
+    const read = holdHistory();
+    await changeLanguageUntilRead();
+
+    // While the history is read the Captain parks a question …
+    const park = {
+      seq: 5,
+      record: {
+        type: "captain_telemetry",
+        turnId: 1,
+        timestamp: NOW,
+        topic: "playbook.fsm.state",
+        payload: {
+          to: "awaitBossReply",
+          pendingBossQuestions: [{ question: "Which target?" }],
+        },
+      },
+    };
+    const ask = {
+      seq: 6,
+      record: { type: "captain_reply", turnId: 1, timestamp: NOW + 1, text: "Which target?" },
+    };
+    await push(park);
+    await push(ask);
+    // … and the view shown holds it at once.
+    const shown = useAppStore.getState().views.s1;
+    expect(shown.pendingQuestion).toBe("Which target?");
+    expect(shown.lastSeq).toBe(6);
+    expect(shown.captain.filter((line) => line.text === "Which target?")).toEqual([
+      expect.objectContaining({ kind: "question" }),
+    ]);
+
+    // The turn settles with the question open: the view shown carries
+    // it, so the queued message stays queued.
+    await act(async () => {
+      deliverServerMessageForTests({
+        type: "session.state",
+        session: { ...running, live: false, endedAt: NOW + 2 },
+      });
+    });
+    expect(commandMock).not.toHaveBeenCalledWith("turn.submit", expect.anything());
+    expect(useAppStore.getState().composers.s1.queued).toEqual([
+      { text: "then write the docs" },
+    ]);
+
+    // The read answers with what the core had stored by then, the two
+    // live records among them.
+    await read.answer([...RECORDS, park, ask] as unknown as typeof RECORDS);
+    await waitFor(() => expect(foldedWords().captain).toContain("◆ 本轮已中止"));
+    const refolded = useAppStore.getState().views.s1;
+    expect(refolded.pendingQuestion).toBe("Which target?");
+    expect(refolded.lastSeq).toBe(6);
+    // Once, though both the read and the live stream carried it.
+    expect(refolded.captain.map((line) => line.text)).toEqual([
+      "fix the bug",
+      "◆ 本轮已中止",
+      "Which target?",
+    ]);
+    expect(refolded.turnActive).toBe(false);
+    // The swap releases nothing either.
+    expect(commandMock).not.toHaveBeenCalledWith("turn.submit", expect.anything());
+    expect(useAppStore.getState().composers.s1.queued).toHaveLength(1);
+  });
+
+  test("a record received during the read keeps its effects and reaches the replacement once", async () => {
+    speak("en", null);
+    holdConversation(true);
+    useAppStore.setState({ collapsedLanes: { s1: ["dev.coder"] } });
+    render(<Root />);
+    await quiet();
+    const lane = () => screen.getByTestId("player-pane-dev.coder");
+    expect(lane().dataset.collapsed).toBe("true");
+    const read = holdHistory();
+    await changeLanguageUntilRead();
+
+    // The coder's next call opens while the history is read …
+    await push(
+      {
+        seq: 5,
+        record: {
+          type: "player_prompt",
+          turnId: 2,
+          timestamp: NOW,
+          playerId: "dev.coder",
+          prompt: "Cover the fix with a test",
+        },
+      },
+      "code",
+    );
+    // … and its folded lane opens at once (run-view-117).
+    expect(useAppStore.getState().collapsedLanes.s1).toEqual([]);
+    expect(lane().dataset.collapsed).toBeUndefined();
+    expect(coderPrompts(useAppStore.getState().views.s1)).toEqual([
+      { text: "Fix the bug in auth.ts" },
+      { text: "Cover the fix with a test", role: "code" },
+    ]);
+
+    // The read answers with what the core had stored before the call
+    // opened: the replacement takes the call from the live stream.
+    await read.answer(RECORDS);
+    await waitFor(() => expect(foldedWords().coder).toEqual(["智能体错误"]));
+    const refolded = useAppStore.getState().views.s1;
+    expect(refolded.lastSeq).toBe(5);
+    expect(coderPrompts(refolded)).toEqual([
+      { text: "Fix the bug in auth.ts" },
+      { text: "Cover the fix with a test", role: "code" },
+    ]);
+    expect(refolded.players["dev.coder"].running).toBe(true);
+    expect(useAppStore.getState().collapsedLanes.s1).toEqual([]);
+    expect(lane().dataset.collapsed).toBeUndefined();
+  });
+
+  test("a failed history read leaves the shown view with everything it received", async () => {
+    speak("en", null);
+    holdConversation(true);
+    render(<Root />);
+    await quiet();
+    const read = holdHistory();
+    await changeLanguageUntilRead();
+
+    const reply = {
+      seq: 5,
+      record: {
+        type: "captain_reply",
+        turnId: 1,
+        timestamp: NOW,
+        text: "The fix is in auth.ts.",
+      },
+    };
+    await push(reply);
+    const shown = useAppStore.getState().views.s1;
+    await read.fail(new Error("history unreadable"));
+
+    // The view shown stands as it was, the reply and all: its earlier
+    // lines keep the words they were folded in.
+    const view = useAppStore.getState().views.s1;
+    expect(view).toBe(shown);
+    expect(view.lastSeq).toBe(5);
+    expect(view.captain.map((line) => line.text)).toEqual([
+      "fix the bug",
+      "◆ turn aborted",
+      "The fix is in auth.ts.",
+    ]);
+    expect(
+      within(screen.getByTestId("captain-pane")).getByText("The fix is in auth.ts."),
+    ).toBeTruthy();
+    // No failure surfaces: the change of language swallowed it.
+    expect(view.loadError).toBeUndefined();
+    expect(view.loading).toBeFalsy();
+    expect(useAppStore.getState().runErrors.s1).toBeUndefined();
+
+    // Nor does the failed read stand in the way of the next change.
+    servedHistory = { s1: [...RECORDS, reply] as unknown as typeof RECORDS };
+    serveLedger(EMPTY_LEDGER);
+    commandMock.mockClear();
+    await broadcast("en");
+    await waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("history.get", {
+        sessionId: "s1",
+        afterSeq: 0,
+      }),
+    );
+    await waitFor(() => expect(useAppStore.getState().views.s1).not.toBe(shown));
+    expect(useAppStore.getState().views.s1.captain.map((line) => line.text)).toEqual([
+      "fix the bug",
+      "◆ turn aborted",
+      "The fix is in auth.ts.",
+    ]);
   });
 
   describe("a page whose browser asks for Chinese", () => {

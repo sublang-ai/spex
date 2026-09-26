@@ -700,6 +700,15 @@ const backfilling = new Map<
   }[]
 >();
 
+/** Live records a session received while its view was being folded
+ * again for a change of language (localization-11): they were applied
+ * to the view shown, with their effects, as they arrived, and reach
+ * the replacement view once more without them. */
+const refolding = new Map<
+  string,
+  { seq: number; record: TmuxPlayRecord; role?: string }[]
+>();
+
 /** Drafts with a draft.open replay in flight: live draft.record
  * messages buffer here and apply after the replay, in seq order. */
 const draftBackfilling = new Map<string, DraftRecord[]>();
@@ -870,29 +879,34 @@ export const useAppStore = create<AppState>((set, get) => {
    * language of that moment, so a change of language reads them again
    * (localization-11) without the view ever leaving the store: the
    * conversation shown keeps its mount, and every editor open in it
-   * its state. Live records arriving meanwhile buffer as for a
-   * backfill, so nothing is lost across the swap; lane folds are not
-   * touched, since no record is new. */
+   * its state. Live handling never pauses for it: a record arriving
+   * while the history is read applies to the view shown at once, with
+   * every effect it carries — a lane opened, a queued send released,
+   * a spec tree re-read — and is only mirrored into the replacement
+   * afterwards, so nothing happens twice and nothing waits; a failed
+   * read leaves the view shown, which holds everything it received. A
+   * backfill in flight owns the session's records, so no re-fold runs
+   * beside one. */
   async function refoldView(sessionId: string): Promise<void> {
-    if (!get().views[sessionId]) return;
-    const pending: {seq: number; record: TmuxPlayRecord; role?: string}[] = [];
-    backfilling.set(sessionId, pending);
+    if (!get().views[sessionId] || backfilling.has(sessionId) || refolding.has(sessionId)) return;
+    const seen: {seq: number; record: TmuxPlayRecord; role?: string}[] = [];
+    refolding.set(sessionId, seen);
     try {
       const history = await getClient().command("history.get", { sessionId, afterSeq: 0 });
-      const fresh = get();
-      if (!fresh.views[sessionId] || backfilling.get(sessionId) !== pending) return;
-      const session = fresh.sessions.find((s) => s.id === sessionId);
+      const current = get();
+      if (!current.views[sessionId] || backfilling.has(sessionId) || refolding.get(sessionId) !== seen) return;
+      const session = current.sessions.find((s) => s.id === sessionId);
       const view = initialSessionView(session?.players ?? []);
       for (const entry of history.records) {
         applyRecord(view, entry.seq, permissionAsFailure(entry.record), entry.role);
       }
-      for (const entry of backfilling.get(sessionId) ?? []) {
+      for (const entry of seen) {
         if (entry.seq > view.lastSeq) applyRecord(view, entry.seq, permissionAsFailure(entry.record), entry.role);
       }
       view.loading = false;
       set({ views: { ...get().views, [sessionId]: sessionActivity(view, session) } });
     } finally {
-      if (backfilling.get(sessionId) === pending) backfilling.delete(sessionId);
+      if (refolding.get(sessionId) === seen) refolding.delete(sessionId);
     }
   }
 
@@ -1209,6 +1223,9 @@ export const useAppStore = create<AppState>((set, get) => {
           buffer.push({ seq, record, ...(role !== undefined ? { role } : {}) });
           break;
         }
+        // A re-fold in flight sees the record too, after this view has
+        // taken it with its effects.
+        refolding.get(sessionId)?.push({ seq, record, ...(role !== undefined ? { role } : {}) });
         const state = get();
         const session = state.sessions.find((s) => s.id === sessionId);
         const view =
