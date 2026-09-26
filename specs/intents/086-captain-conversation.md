@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `codex/captain-conversation`; not merged or released.
+Completed on `codex/captain-conversation` and merged to `main` on 2026-09-25 after two review rounds; not released.
 
 ## Intent
 
