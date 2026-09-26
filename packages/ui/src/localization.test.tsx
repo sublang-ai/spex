@@ -1060,6 +1060,144 @@ describe("localization-11: a change of choice re-reads the core's prose", () => 
     ]);
   });
 
+  /** Hold every read of s1's history until the test answers it, each
+   * by where it starts: a re-fold reads from the first record
+   * (afterSeq 0), a backfill after the view's last (afterSeq > 0), so
+   * both can be held at once and answered in either order. Every other
+   * command is served as before. */
+  function holdHistoryReads(): {
+    issued(afterSeq: number): number;
+    answer(afterSeq: number, records: typeof RECORDS): Promise<void>;
+  } {
+    const held = new Map<number, ((history: { records: typeof RECORDS }) => void)[]>();
+    const issued = new Map<number, number>();
+    const serve = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, fields?: Record<string, unknown>) => {
+      if (type !== "history.get") return serve(type, fields);
+      const afterSeq = fields?.afterSeq as number;
+      issued.set(afterSeq, (issued.get(afterSeq) ?? 0) + 1);
+      return new Promise<{ records: typeof RECORDS }>((resolve) => {
+        held.set(afterSeq, [...(held.get(afterSeq) ?? []), resolve]);
+      });
+    });
+    return {
+      issued: (afterSeq) => issued.get(afterSeq) ?? 0,
+      answer: async (afterSeq, records) => {
+        const resolve = held.get(afterSeq)?.shift();
+        if (!resolve) throw new Error(`no history read after ${afterSeq} is held`);
+        await act(async () => resolve({ records }));
+      },
+    };
+  }
+
+  /** The Boss writing to s1 while it is paused: the message opens the
+   * session again, and its subscription backfills the loaded view from
+   * after its last record before the turn is submitted. */
+  function continueConversation(): Promise<void> {
+    return useAppStore.getState().submitBossText("s1", "now write the docs");
+  }
+
+  /** The backfill subscribes before it reads: the fake client takes it. */
+  function acceptSubscriptions(): void {
+    setClientForTests({ command: commandMock, subscribe: async () => {} } as never);
+  }
+
+  test("a language change met by a backfill in flight re-folds once the backfill settles", async () => {
+    speak("en", null);
+    const loaded = holdConversation(true);
+    acceptSubscriptions();
+    render(<Root />);
+    await quiet();
+    const reads = holdHistoryReads();
+    const sent = continueConversation();
+    await waitFor(() => expect(reads.issued(loaded.lastSeq)).toBe(1));
+    expect(commandMock).toHaveBeenCalledWith("history.get", {
+      sessionId: "s1",
+      afterSeq: RECORDS.length,
+    });
+
+    await broadcast("zh");
+    // The re-read reached the loaded conversations …
+    await waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.list", {}));
+    // … and held the re-fold behind the backfill: nothing is read from
+    // the first record, and the line keeps the words it was folded in.
+    expect(reads.issued(0)).toBe(0);
+    expect(foldedWords().captain).toEqual(["fix the bug", "◆ turn aborted"]);
+    expect(screen.getByTestId("captain-pane").textContent).toContain("◆ turn aborted");
+
+    // The backfill settles, and the held re-fold runs.
+    await reads.answer(loaded.lastSeq, []);
+    await waitFor(() => expect(reads.issued(0)).toBe(1));
+    expect(commandMock).toHaveBeenCalledWith("history.get", {
+      sessionId: "s1",
+      afterSeq: 0,
+    });
+    const backfilled = useAppStore.getState().views.s1;
+    expect(backfilled.captain.map((line) => line.text)).toContain("◆ turn aborted");
+    await reads.answer(0, RECORDS);
+    await waitFor(() => expect(useAppStore.getState().views.s1).not.toBe(backfilled));
+    expect(foldedWords()).toEqual({
+      captain: ["fix the bug", "◆ 本轮已中止"],
+      coder: ["智能体错误"],
+    });
+    const captain = screen.getByTestId("captain-pane").textContent ?? "";
+    expect(captain).toContain("◆ 本轮已中止");
+    expect(captain).not.toContain("◆ turn aborted");
+    expect(useAppStore.getState().views.s1.lastSeq).toBe(RECORDS.length);
+
+    // The message the backfill preceded goes out as before.
+    await act(async () => {
+      await sent;
+    });
+    expect(commandMock).toHaveBeenCalledWith("turn.submit", {
+      sessionId: "s1",
+      text: "now write the docs",
+    });
+  });
+
+  test("a backfill starting during the re-fold's read holds the re-fold until it settles", async () => {
+    speak("en", null);
+    const loaded = holdConversation(true);
+    acceptSubscriptions();
+    render(<Root />);
+    await quiet();
+    const reads = holdHistoryReads();
+    await broadcast("zh");
+    await waitFor(() => expect(reads.issued(0)).toBe(1));
+    const sent = continueConversation();
+    await waitFor(() => expect(reads.issued(loaded.lastSeq)).toBe(1));
+
+    // The re-fold's read answers first: the backfill owns the records,
+    // so nothing is swapped in and the line keeps its English words.
+    await reads.answer(0, RECORDS);
+    expect(useAppStore.getState().views.s1).toBe(loaded);
+    expect(foldedWords().captain).toEqual(["fix the bug", "◆ turn aborted"]);
+    expect(reads.issued(0)).toBe(1);
+
+    // The backfill settles, and the held re-fold reads again.
+    await reads.answer(loaded.lastSeq, []);
+    await waitFor(() => expect(reads.issued(0)).toBe(2));
+    const backfilled = useAppStore.getState().views.s1;
+    expect(backfilled.captain.map((line) => line.text)).toContain("◆ turn aborted");
+    await reads.answer(0, RECORDS);
+    await waitFor(() => expect(useAppStore.getState().views.s1).not.toBe(backfilled));
+    expect(foldedWords()).toEqual({
+      captain: ["fix the bug", "◆ 本轮已中止"],
+      coder: ["智能体错误"],
+    });
+    const captain = screen.getByTestId("captain-pane").textContent ?? "";
+    expect(captain).toContain("◆ 本轮已中止");
+    expect(captain).not.toContain("◆ turn aborted");
+
+    await act(async () => {
+      await sent;
+    });
+    expect(commandMock).toHaveBeenCalledWith("turn.submit", {
+      sessionId: "s1",
+      text: "now write the docs",
+    });
+  });
+
   describe("a page whose browser asks for Chinese", () => {
     // The page resolves zh from its own browser with nothing stored, so
     // the home's choice can move to zh while this page's language stays.

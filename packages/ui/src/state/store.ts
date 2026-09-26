@@ -708,6 +708,10 @@ const refolding = new Map<
   string,
   { seq: number; record: TmuxPlayRecord; role?: string }[]
 >();
+/** Sessions whose re-fold met a backfill in flight: the backfill owns
+ * the records until it settles, and the re-fold runs then, so a change
+ * of language never goes unread for a view (localization-11). */
+const refoldPending = new Set<string>();
 
 /** Drafts with a draft.open replay in flight: live draft.record
  * messages buffer here and apply after the replay, in seq order. */
@@ -886,15 +890,24 @@ export const useAppStore = create<AppState>((set, get) => {
    * afterwards, so nothing happens twice and nothing waits; a failed
    * read leaves the view shown, which holds everything it received. A
    * backfill in flight owns the session's records, so no re-fold runs
-   * beside one. */
+   * beside one: it is held until the backfill settles, whose end runs
+   * it, since an incremental read phrases no line again. */
   async function refoldView(sessionId: string): Promise<void> {
-    if (!get().views[sessionId] || backfilling.has(sessionId) || refolding.has(sessionId)) return;
+    if (!get().views[sessionId] || refolding.has(sessionId)) return;
+    if (backfilling.has(sessionId)) {
+      refoldPending.add(sessionId);
+      return;
+    }
     const seen: {seq: number; record: TmuxPlayRecord; role?: string}[] = [];
     refolding.set(sessionId, seen);
     try {
       const history = await getClient().command("history.get", { sessionId, afterSeq: 0 });
       const current = get();
-      if (!current.views[sessionId] || backfilling.has(sessionId) || refolding.get(sessionId) !== seen) return;
+      if (!current.views[sessionId] || refolding.get(sessionId) !== seen) return;
+      if (backfilling.has(sessionId)) {
+        refoldPending.add(sessionId);
+        return;
+      }
       const session = current.sessions.find((s) => s.id === sessionId);
       const view = initialSessionView(session?.players ?? []);
       for (const entry of history.records) {
@@ -958,7 +971,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       throw cause;
     } finally {
-      if (backfilling.get(sessionId) === pending) backfilling.delete(sessionId);
+      if (backfilling.get(sessionId) === pending) {
+        backfilling.delete(sessionId);
+        // A language change that met this backfill re-folds now.
+        if (refoldPending.delete(sessionId)) void refoldView(sessionId).catch(() => {});
+      }
     }
   }
 
@@ -1881,6 +1898,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // on nothing (run-view-47).
       get().closeTab(projectId, sessionId);
       backfilling.delete(sessionId);
+      refoldPending.delete(sessionId);
       const state = get();
       const { [sessionId]: _view, ...views } = state.views;
       const { [sessionId]: _composer, ...composers } = state.composers;
