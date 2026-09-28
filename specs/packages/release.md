@@ -66,6 +66,7 @@ When the release workflow completes publishing, it shall create a GitHub release
 
 - CLI: `Spex CLI vMAJOR.MINOR.PATCH`.
 - App: `Spex App vMAJOR.MINOR.PATCH`; a beta ([DR-087](../decisions/087-beta-app-releases.md)): `Spex App vMAJOR.MINOR.PATCH-beta.N`, created as a pre-release.
+- An app release's notes point their repository-relative links at the tagged tree, so a record cited from the changelog opens from the release page.
 
 #### release-18
 
