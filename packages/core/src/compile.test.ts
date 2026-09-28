@@ -9,8 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -29,19 +28,7 @@ import { parse as parseYaml } from "yaml";
 import type { RegistryEntryLike } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
-
-/** Every scratch directory a test here makes, removed once the file's
- * tests end. */
-const scratchDirs: string[] = [];
-test.after(() => {
-  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-}
+import { scratchDir } from "./testing/scratch.js";
 
 const STUB_SLC = stubSlcSource();
 

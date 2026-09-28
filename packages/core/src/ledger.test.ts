@@ -9,9 +9,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 
@@ -32,19 +31,7 @@ import type {
   ServerMessage,
   TmuxPlayRecord,
 } from "./protocol.js";
-
-/** Every scratch directory a test here makes, removed once the file's
- * tests end. */
-const scratchDirs: string[] = [];
-test.after(() => {
-  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-}
+import { scratchDir } from "./testing/scratch.js";
 
 // ---------------------------------------------------------------------------
 // Store-level harness: the fold's contract is over stored rows, so a

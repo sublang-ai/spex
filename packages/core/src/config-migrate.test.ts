@@ -9,27 +9,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 import {
   migrateConfigFileIfRetired,
   migrateRetiredProfiles,
 } from "./config-migrate.js";
-
-/** Every scratch directory a test here makes, removed once the file's
- * tests end. */
-const scratchDirs: string[] = [];
-test.after(() => {
-  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-}
+import { scratchDir } from "./testing/scratch.js";
 
 const PROFILES_ERA = `# Spex / playbook shared configuration.
 # Header paragraph that must survive.

@@ -12,8 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 
@@ -22,19 +21,7 @@ import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { Captain } from "@sublang/cligent/tmux-play";
 import type { Command, CommandResults, ServerMessage } from "./protocol.js";
-
-/** Every scratch directory a test here makes, removed once the file's
- * tests end. */
-const scratchDirs: string[] = [];
-test.after(() => {
-  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-}
+import { scratchDir } from "./testing/scratch.js";
 
 const CONFIG = `
 captain:

@@ -11,9 +11,9 @@
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { hostname, tmpdir } from "node:os";
+import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
@@ -43,19 +43,7 @@ import type {
   SessionInfo,
   StoredRecord,
 } from "./protocol.js";
-
-/** Every scratch directory a test here makes, removed once the file's
- * tests end. */
-const scratchDirs: string[] = [];
-test.after(() => {
-  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  scratchDirs.push(dir);
-  return dir;
-}
+import { scratchDir } from "./testing/scratch.js";
 
 // ---------------------------------------------------------------------------
 // Harness
