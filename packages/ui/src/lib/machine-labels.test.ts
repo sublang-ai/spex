@@ -46,9 +46,9 @@ describe("widenLayout", () => {
 
   test("each column takes its longest label's width, from the floor to the cap", () => {
     const widened = widenLayout(layout, graph, frame());
-    const reported = widened.nodes.get("reportedReviewFailure")!;
+    const reported = widened.nodes.get("reviewNewIntentPhase")!;
     const ready = widened.nodes.get("ready")!;
-    expect(reported.width).toBe(labelWidth("reported review failure"));
+    expect(reported.width).toBe(labelWidth("review new intent phase"));
     expect(reported.width).toBeGreaterThan(STATE_W);
     // Boxes in one column share the width; another column keeps the
     // floor when nothing in it needs more.
@@ -59,7 +59,7 @@ describe("widenLayout", () => {
     expect(failed.x).toBeGreaterThan(layout.nodes.get("failed")!.x);
     expect(widened.width).toBeGreaterThan(layout.width);
     // Rank heights and kinds are the geometry's own, untouched.
-    expect(reported.height).toBe(layout.nodes.get("reportedReviewFailure")!.height);
+    expect(reported.height).toBe(layout.nodes.get("reviewNewIntentPhase")!.height);
     expect(widened.kinds).toBe(layout.kinds);
   });
 
@@ -157,25 +157,25 @@ describe("run-view-60: a nested state goes by its own segment", () => {
   } as unknown as MachineFrame;
 
   test("the leaf names the box, the path names the tooltip", () => {
-    expect(stateName("independentProposals.coder.working")).toBe("working");
-    expect(stateName("independentProposals.coder")).toBe("coder");
+    expect(stateName("independentProposals.coderProposalRegion.askCoderProposal")).toBe("ask coder proposal");
+    expect(stateName("independentProposals.coderProposalRegion")).toBe("coder proposal region");
     expect(stateName("reportedReviewFailure")).toBe("reported review failure");
-    expect(statePath("independentProposals.coder.working")).toBe(
-      "independent proposals · coder · working",
+    expect(statePath("independentProposals.coderProposalRegion.askCoderProposal")).toBe(
+      "independent proposals · coder proposal region · ask coder proposal",
     );
     expect(statePath("ready")).toBe("ready");
   });
 
   test("a nested state with no role wears its parent's name", () => {
-    const region = decide.nodes.find((n) => n.id === "independentProposals.coder")!;
+    const region = decide.nodes.find((n) => n.id === "independentProposals.coderProposalRegion")!;
     const waiting = decide.nodes.find(
-      (n) => n.id === "independentProposals.reviewer.waiting",
+      (n) => n.id === "independentProposals.reviewerProposalRegion.awaitReviewerProposalReply",
     )!;
     const working = decide.nodes.find(
-      (n) => n.id === "independentProposals.coder.working",
+      (n) => n.id === "independentProposals.coderProposalRegion.askCoderProposal",
     )!;
     expect(stateCaption(region, emptyFrame)?.text).toBe("independent proposals");
-    expect(stateCaption(waiting, emptyFrame)?.text).toBe("reviewer");
+    expect(stateCaption(waiting, emptyFrame)?.text).toBe("reviewer proposal region");
     // A role still captions the box it names.
     expect(stateCaption(working, emptyFrame)?.text).toBe("coder");
   });

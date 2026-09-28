@@ -495,7 +495,7 @@ export function demoCaptain(
       await context.callCaptain(`recover: ${turn.prompt}`, {
         visibility: "hidden",
       });
-      await move("failed", "runFirstPhase", "RETRY_CODE", "active", [
+      await move("failed", "firstPhase", "RETRY_CODE", "active", [
         "playbook.busy",
       ]);
       await session.emitStatus("◇ /code recovery started");
@@ -508,10 +508,10 @@ export function demoCaptain(
       visibility: "hidden",
     });
     await trace("session.started", {});
-    await move("ready", "runFirstPhase", "START_CODE");
+    await move("ready", "firstPhase", "START_CODE");
     await session.emitStatus("⤷ Coder: implement");
     await trace("player.call.started", {
-      stateId: "runFirstPhase",
+      stateId: "firstPhase",
       roleId: "coder",
       playerId: "dev.coder",
     });
@@ -521,11 +521,11 @@ export function demoCaptain(
     // so the machine stands there waiting for the Boss (DR-060).
     if (turn.prompt.toLowerCase().startsWith("fail")) {
       await trace("player.call.finished", {
-        stateId: "runFirstPhase",
+        stateId: "firstPhase",
         status: "error",
       });
       await session.emitStatus("◆ workflow failed; awaiting Boss recovery.");
-      await move("runFirstPhase", "failed", "CODE_FAILED", "active", [
+      await move("firstPhase", "failed", "CODE_FAILED", "active", [
         "playbook.parked",
       ]);
       setFailedRun(runId);
@@ -533,10 +533,10 @@ export function demoCaptain(
       return;
     }
     await trace("player.call.finished", {
-      stateId: "runFirstPhase",
+      stateId: "firstPhase",
       status: "ok",
     });
-    await move("runFirstPhase", "reviewFirstCommit", "done");
+    await move("firstPhase", "reviewNewIntentPhase", "done");
     const reviewId = `${runId}-review`;
     let reviewSequence = 0;
     const reviewTrace = async (
@@ -575,33 +575,33 @@ export function demoCaptain(
     };
     await session.emitStatus("⮕ /review: first commit");
     await trace("playbook.call.started", {
-      stateId: "reviewFirstCommit",
+      stateId: "reviewNewIntentPhase",
       playbookId: "review",
       text: "review the first commit",
     });
     await reviewTrace("session.started", {});
-    await reviewMove("ready", "reviewInitial", "START_REVIEW");
+    await reviewMove("ready", "firstReview", "START_REVIEW");
     await session.emitStatus("⤷ Reviewer: review round 1");
     await reviewTrace("player.call.started", {
-      stateId: "reviewInitial",
+      stateId: "firstReview",
       roleId: "reviewer",
       playerId: "dev.reviewer",
     });
     await context.callPlayer("dev.reviewer", "Review the change");
     await reviewTrace("player.call.finished", {
-      stateId: "reviewInitial",
+      stateId: "firstReview",
       status: "ok",
     });
-    await reviewMove("reviewInitial", "done", "done", "done");
+    await reviewMove("firstReview", "done", "done", "done");
     await reviewTrace("session.disposed", {
       state: { value: "done", status: "done" },
     });
     await trace("playbook.call.finished", {
-      stateId: "reviewFirstCommit",
+      stateId: "reviewNewIntentPhase",
       playbookId: "review",
       result: "approved",
     });
-    await move("reviewFirstCommit", "done", "done", "done");
+    await move("reviewNewIntentPhase", "done", "done", "done");
     await trace("status.emitted", { message: "settled", stateId: "done" });
     // Opt in only for journeys exercising advancement from a typed
     // governed result; the ordinary demo remains narration alone.
