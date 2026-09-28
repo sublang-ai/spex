@@ -1596,6 +1596,11 @@ msgstr "该关联会让等待链形成循环"
 msgid "That turn has not ended, so it cannot be marked as read."
 msgstr "该轮次尚未结束，无法标记为已读。"
 
+#. Adapter requirement; the adapter's name, the platform package's name, the platform and architecture, and `npm ci` stay as they are
+#: src/config.ts
+msgid "the {adapter} executable is missing: {package} did not install for {platform}-{arch} — run npm ci in the checkout, or reinstall the app"
+msgstr "缺少 {adapter} 可执行文件：{package} 未能为 {platform}-{arch} 安装 — 请在检出目录运行 npm ci，或重新安装应用"
+
 #. Adapter requirement; the adapter's name and `npm install` stay as they are
 #: src/config.ts
 msgid "the {adapter} runtime failed to load — reinstall the app, or run npm install in a checkout"

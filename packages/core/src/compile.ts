@@ -18,19 +18,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 /** The node_modules directories up-tree from a module, nearest first:
- * where a shell finds the compiler it declares (playbook-library-11). */
-export function moduleDirectoriesAbove(fromUrl: string): string[] {
-  const paths: string[] = [];
-  let current = dirname(fileURLToPath(fromUrl));
-  for (let depth = 0; depth < 6; depth += 1) {
-    const candidate = join(current, "node_modules");
-    if (existsSync(candidate)) paths.push(candidate);
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return paths;
-}
+ * where a shell finds the compiler it declares (playbook-library-11) —
+ * one rule with the readiness probe's, so both read one tree. */
+export { moduleDirectoriesAbove } from "./config.js";
 
 /** node_modules dirs up-tree from this package, so bundling artifacts
  * in the external library dir still resolves xstate and friends. */
@@ -40,7 +30,7 @@ function bundleNodePaths(): string[] {
 
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
-import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
+import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, moduleDirectoriesAbove, REGISTRY_CONTRACT } from "./config.js";
 import { i18n } from "./i18n.js";
 
 /** The packages a compile resolves from the playbook's own directory:

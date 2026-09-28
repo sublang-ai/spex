@@ -1575,6 +1575,86 @@ export function describeRuntimeFault(verdict: RuntimeReadiness): string {
   });
 }
 
+/** The node_modules directories up-tree from a module, nearest first —
+ * the tree the app's bundled SDKs are resolved from. */
+export function moduleDirectoriesAbove(fromUrl: string): string[] {
+  const paths: string[] = [];
+  let current = dirname(fileURLToPath(fromUrl));
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = join(current, "node_modules");
+    if (existsSync(candidate)) paths.push(candidate);
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return paths;
+}
+
+/** A native binary a bundled SDK spawns: the platform package that
+ * carries it and the file inside, relative to a node_modules directory. */
+export interface SpawnedBinary {
+  package: string;
+  file: string;
+}
+
+/**
+ * What each bundled SDK spawns, by the SDK's own rule (DR-024): the Claude
+ * SDK resolves `@anthropic-ai/claude-agent-sdk-<platform>-<arch>/claude`
+ * (Linux tries the glibc and musl packages, Android its own), and Codex's
+ * launcher `@openai/codex-<platform>-<arch>/vendor/<triple>/bin/codex`.
+ * Both are optional dependencies npm can drop without failing the
+ * install, after which the SDK module still loads and the first turn
+ * fails with "executable not found". The first candidate is the one
+ * the SDK names when none exists.
+ */
+export function spawnedBinaryCandidates(
+  adapter: AdapterName,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): SpawnedBinary[] {
+  const exe = platform === "win32" ? ".exe" : "";
+  if (adapter === "claude") {
+    const prefix = "@anthropic-ai/claude-agent-sdk";
+    const packages =
+      platform === "android"
+        ? [`${prefix}-linux-${arch}-android`]
+        : platform === "linux"
+          ? [`${prefix}-linux-${arch}`, `${prefix}-linux-${arch}-musl`]
+          : [`${prefix}-${platform}-${arch}`];
+    return packages.map((name) => ({ package: name, file: `${name}/claude${exe}` }));
+  }
+  if (adapter === "codex") {
+    const os = platform === "android" ? "linux" : platform;
+    const triple =
+      os === "linux"
+        ? arch === "x64" ? "x86_64-unknown-linux-musl" : arch === "arm64" ? "aarch64-unknown-linux-musl" : undefined
+        : os === "darwin"
+          ? arch === "x64" ? "x86_64-apple-darwin" : arch === "arm64" ? "aarch64-apple-darwin" : undefined
+          : os === "win32"
+            ? arch === "x64" ? "x86_64-pc-windows-msvc" : arch === "arm64" ? "aarch64-pc-windows-msvc" : undefined
+            : undefined;
+    if (!triple) return [];
+    const name = `@openai/codex-${os}-${arch}`;
+    return [{ package: name, file: `${name}/vendor/${triple}/bin/codex${exe}` }];
+  }
+  return [];
+}
+
+/** The platform package a bundled SDK would spawn from but cannot find
+ * in any of the module directories, else undefined when one is there
+ * or the adapter spawns nothing this way. */
+export function missingSpawnedBinary(
+  adapter: AdapterName,
+  moduleDirectories: string[] = moduleDirectoriesAbove(import.meta.url),
+): SpawnedBinary | undefined {
+  const candidates = spawnedBinaryCandidates(adapter);
+  if (candidates.length === 0) return undefined;
+  for (const candidate of candidates) {
+    if (moduleDirectories.some((root) => existsSync(join(root, candidate.file)))) return undefined;
+  }
+  return candidates[0];
+}
+
 // DR-024: availability is cligent's own answer — the same load a session
 // start performs, so readiness cannot disagree with the run. Only when the
 // probe says no are the published targets consulted, to say which runtime
@@ -1584,6 +1664,9 @@ export function describeRuntimeFault(verdict: RuntimeReadiness): string {
 // non-faults: the load gate itself fails open on both.
 export async function checkAdapterRuntime(
   adapter: AdapterName,
+  // The module directories the bundled SDKs spawn from; injectable so a
+  // test can stand a tree with the SDK but not its platform package.
+  moduleDirectories: string[] = moduleDirectoriesAbove(import.meta.url),
 ): Promise<AdapterRuntimeCheck> {
   let available = false;
   try {
@@ -1598,8 +1681,23 @@ export async function checkAdapterRuntime(
   } catch {
     available = false;
   }
-  if (available) return { usable: true };
+  // The load proves the SDK module; the binary it spawns is a separate
+  // optional package npm drops silently, so the runtime half also asks
+  // for that file — the first turn would otherwise fail on a "ready"
+  // adapter (core-service-9).
+  const missing = missingSpawnedBinary(adapter, moduleDirectories);
+  if (available && !missing) return { usable: true };
   const faults: string[] = [];
+  if (missing) {
+    faults.push(
+      i18n._({
+        id: "the {adapter} executable is missing: {package} did not install for {platform}-{arch} — run npm ci in the checkout, or reinstall the app",
+        comment:
+          "Adapter requirement; the adapter's name, the platform package's name, the platform and architecture, and `npm ci` stay as they are",
+        values: { adapter, package: missing.package, platform: process.platform, arch: process.arch },
+      }),
+    );
+  }
   for (const target of AGENT_RUNTIME_TARGETS[adapter] ?? []) {
     const installed = readRuntimeVersion(target);
     const verdict = classifyRuntime(target, false, installed);

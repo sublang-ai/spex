@@ -3,9 +3,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { AGENT_RUNTIME_TARGETS, classifyRuntime } from "@sublang/cligent";
@@ -15,6 +15,7 @@ import {
   checkAdapterReadiness,
   checkAdapterRuntime,
   composeConfig,
+  spawnedBinaryCandidates,
   describeRuntimeFault,
   RegistryError,
   resolveConfigPath,
@@ -636,6 +637,56 @@ test("adapter readiness mirrors the launcher credential rules", async () => {
     (await checkAdapterReadiness("kimi", {}, home, usableRuntime)).ready,
     null,
   );
+});
+
+test("readiness names the platform package a bundled SDK spawns from when npm dropped it (core-service-113)", async () => {
+  // The SDK module loads without its optional platform package, and the
+  // first turn then fails on "executable not found"; the runtime half
+  // asks for the binary itself, over the tree it is handed.
+  const { platform, arch } = process;
+  const claudePackage = `@anthropic-ai/claude-agent-sdk-${platform === "android" ? "linux" : platform}-${arch}${platform === "android" ? "-android" : ""}`;
+  const codexPackage = `@openai/codex-${platform === "android" ? "linux" : platform}-${arch}`;
+  assert.equal(spawnedBinaryCandidates("claude")[0]?.package, claudePackage);
+  assert.equal(spawnedBinaryCandidates("codex")[0]?.package, codexPackage);
+  assert.deepEqual(
+    spawnedBinaryCandidates("claude", "linux", "arm64").map((c) => c.file),
+    ["@anthropic-ai/claude-agent-sdk-linux-arm64/claude", "@anthropic-ai/claude-agent-sdk-linux-arm64-musl/claude"],
+    "Linux tries the glibc package, then musl",
+  );
+  assert.equal(
+    spawnedBinaryCandidates("codex", "win32", "x64")[0]?.file,
+    "@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+  );
+  assert.deepEqual(spawnedBinaryCandidates("gemini"), [], "a PATH runtime spawns no bundled binary");
+
+  const tree = mkdtempSync(join(tmpdir(), "spex-sdk-tree-"));
+  const root = join(tree, "node_modules");
+  mkdirSync(join(root, "@anthropic-ai", "claude-agent-sdk"), { recursive: true });
+  writeFileSync(join(root, "@anthropic-ai", "claude-agent-sdk", "package.json"), '{"name":"@anthropic-ai/claude-agent-sdk"}');
+  mkdirSync(join(root, "@openai", "codex"), { recursive: true });
+  writeFileSync(join(root, "@openai", "codex", "package.json"), '{"name":"@openai/codex"}');
+
+  const claudeMissing = await checkAdapterRuntime("claude", [root]);
+  assert.equal(claudeMissing.usable, false);
+  assert.match(claudeMissing.requirement ?? "", new RegExp(claudePackage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(claudeMissing.requirement ?? "", /npm ci/);
+  const codexMissing = await checkAdapterRuntime("codex", [root]);
+  assert.equal(codexMissing.usable, false);
+  assert.match(codexMissing.requirement ?? "", /@openai\/codex-/);
+
+  // The binaries present: the tree reads usable again.
+  for (const candidate of [spawnedBinaryCandidates("claude")[0]!, spawnedBinaryCandidates("codex")[0]!]) {
+    mkdirSync(dirname(join(root, candidate.file)), { recursive: true });
+    writeFileSync(join(root, candidate.file), "");
+  }
+  assert.equal((await checkAdapterRuntime("claude", [root])).usable, true);
+  assert.equal((await checkAdapterRuntime("codex", [root])).usable, true);
+  // And readiness carries the runtime's verdict whole (DR-024).
+  const home = mkdtempSync(join(tmpdir(), "spex-home-"));
+  rmSync(join(root, spawnedBinaryCandidates("claude")[0]!.file));
+  const readiness = await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, (adapter) => checkAdapterRuntime(adapter, [root]));
+  assert.equal(readiness.ready, false);
+  assert.match(readiness.requirement ?? "", /executable is missing/);
 });
 
 test("a missing or stale runtime reports not ready, whatever the credential class", async () => {
