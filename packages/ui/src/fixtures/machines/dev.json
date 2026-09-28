@@ -13,15 +13,23 @@
       "id": "planAnalysis",
       "kind": "state",
       "role": "analyst",
-      "description": "Analyst is choosing the development path.",
+      "description": "Analyst chooses the development path in a short planning note.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
+      "id": "awaitBossReply",
+      "kind": "state",
+      "description": "Waiting for Boss to answer the acting agent's question.",
+      "tags": [
+        "playbook.parked"
+      ]
+    },
+    {
       "id": "createBranch",
       "kind": "state",
-      "description": "The BRANCH playbook is preparing the pull-request branch for the planned development path.",
+      "description": "The BRANCH playbook prepares the branch for the pull-request delivery path.",
       "tags": [
         "playbook.suspended"
       ]
@@ -29,7 +37,7 @@
     {
       "id": "callCode",
       "kind": "state",
-      "description": "The CODE playbook is implementing the planned development path.",
+      "description": "The CODE playbook implements the planned development path.",
       "tags": [
         "playbook.suspended"
       ]
@@ -37,7 +45,7 @@
     {
       "id": "callDecide",
       "kind": "state",
-      "description": "The DECIDE playbook is settling the durable decision the planned path requires.",
+      "description": "The DECIDE playbook settles the decision the planned development path requires.",
       "tags": [
         "playbook.suspended"
       ]
@@ -45,7 +53,7 @@
     {
       "id": "callCodeAfterDecide",
       "kind": "state",
-      "description": "The CODE playbook is implementing the decided development path.",
+      "description": "The CODE playbook implements the development path DECIDE settled.",
       "tags": [
         "playbook.suspended"
       ]
@@ -53,23 +61,15 @@
     {
       "id": "openPullRequest",
       "kind": "state",
-      "description": "The PR playbook is delivering the implemented branch through a pull request.",
+      "description": "The PR playbook delivers the implemented branch through a pull request.",
       "tags": [
         "playbook.suspended"
       ]
     },
     {
-      "id": "awaitBossReply",
-      "kind": "state",
-      "description": "Waiting for Boss to answer Analyst.",
-      "tags": [
-        "playbook.parked"
-      ]
-    },
-    {
       "id": "failed",
       "kind": "state",
-      "description": "The development planning workflow failed and is waiting for a new development request.",
+      "description": "DEV failed outside a child result contract and waits for a new development request.",
       "tags": [
         "playbook.parked"
       ]
@@ -77,19 +77,19 @@
     {
       "id": "discussionComplete",
       "kind": "final",
-      "description": "The planning discussion concluded after a Boss reply with no repository work to follow.",
+      "description": "After a Boss reply, the planning discussion concluded with no child call or repository change.",
       "tags": []
     },
     {
       "id": "done",
       "kind": "final",
-      "description": "The selected development path completed with the final child playbook's successful result.",
+      "description": "The selected development path completed with its final child playbook's successful result.",
       "tags": []
     },
     {
       "id": "reportedChildFailure",
       "kind": "final",
-      "description": "The development workflow relayed a child playbook's authored abort, failure, or insufficient terminal result.",
+      "description": "DEV ended by relaying a child playbook's authored abort, failure, or result that did not prove the required success.",
       "tags": []
     }
   ],
@@ -103,41 +103,47 @@
     {
       "id": "planAnalysis::done::0::0",
       "from": "planAnalysis",
-      "to": "discussionComplete",
+      "to": "awaitBossReply",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::1::0",
       "from": "planAnalysis",
-      "to": "callCode",
+      "to": "failed",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::2::0",
       "from": "planAnalysis",
-      "to": "callDecide",
+      "to": "discussionComplete",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::3::0",
       "from": "planAnalysis",
-      "to": "createBranch",
+      "to": "callCode",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::4::0",
       "from": "planAnalysis",
-      "to": "createBranch",
+      "to": "callDecide",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::5::0",
       "from": "planAnalysis",
-      "to": "awaitBossReply",
+      "to": "createBranch",
       "event": "done"
     },
     {
       "id": "planAnalysis::done::6::0",
+      "from": "planAnalysis",
+      "to": "createBranch",
+      "event": "done"
+    },
+    {
+      "id": "planAnalysis::done::7::0",
       "from": "planAnalysis",
       "to": "failed",
       "event": "done"
@@ -147,6 +153,24 @@
       "from": "planAnalysis",
       "to": "failed",
       "event": "error"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::0::0",
+      "from": "awaitBossReply",
+      "to": "failed",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::BOSS_REPLY::1::0",
+      "from": "awaitBossReply",
+      "to": "planAnalysis",
+      "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::START_DEV::0::0",
+      "from": "awaitBossReply",
+      "to": "planAnalysis",
+      "event": "START_DEV"
     },
     {
       "id": "createBranch::done::0::0",
@@ -279,24 +303,6 @@
       "from": "openPullRequest",
       "to": "failed",
       "event": "error"
-    },
-    {
-      "id": "awaitBossReply::BOSS_REPLY::0::0",
-      "from": "awaitBossReply",
-      "to": "failed",
-      "event": "BOSS_REPLY"
-    },
-    {
-      "id": "awaitBossReply::BOSS_REPLY::1::0",
-      "from": "awaitBossReply",
-      "to": "planAnalysis",
-      "event": "BOSS_REPLY"
-    },
-    {
-      "id": "awaitBossReply::START_DEV::0::0",
-      "from": "awaitBossReply",
-      "to": "planAnalysis",
-      "event": "START_DEV"
     },
     {
       "id": "failed::START_DEV::0::0",

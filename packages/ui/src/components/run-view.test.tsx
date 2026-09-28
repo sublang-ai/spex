@@ -922,10 +922,10 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // its calling state in the call voice naming the callee, and the
     // strip's sentence still names both for the accessible name.
     expect(cards[0].getAttribute("data-expanded")).toBe("true");
-    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
     expect(cards[0].getAttribute("aria-label")).toContain("/review");
     const delegating = within(cards[0]).getByTestId(
-      "machine-state-t-code-reviewFirstCommit",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     expect(delegating.getAttribute("data-delegating")).toBe("true");
     expect(within(delegating).getByText("call /review")).toBeTruthy();
@@ -936,7 +936,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The running leaf is drawn too, and its header names the state
     // that called it.
     expect(cards[1].getAttribute("data-expanded")).toBe("true");
-    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewFirstCommit");
+    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewNewIntentPhase");
     expect(reviewing.getAttribute("data-active")).toBe("true");
 
     // The running mark is the app's one pulse, and it says so.
@@ -965,7 +965,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The strip names the calling state and the callee, and the
     // connector still leaves it — containment survives the fold.
     expect(cards[0].getAttribute("data-expanded")).toBe("false");
-    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
     expect(screen.getByTestId("machine-connector-t-code")).toBeTruthy();
     // The child is untouched: the same tree, differently disclosed.
     expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
@@ -996,7 +996,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     );
     // The settled child stays anchored to the state that called it.
     expect(settled[1].getAttribute("data-caller-state")).toBe(
-      "reviewFirstCommit",
+      "reviewNewIntentPhase",
     );
   });
 
@@ -1044,13 +1044,13 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("boxes take their column's longest label; a long caption falls back to its role", () => {
     renderRun(MACHINE_RUN.slice(0, 13), true);
     const code = screen.getByTestId("machine-card-t-code");
-    // "reported review failure" sets its column's width, so it reads
+    // "review new intent phase" sets its column's width, so it reads
     // whole at 13px and the shorter names share the box width.
     const reported = within(code).getByTestId(
-      "machine-state-t-code-reportedReviewFailure",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     expect(reported.querySelector("text")!.textContent).toBe(
-      "reported review failure",
+      "review new intent phase",
     );
     const reportedBox = reported.querySelector("rect")!;
     const readyBox = within(code)
@@ -1065,11 +1065,11 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
 
   test("a running call names role and player at the caption step, or the role alone", () => {
     // Through the coder's call: the code machine's first column is as
-    // wide as "reported review failure", so the pair reads whole.
+    // wide as "review new intent phase", so the pair reads whole.
     renderRun(MACHINE_RUN.slice(0, 8));
-    const running = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    const running = screen.getByTestId("machine-state-t-code-firstPhase");
     const caption = within(running).getByTestId(
-      "machine-caption-t-code-runFirstPhase",
+      "machine-caption-t-code-firstPhase",
     );
     expect(caption.textContent).toBe("coder · dev.coder");
     expect(caption.getAttribute("font-size")).toBe("12");
@@ -1093,7 +1093,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
             type: "player.call.started",
             timestamp: 9_004,
             payload: {
-              stateId: "runFirstPhase",
+              stateId: "firstPhase",
               roleId: "coder",
               playerId: "security.compliance.reviewer.lane",
             },
@@ -1102,9 +1102,9 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
       },
     ]);
     renderRun(longLane);
-    const state = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    const state = screen.getByTestId("machine-state-t-code-firstPhase");
     expect(
-      within(state).getByTestId("machine-caption-t-code-runFirstPhase").textContent,
+      within(state).getByTestId("machine-caption-t-code-firstPhase").textContent,
     ).toBe("coder");
     expect(state.querySelector("title")!.textContent).toContain(
       "coder · security.compliance.reviewer.lane",
@@ -1115,12 +1115,12 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("unwalked exits into rest states fold to a count until walked or hovered", () => {
     renderRun(MACHINE_RUN.slice(0, 13), true);
     const code = screen.getByTestId("machine-card-t-code");
-    // runFirstPhase's three unwalked exits — two into failed, one
+    // firstPhase's three unwalked exits — two into failed, one
     // into the Boss-reply wait (playbook 12.2's CODE) — fold to one
     // "+3" marker whose title lists them, and no label.
-    const first = within(code).getByTestId("machine-state-t-code-runFirstPhase");
+    const first = within(code).getByTestId("machine-state-t-code-firstPhase");
     const folded = within(first).getByTestId(
-      "machine-exits-folded-t-code-runFirstPhase",
+      "machine-exits-folded-t-code-firstPhase",
     );
     expect(folded.textContent).toContain("+3");
     expect(folded.querySelector("title")!.textContent).toContain("→ failed");
@@ -1129,20 +1129,20 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     fireEvent.mouseEnter(first);
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(3);
     expect(
-      within(first).queryByTestId("machine-exits-folded-t-code-runFirstPhase"),
+      within(first).queryByTestId("machine-exits-folded-t-code-firstPhase"),
     ).toBeNull();
     fireEvent.mouseLeave(first);
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
     // An exit into working state stays a label; the one into failed
     // beside it folds to "+1".
     const review = within(code).getByTestId(
-      "machine-state-t-code-reviewFirstCommit",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     const labels = within(review).getAllByTestId(/^machine-exit-/);
     expect(labels).toHaveLength(1);
-    expect(labels[0].textContent).toContain("→ run ir task");
+    expect(labels[0].textContent).toContain("→ ir task phase");
     expect(
-      within(review).getByTestId("machine-exits-folded-t-code-reviewFirstCommit")
+      within(review).getByTestId("machine-exits-folded-t-code-reviewNewIntentPhase")
         .textContent,
     ).toContain("+1");
   });
@@ -2969,7 +2969,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // the whole of it in the tooltip: the label is still what the
     // turn will carry, so the reader can read all of it.
     const LABEL =
-      "Retry: Coder is running the first coding phase: a direct implementation, a new intent record, or an existing intent-record task";
+      "Retry: Coder runs the first coding phase: a direct implementation, a new IR, or the next task of an existing IR.";
     renderFailed({
       session: {
         ...SESSION,
@@ -3005,7 +3005,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // (run-view-59); the raw id and the runtime's own message ride the
     // tooltip.
     expect(screen.getByTestId("failure-card-what").textContent).toBe(
-      "/code failed at run first phase",
+      "/code failed at first phase",
     );
     expect(screen.getByTestId("failure-card-why").textContent).toBe(
       "Committed, but left changes uncommitted: stray-1.txt",
@@ -3014,7 +3014,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       "Commit or discard what is left · Retry unresolved effect reconciliation: nothing has changed since it failed",
     );
     expect(card.getAttribute("title")).toBe(
-      "CODE governed outcome remains unresolved: repository-disposition-mismatch · step: runFirstPhase",
+      "CODE governed outcome remains unresolved: repository-disposition-mismatch · step: firstPhase",
     );
     // The bare status line it replaces is gone from the thread.
     expect(
@@ -3475,9 +3475,9 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     expect(screen.getByTestId("state-chip").textContent).toBe("needs attention");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED, MACHINE_RECOVERED))} />);
     const chip = screen.getByTestId("state-chip");
-    expect(chip.textContent).toBe("run first phase");
+    expect(chip.textContent).toBe("first phase");
     expect(chip.className).not.toContain("red");
-    expect(chip.getAttribute("title")).toBe("state: runFirstPhase");
+    expect(chip.getAttribute("title")).toBe("state: firstPhase");
   });
 });
 

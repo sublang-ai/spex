@@ -184,7 +184,7 @@ test("playbook-library-37: every built-in serves a whole machine graph", async (
     .machine;
   assert.ok(
     review?.edges.some(
-      (edge) => edge.from === "ready" && edge.to === "reviewInitial",
+      (edge) => edge.from === "ready" && edge.to === "firstReview",
     ),
     "review's opening transition must resolve",
   );
