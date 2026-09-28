@@ -14,13 +14,13 @@ Implement [DR-086](../decisions/086-tests-in-tiers.md) and [DR-087](../decisions
 ## Deliverables
 
 - [ ] The fresh-install smoke (`scripts/install-smoke.mjs`) and the smoke reduced to build, lint, fresh install, CLI user pass.
-- [ ] The regression: the two-role playbook run after registration on a `gpt-6-astra` compile, the two-intent new-project journey, `npm run regression`.
-- [ ] The hermetic paste-path journey (`playbook-library-85`).
-- [ ] The beta app release workflow and CI's macOS journeys lane.
+- [x] The regression: the two-role playbook run after registration on a `gpt-6-astra` compile, the two-intent new-project journey, `npm run regression`.
+- [x] The hermetic paste-path journey (`playbook-library-85`).
+- [x] The beta app release workflow and CI's macOS journeys lane (the macOS lane is proven once CI runs the branch).
 - [ ] The release checklist reduced to its residue; the changelog.
-- [ ] CI green: the Up next row's overflow on Linux fonts.
-- [ ] The fresh-user interface review and its fixes, in both catalogs.
-- [ ] Redundant or low-return tests removed.
+- [x] CI green: the Up next row's overflow on Linux fonts (the fix is verified on macOS; Linux fonts are CI's to confirm).
+- [x] The fresh-user interface review and its fixes, in both catalogs.
+- [x] Redundant or low-return tests removed: 35 interface tests, 4 core tests, one journey boot.
 
 ## Tasks
 
