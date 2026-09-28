@@ -930,6 +930,10 @@ msgstr "always"
 msgid "An agent failed"
 msgstr "An agent failed"
 
+#: src/components/SpaceSync.tsx
+msgid "Another machine's space already there? Join first."
+msgstr "Another machine's space already there? Join first."
+
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "Answer below, or drop the run"
@@ -1074,6 +1078,10 @@ msgstr "branch {branch} · {status}"
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "Brings a file in as the source, then asks to adapt it"
+
+#: src/components/SpaceSync.tsx
+msgid "Brings both spaces into one and asks about anything that differs"
+msgstr "Brings both spaces into one and asks about anything that differs"
 
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
@@ -2560,13 +2568,13 @@ msgstr "It gives no player for {roles}."
 msgid "it would do nothing"
 msgstr "it would do nothing"
 
-#: src/components/SpecView.tsx
-msgid "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
-msgstr "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
-
 #: src/App.tsx
 msgid "its endpoint"
 msgstr "its endpoint"
+
+#: src/components/SpecView.tsx
+msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
+msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 
 #. confirm: join both spaces into one
 #. confirm: join both spaces into one
@@ -2576,6 +2584,10 @@ msgstr "its endpoint"
 #: src/components/SpaceSync.tsx
 msgid "Join"
 msgstr "Join"
+
+#: src/components/SpaceSync.tsx
+msgid "Join both into one space, or check the remote URL."
+msgstr "Join both into one space, or check the remote URL."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -2927,6 +2939,10 @@ msgstr "Next page"
 msgid "Next tab in Projects"
 msgstr "Next tab in Projects"
 
+#: src/components/SpecView.tsx
+msgid "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
+msgstr "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
+
 #: src/lib/labels.ts
 msgid "No adapter named \"{adapter}\" — check the config"
 msgstr "No adapter named \"{adapter}\" — check the config"
@@ -3247,10 +3263,6 @@ msgstr "One normative spec item per state behavior — the compiler's middle sta
 #: src/components/AuthoringWorkspace.tsx
 msgid "One spec item per state behavior, from the last compile"
 msgstr "One spec item per state behavior, from the last compile"
-
-#: src/components/SettingsSurface.tsx
-msgid "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
-msgstr "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
 
 #. open this draft's authoring workspace
 #: src/components/LibrarySurface.tsx
@@ -4224,6 +4236,10 @@ msgstr "Sends after the reply · {keys}"
 msgid "Sends after the reply…"
 msgstr "Sends after the reply…"
 
+#: src/components/SpaceSurface.tsx
+msgid "Sends what is here and brings back anything new"
+msgstr "Sends what is here and brings back anything new"
+
 #: src/components/Composer.tsx
 msgid "sends when this turn ends"
 msgstr "sends when this turn ends"
@@ -4521,6 +4537,10 @@ msgstr "Spex could not read this block"
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex has no config file yet — playbooks are unavailable."
 
+#: src/components/SettingsSurface.tsx
+msgid "Spex itself follows your OS theme."
+msgstr "Spex itself follows your OS theme."
+
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex navigation"
@@ -4701,10 +4721,6 @@ msgstr "sync rules"
 #: src/lib/space.ts
 msgid "Sync rules"
 msgstr "Sync rules"
-
-#: src/components/SpaceSync.tsx
-msgid "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
-msgstr "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
 
 #: src/components/SpaceSync.tsx
 msgid "Sync steps"
@@ -4936,6 +4952,10 @@ msgstr "The Spex window and its core speak different protocol versions — resta
 msgid "The step left no record of what it changed"
 msgstr "The step left no record of what it changed"
 
+#: src/components/SettingsSurface.tsx
+msgid "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
+msgstr "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
+
 #: src/components/FailureCard.tsx
 msgid "The workflow failed"
 msgstr "The workflow failed"
@@ -4974,10 +4994,6 @@ msgstr "This conversation only"
 msgid "This device against the common ancestor"
 msgstr "This device against the common ancestor"
 
-#: src/components/SpaceSync.tsx
-msgid "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
-msgstr "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
-
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "This file changed on disk since you opened it."
@@ -4986,10 +5002,6 @@ msgstr "This file changed on disk since you opened it."
 #: src/components/LibrarySurface.tsx
 msgid "This lane also answers {positions} — one conversation across them"
 msgstr "This lane also answers {positions} — one conversation across them"
-
-#: src/components/SpecView.tsx
-msgid "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
-msgstr "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
 
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
@@ -5006,6 +5018,10 @@ msgstr "This project's overview: history, now, up next, sources, repo state"
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
 msgstr "This record is not in the project's specs tree"
+
+#: src/components/SpecView.tsx
+msgid "This refreshes the spec law and prints a migration prompt for an AI agent to apply:"
+msgstr "This refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"

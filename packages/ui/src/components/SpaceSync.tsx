@@ -1130,9 +1130,7 @@ export function SyncTab({
         <Card testId="space-first-meeting" tone="neutral">
           <span className="font-medium">{i18n._("This space has not met that remote yet.")}</span>
           <span className="text-xs">
-            {i18n._(
-              "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs.",
-            )}
+            {i18n._("Another machine's space already there? Join first.")}
           </span>
           {firstJoin ? (
             <InlineConfirm
@@ -1150,6 +1148,7 @@ export function SyncTab({
                 data-testid="space-first-join"
                 className={SECONDARY}
                 disabled={disabled || pending}
+                title={i18n._("Brings both spaces into one and asks about anything that differs")}
                 onClick={() => setFirstJoin(true)}
               >
                 {i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
@@ -1181,11 +1180,7 @@ export function SyncTab({
       {sync.phase === "unrelated" ? (
         <Card testId="space-unrelated" tone="amber">
           <span className="font-medium">{i18n._("Unrelated history")}</span>
-          <span>
-            {i18n._(
-              "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation.",
-            )}
-          </span>
+          <span>{i18n._("Join both into one space, or check the remote URL.")}</span>
         </Card>
       ) : null}
       {showStopped && sync.phase === "stopped" ? (

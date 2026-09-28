@@ -29,7 +29,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | outside | each of the configuration file and the sessions directory lying outside the home [[storage-1](storage.md#storage-1)], named "outside the space; not shared" |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
-- the header ends with the primary control for the state — Set up space, or Sync — and the Sync and Explore tabs stand beneath it.
+- the header ends with the primary control for the state — Set up space, or Sync, titled as sending what is here and bringing back anything new — and the Sync and Explore tabs stand beneath it.
 
 #### space-2
 
@@ -84,7 +84,7 @@ When the user activates Set up space with a remote URL, the surface shall initia
 
 While the home is a repository on `main` whose `origin` is set and whose remote has never been checked, the Sync tab shall stand a Join card above the changes list offering Join, the join being inert where the histories share an ancestor ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
-- the card says that syncing sends what is here and brings back what is new, and that a remote already holding another space is joined into one, anything differing asked as a choice;
+- the card names the case in one phrase — another machine's space already at that remote is joined first — with Join titled as bringing both into one and asking about anything that differs ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - Join confirms inline with Cancel focused and Escape cancelling, then starts the joining sync of [[space-13](#space-13)];
 - the header's primary control stays Sync, the card never standing in its place;
 - the card goes after the first check or sync of that remote and returns when the remote changes, a changed remote clearing the last check [[space-5](#space-5)].

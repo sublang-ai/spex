@@ -20,7 +20,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] The Specs tab's empty state naming a command that scaffolds.
 - [x] The Register tab's intent defaulting to the source's title, so the app's own example registers on its defaults.
 - [x] Spec items matching what is built and tested: the palette, the Overview's GitHub line, the live journeys, spec-view's lowest free number.
-- [ ] Inline explanations shortened to key phrases, in both catalogs.
+- [x] Inline explanations shortened to key phrases, in both catalogs.
 - [ ] The changelog carrying what shipped unnoted.
 - [ ] The smoke's `live` stage (`npm run smoke -- --live`).
 - [ ] The regression's example journey: pasted, compiled for real, registered on the defaults, run to a finished turn.
@@ -52,6 +52,24 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 
 Part 1: `npm run build`, `npm test`, `npm run e2e`, `spex lint` and the catalog check pass.
 Part 2: `npm run smoke -- --live` passes every stage, and `npm run regression` runs with every failure judged by DR-089's classes.
+
+The fresh-user wording review read every interface message over about 120 characters in the English catalog where it renders, per [DR-069](../decisions/069-key-phrases-not-sentences.md):
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Specs, legacy layout | "Its specs/ tree still holds directories from an earlier layout — the user/, dev/, test/, or items/ groups, or an interactions/ or compositions/ collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:" | "This refreshes the spec law and prints a migration prompt for an AI agent to apply:"; the directories in the heading's title |
+| Specs, no `specs/` | "This project has no specs/ directory yet — it holds the spec packages and the decision and intent records this view navigates." | "No specs/ directory yet — it holds spec packages and decision and intent records." |
+| Space, unrelated history | "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation." | "Join both into one space, or check the remote URL."; the choice on differences stays in Join's confirm |
+| Space, a remote not yet met | "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs." | "Another machine's space already there? Join first."; Join titled "Brings both spaces into one and asks about anything that differs", Sync titled "Sends what is here and brings back anything new" |
+| Settings, terminal pane theme | "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme." | "Spex itself follows your OS theme."; the field titled "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto" |
+| Playbooks, `/dev` card | "Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs." | kept: a state, its remedy and its boundary, one sentence per case |
+| Captain home, three greetings | "Hello! I'm your Captain. … a playbook, a scripted workflow the AI players run." | kept: the Captain's own words, and where a new reader first meets what a playbook is |
+| Connection banner | "Can't reach the Spex core at {endpoint} — retrying every second. …" | kept: a failure saying what and what now |
+| Space, Apply and Keep confirms | "Replace {count} units with the remote's version? …" | kept: an inline confirm names its consequences (space-18) |
+| Space setup line | "Syncs sessions, queues, projects, Settings and playbook sources — see what stays. Nothing is contacted until you set up." | kept: a scope and a boundary, each a phrase where it applies |
+| Space explorer, a session | "{count} files — the manifest, the records and, where this device ran it, its provider hints." | kept: the explorer says what each thing is |
+| Sources summary, Space ahead/behind | counts | kept: they name and count |
+| Session recovery | "Discard this attempt? …" | not reviewed: the Playbook 17 adoption owns recovery |
 
 The changelog's tiers entry and [DR-039](../decisions/039-browser-acceptance-journeys.md)'s status still say the regression walks the three fresh-user scenarios.
 Both stay until task 16: the changelog entry describes the lane as it is built today and is rewritten when the lane changes, and DR-039's line summarizes DR-086's extension, which DR-089 amends without rewriting.

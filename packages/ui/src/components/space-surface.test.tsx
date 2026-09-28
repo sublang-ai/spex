@@ -703,7 +703,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(screen.getByText("The remote is empty; Sync will send this space")).toBeTruthy();
     cleanup();
     await renderSpace(repoState({ repository: { ...REPO, unrelated: true }, incoming: [], sync: { phase: "unrelated" } }));
-    expect(screen.getByTestId("space-unrelated").textContent).toContain("separate histories");
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("check the remote URL");
     expect(screen.queryByTestId("space-ahead-behind")).toBeNull();
     expect(screen.getByRole("button", { name: "Join" })).toBeTruthy();
   });

@@ -979,7 +979,7 @@ export function SpecView(props: SpecViewProps) {
         <p>
           <Rich
             text={i18n._(
-              "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates.",
+              "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records.",
             )}
             components={[<span className="font-mono" key="specs" />]}
           />
@@ -1023,24 +1023,20 @@ export function SpecView(props: SpecViewProps) {
         data-testid="specs-legacy"
       >
         {liveRegion}
-        <h1 className="text-lg font-semibold text-neutral-700 dark:text-neutral-200">
+        {/* A key phrase where it applies (DR-069); which directories
+            mark the layout rides the heading's title. */}
+        <h1
+          className="text-lg font-semibold text-neutral-700 dark:text-neutral-200"
+          title={i18n._(
+            "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection.",
+          )}
+        >
           {i18n._("This project uses a legacy specs layout")}
         </h1>
         <p>
-          <Rich
-            text={i18n._(
-              "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:",
-            )}
-            components={[
-              <span className="font-mono" key="specs" />,
-              <span className="font-mono" key="user" />,
-              <span className="font-mono" key="dev" />,
-              <span className="font-mono" key="test" />,
-              <span className="font-mono" key="items" />,
-              <span className="font-mono" key="interactions" />,
-              <span className="font-mono" key="compositions" />,
-            ]}
-          />
+          {i18n._(
+            "This refreshes the spec law and prints a migration prompt for an AI agent to apply:",
+          )}
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}
         {/* A legacy tree parses no packages, but its records are read

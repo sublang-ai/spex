@@ -921,6 +921,13 @@ function Header({
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={disabled || refusal !== undefined || pending}
           aria-describedby={refusal || actionError ? "space-primary-caption" : undefined}
+          // What Sync does is the control's to say, not a card's
+          // (DR-069); a running control's word says it already.
+          title={
+            joining || busy === "sync" || accepted === "sync" || running
+              ? undefined
+              : i18n._("Sends what is here and brings back anything new")
+          }
           onClick={onSync}
         >
           {label}

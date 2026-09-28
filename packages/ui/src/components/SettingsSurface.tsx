@@ -307,6 +307,9 @@ function ThemeInput({
   return (
     <input
       aria-label={i18n._("Terminal pane theme")}
+      title={i18n._(
+        "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto",
+      )}
       value={draft}
       // `auto` is the value the field takes when left empty, not a word.
       placeholder="auto"
@@ -932,7 +935,7 @@ export function SettingsSurface() {
           />
           {saved === "theme" ? <SavedTick testId="theme-saved" /> : null}
           <span className="text-xs text-neutral-500">
-            {i18n._("Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme.")}
+            {i18n._("Spex itself follows your OS theme.")}
           </span>
         </div>
       </section>
