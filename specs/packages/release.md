@@ -195,7 +195,7 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 - an `app-vMAJOR.MINOR.PATCH-beta.N` tag over manifests at its pre-release version is a beta titled with that version, whose notes are the `[Unreleased]` section under the line naming the beta and the release it leads to, and end with the line naming the gates a beta skips [[release-27](#release-27)];
 - `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
 - a manifest off the tag's version, regular or beta, refuses the release [[release-8](#release-8)] [[release-27](#release-27)];
-- a beta's `[Unreleased]` holding only headings and blank lines, or a version with no section, is refused as empty notes [[release-27](#release-27)].
+- a beta's `[Unreleased]` holding only headings and blank lines, its lines ending in LF or CRLF, or a version with no section, is refused as empty notes [[release-27](#release-27)].
 
 ## References
 

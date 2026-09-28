@@ -181,7 +181,7 @@ test("a manifest off the tag's version refuses the release", (t) => {
   }
 });
 
-test("empty notes are refused: an [Unreleased] holding only headings, a version with no section", (t) => {
+test("empty notes are refused: an [Unreleased] holding only headings, LF or CRLF, a version with no section", (t) => {
   const emptied = CHANGELOG.replace(
     "### Added\n\n- A beta feature, recorded in [DR-087](specs/decisions/087-beta-app-releases.md).\n",
     "### Added\n\n",
@@ -198,4 +198,15 @@ test("empty notes are refused: an [Unreleased] holding only headings, a version 
   const missing = run(root, "notes", "--tag=app-v9.9.9", `--repository=${REPO}`, `--out=${out}`);
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /No release notes found under \[9\.9\.9\]/);
+
+  // The same files with CRLF line endings: a heading ending in a
+  // carriage return is still a heading, as grep read it in the workflow,
+  // and a note is still a note.
+  const crlf = (text) => text.replaceAll("\n", "\r\n");
+  const beta1 = parseTag("app-v1.3.0-beta.1");
+  assert.throws(
+    () => releaseNotes({ changelog: crlf(emptied), release: beta1, repository: REPO }),
+    /No release notes found under \[Unreleased\]/,
+  );
+  assert.match(releaseNotes({ changelog: crlf(CHANGELOG), release: beta1, repository: REPO }), /A beta feature/);
 });

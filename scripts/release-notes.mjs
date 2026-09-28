@@ -94,9 +94,11 @@ export function changelogSection(changelog, section) {
 }
 
 /** Blank lines and headings alone are no notes: a section left empty
- * by the last release still holds a blank line. */
+ * by the last release still holds a blank line. The classes are grep's
+ * `#.*` and `[[:space:]]*`, whose dot takes a carriage return and whose
+ * space is ASCII's alone, so a CRLF heading reads as a heading. */
 export function hasNotes(section) {
-  return section.split("\n").some((line) => !/^(#.*|\s*)$/.test(line));
+  return section.split("\n").some((line) => !/^(#[^\n]*|[ \t\v\f\r]*)$/.test(line));
 }
 
 /** Point repository-relative links at the tree at this tag: resolved
