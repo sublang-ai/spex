@@ -1111,7 +1111,7 @@ describe("spec-view-63: the Specs tab on a project with no specs/", () => {
     fireEvent.click(screen.getByTestId("workspace-tab-specs"));
 
     const empty = await screen.findByTestId("specs-empty");
-    expect(empty.textContent).toMatch(/npx @sublang\/spex/);
+    expect(empty.textContent).toMatch(/npx @sublang\/spex scaffold/);
     expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
     // The tab really is the shown one, so the empty state is what the
     // reader is looking at and not something rendered off-surface.

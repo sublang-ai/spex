@@ -1216,10 +1216,10 @@ describe("SPECV-9/17/18: empty, legacy, and loading states", () => {
   test("no specs/ shows the instructive scaffold empty state", () => {
     render(<Harness tree={EMPTY_TREE} />);
     const empty = screen.getByTestId("specs-empty");
-    expect(empty.textContent).toContain("npx @sublang/spex");
+    expect(empty.textContent).toContain("npx @sublang/spex scaffold");
     expect(
       within(empty).getByRole("button", {
-        name: "Copy command npx @sublang/spex",
+        name: "Copy command npx @sublang/spex scaffold",
       }),
     ).toBeTruthy();
     // Without a seeding wire-up, the Academy offer stays hidden.

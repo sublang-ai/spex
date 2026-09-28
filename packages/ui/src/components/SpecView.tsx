@@ -985,7 +985,9 @@ export function SpecView(props: SpecViewProps) {
           />
         </p>
         <p>{i18n._("Scaffold one in the project directory:")}</p>
-        {copyCommand("npx @sublang/spex")}
+        {/* The CLI's bare command prints its usage; `scaffold` writes
+            the tree (spec-view-9). */}
+        {copyCommand("npx @sublang/spex scaffold")}
         {props.onSeedExample ? (
           <div>
             <button

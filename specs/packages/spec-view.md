@@ -285,7 +285,7 @@ While the spec view renders a read tree, the spec view shall show a manual refre
 
 Where the tree is absent or only partially parsed, the spec view shall degrade instructively and never render blank ([DR-011](../decisions/011-project-workspace.md)):
 
-- with no `specs/` directory, an instructive empty state states what `specs/` holds and presents the scaffold command (`npx @sublang/spex`) as a copyable block;
+- with no `specs/` directory, an instructive empty state states what `specs/` holds and presents the command that scaffolds it (`npx @sublang/spex scaffold`) as a copyable block;
 - a file that fails to parse renders a per-file notice inside its node while parsed content stays visible;
 - tree-level notices render under the header.
 
