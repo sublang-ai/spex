@@ -261,6 +261,19 @@ function expectNext(
   return row;
 }
 
+/** An abort Playbook settled at its saved progress (core-service-6,
+ * DR-088): the conversation continues, owes no recovery, and stays the
+ * project's lane (core-service-93). */
+function expectStoppedLane(h: Harness, sessions: CommandResults["session.list"]) {
+  const row = sessions.find((candidate) => candidate.id === h.session.id);
+  assert.equal(row?.recovery, undefined);
+  assert.equal(row?.continuable, true, row?.continuationReason ?? "no reason given");
+  assert.deepEqual(
+    h.service["sessions"].listLanes().filter((lane) => lane.projectId === h.project.id).map((lane) => lane.sessionId),
+    [h.session.id],
+  );
+}
+
 for (const mode of ["automatic", "manual race", "done during settlement", "drop during settlement"] as const) {
   test(`queue advance: settlement gates ${mode}`, { timeout: 20_000 }, async (t) => {
     const prompts: string[] = [];
@@ -554,6 +567,7 @@ test("queue advance: an aborted dispatch holds the queue at the stopped intent",
   expectNext(await h.client.expectOk("ledger.get", {}), first.id, "stopped", true);
   assert.equal(entry(await h.client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text]);
+  expectStoppedLane(h, await h.client.expectOk("session.list", {}));
 });
 
 test("queue advance: a restore reports an interrupted follow-up and starts no successor", { timeout: 20_000 }, async (t) => {
@@ -673,6 +687,7 @@ test("queue advance: an aborted follow-up cannot inherit an older finish", { tim
   expectNext(after, next.id, "stopped", true);
   assert.equal(entry(after, next.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text, "One more change"]);
+  expectStoppedLane(h, await h.client.expectOk("session.list", {}));
 });
 
 for (const verdict of ["done", "dropped"] as const) {
