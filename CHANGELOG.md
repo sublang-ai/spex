@@ -143,6 +143,25 @@ and `npm start` (desktop) or `npm run start:server` (server).
   desktop renders inside the fresh clone, so `--desktop` is gone
   ([DR-086](specs/decisions/086-tests-in-tiers.md)).
 - `npm run e2e:live` is now `npm run regression`.
+- `npm run smoke` refuses a working tree with uncommitted changes unless
+  `--allow-dirty` is given, since its build, lint and CLI pass read the
+  working tree while the fresh install clones the last commit; the
+  fresh install launches the server shell as the README does, with only
+  `SPEX_HOME` set and an ephemeral port.
+- The project palette's Add and Create say what each does in their
+  tooltips: "Register this existing repository" and "Create a new
+  repository at this path".
+- The Up next row's Start collapses to an icon in a narrow pane, so the
+  row keeps its words on one line.
+- The project Overview names the GitHub state in its header only while
+  the Sources band is folded; an open band says it itself.
+- With no prose paragraph in a draft's source, the Register tab's
+  intent defaults to the source's title, so the app's own example
+  registers on its defaults.
+- Long inline explanations read as key phrases, the detail moving into
+  the control's tooltip: the Specs tab's legacy-layout notice, the
+  Space's unrelated-history and first-meeting cards, and the terminal
+  pane theme in Settings ([DR-069](specs/decisions/069-key-phrases-not-sentences.md)).
 
 ### Fixed
 
@@ -155,6 +174,20 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the shipped compiler resolves the app's SDKs.
 - A running core no longer leaves a temporary directory behind, or grows
   its memory, each time it shows a playbook's machine or opens a session.
+- An authored playbook's compile failed at the machine phase: no
+  `xstate` resolved from the library directory, so the compiler's type
+  check refused the generated machine. The playbook engine is now
+  linked into that directory before the compiler runs.
+- The Register tab could offer a new player whose id the roster already
+  held, and registering overwrote that player; it now selects the
+  existing lane as it stands and mints only a free id.
+- An agent's registration proposal spelled a role in another case than
+  the compiled one ("Coder" for `coder`) and never applied; proposals
+  now match roles case-insensitively.
+- A roster player bound to no role was missing from Settings and from a
+  draft's agent picker.
+- The Specs tab's empty state told you to run `npx @sublang/spex`, which
+  only prints usage; it now offers `npx @sublang/spex scaffold`.
 
 ## [0.8.0] - 2026-09-14
 

@@ -21,7 +21,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] The Register tab's intent defaulting to the source's title, so the app's own example registers on its defaults.
 - [x] Spec items matching what is built and tested: the palette, the Overview's GitHub line, the live journeys, spec-view's lowest free number.
 - [x] Inline explanations shortened to key phrases, in both catalogs.
-- [ ] The changelog carrying what shipped unnoted.
+- [x] The changelog carrying what shipped unnoted.
 - [ ] The smoke's `live` stage (`npm run smoke -- --live`).
 - [ ] The regression's example journey: pasted, compiled for real, registered on the defaults, run to a finished turn.
 - [ ] The hermetic compiled-fixture journey.
