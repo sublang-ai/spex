@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-09-28) on an audit of [DR-086](086-tests-in-tiers.md)'s delivery, which found each of the three fresh-user scenarios short of a real walk.
-Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smoke and the regression walk and how their failures are judged: the live smoke also runs in the installed shape, the regression compiles the app's own example and starts its project where a fresh user does, the regression's observed-and-aborted `/code` leaves, and CI runs a compiled playbook on substitute agents.
+Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smoke and the regression walk and how their failures are judged: the live smoke also runs in the installed shape, the regression compiles the app's own example and starts its project where a fresh user does, the regression's observed-and-aborted `/code` leaves, CI runs a compiled playbook on substitute agents, and a compiler refusal is judged by whose source it refused.
 
 ## Context
 
@@ -16,7 +16,7 @@ Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smok
 - (a): the app's own example, placed by the authoring workspace's Prefill, is a fixed source the app ships beside the compiler it ships; the compiler refusing it is the app failing.
 - (b): the regression's project is a repository the harness built and added with Add, while a fresh user creates one from the palette with specs scaffolded; it runs `/code` twice, never the `/decide` the README pairs with `/code`, and fails outright when a player asks the Boss a question, which real cycles do.
 - The regression's observed-and-aborted `/code` asserts what the live smoke asserts, at a slower tier — the kind of test DR-086 itself retires.
-- DR-086 waives provider-side failures and blocks on app-side ones; a compiler refusal is neither, and went unclassified.
+- DR-086 waives provider-side failures and blocks on app-side ones; a compiler refusal fits neither cleanly — the compiler is the app's, a chat-authored source the model's — and went unclassified.
 
 ## Decision
 
