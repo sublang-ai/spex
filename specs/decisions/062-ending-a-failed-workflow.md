@@ -13,6 +13,7 @@ Amended by [DR-073](073-letting-go-ends-the-parked-run.md) in scope: dropping in
 Amended by [DR-074](074-a-parked-run-survives.md): a session whose run ended with unresolved effects recorded is continuable, and every advertised action is published rather than the first taken.
 Amended by [DR-075](075-a-failure-says-what-and-what-now.md): one control per advertised action, each with its standing, replaces the single Retry.
 Floor raised by [DR-076](076-playbook-14-1-adoption.md): Spex requires Playbook 14.1 or later.
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its last consequence alone: a session holding an uncertain turn is restored first, and Discard stands only where nothing was recorded.
 
 ## Context
 

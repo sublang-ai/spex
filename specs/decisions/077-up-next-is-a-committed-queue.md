@@ -10,6 +10,7 @@ Amends [DR-035](035-intent-ledger.md) in scope: every Up next row is visibly que
 Amends [DR-055](055-queue-advancement.md) in scope: a clean settled turn and a free conversation replace typed governed-root success as the advancement gate; verdict independence, settlement-only triggering, actual-start attribution, normal admission, explicit after-links, and the absence of a retained runner or automatic retry stand.
 Amends [DR-051](051-runtime-held-for-a-turn.md) in scope: the latest owned conversation remains the queue's lane while its recovery boundary stands, even when ordinary continuation is unavailable; the runtime-held-for-a-turn and one-working-turn rules stand.
 Applies [DR-069](069-key-phrases-not-sentences.md) to the next row's standing and [DR-075](075-a-failure-says-what-and-what-now.md) to any failure cause it carries.
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its advancement gate alone: a restore's report settles clean yet hands no queued intent on, being the account of a stop; the gate for every other settled turn stands.
 
 ## Context
 
