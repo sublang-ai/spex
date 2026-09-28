@@ -205,9 +205,10 @@ export function demoAdapterImports(options: { delayMs?: number } = {}) {
  * unresolved effect and a fenced leaf advertising its controls.
  * Shared by the core's integration suite and the browser harness, so
  * the published-control path is proven against one failure and not
- * two.
+ * two. `held` keeps the coder's call in flight, its commit made, until
+ * the run is stopped — a Boss abort, or a writer that dies (DR-088).
  */
-export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
+export function parkingScript(options: { delayMs?: number; held?: boolean } = {}): FakeScript {
   const delay = options.delayMs ?? 1;
   let phase = 0;
   return {
@@ -220,6 +221,7 @@ export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
         response: {
           result: "Committed the phase.",
           delayMs: delay,
+          ...(options.held ? { untilAborted: true } : {}),
           effect: (cwd) => {
             phase += 1;
             writeFileSync(join(cwd, "work.txt"), `baseline\nphase ${phase}\n`);
