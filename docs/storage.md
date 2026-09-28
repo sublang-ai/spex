@@ -45,11 +45,11 @@ Recovery evidence is durable before external actions run, independently of trans
 The checkpoint identifies an exact replay prefix by sequence and digest.
 Its state is `settled`, `uncertain` or `history-only`; transcript completeness alone does not establish safe continuation.
 
-A turn is marked `uncertain` before execution and stays so until settlement.
+A turn is marked `uncertain` before execution; each step's start and result are saved before the next transition, and a turn stopped after a save settles at that position.
 If its writer stops first, desktop or CLI requires explicit recovery:
 
-- **Retry** reconciles completed work, then retries the saved input with its saved configuration.
-- **Discard** restores the preceding checkpoint only if the effect ledger has not advanced; a fresh session with no settled checkpoint may be removed.
+- **Restore** reconciles completed work, restores the saved position and reports what was recorded; nothing is repeated and the saved input is not run again.
+- **Discard** is offered only when nothing was recorded — no step, no abandonment, unchanged repository evidence — and restores the preceding checkpoint; a fresh session with no settled checkpoint may be removed.
 
 Neither action authorizes repeating completed effects or erasing unresolved evidence.
 

@@ -2554,7 +2554,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
 
   test.each(["active", "unknown"] as const)("external %s ownership hides session controls and keeps streaming history", (externalWriter) => {
     const session = { ...SESSION, externalWriter, live: externalWriter === "active", turnActive: false,
-      recovery: { state: "uncertain" as const, input: "Saved request" } };
+      recovery: { state: "uncertain" as const, input: "Saved request", discardable: true } };
     const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
     const composer = { draft: "Keep draft", queued: [{text: "Keep queue"}] };
     const props = {session, view, composer, connected: true, readOnly: false,
@@ -2566,7 +2566,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     expect(screen.queryByTestId("history-notice")).toBeNull();
     expect(screen.queryByText("Interrupted turn")).toBeNull();
     expect(screen.queryByTestId("boss-composer")).toBeNull();
-    for (const name of ["Retry", "Discard", "New session"]) {
+    for (const name of ["Restore", "Discard", "New session"]) {
       expect(screen.queryByRole("button", {name})).toBeNull();
     }
     applyRecords(view, [{seq: view.lastSeq + 1, record: {type: "captain_reply", timestamp: 100, turnId: 1, text: "New external output"} as TmuxPlayRecord}]);
@@ -2587,7 +2587,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
         record: {type: "turn_finished", turnId: 1, timestamp: 1} as TmuxPlayRecord});
       deliverServerMessageForTests({type: "session.state", session});
       await expect(useAppStore.getState().submitBossText("s1", "New request")).rejects.toThrow("ownership");
-      await expect(useAppStore.getState().recoverSession("s1", "retry")).rejects.toThrow("ownership");
+      await expect(useAppStore.getState().recoverSession("s1", "restore")).rejects.toThrow("ownership");
       await expect(useAppStore.getState().recoverSession("s1", "discard")).rejects.toThrow("ownership");
       await expect(useAppStore.getState().deleteSession("s1")).rejects.toThrow("ownership");
       expect(command).not.toHaveBeenCalled();
@@ -2599,8 +2599,8 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     } finally {setClientForTests(undefined); useAppStore.setState(previous, true);}
   });
 
-  function renderInterrupted(onRecover: (action: "retry" | "discard") => Promise<void> = vi.fn(async () => {}), connected = true) {
-    const session = { ...SESSION, live: false, continuable: false, recovery: { state: "uncertain" as const, input: "Original interrupted request" } };
+  function renderInterrupted(onRecover: (action: "restore" | "discard") => Promise<void> = vi.fn(async () => {}), connected = true, discardable = true) {
+    const session = { ...SESSION, live: false, continuable: false, recovery: { state: "uncertain" as const, input: "Original interrupted request", discardable } };
     const props = {
       session, view: initialSessionView(PLAYERS),
       composer: { draft: "Keep my draft", queued: [{ text: "Later" }] },
@@ -2629,14 +2629,14 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(onRecover).toHaveBeenCalledExactlyOnceWith("discard");
-    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(true);
-    await act(async () => refuse(new Error("Effect ledger advanced; discard refused.")));
-    expect(screen.getByRole("alert").textContent).toContain("Effect ledger advanced");
+    expect((screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => refuse(new Error("Recorded work or changed repository evidence must be restored and reported; the turn cannot be discarded")));
+    expect(screen.getByRole("alert").textContent).toContain("must be restored and reported");
     expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
     expect(props.onSubmit).not.toHaveBeenCalled();
   });
 
-  test("sends recovery over the protocol with only the selected session ID", async () => {
+  test("Restore sends only the selected session ID at once, saying nothing is repeated", async () => {
     const previous = useAppStore.getState();
     const command = vi.fn(async () => ({ accepted: true }));
     setClientForTests({ command } as never);
@@ -2644,18 +2644,28 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
       await useAppStore.getState().recoverSession(SESSION.id, action);
     });
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry" })));
-      expect(command).toHaveBeenCalledExactlyOnceWith("session.retry", { sessionId: SESSION.id });
+      const restore = screen.getByRole("button", { name: "Restore" });
+      // It repeats and discards nothing, so it asks nothing (run-view-110).
+      expect(restore.getAttribute("title")).toBe("Nothing is repeated");
+      await act(async () => fireEvent.click(restore));
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.restore", { sessionId: SESSION.id });
     } finally {
       setClientForTests(undefined);
       useAppStore.setState(previous, true);
     }
   });
 
+  test("an attempt that recorded work offers Restore alone, and nothing explains the absence", () => {
+    renderInterrupted(undefined, true, false);
+    const region = screen.getByRole("region", { name: "Interrupted turn" });
+    expect(within(region).getAllByRole("button").map((button) => button.textContent)).toEqual(["Restore"]);
+    expect(region.textContent).not.toMatch(/discard/i);
+  });
+
   test("does not dispatch disconnected recovery", () => {
     renderInterrupted(undefined, false);
-    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Discard" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -2677,7 +2687,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
       expect(useAppStore.getState().views.s1.turnActive).toBe(true);
       expect(screen.getByTestId("working-indicator")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
-      act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, live: false, recovery: { state: "uncertain", input: "saved" } } }));
+      act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, live: false, recovery: { state: "uncertain", input: "saved", discardable: true } } }));
       expect(command).not.toHaveBeenCalled();
       expect(useAppStore.getState().composers.s1.queued).toHaveLength(1);
       act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, turnActive: false } }));
@@ -2711,7 +2721,7 @@ function StoredSessionRun() {
 test("stored mid-turn history stays idle and Discard permits a direct submission", async () => {
   const previous = useAppStore.getState();
   const stopped = { ...SESSION, live: false, turnActive: false, continuable: false,
-    recovery: { state: "uncertain" as const, input: "Interrupted request" } };
+    recovery: { state: "uncertain" as const, input: "Interrupted request", discardable: true } };
   const records = [
     { seq: 1, record: { type: "turn_started", timestamp: 1, turnId: 1, turn: { id: 1, prompt: "Interrupted request" } } },
     { seq: 2, record: { type: "player_prompt", timestamp: 2, turnId: 1, playerId: "dev.coder", prompt: "Work in progress" } },
@@ -2759,7 +2769,7 @@ test.each(["active", "unknown", "continuable", "uncertain"] as const)(
     const externalWriter = kind === "active" || kind === "unknown" ? kind : undefined;
     const session = { ...SESSION, live: kind === "active", turnActive: false, externalWriter,
       continuable: kind === "continuable",
-      ...(kind === "uncertain" ? { recovery: { state: "uncertain" as const, input: "Saved input" } } : {}),
+      ...(kind === "uncertain" ? { recovery: { state: "uncertain" as const, input: "Saved input", discardable: true } } : {}),
     };
     const history = vi.fn().mockRejectedValueOnce(new Error("Cannot read selected transcript"))
       .mockResolvedValueOnce({ records: [{ seq: 1, record: { type: "captain_reply", timestamp: 1, turnId: 1, text: "Recovered history" } }] });
@@ -3245,7 +3255,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       ...SESSION,
       live: false,
       continuable: false,
-      recovery: { state: "uncertain" as const, input: "Saved request" },
+      recovery: { state: "uncertain" as const, input: "Saved request", discardable: true },
     };
     const { rerender } = renderFailed({ session: uncertain, readOnly: true });
     expect(screen.getByRole("region", { name: "Interrupted turn" })).toBeTruthy();

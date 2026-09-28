@@ -181,7 +181,7 @@ export interface CoreServiceOptions {
 /** Commands that write under the home (space-21): refused `busy` while
  * a Space operation runs, so the core stays the sole writer through it. */
 const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
-  "turn.submit", "session.control", "session.create", "session.retry", "session.discard", "session.delete", "session.viewed",
+  "turn.submit", "session.control", "session.create", "session.restore", "session.discard", "session.delete", "session.viewed",
   "project.register", "project.create", "project.rebind", "project.remove",
   "intent.queue", "intent.edit", "intent.move", "intent.link", "intent.close", "intent.remove",
   "config.edit", "compile.run",
@@ -1238,7 +1238,7 @@ export class CoreService {
     if (gate && SPACE_GATED_COMMANDS.has(command.type)) throw new CoreError("busy", gate);
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
-    if (command.type === "session.retry" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
+    if (command.type === "session.restore" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
     switch (command.type) {
       case "config.get":
         return this.configState;
@@ -1391,16 +1391,16 @@ export class CoreService {
       // here is kept by there being no path that could (DR-067).
       case "session.agent.set":
         return await this.setSessionAgent(command);
-      case "session.retry": {
+      case "session.restore": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
         const project = this.store.getProject(session.projectId);
         if (!project) throw new CoreError("invalid_request", i18n._({
-          id: "bind the existing project before retrying",
+          id: "bind the existing project before restoring",
           comment:
             "Refusal: the session's project has no folder on this device yet",
         }));
-        await this.sessions.retrySession(project, session.id);
+        await this.sessions.restoreSession(project, session.id);
         return {accepted: true};
       }
       case "session.discard": {
@@ -2316,9 +2316,8 @@ export class CoreService {
     if (!session.continuable) {
       throw new CoreError("invalid_request", session.recovery
         ? i18n._({
-            id: "Recover the interrupted turn with Retry or Discard first",
-            comment:
-              "Refusal; Retry and Discard are the controls the interface offers",
+            id: "Restore the interrupted turn first",
+            comment: "Refusal; Restore is the control the interface offers for interrupted work",
           })
         // The stored reason where the session carries one, its own words.
         : session.continuationReason ?? i18n._({

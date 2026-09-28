@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -245,7 +245,11 @@ export interface SessionInfo {
   /** Shared validation permits an ordinary Boss message to continue it. */
   continuable?: boolean;
   continuationReason?: string;
-  recovery?: { state: "uncertain"; input: string };
+  /** Interrupted work awaiting the Boss (core-service-32): the saved
+   * input, and whether Playbook's shared discard predicate allows
+   * Discard — nothing recorded, no abandonment, unchanged repository
+   * evidence (DR-088). The client never guesses it. */
+  recovery?: { state: "uncertain"; input: string; discardable: boolean };
   /** The session's own words: its first Boss turn, absent when the
    * session held no turn (core-service-32). */
   title?: string;
@@ -628,7 +632,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("project.rebind"), id, projectId: z.string().uuid(), path: z.string().min(1), aliases: z.array(z.string()).optional(), revision: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("storage.diagnostics"), id }).strict(),
   z.object({ type: z.literal("session.dispose"), id, sessionId: z.string().min(1) }),
-  z.object({ type: z.literal("session.retry"), id, sessionId: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("session.restore"), id, sessionId: z.string().min(1) }).strict(),
   z.object({ type: z.literal("session.discard"), id, sessionId: z.string().min(1) }).strict(),
   z.object({
     type: z.literal("turn.submit"),
@@ -895,7 +899,7 @@ export interface CommandResults {
   "session.list": SessionInfo[];
   "session.create": SessionInfo;
   "session.dispose": null;
-  "session.retry": { accepted: true };
+  "session.restore": { accepted: true };
   "session.discard": { removed: boolean };
   "session.delete": null;
   "turn.submit": { accepted: true };

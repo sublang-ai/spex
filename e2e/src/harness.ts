@@ -906,9 +906,9 @@ export async function writeTerminalSession(
 }
 
 /** Simulate the durable interruption boundary with every local writer stopped. */
-export async function interruptSession(app: App, sessionId: string, input: string): Promise<void> {
+export async function interruptSession(app: App, sessionId: string, input: string, options: { recorded?: boolean } = {}): Promise<void> {
   await app.stop();
-  await interruptDemoSession(app.sharedSessionsDir, sessionId, input);
+  await interruptDemoSession(app.sharedSessionsDir, sessionId, input, options);
   await app.start();
 }
 

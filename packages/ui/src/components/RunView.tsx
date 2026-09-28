@@ -270,7 +270,7 @@ export function RunView({
   onCompileNew?: () => void;
   /** Retry a failed transcript load (read-only view). */
   onRetryLoad?: () => void;
-  onRecover?: (action: "retry" | "discard") => Promise<void>;
+  onRecover?: (action: "restore" | "discard") => Promise<void>;
   onDraftChange?: (draft: string) => void;
   onSubmit: (text: string) => Promise<void>;
   onAbort: () => void;
@@ -703,6 +703,7 @@ export function RunView({
           {uncertain ? (
             <SessionRecovery
               input={session.recovery!.input}
+              discardable={session.recovery!.discardable}
               connected={connected && !session.live}
               onRecover={onRecover}
             />
@@ -815,7 +816,7 @@ export function RunView({
               connected={connected}
               blockedReason={
                 uncertain
-                  ? i18n._("Recover the interrupted turn before sending.")
+                  ? i18n._("Restore the interrupted turn before sending.")
                   : undefined
               }
               error={error}
