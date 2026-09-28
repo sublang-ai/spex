@@ -342,7 +342,7 @@ When a sync's Apply step has changed the working tree — by merge or fast-forwa
 
 #### space-21
 
-While a sync, check, initialize or join is running, the core shall refuse `busy`, naming the operation, every command that writes under the home — turn submission, session creation, retry, discard, deletion and viewed markers, project registration, creation, rebinding and removal, every intent command, configuration edits, and compiles — and a second Space operation, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation:
+While a sync, check, initialize or join is running, the core shall refuse `busy`, naming the operation, every command that writes under the home — turn submission, session creation, restore, discard, deletion and viewed markers, project registration, creation, rebinding and removal, every intent command, configuration edits, and compiles — and a second Space operation, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation:
 
 - the gate is set before the admission checks [[space-11](#space-11)], so a turn admitted after it is refused and one admitted before it fails the check;
 - choices needed and stopped are not running states: nothing is refused while the picker waits.

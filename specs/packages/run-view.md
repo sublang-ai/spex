@@ -200,6 +200,7 @@ While an engagement awaits one or more Boss replies, the run view shall display 
 - a compact banner names the waiting player when exactly one asks and explains that Boss can answer or ask Captain for clarification;
 - every submission goes to Captain through the ordinary Boss input route; a submission or Captain reply never clears the banner;
 - pending questions are read from runtime question data, including lists and keyed parallel questions, without requiring a particular state name; controller state changes alone never clear a question;
+- a restore's recorded position [[core-service-82](core-service.md#core-service-82)] reports the questions standing: those its runs hold, and none where they hold none;
 - an already saved queued message never automatically answers a pending question [[run-view-8](#run-view-8)].
 
 ### Turn Control
@@ -490,6 +491,7 @@ While trace records fold into the run view's state [[run-view-14](#run-view-14)]
 - a frame opens only on evidence that a run is underway — its start, a transition, or a call it makes;
 - events that merely report on a run — statuses, turn settlements, disposal — never open one;
 - a settled run's trace session is tombstoned in the folded state, so later records for it change nothing, in live folding and replay alike;
+- a restore's recorded position [[core-service-82](core-service.md#core-service-82)] is where every run stands after it: each run it names stands underway in its named state with no call running, and every other open frame settles unfinished;
 - the captain shell's own frame is not a playbook run and never draws a card.
 
 #### run-view-75
@@ -831,7 +833,7 @@ When a browser journey opens an interrupted CLI-created session, it shall verify
 - Restore sends only the session ID without a confirmation and displays the Captain's report, with no agent's reply;
 - an attempt with a recorded step shows Restore alone;
 - Discard refusal preserves the error, transcript and draft; successful discard shows the restored state or closes the removed session;
-- pending requests cannot be submitted twice, and disconnected controls cannot dispatch.
+- pending requests cannot be submitted twice — a double activation of Restore reports once — and disconnected controls cannot dispatch.
 
 
 ### Fixture Replay Coverage
@@ -985,6 +987,8 @@ Where a replayed fixture stream ends with a playbook run standing parked on the 
 - activating Drop asks its confirm first — backing out sends nothing — and then sends exactly one command: for a fixture serving an open intent that intent's close as dropped and no control, the ending riding it, and for one serving none exactly one ending control naming the published ending's id and no close [[run-view-112](#run-view-112)];
 - while a command is in flight the activated control shows its busy form under the width rule it held at rest and no control of the notice can be activated; a refused command shows its cause beside the notice, which stands, with the transcript and draft intact [[run-view-130](#run-view-130)];
 - a fixture whose stream then reports the run leaving its failure state removes the notice, one whose stream reports the run ended removes it too, and one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
+- a fixture run calling its player when its writer stopped, then restored by a recorded position holding it in its failure state with no traced move, draws that run failed with no call running and stands the notice with the summary's controls under the Captain's report [[run-view-74](#run-view-74)] [[run-view-128](#run-view-128)];
+- a recorded position holding no run settles that run's card unfinished and stands no notice [[run-view-74](#run-view-74)], and one holding a run's pending question raises the wait for its asker while one holding none clears a standing wait [[run-view-9](#run-view-9)];
 - the same fixture marked uncertain shows the interrupted-turn controls and no parked-run notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
 
 #### run-view-133
