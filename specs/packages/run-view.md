@@ -1148,7 +1148,7 @@ Where the harness boots with the demo project registered, when the journey break
 
 #### run-view-104
 
-Where the live lane runs with the machine's signed-in agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)), when the journey sends a minimal no-change `/code` task, the test suite shall assert through the page that a player pane shows the coder's live output, that the abort control acknowledges instantly and the turn ends aborted [[run-view-10](#run-view-10)] [[run-view-40](#run-view-40)], and that the session then reads idle with its composer ready [[run-view-69](#run-view-69)].
+Where the live lane runs with the machine's signed-in agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)), when the journey sends a minimal one-line `/code` task, the test suite shall assert through the page that a player pane shows the coder's live output, that the abort control acknowledges instantly and the turn ends aborted [[run-view-10](#run-view-10)] [[run-view-40](#run-view-40)], and that the session then reads idle with its composer ready [[run-view-69](#run-view-69)].
 
 #### run-view-115
 
@@ -1217,4 +1217,4 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### run-view-150
 
-Where the live journey lane runs with the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md)) over a fresh repository the journey added, when a `/code` intent started from the Dashboard runs its real turn and a queued second intent follows it, the test suite shall assert through the page that the session's Captain pane shows each run's status lines to its finish with no failure [[run-view-1](#run-view-1)], that the coder's and the reviewer's panes carry their live output [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)], that the composer refuses input while each turn runs and reads ready between them [[run-view-8](#run-view-8)], and that after the second settlement the session reads idle with its composer ready [[run-view-69](#run-view-69)].
+Where the live journey lane runs with the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md)) over a fresh repository the journey added, when a `/code` intent started from the Dashboard runs its real turn and a queued second intent follows it, the test suite shall assert through the page that the session's Captain pane shows each run's status lines to its finish with no failure [[run-view-1](#run-view-1)], that the coder's and the reviewer's panes carry their live output [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)], that the composer refuses input while each turn runs [[run-view-8](#run-view-8)], and that after the second settlement the session reads idle with its composer ready [[run-view-69](#run-view-69)].

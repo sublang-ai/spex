@@ -3111,4 +3111,34 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
       within(overview).queryByRole("button", { name: /Open the project/ }),
     ).toBeNull();
   });
+
+  test("projects-29: the header names the GitHub state only while the Sources band is folded (projects-7)", () => {
+    const guidance = "no GitHub origin remote — add one to list issues and PRs.";
+    seed({
+      projectMeta: {
+        p1: {
+          status: { branch: "main", dirty: false, ahead: 0, behind: 0 },
+          forge: { adapter: "github", authenticated: null, issues: [], prs: [], guidance },
+        },
+        p2: {},
+      },
+    });
+    const { overview } = renderOverview();
+    // The open band carries the guidance itself; the header repeats
+    // nothing.
+    expect(within(overview).getByTestId("sources-guidance-p1").textContent).toContain(guidance);
+    expect(within(overview).queryByTestId("overview-github")).toBeNull();
+
+    // Folded, the band's guidance goes and the header names it beside
+    // the repository state.
+    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
+    expect(within(overview).queryByTestId("sources-guidance-p1")).toBeNull();
+    expect(within(overview).getByTestId("overview-github").textContent).toBe(`GitHub: ${guidance}`);
+    expect(overview.textContent).toContain("main");
+
+    // Opened again, the header's line leaves.
+    fireEvent.click(within(overview).getByTestId("sources-toggle-p1"));
+    expect(within(overview).queryByTestId("overview-github")).toBeNull();
+    expect(within(overview).getByTestId("sources-guidance-p1").textContent).toContain(guidance);
+  });
 });

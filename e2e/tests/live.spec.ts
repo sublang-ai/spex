@@ -4,7 +4,7 @@
 // The live lane — the regression of release-25 (DR-086): the machine's
 // signed-in agents and the real Captain, run by `npm run regression`
 // (SPEX_E2E_LIVE=1) before a regular app release and never in CI.
-// run-view-104 observes a minimal no-change task to a player's live
+// run-view-104 observes a minimal one-line task to a player's live
 // output and aborts it, under DR-020's budget. playbook-library-78
 // authors a two-role changelog playbook, compiles it for real with the
 // released slc on the compile player the journey picks — Codex's
