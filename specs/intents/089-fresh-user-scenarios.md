@@ -5,7 +5,8 @@
 
 ## Status
 
-In progress on `fresh-user-scenarios`: part 1 (tasks 1–9) done and verified; part 2 (tasks 10–16) follows on this branch once the Playbook 17 adoption merges.
+In progress on `fresh-user-scenarios`: part 1 (tasks 1–9) and task 15 done and verified; the rest of part 2 (tasks 10–14 and 16) follows on this branch once the Playbook 17 adoption merges.
+The branch merges to `main` only with part 2: the release rules (release-20, release-22, release-25, release-26) and the journey items (dashboard-63, dashboard-64, run-view-150, playbook-library-86, playbook-library-87) state the walks part 2 builds, so until then no app tag can meet the release rules — `npm run smoke -- --live` is refused as an unknown argument, and the release checklist and playbook still name `npm run smoke:desktop`.
 
 ## Intent
 
@@ -54,8 +55,9 @@ Part 1: `npm run build`, `npm test`, `npm run e2e`, `spex lint` and the catalog 
 Part 2: `npm run smoke -- --live` passes every stage, and `npm run regression` runs with every failure judged by DR-089's classes.
 
 Part 1 verified on 2026-09-28: `npm run build`; `npm test` — 28 script, 133 CLI, 336 core, 704 interface, 16 desktop and 11 server tests; the 62 hermetic journeys; `spex lint` clean; the interface, core and desktop catalogs whole in English and Chinese.
+Re-verified after the review on 2026-09-28 with task 15 landed: `npm run build`; `npm test` — 31 script, 133 CLI, 336 core, 704 interface, 16 desktop and 11 server tests; the 62 hermetic journeys; `spex lint` clean; the three catalogs whole.
 The fresh install (`scripts/install-smoke.mjs`) at cdf44dd passed every stage in 1m19s with the server launched as the README does: the config seeded at the home's `config/playbook.config.yaml`, readiness for the one bound adapter, the desktop rendered by its English names.
-The new release-notes script reproduces, byte for byte, the notes the workflow's inline bash assembled from this changelog for `app-v0.8.0` and for a beta.
+The new release-notes script reproduces, byte for byte, the notes the workflow's inline bash assembled from this changelog for `app-v0.8.0` and for a beta, and since the review reads a CRLF changelog's headings and blank lines as the bash's grep did.
 Two renumberings the audit proposed fail meta-12 and were not made: `dashboard-5` was released in the CLI's v1.0.0 through v3.0.0 trees, and `run-view-111` is assigned; `dashboard-63` and `run-view-150` skipped no free number, while `spec-view-63` skipped the free, never-released 58 and moved there.
 The Specs tab's empty state names the scaffold command rather than offering an in-app Scaffold: the core scaffolds only while creating a repository, and writing into a registered one would need its own decision on committing over a user's history.
 
