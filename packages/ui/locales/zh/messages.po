@@ -1696,6 +1696,10 @@ msgstr "无法撤销：{reason}"
 msgid "Create"
 msgstr "新建"
 
+#: src/components/ProjectPalette.tsx
+msgid "Create a new repository at this path"
+msgstr "在此路径新建一个仓库"
+
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "已在 <0>{path}</0> 创建初始配置"
@@ -3794,6 +3798,10 @@ msgstr "刷新中…"
 msgid "Register"
 msgstr "注册"
 
+#: src/components/ProjectPalette.tsx
+msgid "Register this existing repository"
+msgstr "登记这个已有的仓库"
+
 #: src/components/LibrarySurface.tsx
 msgid "Registered /{command}"
 msgstr "已注册 /{command}"
@@ -4508,6 +4516,7 @@ msgstr "Spex 导航"
 msgid "Squash or reset them yourself"
 msgstr "自行压缩或重置这些提交"
 
+#. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
