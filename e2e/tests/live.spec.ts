@@ -188,9 +188,23 @@ test.describe("the changelog playbook", () => {
     const band = page.getByTestId("compile-band");
     await expect(band).toHaveAttribute("data-outcome", "running", { timeout: 60_000 });
     await expect(page.getByTestId("compile-by")).toHaveText("asked by the agent");
-    await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done", {
-      timeout: 130 * 60_000,
-    });
+    // …unless the core's bounded relay gives up (playbook-library-58:
+    // three failed compiles in a row hand the draft back to the Boss),
+    // in which case the journey stops with the thread attached rather
+    // than waiting out the compile budget.
+    await expect
+      .poll(
+        async () => {
+          if (/three in a row/i.test(await band.innerText())) return "stopped";
+          return page.getByTestId("phase-link").getAttribute("data-status");
+        },
+        { timeout: 130 * 60_000, intervals: [10_000] },
+      )
+      .toMatch(/^(done|stopped)$/);
+    if (/three in a row/i.test(await band.innerText())) {
+      await attach("the compile stopped");
+      throw new Error("the compile failed three times in a row; the compiler's output is attached");
+    }
     await expect(page.getByTestId("draft-chip")).toContainText("Compiled", { timeout: TURN });
     // The derived roles are the two (playbook-library-60), in the
     // casing the compiler emits: the released slc derives canonical
