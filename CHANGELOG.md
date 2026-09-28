@@ -38,6 +38,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
   would do nothing, with its reason; the single Retry that sent the first
   advertised action is gone. Drop stands as before. A session whose
   controls were never captured offers Drop alone.
+- Beta app releases ([DR-087](specs/decisions/087-beta-app-releases.md)).
+  An `app-vX.Y.Z-beta.N` tag, with both shells' manifests at
+  `X.Y.Z-beta.N`, ships the app as a GitHub pre-release once CI, the
+  smoke and the live smoke pass — without the hours-long regression.
+  Its notes are this file's `[Unreleased]` section as it stands at the
+  tag; the changelog gains no section for a beta, so its notes fold
+  into the regular release that follows.
+- Tests in tiers ([DR-086](specs/decisions/086-tests-in-tiers.md)). The
+  smoke installs the release from a fresh clone with `npm ci` on an
+  empty npm cache and launches both shells as a user does: the server
+  shell walked over its printed token URL and stopped with SIGTERM, the
+  desktop rendered by `npm start`. Before a regular release, a
+  regression walks the three fresh-user scenarios with real agents: a
+  `/code` run to live output, a playbook authored in chat compiled,
+  registered and run, and a new project developed through two intents
+  with the queue handing off. CI runs the browser journeys on macOS as
+  well as Linux.
 
 ### Changed
 
@@ -85,6 +102,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   variable, in which case it configures slc itself; an agent on an
   adapter the compiler cannot drive is refused before it runs, and the
   compile log names the agent and where it came from.
+- `npm run smoke` no longer re-runs the unit, integration and journey
+  suites — CI's run on the tagged commit is that evidence — and never
+  flips the developer tree's native module: its stages are the build,
+  the spec lint, the fresh install and the CLI user pass, and the
+  desktop renders inside the fresh clone, so `--desktop` is gone
+  ([DR-086](specs/decisions/086-tests-in-tiers.md)).
+- `npm run e2e:live` is now `npm run regression`.
 
 ### Fixed
 

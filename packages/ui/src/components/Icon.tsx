@@ -74,6 +74,7 @@ const PATHS: Record<string, ReactNode> = {
   ),
   // A square stops the running transport step (space-16).
   stop: <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" />,
+  play: <path d="M5 3.5v9l7.5-4.5Z" fill="currentColor" stroke="none" />,
   // A tick marks a step done (space-12).
   check: <path d="M3 8.5 6.5 12 13 4.5" />,
   // The authoring workspace's tabs below the @xs step

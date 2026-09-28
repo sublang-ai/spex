@@ -1062,11 +1062,13 @@ export class CoreService {
     note(summary.captain.adapter, "captain");
     // A position is a session player, named by its own id; the roles
     // it serves ride along, since one lane may answer several
-    // (DR-032). Only referenced players are in the roster, so an
-    // unused entry never gates a first run.
+    // (DR-032). A lane no role binds is listed for Settings and the
+    // draft picker (settings-26, playbook-library-55) but probed here
+    // for nothing: it opens no session, so an unused entry never
+    // gates a first run, and the picker's chip reads it as unknown.
     for (const player of summary.players) {
-      const roles = player.boundBy.length > 0 ? ` (${player.boundBy.join(", ")})` : "";
-      note(player.agent.adapter, `${player.id}${roles}`);
+      if (player.boundBy.length === 0) continue;
+      note(player.agent.adapter, `${player.id} (${player.boundBy.join(", ")})`);
     }
     return Promise.all(
       [...positions.entries()].map(async ([adapter, usedBy]) => {

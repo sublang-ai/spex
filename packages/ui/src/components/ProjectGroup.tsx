@@ -1202,12 +1202,22 @@ function QueueRow({
             project: ownerName,
           })}
           onClick={onStart}
-          className="min-h-6 shrink-0 rounded bg-brand-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
-        >
-          {i18n._({
+          title={i18n._({
             id: "Start",
             comment: "queue row control: begin this queued intent",
           })}
+          className="flex min-h-6 shrink-0 items-center rounded bg-brand-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400"
+        >
+          {/* Below the row's @xs step the word yields to its icon, the
+              name and title unchanged (DR-041's ladder): on Linux fonts
+              the fixed marks of a 174px row overran it by two pixels. */}
+          <Icon name="play" className="h-3 w-3 @xs:hidden" />
+          <span className="hidden @xs:inline">
+            {i18n._({
+              id: "Start",
+              comment: "queue row control: begin this queued intent",
+            })}
+          </span>
         </button>
       ) : null}
       <button

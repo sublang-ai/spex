@@ -7,6 +7,7 @@
 
 Accepted (2026-09-02) on the owner's ask for automated acceptance that simulates real users in typical scenarios.
 Extends [DR-020](020-desktop-live-smoke.md): the live desktop smoke keeps the Electron topology; the journeys take the interface.
+Extended by [DR-086](086-tests-in-tiers.md): the live lane becomes the regression that regular app releases run, walking the three fresh-user scenarios, and the hermetic lane runs in CI on macOS as well as Linux.
 
 ## Context
 

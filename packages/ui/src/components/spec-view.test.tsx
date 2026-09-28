@@ -960,21 +960,6 @@ describe("DR-010 §6: focus follows", () => {
     expect(document.activeElement).toBe(row);
   });
 
-  test("the reader takes focus on Back and returns it to the record's row", async () => {
-    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nBody.");
-    render(<Harness onReadRecord={onReadRecord} />);
-    // The branch is closed until asked for (spec-view-7).
-    fireEvent.click(screen.getByTestId("decisions-toggle"));
-    const row = screen.getByTestId("record-DR-011");
-    fireEvent.click(row);
-    await screen.findByText("Body.");
-    const back = screen.getByText("← Back");
-    expect(document.activeElement).toBe(back);
-    fireEvent.click(back);
-    // Closing hands focus back to the invoking row (spec-view-7).
-    expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));
-  });
-
   test("a body-link record open returns focus to the citing item row", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nDecided.");
     render(<Harness onReadRecord={onReadRecord} />);
@@ -1200,6 +1185,9 @@ describe("spec-view-7/45: records in their places", () => {
     await screen.findByText("Picked here.");
     const back = screen.getByTestId("reader-back");
     expect(back.textContent).toBe("← Back");
+    // The reader takes focus on Back, and closing hands it back to the
+    // invoking row (DR-010 §6).
+    expect(document.activeElement).toBe(back);
     fireEvent.click(back);
     expect(onReturn).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));

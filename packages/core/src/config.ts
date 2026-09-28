@@ -201,8 +201,14 @@ export interface ComposedConfig {
      * prompt-level control-call tool restriction (DR-019). */
     captainAdapter: string;
   };
-  /** Flat roster of namespaced `<id>-<role>` players, in config order. */
+  /** The session roster: every player a role binding names, in
+   * first-reference order — the lanes a session opens (DR-032). */
   players: ComposedPlayer[];
+  /** Every player the file declares, resolved, in file order — the
+   * roster Settings lists and a draft may pick (settings-26,
+   * playbook-library-55); a player no binding names reaches no
+   * session. */
+  roster: ComposedPlayer[];
   initialVisible: string[];
   playbooks: ComposedPlaybook[];
   notifications?: unknown;
@@ -1377,6 +1383,7 @@ export async function composeConfig(
     captainAgent,
     captainOptions,
     players,
+    roster: [...sessionPlayers].map(([id, agent]) => ({ id, ...agent })),
     initialVisible,
     playbooks,
     ...(top.notifications !== undefined
@@ -1457,12 +1464,15 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     }
   }
   const playerAgents = new Map(
-    loaded.composed.players.map((player) => [player.id, player]),
+    loaded.composed.roster.map((player) => [player.id, player]),
   );
   return {
     path: loaded.path,
     captain: agentSummary(loaded.composed.captainAgent),
-    players: loaded.composed.players.map((player) => ({
+    // Every declared player, bound or not: Settings lists an unbound
+    // lane as bound to no role (settings-26), and a draft may pick it
+    // as its agent (playbook-library-55); sessions keep `players`.
+    players: loaded.composed.roster.map((player) => ({
       id: player.id,
       agent: agentSummary(player),
       display: player.model ?? player.adapter,

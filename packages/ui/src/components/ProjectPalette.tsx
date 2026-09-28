@@ -414,6 +414,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-add"
               disabled={!pathDraft.trim() || busy}
               onClick={() => void runAdd(false)}
+              title={i18n._("Register this existing repository")}
               className="rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
             >
               {i18n._({
@@ -426,6 +427,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-create"
               disabled={!pathDraft.trim() || busy}
               onClick={() => void runAdd(true)}
+              title={i18n._("Create a new repository at this path")}
               className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-neutral-700"
             >
               {i18n._({

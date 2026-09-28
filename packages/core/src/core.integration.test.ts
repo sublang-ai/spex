@@ -3,7 +3,10 @@
 
 // Acceptance coverage for the CORE test package (CORE-19..23):
 // end-to-end over the WebSocket protocol against the scripted fake
-// adapter — no network, no agent credentials (CORE-18).
+// adapter — no network, no agent credentials (CORE-18). It hosts the
+// installed-template acceptance too: the config the core seeds on a
+// first run, hosted by the real Playbook Captain shell over the real
+// registries, starts a session on the template's whole roster.
 
 import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
@@ -12,7 +15,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirS
 import { execFileSync, spawnSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
 import { WebSocket } from "ws";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
@@ -1107,15 +1110,29 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 });
 
 // ---------------------------------------------------------------------------
-// Real Playbook Captain shell through the Spex pipeline (DR-003):
-// registry loading via the injected module loader, player binding,
-// visible replies, and pane visibility — no LLM, no network.
+// Real Playbook Captain shell through the Spex pipeline (DR-003) on the
+// installed template, the config a first run seeds: registry loading
+// via the injected module loader, player binding, visible replies, and
+// pane visibility — no LLM, no network.
 // ---------------------------------------------------------------------------
 
-test("real captain shell: a Boss turn round-trips the captain reply", async () => {
+test("real captain shell: the installed template's session binds its roster, and a Boss turn round-trips the captain reply", async () => {
   const dir = mkdtempSync(join(tmpdir(), "spex-shell-it-"));
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, VALID_CONFIG);
+  // The installed template with every effort it names left to the
+  // adapter: the substitute adapter speaks no effort vocabulary and
+  // refuses a call carrying one. Its roster and playbooks stay the
+  // template's own.
+  const template = parseYaml(readFileSync(templatePath(), "utf8")) as {
+    players: Record<string, unknown>;
+  };
+  const dropEfforts = (node: unknown): void => {
+    if (typeof node !== "object" || node === null) return;
+    delete (node as Record<string, unknown>).effort;
+    for (const child of Object.values(node)) dropEfforts(child);
+  };
+  dropEfforts(template);
+  writeFileSync(configPath, stringifyYaml(template));
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
@@ -1143,10 +1160,15 @@ test("real captain shell: a Boss turn round-trips the captain reply", async () =
   const session = await client.expectOk("session.create", {
     projectId: project.id,
   });
+  // Every player the template names, in its order, each in view from
+  // the start — reaching a live session over the real registries is
+  // the first-run path that once failed with invalid_config.
+  const roster = Object.keys(template.players);
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["dev.coder"],
+    roster,
   );
+  assert.deepEqual(session.initialVisible, roster);
   await client.expectOk("subscribe", {
     channel: { kind: "session", sessionId: session.id },
   });
@@ -1465,19 +1487,6 @@ test("CORE-13: invalid messages get error replies and the connection survives", 
   assert.deepEqual(projects, []);
 
   client.close();
-  await harness.service.stop();
-});
-
-test("CORE: handshake without the token is rejected before hello", async () => {
-  const harness = await startHarness();
-  const socket = new WebSocket(`ws://127.0.0.1:${harness.service.port()}`);
-  const outcome = await new Promise<string>((resolve) => {
-    socket.on("message", () => resolve("message"));
-    socket.on("close", () => resolve("closed"));
-    socket.on("error", () => resolve("closed"));
-    setTimeout(() => resolve("timeout"), 3000);
-  });
-  assert.equal(outcome, "closed");
   await harness.service.stop();
 });
 

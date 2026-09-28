@@ -887,7 +887,7 @@ export class AuthorManager {
       this.options.store.deletePref(key);
     } else {
       const composed = this.options.composed();
-      if (!composed?.players.some((player) => player.id === playerId)) {
+      if (!composed?.roster.some((player) => player.id === playerId)) {
         throw new CoreError(
           "invalid_request",
           i18n._({
@@ -962,7 +962,7 @@ export class AuthorManager {
   resolveAgent(id: string): ResolvedAuthorAgent {
     const composed = this.options.composed();
     const preferred = this.options.store.getPref<string>(`draft:${id}:player`);
-    const player = preferred ? composed?.players.find((entry) => entry.id === preferred) : undefined;
+    const player = preferred ? composed?.roster.find((entry) => entry.id === preferred) : undefined;
     const agent: ResolvedAgent = player ?? composed?.captainAgent ?? { adapter: "claude" };
     const playerId = player ? player.id : null;
     return {

@@ -65,7 +65,8 @@ When the release workflow publishes a scoped package, it shall use `--access pub
 When the release workflow completes publishing, it shall create a GitHub release with the extracted changelog notes and the channel's title ([DR-056](../decisions/056-release-naming.md)):
 
 - CLI: `Spex CLI vMAJOR.MINOR.PATCH`.
-- App: `Spex App vMAJOR.MINOR.PATCH`.
+- App: `Spex App vMAJOR.MINOR.PATCH`; a beta ([DR-087](../decisions/087-beta-app-releases.md)): `Spex App vMAJOR.MINOR.PATCH-beta.N`, created as a pre-release.
+- An app release's notes point their repository-relative links at the tagged tree, so a record cited from the changelog opens from the release page.
 
 #### release-18
 
@@ -79,7 +80,8 @@ When a release tag is pushed, the release workflow shall confirm the CI workflow
 Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), release tags shall use disjoint namespaces per channel ([DR-056](../decisions/056-release-naming.md)):
 
 - tags matching `cli-vMAJOR.MINOR.PATCH` release only the `@sublang/spex` package from `packages/cli`;
-- tags matching `app-vMAJOR.MINOR.PATCH` release the app — the desktop and server shells — as source ([DR-040](../decisions/040-source-only-app-releases.md)).
+- tags matching `app-vMAJOR.MINOR.PATCH` release the app — the desktop and server shells — as source ([DR-040](../decisions/040-source-only-app-releases.md));
+- tags matching `app-vMAJOR.MINOR.PATCH-beta.N`, `N` counting from 1 within one version, release a beta of the app — the same source release, marked pre-release ([DR-087](../decisions/087-beta-app-releases.md)); a tag carrying any other pre-release identifier is refused;
 - historical `vMAJOR.MINOR.PATCH` CLI tags remain valid release-history evidence; published tags and their URLs are preserved when titles are normalized.
 
 ### Package Hygiene
@@ -109,7 +111,9 @@ When preparing a release tag, the developer/agent shall verify that all changes 
 
 #### release-16
 
-When preparing a release tag, the developer/agent shall verify that the channel's `CHANGELOG.md` [[release-3](#release-3)] is updated with the new version and date, and the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag.
+When preparing a release tag, the developer/agent shall verify that the channel's `CHANGELOG.md` [[release-3](#release-3)] is updated with the new version and date, and the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag:
+
+- for a beta app tag, both shell manifests carry the tag's pre-release version `MAJOR.MINOR.PATCH-beta.N` verbatim ([DR-087](../decisions/087-beta-app-releases.md)).
 
 #### release-17
 
@@ -117,20 +121,24 @@ When preparing a release tag, the developer/agent shall verify that the tarball 
 
 #### release-20
 
-When preparing a release tag, the developer/agent shall run the automated smoke suite (`npm run smoke`, with the desktop stage for app releases) and see it pass every stage: build, spec lint, unit and integration tests, the browser journeys — the served UI driven in Chromium against a real core with substitute agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)) — a core round-trip that seeds the bundled template, serves the built-in catalog and artifacts, and seeds and parses the example project, and an end-user CLI pass that packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin:
+When preparing a release tag, the developer/agent shall run the automated smoke (`npm run smoke`) ([DR-086](../decisions/086-tests-in-tiers.md)) and see it pass every stage — the build, the spec lint, the fresh install, and the CLI user pass, which packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin:
 
-- browser journeys default to one worker locally and in CI, and the smoke stage explicitly uses one worker so the gate's resource load does not scale with the machine's CPU count.
+- the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server` is walked over its printed token URL — the page served, the seeded config valid with every template playbook, the built-in catalog and the `/code` artifacts served, each configured adapter's readiness reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode and exits clean;
+- the smoke re-runs neither the unit and integration suites nor the browser journeys: CI's success for the tagged commit [[release-15](#release-15)] is that evidence, and a local repeat adds none;
+- a stage's scratch tree is removed on success and kept, its path printed, on failure;
+- `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs.
 
 #### release-21
 
-When preparing an app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the desktop visuals automation cannot see — with a failing step blocking the tag until resolved:
+When preparing a regular app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the residue no automation sees: the native notification and the dock badge of a settled turn, and the packaged app as a local option ([DR-040](../decisions/040-source-only-app-releases.md)) — with a failing step blocking the tag until resolved:
 
 - a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies;
-- the checklist's packaging pass is a local option, not a gate: an app release ships no binaries ([DR-040](../decisions/040-source-only-app-releases.md)).
+- a beta app release tag is not gated on it ([DR-087](../decisions/087-beta-app-releases.md));
+- the checklist's packaging pass is a local option, not a gate: an app release ships no binaries.
 
 #### release-22
 
-When preparing an app release tag, the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and record its outcome with the tag:
+When preparing an app release tag — beta or regular ([DR-087](../decisions/087-beta-app-releases.md)) — the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and record its outcome with the tag:
 
 - a provider-side failure may be retried or waived with the reason recorded;
 - an app-side failure blocks the tag.
@@ -142,6 +150,26 @@ When preparing a CLI release tag, the developer/agent shall run the live migrati
 - the run gates on `spex lint` clean, every fixture item surviving under its new id, intent-record checkbox states preserved, and no `compositions/` directory remaining;
 - a provider-side failure may be retried or waived with the reason recorded;
 - a failure of the CLI, the prompt-driven migration, or the gates blocks the tag.
+
+#### release-25
+
+When preparing a regular app release tag, the developer/agent shall run the regression (`npm run regression`) — the browser journeys' live lane on the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md)): a real `/code` observed to live output and aborted, the chat-authored two-role playbook compiled, registered and run, and a new project developed through two intents with the queue handing off between them — and record its outcome with the tag:
+
+- the authored playbook compiles on the roster player the journey picks as the draft's agent, bound to `gpt-6-astra` at `xhigh`; the players that run playbooks and the Captain run on `claude`;
+- a provider-side failure may be retried or waived with the reason recorded;
+- an app-side failure blocks the tag;
+- a beta app release tag is not gated on it ([DR-087](../decisions/087-beta-app-releases.md)).
+
+#### release-26
+
+When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify CI green for the commit to be tagged [[release-15](#release-15)], run the smoke [[release-20](#release-20)] and the live desktop smoke [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
+
+#### release-27
+
+When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall confirm CI green for the tagged commit as for any app tag [[release-18](#release-18)], verify that both shell manifests carry the tag's pre-release version [[release-16](#release-16)], take the release notes from the app changelog's `[Unreleased]` section — refusing empty notes — under a line naming the beta and the release it leads to, and create the GitHub release as a pre-release titled by [[release-11](#release-11)], its run-from-source instructions followed by a line stating that a beta ran the smoke and the live smoke but not the regression:
+
+- a tag whose pre-release identifier is not `beta.N` is refused without a release;
+- the changelog gains no section for a beta [[release-3](#release-3)]: the regular release that follows moves `[Unreleased]` into its version section [[release-5](#release-5)], folding the betas' notes into it.
 
 ## Verification
 

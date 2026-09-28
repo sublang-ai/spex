@@ -322,7 +322,7 @@ test.describe("the History frame", () => {
   // page, then a second one behind "Older…".
   test.use({ appOptions: { project: true, history: 25 } });
 
-  test("dashboard-44: History scrolls inside a frame eight rows tall that Older… never grows", async ({
+  test("dashboard-44, dashboard-48: History scrolls inside a frame eight rows tall that Older… never grows, and the reader's pull on its edge stays", async ({
     page,
     app,
   }) => {
@@ -333,6 +333,7 @@ test.describe("the History frame", () => {
     const rows = frame.getByTestId(/^history-row-/);
     const older = page.getByTestId(`history-older-${projectId}`);
     const group = page.getByTestId(`project-group-${projectId}`);
+    const grip = page.getByTestId(`history-frame-${projectId}-grip`);
     const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height;
     const scrolls = (el: HTMLElement) => el.scrollHeight > el.clientHeight;
 
@@ -375,31 +376,16 @@ test.describe("the History frame", () => {
     await expect(frame).toBeVisible();
     expect(await frame.evaluate(heightOf)).toBeCloseTo(frameHeight, 0);
     expect(await frame.evaluate(scrolls)).toBe(true);
-  });
 
-  test("dashboard-48: the reader pulls the frame's edge, and it stays pulled", async ({
-    page,
-    app,
-  }) => {
-    await open(page, app);
+    // Back on the Dashboard, the reader pulls the frame's edge
+    // (dashboard-48). The grip stands while the rows run past the
+    // frame, names itself, and reports the height in rows.
     await nav(page, "Dashboard").click();
-    const projectId = app.projectId!;
-    const frame = page.getByTestId(`history-frame-${projectId}`);
-    const grip = page.getByTestId(`history-frame-${projectId}-grip`);
-    const heightOf = (el: HTMLElement) => el.getBoundingClientRect().height;
-    const scrolls = (el: HTMLElement) => el.scrollHeight > el.clientHeight;
-
-    // The grip stands while the rows run past the frame, names itself,
-    // and reports the height in rows.
     await expect(grip).toBeVisible();
     await expect(grip).toHaveAttribute("aria-label", "Resize History");
     await expect(grip).toHaveAttribute("aria-valuenow", "8");
     await expect(grip).toHaveAttribute("aria-valuemin", "4");
     await expect(grip).toHaveAttribute("aria-valuemax", "24");
-    const rowHeight = await frame
-      .getByTestId(/^history-row-/)
-      .first()
-      .evaluate(heightOf);
     const before = await frame.evaluate(heightOf);
 
     // Dragged down two rows, the frame is two rows taller and still

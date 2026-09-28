@@ -63,9 +63,15 @@ jobs:
         run: node --test packages/core/dist/platform.integration.test.js
 
   # The browser journeys (DR-039): the served UI driven in Chromium
-  # against a real core with substitute agents — one lane, one OS.
+  # against a real core with substitute agents, on Linux and on macOS,
+  # the desktop's platform — the fit journeys measure real fonts, which
+  # differ between the two (DR-086).
   journeys:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -82,8 +88,15 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Chromium
+      # Chromium's system libraries are an apt install on Linux; macOS
+      # needs none.
+      - name: Chromium and its system libraries
+        if: runner.os == 'Linux'
         run: npx playwright install --with-deps chromium
+
+      - name: Chromium
+        if: runner.os != 'Linux'
+        run: npx playwright install chromium
 
       - name: Browser journeys
         run: npm run e2e
@@ -91,7 +104,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: journey-report
+          name: journey-report-${{ matrix.os }}
           path: |
             e2e/playwright-report/
             e2e/test-results/

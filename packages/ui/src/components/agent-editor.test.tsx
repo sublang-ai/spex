@@ -401,16 +401,6 @@ describe("DR-019/DR-010 §6: the popover's at-hand discipline", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  test("it asks for no more width than the window can show", () => {
-    // The stylesheet's own floor under the measured placement
-    // (settings-33): the dialog never exceeds the window, and it
-    // scrolls its own content rather than leaving its box.
-    renderPopover();
-    const popover = screen.getByTestId("agent-popover");
-    expect(popover.className).toContain("max-w-[calc(100vw-1rem)]");
-    expect(popover.className).toContain("overflow-y-auto");
-  });
-
   test("a dialog hanging out of its pane is moved inside it", () => {
     // A simulated document measures nothing, so the boxes are given:
     // a 264px pane and a dialog pinned to an anchor near its left

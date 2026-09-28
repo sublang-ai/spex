@@ -1696,6 +1696,10 @@ msgstr "Couldn't undo: {reason}"
 msgid "Create"
 msgstr "Create"
 
+#: src/components/ProjectPalette.tsx
+msgid "Create a new repository at this path"
+msgstr "Create a new repository at this path"
+
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "Created a starter config at <0>{path}</0>"
@@ -3794,6 +3798,10 @@ msgstr "Refreshing…"
 msgid "Register"
 msgstr "Register"
 
+#: src/components/ProjectPalette.tsx
+msgid "Register this existing repository"
+msgstr "Register this existing repository"
+
 #: src/components/LibrarySurface.tsx
 msgid "Registered /{command}"
 msgstr "Registered /{command}"
@@ -4508,6 +4516,7 @@ msgstr "Spex navigation"
 msgid "Squash or reset them yourself"
 msgstr "Squash or reset them yourself"
 
+#. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent

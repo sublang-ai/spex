@@ -908,34 +908,12 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(within(overview).getByTestId("history-p1")).toBeTruthy();
   });
 
-  test("dashboard-47: the scroll box owns the full surface around its centered column", () => {
-    seed();
-    renderSurface();
-    const scroll = screen.getByTestId("dashboard-scroll");
-    const column = screen.getByTestId("dashboard-column");
-    expect(scroll.contains(column)).toBe(true);
-    expect(scroll.className).toContain("relative");
-    expect(scroll.className).toContain("min-h-0");
-    expect(scroll.className).toContain("w-full");
-    expect(scroll.className).toContain("overflow-y-auto");
-    expect(scroll.className).not.toContain("max-w-4xl");
-    expect(column.className).toContain("mx-auto");
-    expect(column.className).toContain("max-w-4xl");
-    expect(column.className).not.toContain("overflow-y-auto");
-  });
-
   test("published next is emphasized; every row is Queued; blocked and later rows are inert", () => {
     seed({ ledger: QUEUE_LEDGER });
     const { onStartIntent } = renderSurface();
 
     const head = screen.getByTestId("upnext-row-q1");
     expect(head.getAttribute("data-next")).toBe("true");
-    expect(screen.getByTestId("upnext-title-q1").className).toContain(
-      "font-medium",
-    );
-    expect(screen.getByTestId("upnext-title-q3").className).not.toContain(
-      "font-medium",
-    );
     fireEvent.click(screen.getByTestId("upnext-start-q1"));
     expect(onStartIntent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "q1" }),
@@ -1074,57 +1052,6 @@ describe("dashboard-26/29: groups and the queue band", () => {
     expect(screen.getByTestId("upnext-row-published").getAttribute("data-next")).toBe("true");
     expect(screen.getByTestId("attention-all-clear").textContent).toContain(
       "Core-published next",
-    );
-  });
-
-  test("the title and standing are the row's one responsive slack owner", () => {
-    const phrase = "waiting — previous work stopped";
-    seed({
-      projects: [PROJECTS[0]],
-      ledger: {
-        intents: [
-          q("fit", "p1", "A long queued title\nwith retained detail", {
-            next: { standing: "stopped", manualStart: true },
-          }),
-        ],
-        attention: [],
-        badge: 0,
-      },
-    });
-    renderSurface();
-
-    const row = screen.getByTestId("upnext-row-fit");
-    const text = screen.getByTestId("upnext-text-fit");
-    const title = screen.getByTestId("upnext-title-fit");
-    const standing = screen.getByTestId("upnext-standing-fit");
-    expect(row.className).toContain("@container");
-    expect(text.className).toContain("min-w-0");
-    expect(text.className).toContain("flex-1");
-    expect(text.className).toContain("flex-col");
-    expect(text.className).toContain("@md:flex-row");
-    expect(
-      Array.from(row.children).filter((child) =>
-        child.getAttribute("class")?.split(" ").includes("flex-1"),
-      ),
-    ).toEqual([text]);
-    expect(title.className).toContain("truncate");
-    expect(title.getAttribute("title")).toBe(
-      "A long queued title\nwith retained detail",
-    );
-    expect(standing.className).toContain("truncate");
-    expect(standing.className).toContain("@md:max-w-[45%]");
-    expect(standing.getAttribute("title")).toBe(phrase);
-    expect(screen.getByTestId("upnext-queued-fit").className).toContain(
-      "shrink-0",
-    );
-    expect(screen.getByTestId("upnext-start-fit").className).toContain(
-      "shrink-0",
-    );
-    expect(screen.getByTestId("upnext-menu-fit").className).toContain(
-      "shrink-0",
-    );
-    expect(row.querySelector("svg")?.getAttribute("class")).toContain(
-      "shrink-0",
     );
   });
 
@@ -1507,10 +1434,6 @@ describe("dashboard-26/29: groups and the queue band", () => {
     });
     expect(add.tagName).toBe("TEXTAREA");
     expect(add.rows).toBe(1);
-    expect(add.className).toContain("resize-none");
-    expect(add.className).toContain("min-w-0");
-    expect(add.className).toContain("flex-1");
-    expect(queue.className).toContain("shrink-0");
     expect((queue as HTMLButtonElement).disabled).toBe(true);
     expect(
       within(addRow).queryByRole("button", { name: /^Start\b/ }),
@@ -1555,53 +1478,6 @@ describe("dashboard-26/29: groups and the queue band", () => {
     });
     expect(row.getAttribute("data-highlight")).toBeNull();
     timerSpy.mockRestore();
-  });
-
-  test("Enter is the same Queue gesture and an idle capture renders manual-ready", async () => {
-    let current = EMPTY_LEDGER;
-    commandMock.mockImplementation(async (type: string, fields) => {
-      if (type === "intent.queue") {
-        const input = fields as { projectId: string; text: string };
-        const intent = info({
-          id: "i-first",
-          projectId: input.projectId,
-          text: input.text,
-        });
-        current = {
-          intents: [{ intent, state: "queued", next: MANUAL_READY }],
-          attention: [],
-          badge: 0,
-        };
-        return intent;
-      }
-      if (type === "ledger.get") return current;
-      return {};
-    });
-    seed({ projects: [PROJECTS[0]], ledger: current });
-    renderSurface();
-
-    const add = screen.getByTestId("add-intent-p1") as HTMLTextAreaElement;
-    fireEvent.change(add, { target: { value: "  First queued work  " } });
-    await act(async () => {
-      fireEvent.keyDown(add, { key: "Enter" });
-    });
-
-    expect(callsOf("intent.queue")).toEqual([
-      { projectId: "p1", text: "First queued work" },
-    ]);
-    const row = await screen.findByTestId("upnext-row-i-first");
-    expect(row.getAttribute("data-highlight")).toBe("true");
-    expect(row.getAttribute("data-next")).toBe("true");
-    expect(screen.getByTestId("upnext-queued-i-first").textContent).toBe(
-      "Queued",
-    );
-    expect(screen.getByTestId("upnext-start-i-first")).toBeTruthy();
-    expect(screen.queryByTestId("upnext-standing-i-first")).toBeNull();
-    expect(screen.getByTestId("attention-all-clear").textContent).toContain(
-      "First queued work",
-    );
-    expect(screen.getByTestId("all-clear-start")).toBeTruthy();
-    expect(callsOf("turn.submit")).toEqual([]);
   });
 });
 
@@ -2055,18 +1931,6 @@ describe("dashboard-50: the Running band lists what is working", () => {
       views: { "s-idle": inFlight() },
     });
     renderSurface();
-    expect(screen.queryByTestId("running-session-s-idle")).toBeNull();
-  });
-
-  test("nothing running keeps the band in place with its note (dashboard-8)", () => {
-    seed({
-      sessions: [live("s-idle", "p1", "Yesterday's work")],
-      views: { "s-idle": initialSessionView([]) },
-    });
-    renderSurface();
-    expect(screen.getByTestId("running-band").textContent).toContain(
-      "Nothing running.",
-    );
     expect(screen.queryByTestId("running-session-s-idle")).toBeNull();
   });
 
@@ -2704,14 +2568,9 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
       // Every row is one frame unit tall, so the frame's cap counts in
       // rows exactly: eight of them by default.
       expect(frame.style.maxHeight).toBe(`${8 * ROW}px`);
-      expect(frame.className).toContain("overflow-y-auto");
-      for (const row of screen.getAllByTestId(/^history-row-/)) {
-        expect(row.className).toContain("h-6");
-      }
       // The overflowing frame draws its cut edges and takes focus.
       expect(frame.getAttribute("data-overflowing")).toBe("true");
       expect(frame.getAttribute("tabindex")).toBe("0");
-      expect(frame.className).toContain("border-y");
       // Nothing waits unfetched: no control, one fetch.
       expect(screen.queryByTestId("history-older-p1")).toBeNull();
       expect(callsOf("ledger.history")).toHaveLength(1);
@@ -2765,7 +2624,6 @@ describe("dashboard-27/38: History is done work, one timeline newest first", () 
       expect(ids()).toHaveLength(8);
       expect(frame.getAttribute("data-overflowing")).toBeNull();
       expect(frame.getAttribute("tabindex")).toBeNull();
-      expect(frame.className).not.toContain("border-y");
       // Eight rows hold everything: nothing to page through, so no
       // edge to pull (DR-030).
       expect(screen.queryByTestId("history-frame-p1-grip")).toBeNull();

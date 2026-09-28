@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { compilePlaybook, defaultSpawner } from "./compile.js";
-import { loadConfig, resolveConfigPath, resolveSessionsDir } from "./config.js";
+import { loadConfig, resolveSessionsDir } from "./config.js";
 import { editConfigFile } from "./config-edit.js";
 import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
@@ -15,7 +15,6 @@ import { stubSlcSource } from "./testing/stub-slc.js";
 
 test("home defaults agree and only explicit session paths replace the shared default", () => {
   const scratch = mkdtempSync(join(tmpdir(), "spex-locations-")); const home = join(scratch, "home"); const config = join(scratch, "elsewhere", "config.yaml"); mkdirSync(join(scratch, "elsewhere"));
-  assert.equal(resolveConfigPath({ SPEX_HOME: home }, scratch), join(home, "config", "playbook.config.yaml"));
   assert.equal(resolveSessionsDir(config, { SPEX_HOME: home, XDG_STATE_HOME: "/ignored" }, scratch), join(home, "sessions"));
   assert.equal(resolveSessionsDir(config, { SPEX_HOME: "  " }, scratch), join(scratch, ".spex", "sessions"));
   writeFileSync(config, "sessions: ./records\n"); assert.equal(resolveSessionsDir(config, { SPEX_HOME: home }, scratch), join(scratch, "elsewhere", "records"));

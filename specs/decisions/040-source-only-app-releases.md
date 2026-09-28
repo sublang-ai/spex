@@ -8,6 +8,8 @@
 Accepted (2026-09-02) on the owner's direction: release the app without binaries, letting users build locally, since no signing exists and per-platform builds would cost more than they return.
 Amends [DR-002](002-desktop-app-architecture.md) (distribution: GitHub Releases still, without build artifacts for now) and [DR-033](033-remote-gui-serving.md) (the server shell ships in the same source release).
 Floor raised by [DR-079](079-the-core-speaks-the-homes-language.md): Node 22 or later for every package.
+Amended by [DR-086](086-tests-in-tiers.md) in how a tag is prepared: the hermetic smoke installs the release from a fresh clone instead of re-running the checks, the regression joins the regular release's gates, and the manual checklist keeps only its residue.
+Amended by [DR-087](087-beta-app-releases.md): the app channel gains the pre-release form `app-vX.Y.Z-beta.N`, gated on CI, the smoke and the live smoke, its notes taken from `[Unreleased]`.
 
 ## Context
 

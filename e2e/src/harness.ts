@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { parseDocument } from "yaml";
 
 import type {
   AgentOptions,
@@ -31,6 +32,7 @@ import type {
   ServerMessage,
   SpaceState,
 } from "@sublang/spex-core";
+import { templatePath } from "@sublang/spex-core";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -148,6 +150,36 @@ export interface AppOptions {
     phaseDelayMs?: number;
     hold?: boolean;
   };
+  /**
+   * A compile player (DR-086, release-25): the config is written
+   * before boot as the installed template's text with one more roster
+   * player, `compiler`, on this adapter, model and effort in cligent's
+   * protected auto mode — bound to no role, so no session runs it,
+   * for a journey to pick as a draft's agent so the conversation and
+   * the compile run on its block while the Captain and every player a
+   * playbook runs keep the template's. Takes the place of `config`;
+   * the boot refuses a config the core does not read as valid.
+   */
+  compiler?: { adapter: string; model: string; effort?: string };
+}
+
+/** The roster id `AppOptions.compiler` writes. */
+export const COMPILER_PLAYER = "compiler";
+
+/** The installed template's text (what `config: "none"` seeds) with
+ * the compile player added under `players`, its comments kept. */
+function compilerConfig(compiler: NonNullable<AppOptions["compiler"]>): string {
+  const doc = parseDocument(readFileSync(templatePath(), "utf8"));
+  doc.setIn(
+    ["players", COMPILER_PLAYER],
+    doc.createNode({
+      adapter: compiler.adapter,
+      model: compiler.model,
+      ...(compiler.effort ? { effort: compiler.effort } : {}),
+      permissions: { mode: "auto" },
+    }),
+  );
+  return doc.toString();
 }
 
 /** The compile floor of DR-005 (`MIN_NODE_MAJOR.MIN_NODE_MINOR` in the
@@ -491,7 +523,9 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
     ? join(dataDir, "config", "playbook.config.yaml")
     : join(scratch, "config", "playbook.config.yaml");
   mkdirSync(dirname(configPath), { recursive: true });
-  if ((options.config ?? "demo") === "demo") {
+  if (options.compiler) {
+    writeFileSync(configPath, compilerConfig(options.compiler));
+  } else if ((options.config ?? "demo") === "demo") {
     writeFileSync(configPath, DEMO_CONFIG);
   }
   if (options.project && options.history) {
@@ -689,6 +723,15 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
       return existsSync(prefs) ? readFileSync(prefs, "utf8") : "";
     },
   };
+  if (options.compiler) {
+    // The written file must be what the core reads as valid, or the
+    // journey would meet a broken Settings rather than the roster.
+    const config = await app.core.command("config.get", {});
+    if (config.status !== "valid") {
+      await app.close();
+      throw new Error(`the compile player's config reads ${JSON.stringify(config)}`);
+    }
+  }
   if (options.project) {
     const info = await app.core.command("project.register", { path: projectDir });
     app.projectId = info.id;
@@ -982,4 +1025,118 @@ export async function send(page: Page, text: string): Promise<void> {
   const box = composer(page);
   await box.fill(text);
   await page.getByRole("button", { name: "Send", exact: true }).click();
+}
+
+// ---------------------------------------------------------------------------
+// The live lane's runs (DR-086): real agents, minutes to hours each
+// ---------------------------------------------------------------------------
+
+/** How many commits a repository's HEAD holds. */
+export function commitCount(dir: string): number {
+  return Number(git(dir, "rev-list", "--count", "HEAD"));
+}
+
+/**
+ * Give a scratch repository its own committer, for the real agents
+ * that commit there: an unset identity makes the Captain ask, and a
+ * signing requirement in the machine's Git config can stall the
+ * commit — neither is the machine's to decide.
+ */
+export function commitIdentity(dir: string): void {
+  for (const [key, value] of [
+    ["user.name", "Spex Test"],
+    ["user.email", "spex@example.test"],
+    ["commit.gpgsign", "false"],
+  ]) {
+    execFileSync("git", ["-C", dir, "config", key, value]);
+  }
+}
+
+/** The open session's Captain pane and player grid, as evidence. */
+export async function attachRun(page: Page, label: string): Promise<void> {
+  const textOf = async (id: string) => {
+    const element = page.getByTestId(id);
+    return (await element.count()) > 0 ? element.innerText() : "(not shown)";
+  };
+  await test.info().attach(label, {
+    body: [
+      "--- captain ---",
+      await textOf("captain-pane"),
+      "--- players ---",
+      await textOf("player-grid"),
+    ].join("\n"),
+    contentType: "text/plain",
+  });
+}
+
+/** What stops a live run that the journey will not move past by
+ * itself: a failed turn, a question for the Boss (the lane answers
+ * none), or a failure notice; undefined while the run goes on. One
+ * read of the page, so hours of polling stay light in the trace. */
+async function runStop(page: Page): Promise<string | undefined> {
+  return page.evaluate(() => {
+    const all = (id: string) =>
+      Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
+    if (all("captain-pane").some((pane) => /turn failed/i.test(pane.innerText))) {
+      return "the turn failed";
+    }
+    const question = all("question-bubble").at(-1);
+    if (question) return `the run asked the Boss: ${question.innerText}`;
+    for (const id of ["failed-workflow", "unparked-failure-notice"]) {
+      const notice = all(id)[0];
+      if (notice) return `${id}: ${notice.innerText}`;
+    }
+    return undefined;
+  });
+}
+
+/**
+ * Watch the open session until `reached` holds, polling every ten
+ * seconds, and fail at once — the transcripts attached — when the run
+ * stops short of it or the time runs out.
+ */
+export async function awaitRun(
+  page: Page,
+  what: string,
+  reached: () => Promise<boolean>,
+  timeout: number,
+): Promise<void> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const stop = await runStop(page);
+    if (stop) {
+      await attachRun(page, `stopped before ${what}`);
+      throw new Error(`${what}: ${stop}`);
+    }
+    if (await reached()) return;
+    if (Date.now() > deadline) {
+      await attachRun(page, `timed out before ${what}`);
+      throw new Error(`${what}: not reached in ${Math.round(timeout / 60_000)} minutes`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+}
+
+/** Wait until the Captain pane has narrated `line` `times` times —
+ * "/code finished" once per settled run — failing fast as `awaitRun`. */
+export async function awaitCaptainLine(
+  page: Page,
+  line: string,
+  timeout: number,
+  times = 1,
+): Promise<void> {
+  const lines = page
+    .getByTestId("captain-pane")
+    .getByTestId("system-line")
+    .filter({ hasText: line });
+  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout);
+}
+
+/** A player's pane carries the output of a call it served: no longer
+ * idle, and more than `least` characters of text. */
+export async function expectEngaged(page: Page, playerId: string, least = 50): Promise<void> {
+  const pane = page.getByTestId(`player-pane-${playerId}`);
+  await expect(pane).toBeVisible();
+  await expect(pane).not.toContainText("Idle until the playbook calls");
+  expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
 }

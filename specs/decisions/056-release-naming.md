@@ -7,6 +7,7 @@
 
 Accepted (2026-09-09).
 Amends [DR-002](002-desktop-app-architecture.md) for the CLI release tag namespace.
+Amended by [DR-087](087-beta-app-releases.md): a beta app release is titled `Spex App vX.Y.Z-beta.N` and created as a pre-release.
 
 ## Context
 

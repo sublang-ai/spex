@@ -10,7 +10,7 @@
 // registry's state ids by FSM introspection.
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -42,6 +42,43 @@ import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
 import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
 import { i18n } from "./i18n.js";
+
+/** The packages a compile resolves from the playbook's own directory:
+ * the engine the compiler links against and the machine library the
+ * generated `.fsm.ts` imports — which slc's strict type check reads
+ * from there, and which the emitted entry imports at run time. */
+export const ENGINE_LINKS = ["xstate", "@sublang/playbook"] as const;
+
+/**
+ * Provision `<dir>/node_modules/` with links to the app's own copies of
+ * the engine packages (playbook-library-12, DR-081): the library
+ * directory lies outside any dependency tree, so without them slc's
+ * gears2fsm check finds no `xstate` types and fails the machine, and
+ * the entry it emits would resolve nothing. Idempotent: a link that
+ * already points at the copy stays, a stale link is replaced, and a
+ * real directory a user placed there is left alone. Playbook's host
+ * provisions the same links for a run.
+ */
+export function provisionEngineLinks(dir: string, modulePaths: string[] = bundleNodePaths()): string[] {
+  const provisioned: string[] = [];
+  for (const name of ENGINE_LINKS) {
+    const target = modulePaths.map((root) => join(root, name)).find((candidate) => existsSync(join(candidate, "package.json")));
+    if (!target) continue;
+    const link = join(dir, "node_modules", name);
+    mkdirSync(dirname(link), { recursive: true });
+    let stat;
+    try { stat = lstatSync(link); } catch { stat = undefined; }
+    if (stat?.isSymbolicLink()) {
+      if (readlinkSync(link) === target) { provisioned.push(link); continue; }
+      rmSync(link);
+    } else if (stat) {
+      continue;
+    }
+    symlinkSync(target, link, "dir");
+    provisioned.push(link);
+  }
+  return provisioned;
+}
 
 export const MIN_NODE_MAJOR = 23;
 export const MIN_NODE_MINOR = 6;
@@ -792,6 +829,10 @@ export async function compilePlaybook(
     } else if (agentEnv.SLC_AGENT) {
       progress(`agent: ${agentEnv.SLC_AGENT} from the block`);
     }
+    // The engine resolves from the playbook's own directory (see
+    // provisionEngineLinks): the compiler's checks and the entry it
+    // emits both look there.
+    provisionEngineLinks(dir, options.runtime?.modulePaths ?? bundleNodePaths());
     progress(`running: ${toolchain.slc.command.join(" ")} playbook ${id}.md`);
     // Bare invocation (DR-019): slc >= 0.2 links against the installed
     // @sublang/playbook runtime contract by default.
