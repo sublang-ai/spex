@@ -1263,6 +1263,7 @@ export class AuthorManager {
       '- Behaviors as prose: "When <condition>, Captain shall prompt <Role>:" followed by the prompt as a blockquote, one point per line, or a fenced ```markdown instruction block introduced as the instruction.',
       '- Runtime values the role cannot otherwise see are relayed in quotes (`>`) as <placeholders>: "> Original request: <caller-input>".',
       "- `Results:` bullets only where a behavior has several outcomes, or a later prompt consumes its output; a relayed whole reply is declared as `<field>: <verbatim final text>`.",
+      "- Each outcome has exactly one repository effect: one that may either commit or leave the repository unchanged is two outcomes (e.g. `drafted` commits, `noChanges` leaves it unchanged); slc's link refuses an outcome with both.",
       '- A nested call: "Captain shall call playbook `id`:" with the input template blockquoted.',
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
