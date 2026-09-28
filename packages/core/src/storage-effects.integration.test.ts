@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
+import { createTmuxPlayRuntime } from "@sublang/cligent/tmux-play";
 import { ApplicationRegistry } from "./app-storage.js";
 import { prepareStorageGitFiles, selectStorageMerge } from "./storage-git.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
@@ -141,11 +142,22 @@ playbooks:
   await selectStorageMerge(home, { [`sessions/${id}`]: "ours" });
   assert.deepEqual(readFileSync(manifest), selectedManifest);
   assert.equal(JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt, undefined);
-  let hostStarts = 0;
-  await assert.rejects(() => openSessionHost({ store, sessionId: id, mode: "retry", cwd: project, config,
-    createHostRuntime: async () => { hostStarts += 1; throw new Error("must not run another action"); },
-  }), /cannot restore a changed pre-turn boundary/);
-  assert.equal(hostStarts, 0, "reconciliation refuses before any host or provider work");
+  // Playbook 17 restores and reports the interrupted turn rather than
+  // repeating it (DR-088): reconciliation recovers the omitted action's
+  // receipt before the host starts, and the report calls no agent.
+  let receiptAtHostStart: { classification?: string } | undefined;
+  const { imports: restoreImports, stats } = fakeAdapterImports({ fallback: { result: "must not run another action" } });
+  const restored = await openSessionHost({ store, sessionId: id, mode: "recover", cwd: project, config,
+    adapterImports: restoreImports,
+    createHostRuntime: async (input: Parameters<typeof createTmuxPlayRuntime>[0]) => {
+      receiptAtHostStart = JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt;
+      return createTmuxPlayRuntime(input);
+    },
+  });
+  try { await restored.recover(); } finally { await restored.dispose(); }
+  assert.equal(receiptAtHostStart?.classification, "one-descendant-commit", "reconciliation precedes the host");
+  assert.equal(stats.runs.length, 0, "restoring runs no agent");
+  assert.equal(JSON.parse(readFileSync(manifest, "utf8")).state, "settled");
   const recovered = JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt;
   assert.equal(recovered.classification, "one-descendant-commit");
   assert.equal(recovered.commitOid, completedHead, "the selected manifest now retains evidence of the omitted action");
