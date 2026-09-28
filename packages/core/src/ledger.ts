@@ -19,7 +19,7 @@ import type {
   QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
-import { controlKind, isStoppedTurnReason } from "./control-record.js";
+import { controlKind, isStoppedTurnReason, restoredPosition } from "./control-record.js";
 import type { Store } from "./store.js";
 
 /** What the session manager knows live: the lanes and their activity. */
@@ -144,6 +144,61 @@ function pendingQuestionCount(payload: {
   ).length;
 }
 
+/** The state a trace, a state report or a restored run names: a string,
+ * or an object carrying `stateId` or `value`. */
+function stateName(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const shape = value as { stateId?: unknown; value?: unknown };
+    if (typeof shape.stateId === "string") return shape.stateId;
+    if (typeof shape.value === "string") return shape.value;
+  }
+  return undefined;
+}
+
+/** The turns a restore reported (core-service-82, DR-088): each is the
+ * account of interrupted work, a stop rather than work that finished. */
+function restoredTurnIds(records: StoredRecord[]): Set<number> {
+  const ids = new Set<number>();
+  for (const { record } of records) {
+    if (!restoredPosition(record)) continue;
+    const turnId = (record as { turnId?: unknown }).turnId;
+    if (typeof turnId === "number") ids.add(turnId);
+  }
+  return ids;
+}
+
+/** The restores that brought a run back in its failure state
+ * (dashboard-10, DR-088): each is a turn whose engagement settled
+ * failed, the failure the Boss did not stop himself. */
+function restoredFailures(
+  records: StoredRecord[],
+): { seq: number; turnId: number; timestamp: number }[] {
+  return records.flatMap(({ seq, record }) => {
+    const position = restoredPosition(record);
+    const turnId = (record as { turnId?: unknown }).turnId;
+    if (!position || typeof turnId !== "number") return [];
+    return position.runs.some((run) => stateName(run.state) === "failed")
+      ? [{ seq, turnId, timestamp: record.timestamp }]
+      : [];
+  });
+}
+
+/** A session's turns as every ledger read takes them (core-service-82,
+ * DR-088): a restore's report ends finished, yet it accounts for work
+ * that stopped, so it reads as the aborted turn it reports — it
+ * finishes no intent, raises no review, and leaves the lane stopped. */
+function ledgerTurns(store: Store, sessionId: string): Turn[] {
+  const turns = store.listTurns(sessionId);
+  const restored = restoredTurnIds(store.getRecords(sessionId));
+  if (restored.size === 0) return turns;
+  return turns.map((turn) =>
+    restored.has(turn.turnId) && turn.status === "finished"
+      ? { ...turn, status: "aborted" }
+      : turn
+  );
+}
+
 export function foldConditions(records: StoredRecord[]): SessionConditions {
   const abortErrors = stoppedTurnErrorSeqs(records);
   let fallbackQuestion: SessionConditions["question"];
@@ -248,6 +303,38 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         bearsCause((record as { data?: unknown }).data);
         break;
       case "captain_telemetry": {
+        const restored = restoredPosition(record);
+        if (restored) {
+          // A restore states where every run now stands (core-service-82,
+          // DR-088): whatever the stream last said of the interrupted
+          // turn's runs gives way to the position the checkpoint holds.
+          parkedQuestions.clear();
+          parkedFailures.clear();
+          pendingByRun.clear();
+          fallbackQuestion = undefined;
+          fallbackFailure = undefined;
+          pendingCause = undefined;
+          pendingFromError = false;
+          const at = {
+            since: record.timestamp,
+            turnId: (record as { turnId?: number | null }).turnId ?? null,
+          };
+          for (const run of restored.runs) {
+            const state = stateName(run.state);
+            const cause = readFailureCause(run);
+            if (state === "failed") parkedFailures.set(run.sessionId, { ...at, ...(cause ? { cause } : {}) });
+            if (
+              state === "awaitBossReply" ||
+              pendingQuestionCount({ pendingBossQuestions: run.pendingBossQuestions }) > 0
+            ) parkedQuestions.set(run.sessionId, { ...at });
+          }
+          latestFailure = parkedFailures.size > 0
+            ? "parked"
+            : unparkedFailureCause
+              ? "unparked"
+              : undefined;
+          break;
+        }
         const telemetry = record as {
           topic?: string;
           payload?: {
@@ -333,17 +420,8 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
           break;
         }
         if (telemetry.topic !== "playbook.fsm.state") break;
-        const stateText = (value: unknown): string | undefined => {
-          if (typeof value === "string") return value;
-          if (value && typeof value === "object") {
-            const shape = value as { stateId?: unknown; value?: unknown };
-            if (typeof shape.stateId === "string") return shape.stateId;
-            if (typeof shape.value === "string") return shape.value;
-          }
-          return undefined;
-        };
         const state =
-          stateText(telemetry.payload?.to) ?? stateText(telemetry.payload?.state);
+          stateName(telemetry.payload?.to) ?? stateName(telemetry.payload?.state);
         const payload = telemetry.payload;
         if (
           payload != null &&
@@ -371,7 +449,7 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
             since: telemetry.timestamp,
             turnId: telemetry.turnId,
           };
-        } else if (stateText(telemetry.payload?.from) === "awaitBossReply") {
+        } else if (stateName(telemetry.payload?.from) === "awaitBossReply") {
           // A shell-state report can clear only the aggregate fallback;
           // identified parked runs leave through their own trace.
           fallbackQuestion = undefined;
@@ -385,7 +463,7 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
           pendingCause = undefined;
           pendingFromError = false;
           latestFailure = "fallback";
-        } else if (stateText(telemetry.payload?.from) === "failed") {
+        } else if (stateName(telemetry.payload?.from) === "failed") {
           // As above, never let an aggregate report erase a different
           // run's identified failure park.
           fallbackFailure = undefined;
@@ -476,7 +554,7 @@ export function queueSchedule(
     return { standing: "question-park", manualStart: false };
   }
 
-  const latest = store.listTurns(lane.sessionId).at(-1);
+  const latest = ledgerTurns(store, lane.sessionId).at(-1);
   if (latest) {
     const failed = records.some(({ seq, record }) => {
       if (record.type !== "runtime_error") return false;
@@ -517,7 +595,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   const sessionTurns = (sessionId: string): Turn[] => {
     let turns = turnsBySession.get(sessionId);
     if (!turns) {
-      turns = store.listTurns(sessionId);
+      turns = ledgerTurns(store, sessionId);
       turnsBySession.set(sessionId, turns);
     }
     return turns;
@@ -532,6 +610,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     }
     return conditions;
   };
+  // The failures in a turn range, oldest first: every runtime error
+  // but an intentional stop's, and every restore that brought a run
+  // back in its failure state (dashboard-10, DR-088).
   const effectiveRuntimeErrors = (
     sessionId: string,
     fromTurnId: number,
@@ -539,13 +620,18 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   ) => {
     const records = store.getRecords(sessionId);
     const ignored = stoppedTurnErrorSeqs(records);
-    return records.flatMap(({ seq, record }) => {
+    const inRange = (turnId: number) =>
+      turnId >= fromTurnId && (toTurnId === null || turnId < toTurnId);
+    const errors = records.flatMap(({ seq, record }) => {
       if (record.type !== "runtime_error" || ignored.has(seq)) return [];
       const turnId = (record as { turnId?: unknown }).turnId;
-      if (typeof turnId !== "number" || turnId < fromTurnId ||
-          (toTurnId !== null && turnId >= toTurnId)) return [];
-      return [{ turnId, timestamp: record.timestamp }];
+      if (typeof turnId !== "number" || !inRange(turnId)) return [];
+      return [{ seq, turnId, timestamp: record.timestamp }];
     });
+    const restored = restoredFailures(records).filter(({ turnId }) => inRange(turnId));
+    return [...errors, ...restored]
+      .sort((a, b) => a.seq - b.seq)
+      .map(({ turnId, timestamp }) => ({ turnId, timestamp }));
   };
 
   const derived: DerivedIntent[] = [];
@@ -871,7 +957,7 @@ function attributedTurns(
   );
   const endTurnId = next ? next.turnId : null;
   return {
-    range: rangeOf(store.listTurns(bound.sessionId), bound.turnId, endTurnId),
+    range: rangeOf(ledgerTurns(store, bound.sessionId), bound.turnId, endTurnId),
     endTurnId,
   };
 }

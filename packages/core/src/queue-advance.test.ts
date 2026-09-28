@@ -599,8 +599,50 @@ test("queue advance: a restore reports an interrupted follow-up and starts no su
   // runs next is the Boss's choice (core-service-82, DR-088).
   const after = await client.expectOk("ledger.get", {});
   assert.equal(entry(after, next.id).intent.dispatched, undefined);
+  // The report reads as the stop it accounts for (core-service-107).
+  expectNext(after, next.id, "stopped", true);
   assert.ok(!prompts.includes(next.text), "the next intent never ran");
   assert.equal((await client.expectOk("session.list", {})).find((row) => row.id === session.id)?.continuable, true);
+});
+
+test("queue advance: a restore of an interrupted dispatch keeps its intent's standing and starts no successor", { timeout: 20_000 }, async (t) => {
+  let turns = 0;
+  const h = await harness(t, async () => {
+    turns += 1;
+    // The dispatch fails before its writer saved anything, leaving the
+    // turn uncertain; the restore's own turn only reports.
+    if (turns === 1) throw new Error("the writer stopped");
+  });
+  const { client, project, session } = h;
+  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First intent" });
+  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next intent" });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id &&
+    message.session.recovery?.input === first.text && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  const before = await client.expectOk("ledger.get", {});
+  const stamped = entry(before, first.id).intent.dispatched;
+  assert.equal(stamped?.turnId, 1, "the dispatch was stamped when its turn started");
+
+  const seen = client.messages.length;
+  await client.expectOk("session.restore", { sessionId: session.id });
+  await client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "session.state" &&
+    message.session.id === session.id && !message.session.recovery && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  await Promise.all([...h.service["advancing"]]);
+  // The report is the account of a stop, not of delivered work: the
+  // intent keeps the standing its stopped dispatch gave it — released,
+  // its stamps kept (dashboard-34) — and nothing runs next
+  // (core-service-82).
+  const after = await client.expectOk("ledger.get", {});
+  assert.equal(entry(before, first.id).state, "queued");
+  assert.equal(entry(after, first.id).state, "queued", "a restore's report finishes nothing");
+  assert.deepEqual(entry(after, first.id).intent.dispatched, stamped, "the dispatch stamps stand as history");
+  // The failed dispatch's own error stays the lane's last word.
+  expectNext(after, first.id, "failed", true);
+  assert.equal(entry(after, next.id).intent.dispatched, undefined);
+  assert.ok(!after.attention.some((row) => row.band === "finished"), "no finish or review is raised");
+  assert.equal(starts(client).length, 2, "the dispatch and the restore's report, and nothing after");
 });
 
 test("queue advance: an aborted follow-up cannot inherit an older finish", { timeout: 20_000 }, async (t) => {

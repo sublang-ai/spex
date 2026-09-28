@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -3135,6 +3135,88 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     }
   });
 }
+
+/** Start the stopped writer (core-service-84): a CLI host that dies
+ * mid-step, its step's start saved and its coder's commit made. */
+async function stopWriterMidStep(sessionsDir: string, projectPath: string, configPath: string, input: string): Promise<string> {
+  const child = spawn(process.execPath, [join(dirname(new URL(import.meta.url).pathname), "testing", "stopped-writer.js"), sessionsDir, projectPath, configPath, input], { stdio: ["ignore", "pipe", "inherit"] });
+  const sessionId = await new Promise<string>((resolveReady, reject) => {
+    let out = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk);
+      const ready = /READY (\S+)/.exec(out);
+      if (ready) resolveReady(ready[1]!);
+    });
+    child.once("exit", (code) => reject(new Error(`the stopped writer exited early (${code}): ${out}`)));
+  });
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  child.kill("SIGKILL");
+  await exited;
+  return sessionId;
+}
+
+test("core-service-84: a writer stopped mid-step restores to its saved step and publishes the run's controls", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-stopped-writer-");
+  const configPath = join(dir, "config.yaml");
+  const projectPath = join(dir, "project");
+  const dataDir = join(dir, "state");
+  const sessionsDir = join(dataDir, "sessions");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  seedRepository(projectPath);
+  writeFileSync(configPath, VALID_CONFIG);
+  const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+  const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  t.after(async () => { await service.stop(); rmSync(dir, { recursive: true, force: true }); });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+  await client.expectOk("project.register", { path: projectPath });
+
+  // The stopped step is recorded work: the summary says so, names the
+  // way on, and withholds Discard (core-service-32).
+  const interrupted = (await client.expectOk("session.list", {})).find((entry) => entry.id === sessionId);
+  assert.deepEqual(interrupted?.recovery, { state: "uncertain", input: "Add a line to work.txt", discardable: false });
+  assert.equal(interrupted?.continuationReason, "Restore the interrupted turn first");
+  const blocked = await client.command("turn.submit", { sessionId, text: "Something else" });
+  assert.ok(!blocked.ok && blocked.error.message === "Restore the interrupted turn first", JSON.stringify(blocked));
+  const refused = await client.command("session.discard", { sessionId });
+  assert.ok(!refused.ok && /restored and reported/.test(refused.error.message), JSON.stringify(refused));
+  assert.equal(validateSessionManifest(await createSessionStore({ sessionsDir }).readManifest(sessionId)).state, "uncertain");
+
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId } });
+  await client.expectOk("session.restore", { sessionId });
+  // A repeated request lands on the restore in flight, or on a session
+  // with nothing left to restore; either way it starts no second turn.
+  const repeated = await client.command("session.restore", { sessionId });
+  assert.ok(!repeated.ok, JSON.stringify(repeated));
+  const restored = await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId &&
+    !m.session.recovery && !m.session.live && !m.session.turnActive, 60_000);
+  assert.ok(restored.type === "session.state");
+  assert.equal(client.records("session").filter(({ record }) => record.type === "turn_started").length, 1, "one report, and no second turn");
+  // The saved step comes back and is reported; nothing runs again
+  // (core-service-82).
+  assert.equal(stats.runs.length, 0, "Restore calls no agent");
+  assert.ok(client.records("session").some(({ record }) => record.type === "captain_reply"), "the restore reports through the Captain");
+  const position = client.records("session").find(({ record }) =>
+    (record as { topic?: unknown }).topic === "spex.session.restored");
+  const runs = (position?.record as { payload?: { runs?: { playbookId: string; state: { stateId?: string }; cause?: { code: string } }[] } } | undefined)?.payload?.runs;
+  assert.deepEqual(runs?.map((run) => [run.playbookId, run.state.stateId, run.cause?.code]), [["code", "failed", "runtime-defect"]],
+    "the restored position is in the stream, the run at its failure state");
+  // Where the run stands, its controls: captured at the restore's
+  // settlement exactly as at any other (core-service-91).
+  assert.equal(restored.session.continuable, true, restored.session.continuationReason ?? "no reason given");
+  assert.equal(restored.session.parked?.reason, "failure");
+  assert.deepEqual(restored.session.parked?.actions.map((action) => [action.id, action.standing]),
+    [["reconcile:unresolved-effect", "no-op"], ["abandon:unresolved-effect", "ready"]]);
+  assert.equal(restored.session.parked?.ending?.id, "give-up");
+  // The run the restore brought back in its failure state summons as a
+  // failure, with the cause the runtime attached (core-service-49).
+  const ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === sessionId)
+    .map((entry) => [entry.band, entry.kind, entry.parked, entry.cause?.code]), [["interrupted", "failure", true, "runtime-defect"]]);
+});
 
 test("core-service-84: Restore refuses a session with nothing interrupted and a relocated checkpoint, starting no turn", { timeout: 60_000 }, async (t) => {
   const harness = await startHarness();

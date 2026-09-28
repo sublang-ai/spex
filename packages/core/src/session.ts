@@ -18,7 +18,7 @@ import {
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, type TurnControlKind } from "./control-record.js";
+import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, restoredRecord, restoredRuns, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
@@ -601,6 +601,23 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** Record the position a restore settled (core-service-82, DR-088).
+   * Playbook's report moves no traced state — a run restored into its
+   * failure state never traced the move — so the stream would go on
+   * showing where the lost turn last was. The settled checkpoint says
+   * where each run stands; one visible record carries that, before the
+   * settlement's release reads the park from the stream. */
+  private async appendRestored(entry: LiveSession, turnId: number): Promise<void> {
+    const settled = await entry.controller.read();
+    // English, deliberately (core-service-111): recover() resolves only
+    // once the report settled, so an unsettled read is an internal fault.
+    if (settled?.state !== "settled") throw new Error("the restore settled no readable checkpoint");
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(restoredRecord(turnId, restoredRuns(settled.snapshot), this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
   /** What the opened shell advertises now (core-service-98): the
    * parked leaf's own actions for a recovery, the shell's own controls
    * for an ending. An unreadable control view advertises nothing
@@ -721,8 +738,11 @@ export class SessionManager {
     entry.operation = (async () => {
       let failed = false;
       try {
-        if (restore) await entry.controller.recover();
-        else if (control) {
+        if (restore) {
+          await entry.controller.recover();
+          const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
+          if (turnId !== undefined) await this.appendRestored(entry, turnId);
+        } else if (control) {
           const controller = entry.controller as {
             submitRuntimeAction(id: string): Promise<unknown>;
             submitShellAction(id: string): Promise<unknown>;
