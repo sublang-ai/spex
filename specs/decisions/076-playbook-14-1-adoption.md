@@ -8,6 +8,7 @@
 Accepted (2026-09-17).
 Raises the Playbook floor set by [DR-062](062-ending-a-failed-workflow.md) from 13.3 to 14.1, in the pattern of [DR-053](053-model-options-adoption.md); Cligent's floor is unchanged.
 Completes [DR-075](075-a-failure-says-what-and-what-now.md), which required this floor.
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its Playbook floor alone, now `^17.0.0`.
 
 ## Context
 
