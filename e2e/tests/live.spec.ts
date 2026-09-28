@@ -166,7 +166,10 @@ test.describe("the changelog playbook", () => {
     // reply carries the compile request (playbook-library-66).
     for (let round = 0; round < 3; round += 1) {
       await expect(working).toHaveCount(0, { timeout: TURN });
-      await expect(page.getByTestId("draft-send")).toBeEnabled();
+      // The reply landed and the composer is the Boss's again; Send
+      // itself stays held while the field is empty.
+      await expect(composer).toBeEnabled();
+      await expect(composer).toHaveAttribute("placeholder", "Describe the playbook…");
       if ((await compileCards.count()) > 0) break;
       await attach(`reply ${round + 1} without a compile request`);
       await composer.fill(
