@@ -72,7 +72,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   is repeated and the saved message is not run again. You then continue
   with the run's own controls or a new message. A turn stopped after its
   work was saved — an abort included — now settles there and simply
-  continues.
+  continues, the run it left waiting showing its controls.
+- A Restore's report finishes nothing: it raises no Finished entry and
+  starts no queued work, and an interrupted intent returns to Up next
+  with its history kept. A run it brings back failed asks for you on the
+  Dashboard.
 - **Discard** appears only when nothing was recorded: no step, no
   abandonment, and unchanged repository evidence. Otherwise Restore
   stands alone.
