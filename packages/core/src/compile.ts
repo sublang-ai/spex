@@ -696,7 +696,8 @@ export interface FsmInfo {
  * `xstate`. A load whose bundle read any other input (a relative
  * module) is not kept, so such a machine is bundled afresh each time.
  * Only a successful load is kept; a failed one is retried on the next
- * request. Callers share the result and must not mutate it.
+ * request. Callers share the result deep-frozen, so a caller that
+ * would mutate it throws instead of changing it for every other.
  */
 const fsmInfoMemo = new Map<string, { digest: string; info: Promise<FsmInfo> }>();
 
@@ -708,6 +709,8 @@ const NODE_MODULES_SEGMENT = /(^|[\\/])node_modules[\\/]/;
  * imports its own file still shows an input outside the digest. */
 const STDIN_INPUT = "<stdin>";
 
+const NO_FSM_INFO: FsmInfo = Object.freeze({ stateIds: null, machine: null });
+
 /** Bundle an FSM module and serve its state ids and drawable graph,
  * or nulls on failure (playbook-library-36). */
 export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
@@ -715,7 +718,7 @@ export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
   try {
     contents = readFileSync(fsmPath);
   } catch {
-    return { stateIds: null, machine: null };
+    return NO_FSM_INFO;
   }
   const digest = createHash("sha256").update(contents).digest("hex");
   const key = resolve(fsmPath);
@@ -727,15 +730,31 @@ export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
   const info: Promise<FsmInfo> = bundleFsmInfo(fsmPath, contents).then(
     ({ loaded, reproducible }) => {
       if (!reproducible) forget();
-      return loaded;
+      return freezeFsmInfo(loaded);
     },
     () => {
       forget();
-      return { stateIds: null, machine: null };
+      return NO_FSM_INFO;
     },
   );
   fsmInfoMemo.set(key, { digest, info });
   return info;
+}
+
+/** Freeze a load's result through every array and object it holds. */
+function freezeFsmInfo(info: FsmInfo): FsmInfo {
+  if (info.stateIds) Object.freeze(info.stateIds);
+  if (info.machine) {
+    for (const node of info.machine.nodes) {
+      Object.freeze(node.tags);
+      Object.freeze(node);
+    }
+    for (const edge of info.machine.edges) Object.freeze(edge);
+    Object.freeze(info.machine.nodes);
+    Object.freeze(info.machine.edges);
+    Object.freeze(info.machine);
+  }
+  return Object.freeze(info);
 }
 
 /** Bundle and import one machine from the entry's given bytes,

@@ -188,6 +188,15 @@ test("a machine load leaves no bundle behind and loads unchanged content once", 
   assert.equal(second.stateIds, first.stateIds);
   assert.deepEqual(readdirSync(bundles), []);
 
+  // The shared result refuses a change rather than taking it for every
+  // later reader.
+  const machine = first.machine;
+  assert.throws(() => first.stateIds?.push("extra"), TypeError);
+  assert.throws(() => machine.nodes.push(machine.nodes[0]), TypeError);
+  assert.throws(() => machine.nodes[0].tags.push("extra"), TypeError);
+  assert.throws(() => { machine.edges[0].to = "elsewhere"; }, TypeError);
+  assert.throws(() => { machine.initial = "elsewhere"; }, TypeError);
+
   // Other content of the same size and mtime is loaded afresh.
   place(`// B\n${review.fsm}`);
   const third = await resolveArtifacts({ id: "kept", from });
