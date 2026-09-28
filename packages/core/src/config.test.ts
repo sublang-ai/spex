@@ -408,6 +408,27 @@ test("fast mode composes on agents and roles; a non-boolean is refused", async (
   await expectError(bad, /^captain\.fastMode must be a boolean$/);
 });
 
+test("a player no binding names is listed as bound to no role and opens no session lane", async () => {
+  // settings-26 and playbook-library-55: the summary lists every
+  // declared player so Settings can show the unbound lane and a draft
+  // can pick it as its agent; the session roster keeps only the
+  // players a role binds (DR-032).
+  const top = baseConfig();
+  roster(top)["compiler"] = { adapter: "codex", model: "gpt-6-astra", effort: "xhigh" };
+  const composed = await composeConfig(top, stubLoader);
+  assert.ok(!composed.players.some((p) => p.id === "compiler"), "no session lane for an unbound player");
+  assert.deepEqual(
+    composed.roster.map((p) => p.id),
+    Object.keys(roster(top)),
+    "the roster holds every declared player in file order",
+  );
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  const spare = summary.players.find((p) => p.id === "compiler");
+  assert.deepEqual(spare?.boundBy, []);
+  assert.equal(spare?.agent.adapter, "codex");
+  assert.equal(spare?.agent.effort, "xhigh");
+});
+
 test("unknown agent fields and adapters are rejected; kimi is known", async () => {
   const top = baseConfig();
   (top.captain as Record<string, unknown>).typo = true;

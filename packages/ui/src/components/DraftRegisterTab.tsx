@@ -62,24 +62,45 @@ export function resolveRegisterForm(
   const roles = draft.compile?.outcome === "ok" ? (draft.compile.roles ?? []) : [];
   const proposal = draft.proposal;
   const roster = new Set(players.map((player) => player.id));
+  // The compiled entry keys roles as it derived them; the agent's
+  // proposal may spell a role in another case (playbook-library-32
+  // re-keys bindings case-insensitively), so a proposal is read by
+  // the role's lower-cased name.
+  const proposedFor = (role: string): string | undefined => {
+    if (!proposal) return undefined;
+    const key = Object.keys(proposal.players).find(
+      (name) => name.toLowerCase() === role.toLowerCase(),
+    );
+    return key === undefined ? undefined : proposal.players[key];
+  };
+  const proposedRoles = new Set(
+    Object.keys(proposal?.players ?? {}).map((name) => name.toLowerCase()),
+  );
   const choices: Record<string, string> = {};
   const newIds: Record<string, string> = {};
   for (const role of roles) {
-    const proposed = proposal?.players[role];
-    // A proposed player the roster lacks is offered as that new player.
-    const newId = proposed && !roster.has(proposed) ? proposed : newPlayerId(role);
+    const proposed = proposedFor(role);
+    // The lane a role would mint: the proposal's, when the roster lacks
+    // it, else the role's own name — and never an id the roster already
+    // holds, which registration would overwrite; that lane is chosen as
+    // it stands instead.
+    const minted = proposed && !roster.has(proposed) ? proposed : newPlayerId(role);
+    const newId = roster.has(minted) ? freeId(minted, roster) : minted;
     newIds[role] = newId;
     const fromProposal = proposed
       ? roster.has(proposed)
         ? proposed
         : `${NEW_PREFIX}${proposed}`
       : undefined;
-    choices[role] = form?.players[role] ?? fromProposal ?? `${NEW_PREFIX}${newId}`;
+    const byDefault = roster.has(minted) ? minted : `${NEW_PREFIX}${newId}`;
+    choices[role] = form?.players[role] ?? fromProposal ?? byDefault;
   }
   const extra = proposal
-    ? Object.keys(proposal.players).filter((role) => !roles.includes(role))
+    ? Object.keys(proposal.players).filter(
+        (name) => !roles.some((role) => role.toLowerCase() === name.toLowerCase()),
+      )
     : [];
-  const missing = proposal ? roles.filter((role) => !(role in proposal.players)) : [];
+  const missing = proposal ? roles.filter((role) => !proposedRoles.has(role.toLowerCase())) : [];
   return {
     roles,
     command: form?.command ?? proposal?.command ?? draft.id,
@@ -89,6 +110,14 @@ export function resolveRegisterForm(
     newIds,
     ...(extra.length > 0 || missing.length > 0 ? { mismatch: { extra, missing } } : {}),
   };
+}
+
+/** The first `<id>-2`, `<id>-3`, … the roster does not hold. */
+function freeId(id: string, roster: Set<string>): string {
+  for (let n = 2; ; n += 1) {
+    const candidate = `${id}-${n}`;
+    if (!roster.has(candidate)) return candidate;
+  }
 }
 
 const INPUT_CLASS =

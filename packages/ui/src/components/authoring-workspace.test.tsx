@@ -1160,6 +1160,40 @@ describe("playbook-library-61: the Register tab", () => {
     expect(screen.queryByTestId("register-role-Auditor")).toBeNull();
   });
 
+  test("a proposal keyed in another case applies, and a role whose lane exists selects it rather than minting over it", async () => {
+    // The compiled entry keys roles as it derived them (lowercase from
+    // a `Roles:` source); the agent proposes "Coder". And `coder`'s own
+    // lane, dev.coder, already exists, so the form selects it and its
+    // New player option offers a free id instead of overwriting.
+    const compiled = draftInfo({
+      state: "compiled",
+      compile: { at: now - 2 * 60_000, by: "agent", outcome: "ok", roles: ["coder", "verifier"] },
+      proposal: { command: "triage", intent: "Triage a new issue", players: { Coder: "dev.coder", Verifier: "dev.reviewer" } },
+    });
+    renderWorkspace(compiled, { view: foldView(THREAD) });
+    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
+    fireEvent.click(tab("Register"));
+    expect((screen.getByTestId("register-player-coder") as HTMLSelectElement).value).toBe("dev.coder");
+    expect((screen.getByTestId("register-player-verifier") as HTMLSelectElement).value).toBe("dev.reviewer");
+    expect(screen.queryByTestId("register-mismatch")).toBeNull();
+
+    // Without a proposal the existing lane is still the choice, and the
+    // mintable id sidesteps it.
+    cleanup();
+    renderWorkspace(
+      draftInfo({
+        state: "compiled",
+        compile: { at: now - 2 * 60_000, by: "agent", outcome: "ok", roles: ["coder"] },
+      }),
+      { view: foldView(THREAD) },
+    );
+    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
+    fireEvent.click(tab("Register"));
+    const coder = screen.getByTestId("register-player-coder") as HTMLSelectElement;
+    expect(coder.value).toBe("dev.coder");
+    expect(Array.from(coder.options).map((option) => option.textContent)).toContain("New player dev.coder-2");
+  });
+
   test("Register writes the bindings and the new players, then the list opens with the card in view", async () => {
     renderWorkspace(
       { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.triager", Verifier: "dev.reviewer" } } },
