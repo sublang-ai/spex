@@ -3,8 +3,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The app release's tag check and notes (release-11, release-19,
-// release-27; DR-040, DR-087), run by .github/workflows/app-release.yml
-// and tested by release-notes.test.mjs (release-28). Pure functions
+// release-27, app-shell-14; DR-040, DR-087), run by
+// .github/workflows/app-release.yml and tested by
+// release-notes.test.mjs (release-28, app-shell-36). Pure functions
 // plus a command the workflow calls in two steps:
 //
 //   node scripts/release-notes.mjs check --tag=<tag>

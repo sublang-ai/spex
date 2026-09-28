@@ -72,9 +72,9 @@ jobs:
           cache: npm
 
       # The tag's form and both manifests' versions (release-19,
-      # release-27): scripts/release-notes.mjs, tested by
-      # release-notes.test.mjs (release-28). Built-ins only, before
-      # npm ci.
+      # release-27, app-shell-14): scripts/release-notes.mjs, tested by
+      # release-notes.test.mjs (release-28, app-shell-36). Built-ins
+      # only, before npm ci.
       - name: Verify version matches tag
         id: version
         run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"

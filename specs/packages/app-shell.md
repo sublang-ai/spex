@@ -150,7 +150,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
-- the release names Node.js 22.19 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
+- the release names Node.js 22.19 or later and, from a checkout of its tag, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
@@ -246,6 +246,16 @@ Where the host is macOS with Apple's command-line tools installed, when the sour
 #### app-shell-35
 
 Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm start` with the acceptance variable naming a screenshot, the smoke user-data variable naming a scratch directory whose Spex home stores English as its language, and a scratch Spex home, the smoke shall assert the guarded launch in its installed shape: the command builds the workspaces, rebuilds the native module for Electron, launches the app, and returns zero after restoring the module for Node [[app-shell-26](#app-shell-26)]; the app took its lock and its state under the scratch directories, the developer's own Spex untouched [[app-shell-24](#app-shell-24)]; and the render exited clean with the screenshot written.
+
+### Release Coverage
+
+#### app-shell-36
+
+When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests for an `app-vMAJOR.MINOR.PATCH` tag, the test suite shall assert the regular release's checks and instructions:
+
+- the notes end with the run-from-source instructions, which name Node.js 22.19 — the root manifest's engine floor — or later and check out that tag before `npm ci`, `npm start` and `npm run start:server` [[app-shell-14](#app-shell-14)];
+- either shell's manifest off the tag's version refuses the release [[app-shell-14](#app-shell-14)];
+- a version with no changelog section is refused as empty notes [[app-shell-14](#app-shell-14)].
 
 ## References
 
