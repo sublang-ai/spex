@@ -1394,11 +1394,6 @@ msgstr "项目有更改"
 msgid "queue replaced"
 msgstr "队列被整体替换"
 
-#. Why a session cannot continue; Retry and Discard are the interface's controls
-#: src/store.ts
-msgid "Recover the interrupted turn with Retry or Discard"
-msgstr "请用“重试”或“丢弃”恢复中断的轮次"
-
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
@@ -1427,8 +1422,10 @@ msgstr "已将“{before}”重命名为“{name}”"
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
 #: src/service.ts
 #: src/session.ts
+#: src/store.ts
 msgid "Restore the interrupted turn first"
 msgstr "请先“恢复”中断的轮次"
 
@@ -1782,6 +1779,11 @@ msgstr "此运行没有可重新执行的恢复操作。"
 #: src/service.ts
 msgid "this session has no compatible checkpoint"
 msgstr "该会话没有兼容的检查点"
+
+#. Refusal: Restore was asked of a session with nothing interrupted, as when another client restored or discarded it first
+#: src/session.ts
+msgid "This session has no interrupted turn to restore"
+msgstr "此会话没有可“恢复”的中断轮次"
 
 #. Refusal: the ending the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts

@@ -3031,6 +3031,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     await cli.dispose();
     const revealed = await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.recovery?.input === "saved CLI input" && !message.session.externalWriter);
     assert.equal(revealed.type === "session.state" && revealed.session.recovery?.discardable, !recorded, "the summary carries Playbook's discard predicate");
+    assert.equal(revealed.type === "session.state" && revealed.session.continuationReason, "Restore the interrupted turn first", "the reason names the way on");
     const blocked = await client.command("turn.submit", {sessionId, text:"replacement input"});
     assert.equal(blocked.ok, false, "ordinary input cannot retry uncertainty");
     assert.equal(stats.runs.length, 0);
@@ -3076,6 +3077,52 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     }
   });
 }
+
+test("core-service-84: Restore refuses a session with nothing interrupted and a relocated checkpoint, starting no turn", { timeout: 60_000 }, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("session.dispose", { sessionId: session.id });
+  const recordsBefore = (await client.expectOk("history.get", { sessionId: session.id })).records.length;
+
+  // A stale Restore — another client or the CLI got there first — is
+  // refused before anything opens, so it writes nothing.
+  const settled = await client.command("session.restore", { sessionId: session.id });
+  assert.ok(!settled.ok && settled.error.code === "invalid_request", JSON.stringify(settled));
+  assert.match(settled.error.message, /no interrupted turn to restore/);
+  assert.equal((await client.expectOk("history.get", { sessionId: session.id })).records.length, recordsBefore);
+  const unchanged = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(unchanged?.failed, false);
+  assert.equal(unchanged?.continuable, true);
+
+  // An interrupted turn whose repository has since moved: Playbook
+  // refuses to reconcile a relocated checkpoint, and says why.
+  const shared = createSessionStore({ sessionsDir: join(harness.dataDir, "sessions") });
+  const lease = await shared.acquire(session.id);
+  try {
+    const prior = await lease.read();
+    assert.ok(prior);
+    await lease.beginTurn({ input: "Interrupted here", attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+  } finally { await lease.release(); }
+  const relocated = join(harness.dir, "relocated-project");
+  mkdirSync(relocated);
+  execFileSync("git", ["init", "-q", relocated]);
+  await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [harness.projectDir] });
+  await harness.service["syncForeignSessions"]();
+  const moved = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(moved?.recovery?.input, "Interrupted here");
+  const refused = await client.command("session.restore", { sessionId: session.id });
+  assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
+  assert.match(refused.error.message, /relocation is unsupported/);
+  const after = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(after?.recovery?.input, "Interrupted here", "the interrupted turn still stands");
+  assert.equal(after?.turns, moved?.turns, "no turn started");
+  assert.equal(after?.live, false);
+  assert.equal(harness.stats.runs.length, 0);
+});
 
 // Review regressions exercise the public protocol with independent files.
 test("core-service-86: damaged sessions refuse only their own execution and remain deletable", async (t) => {

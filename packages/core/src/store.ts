@@ -189,8 +189,8 @@ function sessionInfo(
             })}
       : meta.continuationReason ? { continuationReason: meta.continuationReason }
       : meta.continuationRecovery ? { continuationReason: i18n._({
-          id: "Recover the interrupted turn with Retry or Discard",
-          comment: "Why a session cannot continue; Retry and Discard are the interface's controls",
+          id: "Restore the interrupted turn first",
+          comment: "Refusal; Restore is the control the interface offers for interrupted work",
         }) }
       : {}),
     ...(meta.recovery && !meta.externalWriter ? { recovery: meta.recovery } : {}),
