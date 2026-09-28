@@ -175,9 +175,34 @@ export function newPlayerId(role: string): string {
   return `dev.${role.toLowerCase().replace(/[^a-z0-9_-]+/gu, "-")}`;
 }
 
-/** The source's first prose paragraph, on one line — the intent's
- * derived default (playbook-library-61). Headings, the `Roles:` list,
- * list items, blockquotes, and fenced code are not prose. */
+/** The intent's derived default (playbook-library-61): the source's
+ * first prose paragraph, else its title — a source written as a title
+ * over a `Roles:` list and numbered steps, as the app's own example
+ * is, holds no prose paragraph, and an empty intent refuses Register. */
+export function derivedIntent(markdown: string): string {
+  return firstProseParagraph(markdown) || firstTitle(markdown);
+}
+
+/** The text of the source's first level-one heading outside fenced
+ * code, closing hashes dropped; empty when it has none. */
+export function firstTitle(markdown: string): string {
+  let fenced = false;
+  for (const raw of markdown.replace(/\r\n/gu, "\n").split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("```")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const title = /^#\s+(.*?)(?:\s+#+)?$/u.exec(line)?.[1]?.trim();
+    if (title) return title;
+  }
+  return "";
+}
+
+/** The source's first prose paragraph, on one line. Headings, the
+ * `Roles:` list, list items, blockquotes, and fenced code are not
+ * prose. */
 export function firstProseParagraph(markdown: string): string {
   const blocks = markdown.replace(/\r\n/gu, "\n").split(/\n\s*\n/u);
   let fenced = false;

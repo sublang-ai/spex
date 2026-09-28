@@ -11,6 +11,7 @@ import {
   agentBlockOf,
   draftChipTitle,
   draftChipWord,
+  derivedIntent,
   firstProseParagraph,
   newPlayerId,
 } from "./drafts.js";
@@ -92,6 +93,20 @@ describe("firstProseParagraph", () => {
       "When an issue arrives, Captain shall prompt Triager: wrapped onto a second line.",
     );
     expect(firstProseParagraph("# Only a title")).toBe("");
+  });
+});
+
+describe("derivedIntent", () => {
+  test("the first prose paragraph, else the title outside code", () => {
+    expect(derivedIntent("# Triage\n\nLabel each new issue.\n")).toBe("Label each new issue.");
+    // The app's own example: a title over a roles list and numbered
+    // steps, no prose paragraph.
+    expect(
+      derivedIntent(
+        "# Two-Agent Change-and-Review Workflow #\n\nRoles:\n\n- Coder\n- Reviewer\n\n## Procedure\n\n1. Step one.\n",
+      ),
+    ).toBe("Two-Agent Change-and-Review Workflow");
+    expect(derivedIntent("```\n# not a title\n```\n\n## Only a section\n")).toBe("");
   });
 });
 

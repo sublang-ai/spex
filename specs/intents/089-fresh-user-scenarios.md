@@ -18,7 +18,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] The fresh install launching the server shell the README's way, reading readiness for bound players only, rendering in English on any system; the smoke refusing a dirty tree.
 - [x] Node.js 22.19 stated as the app's floor wherever the floor is stated; the tests-in-tiers record's status and regression outcome stated as they are.
 - [x] The Specs tab's empty state naming a command that scaffolds.
-- [ ] The Register tab's intent defaulting to the source's title, so the app's own example registers on its defaults.
+- [x] The Register tab's intent defaulting to the source's title, so the app's own example registers on its defaults.
 - [ ] Spec items matching what is built and tested: the palette, the Overview's GitHub line, the live journeys, spec-view's lowest free number.
 - [ ] Inline explanations shortened to key phrases, in both catalogs.
 - [ ] The changelog carrying what shipped unnoted.

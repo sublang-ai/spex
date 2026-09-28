@@ -1161,7 +1161,7 @@ describe("playbook-library-61: the Register tab", () => {
     expect(screen.queryByTestId("register-role-Auditor")).toBeNull();
   });
 
-  test("a proposal keyed in another case applies, and a role whose lane exists selects it rather than minting over it", async () => {
+  test("a proposal matches roles case-insensitively, a role's existing lane is selected as it stands, and a minted id is never one the roster holds", async () => {
     // The compiled entry keys roles as it derived them (lowercase from
     // a `Roles:` source); the agent proposes "Coder". And `coder`'s own
     // lane, dev.coder, already exists, so the form selects it and its
@@ -1271,8 +1271,20 @@ describe("playbook-library-61: the Register tab", () => {
     expect(submit.title).toBe("Waits for the reply");
   });
 
+  test("with no prose paragraph the intent defaults to the source's title, so the app's own example registers on its defaults", async () => {
+    // The example is a title over a roles list and numbered steps.
+    renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: SLC_DEMO.stages.normalized } });
+    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
+    fireEvent.click(tab("Register"));
+    expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe(
+      "Two-Agent Change-and-Review Workflow",
+    );
+    expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   test("an empty intent holds Register until the Boss writes one", async () => {
-    renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: "# Triage\n\nRoles:\n- Triager\n- Verifier" } });
+    // Neither a prose paragraph nor a title to derive one from.
+    renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: "Roles:\n- Triager\n- Verifier" } });
     await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
     fireEvent.click(tab("Register"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe("");

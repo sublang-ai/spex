@@ -541,7 +541,9 @@ test.describe("the pasted example", () => {
     await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done");
     await expect(chip).toContainText("Compiled");
 
-    // The Register tab stands with no proposal to prefill it and a
+    // The Register tab stands with no proposal to prefill it, on the
+    // derived defaults — the draft's id as the command and, the example
+    // holding no prose paragraph, its title as the intent — and a
     // player per derived role (playbook-library-61, playbook-library-7).
     const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
     await tabs.getByRole("tab", { name: "Register", exact: true }).click();
@@ -549,13 +551,11 @@ test.describe("the pasted example", () => {
     await expect(form).toBeVisible();
     await expect(form).not.toContainText("Prefilled from the agent's proposal");
     await expect(page.getByTestId("register-command")).toHaveValue(draft.id);
+    await expect(page.getByTestId("register-intent")).toHaveValue("Two-Agent Change-and-Review Workflow");
     await expect(page.getByTestId(/^register-player-/)).toHaveCount(2);
     for (const role of ["Triager", "Verifier"]) {
       await page.getByTestId(`register-player-${role}`).selectOption({ index: 0 });
     }
-    // The example's text holds no prose paragraph to derive an intent
-    // from, so the Boss writes one.
-    await page.getByTestId("register-intent").fill("Change code and review it with two agents");
     await page.getByTestId("register-submit").click();
 
     // Register lists it and the draft leaves (playbook-library-10) …
