@@ -186,6 +186,12 @@ Where built server artifacts and a controlled npm executable are available on a 
 - the forwarded arguments govern the printed reachable access URL, config status, and created state root [[server-shell-14](#server-shell-14)] [[server-shell-1](#server-shell-1)];
 - SIGTERM delivered to the launcher lifecycle process shuts the core down cleanly, makes the root command return 0, and closes the bound port [[server-shell-6](#server-shell-6)].
 
+#### server-shell-23
+
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` with a loopback host, an ephemeral port, a token, and a scratch config path and state root, the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL serves the page and answers the token-bearing WebSocket handshake on the one port [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
+
+- the same socket then carries the smoke's first-run walk of the installed core, as the release rules describe it.
+
 ### Compression Coverage
 
 #### server-shell-17

@@ -6,6 +6,7 @@
 ## Status
 
 Accepted; amended by [DR-036](036-file-state-store.md): the smoke redirect covers the state root as well as the user-data directory.
+Extended by [DR-086](086-tests-in-tiers.md): the live desktop smoke is the live smoke every app release runs, beta included, and the long live runs move to a regression tier.
 
 ## Context
 

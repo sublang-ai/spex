@@ -243,6 +243,10 @@ Where executable npm and Electron fixtures stand in for their external effects, 
 
 Where the host is macOS with Apple's command-line tools installed, when the source-run integration suite runs each ABI rebuild — the Node restore with a stub `npm`, the Electron rebuild with a stub `@electron/rebuild` — on a PATH led by the stubs' directory and a fixture `libtool` that rejects every option, the suite shall assert for each rebuild that the `libtool` the stub resolves is the file `xcrun --find libtool` names and answers `-V` as Apple's while the fixture answers on the same PATH outside the rebuild, that the contributor's PATH follows the one directory the rebuild prepends, and that the directory is gone once the rebuild returns [[app-shell-31](#app-shell-31)].
 
+#### app-shell-35
+
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm start` with the acceptance variable naming a screenshot, the smoke user-data variable naming a scratch directory, and a scratch Spex home, the smoke shall assert the guarded launch in its installed shape: the command builds the workspaces, rebuilds the native module for Electron, launches the app, and returns zero after restoring the module for Node [[app-shell-26](#app-shell-26)]; the app took its lock and its state under the scratch directories, the developer's own Spex untouched [[app-shell-24](#app-shell-24)]; and the render exited clean with the screenshot written.
+
 ## References
 
 [1]: https://www.electronjs.org/docs/latest/tutorial/security "Electron security tutorial"
