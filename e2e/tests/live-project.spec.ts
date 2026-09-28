@@ -42,9 +42,9 @@ test.use({ appOptions: { config: "none" } });
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const FIRST =
-  '/code Add a greet(name) function in src/index.js returning "Hello, <name>!" with a test under test/. Keep the change minimal.';
+  '/code Add a sum(a, b) function in src/index.js returning a + b, with a test under test/. Keep the change minimal.';
 const SECOND =
-  '/code Add a farewell(name) function beside greet in src/index.js returning "Goodbye, <name>!" with a test under test/.';
+  '/code Add a product(a, b) function beside sum in src/index.js returning a * b, with a test under test/.';
 /** A real /code cycle with its review (DR-086: twenty to forty-five minutes). */
 const CYCLE = 60 * 60_000;
 /** From a settled turn to the queued intent's dispatch (DR-077). */
@@ -180,7 +180,7 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
     await expect(row).toBeVisible();
     return (await row.getAttribute("data-intent-id"))!;
   };
-  const firstId = await capture(FIRST, "greet(name)");
+  const firstId = await capture(FIRST, "sum(a, b)");
   await expect(page.getByTestId(`upnext-row-${firstId}`)).toHaveAttribute("data-next", "true");
   await page.getByTestId(`upnext-start-${firstId}`).click();
   await expect(page.getByTestId("start-composer")).toHaveValue(FIRST);
@@ -198,11 +198,11 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
   const sessionId = (await running.getAttribute("data-testid"))!.replace(/^running-session-/, "");
   const now = page.getByTestId(`now-session-${projectId}`);
   await expect(now).toHaveAttribute("data-intent-id", firstId);
-  await expect(now).toContainText("greet(name)");
+  await expect(now).toContainText("sum(a, b)");
 
   // ── The second intent queues behind it as the project's next
   //    (dashboard-29, DR-077): Queued, after the current work, no Start.
-  const secondId = await capture(SECOND, "farewell(name)");
+  const secondId = await capture(SECOND, "product(a, b)");
   await expect(page.getByTestId(`upnext-row-${secondId}`)).toHaveAttribute("data-next", "true");
   await expect(page.getByTestId(`upnext-queued-${secondId}`)).toHaveText("Queued");
   await expect(page.getByTestId(`upnext-standing-${secondId}`)).toHaveText("after current work");
@@ -281,8 +281,8 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
     contentType: "text/plain",
   });
   const source = readFileSync(join(projectDir, "src", "index.js"), "utf8");
-  expect(source).toContain("greet");
-  expect(source).toContain("farewell");
+  expect(source).toContain("sum");
+  expect(source).toContain("product");
   let output = "";
   try {
     output = execFileSync("npm", ["test"], { cwd: projectDir, encoding: "utf8", stdio: "pipe" });

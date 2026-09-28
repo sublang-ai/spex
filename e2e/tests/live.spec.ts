@@ -114,8 +114,10 @@ test.describe("the changelog playbook", () => {
     const TURN = 10 * 60_000;
     await open(page, app);
     await nav(page, "Playbooks").click();
-    await expect(page.getByTestId("builtins-section")).toBeVisible();
+    // The seeded template configures every built-in, so no built-ins
+    // section stands here; the New playbook field proves the surface.
     const idField = page.getByTestId("new-playbook-id");
+    await expect(idField).toBeVisible();
     await idField.fill("changelog");
     await idField.press("Enter");
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
