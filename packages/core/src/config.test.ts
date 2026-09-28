@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -23,6 +23,19 @@ import {
   templatePath,
   type LoadModule,
 } from "./config.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 // Mirrors the real @sublang/playbook/code/registry entry shape: the
 // Playbook Captain shell load contract is id/command/intent/requiredRoleIds/
@@ -271,7 +284,7 @@ test("from must be a module specifier and import failures carry the cause", asyn
 
 test("a file-path registry without the current contract marker is refused as stale", async () => {
   const top = baseConfig();
-  const registry = join(mkdtempSync(join(tmpdir(), "spex-stale-")), "registry.mjs");
+  const registry = join(scratchDir("spex-stale-"), "registry.mjs");
   codeBlock(top).from = registry;
   const loader: LoadModule = async (specifier) =>
     specifier === registry ? { default: registryEntry() } : stubLoader(specifier);
@@ -580,7 +593,7 @@ test("command overrides land in captain options and duplicates are rejected", as
 });
 
 test("seedConfig creates once and never overwrites", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-config-"));
+  const dir = scratchDir("spex-config-");
   const path = join(dir, "config", "playbook.config.yaml");
   assert.equal(seedConfig(path), true);
   const seeded = readFileSync(path, "utf8");
@@ -613,7 +626,7 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
 const usableRuntime = () => ({ usable: true });
 
 test("adapter readiness mirrors the launcher credential rules", async () => {
-  const home = mkdtempSync(join(tmpdir(), "spex-home-"));
+  const home = scratchDir("spex-home-");
   assert.equal(
     (await checkAdapterReadiness("claude", {}, home, usableRuntime)).ready,
     false,
@@ -639,7 +652,7 @@ test("adapter readiness mirrors the launcher credential rules", async () => {
 });
 
 test("a missing or stale runtime reports not ready, whatever the credential class", async () => {
-  const home = mkdtempSync(join(tmpdir(), "spex-home-"));
+  const home = scratchDir("spex-home-");
   const missing = () => ({
     usable: false,
     requirement:
@@ -654,7 +667,7 @@ test("a missing or stale runtime reports not ready, whatever the credential clas
   const gemini = await checkAdapterReadiness("gemini", {}, home, missing);
   assert.equal(gemini.ready, false);
   // Both halves unmet report both, not the first alone.
-  const both = await checkAdapterReadiness("claude", {}, mkdtempSync(join(tmpdir(), "spex-home-")), missing);
+  const both = await checkAdapterReadiness("claude", {}, scratchDir("spex-home-"), missing);
   assert.equal(both.ready, false);
   assert.match(both.requirement ?? "", /npm install -g/);
   assert.match(both.requirement ?? "", /ANTHROPIC_API_KEY/);

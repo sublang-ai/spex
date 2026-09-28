@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,12 +23,25 @@ import {
   type RunCommand,
 } from "./forge.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 function git(args: string[], cwd: string): void {
   execFileSync("git", args, { cwd });
 }
 
 function fixtureRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), "spex-forge-"));
+  const dir = scratchDir("spex-forge-");
   git(["init", "-q", "-b", "main", "."], dir);
   git(["config", "user.email", "t@example.com"], dir);
   git(["config", "user.name", "t"], dir);
@@ -45,7 +58,7 @@ test("isWorkTreeRoot accepts only the repo root", async () => {
   const sub = join(repo, "sub");
   mkdirSync(sub);
   assert.equal(await isWorkTreeRoot(sub), false);
-  const plain = mkdtempSync(join(tmpdir(), "spex-plain-"));
+  const plain = scratchDir("spex-plain-");
   assert.equal(await isWorkTreeRoot(plain), false);
 });
 
@@ -64,7 +77,7 @@ test("repoStatus reports branch and dirty state from local git", async () => {
 });
 
 test("repoStatus names the real branch on a fresh repo with no commits", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-forge-fresh-"));
+  const dir = scratchDir("spex-forge-fresh-");
   git(["init", "-q", "-b", "main", "."], dir);
   const status = await repoStatus(dir);
   assert.equal(status.branch, "main");
@@ -72,13 +85,13 @@ test("repoStatus names the real branch on a fresh repo with no commits", async (
 });
 
 test("createProjectRepo initializes a commit-ready repo", async () => {
-  const dir = join(mkdtempSync(join(tmpdir(), "spex-create-")), "newproj");
+  const dir = join(scratchDir("spex-create-"), "newproj");
   await createProjectRepo({ path: dir });
   assert.equal(await isWorkTreeRoot(dir), true);
 });
 
 test("createProjectRepo surfaces scaffold failures", async () => {
-  const dir = join(mkdtempSync(join(tmpdir(), "spex-create-")), "p2");
+  const dir = join(scratchDir("spex-create-"), "p2");
   const run: RunCommand = async (command, args, cwd) => {
     if (command === "git") {
       const { execFile } = await import("node:child_process");
@@ -101,7 +114,7 @@ test("createProjectRepo surfaces scaffold failures", async () => {
 });
 
 test("createProjectRepo stages every supported agent-instruction target", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-agent-targets-"));
+  const dir = scratchDir("spex-agent-targets-");
   const calls: Array<{ command: string; args: string[] }> = [];
   const run: RunCommand = async (command, args) => {
     calls.push({ command, args });
@@ -129,7 +142,7 @@ test("createProjectRepo stages every supported agent-instruction target", async 
 });
 
 test("createProjectRepo never stages a pre-existing agent file", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-agent-existing-"));
+  const dir = scratchDir("spex-agent-existing-");
   writeFileSync(join(dir, "GEMINI.md"), "user content\n");
   const calls: Array<{ command: string; args: string[] }> = [];
   const run: RunCommand = async (command, args) => {
@@ -248,7 +261,7 @@ test("no origin remote degrades to guidance", async () => {
 });
 
 test("seedExampleProject materializes the corpus into an empty dir", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-seed-"));
+  const dir = scratchDir("spex-seed-");
   const corpus = join(dir, "corpus");
   mkdirSync(join(corpus, "specs"), { recursive: true });
   writeFileSync(join(corpus, "README.md"), "# Example\n");
@@ -275,7 +288,7 @@ test("the staged Academy corpus is present and seedable", async () => {
   const corpus = academyCorpusDir();
   assert.ok(existsSync(join(corpus, "specs", "map.md")));
   assert.ok(existsSync(join(corpus, "guidelines.md")));
-  const target = join(mkdtempSync(join(tmpdir(), "spex-seed-")), "academy");
+  const target = join(scratchDir("spex-seed-"), "academy");
   await seedExampleProject({ path: target });
   assert.ok(existsSync(join(target, "specs", "meta.md")));
 });

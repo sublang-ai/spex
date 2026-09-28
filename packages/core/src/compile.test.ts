@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -29,6 +29,19 @@ import { parse as parseYaml } from "yaml";
 import type { RegistryEntryLike } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 const STUB_SLC = stubSlcSource();
 
@@ -55,7 +68,7 @@ function testSpawner(
 }
 
 test("compile pipeline: stub slc to a runnable bundled registry", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const dir = scratchDir("spex-compile-");
   const stubPath = join(dir, "stub-slc.cjs");
   writeFileSync(stubPath, STUB_SLC);
 
@@ -153,7 +166,7 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
 });
 
 test("an environment-set stall budget is left alone", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const dir = scratchDir("spex-compile-");
   const stubPath = join(dir, "stub-slc.cjs");
   writeFileSync(stubPath, STUB_SLC);
 
@@ -179,7 +192,7 @@ test("an environment-set stall budget is left alone", async () => {
 test("an entry with no derived roles is refused with recompile guidance", async () => {
   // Entries compiled before slc 0.2 can declare zero roles when the
   // gears rendered Players as a heading (fixed upstream in slc 0.2).
-  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const dir = scratchDir("spex-compile-");
   const stubPath = join(dir, "stub-slc.cjs");
   writeFileSync(stubPath, stubSlcSource("[]"));
 
@@ -210,7 +223,7 @@ test("toolchain guidance: old node refuses with instructions", async () => {
       roles: ["r"],
       command: "demo",
       intent: "x",
-      libraryDir: mkdtempSync(join(tmpdir(), "spex-compile-")),
+      libraryDir: scratchDir("spex-compile-"),
       env: {},
       spawner: testSpawner("v20.11.0"),
     }),
@@ -252,7 +265,7 @@ const APP_ENGINE = { runtimeAbi: RUNTIME_ABI, artifactSchemas: [...ARTIFACT_SCHE
 function fakeCompilerTree(
   engine: { runtimeAbi: number; artifactSchemas: number[] } | null = APP_ENGINE,
 ): { modulePath: string; cli: string } {
-  const modulePath = mkdtempSync(join(tmpdir(), "spex-modules-"));
+  const modulePath = scratchDir("spex-modules-");
   const packageDir = join(modulePath, "@sublang", "slc");
   mkdirSync(join(packageDir, "dist"), { recursive: true });
   writeFileSync(
@@ -371,7 +384,7 @@ test("no Node at the floor names the version found and starts nothing (playbook-
       roles: ["r"],
       command: "demo",
       intent: "x",
-      libraryDir: mkdtempSync(join(tmpdir(), "spex-compile-")),
+      libraryDir: scratchDir("spex-compile-"),
       env: {},
       spawner,
       runtime: { execPath: "/usr/local/bin/node", electron: false, modulePaths: [modulePath] },
@@ -381,7 +394,7 @@ test("no Node at the floor names the version found and starts nothing (playbook-
 });
 
 test("a tree without the supplied compiler is unavailable with restore guidance (playbook-library-18)", async () => {
-  const empty = mkdtempSync(join(tmpdir(), "spex-modules-"));
+  const empty = scratchDir("spex-modules-");
   const probes: { command: string; env?: NodeJS.ProcessEnv }[] = [];
   const spawner = versionSpawner({ "/usr/local/bin/node": "v24.1.0" }, probes);
   const status = await checkToolchain({}, spawner, {
@@ -401,7 +414,7 @@ test("a tree without the supplied compiler is unavailable with restore guidance 
       roles: ["r"],
       command: "demo",
       intent: "x",
-      libraryDir: mkdtempSync(join(tmpdir(), "spex-compile-")),
+      libraryDir: scratchDir("spex-compile-"),
       env: {},
       spawner,
       runtime: { execPath: "/usr/local/bin/node", electron: false, modulePaths: [empty] },
@@ -443,7 +456,7 @@ test("a compiler whose engine the app cannot run is unavailable with update guid
       roles: ["r"],
       command: "demo",
       intent: "x",
-      libraryDir: mkdtempSync(join(tmpdir(), "spex-compile-")),
+      libraryDir: scratchDir("spex-compile-"),
       env: {},
       spawner,
       runtime: { ...runtime, modulePaths: [other.modulePath] },
@@ -492,7 +505,7 @@ test("a compile on Electron spawns the copy behind the preload with the variable
     calls.push({ argv: [command, ...args], ...(env ? { env } : {}) });
     return 0;
   };
-  const libraryDir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const libraryDir = scratchDir("spex-compile-");
   const electron = { execPath: "/apps/Spex/Electron", electron: true, modulePaths: [modulePath] };
   // The recorder runs nothing, so no artifact appears: the run stops
   // right after the spawn it recorded.
@@ -566,7 +579,7 @@ test("the compile's agent reaches slc unless the environment configures it (play
   assert.deepEqual(compilerAgentEnv({}, { adapter: "kimi", model: "k2" }), {});
   assert.deepEqual(compilerAgentEnv({}, undefined), {});
 
-  const dir = mkdtempSync(join(tmpdir(), "spex-compile-"));
+  const dir = scratchDir("spex-compile-");
   const stubPath = join(dir, "stub-slc.cjs");
   writeFileSync(stubPath, STUB_SLC);
   const stub = `${process.execPath} ${stubPath}`;

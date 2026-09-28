@@ -507,12 +507,35 @@ async function boot(
   const core = new CoreClient(
     server.url.replace(/^http/, "ws"),
   );
-  await core.open();
+  try {
+    await core.open();
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
   return { server, core };
 }
 
 export async function startApp(options: AppOptions = {}): Promise<App> {
   const scratch = mkdtempSync(join(tmpdir(), "spex-e2e-"));
+  // A start that fails leaves no root behind: removed outright before
+  // the shell boots, closed with the shell after.
+  const started: { app?: App } = {};
+  try {
+    return await arrangeApp(scratch, options, started);
+  } catch (error) {
+    // The failure that stopped the start is the one reported.
+    if (started.app) await started.app.close().catch(() => undefined);
+    else rmSync(scratch, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function arrangeApp(
+  scratch: string,
+  options: AppOptions,
+  started: { app?: App },
+): Promise<App> {
   const home = join(scratch, "home");
   mkdirSync(home, { recursive: true });
   const dataDir = join(scratch, "state");
@@ -705,8 +728,11 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
       running = await boot(shellOptions);
     },
     async close() {
-      await app.stop();
-      rmSync(scratch, { recursive: true, force: true });
+      try {
+        await app.stop();
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
     },
     readConfig() {
       return existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
@@ -723,12 +749,12 @@ export async function startApp(options: AppOptions = {}): Promise<App> {
       return existsSync(prefs) ? readFileSync(prefs, "utf8") : "";
     },
   };
+  started.app = app;
   if (options.compiler) {
     // The written file must be what the core reads as valid, or the
     // journey would meet a broken Settings rather than the roster.
     const config = await app.core.command("config.get", {});
     if (config.status !== "valid") {
-      await app.close();
       throw new Error(`the compile player's config reads ${JSON.stringify(config)}`);
     }
   }

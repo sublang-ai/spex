@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,6 +32,19 @@ import type {
   ServerMessage,
   TmuxPlayRecord,
 } from "./protocol.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 // ---------------------------------------------------------------------------
 // Store-level harness: the fold's contract is over stored rows, so a
@@ -794,7 +807,7 @@ test("DR-066: a session's own failure honours the parked rule its intent-owned t
 });
 
 test("DR-066: a project whose store refuses its acts raises no summons", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ledger-blocked-"));
+  const dir = scratchDir("spex-ledger-blocked-");
   const { store, projectId } = newProjectStore(dir);
   addSession(store, projectId, "s1");
   beginTurn(store, "s1", 1, "chat about tests", 1000);
@@ -1249,7 +1262,7 @@ test("DR-035: an un-ledgered finished turn stands in for review until the viewed
 
 test("DR-035: reopening the store reproduces closed, queued, and finished; a dead session's dispatch releases", async () => {
   const ids = { s1: "73000000-0000-4000-8000-000000000001", s2: "73000000-0000-4000-8000-000000000002", closed: "73000000-0000-4000-8000-000000000003", queued: "73000000-0000-4000-8000-000000000004", finished: "73000000-0000-4000-8000-000000000005", working: "73000000-0000-4000-8000-000000000006" };
-  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-"));
+  const dir = scratchDir("spex-ledger-");
   const path = join(dir, "state");
   const { store, projectId } = newProjectStore(path);
   addSession(store, projectId, ids.s1);
@@ -1305,7 +1318,7 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
 
 test("core-service-79: a remove act retires a closed intent from every read, its acts kept and its neighbours unmoved", async () => {
   const ids = { s1: "73000000-0000-4000-8000-000000000001", gone: "73000000-0000-4000-8000-000000000002", kept: "73000000-0000-4000-8000-000000000003" };
-  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-remove-"));
+  const dir = scratchDir("spex-ledger-remove-");
   const path = join(dir, "state");
   const { store, projectId } = newProjectStore(path);
   addSession(store, projectId, ids.s1);
@@ -1373,7 +1386,7 @@ test("core-service-79: a remove act retires a closed intent from every read, its
 // ---------------------------------------------------------------------------
 
 test("DR-035: intent records serve their Status line verbatim, or none", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-specs-"));
+  const dir = scratchDir("spex-ledger-specs-");
   mkdirSync(join(dir, "specs", "intents"), { recursive: true });
   writeFileSync(
     join(dir, "specs", "intents", "001-ship-it.md"),
@@ -1541,7 +1554,7 @@ async function startHarness(
     decision?: string;
   } = {},
 ): Promise<Harness> {
-  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-it-"));
+  const dir = scratchDir("spex-ledger-it-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const projectDir = join(dir, "project");
@@ -2401,7 +2414,7 @@ test("core-service-57: submission validates the intent, the turn start stamps it
 test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest first, no overlap", async () => {
   // Seed the store first, then serve it: paging is a pure read over
   // closed rows, wherever they came from.
-  const dir = mkdtempSync(join(tmpdir(), "spex-ledger-hist-"));
+  const dir = scratchDir("spex-ledger-hist-");
   const dataDir = join(dir, "state");
   const seeded = new Store({ dir: dataDir });
   const project = seeded.registerProject("/tmp/ledger-hist-proj", "hist", 1);

@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,19 @@ import {
   createScriptedCaptain,
   type CaptainTurnScript,
 } from "./testing/scripted-captain.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 /** The roster the installed template binds, in config order. */
 function templateRoster(): string[] {
@@ -37,7 +50,7 @@ async function setup(
 ) {
   const top = parseYaml(readFileSync(templatePath(), "utf8"));
   const composed = await composeConfig(top);
-  const scratch = mkdtempSync(join(tmpdir(), "spex-sess-"));
+  const scratch = scratchDir("spex-sess-");
   const projectDir = join(scratch, "project"); mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
   const store = new Store({ dir: join(scratch, "state") });

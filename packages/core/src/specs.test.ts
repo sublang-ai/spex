@@ -16,6 +16,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -42,10 +43,23 @@ import type {
   SpecTreeState,
 } from "./protocol.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 const posixTest = process.platform === "win32" ? test.skip : test;
 
 function fixture(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), "spex-specs-"));
+  const dir = scratchDir("spex-specs-");
   for (const [rel, text] of Object.entries(files)) {
     const abs = join(dir, ...rel.split("/"));
     mkdirSync(dirname(abs), { recursive: true });
@@ -84,7 +98,7 @@ function item(info: SpecFileInfo, id: string): SpecItemInfo {
 // ---------------------------------------------------------------------------
 
 test("no specs/ directory reports present: false", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-specs-"));
+  const dir = scratchDir("spex-specs-");
   const tree = parseSpecTree(dir);
   assert.equal(tree.present, false);
   assert.equal(tree.legacy, false);
@@ -658,7 +672,7 @@ posixTest("an unreadable file degrades to a per-file error", () => {
 });
 
 posixTest("a symlink escaping the project is skipped with a notice", () => {
-  const outside = mkdtempSync(join(tmpdir(), "spex-outside-"));
+  const outside = scratchDir("spex-outside-");
   writeFileSync(
     join(outside, "secret.md"),
     "# secret: S\n\n## External Behavior\n\n### secret-1\n\nHidden.\n",
@@ -800,7 +814,7 @@ test("spec-view-36: writeSpecFile confines writes like reads and creates nothing
 });
 
 posixTest("resolveSpecPath and writeSpecFile reject a symlink escaping the project", () => {
-  const outside = mkdtempSync(join(tmpdir(), "spex-outside-"));
+  const outside = scratchDir("spex-outside-");
   writeFileSync(join(outside, "secret.md"), "top secret\n");
   const dir = fixture({ "specs/packages/auth.md": "# auth: A\n" });
   symlinkSync(join(outside, "secret.md"), join(dir, "specs", "evil.md"));
@@ -877,7 +891,7 @@ posixTest("spec-view-47: the write keeps the file's mode", () => {
 // ---------------------------------------------------------------------------
 
 test("specs.get and specs.read serve over the protocol", async () => {
-  const home = mkdtempSync(join(tmpdir(), "spex-specs-home-"));
+  const home = scratchDir("spex-specs-home-");
   const project = fixture({
     "specs/packages/auth.md":
       "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne sentence.\n",
@@ -1009,7 +1023,7 @@ test("specs.get and specs.read serve over the protocol", async () => {
 });
 
 test("localized zh sections map to groups and intent parses", () => {
-  const root = mkdtempSync(join(tmpdir(), "spex-specs-zh-"));
+  const root = scratchDir("spex-specs-zh-");
   mkdirSync(join(root, "specs", "packages"), { recursive: true });
   writeFileSync(
     join(root, "specs", "packages", "auth.md"),

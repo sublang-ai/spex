@@ -10,13 +10,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { checkToolchain, moduleDirectoriesAbove } from "@sublang/spex-core";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -74,7 +87,7 @@ test(
     assert.match(ran.stdout, /^slc \d+\.\d+\.\d+/);
     // In the compiler's place, a probe sees the runtime as Node with
     // the variable that made it one already gone.
-    const probe = join(mkdtempSync(join(tmpdir(), "spex-runtime-")), "probe.mjs");
+    const probe = join(scratchDir("spex-runtime-"), "probe.mjs");
     writeFileSync(
       probe,
       'console.log(JSON.stringify({ node: process.versions.node, flag: process.env.ELECTRON_RUN_AS_NODE ?? null }));\n',

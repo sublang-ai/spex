@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,6 +17,19 @@ import {
   migrateConfigFileIfRetired,
   migrateRetiredProfiles,
 } from "./config-migrate.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 const PROFILES_ERA = `# Spex / playbook shared configuration.
 # Header paragraph that must survive.
@@ -72,7 +85,7 @@ test("unmatched scalars stay as written; block-only configs no-op", () => {
 });
 
 test("a block profile naming a missing entry hard-errors, file untouched", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-migrate-"));
+  const dir = scratchDir("spex-migrate-");
   const path = join(dir, "playbook.config.yaml");
   const text = `captain:\n  profile: ghost\nplaybooks:\n  code:\n    from: "x"\n    players:\n      coder: claude\n`;
   writeFileSync(path, text);
@@ -85,7 +98,7 @@ test("a block profile naming a missing entry hard-errors, file untouched", () =>
 });
 
 test("file migration writes a numbered backup and is idempotent", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-migrate-"));
+  const dir = scratchDir("spex-migrate-");
   const path = join(dir, "playbook.config.yaml");
   writeFileSync(path, PROFILES_ERA);
   const first = migrateConfigFileIfRetired(path);

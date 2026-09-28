@@ -44,6 +44,19 @@ import type {
   StoredRecord,
 } from "./protocol.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -196,7 +209,7 @@ async function startHarness(
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
   } = {},
 ): Promise<Harness> {
-  const dir = mkdtempSync(join(tmpdir(), "spex-core-it-"));
+  const dir = scratchDir("spex-core-it-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, configText);
   const projectDir = join(dir, "project");
@@ -1117,7 +1130,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 // ---------------------------------------------------------------------------
 
 test("real captain shell: the installed template's session binds its roster, and a Boss turn round-trips the captain reply", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-shell-it-"));
+  const dir = scratchDir("spex-shell-it-");
   const configPath = join(dir, "playbook.config.yaml");
   // The installed template with every effort it names left to the
   // adapter: the substitute adapter speaks no effort vocabulary and
@@ -1495,7 +1508,7 @@ test("CORE-13: invalid messages get error replies and the connection survives", 
 // ---------------------------------------------------------------------------
 
 test("core-service-63: a second core service on a held root refuses naming the holder, and a fresh start succeeds after stop", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-root-"));
+  const dir = scratchDir("spex-root-");
   const options = {
     token: "test",
     configPath: join(dir, "playbook.config.yaml"),
@@ -1523,7 +1536,7 @@ test("core-service-63: a second core service on a held root refuses naming the h
 // ---------------------------------------------------------------------------
 
 test("core-service-64: a legacy library relocates into the root with config from paths rewritten and comments kept", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-lib-"));
+  const dir = scratchDir("spex-lib-");
   const legacyLib = join(dir, "legacy-lib");
   mkdirSync(join(legacyLib, "demo"), { recursive: true });
   writeFileSync(join(legacyLib, "demo", "demo.registry.mjs"), "export default {};\n");
@@ -1601,7 +1614,7 @@ function writeForeignRecordEntries(
 }
 
 test("core-service-103: stored call spans fold to per-agent active time", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-agent-active-"));
+  const dir = scratchDir("spex-agent-active-");
   const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
@@ -1778,7 +1791,7 @@ function foreignTurn(prompt: string): Record<string, unknown>[] {
 }
 
 test("core-service-60: sessions another host wrote are served, bound to their project by working directory", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-foreign-"));
+  const dir = scratchDir("spex-foreign-");
   const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
@@ -1892,7 +1905,7 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
 });
 
 test("core-service-62: CLI stream changes refresh history and subscribers without duplicating folds or writing foreign files", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-foreign-refresh-"));
+  const dir = scratchDir("spex-foreign-refresh-");
   const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
@@ -2087,7 +2100,7 @@ test("core-service-85: removing a recorded path alias unlists history without de
 });
 
 test("core-service-71: session.delete removes an ended session and its traces, refuses a live one, and refuses another host's while its lease is held", async () => {
-  const sessionsDir = join(mkdtempSync(join(tmpdir(), "spex-delete-")), "shared-sessions");
+  const sessionsDir = join(scratchDir("spex-delete-"), "shared-sessions");
   const harness = await startHarness(`sessions: ${sessionsDir}\n${VALID_CONFIG}`);
   const client = new Client(harness.service.port());
   await client.open();
@@ -2205,7 +2218,7 @@ test("core-service-71: session.delete removes an ended session and its traces, r
 // ---------------------------------------------------------------------------
 
 test("core-service-78: another host's session deletes lease-free, its lock dirs untouched, and one that vanishes leaves the listing", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-foreign-delete-"));
+  const dir = scratchDir("spex-foreign-delete-");
   const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
@@ -2543,7 +2556,7 @@ test("core-service-77: a real session continues after restart and respects anoth
 });
 
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-shell-continue-"));
+  const dir = scratchDir("spex-shell-continue-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const projectDir = join(dir, "project");
@@ -2666,7 +2679,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
 // ---------------------------------------------------------------------------
 
 test("core-service-66: a config at the XDG location relocates once, bytes and mode kept, seeding nothing over it", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-"));
+  const dir = scratchDir("spex-relocate-");
   const home = join(dir, "home");
   const xdg = join(dir, "xdg");
   const legacy = join(xdg, "playbook", "playbook.config.yaml");
@@ -2715,7 +2728,7 @@ test("core-service-66: a config at the XDG location relocates once, bytes and mo
 });
 
 test("core-service-66: the home's own former config moves ahead of the XDG one, its emptied directory going with it", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-home-"));
+  const dir = scratchDir("spex-relocate-home-");
   const home = join(dir, "home");
   const xdg = join(dir, "xdg");
   // The shell passes its own data directory, so the home the former
@@ -2781,7 +2794,7 @@ test("core-service-66: the home's own former config moves ahead of the XDG one, 
 });
 
 test("core-service-66: a former config whose locator points into its own directory stays, reported, and no older one is published past it", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-refused-"));
+  const dir = scratchDir("spex-relocate-refused-");
   const home = join(dir, "home");
   const xdg = join(dir, "xdg");
   const dataDir = join(dir, "state");
@@ -2837,7 +2850,7 @@ test("core-service-66: a former config whose locator points into its own directo
 });
 
 test("core-service-66: the former directory stays when another file of the reader's sits beside the config", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-relocate-kept-"));
+  const dir = scratchDir("spex-relocate-kept-");
   const home = join(dir, "home");
   const dataDir = join(dir, "state");
   const former = join(dataDir, "playbook", "playbook.config.yaml");
@@ -2873,7 +2886,7 @@ test("core-service-66: the former directory stays when another file of the reade
 // ---------------------------------------------------------------------------
 
 test("playbook-library-32: compile.run binds derived roles however the form cased them", async () => {
-  const stubDir = mkdtempSync(join(tmpdir(), "spex-stub-slc-"));
+  const stubDir = scratchDir("spex-stub-slc-");
   const stubPath = join(stubDir, "stub-slc.cjs");
   // slc emits the ids as the gears declared them (DR-032): `Coder`
   // and `Reviewer`, not their lowercase forms.
@@ -2947,7 +2960,7 @@ test("playbook-library-32: compile.run binds derived roles however the form case
 
 for (const selection of ["default", "home override", "sessions override"] as const) {
   test(`storage-15: legacy default discovery respects ${selection}`, async (t) => {
-    const home = mkdtempSync(join(tmpdir(),"spex-legacy-default-"));
+    const home = scratchDir("spex-legacy-default-");
     const dataDir = selection === "home override" ? join(home,"custom") : join(home,".spex");
     const legacyDir = join(home,"old-state","playbook","sessions");
     const projectPath = join(home,"project");
@@ -2989,7 +3002,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
 
 for (const action of ["retry", "discard"] as const) {
   test(`core-service-84: desktop ${action} recovers CLI storage without current config`, async (t) => {
-    const dir = mkdtempSync(join(tmpdir(), "spex-cross-host-recovery-"));
+    const dir = scratchDir("spex-cross-host-recovery-");
     const configPath = join(dir, "config.yaml");
     const projectPath = join(dir, "project");
     const dataDir = join(dir, "state");
@@ -3227,7 +3240,7 @@ test("core-service-32/39: shutdown waits for a paused durable settlement after r
 
 
 test("core-service-81: saved Captain, player context and graphs survive removal of the playbook module", async (t) => {
-  const moduleDir=mkdtempSync(join(tmpdir(),"spex-removed-module-"));
+  const moduleDir=scratchDir("spex-removed-module-");
   const registry=resolveModulePath("@sublang/playbook/code/registry")!;
   const wrapper=join(moduleDir,"code.registry.mjs");
   writeFileSync(wrapper,`export {default} from ${JSON.stringify(pathToFileURL(registry).href)};\nexport const spexRegistryContract = ${REGISTRY_CONTRACT};\n`);
@@ -3286,7 +3299,7 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
 });
 
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {
-  const root=mkdtempSync(join(tmpdir(),"spex-migration-refusal-"));
+  const root=scratchDir("spex-migration-refusal-");
   const home=join(root,"home");const dataDir=join(home,".spex");const sessionsDir=join(dataDir,"sessions");
   const configPath=join(dataDir,"config","playbook.config.yaml");mkdirSync(dirname(configPath),{recursive:true});writeFileSync(configPath,VALID_CONFIG);
   const projectPath=join(root,"project");mkdirSync(projectPath);execFileSync("git",["init","-q",projectPath]);
@@ -3317,7 +3330,7 @@ test("storage-15: repeated default-home startup does not grow leases for a refus
 });
 
 test("core-service-101: a session's own tuning reaches its runtime, its config file, and nothing else", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-tuning-"));
+  const dir = scratchDir("spex-tuning-");
   const configPath = join(dir, "playbook.config.yaml");
   // A binding that pins its own effort, so the session's tuning can be
   // seen beating it at the site the provider call is built from.
@@ -3474,7 +3487,7 @@ test("core-service-112: the core's own prose re-derives in the home's language",
   const CONFIG_ERROR_ZH = "playbooks 必须至少启用一个规程";
   const BROKEN_CONFIG = "playbooks: {}\n";
 
-  const dir = mkdtempSync(join(tmpdir(), "spex-core-prose-"));
+  const dir = scratchDir("spex-core-prose-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const { imports } = fakeAdapterImports({});
@@ -3562,7 +3575,7 @@ test("core-service-112: a start speaks the stored language before its store load
   // cache the store cannot read at load; the cause after it is relayed.
   const CACHE_EN = "Unreadable cache; refresh to rebuild: ";
   const CACHE_ZH = "缓存无法读取；刷新可重建：";
-  const dir = mkdtempSync(join(tmpdir(), "spex-core-load-language-"));
+  const dir = scratchDir("spex-core-load-language-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const dataDir = join(dir, "state");

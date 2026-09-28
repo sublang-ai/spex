@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -29,6 +29,19 @@ import type {
   DraftStateMessage,
   ServerMessage,
 } from "./protocol.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -208,7 +221,7 @@ function probeSpawner(slcCalls: Harness["slcCalls"]): LineSpawner {
 }
 
 async function startHarness(options: { script: FakeScript; slc: string; dir?: string }): Promise<Harness> {
-  const dir = options.dir ?? mkdtempSync(join(tmpdir(), "spex-authoring-it-"));
+  const dir = options.dir ?? scratchDir("spex-authoring-it-");
   const configPath = join(dir, "playbook.config.yaml");
   if (!existsSync(configPath)) writeFileSync(configPath, CONFIG);
   const stubPath = join(dir, "stub-slc.cjs");

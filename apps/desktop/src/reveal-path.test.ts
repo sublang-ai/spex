@@ -8,14 +8,27 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { resolveRevealTarget } from "./reveal-path.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 function scratch(): { root: string; outside: string } {
-  const base = mkdtempSync(join(tmpdir(), "spex-reveal-"));
+  const base = scratchDir("spex-reveal-");
   const root = join(base, "home");
   const outside = join(base, "elsewhere");
   mkdirSync(join(root, "sessions"), { recursive: true });

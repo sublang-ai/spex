@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,19 @@ import {
 } from "./config-edit.js";
 import { templatePath, type LoadModule } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
+
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 function stubEntry(id: string, roles: string[]) {
   return {
@@ -58,7 +71,7 @@ const stubLoader: LoadModule = async (specifier) => {
 };
 
 function templateFile(): string {
-  const dir = mkdtempSync(join(tmpdir(), "spex-edit-"));
+  const dir = scratchDir("spex-edit-");
   const path = join(dir, "playbook.config.yaml");
   writeFileSync(path, readFileSync(templatePath(), "utf8"));
   return path;
@@ -278,7 +291,7 @@ test("edits the launcher would reject never reach the file", async () => {
 test("the retired profile key never survives an edit", async () => {
   // A hand-typed profiles-era survivor on the target block is dropped
   // by the merge patch rather than written back.
-  const dir = mkdtempSync(join(tmpdir(), "spex-edit-"));
+  const dir = scratchDir("spex-edit-");
   const path = join(dir, "playbook.config.yaml");
   writeFileSync(
     path,

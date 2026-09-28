@@ -15,10 +15,23 @@ import { DraftStore, type StoredDraft } from "./drafts.js";
 import { StorageFormatError } from "./app-storage.js";
 import type { SessionInfo, TmuxPlayRecord } from "./protocol.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 const PROJECT_PATH = join(tmpdir(), "spex-store-project");
 
 function tempRoot(): string {
-  return join(mkdtempSync(join(tmpdir(), "spex-store-")), "state");
+  return join(scratchDir("spex-store-"), "state");
 }
 
 function sampleSession(store: Store): SessionInfo {
@@ -264,7 +277,7 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
   // identically from the file state, with turns, titles, and usage
   // folded from the imported record stream — and the legacy file must
   // stay in place, imported exactly once.
-  const dir = mkdtempSync(join(tmpdir(), "spex-import-"));
+  const dir = scratchDir("spex-import-");
   const legacyDbPath = join(dir, "spex.db");
   const root = join(dir, "state");
   const legacy = new Database(legacyDbPath);
@@ -409,7 +422,7 @@ test("a second shell's legacy import merges into the root, clobbering nothing", 
   // Both shells share one root: the server's first launch imports its
   // own legacy store and must not erase what the desktop imported or
   // what was registered since (DR-036).
-  const dir = mkdtempSync(join(tmpdir(), "spex-merge-"));
+  const dir = scratchDir("spex-merge-");
   const root = join(dir, "state");
   const seed = (path: string, projectId: string, projectPath: string): void => {
     const db = new Database(path);
@@ -460,7 +473,7 @@ test("a torn intent tail remains readable but refuses further writes without cha
 });
 
 test("an unreadable legacy store skips its import and never blocks startup", () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-badlegacy-"));
+  const dir = scratchDir("spex-badlegacy-");
   const legacyDbPath = join(dir, "spex.db");
   // What better-sqlite3 leaves when the old app died before its first
   // migration: a zero-byte file.
