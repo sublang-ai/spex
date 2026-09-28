@@ -3,8 +3,9 @@
 
 // Browser acceptance journeys (DR-039): Chromium over the served UI
 // bundle against a real core. The hermetic lane is the default; the
-// live lane (SPEX_E2E_LIVE=1, `@live` tests) uses the machine's
-// signed-in agents under DR-020's wait budget.
+// live lane (SPEX_E2E_LIVE=1, `@live` tests) — the regression of
+// DR-086, `npm run regression` — uses the machine's signed-in agents,
+// each journey setting its own budget.
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -34,6 +35,9 @@ export default defineConfig({
     // and assert English; a journey that wants Chinese sets its own
     // context locale.
     locale: "en-US",
+    // A live journey runs for hours: an action on a control that never
+    // comes fails in a minute rather than at the journey's budget.
+    ...(live ? { actionTimeout: 60_000 } : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
