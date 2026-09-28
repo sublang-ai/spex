@@ -150,7 +150,7 @@ Where the app is packaged, the packaged app shall ship agent-SDK native binaries
 When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
-- the release names Node 22 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
+- the release names Node.js 22.19 or later, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 

@@ -126,7 +126,7 @@ export function releaseNotes({ changelog, release, repository }) {
     "\n",
     "## Run from source\n",
     "\n",
-    "This release ships no binaries: build it on macOS or Linux with Node.js 22 or later and a native build toolchain. Storage requires private POSIX permissions. Windows users can run the scaffold CLI or access a Spex server in their browser.\n",
+    "This release ships no binaries: build it on macOS or Linux with Node.js 22.19 or later and a native build toolchain. Storage requires private POSIX permissions. Windows users can run the scaffold CLI or access a Spex server in their browser.\n",
     "\n",
     "```bash\n",
     `git clone https://github.com/${repository}.git\n`,

@@ -106,8 +106,12 @@ test("a regular tag checks both manifests and takes its version's section, links
   assert.match(body, /\[the guide\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/docs\/release-smoke\.md\)/);
   assert.match(body, /\[README\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/README\.md\)/);
   assert.match(body, /\[an external page\]\(https:\/\/example\.com\/specs\/x\)/);
-  // The run-from-source instructions check out this tag; no beta line.
+  // The run-from-source instructions name the manifests' Node floor and
+  // check out this tag; no beta line.
   assert.match(body, /## Run from source\n/);
+  const floor = JSON.parse(readFileSync(join(dirname(script), "..", "package.json"), "utf8"))
+    .engines.node.replace(/^>=/, "");
+  assert.match(body, new RegExp(`with Node\\.js ${floor.replace(".", "\\.")} or later and`));
   assert.match(body, /git checkout app-v1\.2\.3\n/);
   assert.doesNotMatch(body, /^Beta /m);
   assert.doesNotMatch(body, /This beta ran/);
