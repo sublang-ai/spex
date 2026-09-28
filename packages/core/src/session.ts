@@ -36,6 +36,17 @@ export class CoreError extends Error {
   }
 }
 
+/** The refusal of a Restore with nothing interrupted (core-service-82):
+ * another client, the CLI or another device restored or discarded it
+ * first. */
+function nothingToRestore(): CoreError {
+  return new CoreError("invalid_request", i18n._({
+    id: "This session has no interrupted turn to restore",
+    comment:
+      "Refusal: Restore was asked of a session with nothing interrupted, as when another client restored or discarded it first",
+  }));
+}
+
 /** core-service-98: the optional control members a Captain shell may
  * publish, forwarded from a wrapped shell by feature detection. */
 function controlSurfaces(shell: unknown): Record<string, unknown> {
@@ -363,8 +374,23 @@ export class SessionManager {
    * restores the saved position and reports what was recorded —
    * nothing re-runs, and no agent is called. */
   async restoreSession(project: ProjectInfo, sessionId: string): Promise<void> {
+    // Only interrupted work is restored (core-service-82). A stale
+    // Restore is refused before anything opens, so it writes nothing; a
+    // held or externally owned session is left to the lease to name.
+    // Playbook's recover mode also opens a settled record — it would
+    // take the missing input as a paused task's and fail the turn — so
+    // the record is read again under the lease before any turn starts.
+    const info = this.store.describeSession(sessionId);
+    if (info && !info.recovery && !info.externalWriter && !this.live.has(sessionId)) throw nothingToRestore();
     await this.open(project, undefined, sessionId, "recover");
-    this.startTurn(this.requireLive(sessionId), undefined, true);
+    const entry = this.requireLive(sessionId);
+    let state: string | undefined;
+    try { state = (await entry.controller.read())?.state; } catch { state = undefined; }
+    if (state !== "uncertain") {
+      await this.disposeSession(sessionId);
+      throw nothingToRestore();
+    }
+    this.startTurn(entry, undefined, true);
   }
   async discardSession(sessionId: string): Promise<{removed: boolean}> {
     if (this.live.has(sessionId) || this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
