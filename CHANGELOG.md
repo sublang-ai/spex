@@ -119,6 +119,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Compiling on a machine without the agent SDKs beside a global or `npx`
   `slc` failed at the first agent call with a missing-package error;
   the shipped compiler resolves the app's SDKs.
+- A running core no longer leaves a temporary directory behind, or grows
+  its memory, each time it shows a playbook's machine or opens a session.
 
 ## [0.8.0] - 2026-09-14
 
