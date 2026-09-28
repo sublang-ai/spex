@@ -63,9 +63,13 @@ function StatusBadges({ meta }: { meta?: ProjectMeta }) {
 
 /** The GitHub binding's state, named in the header (projects-7): the
  * guidance for an unmet condition, or the load failure, so a user
- * never has to open the Sources band to learn why it is empty. */
-function GitHubLine({ meta }: { meta?: ProjectMeta }) {
+ * never has to open the Sources band to learn why it is empty — and
+ * only while that band is folded, since an open band says it itself
+ * (DR-069: a surface explains nothing its controls show). */
+function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string }) {
+  const folded = useAppStore((state) => state.foldedSources[projectId] ?? false);
   const forge = meta?.forge;
+  if (!folded) return null;
   const ready =
     forge !== undefined && !(forge.guidance && forge.authenticated !== true);
   if (ready) return null;
@@ -178,7 +182,7 @@ export function OverviewTab({
           <div className="truncate text-xs text-neutral-500">
             {project.path}
           </div>
-          <GitHubLine meta={meta} />
+          <GitHubLine meta={meta} projectId={project.id} />
         </div>
         <button
           type="button"

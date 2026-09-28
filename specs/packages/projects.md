@@ -78,7 +78,7 @@ Where a project is bound to a GitHub repository, while the gh CLI is installed a
 Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists:
 
 - While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
-- The Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the Sources band.
+- While the Sources band is folded, the Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the band; an open band carries the guidance itself and the header repeats nothing ([DR-069](../decisions/069-key-phrases-not-sentences.md)).
 
 ### Session and Removal
 
