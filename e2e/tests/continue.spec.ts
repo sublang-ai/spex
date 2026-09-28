@@ -130,7 +130,9 @@ test("run-view-111: Restore reports interrupted work without repeating it, and D
   // again, so no agent answers (DR-088).
   const restore = recovery.getByRole("button", { name: "Restore", exact: true });
   await expect(restore).toHaveAttribute("title", "Nothing is repeated");
-  await restore.click();
+  // No confirm stands between the click and the command, so a double
+  // activation is what could send it twice: it reports once.
+  await restore.dblclick();
   await expect(recovery).toBeHidden();
   const captain = page.getByTestId("captain-pane");
   await expect(captain.getByTestId("boss-bubble").filter({ hasText: "Restore this saved request" })).toHaveCount(1);
