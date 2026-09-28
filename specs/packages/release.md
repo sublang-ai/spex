@@ -184,6 +184,18 @@ When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releas
 
 When a release candidate tarball is inspected via `npm pack --dry-run`, the inspection shall find no test files and no source files that are not required at runtime in the file list, asserting the runtime-files hygiene of the `files` field [[release-12](#release-12)] and the workflow's package validation [[release-13](#release-13)].
 
+### Release Workflow
+
+#### release-28
+
+When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests, the test suite shall assert:
+
+- an `app-vMAJOR.MINOR.PATCH` tag over manifests at its version is a regular release titled `Spex App vMAJOR.MINOR.PATCH` [[release-19](#release-19)] [[release-11](#release-11)], whose notes are its version's section alone — no neighbouring section, no link definition — with repository-relative links pointed at the tagged tree and other links left as they are [[release-11](#release-11)], followed by the run-from-source instructions checking out that tag;
+- an `app-vMAJOR.MINOR.PATCH-beta.N` tag over manifests at its pre-release version is a beta titled with that version, whose notes are the `[Unreleased]` section under the line naming the beta and the release it leads to, and end with the line naming the gates a beta skips [[release-27](#release-27)];
+- `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
+- a manifest off the tag's version, regular or beta, refuses the release [[release-8](#release-8)] [[release-27](#release-27)];
+- a beta's `[Unreleased]` holding only headings and blank lines, or a version with no section, is refused as empty notes [[release-27](#release-27)].
+
 ## References
 
 [1]: https://semver.org/spec/v2.0.0.html "Semantic Versioning 2.0.0"
