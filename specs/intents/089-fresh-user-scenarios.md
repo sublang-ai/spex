@@ -15,7 +15,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 
 - [x] DR-089 and the release rules it changes, with release-5 and release-16 scoped to the regular and beta forms.
 - [x] The app release's tag check and notes assembly in `scripts/release-notes.mjs`, tested (release-28).
-- [ ] The fresh install launching the server shell the README's way, reading readiness for bound players only, rendering in English on any system; the smoke refusing a dirty tree.
+- [x] The fresh install launching the server shell the README's way, reading readiness for bound players only, rendering in English on any system; the smoke refusing a dirty tree.
 - [ ] Node.js 22.19 stated as the app's floor wherever the floor is stated; the tests-in-tiers record's status and regression outcome stated as they are.
 - [ ] The Specs tab's empty state naming a command that scaffolds.
 - [ ] The Register tab's intent defaulting to the source's title, so the app's own example registers on its defaults.

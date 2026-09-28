@@ -26,7 +26,10 @@ npm run smoke
 
 Four stages, fail-fast, each named: `build` → `lint` (the spec lint) →
 `fresh-install` → `cli-user`. No sign-in is involved; budget about ten
-minutes, most of it `npm ci` on an empty cache.
+minutes, most of it `npm ci` on an empty cache. Run it on a clean tree:
+the build, the lint and the CLI pass read the working tree while the
+fresh install clones `HEAD`, so the smoke refuses uncommitted changes
+unless `--allow-dirty` is given.
 
 The fresh install (`scripts/install-smoke.mjs`) is a new user following
 the README on this machine:
@@ -34,19 +37,24 @@ the README on this machine:
 - It clones the committed tree — `HEAD`, not the working tree; a warning
   names uncommitted changes — into a scratch directory, and installs it
   with `npm ci` on an empty npm cache.
-- `npm run start:server` runs on a scratch Spex home and is walked over
-  its printed token URL: the page served, the socket's hello, the seeded
-  config valid with every template playbook, the built-in catalog and
-  the `/code` artifacts, readiness for each configured adapter (this
-  machine's sign-ins; none is asserted ready and no agent is called),
-  the compiler check naming the clone's own `@sublang/slc`, the Academy
-  example seeded and parsed. SIGTERM then exits it 0 with the port
-  closed.
+- `npm run start:server` runs as the README runs it, with only
+  `SPEX_HOME` set to a scratch home and, beyond the README, an ephemeral
+  port (`--port=0`) so it never meets a server already on 8137. It is
+  walked over its printed token URL — the default loopback host with a
+  generated token: the page served, the socket's hello, the config
+  seeded at the home's `config/playbook.config.yaml` and valid with
+  every template playbook, the built-in catalog and the `/code`
+  artifacts, readiness for the Captain's and each bound player's adapter
+  (this machine's sign-ins; none is asserted ready and no agent is
+  called), the compiler check naming the clone's own `@sublang/slc`, the
+  Academy example seeded and parsed. SIGTERM then exits it 0 with the
+  port closed.
 - `npm start` builds, rebuilds the native module for Electron, renders
   the desktop in acceptance mode on scratch user data — opening
-  Playbooks, Settings and the Dashboard — writes a screenshot, and
-  restores the module, all inside the clone: the developer tree's native
-  module is never flipped.
+  Playbooks, Settings and the Dashboard by their English names, the
+  scratch home storing English as its language so the names hold on any
+  system — writes a screenshot, and restores the module, all inside the
+  clone: the developer tree's native module is never flipped.
 
 The CLI user pass packs the release tarball, installs it into an
 isolated prefix, and walks the README's fresh-user and upgrading-user
@@ -91,6 +99,7 @@ beside the tag; an app-side failure blocks the tag.
 ## 3. The regression — regular app releases
 
 ```bash
+npm run build          # the journeys import the built core and server
 npm run regression
 ```
 
@@ -146,5 +155,8 @@ A beta ships for early trial without the regression
 
 ## 6. Record
 
-Note each run (date, commit, deviations, any waiver and its reason) in
-the release PR or tag message. Any red step blocks the tag.
+Record each run — date, commit, stage timings, deviations, any waiver
+and its reason — in `docs/releases/<version>-preparation.md`, shaped like
+the existing files there, as the release playbook
+([`playbooks/release.md`](../playbooks/release.md)) does. Any red step
+blocks the tag.

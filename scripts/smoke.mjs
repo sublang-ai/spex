@@ -14,6 +14,11 @@
 // Fail-fast; each stage names itself. `--from=<stage>` resumes at a
 // stage once every earlier stage has passed on the current inputs;
 // `--keep` keeps the fresh install's scratch directory.
+//
+// The build, the lint and the CLI user pass read the working tree
+// while the fresh install clones HEAD, so a tree with uncommitted
+// changes would pass the four stages on two different inputs: the
+// smoke refuses one unless `--allow-dirty` says that is meant.
 
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
@@ -23,6 +28,7 @@ const root = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const stages = ["build", "lint", "fresh-install", "cli-user"];
 const args = process.argv.slice(2);
 const keep = args.includes("--keep");
+const allowDirty = args.includes("--allow-dirty");
 const from = args.find((arg) => arg.startsWith("--from="))?.slice(7) ?? "build";
 const timings = [];
 let stage = "";
@@ -53,16 +59,39 @@ function run(name, command, commandArgs) {
 
 try {
   const unknown = args.filter(
-    (arg) => arg !== "--keep" && !arg.startsWith("--from="),
+    (arg) =>
+      arg !== "--keep" && arg !== "--allow-dirty" && !arg.startsWith("--from="),
   );
   if (unknown.length > 0) {
     throw new Error(
       `unknown argument ${unknown.join(" ")}; ` +
-        "the smoke takes --from=<stage> and --keep",
+        "the smoke takes --from=<stage>, --keep and --allow-dirty",
     );
   }
   if (!stages.includes(from)) {
     throw new Error(`--from must name a stage: ${stages.join(", ")}`);
+  }
+  const status = spawnSync("git", ["status", "--porcelain"], {
+    cwd: root,
+    encoding: "utf-8",
+  });
+  if (status.status !== 0) {
+    throw new Error(`git status failed: ${status.stderr.trim()}`);
+  }
+  const changes = status.stdout.split("\n").filter(Boolean);
+  if (changes.length > 0 && !allowDirty) {
+    throw new Error(
+      "the working tree has uncommitted changes, which the build, the " +
+        "lint and the CLI user pass would test while the fresh install " +
+        "tests HEAD; commit or stash them, or pass --allow-dirty:\n" +
+        changes.map((line) => `  ${line}`).join("\n"),
+    );
+  }
+  if (changes.length > 0) {
+    process.stdout.write(
+      `smoke: --allow-dirty: ${changes.length} uncommitted change(s) ` +
+        "reach build, lint and cli-user but not the fresh install\n",
+    );
   }
   if (selected("build")) run("build", "npm", ["run", "build"]);
   if (selected("lint")) run("lint", "node", ["packages/cli/dist/cli.js", "lint"]);

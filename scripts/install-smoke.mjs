@@ -11,11 +11,12 @@
 //   preflight  a display for the desktop render
 //   clone      git clone of this checkout into a scratch directory
 //   install    npm ci on an empty npm cache, no optional dependency lost
-//   server     npm run start:server on a scratch Spex home, walked over
-//              its printed token URL — the page, the WebSocket hello,
-//              the seeded config, the built-in catalog, the /code
-//              artifacts, adapter readiness, the compiler check, the
-//              Academy example — then stopped by SIGTERM
+//   server     npm run start:server as the README runs it, on a scratch
+//              Spex home, walked over its printed token URL — the page,
+//              the WebSocket hello, the config seeded in the home, the
+//              built-in catalog, the /code artifacts, the bound
+//              adapters' readiness, the compiler check, the Academy
+//              example — then stopped by SIGTERM
 //   desktop    npm start in acceptance mode on scratch user data: the
 //              build, the Electron rebuild, the render with its clicks
 //              and screenshot, and the Node restore, all in the clone
@@ -31,14 +32,15 @@
 // failure; `--keep` keeps it always.
 
 import { spawn, spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
@@ -58,8 +60,10 @@ const DESKTOP_BUDGET_MS = 10 * 60_000;
 // Every playbook the seeded template enables, by command.
 const TEMPLATE_COMMANDS = ["code", "review", "decide", "dev", "branch", "pr"];
 // Rail entries the render activates by accessible name (NavRail's
-// labels, which read English on an English system); a click that
-// misses is a console error, which fails the render.
+// labels); a click that misses is a console error, which fails the
+// render. The names are English, so the desktop's home stores English
+// as its language: with no choice stored the app follows the system,
+// and on a Chinese system every name would miss.
 const CLICKS = "Playbooks,Settings,Dashboard";
 // The steps `npm start` runs, in order (scripts/desktop-runner.mjs).
 const DESKTOP_STEPS = [
@@ -443,22 +447,19 @@ try {
   };
 
   begin("server");
+  // The README's command with the one variable that keeps it off this
+  // machine's own home: SPEX_HOME. The host, the token, the config and
+  // the state root are the shell's defaults, so the printed URL is the
+  // loopback one with a generated token and the config seeds inside the
+  // home. Beyond the README only the port: an ephemeral one keeps the
+  // launch clear of a Spex server the developer may already run on the
+  // default. The XDG homes above stand for a new machine's, holding no
+  // former config or store for the core to relocate or import.
   const serverHome = join(scratch, "home");
-  const token = randomBytes(16).toString("hex");
-  const server = launch(
-    "npm",
-    [
-      "run",
-      "start:server",
-      "--",
-      "--host=127.0.0.1",
-      "--port=0",
-      `--token=${token}`,
-      `--config=${join(serverHome, "config", "playbook.config.yaml")}`,
-      `--data-dir=${serverHome}`,
-    ],
-    { cwd: clone, env: userEnv({ SPEX_HOME: serverHome, ...xdg }) },
-  );
+  const server = launch("npm", ["run", "start:server", "--", "--port=0"], {
+    cwd: clone,
+    env: userEnv({ SPEX_HOME: serverHome, ...xdg }),
+  });
   const url = await waitFor(
     () => {
       const printed = /\[spex-server\] serving at (\S+)/.exec(server.stdout)?.[1];
@@ -481,8 +482,8 @@ try {
     address.protocol === "http:" &&
       address.hostname === "127.0.0.1" &&
       port > 0 &&
-      address.searchParams.get("token") === token,
-    `the printed access URL is not the loopback token URL asked for: ${url}`,
+      (address.searchParams.get("token") ?? "").length >= 16,
+    `the printed access URL is not the default loopback URL with a generated token: ${url}`,
   );
 
   const page = await fetch(url);
@@ -508,6 +509,12 @@ try {
     `the seeded config is not valid: ${JSON.stringify(config)}`,
   );
   assert(config.seeded === true, "the first start did not seed the config");
+  // The config lands where the README's user finds it: inside the home.
+  const configPath = join(serverHome, "config", "playbook.config.yaml");
+  assert(
+    config.summary.path === configPath && existsSync(configPath),
+    `the config was seeded at ${config.summary.path}, not ${configPath}`,
+  );
   const commands = config.summary.playbooks.map((playbook) => playbook.command);
   const absent = TEMPLATE_COMMANDS.filter((name) => !commands.includes(name));
   assert(
@@ -534,9 +541,9 @@ try {
   );
   say("catalog: code, review and decide with their sources; /code artifacts complete");
 
-  // One entry per configured adapter (ReadinessEntry): `ready` is
-  // true, false with the requirement a human meets, or null where the
-  // adapter has no preflight rule. This machine's sign-ins decide which.
+  // One entry per adapter in use (ReadinessEntry): `ready` is true,
+  // false with the requirement a human meets, or null where the adapter
+  // has no preflight rule. This machine's sign-ins decide which.
   const readiness = await core.command("readiness.get");
   assert(
     Array.isArray(readiness) && readiness.length > 0,
@@ -557,14 +564,19 @@ try {
       `${entry.adapter} is not ready and names no requirement`,
     );
   }
-  const configured = new Set([
+  // Readiness covers the Captain and the players a role binds: the
+  // summary lists every roster player, but one bound to no role opens
+  // no session lane, so its adapter is not probed (DR-032).
+  const inUse = new Set([
     config.summary.captain.adapter,
-    ...config.summary.players.map((player) => player.agent.adapter),
+    ...config.summary.players
+      .filter((player) => player.boundBy.length > 0)
+      .map((player) => player.agent.adapter),
   ]);
-  for (const adapter of configured) {
+  for (const adapter of inUse) {
     assert(
       readiness.some((entry) => entry.adapter === adapter),
-      `no readiness for the configured adapter ${adapter}`,
+      `no readiness for the adapter in use ${adapter}`,
     );
   }
   for (const entry of readiness) {
@@ -657,6 +669,14 @@ try {
   // The Spex home the environment names, standing in for the
   // developer's own: the render must leave it untouched.
   const envHome = join(scratch, "home-desktop");
+  // The home the app keeps under the smoke's user data stores English
+  // as its language (storage-5), so the clicks' English names hold on
+  // any system; the first start seeds the rest.
+  mkdirSync(join(userData, "spex-home"), { recursive: true });
+  writeFileSync(
+    join(userData, "spex-home", "prefs.json"),
+    JSON.stringify({ v: 1, prefs: { language: "en" } }),
+  );
   const desktop = launch("npm", ["start"], {
     cwd: clone,
     env: userEnv({
