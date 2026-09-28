@@ -2638,20 +2638,29 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     expect(props.onSubmit).not.toHaveBeenCalled();
   });
 
-  test("Restore sends only the selected session ID at once, saying nothing is repeated", async () => {
+  test("Restore sends only the selected session ID at once, saying nothing is repeated, and never twice", async () => {
     const previous = useAppStore.getState();
-    const command = vi.fn(async () => ({ accepted: true }));
+    let accept!: () => void;
+    const command = vi.fn(() => new Promise((resolve) => { accept = () => resolve({ accepted: true }); }));
     setClientForTests({ command } as never);
     renderInterrupted(async (action) => {
       await useAppStore.getState().recoverSession(SESSION.id, action);
     });
     try {
-      const restore = screen.getByRole("button", { name: "Restore" });
+      const restore = screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement;
       // It repeats and discards nothing, so it asks nothing (run-view-110).
       expect(restore.getAttribute("title")).toBe("Nothing is repeated");
-      await act(async () => fireEvent.click(restore));
+      // With no confirm between the click and the command, a repeated
+      // click is what could send it twice (run-view-111).
+      fireEvent.click(restore);
+      fireEvent.click(restore);
+      await act(async () => {});
       expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+      expect(restore.disabled).toBe(true);
+      fireEvent.click(restore);
       expect(command).toHaveBeenCalledExactlyOnceWith("session.restore", { sessionId: SESSION.id });
+      await act(async () => accept());
+      expect(command).toHaveBeenCalledTimes(1);
     } finally {
       setClientForTests(undefined);
       useAppStore.setState(previous, true);
