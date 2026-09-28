@@ -69,9 +69,25 @@ async function main(): Promise<void> {
   console.log(`[dev-core] listening on ws://127.0.0.1:${service.port()}/?token=${service.token()}`);
   console.log(`[dev-core] config: ${JSON.stringify(service.configStateSnapshot().status)}`);
 
-  process.on("SIGINT", () => {
-    void service.stop().finally(removeScratch).then(() => process.exit(0));
-  });
+  // Ctrl-C and a plain `kill` both stop the core and remove the fake
+  // mode's scratch home; a second signal while stopping changes nothing.
+  let stopping = false;
+  const stop = (): void => {
+    if (stopping) return;
+    stopping = true;
+    void service
+      .stop()
+      .finally(removeScratch)
+      .then(
+        () => process.exit(0),
+        (error: unknown) => {
+          console.error(error);
+          process.exit(1);
+        },
+      );
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
 }
 
 main().catch((error) => {
