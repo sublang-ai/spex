@@ -9,7 +9,7 @@
 //
 // Prints the WebSocket URL; the UI's default port is 8137.
 
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -28,9 +28,12 @@ const port = portArg ? Number(portArg.split("=")[1]) : 8137;
 
 async function main(): Promise<void> {
   const options: CoreServiceOptions = { port, token: process.env.SPEX_TOKEN ?? "dev" };
+  // The fake mode's scratch home, removed when the core stops.
+  let scratch: string | undefined;
 
   if (fake) {
     const dir = mkdtempSync(join(tmpdir(), "spex-dev-"));
+    scratch = dir;
     const configPath = join(dir, "playbook.config.yaml");
     writeFileSync(configPath, DEMO_CONFIG);
     const projectDir = join(dir, "demo-project");
@@ -53,12 +56,21 @@ async function main(): Promise<void> {
     console.log(`[dev-core] fake mode; demo project: ${projectDir}`);
   }
 
-  const service = await CoreService.start(options);
+  const removeScratch = (): void => {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
+  };
+  let service: CoreService;
+  try {
+    service = await CoreService.start(options);
+  } catch (error) {
+    removeScratch();
+    throw error;
+  }
   console.log(`[dev-core] listening on ws://127.0.0.1:${service.port()}/?token=${service.token()}`);
   console.log(`[dev-core] config: ${JSON.stringify(service.configStateSnapshot().status)}`);
 
   process.on("SIGINT", () => {
-    void service.stop().then(() => process.exit(0));
+    void service.stop().finally(removeScratch).then(() => process.exit(0));
   });
 }
 
