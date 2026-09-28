@@ -1354,6 +1354,11 @@ msgstr "players 必须是一个对象"
 msgid "players.captain is reserved for the session Captain, which is configured at the top level"
 msgstr "players.captain 为会话的 Captain 保留，它在顶层配置"
 
+#. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
+#: src/authoring.ts
+msgid "Prefix"
+msgstr "前缀"
+
 #. Config error; `profiles` is the config file's own retired field name
 #: src/config.ts
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"

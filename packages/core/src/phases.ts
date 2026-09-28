@@ -3,7 +3,7 @@
 
 // The compile pipeline's phases with their human names (DR-010 §2,
 // playbook-library-57): slc's ids — normalize, text2gears, optimize,
-// gears2fsm, link — and Spex's own packaging step. The core speaks
+// prefix, gears2fsm, link — and Spex's own packaging step. The core speaks
 // the human word wherever the Boss reads it (the thread's ◇ lines);
 // the id stays in what the agent reads and in the tooltips. Shared
 // with the UI over the protocol entry so both name a phase alike.
@@ -13,6 +13,7 @@ export const PIPELINE_PHASES: readonly { id: string; label: string }[] = [
   { id: "normalize", label: "Normalize" },
   { id: "text2gears", label: "Spec items" },
   { id: "optimize", label: "Optimize" },
+  { id: "prefix", label: "Prefix" },
   { id: "gears2fsm", label: "Machine" },
   { id: "link", label: "Link" },
   { id: "spex", label: "Package" },

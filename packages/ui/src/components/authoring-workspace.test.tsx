@@ -694,6 +694,7 @@ describe("playbook-library-57/58: the compile band", () => {
     expect(cells[1]).toMatch(/^Specitems4m\d\ds:running$/);
     expect(cells.slice(2)).toEqual([
       "○Optimize:waiting",
+      "○Prefix:waiting",
       "○Machine:waiting",
       "○Link:waiting",
       "○Package:waiting",
