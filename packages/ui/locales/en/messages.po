@@ -3513,6 +3513,11 @@ msgstr "Prefilled from the agent's proposal — edit anything"
 msgid "Prefilled from the source and the compiled roles — edit anything"
 msgstr "Prefilled from the source and the compiled roles — edit anything"
 
+#. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
+#: src/lib/compile-log.ts
+msgid "Prefix"
+msgstr "Prefix"
+
 #. editor mode: the rendered draft
 #: src/components/SpecEditor.tsx
 msgid "Preview"

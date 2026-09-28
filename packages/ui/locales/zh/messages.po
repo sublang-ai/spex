@@ -3513,6 +3513,11 @@ msgstr "已按智能体的提议预填 — 可随意修改"
 msgid "Prefilled from the source and the compiled roles — edit anything"
 msgstr "已按源文本与编译出的角色预填 — 可随意修改"
 
+#. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
+#: src/lib/compile-log.ts
+msgid "Prefix"
+msgstr "前缀"
+
 #. editor mode: the rendered draft
 #: src/components/SpecEditor.tsx
 msgid "Preview"
