@@ -69,7 +69,8 @@ The regression is the journeys' live lane — the served shell on a scratch home
 - Running the fresh install in CI: the desktop render needs a display and anything live needs a sign-in; CI keeps the checks and the smoke stays local.
 - Running a stub-compiled playbook hermetically: the stub's runtime does nothing a session could show, so it would prove the slash menu twice.
 - Compiling the pasted source for real as well: past "Use as source" the paste path and the chat path share every step, so the paste-specific part is proven hermetically and the shared part once, live.
-- A playbook that reviews the interface as a fresh user, with an explorer and an editor role, instead of a checklist row: deferred; when it lands, its source lives under `e2e/playbooks/`.
+- A playbook that reviews the interface as a fresh user, with an explorer and an editor role, instead of a checklist row: deferred.
+- Where a playbook does beat a script — the release preparation itself, whose changelog review, waiver judgment and record-keeping are judgment work — the playbook's prose lives in the repository under `playbooks/`, compiled by each maintainer through Spex's own authoring workspace; compiled artifacts depend on the installed engine and are never committed.
 
 ## Consequences
 
