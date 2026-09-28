@@ -143,7 +143,10 @@ jobs:
 
           EOF
           fi
-          cat /tmp/changelog-section.md >> /tmp/release-notes.md
+          # A repo-relative link would resolve against the release page;
+          # point it into the tree at this tag instead.
+          sed -E "s#]\((specs/|docs/|packages/|apps/|README\.md)#](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/\1#g" \
+            /tmp/changelog-section.md >> /tmp/release-notes.md
           cat >> /tmp/release-notes.md <<EOF
 
           ## Run from source
