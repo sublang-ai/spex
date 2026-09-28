@@ -10,6 +10,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import { randomUUID } from "node:crypto";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain, type CaptainTurnScript } from "./testing/scripted-captain.js";
@@ -552,6 +554,53 @@ test("queue advance: an aborted dispatch holds the queue at the stopped intent",
   expectNext(await h.client.expectOk("ledger.get", {}), first.id, "stopped", true);
   assert.equal(entry(await h.client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text]);
+});
+
+test("queue advance: a restore reports an interrupted follow-up and starts no successor", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First intent" });
+  // Held behind another project's row through the first settlement, so
+  // only the later turn could hand it on.
+  const otherDir = join(h.dir, "other");
+  mkdirSync(otherDir);
+  execFileSync("git", ["init", "-q", otherDir]);
+  const other = await client.expectOk("project.register", { path: otherDir });
+  const foreign = await client.expectOk("intent.queue", { projectId: other.id, text: "Other project" });
+  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next intent", afterIntentId: foreign.id });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await settled(h);
+  assert.equal(entry(await client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
+  await client.expectOk("intent.close", { intentId: foreign.id, as: "dropped" });
+
+  // A follow-up the writer lost after marking it: the released runtime
+  // leaves the lease free, and the shared store says what a crash would.
+  const shared = createSessionStore({ sessionsDir: join(h.dir, "state", "sessions") });
+  const lease = await shared.acquire(session.id);
+  try {
+    const prior = await lease.read();
+    assert.ok(prior);
+    await lease.beginTurn({ input: "Keep going", attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+  } finally { await lease.release(); }
+  await h.service["syncForeignSessions"]();
+  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id && message.session.recovery?.input === "Keep going");
+
+  const seen = client.messages.length;
+  await client.expectOk("session.restore", { sessionId: session.id });
+  await client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "session.state" &&
+    message.session.id === session.id && !message.session.recovery && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  await Promise.all([...h.service["advancing"]]);
+  // The report settled, attributed to the open first intent, yet what
+  // runs next is the Boss's choice (core-service-82, DR-088).
+  const after = await client.expectOk("ledger.get", {});
+  assert.equal(entry(after, next.id).intent.dispatched, undefined);
+  assert.ok(!prompts.includes(next.text), "the next intent never ran");
+  assert.equal((await client.expectOk("session.list", {})).find((row) => row.id === session.id)?.continuable, true);
 });
 
 test("queue advance: an aborted follow-up cannot inherit an older finish", { timeout: 20_000 }, async (t) => {
