@@ -143,7 +143,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   desktop renders inside the fresh clone, so `--desktop` is gone
   ([DR-086](specs/decisions/086-tests-in-tiers.md)).
 - `npm run e2e:live` is now `npm run regression`.
-- `npm run smoke` refuses a working tree with uncommitted changes unless
+- `npm run smoke` refuses a working tree with uncommitted changes —
+  the release records under `docs/releases/` aside — unless
   `--allow-dirty` is given, since its build, lint and CLI pass read the
   working tree while the fresh install clones the last commit; the
   fresh install launches the server shell as the README does, with only

@@ -29,14 +29,16 @@ Four stages, fail-fast, each named: `build` → `lint` (the spec lint) →
 minutes, most of it `npm ci` on an empty cache. Run it on a clean tree:
 the build, the lint and the CLI pass read the working tree while the
 fresh install clones `HEAD`, so the smoke refuses uncommitted changes
-unless `--allow-dirty` is given.
+unless `--allow-dirty` is given. The release records under
+`docs/releases/` are exempt: no stage reads them, and a release's record
+is written while its gates run (section 6).
 
 The fresh install (`scripts/install-smoke.mjs`) is a new user following
 the README on this machine:
 
-- It clones the committed tree — `HEAD`, not the working tree; a warning
-  names uncommitted changes — into a scratch directory, and installs it
-  with `npm ci` on an empty npm cache.
+- It clones the committed tree — `HEAD`, not the working tree — into a
+  scratch directory, and installs it with `npm ci` on an empty npm
+  cache.
 - `npm run start:server` runs as the README runs it, with only
   `SPEX_HOME` set to a scratch home and, beyond the README, an ephemeral
   port (`--port=0`) so it never meets a server already on 8137. It is
@@ -158,5 +160,6 @@ A beta ships for early trial without the regression
 Record each run — date, commit, stage timings, deviations, any waiver
 and its reason — in `docs/releases/<version>-preparation.md`, shaped like
 the existing files there, as the release playbook
-([`playbooks/release.md`](../playbooks/release.md)) does. Any red step
-blocks the tag.
+([`playbooks/release.md`](../playbooks/release.md)) does; the smoke's
+clean-tree check exempts that directory, so a gate re-run needs no
+`--allow-dirty` over the record. Any red step blocks the tag.

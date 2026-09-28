@@ -18,7 +18,9 @@
 // The build, the lint and the CLI user pass read the working tree
 // while the fresh install clones HEAD, so a tree with uncommitted
 // changes would pass the four stages on two different inputs: the
-// smoke refuses one unless `--allow-dirty` says that is meant.
+// smoke refuses one unless `--allow-dirty` says that is meant. The
+// release records under docs/releases/ are exempt: no stage reads
+// them, and a release's record is written while its gates run.
 
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
@@ -71,10 +73,11 @@ try {
   if (!stages.includes(from)) {
     throw new Error(`--from must name a stage: ${stages.join(", ")}`);
   }
-  const status = spawnSync("git", ["status", "--porcelain"], {
-    cwd: root,
-    encoding: "utf-8",
-  });
+  const status = spawnSync(
+    "git",
+    ["status", "--porcelain", "--", ".", ":(exclude)docs/releases"],
+    { cwd: root, encoding: "utf-8" },
+  );
   if (status.status !== 0) {
     throw new Error(`git status failed: ${status.stderr.trim()}`);
   }
