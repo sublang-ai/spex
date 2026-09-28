@@ -1402,6 +1402,64 @@ test(
 );
 
 test(
+  "core-service-114: a Boss abort mid-step settles at the saved step and publishes the run's controls",
+  { timeout: 180_000 },
+  async (t) => {
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: parkingScript({ held: true }),
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Add a line to work.txt",
+    });
+    // The coder's call is in flight with its commit made: the step's
+    // start is saved, its result is not.
+    const deadline = Date.now() + 60_000;
+    while (!readFileSync(join(harness.projectDir, "work.txt"), "utf8").includes("phase 1")) {
+      if (Date.now() > deadline) throw new Error("the coder never committed");
+      await sleep(20);
+    }
+    await client.expectOk("turn.abort", { sessionId: session.id });
+    const stopped = await settledSession(client, session.id, 1);
+
+    // Playbook settles the stop at the saved step, so the conversation
+    // continues and owes no recovery (core-service-6) ...
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    // ... and the run it left parked publishes its controls, read at
+    // that settlement as at any other (core-service-91, core-service-32).
+    assert.equal(stopped.parked?.reason, "failure");
+    assert.deepEqual(
+      stopped.parked?.actions.map((action) => action.id),
+      ["reconcile:unresolved-effect", "abandon:unresolved-effect"],
+    );
+    assert.equal(stopped.parked?.ending?.id, "give-up");
+    assert.ok(
+      Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "the reading is kept where a restart can find it",
+    );
+  },
+);
+
+test(
   "core-service-105: the ending runs by fallback on a restored parked run, and deletion forgets its controls",
   { timeout: 180_000 },
   async (t) => {

@@ -752,7 +752,20 @@ export class SessionManager {
         // Register before cleanup starts, including the failed/aborted
         // path, and keep the barrier after cleanup removes the runtime.
         const done = Promise.resolve().then(async () => {
+          // A turn that stopped after saving progress — an abort or a
+          // failure — settles at that position (DR-088), where its run
+          // may stand parked: it is released as a settled turn is, its
+          // controls captured with it (core-service-32). Only a turn
+          // left uncertain is disposed, and whatever an earlier
+          // settlement read of its run no longer stands.
+          let settledAfterStop = false;
           if (failed) {
+            try { settledAfterStop = (await entry.controller.read())?.state === "settled"; }
+            catch { settledAfterStop = false; }
+          }
+          if (failed && !settledAfterStop) {
+            try { this.store.setParkedRun(entry.info.id, undefined); }
+            catch (error) { console.error(`spex: parked-run controls not cleared: ${String(error)}`); }
             try { await entry.controller.dispose(); this.live.delete(entry.info.id); this.store.setLocalSession(entry.info.id, false); }
             catch (error) { console.error(`spex: session cleanup failed; ownership retained: ${String(error)}`); }
           } else {
