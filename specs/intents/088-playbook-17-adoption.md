@@ -20,6 +20,7 @@ Realize [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)
 - [x] The machine and parked-failure fixtures re-captured; tests, narrations and demos on the renamed states.
 - [x] The core suites on Playbook 17's settlement of a saved stop and its restore after Git selection; the one-effect rule in the preamble; the relay journey over the real shell.
 - [x] The upgrade notes in the changelog.
+- [x] The review's corrections: DR-088's relations to DR-080, DR-081, DR-077 and DR-062 and its reference; a stale Restore refused; Restore named as an interrupted session's way on; a stopped run's controls kept where its stop settles; the restored position recorded and read by the ledger and the run view; a restore's report finishing nothing; Restore proven to report once.
 
 ## Tasks
 
@@ -35,6 +36,12 @@ Realize [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)
 10. Write the upgrade notes.
 11. Show that a restore hands no queued intent on.
 12. Record the verification.
+13. Correct the adoption's records and the restore items after review.
+14. Refuse a stale Restore and name Restore as the way on.
+15. Keep a stopped run's controls where its stop settles.
+16. Record where a restore leaves each run, and read its report as a stop.
+17. Prove Restore reports once.
+18. Record the review's verification.
 
 ## Verification
 
@@ -42,3 +49,6 @@ Run `npm run build`, `npm test` and `npm run e2e` at the root, the catalog check
 
 Verified on 2026-09-28 against the public registry's Playbook 17.0.0, Cligent 0.27.0 and slc 0.12.0 (whose nested Playbook 16.0.0 declares the app's ABI 1 and schema 3): the root build passed; the root test gate passed 1,222/1,222 (23 script, 133 CLI, 338 core, 701 UI, 16 desktop and 11 server tests); the hermetic journeys passed 63/63, the relay journey among them; the core, UI and desktop catalogs are whole; `spex lint` passed.
 The parked-failure capture under Playbook 17 kept the stream's shape and the published controls, `reconcile:unresolved-effect` a no-op beside a ready `abandon:unresolved-effect`, and moved the frames from `firstPhase`.
+
+Verified again on 2026-09-28 after review: the root build passed; the root test gate passed 1,229/1,229 (23 script, 133 CLI, 342 core, 704 UI, 16 desktop and 11 server tests); the hermetic journeys passed 63/63; the core, UI and desktop catalogs are whole; `spex lint` passed.
+A CLI writer killed mid-step lists its step as recorded work, and Restore brings `/code` back at `failed` with the checkpoint's `runtime-defect` cause, publishing the same no-op reconciliation beside a ready abandonment; a Boss abort mid-step settles and publishes them too.
