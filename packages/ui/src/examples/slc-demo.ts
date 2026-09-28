@@ -7,10 +7,11 @@
 // it never touches config, protocol, or the library.
 //
 // Nothing here is a text of the catalog (localization-4): the stages
-// are the vendored workflow, the id, command, intent and roles are the
-// values a prefill writes into a draft, and the title and credit name
-// the example itself. The card's own phrases around them — "Example:
-// {title}", "from {credit}" — are the texts, and live with the card.
+// are the vendored workflow, the id is the draft the Prefill opens, and
+// the title and credit name the example itself. The card's own phrases
+// around them — "Example: {title}", "from {credit}" — are the texts,
+// and live with the card. Its registration takes the Register tab's
+// derived defaults (playbook-library-61), so the example carries none.
 
 import source from "./slc-demo/workflow.txt?raw";
 import normalized from "./slc-demo/workflow.text.md.txt?raw";
@@ -21,12 +22,8 @@ export interface SlcDemoExample {
   title: string;
   /** Credit line naming where the example comes from. */
   credit: string;
-  /** Compile-form prefill suggestions (DR-015). */
+  /** The draft the Prefill opens in paste mode (DR-058). */
   playbookId: string;
-  command: string;
-  intent: string;
-  /** Comma-separated role suggestions matching the roles input. */
-  roles: string;
   stages: {
     /** Raw prose the demo starts from (workflow.txt). */
     source: string;
@@ -44,9 +41,5 @@ export const SLC_DEMO: SlcDemoExample = {
   title: "Two-Agent Change-and-Review Workflow",
   credit: "the slc demo",
   playbookId: "workflow",
-  command: "workflow",
-  intent:
-    "Two-Agent Change-and-Review Workflow — Use two agents to carry out the input task.",
-  roles: "Coder, Reviewer",
   stages: { source, normalized, gears, fsm },
 };

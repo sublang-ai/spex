@@ -309,17 +309,6 @@ function noDraft(id: string): string {
   });
 }
 
-/** The source's first prose paragraph — the Register tab's default intent. */
-export function firstProseParagraph(markdown: string): string | undefined {
-  const paragraphs = markdown.split(/\r?\n\s*\r?\n/);
-  for (const paragraph of paragraphs) {
-    const text = paragraph.trim();
-    if (!text || /^(#|-|\*|>|```|\d+\.)/.test(text) || /^Roles:/i.test(text)) continue;
-    return text.replace(/\s+/g, " ");
-  }
-  return undefined;
-}
-
 export class AuthorManager {
   readonly events: AuthorManagerEvents = {
     onRecord: () => {},
@@ -446,12 +435,6 @@ export class AuthorManager {
       source: source ? { markdown: source.markdown, version: source.version, mtime: source.mtime } : null,
       records,
     };
-  }
-
-  /** The Register tab's derived defaults (playbook-library-61). */
-  derivedIntent(id: string): string | undefined {
-    const source = this.drafts.readSource(id);
-    return source ? firstProseParagraph(source.markdown) : undefined;
   }
 
   private read(id: string): StoredDraft {
