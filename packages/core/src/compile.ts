@@ -687,35 +687,44 @@ export interface FsmInfo {
  * file it extracts. Importing a bundle leaves its module in Node's ESM
  * cache for the life of the process, and loads recur on every
  * artifacts request and session open, so unchanged content is bundled
- * and imported once. The digest covers the entry file alone, which is
- * exact while every other bundled input lies in an installed package
- * the core treats as fixed for its lifetime: the built-in and
- * slc-emitted machines import only `xstate`. A load whose bundle read
- * any other input (a relative module) is not kept, so such a machine
- * is bundled afresh each time. Only a successful load is kept; a
- * failed one is retried on the next request. Callers share the result
- * and must not mutate it.
+ * and imported once. The bytes digested are the bytes bundled, so a
+ * file that changes between reading and bundling cannot leave one
+ * content's result kept under the other's digest. The digest covers
+ * the entry alone, which is exact while every other bundled input
+ * lies in an installed package the core treats as fixed for its
+ * lifetime: the built-in and slc-emitted machines import only
+ * `xstate`. A load whose bundle read any other input (a relative
+ * module) is not kept, so such a machine is bundled afresh each time.
+ * Only a successful load is kept; a failed one is retried on the next
+ * request. Callers share the result and must not mutate it.
  */
 const fsmInfoMemo = new Map<string, { digest: string; info: Promise<FsmInfo> }>();
 
 const NODE_MODULES_SEGMENT = /(^|[\\/])node_modules[\\/]/;
 
+/** The metafile's name for the entry bundled from `stdin`. esbuild
+ * keys it by `sourcefile` when one is given, which is also the key of
+ * that file read from disk — so none is given, and a machine that
+ * imports its own file still shows an input outside the digest. */
+const STDIN_INPUT = "<stdin>";
+
 /** Bundle an FSM module and serve its state ids and drawable graph,
  * or nulls on failure (playbook-library-36). */
 export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
-  let digest: string;
+  let contents: Buffer;
   try {
-    digest = createHash("sha256").update(readFileSync(fsmPath)).digest("hex");
+    contents = readFileSync(fsmPath);
   } catch {
     return { stateIds: null, machine: null };
   }
+  const digest = createHash("sha256").update(contents).digest("hex");
   const key = resolve(fsmPath);
   const kept = fsmInfoMemo.get(key);
   if (kept?.digest === digest) return kept.info;
   const forget = (): void => {
     if (fsmInfoMemo.get(key)?.info === info) fsmInfoMemo.delete(key);
   };
-  const info: Promise<FsmInfo> = bundleFsmInfo(fsmPath).then(
+  const info: Promise<FsmInfo> = bundleFsmInfo(fsmPath, contents).then(
     ({ loaded, reproducible }) => {
       if (!reproducible) forget();
       return loaded;
@@ -729,17 +738,20 @@ export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
   return info;
 }
 
-/** Bundle and import one machine, removing the bundle once imported
- * (the module is evaluated by then); `reproducible` says whether the
- * entry file was the only input outside installed packages. */
+/** Bundle and import one machine from the entry's given bytes,
+ * resolving its imports from the entry's directory, and remove the
+ * bundle once imported (the module is evaluated by then);
+ * `reproducible` says whether those bytes were the only input outside
+ * installed packages. */
 async function bundleFsmInfo(
   fsmPath: string,
+  contents: Uint8Array,
 ): Promise<{ loaded: FsmInfo; reproducible: boolean }> {
   const bundleDir = mkdtempSync(join(tmpdir(), "spex-fsm-"));
   try {
     const outfile = join(bundleDir, "fsm.mjs");
     const { metafile } = await build({
-      entryPoints: [fsmPath],
+      stdin: { contents, resolveDir: dirname(resolve(fsmPath)), loader: "ts" },
       outfile,
       bundle: true,
       format: "esm",
@@ -748,9 +760,8 @@ async function bundleFsmInfo(
       metafile: true,
       nodePaths: bundleNodePaths(),
     });
-    const entry = Object.values(metafile.outputs)[0]?.entryPoint;
     const reproducible = Object.keys(metafile.inputs).every(
-      (input) => input === entry || NODE_MODULES_SEGMENT.test(input),
+      (input) => input === STDIN_INPUT || NODE_MODULES_SEGMENT.test(input),
     );
     const machine = await importMachine(outfile);
     return {
