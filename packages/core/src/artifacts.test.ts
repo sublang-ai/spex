@@ -232,6 +232,38 @@ test("a machine importing a sibling module reads the sibling's change", async ()
   assert.deepEqual((await resolveArtifacts({ id: "split", from })).stateIds, ["ready", "work", "done"]);
 });
 
+test("a failed machine load is retried with the same content", async () => {
+  // The entry names a package that is not installed yet: the same bytes
+  // fail to bundle at first and load once the package arrives.
+  const { dir, from } = compiledLayout("late");
+  writeFileSync(
+    join(dir, "late.playbook", "late.fsm.ts"),
+    [
+      'import { setup } from "xstate";',
+      'import { states } from "spex-late-states";',
+      'export const lateMachine = setup({}).createMachine({ id: "late", initial: "ready", states });',
+      "",
+    ].join("\n"),
+  );
+
+  const first = await resolveArtifacts({ id: "late", from });
+  assert.equal(first.stateIds, null, "an unresolved import fails the load");
+  assert.equal(first.machine, null);
+
+  const pkg = join(dir, "node_modules", "spex-late-states");
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(
+    join(pkg, "package.json"),
+    JSON.stringify({ name: "spex-late-states", type: "module", main: "index.js" }),
+  );
+  const states = { ready: {}, done: { type: "final" } };
+  writeFileSync(join(pkg, "index.js"), `export const states = ${JSON.stringify(states)};\n`);
+
+  const second = await resolveArtifacts({ id: "late", from });
+  assert.deepEqual(second.stateIds, ["ready", "done"], "the failed load is not kept");
+  assert.equal(second.machine?.initial, "ready");
+});
+
 test("playbook-library-37: every built-in serves a whole machine graph", async () => {
   // The review machine targets its states by their declared ids, and
   // the extractor used to read those as machine-id-prefixed paths —
