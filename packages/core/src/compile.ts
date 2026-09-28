@@ -10,6 +10,7 @@
 // registry's state ids by FSM introspection.
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -674,40 +675,94 @@ export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
   };
 }
 
-/** Bundle an FSM module and serve its state ids and drawable graph,
- * or nulls on failure (playbook-library-36). */
-export async function loadFsmInfo(fsmPath: string): Promise<{
+/** A machine's state ids and drawable graph, nulls when it cannot load. */
+export interface FsmInfo {
   stateIds: string[] | null;
   machine: MachineGraph | null;
-}> {
+}
+
+/**
+ * Machine loads kept per FSM path, keyed by a sha256 digest of the
+ * entry file's content — not its mtime, which npm sets alike on every
+ * file it extracts. Importing a bundle leaves its module in Node's ESM
+ * cache for the life of the process, and loads recur on every
+ * artifacts request and session open, so unchanged content is bundled
+ * and imported once. The digest covers the entry file alone, which is
+ * exact while every other bundled input lies in an installed package
+ * the core treats as fixed for its lifetime: the built-in and
+ * slc-emitted machines import only `xstate`. A load whose bundle read
+ * any other input (a relative module) is not kept, so such a machine
+ * is bundled afresh each time. Only a successful load is kept; a
+ * failed one is retried on the next request. Callers share the result
+ * and must not mutate it.
+ */
+const fsmInfoMemo = new Map<string, { digest: string; info: Promise<FsmInfo> }>();
+
+const NODE_MODULES_SEGMENT = /(^|[\\/])node_modules[\\/]/;
+
+/** Bundle an FSM module and serve its state ids and drawable graph,
+ * or nulls on failure (playbook-library-36). */
+export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
+  let digest: string;
   try {
-    const { mkdtempSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const outfile = join(mkdtempSync(join(tmpdir(), "spex-fsm-")), "fsm.mjs");
-    await build({
+    digest = createHash("sha256").update(readFileSync(fsmPath)).digest("hex");
+  } catch {
+    return { stateIds: null, machine: null };
+  }
+  const key = resolve(fsmPath);
+  const kept = fsmInfoMemo.get(key);
+  if (kept?.digest === digest) return kept.info;
+  const forget = (): void => {
+    if (fsmInfoMemo.get(key)?.info === info) fsmInfoMemo.delete(key);
+  };
+  const info: Promise<FsmInfo> = bundleFsmInfo(fsmPath).then(
+    ({ loaded, reproducible }) => {
+      if (!reproducible) forget();
+      return loaded;
+    },
+    () => {
+      forget();
+      return { stateIds: null, machine: null };
+    },
+  );
+  fsmInfoMemo.set(key, { digest, info });
+  return info;
+}
+
+/** Bundle and import one machine, removing the bundle once imported
+ * (the module is evaluated by then); `reproducible` says whether the
+ * entry file was the only input outside installed packages. */
+async function bundleFsmInfo(
+  fsmPath: string,
+): Promise<{ loaded: FsmInfo; reproducible: boolean }> {
+  const bundleDir = mkdtempSync(join(tmpdir(), "spex-fsm-"));
+  try {
+    const outfile = join(bundleDir, "fsm.mjs");
+    const { metafile } = await build({
       entryPoints: [fsmPath],
       outfile,
       bundle: true,
       format: "esm",
       platform: "node",
       logLevel: "silent",
+      metafile: true,
       nodePaths: bundleNodePaths(),
     });
+    const entry = Object.values(metafile.outputs)[0]?.entryPoint;
+    const reproducible = Object.keys(metafile.inputs).every(
+      (input) => input === entry || NODE_MODULES_SEGMENT.test(input),
+    );
     const machine = await importMachine(outfile);
     return {
-      stateIds: Object.keys(machine.config?.states ?? {}),
-      machine: extractMachineGraph(machine),
+      loaded: {
+        stateIds: Object.keys(machine.config?.states ?? {}),
+        machine: extractMachineGraph(machine),
+      },
+      reproducible,
     };
-  } catch {
-    return { stateIds: null, machine: null };
+  } finally {
+    rmSync(bundleDir, { recursive: true, force: true });
   }
-}
-
-/** Bundle an FSM module and list every state id, or null on failure. */
-export async function listFsmStates(
-  fsmPath: string,
-): Promise<string[] | null> {
-  return (await loadFsmInfo(fsmPath)).stateIds;
 }
 
 export function deriveStateIds(machine: MachineLike): {
