@@ -730,6 +730,66 @@ export const MACHINE_RECOVERED: FixtureEntry[] = [
   rec(714, { type: "turn_finished", turnId: 15, timestamp: 15_003 }),
 ];
 
+/** A run a stopped writer left mid-step (DR-088): underway in its
+ * first phase with the coder's call running, and no terminal record,
+ * since the process died there. */
+export const MACHINE_INTERRUPTED: FixtureEntry[] = [
+  rec(751, {
+    type: "turn_started",
+    turnId: 21,
+    timestamp: 21_000,
+    turn: { id: 21, prompt: "/code fix the refresh path" },
+  }),
+  trace(752, 21_001, "t-stop", "code", "session.started", {}),
+  trace(753, 21_002, "t-stop", "code", "fsm.transition",
+    moved("ready", "firstPhase", "START_CODE", "active", ["playbook.busy"])),
+  trace(754, 21_003, "t-stop", "code", "player.call.started", {
+    stateId: "firstPhase",
+    roleId: "coder",
+    playerId: "dev.coder",
+  }),
+];
+
+/** The restore of that turn (core-service-82): Playbook's report turn
+ * moves no traced state, so the core records where each run stands —
+ * here the run back at its failure state, as a step the process
+ * stopped in is restored. */
+export function machineRestored(
+  runs: Record<string, unknown>[] = [
+    {
+      sessionId: "t-stop",
+      playbookId: "code",
+      depth: 1,
+      state: { value: "failed", activeStateIds: ["failed"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "failed" },
+      pendingBossQuestions: [],
+      cause: { code: "runtime-defect", evidence: { reason: "The process stopped during this step. Review the recorded work before choosing how to continue." } },
+    },
+  ],
+): FixtureEntry[] {
+  return [
+    rec(761, {
+      type: "turn_started",
+      turnId: 21,
+      timestamp: 22_000,
+      turn: { id: 21, prompt: "/code fix the refresh path" },
+    }),
+    rec(762, {
+      type: "captain_reply",
+      turnId: 21,
+      timestamp: 22_001,
+      text: "The process stopped during the first phase. Review the recorded work before choosing how to continue.",
+    }),
+    rec(763, { type: "turn_finished", turnId: 21, timestamp: 22_002 }),
+    rec(764, {
+      type: "captain_telemetry",
+      turnId: 21,
+      timestamp: 22_003,
+      topic: "spex.session.restored",
+      payload: { runs },
+    }),
+  ];
+}
+
 /** A turn that answers without recovering (run-view-130): the Captain
  * speaks, the machine stays parked, and the way back stands. */
 export const MACHINE_ANSWERED: FixtureEntry[] = [

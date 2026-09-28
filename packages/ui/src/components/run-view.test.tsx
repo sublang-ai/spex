@@ -41,11 +41,13 @@ import {
   MACHINE_ANSWERED,
   MACHINE_ASKED,
   MACHINE_FAILED,
+  MACHINE_INTERRUPTED,
   MACHINE_ORPHAN,
   MACHINE_RECOVERED,
   MACHINE_RUN,
   MACHINE_STOPPED,
   PARKED_FAILURE,
+  machineRestored,
   type FixtureEntry,
 } from "../fixtures/sample-run.js";
 import codeGraph from "../fixtures/machines/code.json";
@@ -3225,6 +3227,52 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     const busy = action(ABANDON.id);
     expect(busy.disabled).toBe(true);
     expect(busy.getAttribute("title")).toBe("Wait for the running turn");
+  });
+
+  test("a restore's recorded position stands the run where it was restored, its call no longer running", () => {
+    // Playbook's report moves no traced state (DR-088): without the
+    // core's record the card would go on running the coder's call the
+    // process died in, and no notice would stand.
+    const interrupted = applyRecords(initialSessionView(PLAYERS), MACHINE_INTERRUPTED);
+    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
+    const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
+    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    renderFailed({ view });
+    expect(screen.getByText(/The process stopped during the first phase/)).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
+      "The /code workflow failed and is waiting for you.",
+    );
+    expect(screen.getByTestId("failed-workflow").getAttribute("title")).toBe("state: failed");
+    // The controls are the ones the restore's settlement published.
+    expect(
+      screen.getAllByTestId("failed-workflow-action").map((button) => button.getAttribute("data-action-id")),
+    ).toEqual([RECONCILE.id, ABANDON.id]);
+  });
+
+  test("a restored position holding no run settles the stopped one unfinished and stands no notice", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored([])]);
+    expect(view.frames).toEqual([]);
+    expect(view.captain.filter((line) => line.kind === "machine").map((line) => line.frame?.outcome)).toEqual(["stopped"]);
+    renderFailed({ view, session: SESSION });
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+  });
+
+  test("a restored position raises the question it holds, and one holding none clears the wait", () => {
+    const question = { questionId: "firstPhase", asker: { kind: "role", roleId: "dev.coder" }, question: "Should I also migrate the legacy sessions?" };
+    const asking = {
+      sessionId: "t-ask",
+      playbookId: "code",
+      depth: 1,
+      state: { value: "awaitBossReply", activeStateIds: ["awaitBossReply"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "awaitBossReply" },
+      pendingBossQuestions: [question],
+    };
+    const raised = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored([asking])]);
+    expect(raised.pendingQuestion).toBe(question.question);
+    expect(raised.pendingQuestionPlayer).toBe("dev.coder");
+    expect(raised.frames.map((frame) => [frame.traceSessionId, frame.active])).toEqual([["t-ask", "awaitBossReply"]]);
+    const cleared = applyRecords(initialSessionView(PLAYERS), [...MACHINE_ASKED, ...machineRestored([])]);
+    expect(applyRecords(initialSessionView(PLAYERS), MACHINE_ASKED).pendingQuestion).toBeDefined();
+    expect(cleared.pendingQuestion).toBeUndefined();
   });
 
   test("the notice leaves when the run leaves its failure state and stands when a turn only answers", () => {

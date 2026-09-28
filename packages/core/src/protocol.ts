@@ -223,6 +223,33 @@ export interface ParkedRun {
   ending?: { id: string; label: string };
 }
 
+/** The topic of the record a restore leaves in the session's stream
+ * (core-service-82, DR-088). Playbook's report moves no traced state,
+ * so the core writes the position the restore settled, and the run
+ * view and the ledger read the restored park from it. */
+export const RESTORED_TOPIC = "spex.session.restored";
+
+/** One run engaged at the restored position, root to leaf. */
+export interface RestoredRun {
+  sessionId: string;
+  playbookId: string;
+  depth: number;
+  parentSessionId?: string;
+  /** The run's state, shaped as a trace reports one:
+   * `{value, stateId, tags, status, …}`. */
+  state: unknown;
+  pendingBossQuestions: unknown[];
+  /** The structured cause the run's failure state carries, where its
+   * checkpoint records one (DR-075). */
+  cause?: FailureCause;
+}
+
+/** The restored position: every engaged run, root to leaf; none is the
+ * Captain back in chat. */
+export interface RestoredPosition {
+  runs: RestoredRun[];
+}
+
 export interface SessionInfo {
   id: string;
   projectId: string;

@@ -7,6 +7,8 @@
 
 import {
   hasPresentationHeader,
+  RESTORED_TOPIC,
+  type RestoredPosition,
   type TmuxPlayRecord,
   type MachineGraph,
 } from "@sublang/spex-core/protocol";
@@ -118,6 +120,7 @@ export interface PlayerView {
 }
 
 import {
+  foldRestored,
   foldTrace,
   type MachineFrame,
 } from "../lib/machine-frames.js";
@@ -602,6 +605,49 @@ export function applyRecord(
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = stateText(payload?.to);
+      } else if (topic === RESTORED_TOPIC) {
+        // A restore's recorded position (run-view-74, DR-088): the
+        // restore traced no move, so the runs stand where the core
+        // recorded them — a run brought back into its failure state
+        // parks there, a lost call no longer runs, and a run the
+        // checkpoint no longer holds settles unfinished.
+        const runs = ((r.payload as Partial<RestoredPosition> | undefined)?.runs ?? [])
+          .filter((run) => typeof run?.sessionId === "string" && typeof run.playbookId === "string");
+        const fold = foldRestored(view.frames, runs, r.timestamp, view.settledRuns);
+        const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const bind = (frame: MachineFrame): void => {
+          if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          for (const child of frame.settledCalls) bind(child);
+        };
+        for (const frame of [...fold.open, ...fold.closed]) bind(frame);
+        view.frames = fold.open;
+        view.settledRuns = fold.settled;
+        for (const closed of fold.closed) {
+          pushCaptain(view, {
+            kind: "machine",
+            text: `${closed.playbookId} ${closed.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`,
+            frame: closed,
+            turnId: r.turnId,
+            at: r.timestamp,
+          });
+        }
+        // The questions the position holds are the ones standing
+        // (run-view-9): the pre-turn stack brings back the question the
+        // lost turn would have answered, and a position without one
+        // leaves none.
+        const asked = runs.flatMap((run) => {
+          const pending = run.pendingBossQuestions;
+          return (Array.isArray(pending) ? pending : []).map(parseBossQuestion)
+            .filter((question) => question !== undefined);
+        });
+        const waiting = runs.some((run) => stateText(run.state) === "awaitBossReply");
+        if (asked.length > 0 || waiting) {
+          view.pendingQuestion = asked[0]?.question ?? "";
+          view.pendingQuestionPlayer = asked.length === 1 ? resolvePlayerId(view, asked[0]?.player) : undefined;
+        } else {
+          view.pendingQuestion = undefined;
+          view.pendingQuestionPlayer = undefined;
+        }
       } else if (topic === "playbook.trace") {
         // The structured trace opens, moves, and settles the machine
         // frames the pane draws (run-view-60..63); folding is pure so
