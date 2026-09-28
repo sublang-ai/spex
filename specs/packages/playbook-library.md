@@ -598,6 +598,14 @@ Where a draft holds two turns and a compile was running, when the core is stoppe
 
 Where the fake's reply carries, as an explicit case matrix, a block inside a fenced example, two register blocks, a block with an unknown key, a block that fails to parse, and a register block naming a role the entry lacks, the test suite shall assert that only the second register block became the proposal, the nested block acted as nothing, the malformed blocks were recorded malformed and named at the head of the next prompt, and the unknown role stood as a mismatch beside the derived roles [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)].
 
+#### playbook-library-88
+
+Where the Register tab renders a compiled draft over a roster holding `dev.coder` and `dev.reviewer`, the test suite shall assert, as an explicit case matrix, each role row's default [[playbook-library-61](#playbook-library-61)]:
+
+- a proposal naming `Coder` and `Verifier` fills the derived roles `coder` and `verifier` with the proposed players and shows no mismatch;
+- with or without a proposal, the role `coder`, whose own lane `dev.coder` the roster holds, selects that lane as it stands;
+- that role's new player is `dev.coder-2`, and `dev.coder-3` once the roster also holds `dev.coder-2`.
+
 ### Browser Journeys
 
 #### playbook-library-41

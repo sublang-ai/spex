@@ -10,7 +10,8 @@
 // the Source tab's edit, conflict, and paste paths
 // (playbook-library-56), the band's phases and failure
 // (playbook-library-57/58), the Register tab's prefill precedence and
-// mismatch (playbook-library-61), Delete's confirm (playbook-library-63),
+// mismatch (playbook-library-61) and its role defaults
+// (playbook-library-88), Delete's confirm (playbook-library-63),
 // the example prefill (playbook-library-35), and the 14-character
 // budget on every workspace control (DR-041).
 
@@ -1161,7 +1162,7 @@ describe("playbook-library-61: the Register tab", () => {
     expect(screen.queryByTestId("register-role-Auditor")).toBeNull();
   });
 
-  test("a proposal matches roles case-insensitively, a role's existing lane is selected as it stands, and a minted id is never one the roster holds", async () => {
+  test("playbook-library-88: a proposal matches roles case-insensitively, a role's existing lane is selected as it stands, and a minted id is never one the roster holds", async () => {
     // The compiled entry keys roles as it derived them (lowercase from
     // a `Roles:` source); the agent proposes "Coder". And `coder`'s own
     // lane, dev.coder, already exists, so the form selects it and its
@@ -1190,9 +1191,35 @@ describe("playbook-library-61: the Register tab", () => {
     );
     await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
     fireEvent.click(tab("Register"));
-    const coder = screen.getByTestId("register-player-coder") as HTMLSelectElement;
-    expect(coder.value).toBe("dev.coder");
-    expect(Array.from(coder.options).map((option) => option.textContent)).toContain("New player dev.coder-2");
+    const coder = () => screen.getByTestId("register-player-coder") as HTMLSelectElement;
+    const offered = () => Array.from(coder().options).map((option) => option.textContent);
+    expect(coder().value).toBe("dev.coder");
+    expect(offered()).toContain("New player dev.coder-2");
+
+    // With dev.coder-2 on the roster as well, the first free suffix
+    // moves on, and the existing lane stays the choice.
+    act(() => {
+      useAppStore.setState({
+        configState: {
+          ...CONFIG_STATE,
+          summary: {
+            ...CONFIG_STATE.summary,
+            players: [
+              ...CONFIG_STATE.summary.players,
+              {
+                id: "dev.coder-2",
+                agent: { adapter: "claude", model: "claude-opus-5", effort: "high" },
+                display: "claude-opus-5 @ high",
+                boundBy: [],
+              },
+            ],
+          },
+        },
+      });
+    });
+    expect(coder().value).toBe("dev.coder");
+    expect(offered()).toContain("New player dev.coder-3");
+    expect(offered()).not.toContain("New player dev.coder-2");
   });
 
   test("Register writes the bindings and the new players, then the list opens with the card in view", async () => {
