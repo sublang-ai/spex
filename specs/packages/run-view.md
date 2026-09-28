@@ -1217,4 +1217,10 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### run-view-150
 
-Where the live journey lane runs with the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md)) over a fresh repository the journey added, when a `/code` intent started from the Dashboard runs its real turn and a queued second intent follows it, the test suite shall assert through the page that the session's Captain pane shows each run's status lines to its finish with no failure [[run-view-1](#run-view-1)], that the coder's and the reviewer's panes carry their live output [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)], that the composer refuses input while each turn runs [[run-view-8](#run-view-8)], and that after the second settlement the session reads idle with its composer ready [[run-view-69](#run-view-69)].
+Where the live journey lane runs with the machine's signed-in agents ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)) over a project created from the palette with specs scaffolded, when a `/decide` intent started from the Dashboard runs its real turn and the `/code` intent queued behind it follows, the test suite shall assert through the page:
+
+- the session's Captain pane shows each run's status lines to its finish with no failure [[run-view-1](#run-view-1)];
+- the coder's and the reviewer's panes carry their live output [[run-view-7](#run-view-7)] [[run-view-3](#run-view-3)];
+- the composer refuses input while each turn runs [[run-view-8](#run-view-8)];
+- a player's question, where a run asks one, stands as the Captain's bubble with the banner naming the asking player, the journey's answer through the composer goes to the Captain, and the wait clears only once the runtime reports the question gone [[run-view-9](#run-view-9)];
+- after the second settlement the session reads idle with its composer ready [[run-view-69](#run-view-69)].
