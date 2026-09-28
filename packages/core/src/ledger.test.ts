@@ -2132,13 +2132,11 @@ for (const outcome of ["finished", "aborted"] as const) {
       assert.equal(before.intents.find((entry) => entry.intent.id === intent.id)?.intent.dispatched, undefined);
       release();
       const reply = await pending;
-      if (admission === "message" && outcome === "aborted") {
-        assert.ok(!reply.ok && reply.error.code === "invalid_request");
-        assert.match(reply.error.message, /Retry or Discard/);
-      } else {
-        assert.ok(reply.ok, JSON.stringify(reply));
-      }
-      if (admission === "message" && outcome === "finished") {
+      // Playbook 17 settles an abort at its saved progress, so the
+      // aborted conversation continues as a finished one does
+      // (core-service-6, DR-088).
+      assert.ok(reply.ok, JSON.stringify(reply));
+      if (admission === "message") {
         const after = await client.ledgerUntil((ledger) => ledger.intents.find((entry) => entry.intent.id === intent.id)?.state === "finished", "the continued intent to finish");
         assert.equal(after.intents.find((entry) => entry.intent.id === intent.id)?.intent.dispatched?.turnId, 2);
         assert.equal(client.messages.filter((m) => m.type === "record" && m.record.type === "turn_started").length, 2);
@@ -2314,9 +2312,12 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     text: "Follow the build, retried",
   });
 
-  // An abort leaves shared uncertainty. Resolve it before sending different work.
-  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id && !message.session.live && !!message.session.recovery);
-  await client.expectOk("session.discard", { sessionId: session.id });
+  // Playbook settles an abort at its saved progress (core-service-6,
+  // DR-088): the conversation continues, and no recovery is owed.
+  await settledTurns(client, harness, session.id, 2);
+  const continued = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(continued?.recovery, undefined);
+  assert.equal(continued?.continuable, true);
   // Keep the released follower behind the bystander so this fixture's
   // later finished turn does not start unrelated work automatically.
   await client.expectOk("intent.link", { intentId: i2.id, afterIntentId: i3.id });
