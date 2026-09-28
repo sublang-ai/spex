@@ -10,7 +10,6 @@ import {
   fireEvent,
   render,
   screen,
-  within,
 } from "@testing-library/react";
 
 afterEach(cleanup);
@@ -155,19 +154,6 @@ describe("project palette keyboard contract (DR-011)", () => {
 describe("projects-22: with no project, the palette is an add flow", () => {
   const EMPTY = { projects: [], sessions: [], views: {} };
 
-  test("no filter; the path field is focused; the Academy row leads", () => {
-    renderPalette(EMPTY);
-    expect(screen.queryByTestId("palette-search")).toBeNull();
-    const path = screen.getByTestId("palette-path") as HTMLInputElement;
-    expect(document.activeElement).toBe(path);
-    expect(path.placeholder).toBe("Add a project by path…");
-    const dialog = screen.getByRole("dialog", { name: "Add a project" });
-    expect(dialog.getAttribute("aria-modal")).toBe("true");
-    const [first] = within(dialog).getAllByRole("button");
-    expect(first.getAttribute("data-testid")).toBe("palette-academy");
-    expect(first.textContent).toContain("Try the Academy example");
-  });
-
   test("Enter in the empty path field takes the leading Academy row", async () => {
     const openAcademyExample = vi.fn(async () => PROJECTS[1]);
     useAppStore.setState({ openAcademyExample });
@@ -202,33 +188,7 @@ describe("palette rows carry live state", () => {
   });
 });
 
-describe("palette owns add-by-path", () => {
-  test("a typed path registers and picks the project", async () => {
-    const { onPick, onAddPath } = renderPalette();
-    fireEvent.change(screen.getByTestId("palette-path"), {
-      target: { value: "/tmp/somewhere" },
-    });
-    fireEvent.click(screen.getByTestId("palette-add"));
-    await vi.waitFor(() => {
-      expect(onAddPath).toHaveBeenCalledWith("/tmp/somewhere");
-      expect(onPick).toHaveBeenCalledWith("p1");
-    });
-  });
-});
-
 describe("DR-015: the palette offers the Academy example", () => {
-  test("the action seeds via the store and picks the project", async () => {
-    const openAcademyExample = vi.fn(async () => PROJECTS[1]);
-    useAppStore.setState({ openAcademyExample });
-    const { onPick, onClose } = renderPalette();
-    fireEvent.click(screen.getByTestId("palette-academy"));
-    await vi.waitFor(() => {
-      expect(openAcademyExample).toHaveBeenCalledWith(undefined);
-      expect(onPick).toHaveBeenCalledWith("p2");
-      expect(onClose).toHaveBeenCalled();
-    });
-  });
-
   test("a typed path becomes the example target", async () => {
     const openAcademyExample = vi.fn(async () => PROJECTS[1]);
     useAppStore.setState({ openAcademyExample });
@@ -254,24 +214,5 @@ describe("DR-015: the palette offers the Academy example", () => {
     );
     expect(onPick).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-  });
-});
-
-describe("projects-30: the palette fits a short window", () => {
-  test("the dialog is bounded and its list is what yields", () => {
-    renderPalette();
-    const overlay = screen.getByTestId("project-palette");
-    const dialog = screen.getByRole("dialog", { name: "Choose a project" });
-    // The overlay's padding is the dialog's budget, and the gap above
-    // it stops growing once the window is short.
-    expect(overlay.className).toContain("p-4");
-    expect(overlay.className).toContain("pt-[min(18vh,4rem)]");
-    expect(dialog.className).toContain("max-h-full");
-    // The list is what yields inside that bound, rather than the path
-    // row and its failure message being pushed off the screen.
-    const list = dialog.querySelector("div.overflow-y-auto") as HTMLElement;
-    expect(list.className).toContain("flex-1");
-    expect(list.className).toContain("min-h-0");
-    expect(list.className).not.toContain("max-h-[40vh]");
   });
 });

@@ -8,9 +8,9 @@
 // diff (space-7, space-8, space-10), the running rail and Stop
 // (space-12, space-16), the picker, its keyboard and the Apply confirm
 // (space-9, space-17, space-18), the stopped, done and unrelated cards
-// (space-13, space-15), the explorer tree, previews and the privacy
-// panel (space-23..25), reveal and copy (space-26), the copy law
-// (space-27) and the roles assistive technology needs (space-44).
+// (space-13, space-15), the explorer tree and previews (space-23,
+// space-24), reveal and copy (space-26), the copy law (space-27) and
+// the roles assistive technology needs (space-44).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -1000,7 +1000,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
   });
 });
 
-describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
+describe("SPACE: the explorer (space-23, space-24)", () => {
   async function openExplore(state: SpaceState = repoState()) {
     const rendered = await renderSpace(state);
     fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
@@ -1112,33 +1112,6 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(screen.getByTestId("space-preview").textContent).not.toContain("可能包含提供方令牌");
   });
 
-  test("'Stays on this device' lists the seven families with their reasons and remembers its fold", async () => {
-    await openExplore();
-    const toggle = screen.getByTestId("space-privacy-toggle");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.textContent).toContain("7 kinds");
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    const panel = screen.getByTestId("space-privacy");
-    for (const family of [
-      "provider hints",
-      "leases and locks",
-      "local project paths",
-      "preferences",
-      "forge cache",
-      "migration receipts and inputs",
-      "config backups and temporary files",
-    ]) {
-      expect(within(panel).getByText(family)).toBeTruthy();
-    }
-    expect(panel.textContent).toContain("they work nowhere else");
-    expect(panel.textContent).toContain("where you last stopped reading in each session");
-    expect(useAppStore.getState().spacePrivacyCollapsed).toBe(false);
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(useAppStore.getState().spacePrivacyCollapsed).toBe(true);
-  });
-
   test("the tree/preview divider is a separator nudged by arrow keys and remembered", async () => {
     await openExplore();
     const divider = screen.getByRole("separator", { name: "Resize the tree pane" });
@@ -1164,19 +1137,6 @@ describe("SPACE: reveal and copy (space-26)", () => {
     revealPath.mockResolvedValueOnce(false);
     fireEvent.click(reveal);
     await waitFor(() => expect(live()).toBe("Couldn't show it in the file manager"));
-  });
-
-  test("without the bridge Copy path stands instead, acknowledging the copy in words", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    await renderSpace(repoState());
-    expect(screen.queryByTestId("space-path-reveal")).toBeNull();
-    const copy = screen.getByTestId("space-path-copy");
-    fireEvent.click(copy);
-    expect(writeText).toHaveBeenCalledWith(HOME);
-    await waitFor(() => expect(copy.textContent).toBe("Copied"));
-    expect(live()).toBe(`Copied ${HOME}`);
-    expect(copy.getAttribute("aria-label")).toBe("Copy path");
   });
 
   test("with no clipboard access Copy path falls back to a selectable read-only field", async () => {

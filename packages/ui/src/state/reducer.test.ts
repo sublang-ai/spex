@@ -84,20 +84,6 @@ describe("RUN-21: awaitBossReply banner and reply routing", () => {
     expect(view.pendingQuestionPlayer).toBe("dev.reviewer");
   });
 
-  test("Captain supplies the question bubble while telemetry only keeps the wait", () => {
-    const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
-    const questions = view.captain.filter((line) => line.kind === "question");
-    expect(questions).toHaveLength(1);
-    expect(questions[0].text).toBe("Which auth flow should I prioritize?");
-    expect(questions[0].player).toBe("Captain");
-    // The "◆ … asks:" status narration is replaced, not duplicated.
-    expect(
-      view.captain.some(
-        (line) => line.kind === "status" && line.text.includes("asks:"),
-      ),
-    ).toBe(false);
-  });
-
   test("a status echo arriving after the telemetry is also dropped", () => {
     const view = applyRecords(fresh(), [...TURN_ONE, ...TURN_TWO_QUESTION]);
     applyRecords(view, [

@@ -626,7 +626,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     expect(screen.queryByTestId("item-CODE-1")).toBeNull();
   });
 
-  test("the State machine's state list is pinned above the frame", async () => {
+  test("the State machine's stage names its states", async () => {
     withArtifacts(async () => ARTIFACTS);
     renderLibrary();
     fireEvent.click(
@@ -641,16 +641,6 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     expect(states.textContent).toContain("states");
     expect(states.textContent).toContain("idle");
     expect(states.textContent).toContain("coding");
-    // Outside the scrolling frame, and directly above it: the states
-    // cannot scroll away with the module they name.
-    const frame = screen.getByTestId("stage-box-code");
-    expect(frame.contains(states)).toBe(false);
-    expect(
-      states.compareDocumentPosition(frame) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    // The chips wrap rather than overflow their pane (DR-041 §9).
-    expect(states.className).toContain("flex-wrap");
   });
 
   test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {

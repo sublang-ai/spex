@@ -3,8 +3,9 @@
 
 // A forge row yields (forge-work-lists-1, DR-041): at most two label
 // tags show, the rest fold into a "+N" tag that lists every label,
-// the tags leave the row below 28rem with their words in its title,
-// and no chip in the trailing cluster refuses to shrink.
+// and the captured state is bounded; the tags leaving a narrow row
+// with their words in its title is measured by the dashboard-49
+// journey.
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "vitest";
@@ -62,34 +63,6 @@ describe("forge-work-lists-1: label tags cap at two", () => {
 });
 
 describe("forge-work-lists-1: the trailing cluster yields before the row widens", () => {
-  test("the tags leave a narrow row, their words kept in its title", () => {
-    render(
-      <ul>
-        <ForgeItemRow
-          item={{ ...ITEM, labels: ["documentation", "help wanted", "auth"] } as never}
-          kind="issue"
-          onQueue={() => {}}
-          testId="row"
-        />
-      </ul>,
-    );
-    const row = screen.getByTestId("row");
-    expect(row.className).toContain("@container");
-    // Every tag is gated on the row's own width, not the window's.
-    for (const tag of ["documentation", "help wanted"]) {
-      const chip = screen.getByTitle(tag);
-      expect(chip.className).toContain("hidden");
-      expect(chip.className).toContain("@md:inline-block");
-      expect(chip.className).toContain("max-w-24");
-    }
-    const more = screen.getByTestId("row-more-labels");
-    expect(more.className).toContain("hidden");
-    expect(more.className).toContain("@md:inline-block");
-    expect(screen.getByRole("link").title).toBe(
-      "Fix the bug — documentation, help wanted, auth",
-    );
-  });
-
   test("the captured state is bounded and truncates", () => {
     const derived = {
       intent: { id: "i1", projectId: "p1", text: "Address #7", rank: "1a", createdAt: 1 },

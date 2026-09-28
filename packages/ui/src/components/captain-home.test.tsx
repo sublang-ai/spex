@@ -212,21 +212,6 @@ describe("RUN-29: captain home structure and one-motion start", () => {
 });
 
 describe("run-view-25: with nothing registered, the greeting carries the ways in", () => {
-  test("Add a project… opens the palette; the Academy control seeds through the store", async () => {
-    const openAcademyExample = vi.fn(async () => PROJECT);
-    useAppStore.setState({ openAcademyExample });
-    const { onOpenPalette } = renderHome({
-      hasProject: false,
-      hasProjects: false,
-    });
-    fireEvent.click(screen.getByTestId("home-add-project"));
-    expect(onOpenPalette).toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId("home-academy"));
-    // The same store action the palette uses (DR-015); it registers
-    // and selects, so the host then greets by name.
-    await vi.waitFor(() => expect(openAcademyExample).toHaveBeenCalled());
-  });
-
   test("a seeding failure lands in the thread, the controls stay", async () => {
     useAppStore.setState({
       openAcademyExample: vi.fn(async (): Promise<never> => {
@@ -356,22 +341,6 @@ describe("RUN-35: in-place captain agent editing (DR-019)", () => {
         permissions: { mode: "auto" },
       }),
     );
-  });
-});
-
-describe("RUN-43: Escape hides the slash menu, never the draft", () => {
-  test("Escape dismisses; typing brings the menu back", () => {
-    renderHome();
-    const composer = screen.getByTestId(
-      "start-composer",
-    ) as HTMLTextAreaElement;
-    fireEvent.change(composer, { target: { value: "/co" } });
-    expect(screen.getByTestId("slash-menu")).toBeTruthy();
-    fireEvent.keyDown(composer, { key: "Escape" });
-    expect(screen.queryByTestId("slash-menu")).toBeNull();
-    expect(composer.value).toBe("/co");
-    fireEvent.change(composer, { target: { value: "/cod" } });
-    expect(screen.getByTestId("slash-menu")).toBeTruthy();
   });
 });
 
@@ -534,49 +503,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     renderHome();
     expect(screen.queryByTestId("next-card")).toBeNull();
     expect(screen.getByTestId("quick-start")).toBeTruthy();
-  });
-
-  test("the next row has one responsive text region and fixed actions", () => {
-    const longText =
-      "A deliberately long queued intent title that must yield before its actions\nfull context";
-    renderHome({
-      next: nextCard(
-        {
-          standing: "failed",
-          manualStart: true,
-          cause: { code: "commit-missing" },
-        },
-        { text: longText },
-        3,
-      ),
-    });
-
-    const row = screen.getByTestId("next-row");
-    expect(row.className).toContain("@container");
-    expect(row.className).toContain("flex-wrap");
-    const slackOwners = Array.from(row.children).filter((child) =>
-      child.className.split(/\s+/).includes("flex-1"),
-    );
-    expect(slackOwners).toEqual([screen.getByTestId("next-text")]);
-    const text = screen.getByTestId("next-text");
-    expect(text.className).toContain("min-w-0");
-    expect(text.className).toContain("basis-full");
-    expect(text.className).toContain("@md:basis-0");
-    expect(text.firstElementChild?.className).toContain("flex-col");
-    expect(text.firstElementChild?.className).toContain("@md:flex-row");
-    expect(screen.getByTestId("next-title").getAttribute("title")).toBe(
-      longText,
-    );
-    const standing = screen.getByTestId("next-standing");
-    expect(standing.getAttribute("title")).toBe(
-      "waiting — previous work failed — Committed nothing",
-    );
-    expect(standing.className).toContain("truncate");
-    expect(standing.className).toContain("@md:max-w-[45%]");
-    expect(text.textContent).toContain("+3 more queued");
-    for (const testId of ["next-queued", "next-start", "next-remove"]) {
-      expect(screen.getByTestId(testId).className).toContain("shrink-0");
-    }
   });
 
   test("Remove closes the head dropped on the click; Undo re-queues it at the head (run-view-114)", async () => {

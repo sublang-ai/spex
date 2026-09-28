@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // What only opens on a gesture (settings-33, playbook-library-43,
-// projects-30, spec-view-59, spec-view-26, dashboard-49; DR-041 §9):
+// projects-30, spec-view-59, spec-view-26, dashboard-49,
+// forge-work-lists-1; DR-041 §9):
 // the fit journey measures every surface at every width but never
 // opens a popover, hovers a graph node, or shows the palette, so the
 // chrome that appears in place is measured here — each box lying
@@ -258,7 +259,7 @@ test.describe("the Specs surface at its floor", () => {
 test.describe("a labelled Sources row", () => {
   test.use({ appOptions: { project: true, forge: true } });
 
-  test("dashboard-49: an issue row with labels does not widen the Dashboard", async ({
+  test("dashboard-49, forge-work-lists-1: an issue row with labels does not widen the Dashboard", async ({
     page,
     app,
   }) => {

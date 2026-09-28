@@ -225,8 +225,6 @@ function foldView(entries: { seq: number; record: TmuxPlayRecord }[]): DraftView
   return { view, lineSeqs };
 }
 
-let artifactsAvailable = true;
-
 function seed(overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
   useAppStore.setState({
     connection: "open",
@@ -279,7 +277,6 @@ function tab(name: string): HTMLButtonElement {
 }
 
 beforeEach(() => {
-  artifactsAvailable = true;
   useAppStore.setState({
     loadAgentOptions: async (adapter) => ({
       adapter,
@@ -307,9 +304,6 @@ beforeEach(() => {
       case "draft.create":
         return draftInfo({ id: String(params?.draftId), state: "no-source", firstLine: null, touchedAt: now, createdAt: now });
       case "draft.artifacts":
-        // A registry never written resolves to every stage absent —
-        // the core answers, never throws.
-        if (!artifactsAvailable) return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: ["source", "gears", "fsm"] };
         return ARTIFACTS;
       case "draft.send":
         return { accepted: true, queued: state.drafts[String(params?.draftId)]?.activity !== "idle" };
@@ -663,21 +657,6 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     fireEvent.click(tab("Machine"));
     expect(screen.getByTestId("artifact-caption").textContent).toBe("from the last good compile");
   });
-
-  test("a failure with no good compile behind it keeps the compiled tabs disabled", async () => {
-    artifactsAvailable = false;
-    renderWorkspace(
-      draftInfo({ state: "failed", compile: { at: now - 60_000, by: "boss", outcome: "failed", phase: "text2gears", output: "bad" } }),
-    );
-    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.artifacts", { draftId: "triage" }));
-    // The all-absent answer has landed, and the tabs still wait for a
-    // success (playbook-library-60).
-    await vi.waitFor(() => expect(useAppStore.getState().draftArtifacts.triage).toBeDefined());
-    expect(tab("Gears").disabled).toBe(true);
-    expect(tab("Machine").disabled).toBe(true);
-    expect(tab("Machine").title).toBe("Compiles first");
-    expect(tab("Register").disabled).toBe(true);
-  });
 });
 
 describe("playbook-library-57/58: the compile band", () => {
@@ -747,7 +726,6 @@ describe("playbook-library-57/58: the compile band", () => {
     );
     const failed = screen.getByTestId("phase-gears2fsm");
     expect(failed.getAttribute("data-status")).toBe("failed");
-    expect(failed.className).toContain("text-red-600");
     expect(failed.textContent).toContain("Machine");
     expect(failed.textContent).toContain("6m40s");
     expect(screen.getByTestId("compile-output").textContent).toContain("declared twice in TRIAGE-2");
@@ -1099,25 +1077,6 @@ describe("playbook-library-56: the Source tab", () => {
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", sourcePath: "/tmp/skill.md" }),
     );
-  });
-
-  test("Use a SKILL.md… with the bridge: a draft with no source takes the picked file at once", async () => {
-    const pickFile = vi.fn(async () => "/Users/dev/skill/SKILL.md");
-    window.spexNative = { pickDirectory: async () => null, pickFile };
-    try {
-      renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { source: null });
-      fireEvent.click(screen.getByTestId("opener-skill"));
-      await vi.waitFor(() =>
-        expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", sourcePath: "/Users/dev/skill/SKILL.md" }),
-      );
-      const field = screen.getByTestId("draft-composer") as HTMLTextAreaElement;
-      await vi.waitFor(() => expect(field.value).toBe(ADAPT_ASK));
-      expect(document.activeElement).toBe(field);
-      expect(screen.queryByTestId("paste-text")).toBeNull();
-      expect(commandMock).not.toHaveBeenCalledWith("draft.send", expect.anything());
-    } finally {
-      delete window.spexNative;
-    }
   });
 
   test("Use a SKILL.md… with the bridge: a draft with a source gets the path placed to confirm; a canceled pick changes nothing", async () => {

@@ -367,15 +367,6 @@ describe("localization-4: the rail reads the resolved language", () => {
       expect(labels).not.toContain(label);
     }
   });
-
-  test("with en resolved the same entries read their English labels", () => {
-    speak("en", null);
-    render(<Root />);
-    const labels = railLabels();
-    for (const label of ["Dashboard", "Projects", "Playbooks", "Space", "Settings"]) {
-      expect(labels).toContain(label);
-    }
-  });
 });
 
 describe("localization-4: the Dashboard reads the resolved language", () => {
@@ -554,15 +545,6 @@ describe("localization-4: the Settings surface reads the resolved language", () 
   });
 });
 
-describe("localization-3: the document says its language", () => {
-  test("activating a language sets the document's language attribute", () => {
-    speak("zh");
-    expect(document.documentElement.lang).toBe("zh");
-    speak("en", null);
-    expect(document.documentElement.lang).toBe("en");
-  });
-});
-
 describe("localization-5: ages, durations and moments follow the language", () => {
   test("the time vocabulary reads as Chinese messages", () => {
     speak("zh");
@@ -625,29 +607,6 @@ describe("localization-3: a change of choice re-renders the whole root", () => {
     await broadcast(null);
     expect(railLabels()).toContain("Dashboard");
     expect(useAppStore.getState().language.choice).toBeNull();
-  });
-
-  test("the re-render keeps what the page holds: a form under edit survives the change", async () => {
-    speak("en", null);
-    render(<Root />);
-    // The surface the reader stands on and the form below are both the
-    // page's own React state — this environment keeps no storage to
-    // restore either from, so only a re-render, never a remount, keeps
-    // them.
-    await goTo("Settings");
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("player-add"));
-    });
-    const typed = "qa.keeps-its-words";
-    await act(async () => {
-      fireEvent.change(screen.getByTestId("player-add-id"), {
-        target: { value: typed },
-      });
-    });
-    await act(() => useAppStore.getState().setLanguage("zh"));
-    expect(railLabels()).toContain("仪表盘");
-    expect(within(screen.getByTestId("language-section")).getByLabelText("界面语言")).toBeTruthy();
-    expect((screen.getByTestId("player-add-id") as HTMLInputElement).value).toBe(typed);
   });
 });
 

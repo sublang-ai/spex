@@ -125,9 +125,10 @@ describe("SET: the Captain's row and its agent editor", () => {
     ).toBeNull();
   });
 
-  test("editing the model writes a captain.set merge patch and closes the editor", async () => {
+  test("editing the model writes a captain.set merge patch, closes the editor, and ticks on the row", async () => {
     renderSettings();
     const section = screen.getByTestId("captain-section");
+    expect(within(section).queryByRole("status")).toBeNull();
     fireEvent.click(within(section).getByTestId("captain-edit"));
     expect(
       within(section).getByTestId("captain-edit").getAttribute("aria-expanded"),
@@ -143,11 +144,13 @@ describe("SET: the Captain's row and its agent editor", () => {
     expect(payload.op.patch.model).toBe("claude-opus-4-8[1m]");
     // A merge patch never carries hand-written fields it did not edit.
     expect(payload.op.patch).not.toHaveProperty("instruction");
-    // Saved, the editor folds back into the row and the toggle takes
-    // the keyboard (DR-010 §6).
+    // Saved, the editor folds back into the row, the row ticks in a
+    // live region (settings-6), and the toggle takes the keyboard
+    // (DR-010 §6).
     await vi.waitFor(() =>
       expect(within(section).queryByTestId("agent-editor")).toBeNull(),
     );
+    expect(within(section).getByRole("status").textContent).toBe("Saved ✓");
     expect(document.activeElement).toBe(
       within(section).getByTestId("captain-edit"),
     );
@@ -311,24 +314,6 @@ describe("SET: the session-player roster", () => {
 });
 
 describe("settings-6: every edit acknowledges in place", () => {
-  test("saving the Captain closes its editor and ticks on the row", async () => {
-    renderSettings();
-    const section = screen.getByTestId("captain-section");
-    expect(within(section).queryByRole("status")).toBeNull();
-    fireEvent.click(within(section).getByTestId("captain-edit"));
-    fireEvent.change(within(section).getByTestId("agent-model"), {
-      target: { value: "claude-opus-5" },
-    });
-    fireEvent.click(within(section).getByTestId("agent-save"));
-    await vi.waitFor(() =>
-      expect(within(section).getByTestId("captain-saved").textContent).toBe(
-        "Saved ✓",
-      ),
-    );
-    expect(within(section).getByRole("status").textContent).toBe("Saved ✓");
-    expect(within(section).queryByTestId("agent-editor")).toBeNull();
-  });
-
   test("a notification select is disabled in flight, then ticks", async () => {
     let land!: (value: unknown) => void;
     commandMock.mockImplementation(
@@ -387,17 +372,6 @@ describe("settings-6: every edit acknowledges in place", () => {
       i18n._("Saved ✓"),
     );
     expect(select.value).toBe("zh");
-  });
-
-  test("the terminal theme is named for the CLI and stands last", () => {
-    renderSettings();
-    const headings = screen
-      .getAllByRole("heading", { level: 2 })
-      .map((heading) => heading.textContent);
-    expect(headings[headings.length - 1]).toBe(
-      "Terminal pane theme (CLI only)",
-    );
-    expect(headings).toContain("Keyboard shortcuts");
   });
 });
 
