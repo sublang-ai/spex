@@ -97,7 +97,7 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 #### projects-22
 
-The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path", and the palette shall list projects with filter-as-you-type matching on name and path:
+The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path" and both disabled until a path is typed, and the palette shall list projects with filter-as-you-type matching on name and path:
 
 - With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)];
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
@@ -216,7 +216,7 @@ Where a fixture repository is registered, when the project is removed and the co
 
 #### projects-26
 
-Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the path row offers "Add" titled "Register this existing repository" and "Create" titled "Create a new repository at this path", both disabled until a path is typed [[projects-22](#projects-22)] [[projects-25](#projects-25)], that the live project's row reads its running count beside a pulsing dot while the other's reads none [[projects-23](#projects-23)], and that no text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
+Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the path row offers "Add" titled "Register this existing repository" and "Create" titled "Create a new repository at this path" [[projects-22](#projects-22)] [[projects-25](#projects-25)], both disabled until a path is typed [[projects-22](#projects-22)], that the live project's row reads its running count beside a pulsing dot while the other's reads none [[projects-23](#projects-23)], and that no text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
 
 ### Browser Journeys
 
