@@ -1146,10 +1146,6 @@ Where the harness boots with the demo project registered, a finished session, an
 
 Where the harness boots with the demo project registered, when the journey breaks the shared config on disk while the page is open and then repairs it, the test suite shall assert the Captain home lists the actual error with its in-place Settings link while broken, and returns to its greeting once repaired [[run-view-44](#run-view-44)].
 
-#### run-view-104
-
-Where the live lane runs with the machine's signed-in agents ([DR-039](../decisions/039-browser-acceptance-journeys.md)), when the journey sends a minimal one-line `/code` task, the test suite shall assert through the page that a player pane shows the coder's live output, that the abort control acknowledges instantly and the turn ends aborted [[run-view-10](#run-view-10)] [[run-view-40](#run-view-40)], and that the session then reads idle with its composer ready [[run-view-69](#run-view-69)].
-
 #### run-view-115
 
 Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)].

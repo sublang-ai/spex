@@ -50,11 +50,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   empty npm cache and launches both shells as a user does: the server
   shell walked over its printed token URL and stopped with SIGTERM, the
   desktop rendered by `npm start`. Before a regular release, a
-  regression walks the three fresh-user scenarios with real agents: a
-  `/code` run to live output, a playbook authored in chat compiled,
-  registered and run, and a new project developed through two intents
-  with the queue handing off. CI runs the browser journeys on macOS as
-  well as Linux.
+  regression walks the fresh-user scenarios with real agents: a
+  playbook authored in chat compiled, registered and run, and a new
+  project developed through two intents with the queue handing off. CI
+  runs the browser journeys on macOS as well as Linux.
 
 ### Changed
 

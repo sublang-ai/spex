@@ -4,8 +4,8 @@
 // The live lane — the regression of release-25 (DR-086): the machine's
 // signed-in agents and the real Captain, run by `npm run regression`
 // (SPEX_E2E_LIVE=1) before a regular app release and never in CI.
-// run-view-104 observes a minimal one-line task to a player's live
-// output and aborts it, under DR-020's budget. playbook-library-78
+// The live smoke observes a real /code to live output and aborts it
+// (DR-089), so the lane does not repeat it. playbook-library-78
 // authors a two-role changelog playbook, compiles it for real with the
 // released slc on the compile player the journey picks — Codex's
 // `gpt-6-astra` at `xhigh`, the only work the lane gives Codex — then
@@ -32,63 +32,6 @@ import {
 } from "../src/harness";
 
 test.use({ appOptions: { config: "none", project: true } });
-
-test("run-view-104 @live: a real /code task shows live output and aborts cleanly", async ({
-  page,
-  app,
-}) => {
-  test.skip(!LIVE, "live lane only");
-  await open(page, app);
-  await expect(page.getByTestId("captain-home")).toContainText("demo-project");
-  // The seeded template's agents must be ready on this machine, or the
-  // lane proves nothing: fail early, naming what is not signed in.
-  await expect(page.getByTestId("captain-home")).not.toContainText(/aren't ready/i);
-
-  await send(
-    page,
-    "/code Append a single line reading `smoke ok` to the end of README.md. Change nothing else.",
-  );
-  const captain = page.getByTestId("captain-pane");
-  await expect(captain).toBeVisible();
-  const attach = async (label: string) => {
-    await test.info().attach(label, {
-      body: [
-        "--- captain ---",
-        await captain.innerText(),
-        "--- players ---",
-        await page.getByTestId("player-grid").innerText(),
-      ].join("\n"),
-      contentType: "text/plain",
-    });
-  };
-
-  // A player is dispatched and its pane fills with live output: the
-  // running mark first, then real text from the agent.
-  const running = page.getByTestId("player-running").first();
-  await expect(running).toBeVisible({ timeout: 8 * 60_000 });
-  const pane = page
-    .getByTestId(/^player-pane-/)
-    .filter({ has: page.getByTestId("player-running") })
-    .first();
-  await expect
-    .poll(async () => (await pane.innerText()).length, { timeout: 8 * 60_000 })
-    .toBeGreaterThan(200);
-  await attach("live output");
-  await expect(captain).not.toContainText(/turn failed/i);
-
-  // Abort acknowledges at once and the turn ends aborted.
-  const abort = page.getByTestId("abort-button");
-  await abort.click();
-  await expect(abort).toContainText(/aborting/i);
-  await expect(captain).toContainText(/abort/i, { timeout: 90_000 });
-  await expect(page.getByTestId("boss-composer")).toBeEnabled({ timeout: 90_000 });
-  await attach("after abort");
-
-  // Nothing ends (DR-051): the session reads idle with its composer
-  // ready for the next message.
-  await expect(page.getByTestId("end-session")).toHaveCount(0);
-  await expect(page.getByTestId("history-notice")).toHaveCount(0);
-});
 
 test.describe("the changelog playbook", () => {
   // The compile player (DR-086): a roster player on Codex's

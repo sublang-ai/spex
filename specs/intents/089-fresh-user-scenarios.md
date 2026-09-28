@@ -27,7 +27,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [ ] The hermetic compiled-fixture journey.
 - [ ] The regression's new project created from the palette, through `/decide` then `/code`, a player's question answered through the Captain.
 - [ ] The hermetic two-intent handoff journey.
-- [ ] The regression's observed-and-aborted `/code` removed.
+- [x] The regression's observed-and-aborted `/code` removed.
 
 ## Tasks
 
@@ -77,5 +77,5 @@ The fresh-user wording review read every interface message over about 120 charac
 | Sources summary, Space ahead/behind | counts | kept: they name and count |
 | Session recovery | "Discard this attempt? …" | not reviewed: the Playbook 17 adoption owns recovery |
 
-The changelog's tiers entry and [DR-039](../decisions/039-browser-acceptance-journeys.md)'s status still say the regression walks the three fresh-user scenarios.
-Both stay until task 16: the changelog entry describes the lane as it is built today and is rewritten when the lane changes, and DR-039's line summarizes DR-086's extension, which DR-089 amends without rewriting.
+The changelog's tiers entry describes the lane as it is built today, the observed `/code` gone with task 15, and is rewritten with the lane in task 16.
+[DR-039](../decisions/039-browser-acceptance-journeys.md)'s status still says the regression walks the three fresh-user scenarios: that line summarizes DR-086's extension, which DR-089 amends without rewriting.

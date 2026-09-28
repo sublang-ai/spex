@@ -109,12 +109,11 @@ The browser journeys' live lane: the served shell on a scratch home,
 this machine's real adapters and Captain, assertions through the page
 (release-25).
 
-1. A real `/code` is observed to live output and aborted cleanly.
-2. The chat-authored two-role changelog playbook compiles for real on
+1. The chat-authored two-role changelog playbook compiles for real on
    the `compiler` roster player, bound to `gpt-6-astra` at effort
    `xhigh`, then registers and runs: the turn finishes with both players
    engaged and their commit in the repository.
-3. A new project is developed through two `/code` intents: a fresh
+2. A new project is developed through two `/code` intents: a fresh
    repository with scaffolded specs is added from the palette, the
    first intent started from the Dashboard and the second queued behind
    it; each settles after its review, the queue hands off without
