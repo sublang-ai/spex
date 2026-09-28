@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -72,6 +72,15 @@ test("compile pipeline: stub slc to a runnable bundled registry", async () => {
     spawner: testSpawner("v24.1.0", slcCalls),
     onProgress: (line) => progress.push(line),
   });
+
+  // The engine resolves from the playbook's own directory
+  // (playbook-library-12): the app's xstate and @sublang/playbook are
+  // linked into its node_modules before the compiler runs.
+  for (const name of ["xstate", "@sublang/playbook"]) {
+    const link = join(dir, "library", "demo", "node_modules", name);
+    assert.ok(lstatSync(link).isSymbolicLink(), `${name} is linked into the draft directory`);
+    assert.ok(existsSync(join(link, "package.json")), `${name} link resolves to the app's copy`);
+  }
 
   // Bare invocation (DR-019): slc >= 0.2 links against the installed
   // runtime contract by default, so the argv carries no --link.

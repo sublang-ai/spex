@@ -264,7 +264,7 @@ export async function selectStorageMerge(home_: string, choices: Record<string, 
 
 /** Install tracked Git rules after validated migration, before first tracking. */
 export function prepareStorageGitFiles(home: string, unsupportedPaths: string[] = []): void {
-  const ignores = ["/local/", "/prefs.json", "/meta.json", "/forge-cache.json", "/.lock*", "*.hints.json", "*.spex.json", "*.lock", "*.lock.*", "*.tmp", "*.bak", "*.bak.*", "*.backup", "*.backup.*"];
+  const ignores = ["/local/", "/prefs.json", "/meta.json", "/forge-cache.json", "/.lock*", "/playbooks/*/node_modules/", "*.hints.json", "*.spex.json", "*.lock", "*.lock.*", "*.tmp", "*.bak", "*.bak.*", "*.backup", "*.backup.*"];
   const unsupported = [...new Set(unsupportedPaths)].sort().map((file) => {
     if (file.startsWith("/") || file.split("/").includes("..") || /[\r\n\0*?\[\]\\]/.test(file)) throw new Error(`unsafe ignore path ${file}`);
     return `/${file}`;
