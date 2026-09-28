@@ -31,34 +31,41 @@ async function main(): Promise<void> {
   // The fake mode's scratch home, removed when the core stops.
   let scratch: string | undefined;
 
-  if (fake) {
-    const dir = mkdtempSync(join(tmpdir(), "spex-dev-"));
-    scratch = dir;
-    const configPath = join(dir, "playbook.config.yaml");
-    writeFileSync(configPath, DEMO_CONFIG);
-    const projectDir = join(dir, "demo-project");
-    seedDemoProject(projectDir);
-
-    // The delays keep in-flight state watchable by a human at the
-    // dev UI (DR-039 shares the narration with the browser suite,
-    // which runs it near-instant).
-    const { imports } = demoAdapterImports({ delayMs: 3200 });
-    const captain = demoCaptain();
-
-    options.configPath = configPath;
-    options.dataDir = join(dir, "state");
-    options.adapterImports = imports;
-    options.adapterRuntime = () => ({ usable: true });
-    options.captainFactory = async () => captain;
-    options.env = {};
-    options.home = dir;
-
-    console.log(`[dev-core] fake mode; demo project: ${projectDir}`);
-  }
-
   const removeScratch = (): void => {
     if (scratch) rmSync(scratch, { recursive: true, force: true });
   };
+
+  if (fake) {
+    const dir = mkdtempSync(join(tmpdir(), "spex-dev-"));
+    scratch = dir;
+    try {
+      const configPath = join(dir, "playbook.config.yaml");
+      writeFileSync(configPath, DEMO_CONFIG);
+      const projectDir = join(dir, "demo-project");
+      seedDemoProject(projectDir);
+
+      // The delays keep in-flight state watchable by a human at the
+      // dev UI (DR-039 shares the narration with the browser suite,
+      // which runs it near-instant).
+      const { imports } = demoAdapterImports({ delayMs: 3200 });
+      const captain = demoCaptain();
+
+      options.configPath = configPath;
+      options.dataDir = join(dir, "state");
+      options.adapterImports = imports;
+      options.adapterRuntime = () => ({ usable: true });
+      options.captainFactory = async () => captain;
+      options.env = {};
+      options.home = dir;
+
+      console.log(`[dev-core] fake mode; demo project: ${projectDir}`);
+    } catch (error) {
+      // A failed seed leaves no scratch home behind either.
+      removeScratch();
+      throw error;
+    }
+  }
+
   let service: CoreService;
   try {
     service = await CoreService.start(options);
