@@ -510,7 +510,8 @@ async function boot(
   try {
     await core.open();
   } catch (error) {
-    await server.close();
+    // The failed connect is the one reported, whatever the close meets.
+    await server.close().catch(() => undefined);
     throw error;
   }
   return { server, core };
