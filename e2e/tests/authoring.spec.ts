@@ -5,14 +5,18 @@
 // the served shell with the authoring fake script and a stub `slc` on
 // the toolchain path — failing once at gears2fsm, then passing — worked
 // from "New playbook" to a registered `/triage`, with the workspace
-// measured stacked at the 320px floor along the way.
+// measured stacked at the 320px floor along the way. The paste path
+// (playbook-library-85, DR-086): the example's Prefill used as the
+// source, compiled from the workspace's own control by the passing
+// stub, and registered on the form's derived defaults, the agent
+// proposing nothing.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { AUTHORING_SOURCE, seedInterruptedDraft } from "@sublang/spex-core/testing";
 
-import { test, expect, open, nav, slowAuthoringScript } from "../src/harness";
+import { test, expect, open, nav, slowAuthoringScript, surfaceEntry } from "../src/harness";
 
 test.use({
   appOptions: {
@@ -489,4 +493,80 @@ test("playbook-library-84: a picked SKILL.md becomes the source of a draft with 
   expect(readFileSync(join(app.draftDir("triage"), "triage.md"), "utf8")).toContain(
     "description: Label new issues by their text",
   );
+});
+
+test.describe("the pasted example", () => {
+  // The passing stub on its first run — nothing held, nothing relayed
+  // — and an agent whose answer to the success turn that follows every
+  // passing compile (playbook-library-68) proposes nothing, so the
+  // Register form stands on its derived defaults alone.
+  test.use({
+    appOptions: {
+      project: true,
+      authoring: { slc: "ok", script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
+    },
+  });
+
+  test("playbook-library-85: the pasted example compiles from the Boss's control and registers", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await nav(page, "Playbooks").click();
+    await page.getByTestId("example-prefill").click();
+    await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    const chip = page.getByTestId("draft-chip");
+    await expect(chip).toContainText("No source");
+
+    // The placed text, used as it stands, is the draft's source
+    // (playbook-library-35, playbook-library-56).
+    const pasted = page.getByTestId("paste-text");
+    const text = await pasted.inputValue();
+    expect(text).toContain("Roles:");
+    await page.getByTestId("paste-use").click();
+    await expect(pasted).toHaveCount(0);
+    await expect(page.getByTestId("source-markdown")).toContainText(
+      "Two-Agent Change-and-Review Workflow",
+    );
+    await expect(chip).not.toContainText("No source");
+    const [draft] = await app.core.command("draft.list", {});
+    expect(readFileSync(join(app.draftDir(draft.id), `${draft.id}.md`), "utf8")).toBe(text);
+
+    // Compile, from the workspace's own control: asked by the Boss, run
+    // to Link (playbook-library-57).
+    const compile = page.getByTestId("compile-button");
+    await expect(compile).toBeEnabled();
+    await compile.click();
+    await expect(page.getByTestId("compile-by")).toHaveText("asked by you");
+    await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done");
+    await expect(chip).toContainText("Compiled");
+
+    // The Register tab stands with no proposal to prefill it and a
+    // player per derived role (playbook-library-61, playbook-library-7).
+    const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
+    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    const form = page.getByTestId("register-form");
+    await expect(form).toBeVisible();
+    await expect(form).not.toContainText("Prefilled from the agent's proposal");
+    await expect(page.getByTestId("register-command")).toHaveValue(draft.id);
+    await expect(page.getByTestId(/^register-player-/)).toHaveCount(2);
+    for (const role of ["Triager", "Verifier"]) {
+      await page.getByTestId(`register-player-${role}`).selectOption({ index: 0 });
+    }
+    // The example's text holds no prose paragraph to derive an intent
+    // from, so the Boss writes one.
+    await page.getByTestId("register-intent").fill("Change code and review it with two agents");
+    await page.getByTestId("register-submit").click();
+
+    // Register lists it and the draft leaves (playbook-library-10) …
+    const card = page.getByTestId(`playbook-card-${draft.id}`);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`/${draft.id}`);
+    await expect(page.getByTestId("drafts-section")).toHaveCount(0);
+
+    // … and a new session's slash menu offers it.
+    await surfaceEntry(page, "Workspace").click();
+    await page.getByTestId("start-composer").fill("/");
+    await expect(page.getByRole("listbox")).toContainText(`/${draft.id}`);
+  });
 });
