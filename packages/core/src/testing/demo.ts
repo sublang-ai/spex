@@ -258,6 +258,71 @@ export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
   };
 }
 
+/** The player's question, the Captain's relay of it, and the Boss's
+ * answer in the asking script (run-view-151). */
+export const ASKING = {
+  request: "Migrate the session store to the new format",
+  question: "Should I also migrate the archived sessions?",
+  relay: "Coder asks whether the archived sessions should be migrated as well. Should it include them?",
+  answer: "Yes, include the archived ones",
+  done: "Migrated the archived sessions too.",
+} as const;
+
+/**
+ * The script behind a real player question (DR-085, DR-088): the
+ * Captain's decision starts the real /code root, whose coder asks the
+ * Boss a question the hidden judgment returns as awaiting the Boss;
+ * the Captain's closing reply relays it while it stands pending. The
+ * Boss's answer is delivered to that coder, which commits, and the
+ * nested review finds nothing, so the run finishes. Every call is the
+ * real shell's, so the relay the page shows is Playbook's own.
+ */
+export function askingScript(options: { delayMs?: number } = {}): FakeScript {
+  const delay = options.delayMs ?? 1;
+  const decision = (boss: string) => new RegExp(`Select exactly one action[\\s\\S]*\\[Boss message\\]\\n${boss}`);
+  // The judge sees the player's output first, then the outcomes.
+  const judged = (text: string) => new RegExp(`just produced this output:[\\s\\S]*${text}[\\s\\S]*Pick exactly one declared`);
+  return {
+    rules: [
+      { match: decision(ASKING.request), response: { result: JSON.stringify({ action: "start", playbookId: "code", input: ASKING.request }) } },
+      { match: decision(ASKING.answer), response: { result: JSON.stringify({ action: "deliver" }) } },
+      // The runtime classifies the delivered answer against its park.
+      { match: "Classify the following Boss message into exactly one event", response: { result: JSON.stringify({ type: "BOSS_REPLY", questionId: "firstPhase" }) } },
+      // The hidden adjudications, each read from the output it judges;
+      // the question itself is presentation the runtime keeps verbatim.
+      { match: judged("No findings in the migration"), response: { result: JSON.stringify({ guard: "noFindings" }) } },
+      { match: judged(ASKING.done), response: { result: JSON.stringify({ guard: "directCommit" }) } },
+      { match: judged(ASKING.question.replace("?", "\\?")), response: { result: JSON.stringify({ guard: "needsBossReply" }) } },
+      // The closing reply relays the question while it stands pending.
+      { match: /An action just settled for the current Boss turn[\s\S]*Pending Boss questions:\n[^\n]*archived sessions/, response: { result: ASKING.relay } },
+      { match: "An action just settled for the current Boss turn", response: { result: "The session store migration is done and reviewed." } },
+      { match: "A new review begins for the review scope", response: { result: "No findings in the migration.", delayMs: delay } },
+      {
+        // The coder, resumed with the Boss's answer: one clean commit.
+        match: ASKING.answer,
+        response: {
+          deltas: [ASKING.done],
+          result: ASKING.done,
+          delayMs: delay,
+          effect: (cwd) => {
+            writeFileSync(join(cwd, "archived-sessions.md"), "migrated\n");
+            execFileSync("git", ["-C", cwd, "add", "-A"]);
+            execFileSync("git", [
+              "-C", cwd,
+              "-c", "user.name=Spex Test",
+              "-c", "user.email=spex@example.test",
+              "-c", "commit.gpgsign=false",
+              "commit", "-q", "-m", "Migrate the archived sessions",
+            ]);
+          },
+        },
+      },
+      { match: "Original request:", response: { deltas: [ASKING.question], result: ASKING.question, delayMs: delay } },
+    ],
+    fallback: { result: "Done." },
+  };
+}
+
 /** The fake adapter's script behind the demo: the coder's and the
  * reviewer's replies, each in flight for `delayMs`. Exported so a
  * harness can lay other rules before it (the authoring agent's) and

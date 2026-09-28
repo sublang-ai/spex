@@ -45,6 +45,7 @@ import {
   interruptDemoSession,
   fakeAdapterImports,
   parkingScript,
+  askingScript,
   prepareStorageGitFiles,
   STUB_SLC_RELEASE_FILE,
   stubSlcScriptedSource,
@@ -100,6 +101,14 @@ export interface AppOptions {
    * `realCaptain`, and needs `project` for a repository to commit in.
    */
   park?: boolean;
+  /**
+   * The real Captain shell with the asking script (DR-088): the first
+   * Boss turn starts the real /code root, whose coder asks the Boss a
+   * question the Captain relays; the answer is delivered, the coder
+   * commits, and the nested review passes. Implies `realCaptain`, and
+   * needs `project` for a repository to commit in.
+   */
+  ask?: boolean;
   /** The scripted root reports typed success, enabling intent advancement. */
   governedCompletion?: boolean;
   /** Substitute task-free model discovery; never start installed providers. */
@@ -620,12 +629,14 @@ async function arrangeApp(
       : {
           adapterImports: options.park
             ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
+            : options.ask
+            ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
             ? fakeAdapterImports({ fallback: { result: JSON.stringify({ action: "respond", text: "Acknowledged by the real Captain." }) } }).imports
             : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain || options.park ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park || options.ask ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           ...(options.forge
