@@ -170,14 +170,22 @@ export async function appendHistorySession(
   if (!checked.resumable) throw new Error(checked.reasons.join("; "));
 }
 
-/** Save the real pre-turn uncertainty boundary; the harness stops its host first. */
-export async function interruptDemoSession(sessionsDir: string, sessionId: string, input: string): Promise<void> {
+/** Save the real pre-turn uncertainty boundary; the harness stops its host first.
+ * `recorded` also saves a step's start, as a writer stopped mid-step
+ * leaves it: recorded work, which Playbook's predicate withholds from
+ * Discard (DR-088). */
+export async function interruptDemoSession(sessionsDir: string, sessionId: string, input: string, options: { recorded?: boolean } = {}): Promise<void> {
   const shared = createSessionStore({ sessionsDir });
   const lease = await shared.acquire(sessionId);
   try {
     const prior = await lease.read();
     if (!prior || prior.state !== "settled") throw new Error("fixture needs a settled real checkpoint");
     await lease.beginTurn({ input, attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+    if (options.recorded) {
+      const playbookId = Object.keys(prior.lastAppliedExecutionProjection.catalog)[0];
+      if (!playbookId) throw new Error("fixture needs a catalog playbook to record a step in");
+      await lease.recordProgress({ snapshot: null, step: { id: randomUUID(), kind: "player", stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId } });
+    }
   } finally { await lease.release(); }
 }
 

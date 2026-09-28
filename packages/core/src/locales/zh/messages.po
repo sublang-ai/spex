@@ -505,8 +505,8 @@ msgstr "请先绑定该已有项目，再更改其会话的智能体"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
-msgid "bind the existing project before retrying"
-msgstr "请先绑定该已有项目，然后重试"
+msgid "bind the existing project before restoring"
+msgstr "请先绑定该已有项目，然后恢复"
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -1399,14 +1399,6 @@ msgstr "队列被整体替换"
 msgid "Recover the interrupted turn with Retry or Discard"
 msgstr "请用“重试”或“丢弃”恢复中断的轮次"
 
-#. Refusal; Retry and Discard are the controls the interface offers
-#. Refusal; Retry and Discard are the controls the interface offers
-#. Refusal; Retry and Discard are the controls the interface offers
-#: src/service.ts
-#: src/session.ts
-msgid "Recover the interrupted turn with Retry or Discard first"
-msgstr "请先用“重试”或“丢弃”恢复中断的轮次"
-
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
@@ -1431,6 +1423,14 @@ msgstr "已移除“{name}”"
 #: src/space.ts
 msgid "Renamed \"{before}\" to \"{name}\""
 msgstr "已将“{before}”重命名为“{name}”"
+
+#. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
+#: src/service.ts
+#: src/session.ts
+msgid "Restore the interrupted turn first"
+msgstr "请先“恢复”中断的轮次"
 
 #. Guidance under a commit git failed; git commit is the command's own name
 #: src/space.ts
@@ -1748,7 +1748,7 @@ msgstr "该运行仍处于搁置状态，因此意图保持未结束"
 msgid "the session is active"
 msgstr "该会话正在使用中"
 
-#. Refusal: a Retry or Discard of this session is still running
+#. Refusal: a Restore or Discard of this session is still running
 #: src/session.ts
 msgid "the session is recovering"
 msgstr "该会话正在恢复中"

@@ -16,7 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { createSessionStore, validateSessionContext, type SharedSessionStore, type SessionManifest } from "@sublang/playbook/session-store";
+import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { isAbsolute, join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -58,6 +58,15 @@ import {
 export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
 const META_VERSION = 1;
+
+/** Playbook's own discard predicate over a manifest, whose recovery
+ * fields are the record's (core-service-32, DR-088): the client draws
+ * Discard from this, never from a guess. A manifest the predicate
+ * cannot read offers no Discard; Playbook's store refuses it anyway. */
+function discardable(manifest: SessionManifest): boolean {
+  try { return isUncertainTurnDiscardable(manifest as unknown as SessionRecovery); }
+  catch { return false; }
+}
 
 /** Another core instance holds the state root (CORE-61). */
 export class StateRootHeldError extends Error {
@@ -806,7 +815,7 @@ export class Store {
       ...(continuable ? { continuable: true } : {}),
       ...(reason ? { continuationReason: reason } : recoveryReason ? { continuationRecovery: true } : {}),
       ...(manifest.state === "uncertain" && manifest.uncertain
-        ? { recovery: {state: "uncertain", input: manifest.uncertain.input} as const } : {}),
+        ? { recovery: {state: "uncertain", input: manifest.uncertain.input, discardable: discardable(manifest)} as const } : {}),
       ...(incompleteAfterSeq !== undefined ? { streamIncompleteAfterSeq: incompleteAfterSeq } : {}),
     };
     if (problem) this.sessionProblems.set(id, problem);

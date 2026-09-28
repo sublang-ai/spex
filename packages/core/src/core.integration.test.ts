@@ -2987,7 +2987,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
   });
 }
 
-for (const action of ["retry", "discard"] as const) {
+for (const action of ["restore", "discard", "restore after recorded work"] as const) {
   test(`core-service-84: desktop ${action} recovers CLI storage without current config`, async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "spex-cross-host-recovery-"));
     const configPath = join(dir, "config.yaml");
@@ -3006,6 +3006,11 @@ for (const action of ["retry", "discard"] as const) {
     const sessionId = cli.sessionId;
     // Uncertainty under an active CLI lease is not interrupted work.
     await cli.lease.beginTurn({input: "saved CLI input", attemptId: randomUUID(), attemptedExecutionProjection: config});
+    // A step's start saved before the writer stopped is recorded work:
+    // Playbook's predicate withholds Discard (DR-088).
+    const recorded = action === "restore after recorded work";
+    if (recorded) await cli.lease.recordProgress({snapshot: null, step: {id: randomUUID(), kind: "player",
+      stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId: Object.keys(config.catalog)[0]!}});
     writeFileSync(configPath, "captain: [invalid current config]\n");
     const service = await CoreService.start({token:"test", configPath, dataDir, adapterImports:imports, env:{}, watchConfig:true});
     t.after(async () => { await service.stop(); rmSync(dir, {recursive:true,force:true}); });
@@ -3019,28 +3024,38 @@ for (const action of ["retry", "discard"] as const) {
     assert.equal(session?.externalWriter,"active");
     assert.equal(session?.live,true);
     assert.equal(session?.recovery,undefined);
-    assert.equal((await client.command(`session.${action}`,{sessionId})).ok,false);
+    const command = action === "discard" ? "session.discard" : "session.restore";
+    assert.equal((await client.command(command,{sessionId})).ok,false);
     // Releasing only the lease must reveal recovery without a stream write.
     await cli.dispose();
-    await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.recovery?.input === "saved CLI input" && !message.session.externalWriter);
+    const revealed = await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.recovery?.input === "saved CLI input" && !message.session.externalWriter);
+    assert.equal(revealed.type === "session.state" && revealed.session.recovery?.discardable, !recorded, "the summary carries Playbook's discard predicate");
     const blocked = await client.command("turn.submit", {sessionId, text:"replacement input"});
     assert.equal(blocked.ok, false, "ordinary input cannot retry uncertainty");
     assert.equal(stats.runs.length, 0);
     // Both commands use the same exclusive lease as the CLI.
     const holder = await shared.acquire(sessionId);
-    const busy = await client.command(`session.${action}`, {sessionId});
+    const busy = await client.command(command, {sessionId});
     assert.equal(busy.ok, false);
     assert.equal(stats.runs.length, 0);
     await holder.release();
     await client.expectOk("project.register",{path:projectPath});
-    if (action === "retry") {
+    if (recorded) {
+      // Discard is refused with Playbook's cause, and nothing is lost.
+      const refused = await client.command("session.discard", {sessionId});
+      assert.ok(!refused.ok && /restored and reported/.test(refused.error.message), JSON.stringify(refused));
+      assert.equal(validateSessionManifest(await shared.readManifest(sessionId)).state, "uncertain");
+    }
+    if (action !== "discard") {
       await client.expectOk("subscribe", {channel:{kind:"session",sessionId}});
-      await client.expectOk("session.retry", {sessionId});
+      await client.expectOk("session.restore", {sessionId});
       await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.turnActive && m.session.turns > 0 && !m.session.recovery);
       const manifest = validateSessionManifest(await shared.readManifest(sessionId));
       assert.equal(manifest.state, "settled");
-      assert.ok(stats.runs.some((run) => run.prompt.includes("saved CLI input")));
-      assert.ok(stats.runs.every((run) => !run.prompt.includes("replacement input")));
+      // Restore reports and repeats nothing: no agent ran, and the
+      // Captain's reply stands in the stream (core-service-82).
+      assert.equal(stats.runs.length, 0, "Restore calls no agent");
+      assert.ok(client.records("session").some(({record}) => record.type === "captain_reply"), "the restore reports through the Captain");
       assert.ok(!JSON.stringify(manifest).includes("fake-resume-"));
       // Settlement released the runtime (core-service-91); the same CLI
       // facade can reopen the desktop settlement at once.
@@ -3075,7 +3090,7 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   await harness.service["syncForeignSessions"]();
   const reports = await client.expectOk("storage.diagnostics", {});
   assert.ok(reports.some((report) => report.blocking && report.file.endsWith(`${damaged.id}.json`)));
-  for (const type of ["turn.submit","session.retry","session.discard"] as const) {
+  for (const type of ["turn.submit","session.restore","session.discard"] as const) {
     const reply = type === "turn.submit" ? await client.command(type,{sessionId:damaged.id,text:"resume"}) : await client.command(type,{sessionId:damaged.id});
     assert.ok(!reply.ok && reply.error.code === "invalid_request", JSON.stringify(reply));
     assert.ok(!reply.ok && reply.error.message.includes(`${damaged.id}.json`));

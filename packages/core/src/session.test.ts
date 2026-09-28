@@ -88,7 +88,7 @@ test("core-service-93: the newest continuable or recovery-bound conversation own
     failed: state === "recovery",
     ...(state === "continuable"
       ? { continuable: true }
-      : { recovery: { state: "uncertain" as const, input: "work" } }),
+      : { recovery: { state: "uncertain" as const, input: "work", discardable: true } }),
   });
   const olderRecovery = session("recovery", 100, "recovery");
   const newerClean = session("clean", 200, "continuable");

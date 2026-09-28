@@ -1826,9 +1826,10 @@ msgstr "desktop"
 msgid "Discard"
 msgstr "Discard"
 
+#. confirm before Discard, offered only when the interrupted attempt recorded nothing
 #: src/components/SessionRecovery.tsx
-msgid "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
-msgstr "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
+msgid "Discard the unprocessed message? A session with no earlier turn is removed."
+msgstr "Discard the unprocessed message? A session with no earlier turn is removed."
 
 #: src/components/SpecEditor.tsx
 msgid "Discard unsaved changes?"
@@ -3142,6 +3143,11 @@ msgstr "nothing has changed since it failed"
 msgid "Nothing in {project} needs attention."
 msgstr "Nothing in {project} needs attention."
 
+#. Restore's tooltip: restoring reports what was recorded and runs no work again
+#: src/components/SessionRecovery.tsx
+msgid "Nothing is repeated"
+msgstr "Nothing is repeated"
+
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the remote"
 msgstr "Nothing new on the remote"
@@ -3747,14 +3753,6 @@ msgstr "Reconnecting…"
 msgid "records"
 msgstr "records"
 
-#: src/state/store.ts
-msgid "Recover the interrupted turn before sending another message."
-msgstr "Recover the interrupted turn before sending another message."
-
-#: src/components/RunView.tsx
-msgid "Recover the interrupted turn before sending."
-msgstr "Recover the interrupted turn before sending."
-
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
@@ -4001,16 +3999,32 @@ msgstr "Resize the graph pane"
 msgid "Resize the tree pane"
 msgstr "Resize the tree pane"
 
+#. act: bring back the interrupted work's saved position and report what was recorded; nothing runs again
+#: src/components/SessionRecovery.tsx
+msgid "Restore"
+msgstr "Restore"
+
 #: src/lib/failure-catalogue.ts
 msgid "Restore the branch yourself"
 msgstr "Restore the branch yourself"
+
+#: src/state/store.ts
+msgid "Restore the interrupted turn before sending another message."
+msgstr "Restore the interrupted turn before sending another message."
+
+#: src/components/RunView.tsx
+msgid "Restore the interrupted turn before sending."
+msgstr "Restore the interrupted turn before sending."
+
+#: src/components/SessionRecovery.tsx
+msgid "Restoring…"
+msgstr "Restoring…"
 
 #: src/lib/space.ts
 msgid "resume tokens for this machine's agent conversations; they work nowhere else"
 msgstr "resume tokens for this machine's agent conversations; they work nowhere else"
 
 #. act: load the transcript again
-#. act: run the interrupted turn again
 #. read the record again
 #. read the specs tree again
 #. run the stopped step again
@@ -4022,7 +4036,6 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/App.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
-#: src/components/SessionRecovery.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -4030,13 +4043,8 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 msgid "Retry"
 msgstr "Retry"
 
-#: src/components/SessionRecovery.tsx
-msgid "Retry the saved input with its saved configuration after checking completed work?"
-msgstr "Retry the saved input with its saved configuration after checking completed work?"
-
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
-#: src/components/SessionRecovery.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"

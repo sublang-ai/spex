@@ -358,8 +358,12 @@ export class SessionManager {
   async continueSession(project: ProjectInfo, composed: ComposedConfig, session: SessionInfo): Promise<SessionInfo> {
     return this.open(project, composed, session.id, "continue");
   }
-  async retrySession(project: ProjectInfo, sessionId: string): Promise<void> {
-    await this.open(project, undefined, sessionId, "retry");
+  /** Restore an interrupted turn (core-service-82, DR-088): Playbook's
+   * recover mode on the attempted configuration, then one turn that
+   * restores the saved position and reports what was recorded —
+   * nothing re-runs, and no agent is called. */
+  async restoreSession(project: ProjectInfo, sessionId: string): Promise<void> {
+    await this.open(project, undefined, sessionId, "recover");
     this.startTurn(this.requireLive(sessionId), undefined, true);
   }
   async discardSession(sessionId: string): Promise<{removed: boolean}> {
@@ -384,7 +388,7 @@ export class SessionManager {
     finally { this.recovering.delete(sessionId); }
   }
 
-  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "retry"): Promise<SessionInfo> {
+  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover"): Promise<SessionInfo> {
     // One working turn per project (core-service-4, DR-051): only a
     // session whose runtime is held — a turn in flight or settling — or
     // one another host holds stands in the way, and it is named. A
@@ -421,7 +425,7 @@ export class SessionManager {
     }
     if (this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
       id: "the session is recovering",
-      comment: "Refusal: a Retry or Discard of this session is still running",
+      comment: "Refusal: a Restore or Discard of this session is still running",
     }));
     this.opening.add(project.id);
     this.store.setLocalSession(sessionId, true);
@@ -620,8 +624,8 @@ export class SessionManager {
       comment: "Refusal: this conversation is mid-turn",
     }));
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
-      id: "Recover the interrupted turn with Retry or Discard first",
-      comment: "Refusal; Retry and Discard are the controls the interface offers",
+      id: "Restore the interrupted turn first",
+      comment: "Refusal; Restore is the control the interface offers for interrupted work",
     }));
     // The runtime is held only for a turn (core-service-91), so what a
     // run advertises can be read only while the session is open — which
@@ -677,22 +681,21 @@ export class SessionManager {
       comment: "Refusal: this conversation is mid-turn",
     }));
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
-      id: "Recover the interrupted turn with Retry or Discard first",
-      comment: "Refusal; Retry and Discard are the controls the interface offers",
+      id: "Restore the interrupted turn first",
+      comment: "Refusal; Restore is the control the interface offers for interrupted work",
     }));
     entry.pendingIntentId = intentId;
     this.startTurn(entry, text, false);
   }
 
-  private startTurn(entry: LiveSession, text: string | undefined, retry: boolean, control?: { kind: "recovery" | "ending"; controlId: string }): void {
-    const owner = this.store.listSessionDispatches(entry.info.id).at(-1);
-    entry.turnIntentId = retry && owner?.open ? owner.intentId : undefined;
+  private startTurn(entry: LiveSession, text: string | undefined, restore: boolean, control?: { kind: "recovery" | "ending"; controlId: string }): void {
+    entry.turnIntentId = undefined;
     entry.turnActive = true;
     this.publish(entry.info.id);
     entry.operation = (async () => {
       let failed = false;
       try {
-        if (retry) await entry.controller.retry();
+        if (restore) await entry.controller.recover();
         else if (control) {
           const controller = entry.controller as {
             submitRuntimeAction(id: string): Promise<unknown>;
@@ -739,7 +742,9 @@ export class SessionManager {
           this.settling.delete(entry.info.id);
           this.intentionalStops.delete(entry.info.id);
         }
-        if (!failed && turnId !== undefined) {
+        // A restore only reports: what runs next is the Boss's choice,
+        // so it hands no queued intent on (core-service-82, DR-088).
+        if (!failed && !restore && turnId !== undefined) {
           this.onTurnSettled(entry.info.id, turnId, intentId, control?.kind);
         }
       }

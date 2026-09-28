@@ -425,7 +425,9 @@ export interface AppState {
   /** Delete an idle session's files and every trace (DR-038,
    * core-service-70); the core refuses a working or foreign one. */
   deleteSession(sessionId: string): Promise<void>;
-  recoverSession(sessionId: string, action: "retry" | "discard"): Promise<void>;
+  /** Restore interrupted work, or Discard an attempt that recorded
+   * nothing (run-view-110, DR-088). */
+  recoverSession(sessionId: string, action: "restore" | "discard"): Promise<void>;
   /** Forget a deleted session everywhere — the listing, its tab, its
    * transcript, composer, and staged chip. The removal broadcast and
    * the delete reply both land here, idempotently. */
@@ -1877,14 +1879,14 @@ export const useAppStore = create<AppState>((set, get) => {
       if (session) get().forgetSession(sessionId, session.projectId);
     },
 
-    async recoverSession(sessionId: string, action: "retry" | "discard"): Promise<void> {
+    async recoverSession(sessionId: string, action: "restore" | "discard"): Promise<void> {
       if (get().sessions.find((session) => session.id === sessionId)?.externalWriter) {
         throw new Error(
           i18n._("Session ownership must be idle before recovery."),
         );
       }
-      if (action === "retry") {
-        await getClient().command("session.retry", { sessionId });
+      if (action === "restore") {
+        await getClient().command("session.restore", { sessionId });
       } else {
         const result = await getClient().command("session.discard", { sessionId });
         const session = get().sessions.find((s) => s.id === sessionId);
@@ -1933,7 +1935,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       if (session?.recovery && !session.turnActive) {
         throw new Error(
-          i18n._("Recover the interrupted turn before sending another message."),
+          i18n._("Restore the interrupted turn before sending another message."),
         );
       }
       try {
@@ -1962,7 +1964,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       if (session?.recovery && !session.turnActive) {
         throw new Error(
-          i18n._("Recover the interrupted turn before sending another message."),
+          i18n._("Restore the interrupted turn before sending another message."),
         );
       }
       const view = state.views[sessionId];
