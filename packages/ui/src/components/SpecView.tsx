@@ -1035,7 +1035,7 @@ export function SpecView(props: SpecViewProps) {
         </h1>
         <p>
           {i18n._(
-            "This refreshes the spec law and prints a migration prompt for an AI agent to apply:",
+            "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:",
           )}
         </p>
         {copyCommand("npx @sublang/spex scaffold --update")}

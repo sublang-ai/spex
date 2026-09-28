@@ -871,7 +871,7 @@ function Header({
     primary = joinConfirm ? (
       <span data-testid="space-join-confirm">
         <InlineConfirm
-          question={i18n._("Join both spaces into one? Anything in both will ask you to choose.")}
+          question={i18n._("Join both spaces into one? Anything that differs will ask you to choose.")}
           confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
           onConfirm={onJoin}
           onCancel={() => onJoinConfirm(false)}
@@ -884,6 +884,14 @@ function Header({
           data-testid="space-primary"
           className={PRIMARY}
           disabled={disabled || pending}
+          // What Join does is the control's to say (DR-069), as the
+          // first-meeting card's Join says it; a running join's word
+          // says it already.
+          title={
+            joining
+              ? undefined
+              : i18n._("Brings both spaces into one and asks about anything that differs")
+          }
           onClick={() => onJoinConfirm(true)}
         >
           {joining

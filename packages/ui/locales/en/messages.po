@@ -1079,6 +1079,7 @@ msgstr "branch {branch} · {status}"
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "Brings a file in as the source, then asks to adapt it"
 
+#: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "Brings both spaces into one and asks about anything that differs"
 msgstr "Brings both spaces into one and asks about anything that differs"
@@ -2591,8 +2592,8 @@ msgstr "Join both into one space, or check the remote URL."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
-msgid "Join both spaces into one? Anything in both will ask you to choose."
-msgstr "Join both spaces into one? Anything in both will ask you to choose."
+msgid "Join both spaces into one? Anything that differs will ask you to choose."
+msgstr "Join both spaces into one? Anything that differs will ask you to choose."
 
 #. the Join control, while the join runs
 #: src/components/SpaceSurface.tsx
@@ -4982,6 +4983,10 @@ msgstr "these sessions"
 msgid "Thinking"
 msgstr "Thinking"
 
+#: src/components/SpecView.tsx
+msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
+msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "This conversation is in use elsewhere — its settings read only."
@@ -5018,10 +5023,6 @@ msgstr "This project's overview: history, now, up next, sources, repo state"
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
 msgstr "This record is not in the project's specs tree"
-
-#: src/components/SpecView.tsx
-msgid "This refreshes the spec law and prints a migration prompt for an AI agent to apply:"
-msgstr "This refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"

@@ -1135,7 +1135,7 @@ export function SyncTab({
           {firstJoin ? (
             <InlineConfirm
               question={i18n._(
-                "Join both spaces into one? Anything in both will ask you to choose.",
+                "Join both spaces into one? Anything that differs will ask you to choose.",
               )}
               confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
               onConfirm={() => { setFirstJoin(false); void spaceSync({ join: true }); }}

@@ -256,7 +256,7 @@ When a sync is admitted, the core shall run these steps in order, the Sync contr
 Where `main` and the remote's `main` share no common ancestor, when a sync compares, the core shall stop with "Unrelated history" unless the sync was started as a join, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)]:
 
 - Join confirms inline, naming that both histories become one space and that a unit present on both sides differently will ask for a choice ([DR-010](../decisions/010-interface-craft.md) §4);
-- without the join, the surface offers Join in place of Sync with the guidance that a wrong remote URL is the other explanation.
+- without the join, the surface offers Join in place of Sync, titled as bringing both into one and asking about anything that differs, with the guidance that a wrong remote URL is the other explanation.
 
 #### space-14
 

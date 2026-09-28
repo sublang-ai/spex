@@ -820,10 +820,16 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
 
   test("unrelated histories offer Join, confirmed inline with Cancel focused (space-13)", async () => {
     await renderSpace(repoState({ repository: { ...REPO, unrelated: true }, sync: { phase: "unrelated" } }));
+    // Join in place of Sync says what it does in its title, beside the
+    // card's one phrase of guidance.
+    expect(screen.getByTestId("space-primary").title).toBe(
+      "Brings both spaces into one and asks about anything that differs",
+    );
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("check the remote URL");
     fireEvent.click(screen.getByRole("button", { name: "Join" }));
     const confirm = screen.getByTestId("space-join-confirm");
     expect(confirm.textContent).toContain("Join both spaces into one?");
-    expect(confirm.textContent).toContain("will ask you to choose");
+    expect(confirm.textContent).toContain("Anything that differs will ask you to choose.");
     expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByTestId("space-join-confirm")).toBeNull();
