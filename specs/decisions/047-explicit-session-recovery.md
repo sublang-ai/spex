@@ -8,6 +8,7 @@
 Accepted (2026-09-05).
 Amends [DR-045](045-unified-session-storage.md) with desktop access to uncertain-turn recovery.
 Extended by [DR-060](060-failed-workflow-control.md) to the workflow parked in its recoverable failure state, a condition that never stands with uncertainty; the uncertain-turn decision below is unchanged.
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its two controls: Restore replaces Retry, restoring the saved position and reporting what was recorded without repeating it, and Discard is offered only where Playbook's discard predicate holds.
 
 ## Context
 

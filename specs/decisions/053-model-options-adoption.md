@@ -7,6 +7,7 @@
 
 Accepted.
 Amends [DR-050](050-shared-storage-cutover.md) for dependency floors.
+Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its Cligent floor alone, now `^0.27.0`.
 
 ## Context
 

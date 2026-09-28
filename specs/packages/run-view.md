@@ -317,13 +317,13 @@ When the core reconnects or reports replaced history [[core-service-92](core-ser
 
 #### run-view-110
 
-While a stored session is uncertain, the run view shall show "Interrupted turn" with the saved input and explicit Retry and Discard controls using the core's recovery commands [[core-service-82](core-service.md#core-service-82)] [[core-service-83](core-service.md#core-service-83)] ([DR-047](../decisions/047-explicit-session-recovery.md)):
+While a stored session is uncertain, the run view shall show "Interrupted turn" with the saved input, a Restore control using the core's restore command [[core-service-82](core-service.md#core-service-82)], and a Discard control using its discard command [[core-service-83](core-service.md#core-service-83)] only where the session summary calls the attempt discardable [[core-service-32](core-service.md#core-service-32)] ([DR-047](../decisions/047-explicit-session-recovery.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
 
 - normal submission and queued sends remain blocked; drafts and queued input remain available;
-- Retry confirms that it uses the saved input and configuration after checking completed work;
-- Discard confirms that it restores the preceding checkpoint only if no effects were added, or removes a fresh session;
+- Restore acts without a confirmation, its tooltip reading "Nothing is repeated";
+- Discard, where drawn, confirms that the unprocessed message is dropped, or a fresh session removed; where the summary says otherwise it is absent, and nothing explains its absence ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - confirmation focuses Cancel, Escape cancels, and pending or disconnected controls are disabled;
-- success follows the reported state in place; refusal shows its cause with the transcript and draft preserved.
+- success follows the reported state in place, a restore's report standing as the Captain's reply; refusal shows its cause with the transcript and draft preserved.
 
 #### run-view-125
 
@@ -827,8 +827,9 @@ The start view shall obtain projects, playbooks, captain identity, and readiness
 
 When a browser journey opens an interrupted CLI-created session, it shall verify the recovery controls [[run-view-110](#run-view-110)]:
 
-- the saved input is visible, submission is blocked, and confirmation supports keyboard cancellation;
-- Retry sends only the session ID and displays the resulting records;
+- the saved input is visible, submission is blocked, and Discard's confirmation supports keyboard cancellation;
+- Restore sends only the session ID without a confirmation and displays the Captain's report, with no agent's reply;
+- an attempt with a recorded step shows Restore alone;
 - Discard refusal preserves the error, transcript and draft; successful discard shows the restored state or closes the removed session;
 - pending requests cannot be submitted twice, and disconnected controls cannot dispatch.
 
@@ -1107,6 +1108,13 @@ Where the harness boots the served shell with the demo project registered and th
 #### run-view-99
 
 Where the harness boots with the demo project registered, when the journey sends a prompt the scripted Captain parks on a player question, the test suite shall assert the reply round trip through the page: the question renders as an incoming Captain bubble naming the player, with the composer inviting an answer or clarification [[run-view-9](#run-view-9)], the state chip reads waiting in amber [[run-view-59](#run-view-59)], and the reply goes out as the next turn, after which the chip settles [[run-view-9](#run-view-9)].
+
+#### run-view-151
+
+Where the harness boots the served shell's real Captain with the demo project registered and a substitute coder whose first phase asks the Boss a question the hidden judgment returns as awaiting the Boss, when the journey sends the request, the test suite shall assert the relay through the page ([DR-085](../decisions/085-boss-talks-through-captain.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
+
+- the question reaches the Boss once, as the Captain's reply in its own words, and the runtime's raw question status adds no message of its own [[run-view-9](#run-view-9)];
+- the wait stands with the composer inviting the reply, and the Boss's answer is delivered to the run that asked, after which the wait clears [[run-view-9](#run-view-9)].
 
 #### run-view-100
 
