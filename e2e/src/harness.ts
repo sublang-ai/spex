@@ -1257,11 +1257,13 @@ export async function awaitCaptainLine(
   times = 1,
   watch: RunWatch = {},
 ): Promise<void> {
-  const lines = page
-    .getByTestId("captain-pane")
-    .getByTestId("system-line")
-    .filter({ hasText: line });
+  const lines = captainLines(page, line);
   await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout, watch);
+}
+
+/** The Captain pane's status lines that carry `line`. */
+export function captainLines(page: Page, line: string) {
+  return page.getByTestId("captain-pane").getByTestId("system-line").filter({ hasText: line });
 }
 
 /** A player's pane carries the output of a call it served: no longer
@@ -1271,6 +1273,20 @@ export async function expectEngaged(page: Page, playerId: string, least = 50): P
   await expect(pane).toBeVisible();
   await expect(pane).not.toContainText("Idle until the playbook calls");
   expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
+}
+
+/** The calls a player's pane shows it served, by their positions in
+ * the session's record stream: each call opens on a prompt naming the
+ * role it served (run-view-7), and every earlier entry is shown first,
+ * so a long session's first calls count too. */
+export async function callsServed(page: Page, playerId: string): Promise<number[]> {
+  const pane = page.getByTestId(`player-pane-${playerId}`);
+  const earlier = pane.getByRole("button", { name: /earlier entries/ });
+  while ((await earlier.count()) > 0) await earlier.first().click();
+  const ids = await pane
+    .locator('[data-testid^="call-role-"]')
+    .evaluateAll((labels) => labels.map((label) => label.getAttribute("data-testid") ?? ""));
+  return ids.map((id) => Number(id.slice("call-role-".length))).sort((a, b) => a - b);
 }
 
 // ---------------------------------------------------------------------------

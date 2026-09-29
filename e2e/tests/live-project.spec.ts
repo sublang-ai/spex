@@ -10,12 +10,13 @@
 // captured on the Dashboard and started, and a `/code` implementing
 // the decision is queued behind it; the decision runs with its review
 // to a settled turn, the queue hands off to the `/code` with nothing
-// pressed, and it settles in turn. A question a player asks on the way
-// is answered through the Captain, as the Boss would. Both intents are
-// confirmed, History lists them, and the repository carries a commit
-// from each cycle and passes its own tests.
+// pressed, and it settles in turn, each after its own review. A
+// question a player asks on the way is answered through the Captain,
+// as the Boss would. Both intents are confirmed, History lists them,
+// and the repository carries a commit from each cycle and passes its
+// own tests.
 
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -29,6 +30,8 @@ import {
   attachRun,
   awaitCaptainLine,
   awaitRun,
+  callsServed,
+  captainLines,
   commitCount,
   commitIdentity,
   expectEngaged,
@@ -47,6 +50,34 @@ const SECOND =
 const CYCLE = 60 * 60_000;
 /** From a settled turn to the queued intent's dispatch (DR-077). */
 const HANDOFF = 5 * 60_000;
+/** The new repository's own tests, which the agents wrote. */
+const NPM_TEST = 5 * 60_000;
+
+/** Run the repository's own `npm test` in a process group of its own,
+ * killed whole once `budget` runs out: a test script left hanging —
+ * an open handle, a runner the agents chose — then fails the journey
+ * with its output rather than stalling it, and the journey's own
+ * timeout can still fire meanwhile. */
+async function npmTest(cwd: string, budget: number): Promise<{ code: number | null; output: string; timedOut: boolean }> {
+  const child = spawn("npm", ["test"], { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += String(chunk)));
+  child.stderr.on("data", (chunk) => (output += String(chunk)));
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try {
+      process.kill(-child.pid!, "SIGKILL");
+    } catch {
+      // Already gone.
+    }
+  }, budget);
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (exit) => resolve(exit));
+  }).finally(() => clearTimeout(timer));
+  return { code, output, timedOut };
+}
 
 /** The commits a repository holds: none before its first. */
 function commits(dir: string): number {
@@ -184,6 +215,12 @@ test("dashboard-63, run-view-150 @live: a project created from the palette devel
   await expect(captain).not.toContainText(/turn failed/i);
   await expectEngaged(page, "dev.coder", 200);
   await expectEngaged(page, "dev.reviewer");
+  // The decision settled after its review, the review's last call the
+  // reviewer's: every call past it serves the next cycle, whose own
+  // review starts only minutes after the handoff.
+  await expect(captainLines(page, "/review returned to /decide")).not.toHaveCount(0);
+  const firstCycleEnd = (await callsServed(page, "dev.reviewer")).at(-1)!;
+  expect(firstCycleEnd, "the reviewer served the decision's review").toBeGreaterThan(0);
   const afterFirst = commits(projectDir);
   expect(afterFirst).toBeGreaterThan(seeded);
 
@@ -207,8 +244,14 @@ test("dashboard-63, run-view-150 @live: a project created from the palette devel
   await awaitCaptainLine(page, "/code finished", CYCLE, 1, answering);
   await attachRun(page, "cycle 2: finished");
   await expect(captain).not.toContainText(/turn failed/i);
-  await expectEngaged(page, "dev.coder", 200);
-  await expectEngaged(page, "dev.reviewer");
+  // Both players served this cycle — the panes keep the whole session,
+  // so a call past the first cycle's end is this cycle's — and it
+  // settled after its own review.
+  for (const player of ["dev.coder", "dev.reviewer"]) {
+    const latest = (await callsServed(page, player)).at(-1) ?? 0;
+    expect(latest, `${player} served /code`).toBeGreaterThan(firstCycleEnd);
+  }
+  await expect(captainLines(page, "/review returned to /code")).not.toHaveCount(0);
   await expect(box).toBeEnabled();
   await expect(page.getByTestId("end-session")).toHaveCount(0);
   await expect(page.getByTestId("history-notice")).toHaveCount(0);
@@ -249,15 +292,9 @@ test("dashboard-63, run-view-150 @live: a project created from the palette devel
   });
   expect(existsSync(join(projectDir, "package.json")), "the /code cycle wrote a package.json").toBe(true);
   expect(git(projectDir, "grep", "-l", "sum", "--", "*.js", "*.mjs", "*.cjs", "*.ts")).not.toBe("");
-  let output = "";
-  try {
-    output = execFileSync("npm", ["test"], { cwd: projectDir, encoding: "utf8", stdio: "pipe" });
-  } catch (error) {
-    const failed = error as { stdout?: string; stderr?: string };
-    output = `${failed.stdout ?? ""}${failed.stderr ?? ""}`;
-    throw error;
-  } finally {
-    await test.info().attach("npm test", { body: output, contentType: "text/plain" });
-  }
-  expect(output, "npm test ran at least one passing test").toMatch(/\bpass\s+[1-9]/);
+  const tested = await npmTest(projectDir, NPM_TEST);
+  await test.info().attach("npm test", { body: tested.output, contentType: "text/plain" });
+  expect(tested.timedOut, `npm test finished within ${NPM_TEST / 60_000} minutes`).toBe(false);
+  expect(tested.code, "npm test passed").toBe(0);
+  expect(tested.output, "npm test ran at least one passing test").toMatch(/\bpass\s+[1-9]/);
 });
