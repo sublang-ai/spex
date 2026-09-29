@@ -627,6 +627,9 @@ export function applyRecord(
         const runs = ((r.payload as Partial<RestoredPosition> | undefined)?.runs ?? [])
           .filter((run) => typeof run?.sessionId === "string" && typeof run.playbookId === "string");
         const fold = foldRestored(view.frames, runs, r.timestamp, view.settledRuns);
+        // The call the process died in no longer runs: no lane reads as
+        // working on it (run-view-74, run-view-7).
+        for (const lane of Object.values(view.players)) lane.running = false;
         const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
         const bind = (frame: MachineFrame): void => {
           if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;

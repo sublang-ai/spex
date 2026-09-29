@@ -3244,14 +3244,20 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // process died in, and no notice would stand.
     const interrupted = applyRecords(initialSessionView(PLAYERS), MACHINE_INTERRUPTED);
     expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
+    expect(interrupted.players["dev.coder"]?.running).toBe(true);
     const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
     expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    // The call the process died in no longer runs on its lane either
+    // (run-view-74): no running mark, no working reading.
+    expect(Object.values(view.players).filter((lane) => lane.running)).toEqual([]);
     // The report starts the lost turn again under its own id and
     // message: the message was sent once, and reads once.
     expect(view.captain.filter((line) => line.kind === "boss").map((line) => [line.turnId, line.text])).toEqual([
       [21, "/code fix the refresh path"],
     ]);
     renderFailed({ view });
+    expect(screen.queryByTestId("player-running")).toBeNull();
+    expect(screen.queryByTestId("player-working")).toBeNull();
     expect(screen.getAllByTestId("boss-bubble")).toHaveLength(1);
     expect(screen.getByText(/The process stopped during the first phase/)).toBeTruthy();
     expect(screen.getByTestId("failed-workflow-what").textContent).toBe(

@@ -731,8 +731,8 @@ export const MACHINE_RECOVERED: FixtureEntry[] = [
 ];
 
 /** A run a stopped writer left mid-step (DR-088): underway in its
- * first phase with the coder's call running, and no terminal record,
- * since the process died there. */
+ * first phase with the coder's call running — its prompt recorded, its
+ * finish never — and no terminal record, since the process died there. */
 export const MACHINE_INTERRUPTED: FixtureEntry[] = [
   rec(751, {
     type: "turn_started",
@@ -747,6 +747,13 @@ export const MACHINE_INTERRUPTED: FixtureEntry[] = [
     stateId: "firstPhase",
     roleId: "coder",
     playerId: "dev.coder",
+  }),
+  rec(755, {
+    type: "player_prompt",
+    turnId: 21,
+    timestamp: 21_004,
+    playerId: "dev.coder",
+    prompt: "Implement the refresh path fix.",
   }),
 ];
 
