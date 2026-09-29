@@ -120,7 +120,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17, slc 0.12 and Cligent 0.27 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
+- The app requires Playbook 17.1, slc 0.12 and Cligent 0.28 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+  [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md)),
+  and locks the agent SDKs at the releases Cligent 0.28 tests: Claude
+  Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33.
+  Cligent refuses an agent runtime older than the oldest release that
+  serves its provider's latest models, so an older runtime on your
+  `PATH`, such as an OpenCode CLI before 1.18.29, reads not ready with
+  the command that upgrades it.
   **Upgrade every host that shares your Spex home together, and snapshot
   the home first** ([DR-050](specs/decisions/050-shared-storage-cutover.md)):
   once this build saves a session, a host on Playbook 16 or older — a
@@ -328,11 +335,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the model its runtime reported for its latest call while the adapter
   and model setting that call began under still stand, what is set kept
   in its tooltip; a change of either shows at once, as before.
-  Descriptions, the default model and reported models appear once
-  Cligent reports them.
-- A new player lane and a new role assignment start on
-  `claude-opus-5-5`, the latest Claude model, where they started on
-  `claude-opus-5`.
+  Cligent 0.28 supplies the descriptions, the default model and the
+  reported models, wherever the runtime reports them.
+- A new Spex home's starter configuration, a new player lane and a new
+  role assignment start on `claude-opus-5-5`, the latest Claude model,
+  where they started on `claude-opus-5`.
 - Protocol version 17 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
