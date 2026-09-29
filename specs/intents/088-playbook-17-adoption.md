@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `adopt-playbook-17`, awaiting merge to `main`; not released.
+Completed on `playbook-17-adoption`, awaiting merge to `main`; not released.
 
 ## Intent
 
@@ -21,6 +21,7 @@ Realize [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)
 - [x] The core suites on Playbook 17's settlement of a saved stop and its restore after Git selection; the one-effect rule in the preamble; the relay journey over the real shell.
 - [x] The upgrade notes in the changelog.
 - [x] The review's corrections: DR-088's relations to DR-080, DR-081, DR-077 and DR-062 and its reference; a stale Restore refused; Restore named as an interrupted session's way on; a stopped run's controls kept where its stop settles; the restored position recorded and read by the ledger and the run view; a restore's report finishing nothing; Restore proven to report once.
+- [x] The recheck's corrections: the Captain shell's own machine parking nothing; a restored failure counted only where the restore moved a run into it; a restore marked before it runs and its position completed after a stop; a restore's report reading stopped; the restored message drawn once; no call left running after a restore; a restored failure's cause phrased on its card and notice.
 
 ## Tasks
 
@@ -42,6 +43,15 @@ Realize [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)
 16. Record where a restore leaves each run, and read its report as a stop.
 17. Prove Restore reports once.
 18. Record the review's verification.
+19. Keep the Captain's own machine out of parked runs.
+20. Summon only a failure a restore moved a run into.
+21. Complete a restore a stopped core left unrecorded.
+22. Read a restore's report stopped, not failed.
+23. Draw a restored message once.
+24. Leave no call running after a restore.
+25. Say why a restored run failed.
+26. Note what the recheck changed for Restore.
+27. Record the recheck's verification.
 
 ## Verification
 
@@ -52,3 +62,6 @@ The parked-failure capture under Playbook 17 kept the stream's shape and the pub
 
 Verified again on 2026-09-28 after review: the root build passed; the root test gate passed 1,229/1,229 (23 script, 133 CLI, 342 core, 704 UI, 16 desktop and 11 server tests); the hermetic journeys passed 63/63; the core, UI and desktop catalogs are whole; `spex lint` passed.
 A CLI writer killed mid-step lists its step as recorded work, and Restore brings `/code` back at `failed` with the checkpoint's `runtime-defect` cause, publishing the same no-op reconciliation beside a ready abandonment; a Boss abort mid-step settles and publishes them too.
+
+Verified again on 2026-09-28 after an adversarial recheck, on `playbook-17-adoption` rebased on the scratch-leak fix: the root build passed; the root test gate passed 1,236/1,236 (23 script, 133 CLI, 348 core, 705 UI, 16 desktop and 11 server tests); the hermetic journeys passed 63/63; the core, UI and desktop catalogs are whole; the journeys typecheck; `spex lint` passed.
+A Boss abort during the Captain's own call now reads `stopped` with Start; Restore of a run the Boss had stopped raises no summons; a restore whose core stopped before recording the position is completed once by the next core to read it; a restored dispatch reads `stopped`; and the restored run draws its message once, no call running, and its cause on the card and the notice.
