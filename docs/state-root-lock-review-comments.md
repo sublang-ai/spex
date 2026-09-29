@@ -163,3 +163,42 @@ The proposal has legacy hostname-only records fail closed "when their origin can
 Today a legacy record whose hostname equals the current hostname and whose PID is dead is retired automatically.
 Under the new rule, the exact incident scenario, a stale `.lock/` after a crash, always needs manual cleanup on the first run after upgrade.
 Keeping today's rule for legacy-shaped records during the transition is no less safe than the current release; whether to keep it or accept the one-time manual step is a decision to state, not leave to implementation.
+
+---
+
+# Round 4 (2026-09-29): comments on the tagged-identity revision
+
+The three round-3 decisions are now written down: a version-tagged identity in the existing `hostname` field, the XDG-style Playbook state location on both hosts, and today's same-host/dead-PID rule kept for untagged owners.
+Checked against the installed Playbook: both owner validators require only a non-empty `hostname` string, so a tagged value passes without a schema change; an old Spex reader turns a tagged owner into a held-root refusal and an old Playbook reader into `unknown` or a foreign-host error, so the mixed-version behavior is a loss of takeover only, never a second writer.
+`slc` has no lease code.
+The Chinese text matches.
+What remains are implementation-shaping details.
+
+### 1. Let Playbook resolve the identity by default, so Spex cannot forget it
+
+The plan has Spex "update its calls to the Playbook API".
+Spex creates the session store with only `sessionsDir` ([store.ts](../packages/core/src/store.ts) `sessionStore`) and never constructs the repository coordinator at all; the session host builds it internally.
+If Playbook's store and coordinator default `hostname` to the identity file instead of `os.hostname()`, both paths are fixed with no Spex call change and no way to miss one.
+Spex then needs the public identity API only for its own root lease and the storage Git reservation.
+Suggest stating that split: Playbook defaults, Spex consumes for its own two writers.
+
+### 2. State why the tag cannot collide with a legacy value
+
+The safety of "recognize only the exact tagged format" rests on a real hostname never containing `:`.
+That is true by the hostname grammar, but the proposal should say it, since it is the whole reason an untagged value can be trusted as a hostname.
+
+### 3. An unusable identity file is not a lost one
+
+The lost-identity rule generates a new identity.
+If the file exists but is unreadable or malformed, generating over it could silently orphan every tagged owner on the machine.
+Suggested rule: refuse to create a new identity while a file is present, treat the identity as unavailable, and fail closed on any tagged owner until an operator repairs the file.
+
+### 4. Two Spex implementation notes for the diagnostics requirement
+
+- The root refusal "state root … is held by pid … on …" is a catalog message in both PO files ([DR-078](../specs/decisions/078-the-interface-speaks-the-readers-language.md)); the new wording is a new message id and both languages, and the build refuses an incomplete catalog.
+- Several homes on one machine (a developer's real home and a smoke run's isolated home) share one identity; that is the desired behavior and worth one sentence so it is not mistaken for a leak.
+
+### 5. The identity file sits beside a migration source
+
+`$XDG_STATE_HOME/playbook/sessions` is the directory the sessions migration reads and empties ([storage-18](../specs/packages/storage.md#storage-18)); the migration unlinks files inside `sessions/` only.
+The upstream review should confirm that no migration or cleanup ever removes the parent `playbook/` directory or treats the identity file as an input.
