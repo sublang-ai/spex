@@ -1826,9 +1826,10 @@ msgstr "桌面通知"
 msgid "Discard"
 msgstr "丢弃"
 
+#. confirm before Discard, offered only when the interrupted attempt recorded nothing
 #: src/components/SessionRecovery.tsx
-msgid "Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed."
-msgstr "丢弃这次尝试？仅在未产生任何影响时才会恢复到上一个检查点。新建的会话可能会被移除。"
+msgid "Discard the unprocessed message? A session with no earlier turn is removed."
+msgstr "丢弃这条未处理的消息？没有更早轮次的会话将被移除。"
 
 #: src/components/SpecEditor.tsx
 msgid "Discard unsaved changes?"
@@ -3142,6 +3143,11 @@ msgstr "自失败以来没有任何变化"
 msgid "Nothing in {project} needs attention."
 msgstr "{project} 中没有需要关注的内容。"
 
+#. Restore's tooltip: restoring reports what was recorded and runs no work again
+#: src/components/SessionRecovery.tsx
+msgid "Nothing is repeated"
+msgstr "不会重复任何工作"
+
 #: src/components/SpaceSync.tsx
 msgid "Nothing new on the remote"
 msgstr "远程仓库没有新内容"
@@ -3513,6 +3519,11 @@ msgstr "已按智能体的提议预填 — 可随意修改"
 msgid "Prefilled from the source and the compiled roles — edit anything"
 msgstr "已按源文本与编译出的角色预填 — 可随意修改"
 
+#. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
+#: src/lib/compile-log.ts
+msgid "Prefix"
+msgstr "前缀"
+
 #. editor mode: the rendered draft
 #: src/components/SpecEditor.tsx
 msgid "Preview"
@@ -3741,14 +3752,6 @@ msgstr "重新连接中…"
 #: src/lib/space.ts
 msgid "records"
 msgstr "记录"
-
-#: src/state/store.ts
-msgid "Recover the interrupted turn before sending another message."
-msgstr "发送新消息前，请先恢复中断的轮次。"
-
-#: src/components/RunView.tsx
-msgid "Recover the interrupted turn before sending."
-msgstr "发送前请先恢复中断的轮次。"
 
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
@@ -3996,16 +3999,32 @@ msgstr "调整图谱窗格大小"
 msgid "Resize the tree pane"
 msgstr "调整目录树窗格大小"
 
+#. act: bring back the interrupted work's saved position and report what was recorded; nothing runs again
+#: src/components/SessionRecovery.tsx
+msgid "Restore"
+msgstr "恢复"
+
 #: src/lib/failure-catalogue.ts
 msgid "Restore the branch yourself"
 msgstr "自行恢复分支"
+
+#: src/state/store.ts
+msgid "Restore the interrupted turn before sending another message."
+msgstr "发送新消息前，请先恢复中断的轮次。"
+
+#: src/components/RunView.tsx
+msgid "Restore the interrupted turn before sending."
+msgstr "发送前请先恢复中断的轮次。"
+
+#: src/components/SessionRecovery.tsx
+msgid "Restoring…"
+msgstr "恢复中…"
 
 #: src/lib/space.ts
 msgid "resume tokens for this machine's agent conversations; they work nowhere else"
 msgstr "本机智能体对话的续接令牌；在别处无效"
 
 #. act: load the transcript again
-#. act: run the interrupted turn again
 #. read the record again
 #. read the specs tree again
 #. run the stopped step again
@@ -4017,7 +4036,6 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/App.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
-#: src/components/SessionRecovery.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -4025,13 +4043,8 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 msgid "Retry"
 msgstr "重试"
 
-#: src/components/SessionRecovery.tsx
-msgid "Retry the saved input with its saved configuration after checking completed work?"
-msgstr "检查已完成的工作后，用保存的配置重试保存的输入？"
-
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
-#: src/components/SessionRecovery.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"

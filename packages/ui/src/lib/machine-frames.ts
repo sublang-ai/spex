@@ -189,6 +189,182 @@ function outcomeOf(status: string | undefined): MachineFrame["outcome"] {
   return undefined;
 }
 
+/** Settle a frame and everything it still has running: a run cannot
+ * outlive its caller, and an orphan card would be a lie. A child
+ * settles under its caller; only a root run reaches the thread, as
+ * `closed` (run-view-62). */
+function settleFrame(
+  open: readonly MachineFrame[],
+  frame: MachineFrame,
+  outcome: MachineFrame["outcome"],
+  at: number,
+  settled: readonly string[],
+): FrameFoldState {
+  const remaining = open.filter((f) => f.traceSessionId !== frame.traceSessionId);
+  const descendants: MachineFrame[] = [];
+  const collect = (parentId: string): void => {
+    for (const candidate of remaining) {
+      if (candidate.parentSessionId !== parentId) continue;
+      descendants.push(candidate);
+      collect(candidate.traceSessionId);
+    }
+  };
+  collect(frame.traceSessionId);
+  const orphaned = new Set(descendants.map((f) => f.traceSessionId));
+  const adopt = (parent: MachineFrame): MachineFrame => ({
+    ...parent,
+    settledCalls: [
+      ...parent.settledCalls,
+      ...descendants
+        .filter((f) => f.parentSessionId === parent.traceSessionId)
+        .map((child) =>
+          adopt({
+            ...child,
+            // Still running when its caller ended: unfinished.
+            outcome: child.outcome ?? "stopped",
+            closedAt: at,
+            activePlayer: undefined,
+            delegating: undefined,
+          }),
+        ),
+    ],
+  });
+
+  const complete = adopt({
+    ...frame,
+    outcome: frame.outcome ?? outcome,
+    closedAt: at,
+    activePlayer: undefined,
+    delegating: undefined,
+  });
+  const stillOpen = remaining.filter((f) => !orphaned.has(f.traceSessionId));
+  const nextSettled = [
+    ...settled,
+    complete.traceSessionId,
+    ...descendants.map((f) => f.traceSessionId),
+  ];
+
+  const parentIndex = complete.parentSessionId
+    ? stillOpen.findIndex(
+        (f) => f.traceSessionId === complete.parentSessionId,
+      )
+    : -1;
+  if (parentIndex >= 0) {
+    const parent = stillOpen[parentIndex];
+    const next = [...stillOpen];
+    next[parentIndex] = {
+      ...parent,
+      settledCalls: [...parent.settledCalls, complete],
+      delegating: undefined,
+    };
+    return { open: next, settled: nextSettled };
+  }
+  return { open: stillOpen, settled: nextSettled, closed: complete };
+}
+
+/** One run a restore's recorded position holds engaged (run-view-74,
+ * core-service-82): its trace identity and the state it stands in,
+ * shaped as a trace reports one. */
+export interface RestoredFrameRun {
+  sessionId: string;
+  playbookId: string;
+  depth: number;
+  parentSessionId?: string;
+  state: unknown;
+}
+
+/** Folds a restore's recorded position into the frame tree (run-view-74,
+ * DR-088). The restore moves no traced state — a run brought back into
+ * its failure state never traced the move — so the position the core
+ * recorded is where every run stands: each named run is underway in its
+ * named state, whatever the stream last said of it, its call no longer
+ * running; every other open frame settles unfinished. `closed` carries
+ * each root run that settled, in order. */
+export function foldRestored(
+  open: readonly MachineFrame[],
+  runs: readonly RestoredFrameRun[],
+  at: number,
+  settled: readonly string[] = [],
+): { open: MachineFrame[]; settled: string[]; closed: MachineFrame[] } {
+  const held = runs.filter((run) => drawable(run.playbookId, run.depth));
+  const named = new Set(held.map((run) => run.sessionId));
+  let frames = [...open];
+  let tombstones = settled.filter((id) => !named.has(id));
+  const closed: MachineFrame[] = [];
+  // Outermost first, so a caller takes the calls it still had running
+  // with it rather than each settling on its own.
+  for (;;) {
+    const gone = frames.find((frame) =>
+      !named.has(frame.traceSessionId) &&
+      !frames.some((caller) =>
+        caller.traceSessionId === frame.parentSessionId &&
+        !named.has(caller.traceSessionId))
+    );
+    if (!gone) break;
+    const fold = settleFrame(frames, gone, "stopped", at, tombstones);
+    frames = fold.open;
+    tombstones = [...fold.settled];
+    if (fold.closed) closed.push(fold.closed);
+  }
+  for (const [index, run] of held.entries()) {
+    const state = stateValue(run.state);
+    const callee = held[index + 1]?.parentSessionId === run.sessionId
+      ? held[index + 1]
+      : undefined;
+    const found = frames.find((frame) => frame.traceSessionId === run.sessionId);
+    const caller = run.parentSessionId
+      ? frames.find((frame) => frame.traceSessionId === run.parentSessionId)
+      : undefined;
+    const callerStateId =
+      caller?.delegating?.playbookId === run.playbookId
+        ? caller.delegating.stateId
+        : undefined;
+    const base: MachineFrame = found ?? {
+      traceSessionId: run.sessionId,
+      playbookId: run.playbookId,
+      depth: run.depth,
+      ...(run.parentSessionId ? { parentSessionId: run.parentSessionId } : {}),
+      ...(callerStateId ? { callerStateId } : {}),
+      active: null,
+      visited: [],
+      transitions: [],
+      activeTags: [],
+      calls: [],
+      settledCalls: [],
+      openedAt: at,
+    };
+    const active = state ?? base.active;
+    const delegating = callee && active
+      ? { stateId: active, playbookId: callee.playbookId }
+      : undefined;
+    // A run brought back in another state left the one the stream last
+    // had it in: that is the step a failure card names (run-view-147).
+    const moved = base.active && active && active !== base.active
+      ? { lastFired: { from: base.active, to: active, event: "", at } }
+      : {};
+    const restored: MachineFrame = {
+      ...base,
+      ...moved,
+      active,
+      visited: active && !base.visited.includes(active)
+        ? [...base.visited, active]
+        : base.visited,
+      activeTags: stateTags(run.state),
+      activePlayer: undefined,
+      delegating,
+      calls: delegating && !base.calls.some((call) =>
+        call.stateId === delegating.stateId &&
+        call.playbookId === delegating.playbookId)
+        ? [...base.calls, delegating]
+        : base.calls,
+    };
+    frames = found
+      ? frames.map((frame) => (frame === found ? restored : frame))
+      : [...frames, restored].sort((a, b) => a.depth - b.depth || a.openedAt - b.openedAt);
+  }
+  return { open: frames, settled: tombstones, closed };
+}
+
 /** Folds one playbook.trace payload into the frame tree. Returns the
  * next state; `closed` carries at most the one root frame this record
  * settled. */
@@ -226,75 +402,10 @@ export function foldTrace(
     return { open: next, settled };
   };
 
-  /** Settle a frame and everything it still has running: a run cannot
-   * outlive its caller, and an orphan card would be a lie. */
   const close = (
     frame: MachineFrame,
     outcome: MachineFrame["outcome"],
-  ): FrameFoldState => {
-    const remaining = open.filter((f) => f.traceSessionId !== traceSessionId);
-    const descendants: MachineFrame[] = [];
-    const collect = (parentId: string): void => {
-      for (const candidate of remaining) {
-        if (candidate.parentSessionId !== parentId) continue;
-        descendants.push(candidate);
-        collect(candidate.traceSessionId);
-      }
-    };
-    collect(frame.traceSessionId);
-    const orphaned = new Set(descendants.map((f) => f.traceSessionId));
-    const adopt = (parent: MachineFrame): MachineFrame => ({
-      ...parent,
-      settledCalls: [
-        ...parent.settledCalls,
-        ...descendants
-          .filter((f) => f.parentSessionId === parent.traceSessionId)
-          .map((child) =>
-            adopt({
-              ...child,
-              // Still running when its caller ended: unfinished.
-              outcome: child.outcome ?? "stopped",
-              closedAt: at,
-              activePlayer: undefined,
-              delegating: undefined,
-            }),
-          ),
-      ],
-    });
-
-    const complete = adopt({
-      ...frame,
-      outcome: frame.outcome ?? outcome,
-      closedAt: at,
-      activePlayer: undefined,
-      delegating: undefined,
-    });
-    const stillOpen = remaining.filter((f) => !orphaned.has(f.traceSessionId));
-    const nextSettled = [
-      ...settled,
-      complete.traceSessionId,
-      ...descendants.map((f) => f.traceSessionId),
-    ];
-
-    // A child settles under its caller; only a root run reaches the
-    // thread (run-view-62).
-    const parentIndex = complete.parentSessionId
-      ? stillOpen.findIndex(
-          (f) => f.traceSessionId === complete.parentSessionId,
-        )
-      : -1;
-    if (parentIndex >= 0) {
-      const parent = stillOpen[parentIndex];
-      const next = [...stillOpen];
-      next[parentIndex] = {
-        ...parent,
-        settledCalls: [...parent.settledCalls, complete],
-        delegating: undefined,
-      };
-      return { open: next, settled: nextSettled };
-    }
-    return { open: stillOpen, settled: nextSettled, closed: complete };
-  };
+  ): FrameFoldState => settleFrame(open, frame, outcome, at, settled);
 
   const opened = (): MachineFrame => {
     if (found) return found;

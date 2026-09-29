@@ -505,8 +505,8 @@ msgstr "bind the existing project before changing its session's agents"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
-msgid "bind the existing project before retrying"
-msgstr "bind the existing project before retrying"
+msgid "bind the existing project before restoring"
+msgstr "bind the existing project before restoring"
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -1354,6 +1354,11 @@ msgstr "players must be an object"
 msgid "players.captain is reserved for the session Captain, which is configured at the top level"
 msgstr "players.captain is reserved for the session Captain, which is configured at the top level"
 
+#. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
+#: src/authoring.ts
+msgid "Prefix"
+msgstr "Prefix"
+
 #. Config error; `profiles` is the config file's own retired field name
 #: src/config.ts
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
@@ -1389,19 +1394,6 @@ msgstr "Projects changed"
 msgid "queue replaced"
 msgstr "queue replaced"
 
-#. Why a session cannot continue; Retry and Discard are the interface's controls
-#: src/store.ts
-msgid "Recover the interrupted turn with Retry or Discard"
-msgstr "Recover the interrupted turn with Retry or Discard"
-
-#. Refusal; Retry and Discard are the controls the interface offers
-#. Refusal; Retry and Discard are the controls the interface offers
-#. Refusal; Retry and Discard are the controls the interface offers
-#: src/service.ts
-#: src/session.ts
-msgid "Recover the interrupted turn with Retry or Discard first"
-msgstr "Recover the interrupted turn with Retry or Discard first"
-
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
@@ -1426,6 +1418,16 @@ msgstr "Removed \"{name}\""
 #: src/space.ts
 msgid "Renamed \"{before}\" to \"{name}\""
 msgstr "Renamed \"{before}\" to \"{name}\""
+
+#. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
+#. Refusal; Restore is the control the interface offers for interrupted work
+#: src/service.ts
+#: src/session.ts
+#: src/store.ts
+msgid "Restore the interrupted turn first"
+msgstr "Restore the interrupted turn first"
 
 #. Guidance under a commit git failed; git commit is the command's own name
 #: src/space.ts
@@ -1743,7 +1745,7 @@ msgstr "the run is still parked, so the intent stays open"
 msgid "the session is active"
 msgstr "the session is active"
 
-#. Refusal: a Retry or Discard of this session is still running
+#. Refusal: a Restore or Discard of this session is still running
 #: src/session.ts
 msgid "the session is recovering"
 msgstr "the session is recovering"
@@ -1777,6 +1779,11 @@ msgstr "This run offers no recovery to rerun."
 #: src/service.ts
 msgid "this session has no compatible checkpoint"
 msgstr "this session has no compatible checkpoint"
+
+#. Refusal: Restore was asked of a session with nothing interrupted, as when another client restored or discarded it first
+#: src/session.ts
+msgid "This session has no interrupted turn to restore"
+msgstr "This session has no interrupted turn to restore"
 
 #. Refusal: the ending the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts

@@ -41,11 +41,13 @@ import {
   MACHINE_ANSWERED,
   MACHINE_ASKED,
   MACHINE_FAILED,
+  MACHINE_INTERRUPTED,
   MACHINE_ORPHAN,
   MACHINE_RECOVERED,
   MACHINE_RUN,
   MACHINE_STOPPED,
   PARKED_FAILURE,
+  machineRestored,
   type FixtureEntry,
 } from "../fixtures/sample-run.js";
 import codeGraph from "../fixtures/machines/code.json";
@@ -922,10 +924,10 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // its calling state in the call voice naming the callee, and the
     // strip's sentence still names both for the accessible name.
     expect(cards[0].getAttribute("data-expanded")).toBe("true");
-    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
     expect(cards[0].getAttribute("aria-label")).toContain("/review");
     const delegating = within(cards[0]).getByTestId(
-      "machine-state-t-code-reviewFirstCommit",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     expect(delegating.getAttribute("data-delegating")).toBe("true");
     expect(within(delegating).getByText("call /review")).toBeTruthy();
@@ -936,7 +938,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The running leaf is drawn too, and its header names the state
     // that called it.
     expect(cards[1].getAttribute("data-expanded")).toBe("true");
-    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewFirstCommit");
+    expect(cards[1].getAttribute("data-caller-state")).toBe("reviewNewIntentPhase");
     expect(reviewing.getAttribute("data-active")).toBe("true");
 
     // The running mark is the app's one pulse, and it says so.
@@ -965,7 +967,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     // The strip names the calling state and the callee, and the
     // connector still leaves it — containment survives the fold.
     expect(cards[0].getAttribute("data-expanded")).toBe("false");
-    expect(cards[0].getAttribute("aria-label")).toContain("review first commit");
+    expect(cards[0].getAttribute("aria-label")).toContain("review new intent phase");
     expect(screen.getByTestId("machine-connector-t-code")).toBeTruthy();
     // The child is untouched: the same tree, differently disclosed.
     expect(cards.map((card) => card.getAttribute("data-playbook"))).toEqual(
@@ -996,7 +998,7 @@ describe("run-view-66: the machine call tree from the trace", () => {
     );
     // The settled child stays anchored to the state that called it.
     expect(settled[1].getAttribute("data-caller-state")).toBe(
-      "reviewFirstCommit",
+      "reviewNewIntentPhase",
     );
   });
 
@@ -1044,13 +1046,13 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("boxes take their column's longest label; a long caption falls back to its role", () => {
     renderRun(MACHINE_RUN.slice(0, 13), true);
     const code = screen.getByTestId("machine-card-t-code");
-    // "reported review failure" sets its column's width, so it reads
+    // "review new intent phase" sets its column's width, so it reads
     // whole at 13px and the shorter names share the box width.
     const reported = within(code).getByTestId(
-      "machine-state-t-code-reportedReviewFailure",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     expect(reported.querySelector("text")!.textContent).toBe(
-      "reported review failure",
+      "review new intent phase",
     );
     const reportedBox = reported.querySelector("rect")!;
     const readyBox = within(code)
@@ -1065,11 +1067,11 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
 
   test("a running call names role and player at the caption step, or the role alone", () => {
     // Through the coder's call: the code machine's first column is as
-    // wide as "reported review failure", so the pair reads whole.
+    // wide as "review new intent phase", so the pair reads whole.
     renderRun(MACHINE_RUN.slice(0, 8));
-    const running = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    const running = screen.getByTestId("machine-state-t-code-firstPhase");
     const caption = within(running).getByTestId(
-      "machine-caption-t-code-runFirstPhase",
+      "machine-caption-t-code-firstPhase",
     );
     expect(caption.textContent).toBe("coder · dev.coder");
     expect(caption.getAttribute("font-size")).toBe("12");
@@ -1093,7 +1095,7 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
             type: "player.call.started",
             timestamp: 9_004,
             payload: {
-              stateId: "runFirstPhase",
+              stateId: "firstPhase",
               roleId: "coder",
               playerId: "security.compliance.reviewer.lane",
             },
@@ -1102,9 +1104,9 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
       },
     ]);
     renderRun(longLane);
-    const state = screen.getByTestId("machine-state-t-code-runFirstPhase");
+    const state = screen.getByTestId("machine-state-t-code-firstPhase");
     expect(
-      within(state).getByTestId("machine-caption-t-code-runFirstPhase").textContent,
+      within(state).getByTestId("machine-caption-t-code-firstPhase").textContent,
     ).toBe("coder");
     expect(state.querySelector("title")!.textContent).toContain(
       "coder · security.compliance.reviewer.lane",
@@ -1115,12 +1117,12 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
   test("unwalked exits into rest states fold to a count until walked or hovered", () => {
     renderRun(MACHINE_RUN.slice(0, 13), true);
     const code = screen.getByTestId("machine-card-t-code");
-    // runFirstPhase's three unwalked exits — two into failed, one
+    // firstPhase's three unwalked exits — two into failed, one
     // into the Boss-reply wait (playbook 12.2's CODE) — fold to one
     // "+3" marker whose title lists them, and no label.
-    const first = within(code).getByTestId("machine-state-t-code-runFirstPhase");
+    const first = within(code).getByTestId("machine-state-t-code-firstPhase");
     const folded = within(first).getByTestId(
-      "machine-exits-folded-t-code-runFirstPhase",
+      "machine-exits-folded-t-code-firstPhase",
     );
     expect(folded.textContent).toContain("+3");
     expect(folded.querySelector("title")!.textContent).toContain("→ failed");
@@ -1129,20 +1131,20 @@ describe("run-view-60/76/81: the card's words and its fit to the pane", () => {
     fireEvent.mouseEnter(first);
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(3);
     expect(
-      within(first).queryByTestId("machine-exits-folded-t-code-runFirstPhase"),
+      within(first).queryByTestId("machine-exits-folded-t-code-firstPhase"),
     ).toBeNull();
     fireEvent.mouseLeave(first);
     expect(within(first).queryAllByTestId(/^machine-exit-/)).toHaveLength(0);
     // An exit into working state stays a label; the one into failed
     // beside it folds to "+1".
     const review = within(code).getByTestId(
-      "machine-state-t-code-reviewFirstCommit",
+      "machine-state-t-code-reviewNewIntentPhase",
     );
     const labels = within(review).getAllByTestId(/^machine-exit-/);
     expect(labels).toHaveLength(1);
-    expect(labels[0].textContent).toContain("→ run ir task");
+    expect(labels[0].textContent).toContain("→ ir task phase");
     expect(
-      within(review).getByTestId("machine-exits-folded-t-code-reviewFirstCommit")
+      within(review).getByTestId("machine-exits-folded-t-code-reviewNewIntentPhase")
         .textContent,
     ).toContain("+1");
   });
@@ -2554,7 +2556,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
 
   test.each(["active", "unknown"] as const)("external %s ownership hides session controls and keeps streaming history", (externalWriter) => {
     const session = { ...SESSION, externalWriter, live: externalWriter === "active", turnActive: false,
-      recovery: { state: "uncertain" as const, input: "Saved request" } };
+      recovery: { state: "uncertain" as const, input: "Saved request", discardable: true } };
     const view = applyRecords(initialSessionView(PLAYERS), TURN_ONE);
     const composer = { draft: "Keep draft", queued: [{text: "Keep queue"}] };
     const props = {session, view, composer, connected: true, readOnly: false,
@@ -2566,7 +2568,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     expect(screen.queryByTestId("history-notice")).toBeNull();
     expect(screen.queryByText("Interrupted turn")).toBeNull();
     expect(screen.queryByTestId("boss-composer")).toBeNull();
-    for (const name of ["Retry", "Discard", "New session"]) {
+    for (const name of ["Restore", "Discard", "New session"]) {
       expect(screen.queryByRole("button", {name})).toBeNull();
     }
     applyRecords(view, [{seq: view.lastSeq + 1, record: {type: "captain_reply", timestamp: 100, turnId: 1, text: "New external output"} as TmuxPlayRecord}]);
@@ -2587,7 +2589,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
         record: {type: "turn_finished", turnId: 1, timestamp: 1} as TmuxPlayRecord});
       deliverServerMessageForTests({type: "session.state", session});
       await expect(useAppStore.getState().submitBossText("s1", "New request")).rejects.toThrow("ownership");
-      await expect(useAppStore.getState().recoverSession("s1", "retry")).rejects.toThrow("ownership");
+      await expect(useAppStore.getState().recoverSession("s1", "restore")).rejects.toThrow("ownership");
       await expect(useAppStore.getState().recoverSession("s1", "discard")).rejects.toThrow("ownership");
       await expect(useAppStore.getState().deleteSession("s1")).rejects.toThrow("ownership");
       expect(command).not.toHaveBeenCalled();
@@ -2599,8 +2601,8 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     } finally {setClientForTests(undefined); useAppStore.setState(previous, true);}
   });
 
-  function renderInterrupted(onRecover: (action: "retry" | "discard") => Promise<void> = vi.fn(async () => {}), connected = true) {
-    const session = { ...SESSION, live: false, continuable: false, recovery: { state: "uncertain" as const, input: "Original interrupted request" } };
+  function renderInterrupted(onRecover: (action: "restore" | "discard") => Promise<void> = vi.fn(async () => {}), connected = true, discardable = true) {
+    const session = { ...SESSION, live: false, continuable: false, recovery: { state: "uncertain" as const, input: "Original interrupted request", discardable } };
     const props = {
       session, view: initialSessionView(PLAYERS),
       composer: { draft: "Keep my draft", queued: [{ text: "Later" }] },
@@ -2629,33 +2631,52 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(onRecover).toHaveBeenCalledExactlyOnceWith("discard");
-    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(true);
-    await act(async () => refuse(new Error("Effect ledger advanced; discard refused.")));
-    expect(screen.getByRole("alert").textContent).toContain("Effect ledger advanced");
+    expect((screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => refuse(new Error("Recorded work or changed repository evidence must be restored and reported; the turn cannot be discarded")));
+    expect(screen.getByRole("alert").textContent).toContain("must be restored and reported");
     expect(screen.getByDisplayValue("Keep my draft")).toBeTruthy();
     expect(props.onSubmit).not.toHaveBeenCalled();
   });
 
-  test("sends recovery over the protocol with only the selected session ID", async () => {
+  test("Restore sends only the selected session ID at once, saying nothing is repeated, and never twice", async () => {
     const previous = useAppStore.getState();
-    const command = vi.fn(async () => ({ accepted: true }));
+    let accept!: () => void;
+    const command = vi.fn(() => new Promise((resolve) => { accept = () => resolve({ accepted: true }); }));
     setClientForTests({ command } as never);
     renderInterrupted(async (action) => {
       await useAppStore.getState().recoverSession(SESSION.id, action);
     });
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry" })));
-      expect(command).toHaveBeenCalledExactlyOnceWith("session.retry", { sessionId: SESSION.id });
+      const restore = screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement;
+      // It repeats and discards nothing, so it asks nothing (run-view-110).
+      expect(restore.getAttribute("title")).toBe("Nothing is repeated");
+      // With no confirm between the click and the command, a repeated
+      // click is what could send it twice (run-view-111).
+      fireEvent.click(restore);
+      fireEvent.click(restore);
+      await act(async () => {});
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+      expect(restore.disabled).toBe(true);
+      fireEvent.click(restore);
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.restore", { sessionId: SESSION.id });
+      await act(async () => accept());
+      expect(command).toHaveBeenCalledTimes(1);
     } finally {
       setClientForTests(undefined);
       useAppStore.setState(previous, true);
     }
   });
 
+  test("an attempt that recorded work offers Restore alone, and nothing explains the absence", () => {
+    renderInterrupted(undefined, true, false);
+    const region = screen.getByRole("region", { name: "Interrupted turn" });
+    expect(within(region).getAllByRole("button").map((button) => button.textContent)).toEqual(["Restore"]);
+    expect(region.textContent).not.toMatch(/discard/i);
+  });
+
   test("does not dispatch disconnected recovery", () => {
     renderInterrupted(undefined, false);
-    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Restore" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Discard" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -2677,7 +2698,7 @@ describe("run-view-110: explicit uncertain-turn recovery", () => {
       expect(useAppStore.getState().views.s1.turnActive).toBe(true);
       expect(screen.getByTestId("working-indicator")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
-      act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, live: false, recovery: { state: "uncertain", input: "saved" } } }));
+      act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, live: false, recovery: { state: "uncertain", input: "saved", discardable: true } } }));
       expect(command).not.toHaveBeenCalled();
       expect(useAppStore.getState().composers.s1.queued).toHaveLength(1);
       act(() => deliverServerMessageForTests({ type: "session.state", session: { ...SESSION, turnActive: false } }));
@@ -2711,7 +2732,7 @@ function StoredSessionRun() {
 test("stored mid-turn history stays idle and Discard permits a direct submission", async () => {
   const previous = useAppStore.getState();
   const stopped = { ...SESSION, live: false, turnActive: false, continuable: false,
-    recovery: { state: "uncertain" as const, input: "Interrupted request" } };
+    recovery: { state: "uncertain" as const, input: "Interrupted request", discardable: true } };
   const records = [
     { seq: 1, record: { type: "turn_started", timestamp: 1, turnId: 1, turn: { id: 1, prompt: "Interrupted request" } } },
     { seq: 2, record: { type: "player_prompt", timestamp: 2, turnId: 1, playerId: "dev.coder", prompt: "Work in progress" } },
@@ -2759,7 +2780,7 @@ test.each(["active", "unknown", "continuable", "uncertain"] as const)(
     const externalWriter = kind === "active" || kind === "unknown" ? kind : undefined;
     const session = { ...SESSION, live: kind === "active", turnActive: false, externalWriter,
       continuable: kind === "continuable",
-      ...(kind === "uncertain" ? { recovery: { state: "uncertain" as const, input: "Saved input" } } : {}),
+      ...(kind === "uncertain" ? { recovery: { state: "uncertain" as const, input: "Saved input", discardable: true } } : {}),
     };
     const history = vi.fn().mockRejectedValueOnce(new Error("Cannot read selected transcript"))
       .mockResolvedValueOnce({ records: [{ seq: 1, record: { type: "captain_reply", timestamp: 1, turnId: 1, text: "Recovered history" } }] });
@@ -2959,7 +2980,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // the whole of it in the tooltip: the label is still what the
     // turn will carry, so the reader can read all of it.
     const LABEL =
-      "Retry: Coder is running the first coding phase: a direct implementation, a new intent record, or an existing intent-record task";
+      "Retry: Coder runs the first coding phase: a direct implementation, a new IR, or the next task of an existing IR.";
     renderFailed({
       session: {
         ...SESSION,
@@ -2995,7 +3016,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     // (run-view-59); the raw id and the runtime's own message ride the
     // tooltip.
     expect(screen.getByTestId("failure-card-what").textContent).toBe(
-      "/code failed at run first phase",
+      "/code failed at first phase",
     );
     expect(screen.getByTestId("failure-card-why").textContent).toBe(
       "Committed, but left changes uncommitted: stray-1.txt",
@@ -3004,7 +3025,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       "Commit or discard what is left · Retry unresolved effect reconciliation: nothing has changed since it failed",
     );
     expect(card.getAttribute("title")).toBe(
-      "CODE governed outcome remains unresolved: repository-disposition-mismatch · step: runFirstPhase",
+      "CODE governed outcome remains unresolved: repository-disposition-mismatch · step: firstPhase",
     );
     // The bare status line it replaces is gone from the thread.
     expect(
@@ -3217,6 +3238,95 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     expect(busy.getAttribute("title")).toBe("Wait for the running turn");
   });
 
+  test("a restore's recorded position stands the run where it was restored, its call no longer running", () => {
+    // Playbook's report moves no traced state (DR-088): without the
+    // core's record the card would go on running the coder's call the
+    // process died in, and no notice would stand.
+    const interrupted = applyRecords(initialSessionView(PLAYERS), MACHINE_INTERRUPTED);
+    expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
+    expect(interrupted.players["dev.coder"]?.running).toBe(true);
+    const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
+    expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    // The call the process died in no longer runs on its lane either
+    // (run-view-74): no running mark, no working reading.
+    expect(Object.values(view.players).filter((lane) => lane.running)).toEqual([]);
+    // The report starts the lost turn again under its own id and
+    // message: the message was sent once, and reads once.
+    expect(view.captain.filter((line) => line.kind === "boss").map((line) => [line.turnId, line.text])).toEqual([
+      [21, "/code fix the refresh path"],
+    ]);
+    renderFailed({ view });
+    expect(screen.queryByTestId("player-running")).toBeNull();
+    expect(screen.queryByTestId("player-working")).toBeNull();
+    expect(screen.getAllByTestId("boss-bubble")).toHaveLength(1);
+    expect(screen.getByText(/The process stopped during the first phase/)).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
+      "The /code workflow failed and is waiting for you.",
+    );
+    expect(screen.getByTestId("failed-workflow").getAttribute("title")).toBe("state: failed");
+    // Why and what now, from the cause the recorded position carries
+    // (run-view-147): the card at the position's place and the notice
+    // phrase it alike.
+    const why = "A Playbook defect: The process stopped during this step. Review the recorded work before choosing how to continue.";
+    expect(screen.getByTestId("failed-workflow-why").textContent).toBe(why);
+    expect(screen.getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+    expect(screen.getByTestId("failure-card-why").textContent).toBe(why);
+    expect(screen.getByTestId("failure-card-next").textContent).toContain("Report it");
+    // The controls are the ones the restore's settlement published.
+    expect(
+      screen.getAllByTestId("failed-workflow-action").map((button) => button.getAttribute("data-action-id")),
+    ).toEqual([RECONCILE.id, ABANDON.id]);
+  });
+
+  test("a restored position leaves a run already parked in its failure state with the account it had", () => {
+    // The Boss stopped the run himself; a later message was lost and
+    // restored. The position moves no run into failure, so it draws no
+    // second card, and the notice keeps the cause the stop reported.
+    const view = applyRecords(initialSessionView(PLAYERS), [
+      ...MACHINE_FAILED,
+      ...machineRestored([{
+        sessionId: "t-fail",
+        playbookId: "code",
+        depth: 1,
+        state: { value: "failed", activeStateIds: ["failed"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "failed" },
+        pendingBossQuestions: [],
+        cause: { code: "runtime-defect", evidence: { reason: "not this one" } },
+      }]),
+    ]);
+    const before = applyRecords(initialSessionView(PLAYERS), MACHINE_FAILED);
+    expect(view.captain.filter((line) => line.kind === "status" || line.kind === "error").length)
+      .toBe(before.captain.filter((line) => line.kind === "status" || line.kind === "error").length);
+    renderFailed({ view });
+    expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow-why").textContent).not.toContain("not this one");
+  });
+
+  test("a restored position holding no run settles the stopped one unfinished and stands no notice", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored([])]);
+    expect(view.frames).toEqual([]);
+    expect(view.captain.filter((line) => line.kind === "machine").map((line) => line.frame?.outcome)).toEqual(["stopped"]);
+    renderFailed({ view, session: SESSION });
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+  });
+
+  test("a restored position raises the question it holds, and one holding none clears the wait", () => {
+    const question = { questionId: "firstPhase", asker: { kind: "role", roleId: "dev.coder" }, question: "Should I also migrate the legacy sessions?" };
+    const asking = {
+      sessionId: "t-ask",
+      playbookId: "code",
+      depth: 1,
+      state: { value: "awaitBossReply", activeStateIds: ["awaitBossReply"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "awaitBossReply" },
+      pendingBossQuestions: [question],
+    };
+    const raised = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored([asking])]);
+    expect(raised.pendingQuestion).toBe(question.question);
+    expect(raised.pendingQuestionPlayer).toBe("dev.coder");
+    expect(raised.frames.map((frame) => [frame.traceSessionId, frame.active])).toEqual([["t-ask", "awaitBossReply"]]);
+    const cleared = applyRecords(initialSessionView(PLAYERS), [...MACHINE_ASKED, ...machineRestored([])]);
+    expect(applyRecords(initialSessionView(PLAYERS), MACHINE_ASKED).pendingQuestion).toBeDefined();
+    expect(cleared.pendingQuestion).toBeUndefined();
+  });
+
   test("the notice leaves when the run leaves its failure state and stands when a turn only answers", () => {
     const props = {
       session: SESSION,
@@ -3245,7 +3355,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       ...SESSION,
       live: false,
       continuable: false,
-      recovery: { state: "uncertain" as const, input: "Saved request" },
+      recovery: { state: "uncertain" as const, input: "Saved request", discardable: true },
     };
     const { rerender } = renderFailed({ session: uncertain, readOnly: true });
     expect(screen.getByRole("region", { name: "Interrupted turn" })).toBeTruthy();
@@ -3465,9 +3575,9 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     expect(screen.getByTestId("state-chip").textContent).toBe("needs attention");
     rerender(<RunView {...props(viewOf(MACHINE_ANSWERED, MACHINE_RECOVERED))} />);
     const chip = screen.getByTestId("state-chip");
-    expect(chip.textContent).toBe("run first phase");
+    expect(chip.textContent).toBe("first phase");
     expect(chip.className).not.toContain("red");
-    expect(chip.getAttribute("title")).toBe("state: runFirstPhase");
+    expect(chip.getAttribute("title")).toBe("state: firstPhase");
   });
 });
 

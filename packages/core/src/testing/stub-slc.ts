@@ -13,7 +13,7 @@
 import { ARTIFACT_SCHEMAS } from "../config.js";
 
 /** slc's pipeline phases, in order. */
-export const SLC_PHASES = ["normalize", "text2gears", "optimize", "gears2fsm", "link"] as const;
+export const SLC_PHASES = ["normalize", "text2gears", "optimize", "prefix", "gears2fsm", "link"] as const;
 
 /** One scripted run's behavior: pass, fail at a phase, ask for
  * clarification, or stay in flight until killed. */

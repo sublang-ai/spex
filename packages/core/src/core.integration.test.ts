@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -32,6 +32,7 @@ import { parkingScript } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
+import { restoringRecord } from "./control-record.js";
 import type {
   Command,
   CommandResults,
@@ -42,6 +43,7 @@ import type {
   ServerMessage,
   SessionInfo,
   StoredRecord,
+  TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -1398,6 +1400,116 @@ test(
         .map((entry) => entry.band),
       ["finished"],
     );
+  },
+);
+
+test(
+  "core-service-114: a Boss abort mid-step settles at the saved step and publishes the run's controls",
+  { timeout: 180_000 },
+  async (t) => {
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: parkingScript({ held: true }),
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Add a line to work.txt",
+    });
+    // The coder's call is in flight with its commit made: the step's
+    // start is saved, its result is not.
+    const deadline = Date.now() + 60_000;
+    while (!readFileSync(join(harness.projectDir, "work.txt"), "utf8").includes("phase 1")) {
+      if (Date.now() > deadline) throw new Error("the coder never committed");
+      await sleep(20);
+    }
+    await client.expectOk("turn.abort", { sessionId: session.id });
+    const stopped = await settledSession(client, session.id, 1);
+
+    // Playbook settles the stop at the saved step, so the conversation
+    // continues and owes no recovery (core-service-6) ...
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    // ... and the run it left parked publishes its controls, read at
+    // that settlement as at any other (core-service-91, core-service-32).
+    assert.equal(stopped.parked?.reason, "failure");
+    assert.deepEqual(
+      stopped.parked?.actions.map((action) => action.id),
+      ["reconcile:unresolved-effect", "abandon:unresolved-effect"],
+    );
+    assert.equal(stopped.parked?.ending?.id, "give-up");
+    assert.ok(
+      Object.hasOwn(storedPrefs(harness.dataDir), `session:${session.id}:parked`),
+      "the reading is kept where a restart can find it",
+    );
+  },
+);
+
+test(
+  "core-service-114: a Boss abort during the Captain's own call settles stopped, parking nothing",
+  { timeout: 180_000 },
+  async (t) => {
+    // The Captain's decision is the call held in flight: the abort
+    // lands before any playbook run starts, and moves the shell's own
+    // machine to its failure state.
+    const script = parkingScript();
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: { rules: [{ match: /"action"/, response: { result: "", untilAborted: true } }, ...(script.rules ?? [])], fallback: script.fallback },
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const first = await client.expectOk("intent.queue", { projectId: project.id, text: "Add a line to work.txt" });
+    await client.expectOk("intent.queue", { projectId: project.id, text: "Then another" });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+    await client.waitFor((m) => m.type === "record" && m.record.type === "captain_telemetry" &&
+      (m.record as { topic?: unknown }).topic === "playbook.trace" &&
+      (m.record as { payload?: { type?: unknown } }).payload?.type === "captain.call.started", 60_000);
+    await client.expectOk("turn.abort", { sessionId: session.id });
+    const stopped = await settledSession(client, session.id, 1);
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    assert.ok(client.records("session").some(({ record }) =>
+      (record as { topic?: unknown; payload?: { playbookId?: unknown; type?: unknown; payload?: { to?: unknown } } }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown; payload?: { to?: unknown } } }).payload?.playbookId === "captain" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed"),
+      "the shell's own machine moved to its failure state");
+    // The stop settles and continues (core-service-6); the shell's own
+    // machine is no run, so nothing stands parked and no control is
+    // kept (core-service-91) ...
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.equal(stopped.parked, undefined);
+    // ... and the queue reads the stop, not a failure park, with Start
+    // available (core-service-107).
+    const ledger = await client.expectOk("ledger.get", {});
+    const row = ledger.intents.find((entry) => entry.intent.id === first.id);
+    assert.equal(row?.state, "queued");
+    assert.deepEqual([row?.next?.standing, row?.next?.manualStart], ["stopped", true]);
+    assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
   },
 );
 
@@ -2988,7 +3100,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
   });
 }
 
-for (const action of ["retry", "discard"] as const) {
+for (const action of ["restore", "discard", "restore after recorded work"] as const) {
   test(`core-service-84: desktop ${action} recovers CLI storage without current config`, async (t) => {
     const dir = scratchDir("spex-cross-host-recovery-");
     const configPath = join(dir, "config.yaml");
@@ -3007,6 +3119,11 @@ for (const action of ["retry", "discard"] as const) {
     const sessionId = cli.sessionId;
     // Uncertainty under an active CLI lease is not interrupted work.
     await cli.lease.beginTurn({input: "saved CLI input", attemptId: randomUUID(), attemptedExecutionProjection: config});
+    // A step's start saved before the writer stopped is recorded work:
+    // Playbook's predicate withholds Discard (DR-088).
+    const recorded = action === "restore after recorded work";
+    if (recorded) await cli.lease.recordProgress({snapshot: null, step: {id: randomUUID(), kind: "player",
+      stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId: Object.keys(config.catalog)[0]!}});
     writeFileSync(configPath, "captain: [invalid current config]\n");
     const service = await CoreService.start({token:"test", configPath, dataDir, adapterImports:imports, env:{}, watchConfig:true});
     t.after(async () => { await service.stop(); rmSync(dir, {recursive:true,force:true}); });
@@ -3020,28 +3137,39 @@ for (const action of ["retry", "discard"] as const) {
     assert.equal(session?.externalWriter,"active");
     assert.equal(session?.live,true);
     assert.equal(session?.recovery,undefined);
-    assert.equal((await client.command(`session.${action}`,{sessionId})).ok,false);
+    const command = action === "discard" ? "session.discard" : "session.restore";
+    assert.equal((await client.command(command,{sessionId})).ok,false);
     // Releasing only the lease must reveal recovery without a stream write.
     await cli.dispose();
-    await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.recovery?.input === "saved CLI input" && !message.session.externalWriter);
+    const revealed = await client.waitFor((message) => message.type === "session.state" && message.session.id === sessionId && message.session.recovery?.input === "saved CLI input" && !message.session.externalWriter);
+    assert.equal(revealed.type === "session.state" && revealed.session.recovery?.discardable, !recorded, "the summary carries Playbook's discard predicate");
+    assert.equal(revealed.type === "session.state" && revealed.session.continuationReason, "Restore the interrupted turn first", "the reason names the way on");
     const blocked = await client.command("turn.submit", {sessionId, text:"replacement input"});
     assert.equal(blocked.ok, false, "ordinary input cannot retry uncertainty");
     assert.equal(stats.runs.length, 0);
     // Both commands use the same exclusive lease as the CLI.
     const holder = await shared.acquire(sessionId);
-    const busy = await client.command(`session.${action}`, {sessionId});
+    const busy = await client.command(command, {sessionId});
     assert.equal(busy.ok, false);
     assert.equal(stats.runs.length, 0);
     await holder.release();
     await client.expectOk("project.register",{path:projectPath});
-    if (action === "retry") {
+    if (recorded) {
+      // Discard is refused with Playbook's cause, and nothing is lost.
+      const refused = await client.command("session.discard", {sessionId});
+      assert.ok(!refused.ok && /restored and reported/.test(refused.error.message), JSON.stringify(refused));
+      assert.equal(validateSessionManifest(await shared.readManifest(sessionId)).state, "uncertain");
+    }
+    if (action !== "discard") {
       await client.expectOk("subscribe", {channel:{kind:"session",sessionId}});
-      await client.expectOk("session.retry", {sessionId});
+      await client.expectOk("session.restore", {sessionId});
       await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.turnActive && m.session.turns > 0 && !m.session.recovery);
       const manifest = validateSessionManifest(await shared.readManifest(sessionId));
       assert.equal(manifest.state, "settled");
-      assert.ok(stats.runs.some((run) => run.prompt.includes("saved CLI input")));
-      assert.ok(stats.runs.every((run) => !run.prompt.includes("replacement input")));
+      // Restore reports and repeats nothing: no agent ran, and the
+      // Captain's reply stands in the stream (core-service-82).
+      assert.equal(stats.runs.length, 0, "Restore calls no agent");
+      assert.ok(client.records("session").some(({record}) => record.type === "captain_reply"), "the restore reports through the Captain");
       assert.ok(!JSON.stringify(manifest).includes("fake-resume-"));
       // Settlement released the runtime (core-service-91); the same CLI
       // facade can reopen the desktop settlement at once.
@@ -3062,6 +3190,260 @@ for (const action of ["retry", "discard"] as const) {
   });
 }
 
+/** Start the stopped writer (core-service-84): a CLI host that dies
+ * mid-step, its step's start saved and its coder's commit made — or,
+ * continuing a session, dies in the Captain's decision call. */
+async function stopWriterMidStep(sessionsDir: string, projectPath: string, configPath: string, input: string, continued?: string): Promise<string> {
+  const child = spawn(process.execPath, [join(dirname(new URL(import.meta.url).pathname), "testing", "stopped-writer.js"), sessionsDir, projectPath, configPath, input, ...(continued ? [continued] : [])], { stdio: ["ignore", "pipe", "inherit"] });
+  const sessionId = await new Promise<string>((resolveReady, reject) => {
+    let out = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk);
+      const ready = /READY (\S+)/.exec(out);
+      if (ready) resolveReady(ready[1]!);
+    });
+    child.once("exit", (code) => reject(new Error(`the stopped writer exited early (${code}): ${out}`)));
+  });
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  child.kill("SIGKILL");
+  await exited;
+  return sessionId;
+}
+
+test("core-service-84: a writer stopped mid-step restores to its saved step and publishes the run's controls", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-stopped-writer-");
+  const configPath = join(dir, "config.yaml");
+  const projectPath = join(dir, "project");
+  const dataDir = join(dir, "state");
+  const sessionsDir = join(dataDir, "sessions");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  seedRepository(projectPath);
+  writeFileSync(configPath, VALID_CONFIG);
+  const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+  const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  t.after(async () => { await service.stop(); rmSync(dir, { recursive: true, force: true }); });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+  await client.expectOk("project.register", { path: projectPath });
+
+  // The stopped step is recorded work: the summary says so, names the
+  // way on, and withholds Discard (core-service-32).
+  const interrupted = (await client.expectOk("session.list", {})).find((entry) => entry.id === sessionId);
+  assert.deepEqual(interrupted?.recovery, { state: "uncertain", input: "Add a line to work.txt", discardable: false });
+  assert.equal(interrupted?.continuationReason, "Restore the interrupted turn first");
+  const blocked = await client.command("turn.submit", { sessionId, text: "Something else" });
+  assert.ok(!blocked.ok && blocked.error.message === "Restore the interrupted turn first", JSON.stringify(blocked));
+  const refused = await client.command("session.discard", { sessionId });
+  assert.ok(!refused.ok && /restored and reported/.test(refused.error.message), JSON.stringify(refused));
+  assert.equal(validateSessionManifest(await createSessionStore({ sessionsDir }).readManifest(sessionId)).state, "uncertain");
+
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId } });
+  await client.expectOk("session.restore", { sessionId });
+  // A repeated request lands on the restore in flight, or on a session
+  // with nothing left to restore; either way it starts no second turn.
+  const repeated = await client.command("session.restore", { sessionId });
+  assert.ok(!repeated.ok, JSON.stringify(repeated));
+  const restored = await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId &&
+    !m.session.recovery && !m.session.live && !m.session.turnActive, 60_000);
+  assert.ok(restored.type === "session.state");
+  assert.equal(client.records("session").filter(({ record }) => record.type === "turn_started").length, 1, "one report, and no second turn");
+  // The saved step comes back and is reported; nothing runs again
+  // (core-service-82).
+  assert.equal(stats.runs.length, 0, "Restore calls no agent");
+  assert.ok(client.records("session").some(({ record }) => record.type === "captain_reply"), "the restore reports through the Captain");
+  const position = client.records("session").find(({ record }) =>
+    (record as { topic?: unknown }).topic === "spex.session.restored");
+  const runs = (position?.record as { payload?: { runs?: { playbookId: string; state: { stateId?: string }; cause?: { code: string } }[] } } | undefined)?.payload?.runs;
+  assert.deepEqual(runs?.map((run) => [run.playbookId, run.state.stateId, run.cause?.code]), [["code", "failed", "runtime-defect"]],
+    "the restored position is in the stream, the run at its failure state");
+  // Where the run stands, its controls: captured at the restore's
+  // settlement exactly as at any other (core-service-91).
+  assert.equal(restored.session.continuable, true, restored.session.continuationReason ?? "no reason given");
+  assert.equal(restored.session.parked?.reason, "failure");
+  assert.deepEqual(restored.session.parked?.actions.map((action) => [action.id, action.standing]),
+    [["reconcile:unresolved-effect", "no-op"], ["abandon:unresolved-effect", "ready"]]);
+  assert.equal(restored.session.parked?.ending?.id, "give-up");
+  // The run the restore brought back in its failure state summons as a
+  // failure, with the cause the runtime attached (core-service-49).
+  const ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === sessionId)
+    .map((entry) => [entry.band, entry.kind, entry.parked, entry.cause?.code]), [["interrupted", "failure", true, "runtime-defect"]]);
+});
+
+test("core-service-84: a restore bringing back a run the Boss stopped himself raises no failure", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-restored-stop-");
+  const configPath = join(dir, "config.yaml");
+  const projectPath = join(dir, "project");
+  const dataDir = join(dir, "state");
+  const sessionsDir = join(dataDir, "sessions");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  seedRepository(projectPath);
+  writeFileSync(configPath, VALID_CONFIG);
+  const { imports } = fakeAdapterImports(parkingScript({ held: true }));
+  const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  t.after(async () => { await service.stop(); });
+  const client = new Client(service.port());
+  t.after(() => client.close());
+  await client.open();
+  const project = await client.expectOk("project.register", { path: projectPath });
+  const intent = await client.expectOk("intent.queue", { projectId: project.id, text: "Add a line to work.txt" });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: intent.text, intentId: intent.id });
+  const deadline = Date.now() + 60_000;
+  while (!readFileSync(join(projectPath, "work.txt"), "utf8").includes("phase 1")) {
+    if (Date.now() > deadline) throw new Error("the coder never committed");
+    await sleep(20);
+  }
+  // The Boss stops the step himself: the run parks in its failure
+  // state, and his own stop summons no one.
+  await client.expectOk("turn.abort", { sessionId: session.id });
+  await settledSession(client, session.id, 1);
+  assert.deepEqual((await client.expectOk("ledger.get", {})).attention.filter((entry) => entry.sessionId === session.id), []);
+
+  // His next message is lost to a CLI writer that dies in the Captain's
+  // call, and Restore brings back the position before it: the run
+  // still parked where he stopped it.
+  await stopWriterMidStep(sessionsDir, projectPath, configPath, "Keep going", session.id);
+  await service["syncForeignSessions"]();
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.recovery?.input === "Keep going", 30_000);
+  const seen = client.messages.length;
+  await client.expectOk("session.restore", { sessionId: session.id });
+  const restored = await client.waitFor((m) => client.messages.indexOf(m) >= seen && m.type === "session.state" &&
+    m.session.id === session.id && !m.session.recovery && !m.session.live && !m.session.turnActive, 60_000);
+  assert.ok(restored.type === "session.state");
+  const runs = client.records("session").flatMap(({ record }) =>
+    (record as { topic?: unknown }).topic === "spex.session.restored"
+      ? (record as unknown as { payload: { runs: { playbookId: string; state: { stateId?: string }; cause?: { code: string } }[] } }).payload.runs
+      : []);
+  assert.deepEqual(runs.map((run) => [run.playbookId, run.state.stateId, run.cause?.code]), [["code", "failed", "aborted"]]);
+  // The restore moved no run into failure, so none summons; the park
+  // and its controls stand as his stop left them (core-service-82).
+  const ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
+  assert.equal(ledger.intents.find((entry) => entry.intent.id === intent.id)?.next?.standing, "failure-park");
+  assert.equal(restored.session.parked?.reason, "failure");
+});
+
+test("core-service-84: a restore whose core stopped before recording the position is completed once when a core next reads it", { timeout: 180_000 }, async () => {
+  const dir = scratchDir("spex-restore-crash-");
+  const configPath = join(dir, "config.yaml");
+  const projectPath = join(dir, "project");
+  const dataDir = join(dir, "state");
+  const sessionsDir = join(dataDir, "sessions");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  seedRepository(projectPath);
+  writeFileSync(configPath, VALID_CONFIG);
+  const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+
+  // A core marks the restore and reports it, then stops before it
+  // records where the runs stand: the stream holds the marker and the
+  // settled report, and no position.
+  const controller = await openSessionHost({
+    store: createSessionStore({ sessionsDir }), sessionId, mode: "recover", cwd: projectPath,
+    loadModule: (specifier: string) => import(specifier), adapterImports: imports,
+  });
+  const saved = await controller.read();
+  assert.equal(saved?.state, "uncertain");
+  await controller.lease.append(restoringRecord(saved!.uncertain!.input, Date.now()));
+  await controller.recover();
+  assert.equal((await controller.read())?.state, "settled");
+  await controller.dispose();
+
+  const start = () => CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  const positions = (records: { record: TmuxPlayRecord }[]) => records.flatMap(({ record }) =>
+    (record as { topic?: unknown }).topic === "spex.session.restored"
+      ? [record as unknown as { turnId: number; payload: { runs: { playbookId: string; state: { stateId?: string }; cause?: { code: string } }[] } }]
+      : []);
+  let service = await start();
+  try {
+    const client = new Client(service.port());
+    await client.open();
+    await client.expectOk("project.register", { path: projectPath });
+    const history = (await client.expectOk("history.get", { sessionId })).records;
+    const report = history.filter(({ record }) => record.type === "turn_started").at(-1)?.record as { turn: { id: number } } | undefined;
+    // The core reading the session completed the restore from the
+    // settled checkpoint: one position, naming the report's turn
+    // (core-service-82) ...
+    const recorded = positions(history);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0]?.turnId, report?.turn.id);
+    assert.deepEqual(recorded[0]?.payload.runs.map((run) => [run.playbookId, run.state.stateId, run.cause?.code]), [["code", "failed", "runtime-defect"]]);
+    // ... so the report reads as the stop it accounts for, and the run it
+    // brought back failed summons with the checkpoint's cause.
+    const ledger = await client.expectOk("ledger.get", {});
+    assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === sessionId)
+      .map((entry) => [entry.band, entry.kind, entry.parked, entry.cause?.code]), [["interrupted", "failure", true, "runtime-defect"]]);
+    const listed = (await client.expectOk("session.list", {})).find((entry) => entry.id === sessionId);
+    assert.equal(listed?.recovery, undefined);
+    assert.equal(listed?.continuable, true, listed?.continuationReason ?? "no reason given");
+    client.close();
+  } finally { await service.stop(); }
+
+  // Completing is idempotent: a later start appends nothing more.
+  service = await start();
+  try {
+    const client = new Client(service.port());
+    await client.open();
+    await client.expectOk("project.register", { path: projectPath });
+    assert.equal(positions((await client.expectOk("history.get", { sessionId })).records).length, 1);
+    client.close();
+  } finally { await service.stop(); }
+  assert.equal(stats.runs.length, 0, "completing a restore calls no agent");
+});
+
+test("core-service-84: Restore refuses a session with nothing interrupted and a relocated checkpoint, starting no turn", { timeout: 60_000 }, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("session.dispose", { sessionId: session.id });
+  const recordsBefore = (await client.expectOk("history.get", { sessionId: session.id })).records.length;
+
+  // A stale Restore — another client or the CLI got there first — is
+  // refused before anything opens, so it writes nothing.
+  const settled = await client.command("session.restore", { sessionId: session.id });
+  assert.ok(!settled.ok && settled.error.code === "invalid_request", JSON.stringify(settled));
+  assert.match(settled.error.message, /no interrupted turn to restore/);
+  assert.equal((await client.expectOk("history.get", { sessionId: session.id })).records.length, recordsBefore);
+  const unchanged = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(unchanged?.failed, false);
+  assert.equal(unchanged?.continuable, true);
+
+  // An interrupted turn whose repository has since moved: Playbook
+  // refuses to reconcile a relocated checkpoint, and says why.
+  const shared = createSessionStore({ sessionsDir: join(harness.dataDir, "sessions") });
+  const lease = await shared.acquire(session.id);
+  try {
+    const prior = await lease.read();
+    assert.ok(prior);
+    await lease.beginTurn({ input: "Interrupted here", attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+  } finally { await lease.release(); }
+  const relocated = join(harness.dir, "relocated-project");
+  mkdirSync(relocated);
+  execFileSync("git", ["init", "-q", relocated]);
+  await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [harness.projectDir] });
+  await harness.service["syncForeignSessions"]();
+  const moved = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(moved?.recovery?.input, "Interrupted here");
+  const refused = await client.command("session.restore", { sessionId: session.id });
+  assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
+  assert.match(refused.error.message, /relocation is unsupported/);
+  const after = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.equal(after?.recovery?.input, "Interrupted here", "the interrupted turn still stands");
+  assert.equal(after?.turns, moved?.turns, "no turn started");
+  assert.equal(after?.live, false);
+  assert.equal(harness.stats.runs.length, 0);
+});
+
 // Review regressions exercise the public protocol with independent files.
 test("core-service-86: damaged sessions refuse only their own execution and remain deletable", async (t) => {
   const harness = await startHarness(VALID_CONFIG, {realShell:true});
@@ -3076,7 +3458,7 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   await harness.service["syncForeignSessions"]();
   const reports = await client.expectOk("storage.diagnostics", {});
   assert.ok(reports.some((report) => report.blocking && report.file.endsWith(`${damaged.id}.json`)));
-  for (const type of ["turn.submit","session.retry","session.discard"] as const) {
+  for (const type of ["turn.submit","session.restore","session.discard"] as const) {
     const reply = type === "turn.submit" ? await client.command(type,{sessionId:damaged.id,text:"resume"}) : await client.command(type,{sessionId:damaged.id});
     assert.ok(!reply.ok && reply.error.code === "invalid_request", JSON.stringify(reply));
     assert.ok(!reply.ok && reply.error.message.includes(`${damaged.id}.json`));

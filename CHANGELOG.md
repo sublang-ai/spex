@@ -58,6 +58,40 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The app requires Playbook 17, slc 0.12 and Cligent 0.27 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
+  **Upgrade every host that shares your Spex home together, and snapshot
+  the home first** ([DR-050](specs/decisions/050-shared-storage-cutover.md)):
+  once this build saves a session, a host on Playbook 16 or older — a
+  `playbook` CLI sharing the home, or another device syncing it through
+  Space — cannot open that session.
+- A session parked on a question inside a built-in state that Playbook 16
+  renamed — `/code` waiting in its former `runFirstPhase`, for example —
+  no longer resumes from your answer. Drop it, or send a new request.
+- Interrupted work offers **Restore** where it offered Retry. Restore
+  brings back the saved position and reports what was recorded; nothing
+  is repeated and the saved message is not run again. You then continue
+  with the run's own controls or a new message. Your message reads once,
+  and the call that was interrupted no longer shows as working. A turn
+  stopped after its work was saved — an abort included — now settles
+  there and simply continues, the run it left waiting showing its
+  controls; an abort during the Captain's own call leaves Up next
+  stopped, with Start.
+- A Restore's report finishes nothing: it raises no Finished entry and
+  starts no queued work, and an interrupted intent returns to Up next,
+  stopped, with its history kept. A run it brings back failed asks for
+  you on the Dashboard and says why on its card and notice; a run you had
+  stopped yourself stays your stop. A Restore the app was closed in the
+  middle of is completed the next time the app reads the session.
+- **Discard** appears only when nothing was recorded: no step, no
+  abandonment, and unchanged repository evidence. Otherwise Restore
+  stands alone.
+- The compile row shows slc's new **Prefix** phase between Optimize and
+  Machine.
+- A player's question reaches you only as the Captain's explanation of
+  it, which completes [DR-085](specs/decisions/085-boss-talks-through-captain.md).
+- The playbook-authoring agent is taught that each outcome has one
+  repository effect: an outcome that may commit or leave the repository
+  unchanged is two outcomes, as slc's link requires.
 - The shared launcher configuration now lives at
   `config/playbook.config.yaml` under your Spex home, the home's
   directory of hand-written configuration ([DR-080](specs/decisions/080-the-config-directory-is-named-config.md)).
@@ -73,8 +107,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - The app requires Node.js 22.19 or later, the floor of the catalog
   tooling ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md));
   CI drops Node 20, which reached end of life in April 2026.
-- The app requires Playbook 14.1 or later ([DR-076](specs/decisions/076-playbook-14-1-adoption.md)).
-  Uncommitted work already in your tree is now the Coder's context rather
+- With Playbook 14.1 ([DR-076](specs/decisions/076-playbook-14-1-adoption.md)),
+  uncommitted work already in your tree is now the Coder's context rather
   than an ambiguity: a governed call may carry it in its one commit, the
   Coder is told which changes predate its task and to leave them alone
   otherwise, and a settled commit that absorbed or altered any of them

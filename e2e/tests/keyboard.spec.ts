@@ -67,7 +67,9 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await page.keyboard.press("Enter");
   await expect(page.getByRole("tab", { name: /line one/i })).toBeVisible();
   await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
-  expect(await focusedIsBody()).toBe(false);
+  // The field closes while the turn runs (DR-085), so focus returns
+  // once the turn settles, which can trail the run's last line.
+  await expect.poll(focusedIsBody).toBe(false);
 
   // The strip walks by arrow keys, Home, and End without switching
   // tabs; Delete closes the focused tab and focus lands on a tab, never

@@ -7,6 +7,10 @@
 
 import {
   hasPresentationHeader,
+  RESTORED_TOPIC,
+  RESTORING_TOPIC,
+  type FailureCause,
+  type RestoredPosition,
   type TmuxPlayRecord,
   type MachineGraph,
 } from "@sublang/spex-core/protocol";
@@ -118,6 +122,8 @@ export interface PlayerView {
 }
 
 import {
+  FAILURE_STATE_ID,
+  foldRestored,
   foldTrace,
   type MachineFrame,
 } from "../lib/machine-frames.js";
@@ -174,6 +180,9 @@ export interface SessionView {
   pendingQuestion?: string;
   /** The asking player for the parked question (pane id). */
   pendingQuestionPlayer?: string;
+  /** Set by a restore's marker until the next turn starts: that turn is
+   * the restore's report of a message already drawn (run-view-110). */
+  restoring?: boolean;
   lastSeq: number;
 }
 
@@ -404,6 +413,13 @@ export function applyRecord(
       view.turnActive = true;
       const turn = r.turn as { id: number; prompt: string };
       view.currentTurnId = turn.id;
+      // A restore's report starts the interrupted turn again under its
+      // own id and message (run-view-110): the message was sent once,
+      // so where the lost attempt already drew it, it is not drawn again.
+      const reported = view.restoring === true && view.captain.some((line) =>
+        line.kind === "boss" && line.turnId === turn.id && line.text === turn.prompt);
+      view.restoring = undefined;
+      if (reported) break;
       pushCaptain(view, {
         kind: "boss",
         text: turn.prompt,
@@ -602,6 +618,75 @@ export function applyRecord(
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = stateText(payload?.to);
+      } else if (topic === RESTORING_TOPIC) {
+        view.restoring = true;
+      } else if (topic === RESTORED_TOPIC) {
+        // A restore's recorded position (run-view-74, DR-088): the
+        // restore traced no move, so the runs stand where the core
+        // recorded them — a run brought back into its failure state
+        // parks there, a lost call no longer runs, and a run the
+        // checkpoint no longer holds settles unfinished.
+        const runs = ((r.payload as Partial<RestoredPosition> | undefined)?.runs ?? [])
+          .filter((run) => typeof run?.sessionId === "string" && typeof run.playbookId === "string");
+        const failedBefore = new Set(view.frames
+          .filter((frame) => frame.active === FAILURE_STATE_ID)
+          .map((frame) => frame.traceSessionId));
+        const fold = foldRestored(view.frames, runs, r.timestamp, view.settledRuns);
+        // The call the process died in no longer runs: no lane reads as
+        // working on it (run-view-74, run-view-7).
+        for (const lane of Object.values(view.players)) lane.running = false;
+        const graphs = typeof r.contextSeq === "number" ? view.contexts[r.contextSeq] : undefined;
+        const bind = (frame: MachineFrame): void => {
+          if (!("historicalGraph" in frame)) frame.historicalGraph = graphs?.[frame.playbookId] ?? null;
+          for (const child of frame.settledCalls) bind(child);
+        };
+        for (const frame of [...fold.open, ...fold.closed]) bind(frame);
+        view.frames = fold.open;
+        view.settledRuns = fold.settled;
+        for (const closed of fold.closed) {
+          pushCaptain(view, {
+            kind: "machine",
+            text: `${closed.playbookId} ${closed.outcome ?? i18n._({ id: "finished", comment: "a run that ended with no outcome reported" })}`,
+            frame: closed,
+            turnId: r.turnId,
+            at: r.timestamp,
+          });
+        }
+        // A run the position moves into its failure state is a failure
+        // the stream delivers, its account the cause the checkpoint
+        // carries (run-view-147, DR-075): the card stands at the
+        // position's place, and the notice says why from it. A run
+        // already parked there keeps the account it was given.
+        for (const run of runs) {
+          const cause = (run as { cause?: FailureCause }).cause;
+          if (stateText(run.state) !== FAILURE_STATE_ID || failedBefore.has(run.sessionId)) continue;
+          if (typeof cause?.code !== "string") continue;
+          pushCaptain(view, {
+            kind: "status",
+            // Machine words the record carries, kept for the tooltip.
+            text: `${run.playbookId} ${FAILURE_STATE_ID}`,
+            turnId: r.turnId,
+            at: r.timestamp,
+            data: { cause },
+          });
+        }
+        // The questions the position holds are the ones standing
+        // (run-view-9): the pre-turn stack brings back the question the
+        // lost turn would have answered, and a position without one
+        // leaves none.
+        const asked = runs.flatMap((run) => {
+          const pending = run.pendingBossQuestions;
+          return (Array.isArray(pending) ? pending : []).map(parseBossQuestion)
+            .filter((question) => question !== undefined);
+        });
+        const waiting = runs.some((run) => stateText(run.state) === "awaitBossReply");
+        if (asked.length > 0 || waiting) {
+          view.pendingQuestion = asked[0]?.question ?? "";
+          view.pendingQuestionPlayer = asked.length === 1 ? resolvePlayerId(view, asked[0]?.player) : undefined;
+        } else {
+          view.pendingQuestion = undefined;
+          view.pendingQuestionPlayer = undefined;
+        }
       } else if (topic === "playbook.trace") {
         // The structured trace opens, moves, and settles the machine
         // frames the pane draws (run-view-60..63); folding is pure so

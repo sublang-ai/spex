@@ -170,14 +170,22 @@ export async function appendHistorySession(
   if (!checked.resumable) throw new Error(checked.reasons.join("; "));
 }
 
-/** Save the real pre-turn uncertainty boundary; the harness stops its host first. */
-export async function interruptDemoSession(sessionsDir: string, sessionId: string, input: string): Promise<void> {
+/** Save the real pre-turn uncertainty boundary; the harness stops its host first.
+ * `recorded` also saves a step's start, as a writer stopped mid-step
+ * leaves it: recorded work, which Playbook's predicate withholds from
+ * Discard (DR-088). */
+export async function interruptDemoSession(sessionsDir: string, sessionId: string, input: string, options: { recorded?: boolean } = {}): Promise<void> {
   const shared = createSessionStore({ sessionsDir });
   const lease = await shared.acquire(sessionId);
   try {
     const prior = await lease.read();
     if (!prior || prior.state !== "settled") throw new Error("fixture needs a settled real checkpoint");
     await lease.beginTurn({ input, attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+    if (options.recorded) {
+      const playbookId = Object.keys(prior.lastAppliedExecutionProjection.catalog)[0];
+      if (!playbookId) throw new Error("fixture needs a catalog playbook to record a step in");
+      await lease.recordProgress({ snapshot: null, step: { id: randomUUID(), kind: "player", stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId } });
+    }
   } finally { await lease.release(); }
 }
 
@@ -197,9 +205,10 @@ export function demoAdapterImports(options: { delayMs?: number } = {}) {
  * unresolved effect and a fenced leaf advertising its controls.
  * Shared by the core's integration suite and the browser harness, so
  * the published-control path is proven against one failure and not
- * two.
+ * two. `held` keeps the coder's call in flight, its commit made, until
+ * the run is stopped — a Boss abort, or a writer that dies (DR-088).
  */
-export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
+export function parkingScript(options: { delayMs?: number; held?: boolean } = {}): FakeScript {
   const delay = options.delayMs ?? 1;
   let phase = 0;
   return {
@@ -212,6 +221,7 @@ export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
         response: {
           result: "Committed the phase.",
           delayMs: delay,
+          ...(options.held ? { untilAborted: true } : {}),
           effect: (cwd) => {
             phase += 1;
             writeFileSync(join(cwd, "work.txt"), `baseline\nphase ${phase}\n`);
@@ -245,6 +255,71 @@ export function parkingScript(options: { delayMs?: number } = {}): FakeScript {
           }),
         },
       },
+    ],
+    fallback: { result: "Done." },
+  };
+}
+
+/** The player's question, the Captain's relay of it, and the Boss's
+ * answer in the asking script (run-view-151). */
+export const ASKING = {
+  request: "Migrate the session store to the new format",
+  question: "Should I also migrate the archived sessions?",
+  relay: "Coder asks whether the archived sessions should be migrated as well. Should it include them?",
+  answer: "Yes, include the archived ones",
+  done: "Migrated the archived sessions too.",
+} as const;
+
+/**
+ * The script behind a real player question (DR-085, DR-088): the
+ * Captain's decision starts the real /code root, whose coder asks the
+ * Boss a question the hidden judgment returns as awaiting the Boss;
+ * the Captain's closing reply relays it while it stands pending. The
+ * Boss's answer is delivered to that coder, which commits, and the
+ * nested review finds nothing, so the run finishes. Every call is the
+ * real shell's, so the relay the page shows is Playbook's own.
+ */
+export function askingScript(options: { delayMs?: number } = {}): FakeScript {
+  const delay = options.delayMs ?? 1;
+  const decision = (boss: string) => new RegExp(`Select exactly one action[\\s\\S]*\\[Boss message\\]\\n${boss}`);
+  // The judge sees the player's output first, then the outcomes.
+  const judged = (text: string) => new RegExp(`just produced this output:[\\s\\S]*${text}[\\s\\S]*Pick exactly one declared`);
+  return {
+    rules: [
+      { match: decision(ASKING.request), response: { result: JSON.stringify({ action: "start", playbookId: "code", input: ASKING.request }) } },
+      { match: decision(ASKING.answer), response: { result: JSON.stringify({ action: "deliver" }) } },
+      // The runtime classifies the delivered answer against its park.
+      { match: "Classify the following Boss message into exactly one event", response: { result: JSON.stringify({ type: "BOSS_REPLY", questionId: "firstPhase" }) } },
+      // The hidden adjudications, each read from the output it judges;
+      // the question itself is presentation the runtime keeps verbatim.
+      { match: judged("No findings in the migration"), response: { result: JSON.stringify({ guard: "noFindings" }) } },
+      { match: judged(ASKING.done), response: { result: JSON.stringify({ guard: "directCommit" }) } },
+      { match: judged(ASKING.question.replace("?", "\\?")), response: { result: JSON.stringify({ guard: "needsBossReply" }) } },
+      // The closing reply relays the question while it stands pending.
+      { match: /An action just settled for the current Boss turn[\s\S]*Pending Boss questions:\n[^\n]*archived sessions/, response: { result: ASKING.relay } },
+      { match: "An action just settled for the current Boss turn", response: { result: "The session store migration is done and reviewed." } },
+      { match: "A new review begins for the review scope", response: { result: "No findings in the migration.", delayMs: delay } },
+      {
+        // The coder, resumed with the Boss's answer: one clean commit.
+        match: ASKING.answer,
+        response: {
+          deltas: [ASKING.done],
+          result: ASKING.done,
+          delayMs: delay,
+          effect: (cwd) => {
+            writeFileSync(join(cwd, "archived-sessions.md"), "migrated\n");
+            execFileSync("git", ["-C", cwd, "add", "-A"]);
+            execFileSync("git", [
+              "-C", cwd,
+              "-c", "user.name=Spex Test",
+              "-c", "user.email=spex@example.test",
+              "-c", "commit.gpgsign=false",
+              "commit", "-q", "-m", "Migrate the archived sessions",
+            ]);
+          },
+        },
+      },
+      { match: "Original request:", response: { deltas: [ASKING.question], result: ASKING.question, delayMs: delay } },
     ],
     fallback: { result: "Done." },
   };
@@ -487,7 +562,7 @@ export function demoCaptain(
       await context.callCaptain(`recover: ${turn.prompt}`, {
         visibility: "hidden",
       });
-      await move("failed", "runFirstPhase", "RETRY_CODE", "active", [
+      await move("failed", "firstPhase", "RETRY_CODE", "active", [
         "playbook.busy",
       ]);
       await session.emitStatus("◇ /code recovery started");
@@ -500,10 +575,10 @@ export function demoCaptain(
       visibility: "hidden",
     });
     await trace("session.started", {});
-    await move("ready", "runFirstPhase", "START_CODE");
+    await move("ready", "firstPhase", "START_CODE");
     await session.emitStatus("⤷ Coder: implement");
     await trace("player.call.started", {
-      stateId: "runFirstPhase",
+      stateId: "firstPhase",
       roleId: "coder",
       playerId: "dev.coder",
     });
@@ -513,11 +588,11 @@ export function demoCaptain(
     // so the machine stands there waiting for the Boss (DR-060).
     if (turn.prompt.toLowerCase().startsWith("fail")) {
       await trace("player.call.finished", {
-        stateId: "runFirstPhase",
+        stateId: "firstPhase",
         status: "error",
       });
       await session.emitStatus("◆ workflow failed; awaiting Boss recovery.");
-      await move("runFirstPhase", "failed", "CODE_FAILED", "active", [
+      await move("firstPhase", "failed", "CODE_FAILED", "active", [
         "playbook.parked",
       ]);
       setFailedRun(runId);
@@ -525,10 +600,10 @@ export function demoCaptain(
       return;
     }
     await trace("player.call.finished", {
-      stateId: "runFirstPhase",
+      stateId: "firstPhase",
       status: "ok",
     });
-    await move("runFirstPhase", "reviewFirstCommit", "done");
+    await move("firstPhase", "reviewNewIntentPhase", "done");
     const reviewId = `${runId}-review`;
     let reviewSequence = 0;
     const reviewTrace = async (
@@ -567,33 +642,33 @@ export function demoCaptain(
     };
     await session.emitStatus("⮕ /review: first commit");
     await trace("playbook.call.started", {
-      stateId: "reviewFirstCommit",
+      stateId: "reviewNewIntentPhase",
       playbookId: "review",
       text: "review the first commit",
     });
     await reviewTrace("session.started", {});
-    await reviewMove("ready", "reviewInitial", "START_REVIEW");
+    await reviewMove("ready", "firstReview", "START_REVIEW");
     await session.emitStatus("⤷ Reviewer: review round 1");
     await reviewTrace("player.call.started", {
-      stateId: "reviewInitial",
+      stateId: "firstReview",
       roleId: "reviewer",
       playerId: "dev.reviewer",
     });
     await context.callPlayer("dev.reviewer", "Review the change");
     await reviewTrace("player.call.finished", {
-      stateId: "reviewInitial",
+      stateId: "firstReview",
       status: "ok",
     });
-    await reviewMove("reviewInitial", "done", "done", "done");
+    await reviewMove("firstReview", "done", "done", "done");
     await reviewTrace("session.disposed", {
       state: { value: "done", status: "done" },
     });
     await trace("playbook.call.finished", {
-      stateId: "reviewFirstCommit",
+      stateId: "reviewNewIntentPhase",
       playbookId: "review",
       result: "approved",
     });
-    await move("reviewFirstCommit", "done", "done", "done");
+    await move("reviewNewIntentPhase", "done", "done", "done");
     await trace("status.emitted", { message: "settled", stateId: "done" });
     // Opt in only for journeys exercising advancement from a typed
     // governed result; the ordinary demo remains narration alone.

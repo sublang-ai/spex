@@ -5,21 +5,29 @@ import { useEffect, useRef, useState } from "react";
 import { i18n } from "../i18n.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 
-type Action = "retry" | "discard";
+type Action = "restore" | "discard";
 
-/** The two acts an interrupted turn offers, each read where it is
- * shown so the control and its confirm always say the same word. */
-const retryLabel = (): string =>
-  i18n._({ id: "Retry", comment: "act: run the interrupted turn again" });
+/** The acts an interrupted turn offers (run-view-110, DR-088), each
+ * read where it is shown so the control and its confirm always say the
+ * same word. */
+const restoreLabel = (): string =>
+  i18n._({
+    id: "Restore",
+    comment: "act: bring back the interrupted work's saved position and report what was recorded; nothing runs again",
+  });
 const discardLabel = (): string =>
   i18n._({ id: "Discard", comment: "act: throw the interrupted attempt away" });
 
-export function SessionRecovery({ input, connected, onRecover }: {
+/** Restore repeats and discards nothing, so it acts at once; Discard,
+ * drawn only where the summary says nothing was recorded, asks first.
+ * Where Discard is not offered it is simply absent (DR-069). */
+export function SessionRecovery({ input, discardable, connected, onRecover }: {
   input: string;
+  discardable: boolean;
   connected: boolean;
   onRecover?: (action: Action) => Promise<void>;
 }) {
-  const [confirm, setConfirm] = useState<Action>();
+  const [confirm, setConfirm] = useState<"discard">();
   const [pending, setPending] = useState<Action>();
   const [error, setError] = useState<string>();
   const busy = useRef(false);
@@ -48,6 +56,7 @@ export function SessionRecovery({ input, connected, onRecover }: {
     }
   }
 
+  const disabled = !connected || !!pending || !onRecover;
   return (
     <section aria-label={i18n._("Interrupted turn")} className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950">
       <p className="font-medium">{i18n._("Interrupted turn")}</p>
@@ -56,30 +65,41 @@ export function SessionRecovery({ input, connected, onRecover }: {
         <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{input}</p>
       </details>
       {error ? <p role="alert" className="my-2 text-red-700 dark:text-red-300">{error}</p> : null}
-      {pending ? <p role="status">{pending === "retry" ? i18n._("Retrying…") : i18n._("Discarding…")}</p> : null}
+      {pending ? <p role="status">{pending === "restore" ? i18n._("Restoring…") : i18n._("Discarding…")}</p> : null}
       <div ref={controls}>
         {confirm ? (
           <InlineConfirm
-            question={confirm === "retry"
-              ? i18n._("Retry the saved input with its saved configuration after checking completed work?")
-              : i18n._("Discard this attempt? The previous checkpoint is restored only if no effects were added. A fresh session may be removed.")}
-            confirmLabel={confirm === "retry" ? retryLabel() : discardLabel()}
-            disabled={!connected || !!pending || !onRecover}
-            onConfirm={() => void recover(confirm)}
-            onCancel={() => { returnFocus.current = confirm; setConfirm(undefined); }}
+            question={i18n._({
+              id: "Discard the unprocessed message? A session with no earlier turn is removed.",
+              comment: "confirm before Discard, offered only when the interrupted attempt recorded nothing",
+            })}
+            confirmLabel={discardLabel()}
+            disabled={disabled}
+            onConfirm={() => void recover("discard")}
+            onCancel={() => { returnFocus.current = "discard"; setConfirm(undefined); }}
           />
         ) : (
           <div className="flex flex-wrap gap-2">
-            {(["retry", "discard"] as const).map((action) => (
+            <button
+              type="button"
+              data-action="restore"
+              disabled={disabled}
+              title={i18n._({
+                id: "Nothing is repeated",
+                comment: "Restore's tooltip: restoring reports what was recorded and runs no work again",
+              })}
+              onClick={() => void recover("restore")}
+              className="min-h-6 rounded border border-neutral-400 px-2 py-1 disabled:opacity-40 dark:border-neutral-600"
+            >{restoreLabel()}</button>
+            {discardable ? (
               <button
                 type="button"
-                key={action}
-                data-action={action}
-                disabled={!connected || !!pending || !onRecover}
-                onClick={() => setConfirm(action)}
+                data-action="discard"
+                disabled={disabled}
+                onClick={() => setConfirm("discard")}
                 className="min-h-6 rounded border border-neutral-400 px-2 py-1 disabled:opacity-40 dark:border-neutral-600"
-              >{action === "retry" ? retryLabel() : discardLabel()}</button>
-            ))}
+              >{discardLabel()}</button>
+            ) : null}
           </div>
         )}
       </div>

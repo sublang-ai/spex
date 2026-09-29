@@ -50,7 +50,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | draft | 草稿 | an authoring draft |
 | library | 库 | the compiled-artifact store; the surface itself says 规程 |
 | compile / register / publish | 编译 / 注册 / 发布 | |
-| Normalize / Spec items / Optimize / Machine / Link / Package | 规范化 / 规约条目 / 优化 / 状态机 / 链接 / 打包 | the compile pipeline's stages, as the band and the chips name them |
+| Normalize / Spec items / Optimize / Prefix / Machine / Link / Package | 规范化 / 规约条目 / 优化 / 前缀 / 状态机 / 链接 / 打包 | the compile pipeline's stages, as the band and the chips name them |
 | adapter | 适配器 | |
 | readiness / ready / not ready / unverified | 就绪状态 / 就绪 / 未就绪 / 未验证 | |
 | model / effort / fast mode | 模型 / 推理强度 / 快速模式 | |

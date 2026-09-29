@@ -4,41 +4,41 @@
     {
       "id": "ready",
       "kind": "state",
-      "description": "Waiting for a coding intent.",
+      "description": "Waiting for a coding request.",
       "tags": [
         "playbook.parked"
       ]
     },
     {
-      "id": "runFirstPhase",
+      "id": "firstPhase",
       "kind": "state",
       "role": "coder",
-      "description": "Coder is running the first coding phase: a direct implementation, a new intent record, or an existing intent-record task.",
+      "description": "Coder runs the first coding phase: a direct implementation, a new IR, or the next task of an existing IR.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
-      "id": "reviewFirstCommit",
+      "id": "reviewNewIntentPhase",
       "kind": "state",
-      "description": "The REVIEW playbook is checking the direct or new-IR phase commit.",
+      "description": "REVIEW examines the commit of the direct implementation or new-IR phase.",
       "tags": [
         "playbook.suspended"
       ]
     },
     {
-      "id": "runIrTask",
+      "id": "irTaskPhase",
       "kind": "state",
       "role": "coder",
-      "description": "Coder is implementing exactly one unfinished intent-record task.",
+      "description": "Coder implements the identified IR's next unfinished task.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
-      "id": "reviewIrTask",
+      "id": "reviewIrTaskPhase",
       "kind": "state",
-      "description": "The REVIEW playbook is checking the latest task commit.",
+      "description": "REVIEW examines the commit of the IR-task phase.",
       "tags": [
         "playbook.suspended"
       ]
@@ -46,7 +46,7 @@
     {
       "id": "awaitBossReply",
       "kind": "state",
-      "description": "Waiting for Boss to answer Coder.",
+      "description": "Waiting for Boss to answer the acting agent's question.",
       "tags": [
         "playbook.parked"
       ]
@@ -54,21 +54,21 @@
     {
       "id": "failed",
       "kind": "state",
-      "description": "The coding workflow failed and is waiting for a new coding intent.",
+      "description": "CODE parked after a control-plane failure and waits for Boss to restart or resume it.",
       "tags": [
         "playbook.parked"
       ]
     },
     {
-      "id": "reportedReviewFailure",
+      "id": "reviewFailed",
       "kind": "final",
-      "description": "The coding workflow reported a REVIEW failure and the last code-owned commit.",
+      "description": "CODE stopped because review did not pass a phase and reports the failure with its last code-owned commit.",
       "tags": []
     },
     {
       "id": "done",
       "kind": "final",
-      "description": "The coding workflow completed after every phase's REVIEW passed with no unsettled findings.",
+      "description": "CODE completed: every phase's review passed with no unsettled findings.",
       "tags": []
     }
   ],
@@ -76,138 +76,138 @@
     {
       "id": "ready::START_CODE::0::0",
       "from": "ready",
-      "to": "runFirstPhase",
+      "to": "firstPhase",
       "event": "START_CODE"
     },
     {
-      "id": "runFirstPhase::done::0::0",
-      "from": "runFirstPhase",
-      "to": "reviewFirstCommit",
-      "event": "done"
-    },
-    {
-      "id": "runFirstPhase::done::1::0",
-      "from": "runFirstPhase",
-      "to": "reviewFirstCommit",
-      "event": "done"
-    },
-    {
-      "id": "runFirstPhase::done::2::0",
-      "from": "runFirstPhase",
-      "to": "reviewIrTask",
-      "event": "done"
-    },
-    {
-      "id": "runFirstPhase::done::3::0",
-      "from": "runFirstPhase",
-      "to": "reviewIrTask",
-      "event": "done"
-    },
-    {
-      "id": "runFirstPhase::done::4::0",
-      "from": "runFirstPhase",
+      "id": "firstPhase::done::0::0",
+      "from": "firstPhase",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "runFirstPhase::done::5::0",
-      "from": "runFirstPhase",
+      "id": "firstPhase::done::1::0",
+      "from": "firstPhase",
+      "to": "reviewNewIntentPhase",
+      "event": "done"
+    },
+    {
+      "id": "firstPhase::done::2::0",
+      "from": "firstPhase",
+      "to": "reviewNewIntentPhase",
+      "event": "done"
+    },
+    {
+      "id": "firstPhase::done::3::0",
+      "from": "firstPhase",
+      "to": "reviewIrTaskPhase",
+      "event": "done"
+    },
+    {
+      "id": "firstPhase::done::4::0",
+      "from": "firstPhase",
+      "to": "reviewIrTaskPhase",
+      "event": "done"
+    },
+    {
+      "id": "firstPhase::done::5::0",
+      "from": "firstPhase",
       "to": "failed",
       "event": "done"
     },
     {
-      "id": "runFirstPhase::error::0::0",
-      "from": "runFirstPhase",
+      "id": "firstPhase::error::0::0",
+      "from": "firstPhase",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "reviewFirstCommit::done::0::0",
-      "from": "reviewFirstCommit",
+      "id": "reviewNewIntentPhase::done::0::0",
+      "from": "reviewNewIntentPhase",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewFirstCommit::done::1::0",
-      "from": "reviewFirstCommit",
-      "to": "runIrTask",
+      "id": "reviewNewIntentPhase::done::1::0",
+      "from": "reviewNewIntentPhase",
+      "to": "irTaskPhase",
       "event": "done"
     },
     {
-      "id": "reviewFirstCommit::done::2::0",
-      "from": "reviewFirstCommit",
-      "to": "reportedReviewFailure",
+      "id": "reviewNewIntentPhase::done::2::0",
+      "from": "reviewNewIntentPhase",
+      "to": "reviewFailed",
       "event": "done"
     },
     {
-      "id": "reviewFirstCommit::error::0::0",
-      "from": "reviewFirstCommit",
-      "to": "reportedReviewFailure",
+      "id": "reviewNewIntentPhase::error::0::0",
+      "from": "reviewNewIntentPhase",
+      "to": "reviewFailed",
       "event": "error"
     },
     {
-      "id": "reviewFirstCommit::error::1::0",
-      "from": "reviewFirstCommit",
+      "id": "reviewNewIntentPhase::error::1::0",
+      "from": "reviewNewIntentPhase",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "runIrTask::done::0::0",
-      "from": "runIrTask",
-      "to": "reviewIrTask",
-      "event": "done"
-    },
-    {
-      "id": "runIrTask::done::1::0",
-      "from": "runIrTask",
-      "to": "reviewIrTask",
-      "event": "done"
-    },
-    {
-      "id": "runIrTask::done::2::0",
-      "from": "runIrTask",
+      "id": "irTaskPhase::done::0::0",
+      "from": "irTaskPhase",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "runIrTask::done::3::0",
-      "from": "runIrTask",
+      "id": "irTaskPhase::done::1::0",
+      "from": "irTaskPhase",
+      "to": "reviewIrTaskPhase",
+      "event": "done"
+    },
+    {
+      "id": "irTaskPhase::done::2::0",
+      "from": "irTaskPhase",
+      "to": "reviewIrTaskPhase",
+      "event": "done"
+    },
+    {
+      "id": "irTaskPhase::done::3::0",
+      "from": "irTaskPhase",
       "to": "failed",
       "event": "done"
     },
     {
-      "id": "runIrTask::error::0::0",
-      "from": "runIrTask",
+      "id": "irTaskPhase::error::0::0",
+      "from": "irTaskPhase",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "reviewIrTask::done::0::0",
-      "from": "reviewIrTask",
-      "to": "runIrTask",
+      "id": "reviewIrTaskPhase::done::0::0",
+      "from": "reviewIrTaskPhase",
+      "to": "irTaskPhase",
       "event": "done"
     },
     {
-      "id": "reviewIrTask::done::1::0",
-      "from": "reviewIrTask",
+      "id": "reviewIrTaskPhase::done::1::0",
+      "from": "reviewIrTaskPhase",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewIrTask::done::2::0",
-      "from": "reviewIrTask",
-      "to": "reportedReviewFailure",
+      "id": "reviewIrTaskPhase::done::2::0",
+      "from": "reviewIrTaskPhase",
+      "to": "reviewFailed",
       "event": "done"
     },
     {
-      "id": "reviewIrTask::error::0::0",
-      "from": "reviewIrTask",
-      "to": "reportedReviewFailure",
+      "id": "reviewIrTaskPhase::error::0::0",
+      "from": "reviewIrTaskPhase",
+      "to": "reviewFailed",
       "event": "error"
     },
     {
-      "id": "reviewIrTask::error::1::0",
-      "from": "reviewIrTask",
+      "id": "reviewIrTaskPhase::error::1::0",
+      "from": "reviewIrTaskPhase",
       "to": "failed",
       "event": "error"
     },
@@ -220,25 +220,25 @@
     {
       "id": "awaitBossReply::BOSS_REPLY::1::0",
       "from": "awaitBossReply",
-      "to": "runFirstPhase",
+      "to": "firstPhase",
       "event": "BOSS_REPLY"
     },
     {
       "id": "awaitBossReply::BOSS_REPLY::2::0",
       "from": "awaitBossReply",
-      "to": "runIrTask",
+      "to": "irTaskPhase",
       "event": "BOSS_REPLY"
     },
     {
       "id": "awaitBossReply::START_CODE::0::0",
       "from": "awaitBossReply",
-      "to": "runFirstPhase",
+      "to": "firstPhase",
       "event": "START_CODE"
     },
     {
       "id": "failed::START_CODE::0::0",
       "from": "failed",
-      "to": "runFirstPhase",
+      "to": "firstPhase",
       "event": "START_CODE"
     }
   ]

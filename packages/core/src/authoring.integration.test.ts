@@ -283,6 +283,8 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.match(first.prompt, /Boss: I want a playbook that triages/);
   assert.match(first.prompt, /Before work begins, ensure the current directory/);
   assert.match(first.prompt, /A source the Boss placed may be a SKILL\.md/);
+  // DR-088: slc's link gives each outcome one repository disposition.
+  assert.match(first.prompt, /Each outcome has exactly one repository effect/);
 
   // playbook-library-64: author player records and a Boss turn, in sequence.
   const records = client.records("triage");

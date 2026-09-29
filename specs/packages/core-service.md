@@ -85,7 +85,7 @@ When a Boss turn settles on a live session, the core service shall release the s
 
 - unresolved repository effects hold nothing back: the settled checkpoint releases with them recorded, because reopening the session fences them [[1]];
 - the release first records what a run of that session standing parked on the Boss advertises — its own actions and the shell's ending, this being the only moment they can be read without opening the session — and records nothing where no run stands parked [[core-service-32](#core-service-32)];
-- a failed or aborted turn releases the runtime as before, the session's recovery state reported [[core-service-32](#core-service-32)];
+- a failed or aborted turn the shared lifecycle settled at its saved progress releases as a settled one does, its parked run's controls recorded; one left uncertain releases the runtime with its recovery reported and no parked controls kept [[core-service-32](#core-service-32)];
 - the release preserves the local provider hints written at settlement, so the next open resumes the Captain's and the players' provider conversations where they exist;
 - session and project admission wait through release and the resulting stored-summary refresh and publication, on successful and failed turns alike.
 
@@ -155,7 +155,7 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries the session's resolved project, its creation time, its last activity — the wire field `endedAt`, null while live — liveness and `turnActive`, which stays true until the turn transaction settles or fails; host of origin is not an admission condition;
 - a non-live session has no active turn; historical records alone never establish liveness, and a session acquired by this core is never reported as externally owned;
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
-- each uncertain entry carries `recovery: {state: "uncertain", input}` with the exact saved input; uncertainty is never reported as normal continuability;
+- each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
@@ -214,7 +214,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | --- | --- |
 | Another session of the project is live, or a session lease is active | `busy`, naming the session working or the holder |
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
-| Uncertain work | `invalid_request`, use explicit Retry or Discard [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] |
+| Uncertain work | `invalid_request`, restore it first [[core-service-82](#core-service-82)] |
 | Missing/ambiguous project binding | `invalid_request`, bind an existing project identity first |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
@@ -225,16 +225,21 @@ While a session is not live, when a client submits Boss text for it, the core se
 
 #### core-service-6
 
-While a boss turn is active on a session, when a client requests an abort for that session, the core service shall abort the active turn, stream the turn-aborted record to subscribed clients, and admit further input only after the shared lifecycle establishes a settled checkpoint, otherwise reporting uncertainty [[core-service-32](#core-service-32)].
+While a boss turn is active on a session, when a client requests an abort for that session, the core service shall abort the active turn, stream the turn-aborted record to subscribed clients, and admit further input once the shared lifecycle has settled the stopped turn at its saved progress [[core-service-91](#core-service-91)] ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
 
 #### core-service-82
 
-When a client sends `session.retry` with only a `sessionId`, the core shall retry that session's uncertain turn through Playbook's shared lifecycle [[1]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)] ([DR-047](../decisions/047-explicit-session-recovery.md)):
+When a client sends `session.restore` with only a `sessionId`, the core shall restore that session's uncertain turn through Playbook's shared recovery [[2]] under the same project and session admission checks as continuation [[core-service-73](#core-service-73)], as one turn that reports what was recorded and repeats nothing ([DR-047](../decisions/047-explicit-session-recovery.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
 
-- acquire the exclusive session lease and re-read the saved uncertainty before any effects;
-- reconcile repository evidence, restore the saved checkpoint and exact attempted configuration, and retry the recorded input without creating another intent dispatch;
-- reject a non-uncertain session or unsafe recovery with its cause, starting no replacement turn;
-- publish records and the resulting session state, retaining uncertainty if the attempt does not settle.
+- refuse a session whose summary holds no interrupted turn with `invalid_request` and its cause before opening anything, writing no record;
+- acquire the exclusive session lease and re-read the saved uncertainty before any effects, releasing the session with the same refusal where it no longer stands;
+- open the session in Playbook's recover mode [[2]] on the exact attempted configuration, then append one visible `captain_telemetry` record with topic `spex.session.restoring` and no turn id, carrying the saved input, which names the next turn to start with that input as the report — unless a failure is recorded first;
+- reconcile repository evidence and restore the saved position — the pre-turn checkpoint where nothing was recorded — reporting it through the Captain without re-running the recorded input or calling an agent;
+- relay a refusal from Playbook's opening or recovery — a relocated checkpoint among them — with its cause, starting no turn and leaving the uncertainty standing;
+- after the report settles, append one visible `captain_telemetry` record with topic `spex.session.restored` and the report's turn id, whose `runs` lists every run the settled position holds engaged, root to leaf — its trace session, playbook, depth, parent, state, pending questions, and the structured cause its checkpointed failure carries — and is empty where the Captain is back in chat, since the report traces no move;
+- where the core stopped between the report's settlement and that record, the next open of the session, or the next core to read it — at start or as it joins the listing — appends the record once from the settled checkpoint, while the report is still the session's last turn, and a release that cannot append it reads the park from that checkpoint instead;
+- every ledger reading takes the report — the turn its marker or its record names — as the stop of the turn it reports, never as finished work — it finishes no intent, raises no review, and reads `stopped` [[core-service-107](#core-service-107)] — while a run the recorded position moves into its failure state, one the stream did not already show parked there, is a failure in that turn's range [[core-service-49](#core-service-49)]; the turn creates no intent dispatch;
+- publish records and the resulting session state, the parked run's controls recorded at that settlement [[core-service-91](#core-service-91)], retaining uncertainty if the report does not settle.
 
 #### core-service-98
 
@@ -252,9 +257,9 @@ When a client sends `session.control` with a `sessionId`, a control kind and opt
 
 #### core-service-83
 
-When a client sends `session.discard` with only a `sessionId`, the core shall discard that session's uncertain attempt through Playbook's shared lifecycle [[1]] under its exclusive lease, without loading configuration, modules or agents ([DR-047](../decisions/047-explicit-session-recovery.md)):
+When a client sends `session.discard` with only a `sessionId`, the core shall discard that session's uncertain attempt through Playbook's shared lifecycle [[1]] under its exclusive lease, without loading configuration, modules or agents ([DR-047](../decisions/047-explicit-session-recovery.md), [DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)):
 
-- refuse live or unprovably owned sessions and any attempt whose effect ledger has advanced;
+- refuse live or unprovably owned sessions, and any attempt Playbook's shared discard predicate [[2]] refuses — a recorded step, an abandonment, or changed repository evidence — with Playbook's cause;
 - restore the exact preceding settled checkpoint, or remove a never-settled fresh session when Playbook authorizes removal;
 - publish the restored summary or session removal and refreshed intent state; a refusal preserves evidence and reports its cause.
 
@@ -335,11 +340,11 @@ While a session is live, when a Boss submission for it — from a client [[core-
 
 #### core-service-94
 
-When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall, after publishing the released conversation, automatically submit the project's first queued, unblocked intent in current rank order into that same conversation exactly once only while the just-settled turn ended finished, did not run an ending control [[core-service-98](#core-service-98)], and would leave its attributed owner Finished rather than Interrupted if that owner remained open, no run of the conversation remains parked on the Boss, and the turn, dispatch boundary, project lane, and conversation remain current ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall, after publishing the released conversation, automatically submit the project's first queued, unblocked intent in current rank order into that same conversation exactly once only while the just-settled turn ended finished — a restore's report [[core-service-82](#core-service-82)] never does — did not run an ending control [[core-service-98](#core-service-98)], and would leave its attributed owner Finished rather than Interrupted if that owner remained open, no run of the conversation remains parked on the Boss, and the turn, dispatch boundary, project lane, and conversation remain current ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - an ordinary Captain reply qualifies with no `playbook.trace` record or typed terminal evidence, as does a reply that sounds like a question but parks no run;
 - a Boss answer qualifies after its own turn settles finished and the question park has left; a question or failure park still standing, a failed turn, or an aborted turn starts no successor;
-- an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up or recovery may qualify, while an ending control never does;
+- an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up — one recovering a failure among them — may qualify, while an ending control never does;
 - a permission record and absent, unsupported, child, failed, or non-terminal playbook trace evidence add no gate of their own;
 - a Done or Drop verdict accepted before or during the eligible settlement, and a later removal of that settled owner, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
 - selection snapshots the successor's then-current identity before release can expose a manual Start and submits its latest text only while it remains the first eligible row; later capture, reorder, closing of that successor, or blocking that changes the next row cancels the handoff rather than substituting another intent, except that a settled-owner verdict may reveal a formerly blocked next without cancelling the already-authorized successor; explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)] stand, a competing manual submission wins normal admission, and a refused admission causes no automatic retry;
@@ -378,9 +383,11 @@ When the core service derives a project's queue reading, it shall choose the fir
 | a run remains parked on a failure | `failure-park` | unavailable |
 | a run remains parked on a Boss question | `question-park` | unavailable |
 | no run remains parked on the Boss, and either the latest lane turn ended failed or an unparked failure condition still stands | `failed` | available |
-| the latest lane turn ended aborted or ran an ending control [[core-service-98](#core-service-98)] | `stopped` | available |
+| the latest lane turn ended aborted, ran an ending control [[core-service-98](#core-service-98)], or reported a restore [[core-service-82](#core-service-82)] | `stopped` | available |
 | none of the preceding conditions holds | `manual-ready` | available |
 
+- a run is a playbook run: the Captain shell's own machine — which an abort taken during the Captain's call moves to its failure state — parks nothing;
+- a restore's report reuses the id of the turn it reports, so only a failure recorded after the report began is that turn ending failed;
 - a queued row whose after-link names an open predecessor is excluded before next is chosen [[core-service-45](#core-service-45)];
 - an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; rank still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
 - the standing and availability are derived from the lane and intent records, never stored on an intent.
@@ -756,7 +763,7 @@ When an integration suite changes stored history and project bindings through a 
 When the integration suite settles and restarts a shared-store session, it shall verify that either a desktop- or CLI-created supported checkpoint lists continuable [[core-service-32](#core-service-32)], that its runtime was released at settlement with the provider hints kept [[core-service-91](#core-service-91)], continues with the same identities and stream [[core-service-74](#core-service-74)], and persists recovery without provider tokens [[core-service-72](#core-service-72)]; that a message opens it on the current tuning while an added playbook changes nothing and a structural change is refused naming the field [[core-service-92](#core-service-92)]; and that active leases and turns in flight, history-only recovery, damaged digests, uncertain work, missing bindings and path/config drift shall refuse before a turn or intent stamp [[core-service-73](#core-service-73)]:
 
 - a session parked on a question keeps its summons across the release and answers where it waited [[core-service-93](#core-service-93)];
-- with release-time summary refresh held after runtime disposal, a next-message or new-session request waits for publication before admission [[core-service-91](#core-service-91)], and shutdown keeps the store open until refresh completes [[core-service-39](#core-service-39)]; a successful turn permits continuation, an aborted turn requires recovery, and no waiting message stamps an intent [[core-service-47](#core-service-47)].
+- with release-time summary refresh held after runtime disposal, a next-message or new-session request waits for publication before admission [[core-service-91](#core-service-91)], and shutdown keeps the store open until refresh completes [[core-service-39](#core-service-39)]; a finished turn and an aborted turn the shared lifecycle settled at its saved progress both permit continuation [[core-service-6](#core-service-6)], and no waiting message stamps an intent [[core-service-47](#core-service-47)].
 
 #### core-service-63
 
@@ -828,8 +835,9 @@ Where the integration suite starts project turns through real core commands with
 - an ordinary Captain reply carrying no typed terminal evidence starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
 - a prose question that parks no run and permission telemetry add no hold, while an answered parked question starts the successor only after the answer turn settles and the park leaves;
 - an unattributed turn in the project lane publishes `after-current-work` with manual start unavailable, starts no successor when it settles, and then publishes `manual-ready` with manual start available [[core-service-107](#core-service-107)];
-- a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor; either abort keeps its recovery-bound conversation as the current lane [[core-service-93](#core-service-93)], while a later clean attributed follow-up or recovery may start one and an ending control may not;
-- `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving failure park wins over a simultaneous question park and carries its structured cause, either park wins over the turn that left it, a failed turn or finished turn retaining an unparked failure reports `failed` with its cause, an abort or successful ending reports `stopped`, and the fallback alone reports `manual-ready`;
+- a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor; either abort leaves its conversation continuable with no recovery owed and keeps it as the current lane [[core-service-6](#core-service-6)] [[core-service-93](#core-service-93)], while a later clean attributed follow-up — one recovering a failure among them — may start one and an ending control may not;
+- a restore of an interrupted follow-up settles its report, leaves the conversation continuable and the next row `stopped`, and starts no successor, and a restore of an interrupted dispatch whose lost attempt failed turns the next row from `failed` to `stopped` and leaves its intent Queued as the stopped dispatch left it, its stamps kept, raising no finish and starting no successor [[core-service-82](#core-service-82)] [[core-service-94](#core-service-94)] [[core-service-107](#core-service-107)];
+- `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving failure park wins over a simultaneous question park and carries its structured cause, either park wins over the turn that left it, a failed turn or finished turn retaining an unparked failure reports `failed` with its cause, an abort, a successful ending or a restore reports `stopped`, and the fallback alone reports `manual-ready`;
 - a Done or Drop verdict accepted before or during an otherwise eligible settlement neither selects a row that only the verdict releases nor cancels the verdict-independent successor, while either verdict after settlement and a later removal initiate nothing; an ending turn required by Drop remains ineligible;
 - an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
 - adding or editing queued work during the active turn affects the next selection, while a capture, reorder, close, or after-link that changes next after authorization cancels rather than substitutes work; later queue edits, ledger reads, adoption and restart initiate no handoff;
@@ -906,12 +914,16 @@ When the integration suite opens recorded Captain/player work after removing its
 
 When an integration suite interrupts CLI-created and desktop-created sessions and recovers them through core commands, it shall verify explicit recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)]:
 
-- listing and broadcasts expose the saved input and disable ordinary continuation [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
+- listing and broadcasts expose the saved input with a reason naming Restore, and disable ordinary continuation [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
 - an active external writer withholds recovery, and releasing its lease reveals uncertainty without another replay write [[core-service-32](#core-service-32)];
-- Retry reuses saved configuration and input, preserves logical identities and intent dispatch, and refuses unsafe reconciliation;
-- Discard restores the prior checkpoint or removes a fresh attempt without loading agents, and ledger advancement refuses without evidence loss;
-- competing leases and repeated requests start no duplicate turn;
-- aborted turns require recovery whenever the shared checkpoint remains uncertain [[core-service-6](#core-service-6)].
+- an attempt with nothing recorded lists as discardable, and one with a recorded step lists as not discardable and refuses Discard with Playbook's cause, without evidence loss [[core-service-32](#core-service-32)] [[core-service-83](#core-service-83)];
+- Restore reuses the saved configuration, reports the unprocessed message or the lost position through the Captain without calling an agent or re-running the input, settles, and preserves logical identities [[core-service-82](#core-service-82)];
+- a CLI writer killed mid-step, its phase committed, lists that step as recorded work, and Restore brings its run back in its failure state: the restored position with the checkpoint's cause stands in the stream, the summary carries the parked run's controls and the shell's ending, and the failure summons with that cause [[core-service-82](#core-service-82)] [[core-service-91](#core-service-91)] [[core-service-49](#core-service-49)];
+- a run the Boss stopped mid-step, whose next message a CLI writer lost in the Captain's call, comes back from Restore still parked with the stop's cause and its controls, and raises no failure summons [[core-service-82](#core-service-82)] [[core-service-49](#core-service-49)];
+- a restore whose marker and settled report stand with no recorded position is completed once by the next core to read the session, which then reads the report as a stop and the failure it brought back as a summons, and a later start appends nothing [[core-service-82](#core-service-82)];
+- Restore refuses a session with nothing interrupted before opening it, writing no record, and a relocated checkpoint with Playbook's cause, starting no turn and leaving the uncertainty standing [[core-service-82](#core-service-82)];
+- Discard restores the prior checkpoint or removes a fresh attempt without loading agents [[core-service-83](#core-service-83)];
+- competing leases and repeated requests start no duplicate turn [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)].
 
 ### core-service-99
 
@@ -934,6 +946,15 @@ When an integration suite parks a real session's run in its recoverable failure 
 - an ordinary Boss message then continues the session and its new run publishes its own park [[core-service-73](#core-service-73)] [[core-service-32](#core-service-32)];
 - deleting that session — idle, though its run stands parked — forgets what that run advertised [[core-service-70](#core-service-70)].
 
+### core-service-114
+
+When an integration suite aborts a real session's turn while a scripted call is in flight — its player's, with the phase committed, or the Captain's own decision call — it shall verify the saved stop [[core-service-6](#core-service-6)]:
+
+- in either case the turn-aborted record streams, and the settled session lists continuable with no recovery owed [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)];
+- the player's stop leaves its summary carrying the park's reason, the actions the stopped run advertised in order, and the shell's own ending, kept with the preferences as at any settlement [[core-service-91](#core-service-91)] [[core-service-32](#core-service-32)];
+- the Captain's stop, which moves the shell's own machine to its failure state, keeps no park and leaves its dispatched intent Queued with the next row `stopped`, manual start available, and no summons [[core-service-107](#core-service-107)] [[core-service-49](#core-service-49)].
+
 ## References
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared session format and host lifecycle"
+[2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/recovery.md "Prepare and resume interrupted work"

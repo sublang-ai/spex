@@ -106,41 +106,67 @@ test("run-view-109: a session the terminal wrote deletes from the sidebar, its h
 });
 
 
-test("run-view-111: Retry uses saved input and Discard restores the preceding checkpoint", async ({ page, app }) => {
+test("run-view-111: Restore reports interrupted work without repeating it, and Discard stands only where nothing was recorded", async ({ page, app }) => {
   const session = await app.core.command("session.create", { projectId: app.projectId! });
   await app.core.command("session.dispose", { sessionId: session.id });
-  await interruptSession(app, session.id, "Retry this saved request");
+  await interruptSession(app, session.id, "Restore this saved request");
   await open(page, app);
   await page.getByTestId(`sidebar-session-${session.id}`).click();
   const recovery = page.getByRole("region", { name: "Interrupted turn" });
-  await expect(recovery).toContainText("Retry this saved request");
+  await expect(recovery).toContainText("Restore this saved request");
   await page.getByTestId("boss-composer").fill("Keep my draft");
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
-  await recovery.getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(recovery).toContainText("Retry the saved input with its saved configuration");
-  await recovery.getByRole("button", { name: "Retry", exact: true }).click();
+  const send = page.getByRole("button", { name: "Send", exact: true });
+  await expect(send).toBeDisabled();
+
+  // Nothing was recorded, so both acts stand; Discard asks first, and
+  // the keyboard backs out of it.
+  await recovery.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(recovery).toContainText("Discard the unprocessed message?");
+  await expect(recovery.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(recovery).not.toContainText("Discard the unprocessed message?");
+
+  // Restore acts at once and reports through the Captain; nothing runs
+  // again, so no agent answers (DR-088).
+  const restore = recovery.getByRole("button", { name: "Restore", exact: true });
+  await expect(restore).toHaveAttribute("title", "Nothing is repeated");
+  // No confirm stands between the click and the command, so a double
+  // activation is what could send it twice: it reports once.
+  await restore.dblclick();
   await expect(recovery).toBeHidden();
   const captain = page.getByTestId("captain-pane");
-  await expect(captain.getByTestId("boss-bubble").filter({ hasText: "Retry this saved request" })).toHaveCount(1);
-  await expect(captain.getByText("Acknowledged by the real Captain.", { exact: true })).toHaveCount(1);
-  // The retried turn settled and released the runtime (DR-051).
+  await expect(captain.getByTestId("boss-bubble").filter({ hasText: "Restore this saved request" })).toHaveCount(1);
+  await expect(captain).toContainText("The last message was not processed");
+  await expect(captain.getByText("Acknowledged by the real Captain.", { exact: true })).toHaveCount(0);
+  // The report settled and released the runtime (DR-051).
   await expect(page.getByTestId("end-session")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+  await expect(send).toBeEnabled();
+
+  // A step's start was saved before the writer stopped: that is recorded
+  // work, so Restore stands alone and nothing explains Discard's absence.
+  await interruptSession(app, session.id, "Restore this recorded step", { recorded: true });
+  await expect(recovery).toContainText("Restore this recorded step");
+  await expect(recovery.getByRole("button")).toHaveText(["Restore"]);
+  await expect(recovery).not.toContainText(/discard/i);
+  await recovery.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(recovery).toBeHidden();
+  await expect(captain).toContainText("The exact stopping point was not saved");
+  await expect(captain.getByText("Acknowledged by the real Captain.", { exact: true })).toHaveCount(0);
 
   await interruptSession(app, session.id, "Discard this unexecuted request");
   await expect(recovery).toContainText("Discard this unexecuted request");
   await recovery.getByRole("button", { name: "Discard", exact: true }).click();
-  await expect(recovery).toContainText("The previous checkpoint is restored only if no effects were added");
+  await expect(recovery).toContainText("Discard the unprocessed message?");
   await recovery.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(recovery).toBeHidden();
   await expect(page.getByTestId("history-notice")).toHaveCount(0);
-  await expect(captain.getByTestId("boss-bubble")).toHaveCount(1);
+  await expect(captain.getByTestId("boss-bubble")).toHaveCount(2);
   await expect(captain).not.toContainText("Discard this unexecuted request");
   await expect(page.getByTestId("abort-button")).toHaveCount(0);
   await expect(page.getByTestId("working-indicator")).toHaveCount(0);
   await page.getByTestId("boss-composer").fill("Continue after discarding");
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await send.click();
   await expect(captain.getByTestId("boss-bubble").filter({ hasText: "Continue after discarding" })).toHaveCount(1);
-  await expect(captain.getByText("Acknowledged by the real Captain.", { exact: true })).toHaveCount(2);
+  await expect(captain.getByText("Acknowledged by the real Captain.", { exact: true })).toHaveCount(1);
   await expect(page.getByTestId("queue-indicator")).toHaveCount(0);
 });

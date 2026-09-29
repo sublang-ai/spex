@@ -4,43 +4,43 @@
     {
       "id": "ready",
       "kind": "state",
-      "description": "Waits for a caller to start a scoped committed-work review.",
+      "description": "Waiting for a caller to start a review.",
       "tags": [
         "playbook.parked"
       ]
     },
     {
-      "id": "reviewInitial",
+      "id": "firstReview",
       "kind": "state",
       "role": "reviewer",
-      "description": "REVIEW-1: Reviewer reviews the caller's review scope against the original intent.",
+      "description": "Reviewer runs the first review round over the review scope.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
-      "id": "addressFindings",
+      "id": "fixFindings",
       "kind": "state",
       "role": "coder",
-      "description": "REVIEW-2: Coder accepts or rejects every current review finding.",
+      "description": "Coder accepts or rejects each of Reviewer's findings and commits any accepted fixes.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
-      "id": "reviewAfterCommit",
+      "id": "reviewAfterFix",
       "kind": "state",
       "role": "reviewer",
-      "description": "REVIEW-3: Reviewer reviews the cumulative committed state after a review-fix commit.",
+      "description": "Reviewer runs the next review round over the cumulative committed state after a review-fix commit.",
       "tags": [
         "playbook.busy"
       ]
     },
     {
-      "id": "reviewAfterRebuttal",
+      "id": "reviewAfterRejection",
       "kind": "state",
       "role": "reviewer",
-      "description": "REVIEW-4: Reviewer adjudicates an all-rejected Coder disposition.",
+      "description": "Reviewer runs the next review round after Coder rejected every finding without a commit.",
       "tags": [
         "playbook.busy"
       ]
@@ -48,7 +48,7 @@
     {
       "id": "awaitBossReply",
       "kind": "state",
-      "description": "Waits for Boss to answer the active player question.",
+      "description": "Waiting for Boss to answer the acting agent's question.",
       "tags": [
         "playbook.parked"
       ]
@@ -56,7 +56,7 @@
     {
       "id": "failed",
       "kind": "state",
-      "description": "Retains a recoverable REVIEW failure for the caller.",
+      "description": "REVIEW parked after a failure and waits for Boss to restart or resume it.",
       "tags": [
         "playbook.parked"
       ]
@@ -64,7 +64,7 @@
     {
       "id": "done",
       "kind": "final",
-      "description": "The requested review is complete: no unsettled findings remain within the review scope.",
+      "description": "REVIEW completed: the review scope was evaluated at the returned revision and no unsettled findings remain.",
       "tags": []
     }
   ],
@@ -72,110 +72,128 @@
     {
       "id": "ready::START_REVIEW::0::0",
       "from": "ready",
-      "to": "reviewInitial",
+      "to": "firstReview",
       "event": "START_REVIEW"
     },
     {
-      "id": "reviewInitial::done::0::0",
-      "from": "reviewInitial",
-      "to": "addressFindings",
+      "id": "firstReview::done::0::0",
+      "from": "firstReview",
+      "to": "fixFindings",
       "event": "done"
     },
     {
-      "id": "reviewInitial::done::1::0",
-      "from": "reviewInitial",
+      "id": "firstReview::done::1::0",
+      "from": "firstReview",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewInitial::done::2::0",
-      "from": "reviewInitial",
+      "id": "firstReview::done::2::0",
+      "from": "firstReview",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "reviewInitial::error::0::0",
-      "from": "reviewInitial",
+      "id": "firstReview::done::3::0",
+      "from": "firstReview",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "firstReview::error::0::0",
+      "from": "firstReview",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "addressFindings::done::0::0",
-      "from": "addressFindings",
-      "to": "reviewAfterCommit",
+      "id": "fixFindings::done::0::0",
+      "from": "fixFindings",
+      "to": "reviewAfterFix",
       "event": "done"
     },
     {
-      "id": "addressFindings::done::1::0",
-      "from": "addressFindings",
-      "to": "reviewAfterRebuttal",
+      "id": "fixFindings::done::1::0",
+      "from": "fixFindings",
+      "to": "reviewAfterRejection",
       "event": "done"
     },
     {
-      "id": "addressFindings::done::2::0",
-      "from": "addressFindings",
+      "id": "fixFindings::done::2::0",
+      "from": "fixFindings",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "addressFindings::error::0::0",
-      "from": "addressFindings",
+      "id": "fixFindings::done::3::0",
+      "from": "fixFindings",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "fixFindings::error::0::0",
+      "from": "fixFindings",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "reviewAfterCommit::done::0::0",
-      "from": "reviewAfterCommit",
-      "to": "addressFindings",
+      "id": "reviewAfterFix::done::0::0",
+      "from": "reviewAfterFix",
+      "to": "fixFindings",
       "event": "done"
     },
     {
-      "id": "reviewAfterCommit::done::1::0",
-      "from": "reviewAfterCommit",
+      "id": "reviewAfterFix::done::1::0",
+      "from": "reviewAfterFix",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewAfterCommit::done::2::0",
-      "from": "reviewAfterCommit",
+      "id": "reviewAfterFix::done::2::0",
+      "from": "reviewAfterFix",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "reviewAfterCommit::error::0::0",
-      "from": "reviewAfterCommit",
+      "id": "reviewAfterFix::done::3::0",
+      "from": "reviewAfterFix",
+      "to": "failed",
+      "event": "done"
+    },
+    {
+      "id": "reviewAfterFix::error::0::0",
+      "from": "reviewAfterFix",
       "to": "failed",
       "event": "error"
     },
     {
-      "id": "reviewAfterRebuttal::done::0::0",
-      "from": "reviewAfterRebuttal",
-      "to": "addressFindings",
+      "id": "reviewAfterRejection::done::0::0",
+      "from": "reviewAfterRejection",
+      "to": "fixFindings",
       "event": "done"
     },
     {
-      "id": "reviewAfterRebuttal::done::1::0",
-      "from": "reviewAfterRebuttal",
+      "id": "reviewAfterRejection::done::1::0",
+      "from": "reviewAfterRejection",
       "to": "done",
       "event": "done"
     },
     {
-      "id": "reviewAfterRebuttal::done::2::0",
-      "from": "reviewAfterRebuttal",
+      "id": "reviewAfterRejection::done::2::0",
+      "from": "reviewAfterRejection",
       "to": "awaitBossReply",
       "event": "done"
     },
     {
-      "id": "reviewAfterRebuttal::error::0::0",
-      "from": "reviewAfterRebuttal",
+      "id": "reviewAfterRejection::done::3::0",
+      "from": "reviewAfterRejection",
       "to": "failed",
-      "event": "error"
+      "event": "done"
     },
     {
-      "id": "awaitBossReply::START_REVIEW::0::0",
-      "from": "awaitBossReply",
-      "to": "reviewInitial",
-      "event": "START_REVIEW"
+      "id": "reviewAfterRejection::error::0::0",
+      "from": "reviewAfterRejection",
+      "to": "failed",
+      "event": "error"
     },
     {
       "id": "awaitBossReply::BOSS_REPLY::0::0",
@@ -186,31 +204,37 @@
     {
       "id": "awaitBossReply::BOSS_REPLY::1::0",
       "from": "awaitBossReply",
-      "to": "reviewInitial",
+      "to": "firstReview",
       "event": "BOSS_REPLY"
     },
     {
       "id": "awaitBossReply::BOSS_REPLY::2::0",
       "from": "awaitBossReply",
-      "to": "addressFindings",
+      "to": "fixFindings",
       "event": "BOSS_REPLY"
     },
     {
       "id": "awaitBossReply::BOSS_REPLY::3::0",
       "from": "awaitBossReply",
-      "to": "reviewAfterCommit",
+      "to": "reviewAfterFix",
       "event": "BOSS_REPLY"
     },
     {
       "id": "awaitBossReply::BOSS_REPLY::4::0",
       "from": "awaitBossReply",
-      "to": "reviewAfterRebuttal",
+      "to": "reviewAfterRejection",
       "event": "BOSS_REPLY"
+    },
+    {
+      "id": "awaitBossReply::START_REVIEW::0::0",
+      "from": "awaitBossReply",
+      "to": "firstReview",
+      "event": "START_REVIEW"
     },
     {
       "id": "failed::START_REVIEW::0::0",
       "from": "failed",
-      "to": "reviewInitial",
+      "to": "firstReview",
       "event": "START_REVIEW"
     }
   ]

@@ -438,8 +438,8 @@ export function Composer({
               }}
               placeholder={placeholder}
               // The field closes only while a turn runs (DR-085); a
-              // block on sending — an uncertain turn awaiting Retry or
-              // Discard — keeps the draft typable (run-view-110).
+              // block on sending — an uncertain turn awaiting Restore —
+              // keeps the draft typable (run-view-110).
               disabled={!connected || view.turnActive}
             />
           }

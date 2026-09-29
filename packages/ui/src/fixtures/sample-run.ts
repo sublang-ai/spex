@@ -425,7 +425,7 @@ export const MACHINE_RUN: FixtureEntry[] = [
   trace(403, 9_002, "t-code", "code", "session.started", {}),
   trace(404, 9_003, "t-code", "code", "fsm.transition", moved(
     "ready",
-    "runFirstPhase",
+    "firstPhase",
     "START_CODE",
     "active",
     ["playbook.busy"],
@@ -451,22 +451,22 @@ export const MACHINE_RUN: FixtureEntry[] = [
     message: "\u2192 directCommit",
   }),
   trace(406, 9_004, "t-code", "code", "player.call.started", {
-    stateId: "runFirstPhase",
+    stateId: "firstPhase",
     roleId: "coder",
     playerId: "dev.coder",
   }),
   trace(407, 9_010, "t-code", "code", "player.call.finished", {
-    stateId: "runFirstPhase",
+    stateId: "firstPhase",
     status: "ok",
   }),
   trace(408, 9_011, "t-code", "code", "fsm.transition", moved(
-    "runFirstPhase",
-    "reviewFirstCommit",
+    "firstPhase",
+    "reviewNewIntentPhase",
     "done",
   )),
   // The caller names the state that delegates, and to whom.
   trace(409, 9_012, "t-code", "code", "playbook.call.started", {
-    stateId: "reviewFirstCommit",
+    stateId: "reviewNewIntentPhase",
     playbookId: "review",
     text: "review the first commit",
   }),
@@ -490,12 +490,12 @@ export const MACHINE_RUN: FixtureEntry[] = [
     stateId: "done",
   }, "t-code"),
   trace(416, 9_024, "t-code", "code", "playbook.call.finished", {
-    stateId: "reviewFirstCommit",
+    stateId: "reviewNewIntentPhase",
     playbookId: "review",
     result: "approved",
   }),
   trace(417, 9_030, "t-code", "code", "fsm.transition",
-    moved("reviewFirstCommit", "done", "APPROVED", "done")),
+    moved("reviewNewIntentPhase", "done", "APPROVED", "done")),
   trace(418, 9_031, "t-code", "code", "status.emitted", {
     message: "\u2192 settled",
     stateId: "done",
@@ -522,10 +522,10 @@ export const MACHINE_STOPPED: FixtureEntry[] = [
   }),
   trace(502, 11_001, "t-halt", "code", "session.started", {}),
   trace(503, 11_002, "t-halt", "code", "fsm.transition",
-    moved("ready", "runFirstPhase", "START_CODE")),
+    moved("ready", "firstPhase", "START_CODE")),
   trace(504, 11_010, "t-halt", "code", "session.disposed", {
-    state: { value: "runFirstPhase", status: "active" },
-    stateId: "runFirstPhase",
+    state: { value: "firstPhase", status: "active" },
+    stateId: "firstPhase",
   }),
   rec(505, { type: "turn_finished", turnId: 11, timestamp: 11_011 }),
 ];
@@ -569,9 +569,9 @@ export const MACHINE_FAILED: FixtureEntry[] = [
   }),
   trace(703, 14_002, "t-fail", "code", "session.started", {}),
   trace(704, 14_003, "t-fail", "code", "fsm.transition",
-    moved("ready", "runFirstPhase", "START_CODE", "active", ["playbook.busy"])),
+    moved("ready", "firstPhase", "START_CODE", "active", ["playbook.busy"])),
   trace(705, 14_010, "t-fail", "code", "fsm.transition",
-    moved("runFirstPhase", "failed", "xstate.error.actor.0.runFirstPhase",
+    moved("firstPhase", "failed", "xstate.error.actor.0.firstPhase",
       "active", ["playbook.parked"])),
   rec(706, {
     type: "captain_status",
@@ -581,7 +581,7 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     // The runtime's own account of the failure (Playbook DR-063,
     // DR-075): the error it marked as the FSM failure, with the closed
     // cause attached. Captured verbatim from a real core with
-    // substitute agents under Playbook 14.1 (DR-076) — the core's own
+    // substitute agents under Playbook 17 (DR-076, DR-088) — the core's own
     // `parkingScript`, whose coder committed its phase and left one
     // file behind. The observation could name no single commit, so the
     // evidence carries none. The same script runs in the core's
@@ -597,8 +597,8 @@ export const MACHINE_FAILED: FixtureEntry[] = [
           evidence: {
             required: "one-descendant-commit",
             observed: "observation-ambiguous",
-            baselineHead: "60147251bfe6d21c79279e74956f614a00ba2fb2",
-            afterHead: "b5852c25740b3b3d97722f87b46aeac2c47dfdfa",
+            baselineHead: "a74bbf2213d6a16fa6a247babe0b3eacfe831260",
+            afterHead: "9677ec4a938aed509e487eb9aa8df011691cc4d3",
             paths: { uncommitted: ["stray-1.txt"], altered: [] },
           },
         },
@@ -611,9 +611,9 @@ export const MACHINE_FAILED: FixtureEntry[] = [
     timestamp: 14_012,
     topic: "playbook.fsm.state",
     payload: {
-      from: "runFirstPhase",
+      from: "firstPhase",
       to: "failed",
-      event: "xstate.error.actor.0.runFirstPhase",
+      event: "xstate.error.actor.0.firstPhase",
     },
   }),
   rec(708, {
@@ -647,7 +647,7 @@ export const MACHINE_FAILED: FixtureEntry[] = [
  * The reconciliation is the `no-op` a complete receipt makes pointless
  * — the case DR-075 was written on, where a host that took the first
  * advertised action offered a Retry that could never work. Captured
- * from the same real core run as MACHINE_FAILED (DR-076). */
+ * from the same real core run as MACHINE_FAILED (DR-076, DR-088). */
 export const PARKED_FAILURE: ParkedRun = {
   reason: "failure",
   actions: [
@@ -686,22 +686,22 @@ export const MACHINE_ASKED: FixtureEntry[] = [
   }),
   trace(733, 20_002, "t-ask", "code", "session.started", {}),
   trace(734, 20_003, "t-ask", "code", "fsm.transition",
-    moved("ready", "runFirstPhase", "START_CODE", "active", ["playbook.busy"])),
+    moved("ready", "firstPhase", "START_CODE", "active", ["playbook.busy"])),
   trace(735, 20_010, "t-ask", "code", "fsm.transition",
-    moved("runFirstPhase", "awaitBossReply", "NEEDS_BOSS", "active", ["playbook.parked"])),
+    moved("firstPhase", "awaitBossReply", "NEEDS_BOSS", "active", ["playbook.parked"])),
   rec(736, {
     type: "captain_telemetry",
     turnId: 20,
     timestamp: 20_012,
     topic: "playbook.fsm.state",
     payload: {
-      from: "runFirstPhase",
+      from: "firstPhase",
       to: "awaitBossReply",
       event: "NEEDS_BOSS",
       pendingBossQuestion: {
         player: "dev.coder",
         question: "Should I also migrate the legacy sessions?",
-        resumeStateId: "runFirstPhase",
+        resumeStateId: "firstPhase",
       },
     },
   }),
@@ -719,16 +719,92 @@ export const MACHINE_RECOVERED: FixtureEntry[] = [
     turn: { id: 15, prompt: "recover" },
   }),
   trace(712, 15_001, "t-fail", "code", "fsm.transition",
-    moved("failed", "runFirstPhase", "RETRY", "active", ["playbook.busy"])),
+    moved("failed", "firstPhase", "RETRY", "active", ["playbook.busy"])),
   rec(713, {
     type: "captain_telemetry",
     turnId: 15,
     timestamp: 15_002,
     topic: "playbook.fsm.state",
-    payload: { from: "failed", to: "runFirstPhase", event: "RETRY" },
+    payload: { from: "failed", to: "firstPhase", event: "RETRY" },
   }),
   rec(714, { type: "turn_finished", turnId: 15, timestamp: 15_003 }),
 ];
+
+/** A run a stopped writer left mid-step (DR-088): underway in its
+ * first phase with the coder's call running — its prompt recorded, its
+ * finish never — and no terminal record, since the process died there. */
+export const MACHINE_INTERRUPTED: FixtureEntry[] = [
+  rec(751, {
+    type: "turn_started",
+    turnId: 21,
+    timestamp: 21_000,
+    turn: { id: 21, prompt: "/code fix the refresh path" },
+  }),
+  trace(752, 21_001, "t-stop", "code", "session.started", {}),
+  trace(753, 21_002, "t-stop", "code", "fsm.transition",
+    moved("ready", "firstPhase", "START_CODE", "active", ["playbook.busy"])),
+  trace(754, 21_003, "t-stop", "code", "player.call.started", {
+    stateId: "firstPhase",
+    roleId: "coder",
+    playerId: "dev.coder",
+  }),
+  rec(755, {
+    type: "player_prompt",
+    turnId: 21,
+    timestamp: 21_004,
+    playerId: "dev.coder",
+    prompt: "Implement the refresh path fix.",
+  }),
+];
+
+/** The restore of that turn (core-service-82), as a real core streams
+ * it: the core's marker carrying the saved input, then Playbook's
+ * report turn — started again under the lost turn's id and message —
+ * which moves no traced state, so the core records where each run
+ * stands: here the run back at its failure state, as a step the
+ * process stopped in is restored. */
+export function machineRestored(
+  runs: Record<string, unknown>[] = [
+    {
+      sessionId: "t-stop",
+      playbookId: "code",
+      depth: 1,
+      state: { value: "failed", activeStateIds: ["failed"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "failed" },
+      pendingBossQuestions: [],
+      cause: { code: "runtime-defect", evidence: { reason: "The process stopped during this step. Review the recorded work before choosing how to continue." } },
+    },
+  ],
+): FixtureEntry[] {
+  return [
+    rec(760, {
+      type: "captain_telemetry",
+      turnId: null,
+      timestamp: 21_999,
+      topic: "spex.session.restoring",
+      payload: { input: "/code fix the refresh path" },
+    }),
+    rec(761, {
+      type: "turn_started",
+      turnId: 21,
+      timestamp: 22_000,
+      turn: { id: 21, prompt: "/code fix the refresh path" },
+    }),
+    rec(762, {
+      type: "captain_reply",
+      turnId: 21,
+      timestamp: 22_001,
+      text: "The process stopped during the first phase. Review the recorded work before choosing how to continue.",
+    }),
+    rec(763, { type: "turn_finished", turnId: 21, timestamp: 22_002 }),
+    rec(764, {
+      type: "captain_telemetry",
+      turnId: 21,
+      timestamp: 22_003,
+      topic: "spex.session.restored",
+      payload: { runs },
+    }),
+  ];
+}
 
 /** A turn that answers without recovering (run-view-130): the Captain
  * speaks, the machine stays parked, and the way back stands. */

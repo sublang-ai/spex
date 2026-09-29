@@ -71,6 +71,7 @@ const PHASE_LABELS: Record<string, () => string> = {
   normalize: () => i18n._({ id: "Normalize", comment: "compile phase: slc normalizes the source" }),
   text2gears: () => i18n._({ id: "Spec items", comment: "compile phase: slc derives the spec items" }),
   optimize: () => i18n._({ id: "Optimize", comment: "compile phase: slc optimizes the spec items" }),
+  prefix: () => i18n._({ id: "Prefix", comment: "compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix" }),
   gears2fsm: () => i18n._({ id: "Machine", comment: "pipeline stage: the compiled state machine" }),
   link: () => i18n._({ id: "Link", comment: "compile phase: slc links the machine" }),
   spex: packageLabel,

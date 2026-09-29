@@ -18,7 +18,7 @@ import {
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, type TurnControlKind } from "./control-record.js";
+import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
@@ -34,6 +34,17 @@ export class CoreError extends Error {
     super(message);
     this.name = "CoreError";
   }
+}
+
+/** The refusal of a Restore with nothing interrupted (core-service-82):
+ * another client, the CLI or another device restored or discarded it
+ * first. */
+function nothingToRestore(): CoreError {
+  return new CoreError("invalid_request", i18n._({
+    id: "This session has no interrupted turn to restore",
+    comment:
+      "Refusal: Restore was asked of a session with nothing interrupted, as when another client restored or discarded it first",
+  }));
 }
 
 /** core-service-98: the optional control members a Captain shell may
@@ -358,9 +369,28 @@ export class SessionManager {
   async continueSession(project: ProjectInfo, composed: ComposedConfig, session: SessionInfo): Promise<SessionInfo> {
     return this.open(project, composed, session.id, "continue");
   }
-  async retrySession(project: ProjectInfo, sessionId: string): Promise<void> {
-    await this.open(project, undefined, sessionId, "retry");
-    this.startTurn(this.requireLive(sessionId), undefined, true);
+  /** Restore an interrupted turn (core-service-82, DR-088): Playbook's
+   * recover mode on the attempted configuration, then one turn that
+   * restores the saved position and reports what was recorded —
+   * nothing re-runs, and no agent is called. */
+  async restoreSession(project: ProjectInfo, sessionId: string): Promise<void> {
+    // Only interrupted work is restored (core-service-82). A stale
+    // Restore is refused before anything opens, so it writes nothing; a
+    // held or externally owned session is left to the lease to name.
+    // Playbook's recover mode also opens a settled record — it would
+    // take the missing input as a paused task's and fail the turn — so
+    // the record is read again under the lease before any turn starts.
+    const info = this.store.describeSession(sessionId);
+    if (info && !info.recovery && !info.externalWriter && !this.live.has(sessionId)) throw nothingToRestore();
+    await this.open(project, undefined, sessionId, "recover");
+    const entry = this.requireLive(sessionId);
+    let saved: {state?: string; uncertain?: {input?: string}} | undefined;
+    try { saved = await entry.controller.read(); } catch { saved = undefined; }
+    if (saved?.state !== "uncertain" || typeof saved.uncertain?.input !== "string") {
+      await this.disposeSession(sessionId);
+      throw nothingToRestore();
+    }
+    this.startTurn(entry, undefined, { input: saved.uncertain.input });
   }
   async discardSession(sessionId: string): Promise<{removed: boolean}> {
     if (this.live.has(sessionId) || this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
@@ -384,7 +414,7 @@ export class SessionManager {
     finally { this.recovering.delete(sessionId); }
   }
 
-  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "retry"): Promise<SessionInfo> {
+  private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover"): Promise<SessionInfo> {
     // One working turn per project (core-service-4, DR-051): only a
     // session whose runtime is held — a turn in flight or settling — or
     // one another host holds stands in the way, and it is named. A
@@ -421,7 +451,7 @@ export class SessionManager {
     }
     if (this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
       id: "the session is recovering",
-      comment: "Refusal: a Retry or Discard of this session is still running",
+      comment: "Refusal: a Restore or Discard of this session is still running",
     }));
     this.opening.add(project.id);
     this.store.setLocalSession(sessionId, true);
@@ -490,6 +520,13 @@ export class SessionManager {
       if (!info) throw new Error("shared session has no readable project history");
       entry = {info, controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
       this.live.set(sessionId, entry);
+      // A restore whose core stopped before it recorded the position is
+      // completed by whichever open holds the session next
+      // (core-service-82): the settled checkpoint is still its position.
+      if (mode !== "recover") {
+        try { await this.completeRestore(entry); }
+        catch (error) { console.error(`spex: restored position not recorded: ${String(error)}`); }
+      }
       this.publish(sessionId);
       return {...info, live:true, turnActive:false};
     } catch (error) {
@@ -518,7 +555,16 @@ export class SessionManager {
     let recovery: {state?: string} | undefined;
     try { recovery = await entry.controller.read(); } catch { recovery = undefined; }
     if (recovery?.state !== "settled") return;
-    this.captureParkedRun(entry);
+    // The restore's position is recorded before the park is read from
+    // the stream; where it cannot be, the park is read from the settled
+    // checkpoint instead, so its controls are still captured.
+    let unrecorded: unknown;
+    try { await this.completeRestore(entry); }
+    catch (error) {
+      console.error(`spex: restored position not recorded: ${String(error)}`);
+      unrecorded = (recovery as {snapshot?: unknown}).snapshot;
+    }
+    this.captureParkedRun(entry, unrecorded);
     try {
       await entry.controller.dispose();
       this.live.delete(id);
@@ -571,6 +617,80 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
+  /** Mark the restore before it runs (core-service-82, DR-088): the
+   * visible marker names the turn that next starts with the saved input
+   * as the restore's report, so that turn reads as one — and its
+   * position can still be recorded — whatever stops the core after. */
+  private async appendRestoring(entry: LiveSession, input: string): Promise<void> {
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(restoringRecord(input, this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
+  /** Record the position a restore settled (core-service-82, DR-088),
+   * once, for a report still standing without one. Playbook's report
+   * moves no traced state — a run restored into its failure state never
+   * traced the move — so the stream would go on showing where the lost
+   * turn last was. The settled checkpoint says where each run stands;
+   * one visible record carries that, before the settlement's release
+   * reads the park from the stream. */
+  private async completeRestore(entry: LiveSession, justRestored = false): Promise<void> {
+    const records = this.store.getRecords(entry.info.id);
+    let turnId = pendingRestore(records)?.turnId;
+    // The report the restore just settled is its last turn, whatever
+    // the marker could name.
+    if (turnId === undefined && justRestored) {
+      const last = this.store.listTurns(entry.info.id).at(-1)?.turnId;
+      const recorded = restoreReports(records).some((report) => report.turnId === last && report.positionSeq !== undefined);
+      if (!recorded) turnId = last;
+    }
+    if (turnId === undefined) return;
+    const settled = await entry.controller.read();
+    // English, deliberately (core-service-111): the report settled, so
+    // an unsettled read is an internal fault.
+    if (settled?.state !== "settled") throw new Error("the restore settled no readable checkpoint");
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(restoredRecord(turnId, restoredRuns(settled.snapshot), this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
+  /** Complete every restore a stopped core left unrecorded
+   * (core-service-82) in the named sessions — every session, at start —
+   * that no one holds: under its lease, the settled checkpoint's
+   * position is appended once, and the session's history and summary
+   * refresh with it. A session held elsewhere is left to the next open. */
+  async completeRestores(ids?: Iterable<string>): Promise<void> {
+    const named = ids ? new Set(ids) : undefined;
+    for (const session of this.store.listSessions()) {
+      if (named && !named.has(session.id)) continue;
+      if (session.live || session.externalWriter || this.live.has(session.id) || this.settling.has(session.id)) continue;
+      const pending = pendingRestore(this.store.getRecords(session.id));
+      if (!pending) continue;
+      try {
+        const lease = await this.store.sessionStore().acquire(session.id);
+        try {
+          const settled = await lease.read();
+          if (settled?.state !== "settled") continue;
+          await lease.append(restoredRecord(pending.turnId, restoredRuns(settled.snapshot), this.now()));
+        } finally { await lease.release(); }
+        const update = await this.store.refreshSession(session.id, false);
+        for (const entry of update?.appended ?? []) {
+          this.onRecord({
+            sessionId: session.id, seq: entry.seq, record: entry.record,
+            hidden: "visibility" in entry.record && entry.record.visibility === "hidden",
+            ...(entry.role ? { role: entry.role } : {}),
+          });
+        }
+        this.publish(session.id);
+        this.onLedgerChange(session.projectId);
+      } catch (error) {
+        console.error(`spex: restored position not recorded for ${session.id}: ${String(error)}`);
+      }
+    }
+  }
+
   /** What the opened shell advertises now (core-service-98): the
    * parked leaf's own actions for a recovery, the shell's own controls
    * for an ending. An unreadable control view advertises nothing
@@ -597,9 +717,13 @@ export class SessionManager {
    * opening the session — and kept with the local preferences, so the
    * summary carries them after a restart (core-service-32, DR-074). A
    * settlement that finds no run parked leaves no reading behind. */
-  private captureParkedRun(entry: LiveSession): void {
+  private captureParkedRun(entry: LiveSession, unrecorded?: unknown): void {
     const id = entry.info.id;
-    const conditions = foldConditions(this.store.getRecords(id));
+    const records = this.store.getRecords(id);
+    const pending = unrecorded !== undefined ? pendingRestore(records) : undefined;
+    const conditions = foldConditions(pending
+      ? [...records, { seq: Number.MAX_SAFE_INTEGER, record: restoredRecord(pending.turnId, restoredRuns(unrecorded), this.now()) }]
+      : records);
     const reason = conditions.failure ? "failure" as const : conditions.question ? "question" as const : undefined;
     const actions = reason ? this.advertised(entry, "recovery") : [];
     const ending = reason ? this.advertised(entry, "ending")[0] : undefined;
@@ -620,8 +744,8 @@ export class SessionManager {
       comment: "Refusal: this conversation is mid-turn",
     }));
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
-      id: "Recover the interrupted turn with Retry or Discard first",
-      comment: "Refusal; Retry and Discard are the controls the interface offers",
+      id: "Restore the interrupted turn first",
+      comment: "Refusal; Restore is the control the interface offers for interrupted work",
     }));
     // The runtime is held only for a turn (core-service-91), so what a
     // run advertises can be read only while the session is open — which
@@ -677,23 +801,25 @@ export class SessionManager {
       comment: "Refusal: this conversation is mid-turn",
     }));
     if (this.store.describeSession(sessionId)?.recovery) throw new CoreError("invalid_request", i18n._({
-      id: "Recover the interrupted turn with Retry or Discard first",
-      comment: "Refusal; Retry and Discard are the controls the interface offers",
+      id: "Restore the interrupted turn first",
+      comment: "Refusal; Restore is the control the interface offers for interrupted work",
     }));
     entry.pendingIntentId = intentId;
     this.startTurn(entry, text, false);
   }
 
-  private startTurn(entry: LiveSession, text: string | undefined, retry: boolean, control?: { kind: "recovery" | "ending"; controlId: string }): void {
-    const owner = this.store.listSessionDispatches(entry.info.id).at(-1);
-    entry.turnIntentId = retry && owner?.open ? owner.intentId : undefined;
+  private startTurn(entry: LiveSession, text: string | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
+    entry.turnIntentId = undefined;
     entry.turnActive = true;
     this.publish(entry.info.id);
     entry.operation = (async () => {
       let failed = false;
       try {
-        if (retry) await entry.controller.retry();
-        else if (control) {
+        if (restore) {
+          await this.appendRestoring(entry, restore.input);
+          await entry.controller.recover();
+          await this.completeRestore(entry, true);
+        } else if (control) {
           const controller = entry.controller as {
             submitRuntimeAction(id: string): Promise<unknown>;
             submitShellAction(id: string): Promise<unknown>;
@@ -723,7 +849,20 @@ export class SessionManager {
         // Register before cleanup starts, including the failed/aborted
         // path, and keep the barrier after cleanup removes the runtime.
         const done = Promise.resolve().then(async () => {
+          // A turn that stopped after saving progress — an abort or a
+          // failure — settles at that position (DR-088), where its run
+          // may stand parked: it is released as a settled turn is, its
+          // controls captured with it (core-service-32). Only a turn
+          // left uncertain is disposed, and whatever an earlier
+          // settlement read of its run no longer stands.
+          let settledAfterStop = false;
           if (failed) {
+            try { settledAfterStop = (await entry.controller.read())?.state === "settled"; }
+            catch { settledAfterStop = false; }
+          }
+          if (failed && !settledAfterStop) {
+            try { this.store.setParkedRun(entry.info.id, undefined); }
+            catch (error) { console.error(`spex: parked-run controls not cleared: ${String(error)}`); }
             try { await entry.controller.dispose(); this.live.delete(entry.info.id); this.store.setLocalSession(entry.info.id, false); }
             catch (error) { console.error(`spex: session cleanup failed; ownership retained: ${String(error)}`); }
           } else {
@@ -739,7 +878,9 @@ export class SessionManager {
           this.settling.delete(entry.info.id);
           this.intentionalStops.delete(entry.info.id);
         }
-        if (!failed && turnId !== undefined) {
+        // A restore only reports: what runs next is the Boss's choice,
+        // so it hands no queued intent on (core-service-82, DR-088).
+        if (!failed && !restore && turnId !== undefined) {
           this.onTurnSettled(entry.info.id, turnId, intentId, control?.kind);
         }
       }

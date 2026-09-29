@@ -10,6 +10,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import { randomUUID } from "node:crypto";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain, type CaptainTurnScript } from "./testing/scripted-captain.js";
@@ -257,6 +259,19 @@ function expectNext(
   assert.equal(row.next?.standing, standing);
   assert.equal(row.next?.manualStart, manualStart);
   return row;
+}
+
+/** An abort Playbook settled at its saved progress (core-service-6,
+ * DR-088): the conversation continues, owes no recovery, and stays the
+ * project's lane (core-service-93). */
+function expectStoppedLane(h: Harness, sessions: CommandResults["session.list"]) {
+  const row = sessions.find((candidate) => candidate.id === h.session.id);
+  assert.equal(row?.recovery, undefined);
+  assert.equal(row?.continuable, true, row?.continuationReason ?? "no reason given");
+  assert.deepEqual(
+    h.service["sessions"].listLanes().filter((lane) => lane.projectId === h.project.id).map((lane) => lane.sessionId),
+    [h.session.id],
+  );
 }
 
 for (const mode of ["automatic", "manual race", "done during settlement", "drop during settlement"] as const) {
@@ -552,6 +567,100 @@ test("queue advance: an aborted dispatch holds the queue at the stopped intent",
   expectNext(await h.client.expectOk("ledger.get", {}), first.id, "stopped", true);
   assert.equal(entry(await h.client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text]);
+  expectStoppedLane(h, await h.client.expectOk("session.list", {}));
+});
+
+test("queue advance: a restore reports an interrupted follow-up and starts no successor", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First intent" });
+  // Held behind another project's row through the first settlement, so
+  // only the later turn could hand it on.
+  const otherDir = join(h.dir, "other");
+  mkdirSync(otherDir);
+  execFileSync("git", ["init", "-q", otherDir]);
+  const other = await client.expectOk("project.register", { path: otherDir });
+  const foreign = await client.expectOk("intent.queue", { projectId: other.id, text: "Other project" });
+  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next intent", afterIntentId: foreign.id });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await settled(h);
+  assert.equal(entry(await client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
+  await client.expectOk("intent.close", { intentId: foreign.id, as: "dropped" });
+
+  // A follow-up the writer lost after marking it: the released runtime
+  // leaves the lease free, and the shared store says what a crash would.
+  const shared = createSessionStore({ sessionsDir: join(h.dir, "state", "sessions") });
+  const lease = await shared.acquire(session.id);
+  try {
+    const prior = await lease.read();
+    assert.ok(prior);
+    await lease.beginTurn({ input: "Keep going", attemptId: randomUUID(), attemptedExecutionProjection: prior.lastAppliedExecutionProjection });
+  } finally { await lease.release(); }
+  await h.service["syncForeignSessions"]();
+  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id && message.session.recovery?.input === "Keep going");
+
+  const seen = client.messages.length;
+  await client.expectOk("session.restore", { sessionId: session.id });
+  await client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "session.state" &&
+    message.session.id === session.id && !message.session.recovery && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  await Promise.all([...h.service["advancing"]]);
+  // The report settled, attributed to the open first intent, yet what
+  // runs next is the Boss's choice (core-service-82, DR-088).
+  const after = await client.expectOk("ledger.get", {});
+  assert.equal(entry(after, next.id).intent.dispatched, undefined);
+  // The report reads as the stop it accounts for (core-service-107).
+  expectNext(after, next.id, "stopped", true);
+  assert.ok(!prompts.includes(next.text), "the next intent never ran");
+  assert.equal((await client.expectOk("session.list", {})).find((row) => row.id === session.id)?.continuable, true);
+});
+
+test("queue advance: a restore of an interrupted dispatch keeps its intent's standing and starts no successor", { timeout: 20_000 }, async (t) => {
+  let turns = 0;
+  const h = await harness(t, async () => {
+    turns += 1;
+    // The dispatch fails before its writer saved anything, leaving the
+    // turn uncertain; the restore's own turn only reports.
+    if (turns === 1) throw new Error("the writer stopped");
+  });
+  const { client, project, session } = h;
+  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First intent" });
+  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next intent" });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await client.waitFor((message) => message.type === "session.state" && message.session.id === session.id &&
+    message.session.recovery?.input === first.text && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  const before = await client.expectOk("ledger.get", {});
+  const stamped = entry(before, first.id).intent.dispatched;
+  assert.equal(stamped?.turnId, 1, "the dispatch was stamped when its turn started");
+  // Until the restore, the lost attempt's failure is the lane's last word.
+  expectNext(before, first.id, "failed", true);
+
+  const seen = client.messages.length;
+  await client.expectOk("session.restore", { sessionId: session.id });
+  await client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "session.state" &&
+    message.session.id === session.id && !message.session.recovery && !message.session.turnActive && !message.session.live);
+  await h.service["sessions"].settled(session.id);
+  await Promise.all([...h.service["advancing"]]);
+  // The report is the account of a stop, not of delivered work: the
+  // intent keeps the standing its stopped dispatch gave it — released,
+  // its stamps kept (dashboard-34) — and nothing runs next
+  // (core-service-82).
+  const after = await client.expectOk("ledger.get", {});
+  assert.equal(entry(before, first.id).state, "queued");
+  assert.equal(entry(after, first.id).state, "queued", "a restore's report finishes nothing");
+  assert.deepEqual(entry(after, first.id).intent.dispatched, stamped, "the dispatch stamps stand as history");
+  // The report reuses the lost attempt's turn id, yet that attempt's
+  // failure is not the report's: the lane reads the stop the report
+  // accounts for (core-service-107).
+  expectNext(after, first.id, "stopped", true);
+  assert.equal(entry(after, next.id).intent.dispatched, undefined);
+  assert.ok(!after.attention.some((row) => row.band === "finished"), "no finish or review is raised");
+  assert.equal(starts(client).length, 2, "the dispatch and the restore's report, and nothing after");
 });
 
 test("queue advance: an aborted follow-up cannot inherit an older finish", { timeout: 20_000 }, async (t) => {
@@ -582,6 +691,7 @@ test("queue advance: an aborted follow-up cannot inherit an older finish", { tim
   expectNext(after, next.id, "stopped", true);
   assert.equal(entry(after, next.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text, "One more change"]);
+  expectStoppedLane(h, await h.client.expectOk("session.list", {}));
 });
 
 for (const verdict of ["done", "dropped"] as const) {
