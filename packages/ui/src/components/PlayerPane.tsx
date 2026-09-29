@@ -14,7 +14,7 @@ import { currentLocale, i18n } from "../i18n.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
-import { AgentChipButton, agentReading } from "./AgentSettings.js";
+import { AgentChipButton, agentReading, reportedPhrase } from "./AgentSettings.js";
 import {
   AgentActiveTime,
   activeTimeDescription,
@@ -412,7 +412,12 @@ export function PlayerPane({
   const activeDescriptionId = activeMs === undefined
     ? undefined
     : activeTimeDescriptionId(view.id);
-  const railLabel = settings ? `${view.id} · ${agentReading(settings)}` : view.id;
+  // A folded lane's rail carries its chip's reading, what is set kept
+  // beside a reported model as on the chip itself (run-view-139).
+  const reported = settings ? reportedPhrase(settings) : undefined;
+  const railLabel = settings
+    ? `${view.id} · ${agentReading(settings)}${reported ? ` — ${reported}` : ""}`
+    : view.id;
   const railTitle = activeDescription
     ? `${railLabel} · ${activeDescription}`
     : railLabel;

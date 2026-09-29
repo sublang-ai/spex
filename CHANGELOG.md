@@ -120,7 +120,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17, slc 0.12 and Cligent 0.27 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)).
+- The app requires Playbook 17.1, slc 0.13 and Cligent 0.28 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+  [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md)),
+  and locks the agent SDKs at the releases Cligent 0.28 tests: Claude
+  Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
+  compiler now runs on the app's own Playbook and Cligent, with no older
+  copies of its own. Cligent refuses an agent runtime older than the
+  oldest release that serves its provider's latest models, so an older
+  runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
+  not ready with the command that upgrades it.
   **Upgrade every host that shares your Spex home together, and snapshot
   the home first** ([DR-050](specs/decisions/050-shared-storage-cutover.md)):
   once this build saves a session, a host on Playbook 16 or older — a
@@ -318,12 +326,29 @@ and `npm start` (desktop) or `npm run start:server` (server).
   in by running claude in a terminal, or set ANTHROPIC_API_KEY" (`codex`
   alike), and an expired sign-in says to sign in again with that agent's
   CLI, in a terminal.
+- Models are named as the runtime names them ([DR-091](specs/decisions/091-models-named-by-the-runtime.md)).
+  The model field is a list whose rows read each model's name with the
+  specific model behind it — Claude's `opus` reads "Opus ·
+  claude-opus-5-5" rather than "Opus · opus" — and, where the runtime
+  gives them, its own description and the model it runs when none is
+  set. The editor gives the field its full width, and an inherited
+  model is named the same way. In a conversation, an agent's chip reads
+  the model its runtime reported for its latest call while the adapter
+  and model setting that call began under still stand, what is set kept
+  in its tooltip; a change of either shows at once, as before.
+  Cligent 0.28 supplies the descriptions, the default model and the
+  reported models, wherever the runtime reports them.
+- A new Spex home's starter configuration, a new player lane and a new
+  role assignment start on `claude-opus-5-5`, the latest Claude model,
+  where they started on `claude-opus-5`.
 - Protocol version 17 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action
-  it runs by `actionId`; a session gains `parked`, `agentActiveMs` and
-  `agentSettings`, and its `recovery` gains `discardable`; an open
+  it runs by `actionId`; a session gains `parked`, `agentActiveMs`,
+  `agentReportedModels` and `agentSettings`, and its `recovery` gains
+  `discardable`; each model `agent.options` lists may carry its
+  `description`, and an available catalog its `defaultModel`; an open
   intent gains its queue standing, `next`, and loses the `permission`
   reason; attention entries are questions, failures, finishes and
   reviews only, a failure carrying `parked` and its `cause`; a draft's
@@ -379,7 +404,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   package such as `@anthropic-ai/claude-agent-sdk-darwin-arm64` — read
   ready and failed at its first run. Readiness now reads it not ready,
   naming the package and the repair: `npm ci` in the checkout, or
-  reinstall the app. Requires Cligent 0.27.1.
+  reinstall the app. Requires Cligent 0.27.1 or later.
 
 ### Security
 

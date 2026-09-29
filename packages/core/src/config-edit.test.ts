@@ -94,9 +94,10 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
   // captain keys carry no inline comments of their own).
   assertCommentsSurvive(before, after);
   // Only the provided keys changed; the rest of the block and every
-  // unrelated key are untouched.
+  // unrelated key are untouched: the players keep the model Playbook
+  // 17.1's starter names.
   assert.match(after, /captain:\n\s+adapter: claude\n\s+model: claude-opus-4-9\n\s+effort: max/);
-  assert.match(after, /claude-opus-5/);
+  assert.match(after, /model: claude-opus-5-5\n/);
 });
 
 test("player.set merge patch swaps a lane's vendor in place", async () => {

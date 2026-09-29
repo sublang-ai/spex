@@ -32,6 +32,44 @@ export function findModel(models: readonly AgentModelOption[], model: string) {
     ?? models.find((entry) => entry.resolvedModel === model);
 }
 
+/** How a model value reads: a name, and the specific model the runtime
+ * reports behind it where that differs from the name. Both are the
+ * runtime's words, never translated (settings-38, DR-091). */
+export interface ModelDisplay {
+  name: string;
+  specific?: string;
+}
+
+/** The specific model a catalog row stands for: its resolved model when
+ * the id is an alias of it — differing from it and not beginning with
+ * it — else the id when it says more than the name, else nothing. */
+function specificModel(row: AgentModelOption, name: string): string | undefined {
+  const resolved = row.resolvedModel;
+  if (resolved && resolved !== row.id && !row.id.startsWith(resolved)) return resolved;
+  if (row.id.toLowerCase() !== name.toLowerCase()) return row.id;
+  return undefined;
+}
+
+/** The one display rule (settings-38): a value that is a row's id reads
+ * as the row's name then its specific model; a value matching only a
+ * row's resolution — a canonical pin, recognized without rewriting
+ * (DR-052) — and a value no row lists both read as themselves. */
+export function modelDisplay(models: readonly AgentModelOption[], value: string): ModelDisplay {
+  const row = models.find((entry) => entry.id === value);
+  if (!row) return { name: value };
+  // A row the runtime left unnamed is named by its id: nothing reads blank.
+  const name = row.name.trim() ? row.name : row.id;
+  const specific = specificModel(row, name);
+  return specific === undefined ? { name } : { name, specific };
+}
+
+/** The display in one line of text: the name and the specific model
+ * joined by " · ", as a title, an option label or an inherited value
+ * reads it. */
+export function modelDisplayText(display: ModelDisplay): string {
+  return display.specific === undefined ? display.name : `${display.name} · ${display.specific}`;
+}
+
 export function modelTuning(options: AgentOptions | undefined, model: string) {
   // A reply without a discovery report narrows nothing rather than
   // throwing: discovery informs an editor, it never gates one (DR-052).

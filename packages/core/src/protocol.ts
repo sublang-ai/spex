@@ -296,6 +296,11 @@ export interface SessionInfo {
   /** Completed prompt-to-finish time per measured agent. Absent when
    * the stored stream is incomplete or holds no completed call. */
   agentActiveMs?: Record<string, number>;
+  /** The model each agent's runtime reported for its latest call to
+   * report one, with the settings that call began under
+   * (core-service-115, DR-091). Absent when the stored stream is
+   * incomplete or no agent's report can be read. */
+  agentReportedModels?: Record<string, AgentReportedModel>;
   /** This session's own agent settings, absent when it holds none. */
   agentSettings?: SessionAgentSettingsMap;
   /** The controls of a run standing parked on the Boss, absent when
@@ -307,10 +312,26 @@ export interface SessionInfo {
   streamIncompleteAfterSeq?: number;
 }
 
+/** What an agent's runtime named for a call, and what the agent was
+ * set to run when that call began (core-service-115, DR-091). */
+export interface AgentReportedModel {
+  /** The runtime's own words for the model, as it sent them. */
+  model: string;
+  /** The adapter and model setting that call began under, read from the
+   * execution context the stream recorded for it: a string pins, `false`
+   * takes the provider's default. Effort and fast mode are not kept:
+   * neither changes which model the runtime runs. */
+  settings: { adapter: string; model: string | false };
+}
+
+/** One row of the runtime's model catalog. Every word in it — the
+ * name, the ids, the description — is the runtime's own (DR-091). */
 export interface AgentModelOption {
   id: string;
   name: string;
   resolvedModel?: string;
+  /** The runtime's own description of the model, where it gives one. */
+  description?: string;
   effortValues?: readonly string[];
   defaultEffort?: string;
   fastModeSupported?: boolean;
@@ -320,7 +341,14 @@ export interface AgentOptions {
   adapter: AdapterName;
   effortValues: readonly string[];
   fastModeSupported: boolean;
-  discovery: { status: "available"; models: readonly AgentModelOption[]; unreportedEffortValues?: readonly string[] }
+  discovery: {
+    status: "available";
+    models: readonly AgentModelOption[];
+    unreportedEffortValues?: readonly string[];
+    /** The model the runtime runs when none is configured, from its
+     * own effective configuration; it may be absent from `models`. */
+    defaultModel?: string;
+  }
     | { status: "unavailable"; reason: string };
 }
 

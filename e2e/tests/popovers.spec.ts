@@ -163,6 +163,82 @@ test.describe("the role editors on the Playbooks surface", () => {
   });
 });
 
+/** The box that must show `locator`: its nearest ancestor that clips,
+ * else the window (DR-041 §9, lib/popover-fit.ts). */
+async function clippingBox(locator: Locator): Promise<Box> {
+  return locator.evaluate((element) => {
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflowX !== "visible" || style.overflowY !== "visible") {
+        const rect = node.getBoundingClientRect();
+        return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+      }
+    }
+    const root = document.documentElement;
+    return { x: 0, y: 0, width: root.clientWidth, height: root.clientHeight };
+  });
+}
+
+test.describe("a model list at the floor", () => {
+  // A catalog long enough that the list must scroll its own rows, each
+  // with the second line the runtime's description gives it (DR-091).
+  test.use({ appOptions: {
+    discoverAgentModels: async () => ({
+      status: "available",
+      defaultModel: "fixture-model-1",
+      models: Array.from({ length: 12 }, (_, index) => ({
+        id: `fixture-model-${index + 1}`,
+        name: `Fixture Model ${index + 1}`,
+        resolvedModel: `fixture-model-${index + 1}-2026-09-28`,
+        description: `Fixture model ${index + 1} · a description long enough to meet the edge of a narrow list`,
+      })),
+    }),
+  } });
+
+  test("settings-29: a model list opened in an agent editor stays inside the box that must show it", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await collapseRail(page);
+    await nav(page, "Settings").click();
+    const captain = page.getByTestId("captain-section");
+
+    for (const height of [800, SHORT]) {
+      await page.setViewportSize({ width: FLOOR, height });
+      await captain.getByTestId("captain-edit").click();
+      const trigger = captain.getByTestId("agent-model-trigger");
+      await expect(trigger).toBeVisible();
+      await trigger.scrollIntoViewIfNeeded();
+      await trigger.click();
+      const list = captain.getByTestId("agent-model-listbox");
+      await expect(list).toBeVisible();
+      const popup = list.locator("xpath=..");
+      const where = `the model list at ${FLOOR}×${height}`;
+      await expect(async () => {
+        expectInside(await boxOf(popup), await clippingBox(popup), where);
+        expectInside(await boxOf(popup), await viewport(page), `${where}, in the window`);
+      }).toPass();
+
+      // The last row is reached by the list's own scrolling, never the
+      // page's.
+      await page.keyboard.press("End");
+      const last = list.getByRole("option").last();
+      await expect(last).toHaveAccessibleName("Custom model…");
+      await expect(async () => expectInside(await boxOf(last), await boxOf(list), `the last row of ${where}`)).toPass();
+      await pageDoesNotScroll(page);
+
+      // Escape takes the list alone; the editor stands until it too is
+      // dismissed.
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+      await expect(captain.getByTestId("agent-editor")).toBeVisible();
+      await captain.getByTestId("agent-cancel").click();
+      await expect(captain.getByTestId("agent-editor")).toHaveCount(0);
+    }
+  });
+});
+
 test.describe("the project palette", () => {
   test.use({ appOptions: { project: true } });
 

@@ -47,6 +47,7 @@ import type {
 import { hasPresentationHeader } from "./protocol.js";
 import {
   foldAgentActiveMs,
+  foldAgentReportedModels,
   foldTurnEvent,
   foldUsage,
   sanitizeRecord,
@@ -152,6 +153,7 @@ function sessionInfo(
   costUsd: number | undefined,
   agentSettings: SessionAgentSettingsMap | undefined,
   agentActiveMs: Record<string, number> | undefined,
+  agentReportedModels: SessionInfo["agentReportedModels"],
   parked: ParkedRun | undefined,
 ): SessionInfo {
   return {
@@ -169,6 +171,7 @@ function sessionInfo(
     failed,
     ...(costUsd !== undefined ? { costUsd } : {}),
     ...(agentActiveMs !== undefined ? { agentActiveMs } : {}),
+    ...(agentReportedModels !== undefined ? { agentReportedModels } : {}),
     ...(meta.streamIncompleteAfterSeq !== undefined
       ? { streamIncompleteAfterSeq: meta.streamIncompleteAfterSeq }
       : {}),
@@ -1281,9 +1284,13 @@ export class Store {
       costed.length > 0
         ? costed.reduce((sum, entry) => sum + (entry.totalCostUsd ?? 0), 0)
         : undefined;
-    const agentActiveMs = meta.streamIncompleteAfterSeq === undefined
-      ? foldAgentActiveMs(this.records.get(meta.id) ?? [])
-      : undefined;
+    // A stream marked incomplete establishes neither fold: its retained
+    // prefix cannot say what an agent spent, nor what its latest call ran
+    // (core-service-102, core-service-115).
+    const complete = meta.streamIncompleteAfterSeq === undefined;
+    const records = this.records.get(meta.id) ?? [];
+    const agentActiveMs = complete ? foldAgentActiveMs(records) : undefined;
+    const agentReportedModels = complete ? foldAgentReportedModels(records) : undefined;
     return sessionInfo(
       meta,
       path,
@@ -1293,6 +1300,7 @@ export class Store {
       cost,
       this.sessionAgentSettings(meta.id),
       agentActiveMs,
+      agentReportedModels,
       this.parkedRun(meta.id),
     );
   }

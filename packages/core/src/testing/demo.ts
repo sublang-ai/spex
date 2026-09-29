@@ -25,14 +25,14 @@ import { createScriptedCaptain, type CaptainTurnScript } from "./scripted-captai
 export const DEMO_CONFIG = `# Spex demo config — the comment is kept by every in-app edit.
 captain:
   adapter: claude
-  model: claude-opus-5
+  model: claude-opus-5-5
 players:
   dev.coder:
     adapter: claude
-    model: claude-opus-5
+    model: claude-opus-5-5
   dev.reviewer:
     adapter: codex
-    model: gpt-5.6-sol
+    model: gpt-6-sol
 playbooks:
   code:
     from: "@sublang/playbook/code/registry"

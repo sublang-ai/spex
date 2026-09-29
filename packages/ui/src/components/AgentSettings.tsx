@@ -21,6 +21,8 @@ import { useFitInBox } from "../lib/popover-fit.js";
 import {
   changedFields,
   effectiveSettings,
+  providerDefaultReading,
+  reportedModel,
   type SessionAgent,
 } from "../lib/session-agents.js";
 import { FAST_MODE_MARK, fastModeWord } from "./AgentChip.js";
@@ -52,18 +54,39 @@ export interface AgentSettingsChange {
   fastMode?: boolean | null;
 }
 
-/** What an agent is set to run, as a chip reads it. */
+/** What an agent runs, as a chip reads it: the model its runtime
+ * reported for its latest call while the settings that call began under
+ * still stand, else the model it is set to run (run-view-139, DR-091). */
 export function agentReading(agent: SessionAgent): string {
   const effective = effectiveSettings(agent);
-  let text = effective.model ?? agent.adapter;
+  let text = reportedModel(agent) ?? effective.model ?? agent.adapter;
   if (effective.effort) text += ` @ ${effective.effort}`;
   return text;
 }
 
+/** Beside a reported model, what is set and what the runtime reported,
+ * both kept for the chip's title and accessible name: the set model —
+ * or the provider-default words where none is set — with its effort.
+ * Nothing when the chip reads what is set already. The model names are
+ * the runtime's and the config's own words; only the phrase is ours. */
+export function reportedPhrase(agent: SessionAgent): string | undefined {
+  const model = reportedModel(agent);
+  if (model === undefined) return undefined;
+  const effective = effectiveSettings(agent);
+  let set = effective.model ?? providerDefaultReading();
+  if (effective.effort) set += ` @ ${effective.effort}`;
+  return i18n._({
+    id: "set to {set}, runtime reports {model}",
+    comment: "an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running",
+    values: { set, model },
+  });
+}
+
 /** An agent's chip, and the control that edits it (run-view-139): the
- * reading is what the agent is set to run, and the chip itself is the
- * door — a gear here would name the Settings surface, which is the one
- * promise this control must not make. */
+ * reading is what the agent runs — the model its runtime reported while
+ * the settings of that call still stand, else what it is set to run —
+ * and the chip itself is the door: a gear here would name the Settings
+ * surface, which is the one promise this control must not make. */
 export function AgentChipButton({
   agent,
   onOpen,
@@ -76,6 +99,7 @@ export function AgentChipButton({
   open?: boolean;
 }) {
   const reading = agentReading(agent);
+  const reported = reportedPhrase(agent);
   const changed = changedFields(agent.settings).length > 0;
   const fastMode = effectiveSettings(agent).fastMode;
   return (
@@ -84,11 +108,13 @@ export function AgentChipButton({
       ref={anchorRef}
       data-testid={`agent-chip-${agent.id}`}
       data-changed={changed ? "true" : undefined}
+      data-reported={reported ? "true" : undefined}
       aria-expanded={open}
       // The name is the agent's own, its reading a run of ids, and the
-      // clauses below whole phrases: only punctuation joins them.
-      aria-label={`${i18n._("{name} settings: {reading}", { name: agent.name, reading })}${fastMode ? `, ${fastModeWord()}` : ""}${changed ? `, ${changedForThisConversation()}` : ""}`}
-      title={`${reading}${changed ? ` — ${changedForThisConversation()}` : ""}`}
+      // clauses below whole phrases: only punctuation joins them. A
+      // reported model keeps what is set beside it (run-view-139).
+      aria-label={`${i18n._("{name} settings: {reading}", { name: agent.name, reading })}${reported ? `, ${reported}` : ""}${fastMode ? `, ${fastModeWord()}` : ""}${changed ? `, ${changedForThisConversation()}` : ""}`}
+      title={`${reported ?? reading}${changed ? ` — ${changedForThisConversation()}` : ""}`}
       className={`flex min-h-6 min-w-0 max-w-full items-center rounded px-1.5 py-0.5 text-xs whitespace-nowrap hover:bg-neutral-200 dark:hover:bg-neutral-700 ${
         changed
           ? "bg-neutral-100 text-neutral-700 ring-1 ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-500"

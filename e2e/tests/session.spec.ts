@@ -300,6 +300,10 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await expect(coder).toContainText("This conversation only");
     await expect(page.getByTestId("agent-settings-captain")).toHaveCount(0);
     await coder.getByTestId("agent-dev.coder-model-mode").selectOption("pin");
+    // The pinned seed is listed through an alias, so a hand-typed id
+    // goes through the list's custom entry.
+    await coder.getByTestId("agent-dev.coder-model-value-trigger").click();
+    await coder.getByTestId("agent-dev.coder-model-value-listbox").getByRole("option", { name: "Custom model…" }).click();
     await coder.getByTestId("agent-dev.coder-model-value").fill("claude-tuned-coder");
     await coder.getByTestId("agent-save-dev.coder").click();
     await expect(coder).toHaveCount(0);
@@ -308,6 +312,10 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await page.getByTestId("agent-chip-captain").click();
     const captain = page.getByTestId("agent-settings-captain");
     await captain.getByTestId("agent-captain-model-mode").selectOption("pin");
+    // The pinned seed is listed through an alias, so a hand-typed id
+    // goes through the list's custom entry.
+    await captain.getByTestId("agent-captain-model-value-trigger").click();
+    await captain.getByTestId("agent-captain-model-value-listbox").getByRole("option", { name: "Custom model…" }).click();
     await captain.getByTestId("agent-captain-model-value").fill("claude-tuned-captain");
     await captain.getByTestId("agent-save-captain").click();
     await expect(captain).toHaveCount(0);

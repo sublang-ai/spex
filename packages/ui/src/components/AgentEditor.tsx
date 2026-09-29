@@ -7,7 +7,7 @@
 // It edits a local draft and emits a merge patch on save;
 // AgentEditorPopover wraps it for the at-hand flows (DR-007/009).
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
   adapterNameSchema,
   type AdapterName,
@@ -116,7 +116,9 @@ export function AgentEditor(props: AgentEditorProps) {
 
   const discovery = useAgentOptions(adapter);
   const tuning = modelTuning(discovery.options, model);
-  const models = discovery.options?.discovery.status === "available" ? discovery.options.discovery.models : [];
+  const catalog = discovery.options?.discovery.status === "available" ? discovery.options.discovery : undefined;
+  const models = catalog?.models ?? [];
+  const modelLabelId = useId();
   const supportsFastMode = tuning.fastModeSupported ?? readinessByAdapter.get(adapter)?.fastModeSupported ?? false;
   const invalidEffort = Boolean(discovery.options && effort && !tuning.efforts.includes(effort));
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
@@ -232,11 +234,26 @@ export function AgentEditor(props: AgentEditorProps) {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">{i18n._("Model (optional)")}</span>
-          <ModelField value={model} models={models} onChange={setModel} testId="agent-model" />
-        </label>
-        <label className="flex flex-col gap-0.5">
+        {/* The model and its effort each take the editor's full width:
+            a model reads as its name and the specific model behind it,
+            which half a column cuts (settings-39, DR-091). Not a
+            <label>: the model's list sits inside it, and a label would
+            pass every press on the list to the trigger. */}
+        <div className="col-span-2 flex min-w-0 flex-col gap-0.5">
+          <span id={modelLabelId} className="text-xs text-neutral-500">{i18n._("Model (optional)")}</span>
+          <ModelField
+            // Another adapter is another catalog: the field starts over
+            // on the default its switch reset the model to (settings-34).
+            key={adapter}
+            value={model}
+            models={models}
+            {...(catalog?.defaultModel ? { defaultModel: catalog.defaultModel } : {})}
+            onChange={setModel}
+            labelId={modelLabelId}
+            testId="agent-model"
+          />
+        </div>
+        <label className="col-span-2 flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">{i18n._("Reasoning effort")}</span>
           <select
             data-testid="agent-effort"

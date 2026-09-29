@@ -2816,11 +2816,6 @@ msgstr "missing stages: {stages}"
 msgid "model"
 msgstr "model"
 
-#. the model field of an agent editor
-#: src/components/ModelField.tsx
-msgid "Model"
-msgstr "Model"
-
 #: src/components/AgentEditor.tsx
 msgid "Model (optional)"
 msgstr "Model (optional)"
@@ -3600,7 +3595,6 @@ msgid "provider default"
 msgstr "provider default"
 
 #. model choice: let the provider pick its own default model
-#. model choice: let the provider pick its own default model
 #: src/components/ModelField.tsx
 msgid "Provider default"
 msgstr "Provider default"
@@ -4316,6 +4310,11 @@ msgstr "Sessions directory outside the space; not shared"
 #: src/components/SpaceSurface.tsx
 msgid "Set this space up first"
 msgstr "Set this space up first"
+
+#. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
+#: src/components/AgentSettings.tsx
+msgid "set to {set}, runtime reports {model}"
+msgstr "set to {set}, runtime reports {model}"
 
 #: src/components/SpaceSurface.tsx
 msgid "Set up space"

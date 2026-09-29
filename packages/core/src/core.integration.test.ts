@@ -639,10 +639,16 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
 test("settings-36: model discovery uses the captured environment without opening sessions or changing config", async (t) => {
   const env = { ANTHROPIC_API_KEY: "test-key", SPEX_OPTIONS_TEST: "captured environment" };
   const calls: string[] = [];
+  // The runtime's own words ride along untouched: a model's description
+  // and the default model its configuration runs (DR-091).
   const discovered = {
     status: "available" as const,
     unreportedEffortValues: ["ultracode"],
-    models: [{ id: "claude-fable-5-1", name: "Claude Fable 5.1", effortValues: ["high", "max"], fastModeSupported: false }],
+    defaultModel: "opus[1m]",
+    models: [
+      { id: "claude-fable-5-1", name: "Claude Fable 5.1", effortValues: ["high", "max"], fastModeSupported: false },
+      { id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5", description: "Opus 5.5 · Best for everyday, complex tasks" },
+    ],
   };
   const harness = await startHarness(VALID_CONFIG, {
     env,
@@ -1839,6 +1845,175 @@ test("core-service-103: stored call spans fold to per-agent active time", async 
     message.session.streamIncompleteAfterSeq !== undefined &&
     message.session.agentActiveMs === undefined,
   );
+});
+
+test("core-service-116: stored init reports fold to the model each agent's runtime named", async (t) => {
+  const dir = scratchDir("spex-reported-models-");
+  const sessionsDir = join(dir, "shared-sessions");
+  const projectDir = join(dir, "project");
+  mkdirSync(projectDir);
+  execFileSync("git", ["init", "-q", projectDir]);
+  const configPath = join(dir, "playbook.config.yaml");
+  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+
+  // An execution context as the stream records it: every model and
+  // effort a complete selection, and each role binding resolved. The
+  // fold keeps a call's adapter and model setting, never its effort.
+  const pick = (value?: string) => value === undefined ? { kind: "provider-default" } : { kind: "value", value };
+  const block = (model?: string, effort?: string, fastMode?: boolean) =>
+    ({ adapter: "claude", model: pick(model), effort: pick(effort), ...(fastMode === undefined ? {} : { fastMode }) });
+  const context = (
+    timestamp: number,
+    captain: Record<string, unknown>,
+    players: Record<string, Record<string, unknown>>,
+    roles: Record<string, { playerId: string; model?: string }>,
+  ) => ({
+    type: "session_context", timestamp, contextVersion: 1, captainId: "captain-session",
+    configuration: {
+      schemaVersion: 2,
+      captain,
+      players: Object.entries(players).map(([id, agent]) => ({ id, ...agent })),
+      catalog: { code: { id: "code", roles: Object.fromEntries(Object.entries(roles).map(([role, binding]) =>
+        [role, { playerId: binding.playerId, model: pick(binding.model), effort: pick() }])) } },
+    },
+    graphs: [], initialVisible: [],
+  });
+  const init = (playerId: string | undefined, timestamp: number, payload: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    playerId === undefined
+      ? { type: "captain_event", turnId: 1, timestamp, visibility: "hidden", event: { type: "init", payload }, ...extra }
+      : { type: "player_event", turnId: 1, playerId, timestamp, event: { type: "init", payload }, ...extra };
+
+  const reportedId = "11600000-0000-4000-8000-000000000001";
+  const silentId = "11600000-0000-4000-8000-000000000002";
+  const incompleteId = "11600000-0000-4000-8000-000000000003";
+  const reported: Record<string, unknown>[] = [
+    context(10, block("opus", "high"), {
+      "dev.coder": block(),
+      "dev.other": block("gpt-5.6-sol", "high", true),
+      "dev.shared": block("sonnet"),
+    }, { coder: { playerId: "dev.coder" }, lead: { playerId: "dev.shared", model: "opus" }, helper: { playerId: "dev.shared", model: "sonnet" } }),
+    { type: "turn_started", turnId: 1, turn: { id: 1, prompt: "first" }, timestamp: 20 },
+    { type: "captain_prompt", turnId: 1, prompt: "route", visibility: "hidden", timestamp: 30 },
+    init(undefined, 31, { model: "opus", reportedModel: "claude-opus-5-5" }, { contextSeq: 1 }),
+    { type: "captain_finished", turnId: 1, visibility: "hidden", timestamp: 40, result: { status: "success" } },
+    { type: "player_prompt", turnId: 1, playerId: "dev.coder", prompt: "code", timestamp: 50 },
+    init("dev.coder", 51, { model: "unknown", reportedModel: "claude-opus-5-5" }, { contextSeq: 1 }),
+    { type: "player_prompt", turnId: 1, playerId: "dev.shared", prompt: "lead", timestamp: 60 },
+    init("dev.shared", 61, { model: "opus", reportedModel: "claude-opus-5-5" }, { contextSeq: 1 }),
+    { type: "player_prompt", turnId: 1, playerId: "dev.other", prompt: "review", timestamp: 70 },
+    init("dev.other", 71, { model: "gpt-5.6-sol" }, { contextSeq: 1 }),
+    { type: "turn_finished", turnId: 1, timestamp: 80 },
+    // A second turn opens on changed settings.
+    context(90, block("sonnet", "high"), {
+      "dev.coder": block("haiku"),
+      "dev.other": block("gpt-6-astra", "max", false),
+      "dev.shared": block("sonnet"),
+    }, { coder: { playerId: "dev.coder", model: "haiku" }, helper: { playerId: "dev.shared", model: "sonnet" } }),
+    { type: "turn_started", turnId: 2, turn: { id: 2, prompt: "second" }, timestamp: 100 },
+    // The Captain's runtime names no model this time: its earlier
+    // report stands, with the settings that call began under.
+    init(undefined, 110, { model: "sonnet" }, { contextSeq: 13 }),
+    // A record naming the earlier context reads that one...
+    init("dev.coder", 120, { model: "unknown", reportedModel: "claude-opus-5-6" }, { contextSeq: 1 }),
+    // ...and one naming none reads the latest context before it.
+    init("dev.other", 130, { model: "gpt-6-astra", reportedModel: "gpt-6-astra-2026-09" }),
+    { type: "turn_finished", turnId: 2, timestamp: 140 },
+  ];
+  writeForeignSession(sessionsDir, reportedId, projectDir, reported);
+  writeForeignSession(sessionsDir, silentId, projectDir, [
+    context(10, block("opus"), { "dev.coder": block() }, { coder: { playerId: "dev.coder" } }),
+    init(undefined, 20, { model: "opus" }),
+    init("dev.coder", 30, { model: "unknown", reportedModel: "" }),
+  ]);
+  writeForeignSession(sessionsDir, incompleteId, projectDir, [
+    context(10, block("opus"), { "dev.coder": block() }, { coder: { playerId: "dev.coder" } }),
+    init(undefined, 20, { model: "opus", reportedModel: "claude-opus-5-5" }),
+  ]);
+  appendFileSync(join(sessionsDir, `${incompleteId}.records.jsonl`), '{"v":1,"seq":3\n');
+
+  const service = await CoreService.start({
+    token: "test", configPath, dataDir: join(dir, "state"), env: {}, home: join(dir, "home"), watchConfig: true,
+  });
+  const client = new Client(service.port());
+  t.after(async () => {
+    client.close();
+    await service.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  await client.open();
+  await client.expectOk("project.register", { path: projectDir });
+
+  const sessions = await client.expectOk("session.list", {});
+  assert.deepEqual(sessions.find((session) => session.id === reportedId)?.agentReportedModels, {
+    captain: { model: "claude-opus-5-5", settings: { adapter: "claude", model: "opus" } },
+    "dev.coder": { model: "claude-opus-5-6", settings: { adapter: "claude", model: false } },
+    "dev.other": { model: "gpt-6-astra-2026-09", settings: { adapter: "claude", model: "gpt-6-astra" } },
+  }, "a lane its bindings run on two models names none, and a silent call leaves the earlier report");
+  assert.equal(sessions.find((session) => session.id === silentId)?.agentReportedModels, undefined);
+  const incomplete = sessions.find((session) => session.id === incompleteId);
+  assert.notEqual(incomplete?.streamIncompleteAfterSeq, undefined);
+  assert.equal(incomplete?.agentReportedModels, undefined);
+
+  // The hidden Captain report leaks nothing into the visible replay.
+  const visible = await client.expectOk("history.get", { sessionId: reportedId });
+  assert.ok(!visible.records.some((entry) => entry.record.type === "captain_event"));
+
+  // A report stored later is folded and published as it lands.
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: reportedId } });
+  appendFileSync(join(sessionsDir, `${reportedId}.records.jsonl`), JSON.stringify({
+    v: 1, seq: reported.length + 1,
+    record: init("dev.other", 150, { model: "gpt-6-astra", reportedModel: "gpt-6-astra-2026-10" }),
+  }) + "\n");
+  await client.waitFor((message) =>
+    message.type === "session.state" && message.session.id === reportedId &&
+    message.session.agentReportedModels?.["dev.other"]?.model === "gpt-6-astra-2026-10",
+  );
+});
+
+test("core-service-116: a live session's runtime reports reach its summary as sent", async (t) => {
+  const harness = await startHarness(
+    VALID_CONFIG.replace("captain:\n  adapter: claude\n  model: claude-test", "captain:\n  adapter: claude\n  model: claude-captain"),
+    {
+      script: {
+        rules: [{ match: "route:", response: { result: '{"decision":"dispatch"}' } }],
+        fallback: { deltas: ["done"], result: "done" },
+        reportModel: (requested) => requested === undefined ? undefined : `${requested}@runtime`,
+      },
+    },
+  );
+  const client = new Client(harness.service.port());
+  t.after(async () => {
+    client.close();
+    await harness.service.stop();
+    rmSync(harness.dir, { recursive: true, force: true });
+  });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "build it" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.live === false);
+
+  const first = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.deepEqual(first?.agentReportedModels, {
+    captain: { model: "claude-captain@runtime", settings: { adapter: "claude", model: "claude-captain" } },
+    "dev.coder": { model: "claude-test@runtime", settings: { adapter: "claude", model: "claude-test" } },
+  });
+  const history = await client.expectOk("history.get", { sessionId: session.id });
+  const report = history.records.find((entry) =>
+    entry.record.type === "player_event" && (entry.record as { event: { type: string } }).event.type === "init");
+  assert.equal((report?.record as { event?: { payload?: { reportedModel?: unknown } } } | undefined)?.event?.payload?.reportedModel,
+    "claude-test@runtime", "the record keeps the report as the runtime sent it");
+
+  // This conversation's own model for the player: its next call reports
+  // under the new settings.
+  await client.expectOk("session.agent.set", { sessionId: session.id, agentId: "dev.coder", model: "claude-tuned" });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "and again" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 2 && m.session.live === false);
+  const second = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+  assert.deepEqual(second?.agentReportedModels?.["dev.coder"], {
+    model: "claude-tuned@runtime", settings: { adapter: "claude", model: "claude-tuned" },
+  });
 });
 
 /** The lease directory the CLI guards a writer with: `.<id>.lock`

@@ -14,6 +14,7 @@ Amends [DR-077](077-up-next-is-a-committed-queue.md) in its advancement gate alo
 Amends [DR-062](062-ending-a-failed-workflow.md) in its last consequence alone: a session holding an uncertain turn is restored first, and Discard stands only where nothing was recorded.
 Completes [DR-085](085-boss-talks-through-captain.md), whose Captain-worded questions needed Playbook's question relay.
 Amended by [DR-090](090-readiness-names-what-cligent-finds-missing.md) in its Cligent floor alone, now `^0.27.1`.
+Amended by [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) in its floors alone: the core requires `@sublang/playbook` `^17.1.0` and `@sublang/cligent` `^0.28.0`, and both shells declare `@sublang/slc` `^0.13.0`.
 
 ## Context
 

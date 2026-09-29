@@ -289,7 +289,7 @@ When the user opens the captain identity's editor control (or another agent's ed
 When the reader opens an agent's settings control — the chip in the Captain pane's header, or the chip in a player pane's header [[run-view-139](#run-view-139)] — the run view shall show an anchored popover editing that agent's own model, effort, and fast mode for this conversation [[core-service-100](core-service.md#core-service-100)], without leaving the surface and without editing the shared configuration ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-009](../decisions/009-at-hand-interaction.md)):
 
 - it edits the agent whose chip was opened and no other, anchored at that chip and taking the side and the bound of the agent editor's popover [[run-view-32](#run-view-32)], under the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters on open and returns to the chip on close, and Escape, an outside click, and Cancel close it;
-- each field offers the configured value named, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
+- each field offers the configured value named — a model by the display rule [[settings-38](settings.md#settings-38)] — the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)] in the model field [[settings-39](settings.md#settings-39)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
 - it reads the agent's name with "This conversation only" beneath it, and explains neither Settings nor the adapter, instruction and permissions it does not offer, which a new session alone changes [[core-service-92](core-service.md#core-service-92)] ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - where a playbook's binding tunes this agent of its own accord, the editor names those roles in one phrase, because one choice here runs them alike and silence would be a lie;
 - one control returns the whole agent to its configured values while any of them stands, and a save is refused in the editor's own frame with the draft kept, unavailable model discovery showing its reason with a retry while every field stays usable ([DR-052](../decisions/052-runtime-model-options.md));
@@ -297,10 +297,12 @@ When the reader opens an agent's settings control — the chip in the Captain pa
 
 #### run-view-139
 
-While a session's tab is shown, the run view shall read each agent's settings on the agent itself, so a conversation running something other than its configured values never reads as one that is not ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md)):
+While a session's tab is shown, the run view shall read each agent's settings on the agent itself, naming its model as its runtime reported it wherever that report still holds, so a conversation running something other than its configured values never reads as one that is not ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
 - the Captain pane's header and each player pane's header carry their agent's chip — adapter, model, and effort, with the lightning mark while it runs in fast mode, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — and that chip is the control that edits them [[run-view-138](#run-view-138)];
-- a chip reads what its agent is set to run — this conversation's own value for a field [[core-service-32](core-service.md#core-service-32)], else the configured one — so a choice shows the moment it is taken, as a setting does and a record of a past call does not;
+- a chip reads what its agent is set to run — this conversation's own value for a field [[core-service-32](core-service.md#core-service-32)], else the configured one — so a choice shows the moment it is taken, as a setting does;
+- while the agent still runs on the adapter and model setting its latest reporting call began under, the chip's model reads the model the runtime reported for that call [[core-service-115](core-service.md#core-service-115)] in place of the set value, and a change to either returns the chip to the set value at once, while a change of effort or fast mode, which leaves the model it runs unchanged, keeps the report;
+- a chip reading a reported model carries both what is set — the value, or the provider-default words where none is — and what the runtime reported in its title and its accessible name;
 - a chip whose agent this conversation changed says so, in its accessible name as well as in its form, so the reading is told apart from the default it departs from without color alone carrying it ([DR-010](../decisions/010-interface-craft.md) §7);
 - a folded lane's rail carries its chip's reading in its tooltip [[run-view-116](#run-view-116)], and unfolding the lane is the way to its settings — a lane the reader folded is his own doing, and nothing summons from it ([DR-030](../decisions/030-workspace-chrome.md)).
 
@@ -852,7 +854,7 @@ Where a fixture session summary reports the Captain's active time at 3,840,000 m
 - while the thread reads `Captain is thinking…` and no new summary arrives, the Captain's phrase stays at `active · 1h 4m` rather than ticking [[run-view-37](#run-view-37)] [[run-view-143](#run-view-143)];
 - a `player_prompt` replaces the player's cumulative phrase with its `working` reading and a terminal `done` carrying a duration and token totals changes no active-time phrase; on one call an updated summary stays cached until `player_finished` reveals it, while on the next `player_finished` restores the prior resting phrase until a later summary updates it in place [[run-view-7](#run-view-7)] [[run-view-143](#run-view-143)];
 - a terminal `done` carrying a duration for the unmeasured player creates no active-time phrase and does not replace its live reading without a summary, rather than deriving a figure from the event [[run-view-143](#run-view-143)];
-- the completed call's token totals appear once on its result line and not in the header, each active-time phrase stays outside the transcript and the settings control, and each settings chip's accessible reading remains settings-only [[run-view-6](#run-view-6)] [[run-view-139](#run-view-139)] [[run-view-143](#run-view-143)];
+- the completed call's token totals appear once on its result line and not in the header, each active-time phrase stays outside the transcript and the settings control, and each settings chip's accessible reading carries no active time [[run-view-6](#run-view-6)] [[run-view-139](#run-view-139)] [[run-view-143](#run-view-143)];
 - collapsing the measured player's pane removes its visible phrase while the folded rail's tooltip and accessible description retain the full qualified reading, and expanding the lane restores the header phrase [[run-view-116](#run-view-116)] [[run-view-143](#run-view-143)];
 - no header or transcript gains a combined total, share, ranking, graphic or cost [[run-view-143](#run-view-143)].
 
@@ -1009,7 +1011,17 @@ Where a replayed fixture stream stands settled with a Captain and two player lan
 - saving sends exactly one session-scoped agent command naming the session, the agent, and the chosen values, and sends no config edit [[run-view-138](#run-view-138)];
 - the pane's chip reads the chosen value as soon as the change is accepted, and says that this conversation changed it [[run-view-139](#run-view-139)];
 - a refused save keeps the editor open with its draft, and returning the agent to its configured values clears the chip's mark [[run-view-138](#run-view-138)];
+- with the runtime's catalog loaded, the model field's inherit choice names the configured model by the display rule [[run-view-138](#run-view-138)];
 - no session-wide roster or count of changed agents stands anywhere in the view [[run-view-139](#run-view-139)].
+
+#### run-view-152
+
+Where fixture session summaries report the model the runtime named for the Captain's and a player's latest calls with the settings each call began under, when those summaries and the session's records are replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert each chip's reading [[run-view-139](#run-view-139)]:
+
+- an agent whose adapter and model setting still stand as its call began under reads the reported model with its effort, its title and accessible name naming the set value — or the provider-default words for an agent set to none — beside the reported model [[run-view-139](#run-view-139)];
+- an agent the summary reports no model for reads its set value [[run-view-139](#run-view-139)];
+- a change after the call of this conversation's own model for one agent, and of the configured adapter for another, returns each chip to its set value at once, while a change of the configured effort alone keeps the report; a later summary reporting a call under the new settings reads that report [[run-view-139](#run-view-139)];
+- a folded lane's rail carries the reported reading in its tooltip [[run-view-139](#run-view-139)].
 
 #### run-view-92
 
@@ -1140,7 +1152,7 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 #### run-view-102
 
-Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, and Settings — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, Settings, and Settings with an agent editor's model list open — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
 
 #### run-view-103
 
