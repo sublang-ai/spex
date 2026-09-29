@@ -375,7 +375,6 @@ and `npm start` (desktop) or `npm run start:server` (server).
   "Nothing in ⟨project⟩ needs attention."
 - Removing the project the Dashboard was filtered to left the Dashboard
   blank; the filter falls back to All projects.
-
 - An agent whose SDK's native binary npm dropped — an optional platform
   package such as `@anthropic-ai/claude-agent-sdk-darwin-arm64` — read
   ready and failed at its first run. Readiness now reads it not ready,
