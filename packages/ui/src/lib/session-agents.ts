@@ -60,22 +60,22 @@ export function effectiveSettings(agent: SessionAgent): {
   };
 }
 
-/** What this agent is set to run, in the encoding a runtime report's
- * settings use: a string pins, `false` takes the provider's default. */
+/** What this agent is set to run on, in the encoding a runtime report's
+ * settings use: its adapter, and a model setting where a string pins
+ * and `false` takes the provider's default. */
 function currentSettings(agent: SessionAgent): AgentReportedModel["settings"] {
-  const pick = (chosen: string | false | undefined, configured: string | undefined): string | false =>
-    chosen !== undefined ? chosen : configured ?? false;
+  const chosen = agent.settings?.model;
   return {
-    model: pick(agent.settings?.model, agent.configured.model),
-    effort: pick(agent.settings?.effort, agent.configured.effort),
-    fastMode: agent.settings?.fastMode ?? agent.configured.fastMode ?? false,
+    adapter: agent.adapter,
+    model: chosen !== undefined ? chosen : agent.configured.model ?? false,
   };
 }
 
 /** The model the runtime reported for this agent's latest call, while
- * the agent's model, effort and fast mode are still those that call
- * began under; once any of them changes, nothing — the chip then reads
- * what is set, as a setting does (run-view-139, DR-091). */
+ * the agent still runs on the adapter and model setting that call began
+ * under — effort and fast mode leave which model runs unchanged; once
+ * either changes, nothing: the chip then reads what is set, as a
+ * setting does (run-view-139, DR-091). */
 export function reportedModel(agent: SessionAgent): string | undefined {
   const reported = agent.reported;
   // A report whose settings cannot be read is compared with nothing:
@@ -83,9 +83,7 @@ export function reportedModel(agent: SessionAgent): string | undefined {
   if (!reported?.settings || typeof reported.model !== "string") return undefined;
   const now = currentSettings(agent);
   const began = reported.settings;
-  return now.model === began.model && now.effort === began.effort && now.fastMode === began.fastMode
-    ? reported.model
-    : undefined;
+  return now.adapter === began.adapter && now.model === began.model ? reported.model : undefined;
 }
 
 /** The fields this conversation set on one agent, in the reader's own

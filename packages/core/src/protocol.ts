@@ -317,10 +317,11 @@ export interface SessionInfo {
 export interface AgentReportedModel {
   /** The runtime's own words for the model, as it sent them. */
   model: string;
-  /** The settings that call began under, read from the execution
-   * context the stream recorded for it: a string pins, `false` takes
-   * the provider's default. */
-  settings: { model: string | false; effort: string | false; fastMode: boolean };
+  /** The adapter and model setting that call began under, read from the
+   * execution context the stream recorded for it: a string pins, `false`
+   * takes the provider's default. Effort and fast mode are not kept:
+   * neither changes which model the runtime runs. */
+  settings: { adapter: string; model: string | false };
 }
 
 /** One row of the runtime's model catalog. Every word in it — the

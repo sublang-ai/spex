@@ -111,8 +111,8 @@ export function foldAgentActiveMs(
 
 type ReportedSettings = AgentReportedModel["settings"];
 
-/** A model or effort selection as the execution context records it: a
- * pinned value, or the provider's default; anything else is unread. */
+/** A model selection as the execution context records it: a pinned
+ * value, or the provider's default; anything else is unread. */
 function selectionOf(value: unknown): string | false | undefined {
   if (!value || typeof value !== "object") return undefined;
   const shape = value as { kind?: unknown; value?: unknown };
@@ -121,16 +121,15 @@ function selectionOf(value: unknown): string | false | undefined {
   return undefined;
 }
 
-/** An agent block's model, effort and fast mode, or nothing when any of
- * them cannot be read — nothing is guessed (DR-091). */
+/** An agent block's adapter and model setting, or nothing when either
+ * cannot be read — nothing is guessed (DR-091). Effort and fast mode
+ * are left out: neither changes which model the runtime runs. */
 function blockSettings(block: unknown): ReportedSettings | undefined {
   if (!block || typeof block !== "object") return undefined;
-  const shape = block as { model?: unknown; effort?: unknown; fastMode?: unknown };
+  const shape = block as { adapter?: unknown; model?: unknown };
   const model = selectionOf(shape.model);
-  const effort = selectionOf(shape.effort);
-  if (model === undefined || effort === undefined) return undefined;
-  if (shape.fastMode !== undefined && typeof shape.fastMode !== "boolean") return undefined;
-  return { model, effort, fastMode: shape.fastMode === true };
+  if (typeof shape.adapter !== "string" || !shape.adapter || model === undefined) return undefined;
+  return { adapter: shape.adapter, model };
 }
 
 /** What `agentId` was set to run in one execution context. A player a

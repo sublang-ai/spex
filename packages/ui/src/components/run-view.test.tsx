@@ -3768,8 +3768,8 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
     playbooks: [],
   };
   const REPORTED: SessionInfo["agentReportedModels"] = {
-    captain: { model: "claude-opus-5-5", settings: { model: "claude-captain", effort: "high", fastMode: false } },
-    "dev.reviewer": { model: "gpt-5.6-sol", settings: { model: false, effort: false, fastMode: false } },
+    captain: { model: "claude-opus-5-5", settings: { adapter: "claude", model: "claude-captain" } },
+    "dev.reviewer": { model: "gpt-5.6-sol", settings: { adapter: "codex", model: false } },
   };
   let previous: ReturnType<typeof useAppStore.getState>;
   beforeEach(() => {
@@ -3800,7 +3800,7 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
   );
   const chip = (id: string) => screen.getByTestId(`agent-chip-${id}`);
 
-  test("reads what ran while the settings its call began under stand, and what is set once they change", () => {
+  test("reads what ran while its call's adapter and model setting stand, and what is set once either changes", () => {
     const reported = { ...SESSION, live: false, agentReportedModels: REPORTED };
     const { rerender } = render(runView(reported));
 
@@ -3826,8 +3826,8 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
     expect(chip("captain").getAttribute("aria-label")).not.toContain("runtime reports");
     expect(chip("captain").getAttribute("data-changed")).toBe("true");
 
-    // The configured effort for the reviewer changes in Settings: its
-    // chip reads what is set, too.
+    // The configured effort for the reviewer changes in Settings: effort
+    // leaves which model runs unchanged, so the report stands.
     act(() => {
       useAppStore.setState({
         configState: { status: "valid", seeded: false, summary: { ...SUMMARY, players: [
@@ -3836,8 +3836,23 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
         ] } },
       } as never);
     });
-    expect(chip("dev.reviewer").textContent).toBe("codex @ high");
-    expect(chip("dev.reviewer").getAttribute("title")).toBe("codex @ high");
+    expect(chip("dev.reviewer").textContent).toBe("gpt-5.6-sol @ high");
+    expect(chip("dev.reviewer").getAttribute("title")).toBe("set to provider default @ high, runtime reports gpt-5.6-sol");
+
+    // The reviewer moves to another adapter, still on its provider's
+    // default: the report named another runtime's model, so the chip
+    // reads what is set.
+    act(() => {
+      useAppStore.setState({
+        configState: { status: "valid", seeded: false, summary: { ...SUMMARY, players: [
+          SUMMARY.players[0],
+          { ...SUMMARY.players[1], agent: { adapter: "claude" as const, effort: "high" } },
+        ] } },
+      } as never);
+    });
+    expect(chip("dev.reviewer").textContent).toBe("claude @ high");
+    expect(chip("dev.reviewer").getAttribute("title")).toBe("claude @ high");
+    expect(chip("dev.reviewer").getAttribute("data-reported")).toBeNull();
 
     // A call under the new settings reports again, and that report reads.
     rerender(runView({
@@ -3845,7 +3860,7 @@ describe("run-view-152: a chip names the model its runtime reported", () => {
       agentSettings: { captain: { model: "claude-sonnet-5" } },
       agentReportedModels: {
         ...REPORTED,
-        captain: { model: "claude-sonnet-5-20260901", settings: { model: "claude-sonnet-5", effort: "high", fastMode: false } },
+        captain: { model: "claude-sonnet-5-20260901", settings: { adapter: "claude", model: "claude-sonnet-5" } },
       },
     }));
     expect(chip("captain").textContent).toBe("claude-sonnet-5-20260901 @ high");

@@ -7,7 +7,7 @@
 
 Accepted (2026-09-28) on the owner's report: "Spex desktop only shows default or recommended, not specific model name, with Claude."
 Amends [DR-052](052-runtime-model-options.md), which remains accepted, in how a model choice reads alone: one display rule names every choice, and the model field becomes a listbox whose rows carry the runtime's own words.
-Amends [DR-067](067-tuning-for-one-conversation.md), which remains accepted, in §"A chip is a setting, not a receipt" alone: while an agent's settings still stand as its latest reporting call began under, its chip's model reads what the runtime reported for that call.
+Amends [DR-067](067-tuning-for-one-conversation.md), which remains accepted, in §"A chip is a setting, not a receipt" alone: while an agent still runs on the adapter and model setting its latest reporting call began under, its chip's model reads what the runtime reported for that call.
 Amends [DR-068](068-an-agents-settings-where-the-agent-is.md), which remains accepted, in the reading its chip carries alone: the reported model in place of the set one, with what is set kept in the chip's title and accessible name.
 
 ## Context
@@ -40,8 +40,9 @@ Claude's rows read "Opus · claude-opus-5-5" and "Default (recommended) · claud
 
 ### The chip says what ran
 
-- The core folds, per agent, the model the runtime reported for its latest call to report one, with the settings that call began under as the execution context in the stream records them; the Captain's hidden calls fold like any other, as active time does ([DR-070](070-agent-active-time.md)).
-- While those settings are still what the agent is set to run, its pane chip reads the reported model in place of the set value; a change — this conversation's own or the configured value — returns the chip to the set value at once, as [DR-067](067-tuning-for-one-conversation.md) requires of a setting.
+- The core folds, per agent, the model the runtime reported for its latest call to report one, with the adapter and model setting that call began under as the execution context in the stream records them; the Captain's hidden calls fold like any other, as active time does ([DR-070](070-agent-active-time.md)).
+- While the agent still runs on that adapter with that model setting, its pane chip reads the reported model in place of the set value; a change to either — this conversation's own or the configured value — returns the chip to the set value at once, as [DR-067](067-tuning-for-one-conversation.md) requires of a setting.
+- Effort and fast mode do not change which model the runtime runs, so changing them keeps the report standing.
 - A player whose role bindings run it on different models keeps its set value, since no one report names what that lane runs.
 - The chip's title and accessible name keep both what is set — the value, or the provider-default words — and what the runtime reported.
 - The chips of Settings, the Library, the Captain home and drafts keep reading the configuration: they describe a file, not a run.

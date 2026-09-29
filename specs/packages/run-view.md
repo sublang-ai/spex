@@ -301,7 +301,7 @@ While a session's tab is shown, the run view shall read each agent's settings on
 
 - the Captain pane's header and each player pane's header carry their agent's chip — adapter, model, and effort, with the lightning mark while it runs in fast mode, as every agent chip wears it ([DR-038](../decisions/038-history-is-done-work.md)) — and that chip is the control that edits them [[run-view-138](#run-view-138)];
 - a chip reads what its agent is set to run — this conversation's own value for a field [[core-service-32](core-service.md#core-service-32)], else the configured one — so a choice shows the moment it is taken, as a setting does;
-- while the agent's model, effort and fast mode are still those its latest reporting call began under, the chip's model reads the model the runtime reported for that call [[core-service-115](core-service.md#core-service-115)] in place of the set value, and a change to any of them returns the chip to the set value at once;
+- while the agent still runs on the adapter and model setting its latest reporting call began under, the chip's model reads the model the runtime reported for that call [[core-service-115](core-service.md#core-service-115)] in place of the set value, and a change to either returns the chip to the set value at once, while a change of effort or fast mode, which leaves the model it runs unchanged, keeps the report;
 - a chip reading a reported model carries both what is set — the value, or the provider-default words where none is — and what the runtime reported in its title and its accessible name;
 - a chip whose agent this conversation changed says so, in its accessible name as well as in its form, so the reading is told apart from the default it departs from without color alone carrying it ([DR-010](../decisions/010-interface-craft.md) §7);
 - a folded lane's rail carries its chip's reading in its tooltip [[run-view-116](#run-view-116)], and unfolding the lane is the way to its settings — a lane the reader folded is his own doing, and nothing summons from it ([DR-030](../decisions/030-workspace-chrome.md)).
@@ -1018,9 +1018,9 @@ Where a replayed fixture stream stands settled with a Captain and two player lan
 
 Where fixture session summaries report the model the runtime named for the Captain's and a player's latest calls with the settings each call began under, when those summaries and the session's records are replayed into the run view over the protocol [[run-view-14](#run-view-14)], the test suite shall assert each chip's reading [[run-view-139](#run-view-139)]:
 
-- an agent whose settings still stand as its call began under reads the reported model with its effort, its title and accessible name naming the set value — or the provider-default words for an agent set to none — beside the reported model [[run-view-139](#run-view-139)];
+- an agent whose adapter and model setting still stand as its call began under reads the reported model with its effort, its title and accessible name naming the set value — or the provider-default words for an agent set to none — beside the reported model [[run-view-139](#run-view-139)];
 - an agent the summary reports no model for reads its set value [[run-view-139](#run-view-139)];
-- a change after the call — this conversation's own model for one agent, the configured effort for another — returns each chip to its set value at once, and a later summary reporting a call under the new settings reads that report [[run-view-139](#run-view-139)];
+- a change after the call of this conversation's own model for one agent, and of the configured adapter for another, returns each chip to its set value at once, while a change of the configured effort alone keeps the report; a later summary reporting a call under the new settings reads that report [[run-view-139](#run-view-139)];
 - a folded lane's rail carries the reported reading in its tooltip [[run-view-139](#run-view-139)].
 
 #### run-view-92

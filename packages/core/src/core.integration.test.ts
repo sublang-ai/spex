@@ -1857,7 +1857,8 @@ test("core-service-116: stored init reports fold to the model each agent's runti
   writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
 
   // An execution context as the stream records it: every model and
-  // effort a complete selection, and each role binding resolved.
+  // effort a complete selection, and each role binding resolved. The
+  // fold keeps a call's adapter and model setting, never its effort.
   const pick = (value?: string) => value === undefined ? { kind: "provider-default" } : { kind: "value", value };
   const block = (model?: string, effort?: string, fastMode?: boolean) =>
     ({ adapter: "claude", model: pick(model), effort: pick(effort), ...(fastMode === undefined ? {} : { fastMode }) });
@@ -1944,9 +1945,9 @@ test("core-service-116: stored init reports fold to the model each agent's runti
 
   const sessions = await client.expectOk("session.list", {});
   assert.deepEqual(sessions.find((session) => session.id === reportedId)?.agentReportedModels, {
-    captain: { model: "claude-opus-5-5", settings: { model: "opus", effort: "high", fastMode: false } },
-    "dev.coder": { model: "claude-opus-5-6", settings: { model: false, effort: false, fastMode: false } },
-    "dev.other": { model: "gpt-6-astra-2026-09", settings: { model: "gpt-6-astra", effort: "max", fastMode: false } },
+    captain: { model: "claude-opus-5-5", settings: { adapter: "claude", model: "opus" } },
+    "dev.coder": { model: "claude-opus-5-6", settings: { adapter: "claude", model: false } },
+    "dev.other": { model: "gpt-6-astra-2026-09", settings: { adapter: "claude", model: "gpt-6-astra" } },
   }, "a lane its bindings run on two models names none, and a silent call leaves the earlier report");
   assert.equal(sessions.find((session) => session.id === silentId)?.agentReportedModels, undefined);
   const incomplete = sessions.find((session) => session.id === incompleteId);
@@ -1995,8 +1996,8 @@ test("core-service-116: a live session's runtime reports reach its summary as se
 
   const first = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
   assert.deepEqual(first?.agentReportedModels, {
-    captain: { model: "claude-captain@runtime", settings: { model: "claude-captain", effort: false, fastMode: false } },
-    "dev.coder": { model: "claude-test@runtime", settings: { model: "claude-test", effort: false, fastMode: false } },
+    captain: { model: "claude-captain@runtime", settings: { adapter: "claude", model: "claude-captain" } },
+    "dev.coder": { model: "claude-test@runtime", settings: { adapter: "claude", model: "claude-test" } },
   });
   const history = await client.expectOk("history.get", { sessionId: session.id });
   const report = history.records.find((entry) =>
@@ -2011,7 +2012,7 @@ test("core-service-116: a live session's runtime reports reach its summary as se
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 2 && m.session.live === false);
   const second = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
   assert.deepEqual(second?.agentReportedModels?.["dev.coder"], {
-    model: "claude-tuned@runtime", settings: { model: "claude-tuned", effort: false, fastMode: false },
+    model: "claude-tuned@runtime", settings: { adapter: "claude", model: "claude-tuned" },
   });
 });
 
