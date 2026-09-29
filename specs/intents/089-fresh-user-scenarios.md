@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress on `fresh-user-scenarios`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)), whose question relay and slc 0.12 the live journeys need: parts 1 and 2 are built and verified hermetically (tasks 1–15, and task 16's rewrites).
+In progress on `fresh-user-scenarios-v2`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) with its scratch-leak and restore fixes, whose question relay and slc 0.12 the live journeys need: parts 1 and 2 are built and verified hermetically (tasks 1–15, task 16's rewrites, and tasks 17–19).
 What remains is the owner's: one run of `npm run smoke -- --live` and of `npm run regression` on signed-in agents, their outcomes recorded here, and the compiled fixture that the regression's example journey captures, committed; until then the hermetic compiled-fixture journey skips.
 The branch merges to `main` once those runs are recorded.
 
@@ -103,3 +103,6 @@ The live lane's run watch had stopped on a question park's notice before it look
 In the Captain-shell journey the hook's helpers were probed: the coder's and the reviewer's calls carry their role labels, and `/review returned to /code` stands in the thread, which the project journey's second cycle now requires past the first cycle's end.
 The smoke's interrupt was probed with stand-in stages: a SIGTERM to the smoke reached the running `live` stage, and a SIGINT to the process group ended both, each run exiting 143 or 130 and printing the kept scratch; the driver, interrupted while its app launched, killed the app and kept its scratch profile.
 Two rules were settled rather than built around: the example's first compile is the one judged, the relay being free to change the source after it; and the example runs on the command it registered, which a kept proposal may name otherwise than `/workflow`.
+
+Restacked onto the fixed adoption and verified on 2026-09-28 after tasks 17–19: a fresh `npm ci`; `npm run build`; `npm test` — 34 script, 133 CLI, 352 core, 710 interface, 16 desktop and 11 server tests; 64 hermetic journeys passed and the compiled-fixture journey skipped, run-view-118's focus check having failed once in a full run and passed on the rerun and three runs alone; the journeys typecheck; `spex lint` clean; the three catalogs whole.
+The example's displayed gears and state machine are still slc's compile of its former text, until the owner's live compile captures the fixture and refreshes them.
