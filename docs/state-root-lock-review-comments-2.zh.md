@@ -75,3 +75,28 @@ Spex 写过的每一个所有者记录都带令牌，核心和存储预留都是
 - Spex PR 那一行只泛泛提到约束。具体要改的规范是存储 Git 工具的拒绝措辞和根目录租约的测试条目（[core-service-61](../specs/packages/core-service.md#core-service-61) 及其验证测试）；存储命令恢复已死亡本机所有者是新行为，需要自己的条目。
 - 若第 1 条选择协同升级，Playbook PR 除修订版点名的两个文件外还要改 `release.md`。
 - Spex PR 的开发需要本地 link 或 pack 的未发布 Playbook。修订版禁止用它做验证，作为合并门槛是对的；但应写明开发可以使用它，以免被读成不许提前开工。
+
+---
+
+# 第二轮（2026-09-29）：对协同升级修订版的意见
+
+第一轮各点都已落实：发布按 Playbook 的 release-35 和 Spex [DR-088](../specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md) 的快照规则做协同升级；身份接口为异步，并在同步的 `Store` 与预留之前解析；退役路径保持非空并保留所有者文件；要求移动后复核令牌；无令牌所有者按格式错误处理；点名了 Spex 规范条目；Playbook PR 包含 `release.md`；允许用本地 Playbook 构建做开发。
+新增引用都能对应：[core-service-63](../specs/packages/core-service.md#core-service-63) 是准入约束的验证测试，[storage-10](../specs/packages/storage.md#storage-10) 含命令拒绝措辞，DR-088 确实要求宿主一起升级前先做主目录快照。
+rebind 命令构造 `Store`，所以注入的选项覆盖它；演示辅助代码也构造 `Store`。
+中文版与英文版一致。
+剩下两个实现细节。
+
+### 1. 写明永久退役目录放在哪里，以及无人清理
+
+Playbook 永久保留每一个退役租约目录：`makeLeaseStage` 拒绝退役路径已存在的令牌，`retireObservedLease` 和 `retireClaim` 先改名再重读，包内没有任何代码删除退役路径。
+这些目录位于会话目录内部。
+Spex 根目录租约现在正常释放时也要退役，于是每次核心启动和每条存储命令都会留下一个目录；按现在的命名，它们会落在 `~/.spex` 顶层，与用户文件并列。
+
+建议统一嵌套到一个位置，例如 `.lock.retired/<token>/`，存储 Git 工具和可移植文件过滤器现有的 `.lock*` 忽略规则已经覆盖它；并明确写一句退役目录永不清理，与 Playbook 一致，因为面对迟到的回收者无法证明任何清理期限是安全的。
+
+### 2. 拒绝空的活动 `.lock/` 需要在发布 rename 之前检查
+
+POSIX `rename(2)` 对空目录目标会成功，所以只靠把暂存目录改名到位的发布，会静默替换空的 `.lock/`，而不是拒绝它。
+修订版规定的拒绝因此需要在 rename 之前做存在性检查。
+检查与 rename 之间的间隙是安全的：若另一写入者在其间发布，rename 会因目标非空而失败，竞争者像遇到任何被持有的锁一样循环或拒绝。
+采用改名式释放后 Spex 自己不会再制造空目录状态，这只用于防范旧释放路径或人工操作留下的记录。

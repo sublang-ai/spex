@@ -75,3 +75,28 @@ That removes one open item.
 - The Spex PR row names the contracts generically. The storage Git tool's refusal wording and the root-lease test item ([core-service-61](../specs/packages/core-service.md#core-service-61) and its verifying test) are the concrete spec changes; the storage command recovering a dead local owner is a new behavior that needs its own item.
 - If comment 1 takes the coordinated-upgrade path, the Playbook PR also touches `release.md`, beside the two files the revision names.
 - Development of the Spex PR will need a local link or pack of unreleased Playbook. The revision forbids validating with it, which is right for the merge gate; it should say development may use it so the rule is not read as a ban on working ahead.
+
+---
+
+# Round 2 (2026-09-29): comments on the coordinated-upgrade revision
+
+Every point of the first round is in: the rollout is a coordinated upgrade under Playbook's release-35 and Spex's [DR-088](../specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md) snapshot rule, the identity API is asynchronous and resolved before the synchronous `Store` and reservation, retired paths are nonempty with the owner file, the post-move token check is required, a tokenless owner is malformed, the Spex spec items are named, `release.md` is in the Playbook PR, and a local Playbook build is allowed for development.
+The new citations resolve: [core-service-63](../specs/packages/core-service.md#core-service-63) is the verifying test of the admission contract, [storage-10](../specs/packages/storage.md#storage-10) carries the command-refusal wording, and DR-088 does require a home snapshot before hosts upgrade together.
+The rebind command builds a `Store`, so the injected option covers it; the demo helper builds one too.
+The Chinese text matches.
+Two implementation points remain.
+
+### 1. Say where permanent retired directories go, and that nothing prunes them
+
+Playbook keeps every retired lease directory forever: `makeLeaseStage` refuses a token whose retired path exists, `retireObservedLease` and `retireClaim` rename and re-read, and no code in the package removes a retired path.
+Those directories sit inside the sessions directory.
+The Spex root lease now retires on every normal release as well, so each core start and each storage command leaves one directory, and with today's naming they land at the top of `~/.spex` beside the user's files.
+
+Suggest one nested location such as `.lock.retired/<token>/`, which the existing `.lock*` ignore rules in the storage Git tool and the portable-file filter already cover, and an explicit sentence that retired directories are never pruned, matching Playbook, since no prune bound can be proved against a delayed reclaimer.
+
+### 2. Refusing an empty active `.lock/` needs a check before the publication rename
+
+POSIX `rename(2)` succeeds onto an empty directory, so a publication that only renames the stage into place silently replaces an empty `.lock/` instead of refusing it.
+The refusal the revision specifies therefore needs an existence check before the rename.
+The check-then-rename gap is safe: if another writer publishes in between, the rename fails on the nonempty target and the contender loops or refuses as it would for any held lock.
+With rename-based release Spex itself never creates the empty state, so this only guards records left by the old release path or by hand.
