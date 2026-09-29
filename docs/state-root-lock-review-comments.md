@@ -81,3 +81,54 @@ It depends on none of the decisions above and can be made now, with a bounded fo
 ## Suggested next step
 
 Rewrite "Proposed direction" as a comparison of the three candidates, with the DR-036 amendment and the Playbook session lease as explicit decision points, and split the desktop signal handler out as immediate work.
+
+---
+
+# Round 2 (2026-09-29): comments on the revised proposal
+
+The revision answers round 1: the three candidates are compared, A is selected, Playbook's session leases and repository claims are in scope, the DR-036 question and the desktop signal handler are listed.
+The new claims check out against the installed `@sublang/playbook` 15.0.0: the session store compares hostname before PID and accepts `hostname`/`probeProcess`, Spex passes only `sessionsDir` ([store.ts](../packages/core/src/store.ts) `sessionStore`), and the repository coordinator validates a `hostname,ownerToken,pid,schema` owner and probes the PID.
+The candidate B objection (a paused live owner outliving its deadline) is correct.
+What follows are the gaps that remain in A's design.
+
+### 1. Where the machine identity lives is A's central decision, and it is an upstream one
+
+"Outside the synced home" is right, but the location is not named.
+If Playbook's session leases and repository claims adopt the same identity, the standalone CLI must find the file at the same place without Spex.
+The location is therefore a Playbook convention that Spex reads, not a Spex choice that Playbook receives.
+Per shell there is no shared app-data directory today (the server has no `userData`), so a platform state directory (`$XDG_STATE_HOME`, `~/Library/Application Support`) keyed by user is the natural candidate; the proposal should name it.
+
+### 2. Injecting the identity from Spex alone breaks same-host takeover
+
+`@sublang/playbook/session-store` re-exports `createCaptainSessionStore` as `createSessionStore`, so Spex can pass `hostname` today without an upstream change.
+But a lease Spex writes with a machine id in the hostname field is "foreign" to a CLI comparing `os.hostname()`, and vice versa.
+On one machine, the CLI could no longer take over a crashed Spex session and Spex could not take over a CLI one.
+The proposal says a Spex-only injection "would not fix" CLI leases; it should say it regresses them.
+The ordering constraint belongs in the decision list: upstream first, or a transition rule that accepts either the current hostname or the machine id as "same host".
+
+### 3. Process start identity means an owner-record schema change
+
+Node exposes no process start time.
+Linux needs `/proc/<pid>/stat`; macOS needs a spawned `ps -o lstart=` or a native `sysctl`, so the probe becomes a subprocess in the lock path.
+More important, both Playbook owner records are validated against exact key sets (session-store `assertOwnerShape`, repository-effects line `keys.join(',') !== 'hostname,ownerToken,pid,schema'`), and Spex's `owner.json` reader is the same shape.
+Adding a start-time field is a schema bump that older readers reject fail-closed, which is the concrete form of the "legacy owner files" item.
+
+The release path already checks the owner token, so PID reuse only affects retirement of a dead owner's lock on the same machine.
+The proposal should decide whether that residual risk justifies the schema change, rather than list start identity as settled.
+
+### 4. DR-036 grounds the root's foreign-host refusal too
+
+The revision reads DR-036's "foreign-host leases never broken" as a session-lease rule and the root's refusal as implementation.
+DR-036 also states under "Sync and backup" that leases are same-host by design and one machine writes at a time.
+Candidate A therefore "must preserve" the root's refusal unless DR-036 is amended, not "can preserve" it; the decision point should be phrased that way.
+
+### 5. Leftover candidate-C wording
+
+The "Diagnostics" bullet still says metadata never proves an OS lock is held.
+With A selected there is no OS lock; the bullet should say what A reports when the owner is foreign, dead, unverifiable, or of a legacy shape.
+
+### 6. Lost identity: propose the rule
+
+A missing identity file after a reinstall makes every existing lock foreign and refused.
+Suggested rule: generate a new identity, refuse with a message naming the lock path and the reason, and never retire a lock whose identity cannot be matched.
+This keeps fail-closed and gives the operator the one action to take.
