@@ -229,3 +229,26 @@ The rule should be that the writer refuses to start, naming the file and the rea
 Two writers can start at once with no identity file (a Spex core and a standalone CLI).
 Atomic creation is delegated upstream, but the correctness condition is cheap to state here: the loser of the exclusive create discards its own value and re-reads the file, so both end up with one identity.
 Add that case, and a writer start with an unreadable identity, to the A verification list.
+
+---
+
+# Round 6 (2026-09-29): comments on the creation-and-refusal revision
+
+All three round-5 points are in: the exclusive publication with a loser that re-reads and a bounded retry, writer refusal on an unreadable identity with no `os.hostname()` fallback, and the two new verification cases.
+The Chinese text matches.
+
+### 1. The collision wording is now right; round 5 overstated the guarantee
+
+Round 5 argued the worst case is a refusal because this machine's UUID is generated after any legacy record.
+That holds for accidents.
+It does not hold when someone deliberately sets another machine's hostname to this machine's tag and runs an old writer there, which is the case the revision names.
+The revised wording, an unlikely ambiguity the unchanged field cannot eliminate, is the accurate statement, and it is fine to leave as a residual limit since it needs deliberate configuration, not a network event.
+
+### 2. Decide whether wrong permissions make the file unusable
+
+"Unreadable or malformed" blocks every writer, including the standalone CLI, until an operator repairs the file.
+A file that is readable and well-formed but has loose permissions (a umask slip, a restore from backup) is neither, and Playbook's private-directory checks suggest it would be refused too.
+The identity is not a secret: forging a local owner also requires write access to the 0700 home.
+Suggest tightening permissions in place rather than refusing, so the only manual repairs are for content, and stating that choice in the upstream review's scope.
+
+The proposal is otherwise consistent end to end; the remaining open items are the ones it already delegates upstream.
