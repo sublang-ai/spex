@@ -1138,65 +1138,78 @@ export async function attachRun(page: Page, label: string): Promise<void> {
   });
 }
 
-/** What stops a live run that the journey will not move past by
- * itself: a failed turn, a question for the Boss unless the journey
- * answers questions, or a failure notice; undefined while the run goes
- * on. One read of the page, so hours of polling stay light in the
- * trace. */
-async function runStop(page: Page, answering: boolean): Promise<string | undefined> {
+/** Where a watched run stands on one read of the page: stopped short
+ * of what the journey waits for — a failed turn, a failure notice, or
+ * a question for the Boss unless the journey answers questions —
+ * waiting on the Boss's answer, or going on (undefined). One read, so
+ * hours of polling stay light in the trace. */
+async function runStand(
+  page: Page,
+  answering: boolean,
+): Promise<{ stop: string } | "question" | undefined> {
   return page.evaluate((answering) => {
     const all = (id: string) =>
       Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
     if (all("captain-pane").some((pane) => /turn failed/i.test(pane.innerText))) {
-      return "the turn failed";
+      return { stop: "the turn failed" };
     }
     const question = all("question-bubble").at(-1);
-    if (question && !answering) return `the run asked the Boss: ${question.innerText}`;
-    for (const id of ["failed-workflow", "unparked-failure-notice"]) {
-      const notice = all(id)[0];
-      if (notice) return `${id}: ${notice.innerText}`;
-    }
+    if (question && !answering) return { stop: `the run asked the Boss: ${question.innerText}` };
+    // A run parked on a question wears the parked-run notice too
+    // (data-reason="question"): a journey that answers questions
+    // leaves that park to its answer, and stops on a failed one.
+    const parked = all("failed-workflow").find(
+      (notice) => !answering || notice.dataset.reason !== "question",
+    );
+    if (parked) return { stop: `failed-workflow: ${parked.innerText}` };
+    const unparked = all("unparked-failure-notice")[0];
+    if (unparked) return { stop: `unparked-failure-notice: ${unparked.innerText}` };
+    if (answering && all("boss-reply-banner").length > 0) return "question";
     return undefined;
   }, answering);
 }
 
-/** How a journey that answers questions answers the one standing. */
-export interface Answering {
+/** How a journey watches a run it waits on. */
+export interface RunWatch {
   /** Called in the open session while a question waits for the Boss:
-   * the journey answers it, and returns once the wait has cleared. */
+   * the journey answers it, and returns once the wait has cleared.
+   * Without it, a question stops the run. */
   onQuestion?: () => Promise<void>;
+  /** How long to wait between reads of the page: ten seconds by
+   * default, for runs of minutes to hours. */
+  pollMs?: number;
 }
 
 /**
- * Watch the open session until `reached` holds, polling every ten
- * seconds, and fail at once — the transcripts attached — when the run
- * stops short of it or the time runs out. A question for the Boss
- * stops it too, unless `onQuestion` answers it.
+ * Watch the open session until `reached` holds, polling the page, and
+ * fail at once — the transcripts attached — when the run stops short
+ * of it or the time runs out. A question for the Boss stops it too,
+ * unless `onQuestion` answers it.
  */
 export async function awaitRun(
   page: Page,
   what: string,
   reached: () => Promise<boolean>,
   timeout: number,
-  answering: Answering = {},
+  watch: RunWatch = {},
 ): Promise<void> {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const stop = await runStop(page, answering.onQuestion !== undefined);
-    if (stop) {
+    const stand = await runStand(page, watch.onQuestion !== undefined);
+    if (stand && stand !== "question") {
       await attachRun(page, `stopped before ${what}`);
-      throw new Error(`${what}: ${stop}`);
+      throw new Error(`${what}: ${stand.stop}`);
     }
     if (await reached()) return;
-    if (answering.onQuestion && (await page.getByTestId("boss-reply-banner").count()) > 0) {
-      await answering.onQuestion();
+    if (stand === "question" && watch.onQuestion) {
+      await watch.onQuestion();
       continue;
     }
     if (Date.now() > deadline) {
       await attachRun(page, `timed out before ${what}`);
       throw new Error(`${what}: not reached in ${Math.round(timeout / 60_000)} minutes`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await new Promise((resolve) => setTimeout(resolve, watch.pollMs ?? 10_000));
   }
 }
 
@@ -1207,13 +1220,13 @@ export async function awaitCaptainLine(
   line: string,
   timeout: number,
   times = 1,
-  answering: Answering = {},
+  watch: RunWatch = {},
 ): Promise<void> {
   const lines = page
     .getByTestId("captain-pane")
     .getByTestId("system-line")
     .filter({ hasText: line });
-  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout, answering);
+  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout, watch);
 }
 
 /** A player's pane carries the output of a call it served: no longer
