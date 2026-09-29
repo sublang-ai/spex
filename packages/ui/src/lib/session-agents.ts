@@ -8,6 +8,7 @@
 import {
   CAPTAIN_AGENT_ID,
   type AdapterName,
+  type AgentReportedModel,
   type ConfigSummary,
   type SessionAgentSettings,
   type SessionInfo,
@@ -37,6 +38,10 @@ export interface SessionAgent {
   /** `<playbook>.<role>` for every binding that tunes this player of
    * its own accord — one session tuning runs them all alike. */
   divergentRoles: string[];
+  /** The model the runtime reported for this agent's latest call to
+   * report one, with the settings that call began under
+   * (core-service-115). */
+  reported?: AgentReportedModel;
 }
 
 /** What this agent is set to run: this conversation's own value for a
@@ -55,6 +60,34 @@ export function effectiveSettings(agent: SessionAgent): {
   };
 }
 
+/** What this agent is set to run, in the encoding a runtime report's
+ * settings use: a string pins, `false` takes the provider's default. */
+function currentSettings(agent: SessionAgent): AgentReportedModel["settings"] {
+  const pick = (chosen: string | false | undefined, configured: string | undefined): string | false =>
+    chosen !== undefined ? chosen : configured ?? false;
+  return {
+    model: pick(agent.settings?.model, agent.configured.model),
+    effort: pick(agent.settings?.effort, agent.configured.effort),
+    fastMode: agent.settings?.fastMode ?? agent.configured.fastMode ?? false,
+  };
+}
+
+/** The model the runtime reported for this agent's latest call, while
+ * the agent's model, effort and fast mode are still those that call
+ * began under; once any of them changes, nothing — the chip then reads
+ * what is set, as a setting does (run-view-139, DR-091). */
+export function reportedModel(agent: SessionAgent): string | undefined {
+  const reported = agent.reported;
+  // A report whose settings cannot be read is compared with nothing:
+  // nothing is guessed (DR-091).
+  if (!reported?.settings || typeof reported.model !== "string") return undefined;
+  const now = currentSettings(agent);
+  const began = reported.settings;
+  return now.model === began.model && now.effort === began.effort && now.fastMode === began.fastMode
+    ? reported.model
+    : undefined;
+}
+
 /** The fields this conversation set on one agent, in the reader's own
  * words, so a chip and its editor say what departs rather than only
  * that something does. */
@@ -70,7 +103,7 @@ export function changedFields(settings: SessionAgentSettings | undefined): strin
 /** The session's agents, the Captain first and then its players in
  * pane order — one per pane the view draws. */
 export function sessionAgents(
-  session: Pick<SessionInfo, "players" | "agentSettings">,
+  session: Pick<SessionInfo, "players" | "agentSettings" | "agentReportedModels">,
   summary: ConfigSummary | undefined,
 ): SessionAgent[] {
   if (!summary) return [];
@@ -92,6 +125,7 @@ export function sessionAgents(
     },
     ...(session.agentSettings?.[id] ? { settings: session.agentSettings[id] } : {}),
     divergentRoles,
+    ...(session.agentReportedModels?.[id] ? { reported: session.agentReportedModels[id] } : {}),
   });
   // A summary without a captain block — a partial config a client has
   // not finished loading — contributes no Captain row rather than an

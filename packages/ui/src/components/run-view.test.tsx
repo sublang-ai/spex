@@ -3600,7 +3600,10 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     const command = vi.fn(async (name: string) =>
       name === "agent.options"
         ? { adapter: "claude", effortValues: ["low", "high", "max"], fastModeSupported: true,
-            discovery: { status: "available", models: [{ id: "claude-opus", name: "Opus" }] } }
+            discovery: { status: "available", models: [
+              { id: "claude-opus", name: "Opus" },
+              { id: "claude-test", name: "Test", resolvedModel: "claude-test-5-5" },
+            ] } }
         : { ...SESSION, ...(agentSettings ? { agentSettings } : {}) });
     setClientForTests({ command } as never);
     useAppStore.setState({
@@ -3695,6 +3698,17 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     restore();
   });
 
+  test("the inherit choice names the configured model as the runtime reports it", async () => {
+    const { restore } = mount();
+    fireEvent.click(screen.getByTestId("agent-chip-dev.coder"));
+    const editor = await screen.findByTestId("agent-settings-dev.coder");
+    const mode = within(editor).getByTestId("agent-dev.coder-model-mode") as HTMLSelectElement;
+    // Once the runtime's catalog is in, the configured alias reads as
+    // its name and the model it resolves to (run-view-138, DR-091).
+    await waitFor(() => expect(mode.options[0]?.textContent).toBe("from Settings (Test · claude-test-5-5)"));
+    restore();
+  });
+
   test("Use default returns the whole agent, and read-only reads only", async () => {
     const { command, restore } = mount({ "dev.coder": { model: "claude-opus" } });
     fireEvent.click(screen.getByTestId("agent-chip-dev.coder"));
@@ -3742,6 +3756,113 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
   });
 });
 
+
+describe("run-view-152: a chip names the model its runtime reported", () => {
+  const SUMMARY = {
+    path: "/tmp/playbook.config.yaml",
+    captain: { adapter: "claude" as const, model: "claude-captain", effort: "high" },
+    players: [
+      { id: "dev.coder", agent: { adapter: "claude" as const, model: "opus" }, display: "opus", boundBy: ["code.coder"] },
+      { id: "dev.reviewer", agent: { adapter: "codex" as const }, display: "codex", boundBy: ["review.reviewer"] },
+    ],
+    playbooks: [],
+  };
+  const REPORTED: SessionInfo["agentReportedModels"] = {
+    captain: { model: "claude-opus-5-5", settings: { model: "claude-captain", effort: "high", fastMode: false } },
+    "dev.reviewer": { model: "gpt-5.6-sol", settings: { model: false, effort: false, fastMode: false } },
+  };
+  let previous: ReturnType<typeof useAppStore.getState>;
+  beforeEach(() => {
+    previous = useAppStore.getState();
+    setClientForTests({ command: vi.fn(async () => ({})) } as never);
+    useAppStore.setState({
+      configState: { status: "valid", summary: SUMMARY, seeded: false },
+      collapsedLanes: {},
+    } as never);
+  });
+  afterEach(() => {
+    useAppStore.setState(previous, true);
+    setClientForTests(undefined);
+  });
+
+  const view = () => applyRecords(initialSessionView(PLAYERS), TURN_ONE);
+  const runView = (session: SessionInfo) => (
+    <RunView
+      session={session}
+      view={view()}
+      composer={{ queued: [] }}
+      connected
+      onSubmit={async () => {}}
+      onAbort={() => {}}
+      onRemoveQueued={() => {}}
+      onDismissError={() => {}}
+    />
+  );
+  const chip = (id: string) => screen.getByTestId(`agent-chip-${id}`);
+
+  test("reads what ran while the settings its call began under stand, and what is set once they change", () => {
+    const reported = { ...SESSION, live: false, agentReportedModels: REPORTED };
+    const { rerender } = render(runView(reported));
+
+    // The Captain's report stands: its model reads as the runtime named
+    // it, and what is set stays in its title and accessible name.
+    expect(chip("captain").textContent).toBe("claude-opus-5-5 @ high");
+    expect(chip("captain").getAttribute("title")).toBe("set to claude-captain @ high, runtime reports claude-opus-5-5");
+    expect(chip("captain").getAttribute("aria-label")).toBe(
+      "Captain settings: claude-opus-5-5 @ high, set to claude-captain @ high, runtime reports claude-opus-5-5",
+    );
+    // An agent set to the provider's default names that, not its adapter.
+    expect(chip("dev.reviewer").textContent).toBe("gpt-5.6-sol");
+    expect(chip("dev.reviewer").getAttribute("title")).toBe("set to provider default, runtime reports gpt-5.6-sol");
+    // No report: the set value, as ever.
+    expect(chip("dev.coder").textContent).toBe("opus");
+    expect(chip("dev.coder").getAttribute("title")).toBe("opus");
+    expect(chip("dev.coder").getAttribute("data-reported")).toBeNull();
+
+    // This conversation's own model for the Captain, after its call:
+    // the chip reads the choice at once.
+    rerender(runView({ ...reported, agentSettings: { captain: { model: "claude-sonnet-5" } } }));
+    expect(chip("captain").textContent).toBe("claude-sonnet-5 @ high");
+    expect(chip("captain").getAttribute("aria-label")).not.toContain("runtime reports");
+    expect(chip("captain").getAttribute("data-changed")).toBe("true");
+
+    // The configured effort for the reviewer changes in Settings: its
+    // chip reads what is set, too.
+    act(() => {
+      useAppStore.setState({
+        configState: { status: "valid", seeded: false, summary: { ...SUMMARY, players: [
+          SUMMARY.players[0],
+          { ...SUMMARY.players[1], agent: { adapter: "codex" as const, effort: "high" } },
+        ] } },
+      } as never);
+    });
+    expect(chip("dev.reviewer").textContent).toBe("codex @ high");
+    expect(chip("dev.reviewer").getAttribute("title")).toBe("codex @ high");
+
+    // A call under the new settings reports again, and that report reads.
+    rerender(runView({
+      ...reported,
+      agentSettings: { captain: { model: "claude-sonnet-5" } },
+      agentReportedModels: {
+        ...REPORTED,
+        captain: { model: "claude-sonnet-5-20260901", settings: { model: "claude-sonnet-5", effort: "high", fastMode: false } },
+      },
+    }));
+    expect(chip("captain").textContent).toBe("claude-sonnet-5-20260901 @ high");
+    expect(chip("captain").getAttribute("title")).toBe(
+      "set to claude-sonnet-5 @ high, runtime reports claude-sonnet-5-20260901 — changed for this conversation",
+    );
+  });
+
+  test("a folded lane's rail carries the reported reading", () => {
+    render(runView({ ...SESSION, live: false, agentReportedModels: REPORTED }));
+    fireEvent.click(within(screen.getByTestId("player-pane-dev.reviewer"))
+      .getByRole("button", { name: "Collapse dev.reviewer" }));
+    const rail = screen.getByTestId("player-pane-dev.reviewer");
+    expect(within(rail).getByTestId("player-name-dev.reviewer").title)
+      .toBe("dev.reviewer · gpt-5.6-sol — set to provider default, runtime reports gpt-5.6-sol");
+  });
+});
 
 describe("Captain conversation between turns", () => {
   test("busy input stays unavailable until settlement, including an early question", () => {

@@ -4311,6 +4311,11 @@ msgstr "Sessions directory outside the space; not shared"
 msgid "Set this space up first"
 msgstr "Set this space up first"
 
+#. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
+#: src/components/AgentSettings.tsx
+msgid "set to {set}, runtime reports {model}"
+msgstr "set to {set}, runtime reports {model}"
+
 #: src/components/SpaceSurface.tsx
 msgid "Set up space"
 msgstr "Set up space"
