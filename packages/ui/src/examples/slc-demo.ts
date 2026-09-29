@@ -2,21 +2,25 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The app's example (DR-015), adapted from slc 0.7.0's two-agent
-// change-and-review demo in its `Roles:` grammar: its two limits are
-// settled — the first agent's 3rd judgment concludes an argument, and
-// findings left after the 2nd loop are reported at the finish — so the
-// bundled slc asks no clarification of it (DR-089). Staged through the
-// compile pipeline as raw text; the gears and the state machine are
-// slc's output, refreshed from the compiled fixture's capture
-// (e2e/fixtures/compiled/README.md). Display content owned by the UI —
-// it never touches config, protocol, or the library.
+// change-and-review demo in its `Roles:` grammar, its two limits
+// settled for the clarifications slc 0.12 asked of it (DR-089): the
+// first agent's judgments count per loop, its last one in a loop the
+// conclusion, and the 2nd loop's commit ends the work unreviewed.
+// Staged through the compile pipeline as raw text. The normalized text
+// is kept by hand beside the source, in slc's normalized form; the
+// gears and the state machine are slc's compile, refreshed from the
+// compiled fixture's capture (e2e/fixtures/compiled/README.md) — until
+// that capture, of the text before its limits were settled. Display
+// content owned by the UI — it never touches config, protocol, or the
+// library.
 //
 // Nothing here is a text of the catalog (localization-4): the stages
-// are the vendored workflow, the id is the draft the Prefill opens, and
-// the title and credit name the example itself. The card's own phrases
-// around them — "Example: {title}", "from {credit}" — are the texts,
-// and live with the card. Its registration takes the Register tab's
-// derived defaults (playbook-library-61), so the example carries none.
+// are the example's workflow, the id is the draft the Prefill opens,
+// and the title and credit name the example itself. The card's own
+// phrases around them — "Example: {title}", "from {credit}" — are the
+// texts, and live with the card. Its registration takes the Register
+// tab's derived defaults (playbook-library-61), so the example carries
+// none.
 
 import source from "./slc-demo/workflow.txt?raw";
 import normalized from "./slc-demo/workflow.text.md.txt?raw";
@@ -32,10 +36,11 @@ export interface SlcDemoExample {
   stages: {
     /** Raw prose the example starts from (workflow.txt). */
     source: string;
-    /** slc's normalized text (workflow.text.md) — the prefill source,
-     * since the compile pipeline skips the normalize phase. */
+    /** The example's normalized text (workflow.text.md), kept by hand
+     * in slc's normalized form — the prefill source, since the compile
+     * pipeline skips the normalize phase. */
     normalized: string;
-    /** GEARS spec items markdown (workflow.gears.md). */
+    /** GEARS spec items markdown slc compiled (workflow.gears.md). */
     gears: string;
     /** Compiled XState FSM module (workflow.fsm.ts). */
     fsm: string;

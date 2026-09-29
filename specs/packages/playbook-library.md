@@ -291,7 +291,7 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 
 When the Library surface is opened, the Library shall present a two-agent workflow adapted from slc's demo as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
 
-- the example's six-line source is slc's demo with the two limits the bundled compiler asks about settled — the first agent's 3rd judgment is an argument's conclusion, and findings the review still raises after the 2nd loop are reported at the finish ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md));
+- the example's six-line source is slc's demo with the two limits the bundled compiler asked about settled — the first agent's judgments count per loop, its last one in a loop being the conclusion, and the 2nd loop's commit ends the workflow without another review — and its normalized text says the same in slc's normalized form ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md));
 - sources and gears served for display drop their leading maintainer comment headers.
 
 ### Compile Cancellation

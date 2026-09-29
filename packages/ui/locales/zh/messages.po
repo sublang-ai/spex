@@ -3072,8 +3072,8 @@ msgid "Normalized"
 msgstr "规范化"
 
 #: src/components/LibrarySurface.tsx
-msgid "Normalized text: slc's normalize phase turns the prose into workflow markdown"
-msgstr "规范化文本：slc 的规范化阶段把散文转成工作流 markdown"
+msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
+msgstr "规范化文本：散文写成的工作流 markdown，采用 slc 的规范化形式"
 
 #. the space's status, read in a title
 #: src/components/SpaceSurface.tsx
@@ -4926,8 +4926,8 @@ msgid "The queue could not be loaded. <0>Retry</0>"
 msgstr "无法加载队列。<0>重试</0>"
 
 #: src/components/LibrarySurface.tsx
-msgid "The raw prose the demo starts from"
-msgstr "演示所基于的原始文稿"
+msgid "The raw prose the example starts from"
+msgstr "示例所基于的原始文稿"
 
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"

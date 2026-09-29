@@ -3072,8 +3072,8 @@ msgid "Normalized"
 msgstr "Normalized"
 
 #: src/components/LibrarySurface.tsx
-msgid "Normalized text: slc's normalize phase turns the prose into workflow markdown"
-msgstr "Normalized text: slc's normalize phase turns the prose into workflow markdown"
+msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
+msgstr "Normalized text: the prose as workflow markdown, in slc's normalized form"
 
 #. the space's status, read in a title
 #: src/components/SpaceSurface.tsx
@@ -4926,8 +4926,8 @@ msgid "The queue could not be loaded. <0>Retry</0>"
 msgstr "The queue could not be loaded. <0>Retry</0>"
 
 #: src/components/LibrarySurface.tsx
-msgid "The raw prose the demo starts from"
-msgstr "The raw prose the demo starts from"
+msgid "The raw prose the example starts from"
+msgstr "The raw prose the example starts from"
 
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"

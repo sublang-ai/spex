@@ -7,7 +7,7 @@
 
 Accepted (2026-09-28) on an audit of [DR-086](086-tests-in-tiers.md)'s delivery, which found each of the three fresh-user scenarios short of a real walk.
 Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smoke and the regression walk and how their failures are judged: the live smoke also runs in the installed shape, the regression compiles the app's own example and starts its project where a fresh user does, the regression's observed-and-aborted `/code` leaves, CI runs a compiled playbook on substitute agents, and a compiler refusal is judged by whose source it refused.
-Amends [DR-015](015-reference-content.md), which remains accepted, in the example's text: slc's demo adapted, its two open limits settled, rather than vendored as it stands.
+Amends [DR-015](015-reference-content.md), which remains accepted, in the example's text: slc's demo adapted, its two open limits settled and its normalized text kept by hand beside the source, rather than vendored as it stands.
 
 ## Context
 
@@ -31,7 +31,8 @@ Amends [DR-015](015-reference-content.md), which remains accepted, in the exampl
 ### (a) A deterministic compile, and a compiled run in CI
 
 - The regression pastes the app's own example source, compiles it for real on the compile player, registers it on the Register form's prefill, and runs one turn of it to its finish with both players engaged.
-- The example is slc's demo adapted so the bundled compiler asks nothing of it: the first agent's 3rd judgment is an argument's conclusion, and findings the review still raises after the 2nd loop are reported at the finish; the Library credits slc's demo as its source, and its displayed gears and state machine come from the same capture as the compiled fixture.
+- The example is slc's demo adapted to settle the two limits the bundled compiler asked about: the first agent's judgments count per loop, its last one in a loop being the conclusion, and the 2nd loop's commit ends the workflow without another review.
+- The Library credits slc's demo as the example's source; its normalized text, which the Prefill places and the compile reads, is kept by hand beside the source in slc's normalized form, and its displayed gears and state machine come from the same capture as the compiled fixture.
 - The chat-authored two-role changelog journey stays, as the harder case.
 - A player's question in either run, if one is asked, is answered through the Captain, as in (b).
 - CI proves the run path of a compiled playbook on every commit: a fixture compiled by the real `slc` is committed, regenerated whenever the playbook engine changes generation, and registered and run on substitute agents in the hermetic journeys.
