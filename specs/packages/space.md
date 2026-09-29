@@ -118,13 +118,12 @@ When the user adds a repair's project at the folder proposed [[space-53](#space-
 
 #### space-48
 
-When adding a repair's project succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When adding a repair's project succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
 - the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
-- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)];
-- the live region says how many other repairs still stand in the list, declined ones among them, or that every issue is resolved where none does;
-- focus moves to the first control of the first other repair still standing in the core's order — its Add project where it proposes a folder, else its Choose folder…;
-- the outcome stands at the head of the issues list, before every reported row, while the Sync tab stays shown and the list stands, a re-read [[space-2](#space-2)] leaving it in place; the list closes with it once the core reports no diagnostic.
+- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says how many issues are left as that count reads — declined repairs not among them [[space-49](#space-49)] — or that every issue is resolved where none is;
+- focus moves to the first control of the next unanswered repair below it, wrapping to the list's top — its Add project where it proposes a folder, else its Choose folder… — or, where no unanswered repair remains, to the outcome's Open project;
+- the outcome holds that place, the issues list standing with it though the core reports no diagnostic, until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, when it leaves the list.
 
 #### space-49
 
@@ -169,10 +168,11 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 | --- | --- | --- |
 | unanswered | a filled dot | the project's name, where its sessions ran, what the core found, and its controls |
 | declined | a hollow dot | "not added" after the fact, in the surface's secondary tone, its controls kept |
-| resolved | a check | the project, the folder it is now at and the sessions that resolved, with Open project |
+| resolved | a check | the project, the folder it is now a project at and the sessions listed, with Open project [[space-48](#space-48)] |
 
 - the list's heading counts the unanswered repairs and names how many stand not added;
-- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does.
+- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
+- a declined row holds its place until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, then standing after the unanswered repairs [[space-46](#space-46)].
 
 ### Changes
 
@@ -647,13 +647,15 @@ When an integration suite fails a transport against a path holding no repository
 
 #### space-56
 
-Where the Space surface renders over a repository home whose issues list holds two unanswered repairs, each proposing its recorded folder, when the reader adds the first at that folder and then the second, the core reporting after each add only what remains, the test suite shall assert through the surface:
+Where the Space surface renders over a repository home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, adds the third, lets the core deliver a re-read, activates Refresh, adds the second and then the declined first, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
-- after the first add, the first row gives way to an outcome at the head of the list naming the project, the folder it is now a project at and the sessions listed, whose Open project opens that project [[space-48](#space-48)];
-- the header's count reads one issue and the live region "1 issue left." [[space-48](#space-48)];
-- focus rests on the second repair's Add project [[space-48](#space-48)];
-- a re-read the core delivers leaves the outcome standing [[space-48](#space-48)];
-- after the second add, the live region reads "All issues resolved." and the list is gone [[space-48](#space-48)].
+- the declined row keeps the first place, reading "not added", and the header's count falls to two issues [[space-55](#space-55)] [[space-49](#space-49)];
+- the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's count reading one issue and the live region "1 issue left." [[space-48](#space-48)];
+- focus rests on the second repair's Add project, wrapping past the declined row [[space-48](#space-48)];
+- the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
+- after Refresh the outcome is gone and the declined row stands after the second [[space-48](#space-48)] [[space-55](#space-55)];
+- the second's add leaves the live region reading "All issues resolved." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
+- the declined repair's add leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
 ### Browser Journeys
 

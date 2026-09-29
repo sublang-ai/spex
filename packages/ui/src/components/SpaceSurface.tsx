@@ -508,6 +508,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
 
   const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
+  // The reader's own Refresh (space-2), counted: it lets the issues
+  // list lay itself out afresh (space-48, space-55).
+  const [refreshes, setRefreshes] = useState(0);
   const [remoteEditing, setRemoteEditing] = useState(false);
   const [remoteFocus, setRemoteFocus] = useState(0);
   const [busy, setBusy] = useState<"init" | "join" | "sync">();
@@ -727,7 +730,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
             data-testid="space-refresh"
             className={SECONDARY}
             disabled={!connected}
-            onClick={() => void loadSpace()}
+            onClick={() => void loadSpace().then(() => setRefreshes((count) => count + 1))}
           >
             {i18n._({ id: "Refresh", comment: "re-read the space's state" })}
           </button>
@@ -767,6 +770,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
                 now={now}
                 connected={connected}
                 issuesOpen={issuesOpen}
+                refreshes={refreshes}
                 onOpenSession={onOpenSession}
                 onOpenProject={onOpenProject}
                 onNote={onNote}
