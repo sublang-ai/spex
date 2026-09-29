@@ -33,14 +33,19 @@ test("run-view-109: a message continues a settled session on the current setting
   const box = page.getByTestId("boss-composer");
   await expect(box).toBeEnabled();
   const coder = page.getByTestId("player-pane-dev.coder");
-  await expect(coder).toContainText("claude-opus-5");
+  await expect(coder).toContainText("claude-opus-5-5");
 
   // Settings change between turns: the coder's model. The next message
   // opens the runtime on the current settings (core-service-92), and
   // the coder's pane wears the new model.
   await nav(page, "Settings").click();
   await page.getByTestId("player-edit-dev.coder").click();
-  const model = page.getByTestId("player-row-dev.coder").getByTestId("agent-model");
+  // The seeded pin is listed through an alias, so a hand-typed id goes
+  // through the list's custom entry.
+  const row = page.getByTestId("player-row-dev.coder");
+  await row.getByTestId("agent-model-trigger").click();
+  await row.getByTestId("agent-model-listbox").getByRole("option", { name: "Custom model…" }).click();
+  const model = row.getByTestId("agent-model");
   await model.fill("claude-sonnet-5");
   await page.getByTestId("player-row-dev.coder").getByTestId("agent-save").click();
   await expect(page.getByTestId("player-saved-dev.coder")).toHaveText("Saved ✓");

@@ -13,6 +13,8 @@ import { test, expect, open, nav } from "../src/harness";
 test.use({ appOptions: { project: true } });
 
 test("settings-36: runtime model choices narrow tuning and preserve custom drafts on refresh", async ({ page, app }) => {
+  // The Captain starts on a model this runtime no longer lists.
+  await app.core.command("config.edit", { op: { kind: "captain.set", patch: { model: "claude-opus-5" } } });
   await open(page, app);
   await nav(page, "Settings").click();
   const captain = page.getByTestId("captain-section");
@@ -117,11 +119,16 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   const captain = page.getByTestId("captain-section");
   await expect(captain).toBeVisible();
   const chip = captain.getByTestId("agent-chip");
-  await expect(chip).toContainText("claude-opus-5");
+  await expect(chip).toContainText("claude-opus-5-5");
   await expect(captain.getByTestId("agent-editor")).toHaveCount(0);
   await captain.getByTestId("captain-edit").click();
+  // A canonical pin the runtime lists through an alias reads as itself.
+  const trigger = captain.getByTestId("agent-model-trigger");
+  await expect(trigger).toHaveText("claude-opus-5-5");
+  await trigger.click();
+  await captain.getByTestId("agent-model-listbox").getByRole("option", { name: "Custom model…" }).click();
   const model = captain.getByTestId("agent-model");
-  await expect(model).toHaveValue("claude-opus-5");
+  await expect(model).toHaveValue("claude-opus-5-5");
 
   // Change the model; the editor closes, the row ticks Saved and
   // shows the new value, and the file keeps its comment and key order.
@@ -164,6 +171,6 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   expect(app.readConfig()).toBe(before);
 
   // An outside edit lands on the surface without a reload.
-  writeFileSync(app.configPath, before.replace("claude-sonnet-5", "claude-opus-5"));
-  await expect(chip).toContainText("claude-opus-5");
+  writeFileSync(app.configPath, before.replace("claude-sonnet-5", "claude-opus-5-5"));
+  await expect(chip).toContainText("claude-opus-5-5");
 });

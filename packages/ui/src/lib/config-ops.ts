@@ -75,7 +75,7 @@ export function bindRole(
  * adapter, model, effort, and permissions instead. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-opus-5",
+  model: "claude-opus-5-5",
   effort: "high",
   permissions: { mode: "auto" },
 };

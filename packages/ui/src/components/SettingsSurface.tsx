@@ -334,7 +334,7 @@ function sheetKeys(keys: string): string {
  * visible choice rather than a blank the launcher would refuse. */
 const NEW_PLAYER_BLOCK: AgentBlockInput = {
   adapter: "claude",
-  model: "claude-opus-5",
+  model: "claude-opus-5-5",
   effort: "high",
   permissions: { mode: "auto" },
 };

@@ -469,7 +469,7 @@ test.describe("joining", () => {
     await expect(tab.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 2 received$/);
     await expect(header.getByTestId("space-primary")).toHaveText("Sync");
     await expect(header.getByTestId("space-ahead-behind")).toContainText(/0 behind/);
-    expect(readFileSync(app.configPath, "utf8")).toContain("model: claude-opus-5\n");
+    expect(readFileSync(app.configPath, "utf8")).toContain("model: claude-opus-5-5\n");
     expect(readFileSync(app.configPath, "utf8")).not.toContain("claude-opus-5-peer");
     expect(git(app.remotePath!, "rev-parse", "main")).toBe(git(app.dataDir, "rev-parse", "main"));
     await nav(page, "Projects").click();

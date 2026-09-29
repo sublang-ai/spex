@@ -292,10 +292,12 @@ function compiledScript(options: AppOptions): FakeScript {
   };
 }
 
-/** Deliberately omits the demo's current model, exercising retained
- * custom IDs. Claude's catalog carries an alias with the specific model
- * it resolves to, the runtime's own descriptions and the model it runs
- * by default, as the runtime reports them (DR-091). */
+/** Claude's catalog carries an alias with the specific model it
+ * resolves to — the demo's own `claude-opus-5-5`, a canonical pin it
+ * recognizes without listing — the runtime's own descriptions and the
+ * model it runs by default, as the runtime reports them (DR-091).
+ * Codex's deliberately omits the demo's `gpt-6-sol`, exercising
+ * retained custom IDs. */
 function fixtureModelDiscovery(adapter: AgentOptions["adapter"]): AgentOptions["discovery"] {
   return {
     status: "available",
@@ -463,7 +465,7 @@ export function git(cwd: string, ...args: string[]): string {
 /** The peer's differing configuration: the demo config with another
  * Captain model, so Settings is one whole-file choice (space-17). */
 export const PEER_CONFIG = DEMO_CONFIG.replace(
-  "captain:\n  adapter: claude\n  model: claude-opus-5",
+  "captain:\n  adapter: claude\n  model: claude-opus-5-5",
   "captain:\n  adapter: claude\n  model: claude-opus-5-peer",
 );
 /** The model this device sets before the daily sync, so Settings
