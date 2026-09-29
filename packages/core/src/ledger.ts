@@ -168,22 +168,6 @@ function restoredTurnIds(records: StoredRecord[]): Set<number> {
   return ids;
 }
 
-/** The restores that brought a run back in its failure state
- * (dashboard-10, DR-088): each is a turn whose engagement settled
- * failed, the failure the Boss did not stop himself. */
-function restoredFailures(
-  records: StoredRecord[],
-): { seq: number; turnId: number; timestamp: number }[] {
-  return records.flatMap(({ seq, record }) => {
-    const position = restoredPosition(record);
-    const turnId = (record as { turnId?: unknown }).turnId;
-    if (!position || typeof turnId !== "number") return [];
-    return position.runs.some((run) => stateName(run.state) === "failed")
-      ? [{ seq, turnId, timestamp: record.timestamp }]
-      : [];
-  });
-}
-
 /** A session's turns as every ledger read takes them (core-service-82,
  * DR-088): a restore's report ends finished, yet it accounts for work
  * that stopped, so it reads as the aborted turn it reports — it
@@ -199,6 +183,12 @@ function ledgerTurns(store: Store, sessionId: string): Turn[] {
   );
 }
 
+/** The failures restores brought runs back into (dashboard-10, DR-088):
+ * a recorded position holding a run in its failure state that the
+ * stream did not already show parked there — a run the Boss had
+ * stopped himself stays the stop he made, not a new failure. */
+export interface RestoredFailure { seq: number; turnId: number; timestamp: number }
+
 /** Whether a trace is the Captain shell's own machine rather than a
  * playbook run: its moves park nothing (core-service-107), the rule
  * the run view's frames draw by (run-view-74). */
@@ -207,6 +197,14 @@ function captainOwn(trace: { playbookId?: unknown; depth?: unknown }): boolean {
 }
 
 export function foldConditions(records: StoredRecord[]): SessionConditions {
+  const { restoredFailures: _restored, ...conditions } = foldConditionsDetail(records);
+  return conditions;
+}
+
+function foldConditionsDetail(
+  records: StoredRecord[],
+): SessionConditions & { restoredFailures: RestoredFailure[] } {
+  const restoredFailures: RestoredFailure[] = [];
   // The Captain shell's own move last traced, until the aggregate state
   // report that repeats it: that report is the shell's, not a run's.
   let captainMove: { from?: string; to?: string } | undefined;
@@ -318,6 +316,7 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
           // A restore states where every run now stands (core-service-82,
           // DR-088): whatever the stream last said of the interrupted
           // turn's runs gives way to the position the checkpoint holds.
+          const failedBefore = new Set(parkedFailures.keys());
           parkedQuestions.clear();
           parkedFailures.clear();
           pendingByRun.clear();
@@ -329,6 +328,10 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
             since: record.timestamp,
             turnId: (record as { turnId?: number | null }).turnId ?? null,
           };
+          if (typeof at.turnId === "number" && restored.runs.some((run) =>
+            stateName(run.state) === "failed" && !failedBefore.has(run.sessionId))) {
+            restoredFailures.push({ seq, turnId: at.turnId, timestamp: record.timestamp });
+          }
           for (const run of restored.runs) {
             const state = stateName(run.state);
             const cause = readFailureCause(run);
@@ -514,6 +517,7 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
     ...(question ? { question } : {}),
     ...(failure ? { failure } : {}),
     ...(unparkedFailureCause ? { failureCause: unparkedFailureCause } : {}),
+    restoredFailures,
   };
 }
 
@@ -654,7 +658,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       if (typeof turnId !== "number" || !inRange(turnId)) return [];
       return [{ seq, turnId, timestamp: record.timestamp }];
     });
-    const restored = restoredFailures(records).filter(({ turnId }) => inRange(turnId));
+    const restored = foldConditionsDetail(records).restoredFailures.filter(({ turnId }) => inRange(turnId));
     return [...errors, ...restored]
       .sort((a, b) => a.seq - b.seq)
       .map(({ turnId, timestamp }) => ({ turnId, timestamp }));
