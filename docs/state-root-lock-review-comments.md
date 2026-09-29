@@ -252,3 +252,21 @@ The identity is not a secret: forging a local owner also requires write access t
 Suggest tightening permissions in place rather than refusing, so the only manual repairs are for content, and stating that choice in the upstream review's scope.
 
 The proposal is otherwise consistent end to end; the remaining open items are the ones it already delegates upstream.
+
+---
+
+# Round 7 (2026-09-29): comments on the permission-repair revision
+
+The round-6 point is in: excess permissions on a verified safe identity file and directory are tightened in place and rechecked; symlinks, extra hard links, wrong owners, and failed repairs refuse.
+The Chinese text matches, and the verification list covers each case.
+One observation, no new decision.
+
+### The stated rule already exists in Playbook; say it is reused
+
+Playbook's `prepareSessionPermissions` ([session-store.js](../node_modules/@sublang/playbook/reference/sdlc/code.playbook/bin/session-store.js)) applies the same conditions to the sessions directory today: `lstat`, user-owned, not a symlink, a regular file with one link, owner access present, then `chmod` through an opened handle whose identity is compared before and after, then a recheck.
+That is the proposal's rule to the letter, including the check-then-use hazard the proposal does not mention, which the handle comparison closes.
+Under the proposal's own "no second implementation" principle, the upstream work should apply that helper to the identity file and its directory rather than specify a parallel rule.
+One sentence naming the helper would make that explicit.
+
+With this, the proposal reads as consistent end to end.
+Every remaining open item is delegated to the upstream review by name, and nothing in the Spex-side plan depends on an undecided point.
