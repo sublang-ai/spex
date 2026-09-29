@@ -3264,10 +3264,41 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
       "The /code workflow failed and is waiting for you.",
     );
     expect(screen.getByTestId("failed-workflow").getAttribute("title")).toBe("state: failed");
+    // Why and what now, from the cause the recorded position carries
+    // (run-view-147): the card at the position's place and the notice
+    // phrase it alike.
+    const why = "A Playbook defect: The process stopped during this step. Review the recorded work before choosing how to continue.";
+    expect(screen.getByTestId("failed-workflow-why").textContent).toBe(why);
+    expect(screen.getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+    expect(screen.getByTestId("failure-card-why").textContent).toBe(why);
+    expect(screen.getByTestId("failure-card-next").textContent).toContain("Report it");
     // The controls are the ones the restore's settlement published.
     expect(
       screen.getAllByTestId("failed-workflow-action").map((button) => button.getAttribute("data-action-id")),
     ).toEqual([RECONCILE.id, ABANDON.id]);
+  });
+
+  test("a restored position leaves a run already parked in its failure state with the account it had", () => {
+    // The Boss stopped the run himself; a later message was lost and
+    // restored. The position moves no run into failure, so it draws no
+    // second card, and the notice keeps the cause the stop reported.
+    const view = applyRecords(initialSessionView(PLAYERS), [
+      ...MACHINE_FAILED,
+      ...machineRestored([{
+        sessionId: "t-fail",
+        playbookId: "code",
+        depth: 1,
+        state: { value: "failed", activeStateIds: ["failed"], tags: ["playbook.parked"], status: "active", quiescent: true, stateId: "failed" },
+        pendingBossQuestions: [],
+        cause: { code: "runtime-defect", evidence: { reason: "not this one" } },
+      }]),
+    ]);
+    const before = applyRecords(initialSessionView(PLAYERS), MACHINE_FAILED);
+    expect(view.captain.filter((line) => line.kind === "status" || line.kind === "error").length)
+      .toBe(before.captain.filter((line) => line.kind === "status" || line.kind === "error").length);
+    renderFailed({ view });
+    expect(screen.getByTestId("failed-workflow")).toBeTruthy();
+    expect(screen.getByTestId("failed-workflow-why").textContent).not.toContain("not this one");
   });
 
   test("a restored position holding no run settles the stopped one unfinished and stands no notice", () => {

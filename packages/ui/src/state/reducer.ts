@@ -9,6 +9,7 @@ import {
   hasPresentationHeader,
   RESTORED_TOPIC,
   RESTORING_TOPIC,
+  type FailureCause,
   type RestoredPosition,
   type TmuxPlayRecord,
   type MachineGraph,
@@ -121,6 +122,7 @@ export interface PlayerView {
 }
 
 import {
+  FAILURE_STATE_ID,
   foldRestored,
   foldTrace,
   type MachineFrame,
@@ -626,6 +628,9 @@ export function applyRecord(
         // checkpoint no longer holds settles unfinished.
         const runs = ((r.payload as Partial<RestoredPosition> | undefined)?.runs ?? [])
           .filter((run) => typeof run?.sessionId === "string" && typeof run.playbookId === "string");
+        const failedBefore = new Set(view.frames
+          .filter((frame) => frame.active === FAILURE_STATE_ID)
+          .map((frame) => frame.traceSessionId));
         const fold = foldRestored(view.frames, runs, r.timestamp, view.settledRuns);
         // The call the process died in no longer runs: no lane reads as
         // working on it (run-view-74, run-view-7).
@@ -645,6 +650,24 @@ export function applyRecord(
             frame: closed,
             turnId: r.turnId,
             at: r.timestamp,
+          });
+        }
+        // A run the position moves into its failure state is a failure
+        // the stream delivers, its account the cause the checkpoint
+        // carries (run-view-147, DR-075): the card stands at the
+        // position's place, and the notice says why from it. A run
+        // already parked there keeps the account it was given.
+        for (const run of runs) {
+          const cause = (run as { cause?: FailureCause }).cause;
+          if (stateText(run.state) !== FAILURE_STATE_ID || failedBefore.has(run.sessionId)) continue;
+          if (typeof cause?.code !== "string") continue;
+          pushCaptain(view, {
+            kind: "status",
+            // Machine words the record carries, kept for the tooltip.
+            text: `${run.playbookId} ${FAILURE_STATE_ID}`,
+            turnId: r.turnId,
+            at: r.timestamp,
+            data: { cause },
           });
         }
         // The questions the position holds are the ones standing
