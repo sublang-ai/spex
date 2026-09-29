@@ -199,7 +199,17 @@ function ledgerTurns(store: Store, sessionId: string): Turn[] {
   );
 }
 
+/** Whether a trace is the Captain shell's own machine rather than a
+ * playbook run: its moves park nothing (core-service-107), the rule
+ * the run view's frames draw by (run-view-74). */
+function captainOwn(trace: { playbookId?: unknown; depth?: unknown }): boolean {
+  return trace.playbookId === "captain" && (trace.depth === undefined || trace.depth === 0);
+}
+
 export function foldConditions(records: StoredRecord[]): SessionConditions {
+  // The Captain shell's own move last traced, until the aggregate state
+  // report that repeats it: that report is the shell's, not a run's.
+  let captainMove: { from?: string; to?: string } | undefined;
   const abortErrors = stoppedTurnErrorSeqs(records);
   let fallbackQuestion: SessionConditions["question"];
   let fallbackFailure: SessionConditions["failure"];
@@ -350,10 +360,22 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         if (telemetry.topic === "playbook.trace") {
           const trace = telemetry.payload as unknown as {
             sessionId?: unknown;
+            playbookId?: unknown;
+            depth?: unknown;
             type?: unknown;
             payload?: { to?: unknown; from?: unknown };
           };
           if (typeof trace?.sessionId !== "string") break;
+          if (captainOwn(trace)) {
+            // The shell's own machine is not a run: an abort taken during
+            // the Captain's call moves it to its failure state, which
+            // parks nothing and waits for no one (core-service-107).
+            captainMove = trace.type === "fsm.transition"
+              ? { from: stateName(trace.payload?.from), to: stateName(trace.payload?.to) }
+              : captainMove;
+            break;
+          }
+          if (trace.type === "fsm.transition") captainMove = undefined;
           if (trace.type === "fsm.transition" || trace.type === "boss.input.settled") {
             bearsCause(trace.payload, trace.sessionId);
           }
@@ -422,6 +444,10 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
         if (telemetry.topic !== "playbook.fsm.state") break;
         const state =
           stateName(telemetry.payload?.to) ?? stateName(telemetry.payload?.state);
+        const shellMove = captainMove;
+        captainMove = undefined;
+        if (shellMove && shellMove.to === state &&
+            shellMove.from === stateName(telemetry.payload?.from)) break;
         const payload = telemetry.payload;
         if (
           payload != null &&

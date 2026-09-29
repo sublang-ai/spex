@@ -1460,6 +1460,58 @@ test(
 );
 
 test(
+  "core-service-114: a Boss abort during the Captain's own call settles stopped, parking nothing",
+  { timeout: 180_000 },
+  async (t) => {
+    // The Captain's decision is the call held in flight: the abort
+    // lands before any playbook run starts, and moves the shell's own
+    // machine to its failure state.
+    const script = parkingScript();
+    const harness = await startHarness(VALID_CONFIG, {
+      realShell: true,
+      script: { rules: [{ match: /"action"/, response: { result: "", untilAborted: true } }, ...(script.rules ?? [])], fallback: script.fallback },
+      seedCommit: true,
+    });
+    const client = new Client(harness.service.port());
+    t.after(async () => {
+      client.close();
+      await harness.service.stop();
+    });
+    await client.open();
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const first = await client.expectOk("intent.queue", { projectId: project.id, text: "Add a line to work.txt" });
+    await client.expectOk("intent.queue", { projectId: project.id, text: "Then another" });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+    await client.waitFor((m) => m.type === "record" && m.record.type === "captain_telemetry" &&
+      (m.record as { topic?: unknown }).topic === "playbook.trace" &&
+      (m.record as { payload?: { type?: unknown } }).payload?.type === "captain.call.started", 60_000);
+    await client.expectOk("turn.abort", { sessionId: session.id });
+    const stopped = await settledSession(client, session.id, 1);
+    assert.ok(client.records("session").some(({ record }) => record.type === "turn_aborted"));
+    assert.ok(client.records("session").some(({ record }) =>
+      (record as { topic?: unknown; payload?: { playbookId?: unknown; type?: unknown; payload?: { to?: unknown } } }).topic === "playbook.trace" &&
+      (record as { payload?: { playbookId?: unknown; payload?: { to?: unknown } } }).payload?.playbookId === "captain" &&
+      (record as { payload?: { payload?: { to?: unknown } } }).payload?.payload?.to === "failed"),
+      "the shell's own machine moved to its failure state");
+    // The stop settles and continues (core-service-6); the shell's own
+    // machine is no run, so nothing stands parked and no control is
+    // kept (core-service-91) ...
+    assert.equal(stopped.recovery, undefined);
+    assert.equal(stopped.continuable, true, stopped.continuationReason ?? "no reason given");
+    assert.equal(stopped.parked, undefined);
+    // ... and the queue reads the stop, not a failure park, with Start
+    // available (core-service-107).
+    const ledger = await client.expectOk("ledger.get", {});
+    const row = ledger.intents.find((entry) => entry.intent.id === first.id);
+    assert.equal(row?.state, "queued");
+    assert.deepEqual([row?.next?.standing, row?.next?.manualStart], ["stopped", true]);
+    assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
+  },
+);
+
+test(
   "core-service-105: the ending runs by fallback on a restored parked run, and deletion forgets its controls",
   { timeout: 180_000 },
   async (t) => {

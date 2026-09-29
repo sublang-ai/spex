@@ -384,6 +384,7 @@ When the core service derives a project's queue reading, it shall choose the fir
 | the latest lane turn ended aborted, ran an ending control [[core-service-98](#core-service-98)], or reported a restore [[core-service-82](#core-service-82)] | `stopped` | available |
 | none of the preceding conditions holds | `manual-ready` | available |
 
+- a run is a playbook run: the Captain shell's own machine — which an abort taken during the Captain's call moves to its failure state — parks nothing;
 - a queued row whose after-link names an open predecessor is excluded before next is chosen [[core-service-45](#core-service-45)];
 - an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; rank still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
 - the standing and availability are derived from the lane and intent records, never stored on an intent.
@@ -942,10 +943,11 @@ When an integration suite parks a real session's run in its recoverable failure 
 
 ### core-service-114
 
-When an integration suite aborts a real session's turn while its scripted player's call is in flight with the phase committed, it shall verify the saved stop [[core-service-6](#core-service-6)]:
+When an integration suite aborts a real session's turn while a scripted call is in flight — its player's, with the phase committed, or the Captain's own decision call — it shall verify the saved stop [[core-service-6](#core-service-6)]:
 
-- the turn-aborted record streams, and the settled session lists continuable with no recovery owed [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)];
-- its summary carries the park's reason, the actions the stopped run advertised in order, and the shell's own ending, kept with the preferences as at any settlement [[core-service-91](#core-service-91)] [[core-service-32](#core-service-32)].
+- in either case the turn-aborted record streams, and the settled session lists continuable with no recovery owed [[core-service-6](#core-service-6)] [[core-service-32](#core-service-32)];
+- the player's stop leaves its summary carrying the park's reason, the actions the stopped run advertised in order, and the shell's own ending, kept with the preferences as at any settlement [[core-service-91](#core-service-91)] [[core-service-32](#core-service-32)];
+- the Captain's stop, which moves the shell's own machine to its failure state, keeps no park and leaves its dispatched intent Queued with the next row `stopped`, manual start available, and no summons [[core-service-107](#core-service-107)] [[core-service-49](#core-service-49)].
 
 ## References
 
