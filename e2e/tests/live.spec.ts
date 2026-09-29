@@ -10,12 +10,15 @@
 // Codex's `gpt-6-astra` at `xhigh`, the only work the lane gives Codex
 // — and the compiled playbooks run on the template's claude players.
 // playbook-library-86 pastes the app's own example, a fixed source, so
-// a refusal is the app's; with SPEX_E2E_CAPTURE_COMPILED=<dir> it also
+// a refusal of its first compile is the app's; with
+// SPEX_E2E_CAPTURE_COMPILED=<dir> it also
 // copies the compiler's output there, the capture that renews the
 // hermetic journey's committed fixture (playbook-library-87,
 // e2e/fixtures/compiled/README.md). playbook-library-78 authors a
-// two-role changelog playbook in chat, the harder case. The
-// new-project scenario lives in live-project.spec.ts.
+// two-role changelog playbook in chat, the harder case. A question a
+// player asks in either run is answered through the Captain with one
+// neutral reply, attached to the report (DR-089). The new-project
+// scenario lives in live-project.spec.ts.
 
 import { resolve } from "node:path";
 import { parse } from "yaml";
@@ -30,6 +33,7 @@ import {
   LIVE,
   COMPILER_PLAYER,
   EXAMPLE_ID,
+  answeringWith,
   attachRun,
   awaitCaptainLine,
   captureCompiled,
@@ -63,8 +67,9 @@ test.describe("the app's own example", () => {
   }) => {
     test.skip(!LIVE, "live lane only");
     // The compile has taken minutes to two hours (DR-058), the run of a
-    // change and its review tens of minutes.
-    test.setTimeout(200 * 60_000);
+    // change and its review tens of minutes: the budget covers every
+    // step's own bound.
+    test.setTimeout(220 * 60_000);
     const TURN = 10 * 60_000;
     await open(page, app);
     await nav(page, "Playbooks").click();
@@ -110,9 +115,11 @@ test.describe("the app's own example", () => {
 
     // Compiled for real from the workspace's own control, asked by the
     // Boss, to Link (playbook-library-57). The source is fixed and the
-    // compiler the app's: a refusal is the app failing (DR-089), so the
-    // first failed compile stops the journey with the compiler's
-    // output attached, whatever the relay does next.
+    // compiler the app's, so this first compile is the one DR-089
+    // judges: once it fails, the relay hands the output to the agent,
+    // which may change the source, and a later compile is no longer of
+    // the app's example. The first failure stops the journey with the
+    // compiler's output attached, for the Releaser to class.
     await page.getByTestId("compile-button").click();
     await expect(page.getByTestId("compile-by")).toHaveText("asked by you");
     const band = page.getByTestId("compile-band");
@@ -122,11 +129,19 @@ test.describe("the app's own example", () => {
         intervals: [10_000],
       })
       .not.toBe("running");
-    if ((await band.getAttribute("data-outcome")) !== "ok") {
-      await attach("the example refused");
+    const outcome = await band.getAttribute("data-outcome");
+    if (outcome !== "ok") {
+      await attach("the example's first compile");
+      const failed = page.locator('[data-testid^="phase-"][data-status="failed"]');
+      const phase =
+        (await failed.count()) > 0
+          ? (await failed.first().getAttribute("data-testid"))!.replace(/^phase-/, "")
+          : undefined;
       throw new Error(
-        "the bundled compiler refused the app's own example (DR-089: a tag-blocking failure); " +
-          "the compiler's output is attached",
+        `the example's first compile ended ${outcome}${phase ? ` at ${phase}` : ""}; ` +
+          "class it by the compiler's output attached (DR-089): a provider-side cause in " +
+          "the compile's agent — a refusal, a quota, an outage — is retried or waived, " +
+          "and the compiler refusing the example blocks the tag",
       );
     }
     await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done");
@@ -158,9 +173,10 @@ test.describe("the app's own example", () => {
     await expect(page.getByTestId(/^register-player-/)).toHaveCount(2);
     if (/Prefilled from the agent's proposal/.test(await form.innerText())) {
       // A proposal fills the form instead of the derived defaults: the
-      // journey keeps it, moving only a role it leaves off claude — on
-      // the compile player, or on a new lane carrying the compile
-      // player's block — to the roster's own lane for it.
+      // journey keeps it — its command included, which the agent may
+      // name otherwise than the id — moving only a role it leaves off
+      // claude — on the compile player, or on a new lane carrying the
+      // compile player's block — to the roster's own lane for it.
       await attach("the proposal");
       const roster = (parse(app.readConfig()) as { players: Record<string, Block> }).players;
       for (const role of ["coder", "reviewer"]) {
@@ -179,6 +195,9 @@ test.describe("the app's own example", () => {
       await expect(playerFor("coder")).toHaveValue("dev.coder");
       await expect(playerFor("reviewer")).toHaveValue("dev.reviewer");
     }
+    // The command the session invokes is the one registered.
+    const command = await page.getByTestId("register-command").inputValue();
+    expect(command, "the form names a command").not.toBe("");
     await page.getByTestId("register-submit").click();
 
     // Register lists it and the draft leaves (playbook-library-10);
@@ -199,28 +218,34 @@ test.describe("the app's own example", () => {
       players.add(player!);
     }
 
-    // A new session's slash menu offers it, and its turn runs the
-    // registered playbook to its finish with both role players engaged
-    // and the change committed (playbook-library-14).
+    // A new session's slash menu offers its command, and its turn runs
+    // the registered playbook to its finish with both role players
+    // engaged and the change committed (playbook-library-14), any
+    // player's question answered through the Captain.
     await surfaceEntry(page, "Workspace").click();
     await page.getByTestId("start-composer").fill("/");
-    await expect(page.getByRole("listbox")).toContainText(`/${EXAMPLE_ID}`);
+    await expect(page.getByRole("listbox")).toContainText(`/${command}`);
     commitIdentity(app.projectDir);
     const head = git(app.projectDir, "rev-parse", "HEAD");
     const commits = commitCount(app.projectDir);
     await send(
       page,
-      `/${EXAMPLE_ID} Add a NOTES.md at the repository root with one line naming this repository's purpose, and commit it.`,
+      `/${command} Add a NOTES.md at the repository root with one line naming this repository's purpose, and commit it.`,
     );
     const captain = page.getByTestId("captain-pane");
     await expect(captain).toBeVisible();
-    await awaitCaptainLine(page, `/${EXAMPLE_ID} finished`, 60 * 60_000);
+    const answering = answeringWith(page);
+    await awaitCaptainLine(page, `/${command} finished`, 60 * 60_000, 1, answering);
     await attachRun(page, "the run");
     await expect(captain).not.toContainText(/turn failed/i);
     for (const player of players) await expectEngaged(page, player);
     expect(commitCount(app.projectDir)).toBeGreaterThan(commits);
     await test.info().attach("the commits", {
       body: git(app.projectDir, "log", "--stat", `${head}..HEAD`),
+      contentType: "text/plain",
+    });
+    await test.info().attach("questions answered", {
+      body: String(answering.asked()),
       contentType: "text/plain",
     });
   });
@@ -235,8 +260,9 @@ test.describe("the changelog playbook", () => {
   }) => {
     test.skip(!LIVE, "live lane only");
     // A compile has taken from minutes (DR-086) to two hours (DR-058),
-    // the agent's own turns minutes each, and the run tens of minutes.
-    test.setTimeout(200 * 60_000);
+    // the agent's own turns minutes each, and the run tens of minutes:
+    // the budget covers every step's own bound.
+    test.setTimeout(250 * 60_000);
     const TURN = 10 * 60_000;
     await open(page, app);
     await nav(page, "Playbooks").click();
@@ -393,20 +419,26 @@ test.describe("the changelog playbook", () => {
 
     // The registered playbook runs (DR-086): a session's /changelog
     // turn finishes with both role players engaged and the repository
-    // carrying a commit of its notes (playbook-library-14).
+    // carrying a commit of its notes (playbook-library-14), any
+    // player's question answered through the Captain.
     commitIdentity(app.projectDir);
     const head = git(app.projectDir, "rev-parse", "HEAD");
     const commits = commitCount(app.projectDir);
     await send(page, "/changelog Draft release notes for the commits so far into CHANGELOG.md and commit them.");
     const captain = page.getByTestId("captain-pane");
     await expect(captain).toBeVisible();
-    await awaitCaptainLine(page, "/changelog finished", 45 * 60_000);
+    const answering = answeringWith(page);
+    await awaitCaptainLine(page, "/changelog finished", 45 * 60_000, 1, answering);
     await attachRun(page, "the run");
     await expect(captain).not.toContainText(/turn failed/i);
     for (const player of players) await expectEngaged(page, player);
     expect(commitCount(app.projectDir)).toBeGreaterThan(commits);
     await test.info().attach("the commits", {
       body: git(app.projectDir, "log", "--stat", `${head}..HEAD`),
+      contentType: "text/plain",
+    });
+    await test.info().attach("questions answered", {
+      body: String(answering.asked()),
       contentType: "text/plain",
     });
   });

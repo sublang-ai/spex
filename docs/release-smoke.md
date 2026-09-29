@@ -131,8 +131,11 @@ compiled playbooks run on the template's claude players.
 1. The app's own example (playbook-library-86): the text the
    Prefill places is used as the source, compiled for real from the
    workspace's Compile, registered on the Register tab's prefill, and
-   run as `/workflow`: the turn finishes with both players engaged and
-   a commit in the repository.
+   run by the command registered — `/workflow` unless the agent
+   proposed another: the turn finishes with both players engaged and
+   a commit in the repository. Its first compile is the one judged:
+   once it fails, the relay lets the agent change the source, so the
+   journey stops there with the compiler's output attached.
 2. The chat-authored two-role changelog playbook
    (playbook-library-78): authored in the draft's conversation,
    compiled, registered and run to a finished turn with both players
@@ -141,21 +144,25 @@ compiled playbooks run on the template's claude players.
    palette with specs scaffolded, then developed through a `/decide`
    intent started from the Dashboard and a `/code` intent queued behind
    it. Each settles after its review, the queue hands off without
-   confirmation, a question a player asks is answered through the
-   Captain, the repository's tests pass with a commit from each cycle,
-   and History lists both intents.
+   confirmation, the repository's tests pass with a commit from each
+   cycle, and History lists both intents.
+
+In every run, a question a player asks is answered through the
+Captain with one neutral reply, and the transcripts at the question are
+attached.
 
 Needs Claude signed in for the Captain and the players that run
 playbooks, and Codex for the compiles. It takes hours and real model
 calls; each journey attaches the Captain's and the players'
-transcripts, and a refused compile the compiler's output. Judge each
-failure by its class
+transcripts, and a failed compile the compiler's output, which tells a
+provider-side cause in the compile's agent from the compiler refusing
+the source. Judge each failure by its class
 ([DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)):
 
 | Failure | Outcome |
 | --- | --- |
 | Provider-side: a refusal, a quota, an outage | retried, or waived with its reason recorded beside the tag |
-| The bundled compiler refusing the app's own example | blocks the tag |
+| The bundled compiler refusing the app's own example on its first compile | blocks the tag |
 | The compiler refusing the chat-authored source after the bounded relay | may be waived, the compiler's output attached and an issue filed against `slc` |
 | Any other app-side failure | blocks the tag |
 

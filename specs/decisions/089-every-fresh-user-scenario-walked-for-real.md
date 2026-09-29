@@ -28,8 +28,9 @@ Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smok
 
 ### (a) A deterministic compile, and a compiled run in CI
 
-- The regression pastes the app's own example source, compiles it for real on the compile player, registers it on the Register form's defaults, and runs one turn of it to its finish with both players engaged.
+- The regression pastes the app's own example source, compiles it for real on the compile player, registers it on the Register form's prefill, and runs one turn of it to its finish with both players engaged.
 - The chat-authored two-role changelog journey stays, as the harder case.
+- A player's question in either run, if one is asked, is answered through the Captain, as in (b).
 - CI proves the run path of a compiled playbook on every commit: a fixture compiled by the real `slc` is committed, regenerated whenever the playbook engine changes generation, and registered and run on substitute agents in the hermetic journeys.
 
 ### (b) The project a fresh user starts
@@ -49,7 +50,7 @@ For the live smoke and the regression:
 | Failure | Outcome |
 | --- | --- |
 | Provider-side: a refusal, a quota, an outage | retried, or waived with its reason recorded beside the tag |
-| The bundled compiler refusing the app's own example after the bounded relay | blocks the tag |
+| The bundled compiler refusing the app's own example on its first compile — the relay then lets the agent change the source, so a later compile is not of the example | blocks the tag |
 | The compiler refusing the chat-authored source after the bounded relay — a model outcome | may be waived, the compiler's output attached and an issue filed against `slc` |
 | Any other app-side failure | blocks the tag |
 

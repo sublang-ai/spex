@@ -58,11 +58,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   registered and run; a playbook authored in chat compiled, registered
   and run; and a project created from the palette with its specs
   scaffolded, developed through a `/decide` and a `/code` queued behind
-  it, the queue handing off and a player's question answered through
-  the Captain. A compiler refusing the app's own example blocks the
-  tag. CI runs the browser journeys on macOS as well as Linux, the
-  queue's handoff among them, and runs the example as the real `slc`
-  compiled it once that fixture is captured.
+  it, the queue handing off; in every run, a player's question is
+  answered through the Captain. A compiler refusing the app's own
+  example on its first compile blocks the tag. CI runs the browser
+  journeys on macOS as well as Linux, the queue's handoff among them,
+  and runs the example as the real `slc` compiled it once that fixture
+  is captured.
 
 ### Changed
 

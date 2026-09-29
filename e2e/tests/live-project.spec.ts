@@ -25,6 +25,7 @@ import {
   open,
   git,
   LIVE,
+  NEUTRAL_ANSWER,
   attachRun,
   awaitCaptainLine,
   awaitRun,
@@ -42,8 +43,6 @@ const FIRST =
   "/decide How should this repository lay out a small JavaScript package with a sum(a, b) function: its module format, where the source and its tests live, and how npm test runs them? Keep it to what such a package needs.";
 const SECOND =
   "/code Implement the recorded decision for the sum(a, b) package: a package.json whose npm test runs the tests with node --test, sum(a, b) returning a + b, and one test for it. Keep the change minimal.";
-/** The Boss's answer to any question a player asks on the way. */
-const ANSWER = "Take the simplest option that satisfies the request, and go on.";
 /** A real cycle with its review (DR-086: twenty to forty-five minutes). */
 const CYCLE = 60 * 60_000;
 /** From a settled turn to the queued intent's dispatch (DR-077). */
@@ -158,7 +157,7 @@ test("dashboard-63, run-view-150 @live: a project created from the palette devel
       }
       await now.click();
       await expect(box).toBeEnabled();
-      await box.fill(ANSWER);
+      await box.fill(NEUTRAL_ANSWER);
       await page.getByRole("button", { name: "Send", exact: true }).click();
       await expect(banner).toHaveCount(0, { timeout: CYCLE });
     },

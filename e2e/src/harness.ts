@@ -1213,6 +1213,41 @@ export async function awaitRun(
   }
 }
 
+/** The Boss's one answer to any question a player asks in a live run
+ * (DR-089): neutral, so the run goes on as the request asked. */
+export const NEUTRAL_ANSWER = "Take the simplest option that satisfies the request, and go on.";
+
+/**
+ * A watch that answers each question a run asks through the session's
+ * composer, as the Boss would (DR-085): the question standing as the
+ * Captain's bubble with the banner naming the asking player, the
+ * transcripts attached as `question <n>`, then `answer` sent and the
+ * wait cleared within `clears`. `asked()` counts the questions
+ * answered.
+ */
+export function answeringWith(
+  page: Page,
+  answer: string = NEUTRAL_ANSWER,
+  clears = 60 * 60_000,
+): RunWatch & { asked: () => number } {
+  let asked = 0;
+  return {
+    asked: () => asked,
+    onQuestion: async () => {
+      asked += 1;
+      const banner = page.getByTestId("boss-reply-banner");
+      await expect(page.getByTestId("question-bubble").last()).toBeVisible();
+      await expect(banner).toContainText("is waiting");
+      await attachRun(page, `question ${asked}`);
+      const box = page.getByTestId("boss-composer");
+      await expect(box).toBeEnabled();
+      await box.fill(answer);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(banner).toHaveCount(0, { timeout: clears });
+    },
+  };
+}
+
 /** Wait until the Captain pane has narrated `line` `times` times —
  * "/code finished" once per settled run — failing fast as `awaitRun`. */
 export async function awaitCaptainLine(
