@@ -6,8 +6,8 @@
 ## Status
 
 In progress on `fresh-user-scenarios-v2`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) with its scratch-leak and restore fixes, whose question relay and slc 0.12 the live journeys need: parts 1 and 2 are built and verified hermetically (tasks 1–15, task 16's rewrites, and tasks 17–19).
-What remains is the owner's: one run of `npm run smoke -- --live` and of `npm run regression` on signed-in agents, their outcomes recorded here, and the compiled fixture that the regression's example journey captures, committed; until then the hermetic compiled-fixture journey skips.
-The branch merges to `main` once those runs are recorded.
+What remains is the owner's: one run of `npm run smoke -- --live` and of `npm run regression` on signed-in agents, their outcomes recorded here, and the compiled fixture that the regression's example journey captures, committed, with the example's displayed gears and state machine refreshed from the same capture; until then the hermetic compiled-fixture journey skips.
+The branch merges to `main` once those runs are recorded, the fixture committed and the displayed stages refreshed.
 
 ## Intent
 
@@ -28,6 +28,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] The regression's example journey: pasted, compiled for real, registered on the form's prefill, run to a finished turn; its capture switch.
 - [x] The hermetic compiled-fixture journey, its fixture loader and the capture's README.
 - [ ] The compiled fixture, captured by the regression's example journey and committed.
+- [ ] The example's displayed gears and state machine refreshed from that capture, and the changelog saying the example compiles once the regression records its clean first compile.
 - [x] The regression's new project created from the palette, through `/decide` then `/code`, a player's question answered through the Captain.
 - [x] The hermetic two-intent handoff journey.
 - [x] The regression's observed-and-aborted `/code` removed.
@@ -35,7 +36,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [ ] `npm run smoke -- --live` and `npm run regression` run once, their outcomes recorded.
 - [x] The app's example settling the two limits slc 0.12 asks about, named as adapted from slc's demo wherever it is shown, placed or quoted.
 - [x] The changelog carrying every decision since `app-v0.8.0` that `[Unreleased]` missed.
-- [x] space-48 stating a repair's outcome as the Sync tab shows it, verified by space-56.
+- [x] A resolved repair's outcome and a declined row holding their places until the reader's Refresh, the list standing with the last outcome, focus and the live region following the header's count (space-48, space-55), verified by space-56.
 
 ## Tasks
 
@@ -57,7 +58,8 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 16. Rewrite the release checklist, the release playbook and the changelog's tiers entry for the walks as built; run `npm run smoke -- --live` and `npm run regression` once and record the outcomes.
 17. Settle the example's two limits in every copy, and name it adapted from slc's demo.
 18. Note in the changelog every decision since `app-v0.8.0`, and the example's fix.
-19. State the folder repair's outcome as it works, and test it.
+19. Hold a repair's outcome and a declined row in place until the reader's Refresh, and test it.
+20. Refresh the example's displayed gears and state machine from the compiled fixture's capture, and state in the changelog that the example compiles.
 
 ## Verification
 
@@ -106,3 +108,10 @@ Two rules were settled rather than built around: the example's first compile is 
 
 Restacked onto the fixed adoption and verified on 2026-09-28 after tasks 17–19: a fresh `npm ci`; `npm run build`; `npm test` — 34 script, 133 CLI, 352 core, 710 interface, 16 desktop and 11 server tests; 64 hermetic journeys passed and the compiled-fixture journey skipped, run-view-118's focus check having failed once in a full run and passed on the rerun and three runs alone; the journeys typecheck; `spex lint` clean; the three catalogs whole.
 The example's displayed gears and state machine are still slc's compile of its former text, until the owner's live compile captures the fixture and refreshes them.
+
+The restack's review, answered on 2026-09-28 and verified with: `npm run build`; `npm test` — 34 script, 133 CLI, 352 core, 710 interface, 16 desktop and 11 server tests; 64 hermetic journeys passed and the compiled-fixture journey skipped, run-view-118's focus check again failing once in a full run and passing three times alone and in a second full run; the journeys typecheck; `spex lint` clean; the three catalogs whole.
+Every finding was taken.
+space-48 had been restated to the Sync tab's defect: the last outcome never drew, the list closing with the core's last diagnostic and focus falling to the page, and an outcome jumping to the list's head where [DR-065](../decisions/065-repairs-the-reader-answers.md) has a changed row hold its place; the list now holds its drawn order until the reader's Refresh, and space-56's test fails when rows re-sort on every read.
+The example now counts judgments per loop, its last judgment in a loop the conclusion, and ends after the 2nd loop's commit without another review, the reading slc 0.10's compile of the demo took; reporting leftover findings was dropped rather than defined.
+No compile of the new text has run, so the changelog, the asset header, the module comment and the map state the settled limits rather than a compile.
+A declined row's "Don't add" leaves with the answer, so focus falls to the page there too; the review did not raise it and it stays as it was.
