@@ -13,6 +13,7 @@ Amends [DR-047](047-explicit-session-recovery.md) in its two controls: Restore r
 Amends [DR-077](077-up-next-is-a-committed-queue.md) in its advancement gate alone: a restore's report hands no queued intent on, being the account of a stop; the gate for every other settled turn stands.
 Amends [DR-062](062-ending-a-failed-workflow.md) in its last consequence alone: a session holding an uncertain turn is restored first, and Discard stands only where nothing was recorded.
 Completes [DR-085](085-boss-talks-through-captain.md), whose Captain-worded questions needed Playbook's question relay.
+Amended by [DR-090](090-readiness-names-what-cligent-finds-missing.md) in its Cligent floor alone, now `^0.27.1`.
 
 ## Context
 

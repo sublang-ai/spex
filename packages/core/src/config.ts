@@ -31,8 +31,10 @@ import {
   classifyRuntime,
   describeRuntimeReadiness,
   isEffortSupported,
+  locateAgentExecutable,
   readRuntimeVersion,
   supportedEffortValues,
+  type AgentExecutable,
   type RuntimeReadiness,
 } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
@@ -1575,26 +1577,78 @@ export function describeRuntimeFault(verdict: RuntimeReadiness): string {
   });
 }
 
+// The runtime half's two questions, each answered by cligent. Injectable
+// so tests reach every outcome whatever this machine has installed.
+export interface AdapterRuntimeProbes {
+  /** cligent's availability probe: the load a session start performs. */
+  available?: (adapter: AdapterName) => Promise<boolean>;
+  /** cligent's lookup of the native executable a bundled SDK spawns. */
+  locateExecutable?: (runtime: "claude" | "codex") => AgentExecutable;
+}
+
+async function probeAdapterAvailable(adapter: AdapterName): Promise<boolean> {
+  const entry = ADAPTER_MODULES[adapter];
+  const module = (await import(entry.module)) as Record<
+    string,
+    new () => { isAvailable(): Promise<boolean> }
+  >;
+  const AdapterClass = module[entry.name];
+  if (!AdapterClass) throw new Error(`missing export ${entry.name}`);
+  return new AdapterClass().isAvailable();
+}
+
+// Names the native executable cligent's lookup finds absent, or null when
+// the lookup adds nothing to say: no SDK leaves the load failure to speak,
+// and a present executable is no fault of its own. The SDK layout rule is
+// cligent's; Spex only phrases its answer.
+function describeExecutableFault(
+  adapter: "claude" | "codex",
+  executable: AgentExecutable,
+): string | null {
+  if (executable.state === "missing") {
+    return i18n._({
+      id: "the {adapter} executable is missing: {package} is not installed for {platform}-{arch} — run npm ci in the checkout, or reinstall the app",
+      comment:
+        "Adapter requirement; the adapter's name, the platform package's name, the platform and architecture, and `npm ci` stay as they are",
+      values: {
+        adapter,
+        package: executable.package,
+        platform: executable.platform,
+        arch: executable.arch,
+      },
+    });
+  }
+  if (executable.state === "unsupported") {
+    return i18n._({
+      id: "the {adapter} SDK publishes no executable for {platform}-{arch}",
+      comment:
+        "Adapter requirement; the adapter's name and the platform and architecture stay as they are",
+      values: { adapter, platform: executable.platform, arch: executable.arch },
+    });
+  }
+  return null;
+}
+
 // DR-024: availability is cligent's own answer — the same load a session
-// start performs, so readiness cannot disagree with the run. Only when the
-// probe says no are the published targets consulted, to say which runtime
-// is at fault and how its tree is repaired. A target that classifies as
-// healthy while the probe fails is not named — naming a healthy half sends
-// the user to install what is already there. `untested` and `unknown` stay
-// non-faults: the load gate itself fails open on both.
+// start performs, including the native executable a bundled SDK spawns,
+// so readiness cannot disagree with the run. Only when the probe says no
+// are the published targets consulted, to say which runtime is at fault
+// and how its tree is repaired. A target that classifies as healthy while
+// the probe fails is not named — naming a healthy half sends the user to
+// install what is already there. `untested` and `unknown` stay non-faults:
+// the load gate itself fails open on both. When no target explains the
+// failure, cligent's executable lookup names the platform package npm
+// dropped, or a host the SDK publishes nothing for.
 export async function checkAdapterRuntime(
   adapter: AdapterName,
+  {
+    available: probeAvailable = probeAdapterAvailable,
+    locateExecutable = locateAgentExecutable,
+  }: AdapterRuntimeProbes = {},
 ): Promise<AdapterRuntimeCheck> {
   let available = false;
   try {
-    const entry = ADAPTER_MODULES[adapter];
-    const module = (await import(entry.module)) as Record<
-      string,
-      new () => { isAvailable(): Promise<boolean> }
-    >;
-    const AdapterClass = module[entry.name];
-    if (!AdapterClass) throw new Error(`missing export ${entry.name}`);
-    available = await new AdapterClass().isAvailable();
+    available = await probeAvailable(adapter);
   } catch {
     available = false;
   }
@@ -1607,6 +1661,15 @@ export async function checkAdapterRuntime(
     if (verdict.state === "missing" || verdict.state === "unsupported") {
       faults.push(describeRuntimeFault(verdict));
     }
+  }
+  if (faults.length === 0 && (adapter === "claude" || adapter === "codex")) {
+    let fault: string | null = null;
+    try {
+      fault = describeExecutableFault(adapter, locateExecutable(adapter));
+    } catch {
+      fault = null;
+    }
+    if (fault !== null) faults.push(fault);
   }
   return {
     usable: false,

@@ -376,6 +376,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Removing the project the Dashboard was filtered to left the Dashboard
   blank; the filter falls back to All projects.
 
+- An agent whose SDK's native binary npm dropped — an optional platform
+  package such as `@anthropic-ai/claude-agent-sdk-darwin-arm64` — read
+  ready and failed at its first run. Readiness now reads it not ready,
+  naming the package and the repair: `npm ci` in the checkout, or
+  reinstall the app. Requires Cligent 0.27.1.
+
 ### Security
 
 - A remote URL carrying a bare token before the host, such as
