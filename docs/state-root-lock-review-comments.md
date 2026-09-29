@@ -202,3 +202,30 @@ Suggested rule: refuse to create a new identity while a file is present, treat t
 
 `$XDG_STATE_HOME/playbook/sessions` is the directory the sessions migration reads and empties ([storage-18](../specs/packages/storage.md#storage-18)); the migration unlinks files inside `sessions/` only.
 The upstream review should confirm that no migration or cleanup ever removes the parent `playbook/` directory or treats the identity file as an input.
+
+---
+
+# Round 5 (2026-09-29): comments on the implementation-boundary revision
+
+All five round-4 points are in: Playbook resolves the identity by default and Spex consumes the API only for its own two writers, the tag grammar is discussed, an unreadable identity file is distinguished from an absent one, the catalog message and shared-identity-across-homes notes are present, and the migration must preserve the identity file.
+The Chinese text matches.
+Three points remain, all small.
+
+### 1. The tag-collision hedge is larger than the risk
+
+The new paragraph presents an old nonstandard hostname exactly matching a valid tag as an open limit of the unchanged schema.
+Its failure mode is already safe under the stated rules: a new reader parses such a value as an identity and compares it with the local identity, so it is refused unless it equals this machine's UUID, which was generated after that record was written.
+The worst case is therefore a refusal that needs manual recovery, never admission of a second writer.
+Suggest stating that in two sentences and dropping the "cannot be distinguished" framing, which reads as a safety hole.
+
+### 2. A writer without an identity must not start
+
+"Treat identity as unavailable and refuse tagged-owner admission" covers the reading side.
+It leaves open what a new writer does when the file is unreadable: it cannot publish an owner it can later prove, and writing `os.hostname()` would reintroduce legacy records after the transition.
+The rule should be that the writer refuses to start, naming the file and the reason, the same fail-closed posture as an unreadable lock.
+
+### 3. State the creation-race rule
+
+Two writers can start at once with no identity file (a Spex core and a standalone CLI).
+Atomic creation is delegated upstream, but the correctness condition is cheap to state here: the loser of the exclusive create discards its own value and re-reads the file, so both end up with one identity.
+Add that case, and a writer start with an unreadable identity, to the A verification list.
