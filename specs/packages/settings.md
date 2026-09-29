@@ -62,9 +62,9 @@ Where the Settings surface is open, the Settings surface shall offer adding a se
 
 #### settings-34
 
-When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md)):
+When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md), [DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
-- Offer runtime model IDs, provider default, and explicit custom entry; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
+- Offer runtime model IDs, provider default, and explicit custom entry in the model field [[settings-39](#settings-39)], each model named by the display rule [[settings-38](#settings-38)]; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
@@ -77,8 +77,48 @@ When the core receives `agent.options` for a known adapter, it shall return Clig
 - Discovery uses the core's captured environment.
 - Adapter effort values and fast-mode support accompany the discovery result.
 - Available results carry Cligent's optional `unreportedEffortValues` separately from each model's effort list: adapter efforts the discovery interface cannot report.
+- Available results carry each model's optional `description` and the result's optional `defaultModel` — the model the runtime runs when none is configured — as Cligent reported them, absent where it reported none ([DR-091](../decisions/091-models-named-by-the-runtime.md)).
 - Unknown adapters are rejected by the protocol.
 - Discovery failure is returned as unavailable; config load and save do not depend on discovery.
+
+#### settings-38
+
+Where a model editor [[settings-34](#settings-34)] names a model value against the runtime's catalog [[settings-35](#settings-35)] — a row, the field's value, the runtime's `defaultModel`, or a value the editor inherits — it shall read the value by one display rule, naming the specific model wherever the runtime reports one ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
+
+| The value is | It reads as |
+| --- | --- |
+| a row's id | the row's name, then the row's specific model: its `resolvedModel` where the id is an alias of it — differing from it and not beginning with it — else the id where it differs from the name ignoring case, else nothing |
+| only a row's `resolvedModel` | itself, a canonical pin recognized without rewriting it [[settings-34](#settings-34)] |
+| no row's id or `resolvedModel` | itself |
+
+- in one line of text the name and the specific model join with " · ", as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]" and "GPT-6-Astra";
+- a name, an id, a resolved model and a description are the runtime's words, rendered as they came [[localization-1](localization.md#localization-1)].
+
+#### settings-39
+
+Where a model editor offers the runtime's model choices [[settings-34](#settings-34)], its model field shall present them as a single-select listbox opened from a trigger, each model read by the display rule [[settings-38](#settings-38)] ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
+
+- the trigger reads the value with its specific model muted, and the empty value reads "Provider default" followed, muted, by the runtime's `defaultModel` where reported;
+- the rows stand in this order: "Provider default" where the editor allows it, its second line the `defaultModel` where reported; a value recognized only through a resolution, as its own row; each catalog row in the runtime's order, its first line the name with the specific model muted beside it and its second line the runtime's `description` where reported; and "Custom model…" last;
+- the selected row wears a check and is marked selected to assistive technology, and a line too long for its row ends in an ellipsis, whole in the row's title;
+- choosing "Custom model…", or holding a value no row lists, shows the hand-typed model ID field beneath the trigger, the unlisted value with the hint that the runtime does not list it, and while the catalog is loading, unavailable or empty the hand-typed field stands alone;
+- the Captain's and a player's agent editor [[settings-1](#settings-1)] lays the model field across its full width.
+
+#### settings-40
+
+While a model field's trigger has focus or its listbox is open [[settings-39](#settings-39)], the field shall answer the keyboard and the pointer alike, as the listbox idiom does ([DR-091](../decisions/091-models-named-by-the-runtime.md), [DR-010](../decisions/010-interface-craft.md) §6):
+
+| Input | Effect |
+| --- | --- |
+| Enter, Space, Arrow Down or Arrow Up on the closed trigger | opens the listbox with the selected row active |
+| a click on the trigger | opens the listbox with the selected row active, or closes it when open |
+| Arrow Down or Arrow Up; Home or End | moves the active row by one; to the first or the last row — scrolled into view |
+| Enter or Space, or a click on a row | chooses that row, closes the listbox and returns focus to the trigger |
+| Escape | closes the listbox without choosing and returns focus to the trigger, the editor around it staying open |
+| Tab | closes the listbox and moves on from the trigger |
+| a press outside the field | closes the listbox |
+
+- the listbox lies inside the box that must show it — the nearest box that clips, else the window — at every width down to the 320-pixel floor, refitting as either box resizes and scrolling its own rows when that box is the shorter ([DR-041](../decisions/041-chrome-that-fits.md)).
 
 ### Adapter Readiness
 
@@ -223,7 +263,17 @@ When an in-place editor saves an agent-block tweak — the captain's or a player
 
 #### settings-36
 
-Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, adapter switches resetting model/effort/fast mode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery [[settings-35](#settings-35)].
+Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, adapter switches resetting model/effort/fast mode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery and with each model's description and the catalog's default model carried as reported [[settings-35](#settings-35)].
+
+#### settings-41
+
+Where the agent editor and the role-binding editor render against fixture catalogs modeled on the Claude and Codex runtimes — aliases resolving to specific models, a row whose id extends its resolved model, rows named as their ids, descriptions on some rows, and a `defaultModel` in one catalog and none in the other — the test suite shall assert through the rendered editors:
+
+- the trigger and every row read by the display rule, and a value recognized only through a resolution and a value no row lists each read as themselves, the unlisted one with its hint [[settings-38](#settings-38)] [[settings-39](#settings-39)];
+- the provider default reads the `defaultModel` where the catalog reports one and nothing more where it does not, and each description stands as its row's second line [[settings-39](#settings-39)];
+- the keyboard opens the listbox on its selected row, walks it with the arrows, Home and End, chooses with Enter, and closes it with Escape leaving the editor open and focus on the trigger, while a click chooses a row and a press outside closes it [[settings-40](#settings-40)];
+- choosing "Custom model…" shows the hand-typed field, which keeps what is typed [[settings-39](#settings-39)];
+- the Captain's and a player's editor lays the model field across its full width [[settings-39](#settings-39)].
 
 ### Round-Trip Coverage
 
@@ -281,7 +331,8 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - an edit the fail-closed rules reject is refused with its message shown and the file left unchanged [[settings-2](#settings-2)];
 - the readiness panel lists one entry per adapter the config names [[settings-5](#settings-5)];
 - an edit made to the file on disk from outside the app is reflected on the surface without a reload [[settings-8](#settings-8)];
-- an agent editor opened at a role's control at the 320-pixel viewport floor stands wholly inside its surface's box both on opening and after model discovery grows its content, leaving the page scrolling in neither direction [[settings-33](#settings-33)].
+- an agent editor opened at a role's control at the 320-pixel viewport floor stands wholly inside its surface's box both on opening and after model discovery grows its content, leaving the page scrolling in neither direction [[settings-33](#settings-33)];
+- a model listbox opened in an agent editor at the 320-pixel viewport floor lies wholly inside the box that must show it, its last row reachable by its own scrolling, leaving the page scrolling in neither direction [[settings-40](#settings-40)].
 
 #### settings-30
 

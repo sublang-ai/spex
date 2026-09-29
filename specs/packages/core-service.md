@@ -160,6 +160,7 @@ When a client requests the session list, the core service shall reply with every
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
 - each entry carries its turn count and whether it ended holding a failure record;
 - each entry carries cumulative active time from complete stored history for every agent with a measured finished call [[core-service-102](#core-service-102)];
+- each entry carries, for every agent whose runtime reported a call's model, the latest such report with the settings its call began under [[core-service-115](#core-service-115)], which a client compares with what the agent is set to run ([DR-091](../decisions/091-models-named-by-the-runtime.md));
 - each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md));
 - each entry whose last settlement found a run parked on the Boss carries that park [[core-service-91](#core-service-91)] — its reason, the run's failure state or its question; every action that run advertised, in order; and the ending the shell advertised, each control by id and Boss-facing label with any standing the runtime reported for it — so a client draws one control per action and names the one it activates [[core-service-98](#core-service-98)] ([DR-074](../decisions/074-a-parked-run-survives.md)); the reading is this host's own, kept with its preferences [[storage-5](storage.md#storage-5)], and absent where that settlement found no parked run advertising anything.
 
@@ -175,9 +176,18 @@ When the core service folds a session's conversation summary, it shall carry cum
 - a session whose stored stream is marked incomplete carries no `agentActiveMs`, because its retained prefix cannot establish any agent's cumulative session figure [[core-service-10](#core-service-10)];
 - each agent's spans sum independently without removing overlap between calls, and `agentActiveMs` is absent when no agent has a measured figure.
 
+#### core-service-115
+
+When the core service folds a session's conversation summary, it shall carry, as an optional `agentReportedModels` map keyed by the reserved `captain` id and by session player id, the model the runtime reported for each agent's latest call to report one together with the settings that call began under, derived solely from the stored record stream so the same history yields the same map after a restart [[core-service-10](#core-service-10)] ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
+
+- a call reports its model as its `init` event's `reportedModel`, a non-empty string kept as the runtime sent it — a player's in its `player_event`, the Captain's in its `captain_event`, including where the Captain's records are hidden [[core-service-10](#core-service-10)];
+- the settings that call began under are its agent's block in the execution context the stream recorded for it — the `session_context` record whose sequence number the reporting record's `contextSeq` names, else the latest one before it — read as a model and an effort, each a pinned value or `false` for the provider's default, and fast mode on or off;
+- an agent whose context holds no readable block for it, and a player that some role binding in that context runs on a model other than its own block's, have no entry, because no one report names what they run;
+- a session whose stored stream is marked incomplete carries no `agentReportedModels` [[core-service-10](#core-service-10)], and the map is absent when no agent has an entry.
+
 #### core-service-34
 
-When the core service reports a session's state to subscribed clients — at each turn's start and end, after any stored record or stream-completeness change alters its active-time fold [[core-service-102](#core-service-102)], when its runtime is released [[core-service-91](#core-service-91)] or opened by a message [[core-service-73](#core-service-73)], and after recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
+When the core service reports a session's state to subscribed clients — at each turn's start and end, after any stored record or stream-completeness change alters its active-time or reported-model fold [[core-service-102](#core-service-102)] [[core-service-115](#core-service-115)], when its runtime is released [[core-service-91](#core-service-91)] or opened by a message [[core-service-73](#core-service-73)], and after recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)] — the report shall carry that session's conversation summary as the listing carries it [[core-service-32](#core-service-32)] ([DR-029](../decisions/029-session-history-home.md)), never the summary the session was created with:
 
 - A session is named from the turn that starts, not the turn that finishes, so a running session is never listed as having said nothing.
 
@@ -683,6 +693,16 @@ Where fixture sessions' stored record streams hold overlapping prompt-to-finish 
 - the session whose stream is marked incomplete carries no `agentActiveMs` [[core-service-102](#core-service-102)];
 - the session with no matched pair carries no `agentActiveMs` [[core-service-102](#core-service-102)];
 - a newly matched finish and an incompleteness change each cause a state report carrying the revised or absent fold, without asserting that report's position among record messages [[core-service-34](#core-service-34)] [[core-service-102](#core-service-102)].
+
+#### core-service-116
+
+Where fixture sessions' stored record streams hold execution contexts and `init` events — a hidden Captain call reporting its model, a player's later call naming an earlier context, another player's call naming none after a newer context, a player a role binding runs on another model, a call reporting no model after one that did, a stream marked incomplete, and a stream reporting no model — and a live session's runtime reports the model of the Captain's and a player's calls, the core integration suite shall assert the reported-model fold through the WebSocket protocol:
+
+- each reporting agent carries the model its latest reporting call named, as sent, with the settings that call began under read from the context its record names, else the latest one before it — the hidden Captain's included [[core-service-115](#core-service-115)];
+- a call reporting no model leaves the earlier report standing, and the player a binding runs on another model has no entry [[core-service-115](#core-service-115)];
+- the incomplete stream and the stream reporting no model carry no `agentReportedModels` [[core-service-115](#core-service-115)];
+- a newly stored report causes a state report carrying the revised fold, without asserting that report's position among record messages [[core-service-34](#core-service-34)] [[core-service-115](#core-service-115)];
+- in the live session the served records carry each `reportedModel` as the runtime sent it, and once this conversation's own model for the player changes, the next turn's report carries the new settings [[core-service-115](#core-service-115)].
 
 #### core-service-40
 

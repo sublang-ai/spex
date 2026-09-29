@@ -7,6 +7,7 @@
 
 Accepted.
 Amends [DR-019](019-inline-agent-configuration.md), [DR-032](032-session-players.md), and [DR-038](038-history-is-done-work.md): runtime model choices and explicit role fast-mode tuning.
+Amended by [DR-091](091-models-named-by-the-runtime.md) in how a model choice reads alone: one display rule names every choice by the specific model the runtime reports, and the model field is a listbox carrying the runtime's descriptions and default model.
 
 ## Context
 

@@ -21,6 +21,8 @@ Cites [DR-052](052-runtime-model-options.md) for where the model, effort, and fa
 Amended by [DR-068](068-an-agents-settings-where-the-agent-is.md) in §"Where it is shown and changed" alone: one agent's control opens that agent's own settings, there is no session-wide panel and no count, and the act carries no name of its own.
 The scope, the precedence, the storage, the three application sites, the discovery-free validation, and §"A chip is a setting, not a receipt" stand as written.
 
+Amended by [DR-091](091-models-named-by-the-runtime.md) in §"A chip is a setting, not a receipt" alone: while an agent's settings still stand as its latest reporting call began under, its chip's model reads what the runtime reported for that call, and a choice still shows the moment it is taken.
+
 ## Context
 
 Model, effort, and fast mode live in Settings, where they are defaults for every session of every project.
