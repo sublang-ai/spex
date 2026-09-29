@@ -4,8 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { composeConfig, templatePath } from "./config.js";
@@ -19,6 +18,7 @@ import {
   createScriptedCaptain,
   type CaptainTurnScript,
 } from "./testing/scripted-captain.js";
+import { scratchDir } from "./testing/scratch.js";
 
 /** The roster the installed template binds, in config order. */
 function templateRoster(): string[] {
@@ -37,7 +37,7 @@ async function setup(
 ) {
   const top = parseYaml(readFileSync(templatePath(), "utf8"));
   const composed = await composeConfig(top);
-  const scratch = mkdtempSync(join(tmpdir(), "spex-sess-"));
+  const scratch = scratchDir("spex-sess-");
   const projectDir = join(scratch, "project"); mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
   const store = new Store({ dir: join(scratch, "state") });

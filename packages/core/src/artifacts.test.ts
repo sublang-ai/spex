@@ -6,11 +6,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { resolveArtifacts } from "./artifacts.js";
+import { scratchDir } from "./testing/scratch.js";
 
 const FSM = `
 import { setup } from "xstate";
@@ -49,7 +49,7 @@ function gearsFile(id: string): string {
 }
 
 function compiledLayout(id: string): { dir: string; from: string } {
-  const dir = mkdtempSync(join(tmpdir(), "spex-artifacts-"));
+  const dir = scratchDir("spex-artifacts-");
   writeFileSync(join(dir, `${id}.md`), `# ${id} workflow\n`);
   const artifactDir = join(dir, `${id}.playbook`);
   mkdirSync(artifactDir);
@@ -108,7 +108,7 @@ test("gears the parser reads no item from serve as markdown alone", async () => 
 });
 
 test("artifacts resolve from the published-package layout", async () => {
-  const root = mkdtempSync(join(tmpdir(), "spex-artifacts-pkg-"));
+  const root = scratchDir("spex-artifacts-pkg-");
   writeFileSync(join(root, "code.md"), "# code source\n");
   const pkgDir = join(root, "code.playbook");
   mkdirSync(pkgDir);
@@ -153,6 +153,115 @@ test("served source and gears drop leading comment headers", async () => {
   const artifacts = await resolveArtifacts({ id: "demo", from });
   assert.ok((artifacts.source ?? "").startsWith("# demo workflow"));
   assert.match(artifacts.source ?? "", /an inline note stays/);
+});
+
+test("a machine load leaves no bundle behind and loads unchanged content once", async (t) => {
+  const review = await resolveArtifacts({ id: "review", from: "@sublang/playbook/review/registry" });
+  assert.ok(review.fsm, "the built-in review machine must be readable");
+  // The real machine at a path no load has read yet, so the first load
+  // below bundles it rather than answering from memory. npm gives every
+  // file it extracts one mtime, so both versions share one here.
+  const { dir, from } = compiledLayout("kept");
+  const fsmPath = join(dir, "kept.playbook", "kept.fsm.ts");
+  const extracted = new Date("1985-10-26T08:15:00Z");
+  const place = (text: string): void => {
+    writeFileSync(fsmPath, text);
+    utimesSync(fsmPath, extracted, extracted);
+  };
+  place(`// A\n${review.fsm}`);
+
+  const bundles = scratchDir("spex-bundles-");
+  const previous = process.env.TMPDIR;
+  process.env.TMPDIR = bundles;
+  t.after(() => {
+    if (previous === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previous;
+  });
+
+  const first = await resolveArtifacts({ id: "kept", from });
+  assert.ok(first.machine, "the machine graph must be served");
+  assert.ok((first.machine?.edges.length ?? 0) > 0);
+  assert.deepEqual(readdirSync(bundles), [], "the bundle is removed once imported");
+
+  const second = await resolveArtifacts({ id: "kept", from });
+  assert.equal(second.machine, first.machine, "unchanged content is served from memory");
+  assert.equal(second.stateIds, first.stateIds);
+  assert.deepEqual(readdirSync(bundles), []);
+
+  // The shared result refuses a change rather than taking it for every
+  // later reader.
+  const machine = first.machine;
+  assert.throws(() => first.stateIds?.push("extra"), TypeError);
+  assert.throws(() => machine.nodes.push(machine.nodes[0]), TypeError);
+  assert.throws(() => machine.nodes[0].tags.push("extra"), TypeError);
+  assert.throws(() => { machine.edges[0].to = "elsewhere"; }, TypeError);
+  assert.throws(() => { machine.initial = "elsewhere"; }, TypeError);
+
+  // Other content of the same size and mtime is loaded afresh.
+  place(`// B\n${review.fsm}`);
+  const third = await resolveArtifacts({ id: "kept", from });
+  assert.notEqual(third.machine, first.machine, "changed content is loaded again");
+  assert.deepEqual(third.machine, first.machine);
+  assert.deepEqual(readdirSync(bundles), []);
+});
+
+test("a machine importing a sibling module reads the sibling's change", async () => {
+  const { dir, from } = compiledLayout("split");
+  const artifactDir = join(dir, "split.playbook");
+  writeFileSync(
+    join(artifactDir, "split.fsm.ts"),
+    [
+      'import { setup } from "xstate";',
+      'import { states } from "./states.ts";',
+      'export const splitMachine = setup({}).createMachine({ id: "split", initial: "ready", states });',
+      "",
+    ].join("\n"),
+  );
+  const place = (names: string[]): void => {
+    const states = Object.fromEntries([
+      ...names.map((name) => [name, {}]),
+      ["done", { type: "final" }],
+    ]);
+    writeFileSync(join(artifactDir, "states.ts"), `export const states = ${JSON.stringify(states)};\n`);
+  };
+
+  place(["ready"]);
+  assert.deepEqual((await resolveArtifacts({ id: "split", from })).stateIds, ["ready", "done"]);
+  // The entry file is unchanged; only the module it imports moved on.
+  place(["ready", "work"]);
+  assert.deepEqual((await resolveArtifacts({ id: "split", from })).stateIds, ["ready", "work", "done"]);
+});
+
+test("a failed machine load is retried with the same content", async () => {
+  // The entry names a package that is not installed yet: the same bytes
+  // fail to bundle at first and load once the package arrives.
+  const { dir, from } = compiledLayout("late");
+  writeFileSync(
+    join(dir, "late.playbook", "late.fsm.ts"),
+    [
+      'import { setup } from "xstate";',
+      'import { states } from "spex-late-states";',
+      'export const lateMachine = setup({}).createMachine({ id: "late", initial: "ready", states });',
+      "",
+    ].join("\n"),
+  );
+
+  const first = await resolveArtifacts({ id: "late", from });
+  assert.equal(first.stateIds, null, "an unresolved import fails the load");
+  assert.equal(first.machine, null);
+
+  const pkg = join(dir, "node_modules", "spex-late-states");
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(
+    join(pkg, "package.json"),
+    JSON.stringify({ name: "spex-late-states", type: "module", main: "index.js" }),
+  );
+  const states = { ready: {}, done: { type: "final" } };
+  writeFileSync(join(pkg, "index.js"), `export const states = ${JSON.stringify(states)};\n`);
+
+  const second = await resolveArtifacts({ id: "late", from });
+  assert.deepEqual(second.stateIds, ["ready", "done"], "the failed load is not kept");
+  assert.equal(second.machine?.initial, "ready");
 });
 
 test("playbook-library-37: every built-in serves a whole machine graph", async () => {

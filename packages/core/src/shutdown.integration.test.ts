@@ -12,8 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 
@@ -22,6 +21,7 @@ import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import type { Captain } from "@sublang/cligent/tmux-play";
 import type { Command, CommandResults, ServerMessage } from "./protocol.js";
+import { scratchDir } from "./testing/scratch.js";
 
 const CONFIG = `
 captain:
@@ -141,7 +141,7 @@ interface Harness {
 
 /** Start a core whose captains are handed out in creation order. */
 async function startHarness(captains: Captain[]): Promise<Harness> {
-  const dir = mkdtempSync(join(tmpdir(), "spex-shutdown-it-"));
+  const dir = scratchDir("spex-shutdown-it-");
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, CONFIG);
   const projectDirs = ["project-a", "project-b"].map((name) => {

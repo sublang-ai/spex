@@ -10,6 +10,7 @@
 // registry's state ids by FSM introspection.
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -674,40 +675,124 @@ export function extractMachineGraph(machine: MachineLike): MachineGraph | null {
   };
 }
 
-/** Bundle an FSM module and serve its state ids and drawable graph,
- * or nulls on failure (playbook-library-36). */
-export async function loadFsmInfo(fsmPath: string): Promise<{
+/** A machine's state ids and drawable graph, nulls when it cannot load. */
+export interface FsmInfo {
   stateIds: string[] | null;
   machine: MachineGraph | null;
-}> {
+}
+
+/**
+ * Machine loads kept per FSM path, keyed by a sha256 digest of the
+ * entry file's content — not its mtime, which npm sets alike on every
+ * file it extracts. Importing a bundle leaves its module in Node's ESM
+ * cache for the life of the process, and loads recur on every
+ * artifacts request and session open, so unchanged content is bundled
+ * and imported once. The bytes digested are the bytes bundled, so a
+ * file that changes between reading and bundling cannot leave one
+ * content's result kept under the other's digest. The digest covers
+ * the entry alone, which is exact while every other bundled input
+ * lies in an installed package the core treats as fixed for its
+ * lifetime: the built-in and slc-emitted machines import only
+ * `xstate`. A load whose bundle read any other input (a relative
+ * module) is not kept, so such a machine is bundled afresh each time.
+ * Only a successful load is kept; a failed one is retried on the next
+ * request. Callers share the result deep-frozen, so a caller that
+ * would mutate it throws instead of changing it for every other.
+ */
+const fsmInfoMemo = new Map<string, { digest: string; info: Promise<FsmInfo> }>();
+
+const NODE_MODULES_SEGMENT = /(^|[\\/])node_modules[\\/]/;
+
+/** The metafile's name for the entry bundled from `stdin`. esbuild
+ * keys it by `sourcefile` when one is given, which is also the key of
+ * that file read from disk — so none is given, and a machine that
+ * imports its own file still shows an input outside the digest. */
+const STDIN_INPUT = "<stdin>";
+
+const NO_FSM_INFO: FsmInfo = Object.freeze({ stateIds: null, machine: null });
+
+/** Bundle an FSM module and serve its state ids and drawable graph,
+ * or nulls on failure (playbook-library-36). */
+export async function loadFsmInfo(fsmPath: string): Promise<FsmInfo> {
+  let contents: Buffer;
   try {
-    const { mkdtempSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const outfile = join(mkdtempSync(join(tmpdir(), "spex-fsm-")), "fsm.mjs");
-    await build({
-      entryPoints: [fsmPath],
+    contents = readFileSync(fsmPath);
+  } catch {
+    return NO_FSM_INFO;
+  }
+  const digest = createHash("sha256").update(contents).digest("hex");
+  const key = resolve(fsmPath);
+  const kept = fsmInfoMemo.get(key);
+  if (kept?.digest === digest) return kept.info;
+  const forget = (): void => {
+    if (fsmInfoMemo.get(key)?.info === info) fsmInfoMemo.delete(key);
+  };
+  const info: Promise<FsmInfo> = bundleFsmInfo(fsmPath, contents).then(
+    ({ loaded, reproducible }) => {
+      if (!reproducible) forget();
+      return freezeFsmInfo(loaded);
+    },
+    () => {
+      forget();
+      return NO_FSM_INFO;
+    },
+  );
+  fsmInfoMemo.set(key, { digest, info });
+  return info;
+}
+
+/** Freeze a load's result through every array and object it holds. */
+function freezeFsmInfo(info: FsmInfo): FsmInfo {
+  if (info.stateIds) Object.freeze(info.stateIds);
+  if (info.machine) {
+    for (const node of info.machine.nodes) {
+      Object.freeze(node.tags);
+      Object.freeze(node);
+    }
+    for (const edge of info.machine.edges) Object.freeze(edge);
+    Object.freeze(info.machine.nodes);
+    Object.freeze(info.machine.edges);
+    Object.freeze(info.machine);
+  }
+  return Object.freeze(info);
+}
+
+/** Bundle and import one machine from the entry's given bytes,
+ * resolving its imports from the entry's directory, and remove the
+ * bundle once imported (the module is evaluated by then);
+ * `reproducible` says whether those bytes were the only input outside
+ * installed packages. */
+async function bundleFsmInfo(
+  fsmPath: string,
+  contents: Uint8Array,
+): Promise<{ loaded: FsmInfo; reproducible: boolean }> {
+  const bundleDir = mkdtempSync(join(tmpdir(), "spex-fsm-"));
+  try {
+    const outfile = join(bundleDir, "fsm.mjs");
+    const { metafile } = await build({
+      stdin: { contents, resolveDir: dirname(resolve(fsmPath)), loader: "ts" },
       outfile,
       bundle: true,
       format: "esm",
       platform: "node",
       logLevel: "silent",
+      metafile: true,
       nodePaths: bundleNodePaths(),
     });
+    const reproducible = Object.keys(metafile.inputs).every(
+      (input) => input === STDIN_INPUT || NODE_MODULES_SEGMENT.test(input),
+    );
     const machine = await importMachine(outfile);
     return {
-      stateIds: Object.keys(machine.config?.states ?? {}),
-      machine: extractMachineGraph(machine),
+      loaded: {
+        stateIds: Object.keys(machine.config?.states ?? {}),
+        machine: extractMachineGraph(machine),
+      },
+      reproducible,
     };
-  } catch {
-    return { stateIds: null, machine: null };
+  } finally {
+    rmSync(bundleDir, { recursive: true, force: true });
   }
-}
-
-/** Bundle an FSM module and list every state id, or null on failure. */
-export async function listFsmStates(
-  fsmPath: string,
-): Promise<string[] | null> {
-  return (await loadFsmInfo(fsmPath)).stateIds;
 }
 
 export function deriveStateIds(machine: MachineLike): {

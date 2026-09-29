@@ -382,6 +382,9 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** The Space surface's engine (DR-057); absent without a state root. */
   private readonly space?: SpaceManager;
+  /** The scratch root a memory-only core keeps its drafts in, removed
+   * at stop; absent with a state root. */
+  private readonly memoryDraftsRoot?: string;
   /** A sync's Apply through Refresh pauses the watchers (space-31). */
   private watchersPaused = false;
   /** The language the core is composing in (core-service-111): the
@@ -478,7 +481,9 @@ export class CoreService {
     }
     // Drafts live under the state root's ignored `local/` family
     // (storage-23); a memory-only core keeps them in a scratch root.
-    const draftsRoot = join(options.dataDir ?? mkdtempSync(join(tmpdir(), "spex-memory-drafts-")), "local", "drafts");
+    const draftsHome = options.dataDir ?? mkdtempSync(join(tmpdir(), "spex-memory-drafts-"));
+    if (!options.dataDir) this.memoryDraftsRoot = draftsHome;
+    const draftsRoot = join(draftsHome, "local", "drafts");
     this.authors = new AuthorManager({
       store: this.store,
       drafts: new DraftStore(draftsRoot, this.libraryDir()),
@@ -902,6 +907,8 @@ export class CoreService {
       this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
     );
     this.store.close();
+    // No draft is written once the authors have stopped.
+    if (this.memoryDraftsRoot) rmSync(this.memoryDraftsRoot, { recursive: true, force: true });
     if (failure) throw failure.error;
   }
 

@@ -15,6 +15,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  rmSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
@@ -40,13 +41,26 @@ import {
   type ServerShellOptions,
 } from "./server.js";
 
+/** Every scratch directory a test here makes, removed once the file's
+ * tests end. */
+const scratchDirs: string[] = [];
+test.after(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function scratchDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  scratchDirs.push(dir);
+  return dir;
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
 const tlsFixtures = resolve(here, "..", "test", "fixtures", "tls");
 
 function tempOptions(
   overrides: Partial<ServerShellOptions> = {},
 ): ServerShellOptions {
-  const dir = mkdtempSync(join(tmpdir(), "spex-server-"));
+  const dir = scratchDir("spex-server-");
   const options = parseArgs(
     [
       "--port=0",
@@ -165,7 +179,7 @@ test(
   "bundle realpaths stay contained (SERVER-SHELL-9, SERVER-SHELL-19)",
   { skip: process.platform === "win32" },
   async () => {
-    const dir = mkdtempSync(join(tmpdir(), "spex-server-path-"));
+    const dir = scratchDir("spex-server-path-");
     const bundleDir = join(dir, "bundle");
     const outside = join(dir, "outside.txt");
     mkdirSync(bundleDir);
@@ -212,7 +226,7 @@ test(
       }
     };
 
-    const requestedBundle = mkdtempSync(join(tmpdir(), "spex-index-request-"));
+    const requestedBundle = scratchDir("spex-index-request-");
     writeFileSync(
       join(requestedBundle, "page.html"),
       '<meta content="connect-src http://localhost:8137"><p>requested</p>',
@@ -231,7 +245,7 @@ test(
       ),
     );
 
-    const resolvedBundle = mkdtempSync(join(tmpdir(), "spex-index-real-"));
+    const resolvedBundle = scratchDir("spex-index-real-");
     writeFileSync(
       join(resolvedBundle, "index.html"),
       '<meta content="connect-src http://localhost:8137"><p>resolved</p>',
@@ -250,7 +264,7 @@ test(
       ),
     );
 
-    const binaryBundle = mkdtempSync(join(tmpdir(), "spex-index-binary-"));
+    const binaryBundle = scratchDir("spex-index-binary-");
     const binaryBody = Buffer.from([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0xfd,
     ]);
@@ -268,7 +282,7 @@ test(
 );
 
 test("bundle type and coding matrix preserves bytes (SERVER-SHELL-9, SERVER-SHELL-17)", async () => {
-  const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-types-"));
+  const bundleDir = scratchDir("spex-server-types-");
   const cases = [
     ["index.html", "text/html; charset=utf-8", true],
     ["script.js", "text/javascript; charset=utf-8", true],
@@ -438,7 +452,7 @@ test("bundle responses negotiate compression (SERVER-SHELL-9, SERVER-SHELL-17)",
 });
 
 test("encoded asset cache reuses and refreshes bodies (SERVER-SHELL-19)", async () => {
-  const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-cache-"));
+  const bundleDir = scratchDir("spex-server-cache-");
   const assetPath = join(bundleDir, "cached.js");
   const otherPath = join(bundleDir, "other.js");
   const indexPath = join(bundleDir, "index.html");
@@ -565,7 +579,7 @@ test(
   "bundle materialization failures stay local (SERVER-SHELL-9, SERVER-SHELL-19)",
   { skip: process.platform === "win32" },
   async (t) => {
-    const bundleDir = mkdtempSync(join(tmpdir(), "spex-server-head-"));
+    const bundleDir = scratchDir("spex-server-head-");
     const encodedPath = join(bundleDir, "unreadable.js");
     const identityPath = join(bundleDir, "unreadable.png");
     const indexPath = join(bundleDir, "index.html");
@@ -718,7 +732,7 @@ test("startup refusals: public plaintext, lone TLS half, empty token (SERVER-SHE
 });
 
 test("the printed URL matches the endpoint and SIGTERM stops it (SERVER-SHELL-12)", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "spex-server-cli-"));
+  const dir = scratchDir("spex-server-cli-");
   const child = spawn(
     process.execPath,
     [
@@ -767,6 +781,11 @@ test("the printed URL matches the endpoint and SIGTERM stops it (SERVER-SHELL-12
     if (process.platform !== "win32") assert.equal(exitCode, 0);
     await assert.rejects(fetch(`http://127.0.0.1:${parsed.port}/`));
   } finally {
-    child.kill("SIGKILL");
+    // Reaped before the file's cleanup removes the state it serves.
+    if (child.exitCode === null && child.signalCode === null) {
+      const reaped = new Promise((resolveExit) => child.once("exit", resolveExit));
+      child.kill("SIGKILL");
+      await reaped;
+    }
   }
 });

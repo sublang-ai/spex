@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -96,6 +96,7 @@ test("attached endpoint admits the served page and rejects foreigners (CORE-38)"
   } finally {
     await service.stop();
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -120,5 +121,6 @@ test("an empty token option cannot disable the handshake (CORE-24)", async () =>
     );
   } finally {
     await service.stop();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
