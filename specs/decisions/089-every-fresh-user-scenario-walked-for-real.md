@@ -7,6 +7,7 @@
 
 Accepted (2026-09-28) on an audit of [DR-086](086-tests-in-tiers.md)'s delivery, which found each of the three fresh-user scenarios short of a real walk.
 Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smoke and the regression walk and how their failures are judged: the live smoke also runs in the installed shape, the regression compiles the app's own example and starts its project where a fresh user does, the regression's observed-and-aborted `/code` leaves, CI runs a compiled playbook on substitute agents, and a compiler refusal is judged by whose source it refused.
+Amends [DR-015](015-reference-content.md), which remains accepted, in the example's text: slc's demo adapted, its two open limits settled, rather than vendored as it stands.
 
 ## Context
 
@@ -14,6 +15,7 @@ Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smok
 - (c): the fresh install launches both shells from a fresh clone but calls no agent; the live smoke calls one, but only from the developer tree, whose modules, build outputs and native module a fresh user never has.
 - (a): the only real compile is of a source a model authored in chat; on the first regression the bundled compiler refused that machine three times after the bounded relay, a model outcome that says nothing of the app's compile, registration or run, and no run of a compiled playbook has passed anywhere, live or hermetic.
 - (a): the app's own example, placed by the authoring workspace's Prefill, is a fixed source the app ships beside the compiler it ships; the compiler refusing it is the app failing.
+- (a): slc 0.12 asks two clarifications of slc's demo as vendored ([DR-015](015-reference-content.md)): which conclusion governs once the argument stops after the 3rd judgment, and what happens when the review still raises findings at the 2-loop limit.
 - (b): the regression's project is a repository the harness built and added with Add, while a fresh user creates one from the palette with specs scaffolded; it runs `/code` twice, never the `/decide` the README pairs with `/code`, and fails outright when a player asks the Boss a question, which real cycles do.
 - The regression's observed-and-aborted `/code` asserts what the live smoke asserts, at a slower tier — the kind of test DR-086 itself retires.
 - DR-086 waives provider-side failures and blocks on app-side ones; a compiler refusal fits neither cleanly — the compiler is the app's, a chat-authored source the model's — and went unclassified.
@@ -29,6 +31,7 @@ Amends [DR-086](086-tests-in-tiers.md), which remains accepted, in what the smok
 ### (a) A deterministic compile, and a compiled run in CI
 
 - The regression pastes the app's own example source, compiles it for real on the compile player, registers it on the Register form's prefill, and runs one turn of it to its finish with both players engaged.
+- The example is slc's demo adapted so the bundled compiler asks nothing of it: the first agent's 3rd judgment is an argument's conclusion, and findings the review still raises after the 2nd loop are reported at the finish; the Library credits slc's demo as its source, and its displayed gears and state machine come from the same capture as the compiled fixture.
 - The chat-authored two-role changelog journey stays, as the harder case.
 - A player's question in either run, if one is asked, is answered through the Captain, as in (b).
 - CI proves the run path of a compiled playbook on every commit: a fixture compiled by the real `slc` is committed, regenerated whenever the playbook engine changes generation, and registered and run on substitute agents in the hermetic journeys.
@@ -64,4 +67,4 @@ For the live smoke and the regression:
 
 - An app tag's local gates are `npm run smoke -- --live` and, for a regular tag, the regression and the manual residue.
 - The release package gains the smoke's `live` stage, the live smoke run through it, the regression's journeys, and the failure classes.
-- The playbook library gains the example's live journey and the hermetic compiled-fixture journey; the dashboard and run view's live journey starts from Create with `/decide` then `/code`, a hermetic handoff journey joins it, and the run view's observed `/code` journey leaves; the release checklist and the release playbook follow.
+- The playbook library gains the example's live journey and the hermetic compiled-fixture journey, and its example items name the example as adapted from slc's demo; the dashboard and run view's live journey starts from Create with `/decide` then `/code`, a hermetic handoff journey joins it, and the run view's observed `/code` journey leaves; the release checklist and the release playbook follow.

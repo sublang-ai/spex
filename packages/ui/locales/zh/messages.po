@@ -3447,8 +3447,8 @@ msgid "pin a value…"
 msgstr "指定一个值…"
 
 #: src/components/DraftConversation.tsx
-msgid "Places slc's six-line demo as your first message"
-msgstr "把 slc 的六行示例放为你的第一条消息"
+msgid "Places the six-line example as your first message"
+msgstr "把六行示例放为你的第一条消息"
 
 #. one unit's kind: a playbook source
 #: src/lib/space.ts
@@ -5067,7 +5067,7 @@ msgstr "重试"
 msgid "Try the Academy example"
 msgstr "试试 Academy 示例"
 
-#. opener on the empty draft conversation: places slc's demo prose in the composer
+#. opener on the empty draft conversation: places the example's prose in the composer
 #: src/components/DraftConversation.tsx
 msgid "Try the example"
 msgstr "试试示例"

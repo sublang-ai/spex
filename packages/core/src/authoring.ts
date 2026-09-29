@@ -175,7 +175,8 @@ export function authoringDocuments(packageDir = playbookPackageDir()): { path: s
   ];
 }
 
-/** The six-line slc demo, a core asset with a provenance header. */
+/** The app's six-line example, adapted from slc's demo: a core asset
+ * with a provenance header. */
 export function slcDemoText(): string {
   const path = fileURLToPath(new URL("../assets/slc-demo/workflow.txt", import.meta.url));
   return stripLeadingComments(readFileSync(path, "utf8")).trimEnd();
@@ -1251,7 +1252,7 @@ export class AuthorManager {
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
       "",
-      "The shortest complete source is slc's demo:",
+      "The shortest complete source, adapted from slc's demo:",
       slcDemoText().split("\n").map((line) => `  ${line}`).join("\n"),
       "",
       "Documents (absolute paths in the installed @sublang/playbook package):",

@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The slc demo example (DR-015): slc 0.7.0's two-agent change-and-
-// review workflow in its `Roles:` grammar, staged through the compile
-// pipeline and vendored as raw text. Display content owned by the UI —
+// The app's example (DR-015), adapted from slc 0.7.0's two-agent
+// change-and-review demo in its `Roles:` grammar: its two limits are
+// settled — the first agent's 3rd judgment concludes an argument, and
+// findings left after the 2nd loop are reported at the finish — so the
+// bundled slc asks no clarification of it (DR-089). Staged through the
+// compile pipeline as raw text; the gears and the state machine are
+// slc's output, refreshed from the compiled fixture's capture
+// (e2e/fixtures/compiled/README.md). Display content owned by the UI —
 // it never touches config, protocol, or the library.
 //
 // Nothing here is a text of the catalog (localization-4): the stages
@@ -25,7 +30,7 @@ export interface SlcDemoExample {
   /** The draft the Prefill opens in paste mode (DR-058). */
   playbookId: string;
   stages: {
-    /** Raw prose the demo starts from (workflow.txt). */
+    /** Raw prose the example starts from (workflow.txt). */
     source: string;
     /** slc's normalized text (workflow.text.md) — the prefill source,
      * since the compile pipeline skips the normalize phase. */

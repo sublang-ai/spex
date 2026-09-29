@@ -20,10 +20,11 @@ Roles:
    must explain why.
 
 5. The two agents argue until they reach agreement (arguing no more than 2
-   rounds, i.e. after the 3rd judgment in total they stop arguing), and Coder
-   is responsible for changing the code according to the conclusion and
-   committing again.
+   rounds, i.e. after the 3rd judgment in total they stop arguing, and Coder's
+   3rd judgment is the conclusion), and Coder is responsible for changing the
+   code according to the conclusion and committing again.
 
 6. Loop like this until the review raises no findings, then finish.
 
-7. No more than 2 loops.
+7. No more than 2 loops; if the review still raises findings after the 2nd
+   loop, finish and report those findings.

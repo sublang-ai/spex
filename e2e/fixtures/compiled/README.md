@@ -39,6 +39,9 @@ SPEX_E2E_CAPTURE_COMPILED="$PWD/e2e/fixtures/compiled/workflow" \
 It needs Codex signed in for the compile (`gpt-6-astra` at `xhigh`) and
 Claude for the run; a full `npm run regression` with the variable set
 captures it too. Commit the directory as captured.
+The example's displayed gears and state machine
+(`packages/ui/src/examples/slc-demo/workflow.gears.md.txt` and
+`workflow.fsm.ts.txt`) are refreshed from the same capture.
 
 Capture it again whenever:
 

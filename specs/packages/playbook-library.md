@@ -142,7 +142,7 @@ While a draft's workspace is open with an empty transcript, the conversation pan
 | Opener | Act |
 | --- | --- |
 | "Use a SKILL.md…" | where the shell offers a file pick, runs it — a canceled pick changes nothing; a draft with no source takes the picked file as its source [[playbook-library-5](#playbook-library-5)], and one with a source gets the path placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)] for "Use as source" to confirm — else opens the paste mode; in every case places "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done" in the field, focus landing on the paste text where that mode opened and on the field otherwise |
-| "Try the example" | places slc's six-line demo prose [[playbook-library-35](#playbook-library-35)] in the field and focuses it |
+| "Try the example" | places the example's six-line source prose [[playbook-library-35](#playbook-library-35)] in the field and focuses it |
 
 - a write the core refuses keeps the field's text and shows the refusal above the composer [[playbook-library-54](#playbook-library-54)].
 
@@ -289,9 +289,10 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
+When the Library surface is opened, the Library shall present a two-agent workflow adapted from slc's demo as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
 
-- Sources and gears served for display drop their leading maintainer comment headers.
+- the example's six-line source is slc's demo with the two limits the bundled compiler asks about settled — the first agent's 3rd judgment is an argument's conclusion, and findings the review still raises after the 2nd loop are reported at the finish ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md));
+- sources and gears served for display drop their leading maintainer comment headers.
 
 ### Compile Cancellation
 
@@ -418,7 +419,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 
 | Case | Prompt |
 | --- | --- |
-| First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the six-line demo, the directive protocol, the working rules, the draft state, then `Boss:` and the message |
+| First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the example's six-line source [[playbook-library-35](#playbook-library-35)], the directive protocol, the working rules, the draft state, then `Boss:` and the message |
 | Later turn of the same provider conversation | a `Since your last reply:` line when the draft changed since the last prompt — the Boss edited or replaced the source, a compile settled — then `Boss:` and the message |
 | Reseed — a restart, a switched agent, a rejected resume | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
@@ -630,7 +631,7 @@ When the integration suite copies a registered library to a differently located 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` named as the configured compiler, when the journey works a new playbook through the page, the test suite shall assert:
 
 - "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the two openers, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-84](#playbook-library-84)] [[playbook-library-50](#playbook-library-50)];
-- "Try the example" places the demo's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a draft with no source writes the picked file as the source, shown in the Source tab, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
+- "Try the example" places the example's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a draft with no source writes the picked file as the source, shown in the Source tab, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
 - the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
 - a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
@@ -641,7 +642,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
 - a draft seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];
 - Delete asks Delete or Keep and removes the row [[playbook-library-63](#playbook-library-63)];
-- the example card's Prefill opens the demo's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
+- the example card's Prefill opens the example's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
 - at the 320-pixel viewport with the rail collapsed the panes stack under a horizontal grip with the chip in view, every control keeps its accessible name, and the page scrolls in neither direction [[playbook-library-52](#playbook-library-52)].
 
 #### playbook-library-78

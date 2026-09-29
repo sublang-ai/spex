@@ -33,6 +33,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] The regression's observed-and-aborted `/code` removed.
 - [x] The release checklist, the release playbook and the changelog's tiers entry rewritten for the walks as built.
 - [ ] `npm run smoke -- --live` and `npm run regression` run once, their outcomes recorded.
+- [x] The app's example settling the two limits slc 0.12 asks about, named as adapted from slc's demo wherever it is shown, placed or quoted.
 
 ## Tasks
 
@@ -52,6 +53,7 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 14. Add the hermetic two-intent handoff journey.
 15. Drop the regression's observed-and-aborted `/code`.
 16. Rewrite the release checklist, the release playbook and the changelog's tiers entry for the walks as built; run `npm run smoke -- --live` and `npm run regression` once and record the outcomes.
+17. Settle the example's two limits in every copy, and name it adapted from slc's demo.
 
 ## Verification
 

@@ -586,7 +586,7 @@ export function DraftConversation({
               <button
                 type="button"
                 data-testid="opener-example"
-                title={i18n._("Places slc's six-line demo as your first message")}
+                title={i18n._("Places the six-line example as your first message")}
                 onClick={() => {
                   onComposerChange(SLC_DEMO.stages.source.trimEnd());
                   fieldRef.current?.focus();
@@ -595,7 +595,7 @@ export function DraftConversation({
               >
                 {i18n._({
                   id: "Try the example",
-                  comment: "opener on the empty draft conversation: places slc's demo prose in the composer",
+                  comment: "opener on the empty draft conversation: places the example's prose in the composer",
                 })}
               </button>
             </div>
