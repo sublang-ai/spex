@@ -100,3 +100,16 @@ POSIX `rename(2)` succeeds onto an empty directory, so a publication that only r
 The refusal the revision specifies therefore needs an existence check before the rename.
 The check-then-rename gap is safe: if another writer publishes in between, the rename fails on the nonempty target and the contender loops or refuses as it would for any held lock.
 With rename-based release Spex itself never creates the empty state, so this only guards records left by the old release path or by hand.
+
+---
+
+# Round 3 (2026-09-29): comments on the retirement-and-publication revision
+
+Both round-2 points are in: retirement records live under `<state-root>/.lock.retired/<token>/`, are kept permanently with their owner file, and are never pruned; publication inspects the active path without following symlinks and renames only on a definite `ENOENT`, with an existing entry evaluated by the shared rules and the check-then-rename gap argued correctly.
+The verification list names the new cases.
+The Chinese text matches.
+
+Checked that the nested location is inert for existing code: the home-tree copy in `storage-git.ts` skips every `.lock`-prefixed entry, the portable-file filter and the `/.lock*` Git rule exclude it, storage diagnostics do not enumerate top-level entries, and the core's watchers target the config directory and the sessions directory, not the home root.
+
+No new points.
+The proposal is consistent end to end, every Spex-side rule is now concrete enough to specify, and the remaining open details are the Playbook identity-file internals it delegates by name.
