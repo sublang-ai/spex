@@ -5,9 +5,8 @@
 
 ## Status
 
-In progress on `fresh-user-scenarios-v2`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) with its scratch-leak and restore fixes, whose question relay and slc 0.12 the live journeys need: parts 1 and 2 are built and verified hermetically (tasks 1–15, task 16's rewrites, and tasks 17–19).
-What remains is the owner's: one run of `npm run smoke -- --live` and of `npm run regression` on signed-in agents, their outcomes recorded here, and the compiled fixture that the regression's example journey captures, committed, with the example's displayed gears and state machine refreshed from the same capture; until then the hermetic compiled-fixture journey skips.
-The branch merges to `main` once those runs are recorded, the fixture committed and the displayed stages refreshed.
+Merge-ready on `fresh-user-scenarios-v2`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) with its scratch-leak and restore fixes: parts 1 and 2 are built and verified hermetically, and the live runs below are recorded.
+One deliverable waits on the compiler, not on this branch: slc 0.12 refuses the example's machine at `gears2fsm` on every compile so far ([sublang-ai/slc#29](https://github.com/sublang-ai/slc/issues/29)), so no compiled fixture has been captured, the hermetic compiled-fixture journey skips, and the example's displayed gears and state machine stay the original demo's until a capture refreshes them.
 
 ## Intent
 
@@ -115,3 +114,16 @@ space-48 had been restated to the Sync tab's defect: the last outcome never drew
 The example now counts judgments per loop, its last judgment in a loop the conclusion, and ends after the 2nd loop's commit without another review, the reading slc 0.10's compile of the demo took; reporting leftover findings was dropped rather than defined.
 No compile of the new text has run, so the changelog, the asset header, the module comment and the map state the settled limits rather than a compile.
 A declined row's "Don't add" leaves with the answer, so focus falls to the page there too; the review did not raise it and it stays as it was.
+
+Live runs on 2026-09-28, on this machine's signed-in agents, with the template's agents as seeded (Captain and players on `claude-opus-5`, the compile player on Codex `gpt-6-astra` at `xhigh`):
+
+| Run | Tree | Outcome |
+| --- | --- | --- |
+| `npm run smoke -- --live` | `fresh-user-scenarios-v2` at `ed5f5f9` | every stage passed — build 7 s, lint 1 s, fresh install 1 m 07 s, CLI user 9 s, live 48 s: the desktop inside the fresh install dispatched `/code`, the coder's live output was observed, the turn aborted and the app tore down cleanly |
+| The regression, three journeys at once | the part-2 tree before the restack | all three failed; the chat-authored changelog playbook compiled for real on slc 0.12 through Link, registered and started its run |
+| playbook-library-86, the example | the part-2 tree | `text2gears` asked what governs after the third judgment and what happens at the two-loop limit — the example's two open limits, since settled in its text |
+| dashboard-63 and playbook-library-78 | the part-2 tree | the Captain's judge call was refused by the provider: "Opus 5's safeguards flagged this message … `[reasoning_extraction]`" — provider-side by DR-089's classes, and the same refusal the earlier regression runs met |
+| playbook-library-86, twice more | `fresh-user-scenarios-v2` at `ed5f5f9` | `text2gears` and `optimize` passed on the settled text; `gears2fsm` failed closed both times, its mechanical review finding every exit of the first player state unsatisfiable under probing, in two differently generated machines — filed as [sublang-ai/slc#29](https://github.com/sublang-ai/slc/issues/29); by DR-089 a refusal of the app's own example blocks a regular tag, and it does not gate a beta |
+
+No run captured a compiled fixture: the capture follows a passing compile.
+
