@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `models-named-by-runtime` (2026-09-29) in two steps, Playbook 17.1 with Cligent 0.28 and the agent SDK locks, then slc 0.13 once npm served it; not merged, not released.
+Completed on `models-named-by-runtime` (2026-09-29) in two steps, Playbook 17.1 with Cligent 0.28 and the agent SDK locks, then slc 0.13 once npm served it; merged to `main` in 5379860 on 2026-09-29, and released in `app-v0.9.0-beta.3`.
 
 ## Intent
 

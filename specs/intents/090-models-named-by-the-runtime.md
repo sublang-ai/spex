@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `models-named-by-runtime` (2026-09-29); not merged, not released.
+Completed on `models-named-by-runtime`, merged to `main` in 5379860 on 2026-09-29, and released in `app-v0.9.0-beta.3`.
 
 ## Intent
 
