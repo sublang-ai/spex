@@ -25,7 +25,7 @@ import { applyLocalPatch } from "../lib/config-ops.js";
 import {
   agentBlockOf,
   busyReason,
-  firstProseParagraph,
+  derivedIntent,
   newPlayerId,
 } from "../lib/drafts.js";
 import { i18n } from "../i18n.js";
@@ -105,7 +105,7 @@ export function resolveRegisterForm(
     roles,
     command: form?.command ?? proposal?.command ?? draft.id,
     intent:
-      form?.intent ?? proposal?.intent ?? firstProseParagraph(source?.markdown ?? ""),
+      form?.intent ?? proposal?.intent ?? derivedIntent(source?.markdown ?? ""),
     choices,
     newIds,
     ...(extra.length > 0 || missing.length > 0 ? { mismatch: { extra, missing } } : {}),

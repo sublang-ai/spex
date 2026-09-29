@@ -142,7 +142,7 @@ While a draft's workspace is open with an empty transcript, the conversation pan
 | Opener | Act |
 | --- | --- |
 | "Use a SKILL.md…" | where the shell offers a file pick, runs it — a canceled pick changes nothing; a draft with no source takes the picked file as its source [[playbook-library-5](#playbook-library-5)], and one with a source gets the path placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)] for "Use as source" to confirm — else opens the paste mode; in every case places "Adapt this file into a playbook: keep what it does, name who does what, and say when it is done" in the field, focus landing on the paste text where that mode opened and on the field otherwise |
-| "Try the example" | places slc's six-line demo prose [[playbook-library-35](#playbook-library-35)] in the field and focuses it |
+| "Try the example" | places the example's six-line source prose [[playbook-library-35](#playbook-library-35)] in the field and focuses it |
 
 - a write the core refuses keeps the field's text and shows the refusal above the composer [[playbook-library-54](#playbook-library-54)].
 
@@ -201,8 +201,9 @@ When a draft's compile succeeds, the Library shall set the chip "Compiled", fill
 
 While a draft's last compile succeeded, the Register tab shall present the registration form [[playbook-library-7](#playbook-library-7)] — command, intent, and one player per derived role — prefilled in this precedence: the Boss's own edits, then the agent's latest proposal [[playbook-library-66](#playbook-library-66)], then derived defaults — and on "Register" shall register the draft [[playbook-library-69](#playbook-library-69)] ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
 
-- the id is the draft's and not editable; the command defaults to the id; the intent defaults to the source's first prose paragraph;
+- the id is the draft's and not editable; the command defaults to the id; the intent defaults to the source's first prose paragraph, or, where it has none, to its level-one title;
 - a role's player row offers the roster [[settings-26](settings.md#settings-26)] and "New player dev.⟨role⟩" carrying the draft's agent block, editable through the agent editor as a built-in's is [[playbook-library-34](#playbook-library-34)]; a proposed player the roster lacks is offered as that new player;
+- a proposal's roles match the derived roles case-insensitively; a role whose own lane the roster already holds selects that lane as it stands, and the new player a row offers is never an id the roster holds, taking the first free `-2`, `-3`, … suffix instead, so registration never overwrites a player;
 - a proposal naming a role the entry lacks, or missing a derived role, is shown beside the form as a mismatch with the derived roles authoritative;
 - Register is disabled until every role has a player and command and intent are non-empty, reads "Registering…" while it writes, and is refused while a turn or compile runs;
 - a refusal names the violated rule inline and leaves the form standing; success lists the playbook among the configured [[playbook-library-10](#playbook-library-10)], the draft leaves the Drafts section, and the list opens with the new card in view.
@@ -288,9 +289,10 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 
 #### playbook-library-35
 
-When the Library surface is opened, the Library shall present the slc demo workflow as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
+When the Library surface is opened, the Library shall present a two-agent workflow adapted from slc's demo as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
 
-- Sources and gears served for display drop their leading maintainer comment headers.
+- the example's six-line source is slc's demo with the two limits the bundled compiler asked about settled — the first agent's judgments count per loop, its last one in a loop being the conclusion, and the 2nd loop's commit ends the workflow without another review — and its normalized text says the same in slc's normalized form ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md));
+- sources and gears served for display drop their leading maintainer comment headers.
 
 ### Compile Cancellation
 
@@ -417,7 +419,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 
 | Case | Prompt |
 | --- | --- |
-| First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the six-line demo, the directive protocol, the working rules, the draft state, then `Boss:` and the message |
+| First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the example's six-line source [[playbook-library-35](#playbook-library-35)], the directive protocol, the working rules, the draft state, then `Boss:` and the message |
 | Later turn of the same provider conversation | a `Since your last reply:` line when the draft changed since the last prompt — the Boss edited or replaced the source, a compile settled — then `Boss:` and the message |
 | Reseed — a restart, a switched agent, a rejected resume | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
@@ -597,6 +599,14 @@ Where a draft holds two turns and a compile was running, when the core is stoppe
 
 Where the fake's reply carries, as an explicit case matrix, a block inside a fenced example, two register blocks, a block with an unknown key, a block that fails to parse, and a register block naming a role the entry lacks, the test suite shall assert that only the second register block became the proposal, the nested block acted as nothing, the malformed blocks were recorded malformed and named at the head of the next prompt, and the unknown role stood as a mismatch beside the derived roles [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)].
 
+#### playbook-library-88
+
+Where the Register tab renders a compiled draft over a roster holding `dev.coder` and `dev.reviewer`, the test suite shall assert, as an explicit case matrix, each role row's default [[playbook-library-61](#playbook-library-61)]:
+
+- a proposal naming `Coder` and `Verifier` fills the derived roles `coder` and `verifier` with the proposed players and shows no mismatch;
+- with or without a proposal, the role `coder`, whose own lane `dev.coder` the roster holds, selects that lane as it stands;
+- that role's new player is `dev.coder-2`, and `dev.coder-3` once the roster also holds `dev.coder-2`.
+
 ### Browser Journeys
 
 #### playbook-library-41
@@ -621,7 +631,7 @@ When the integration suite copies a registered library to a differently located 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` named as the configured compiler, when the journey works a new playbook through the page, the test suite shall assert:
 
 - "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the two openers, and a Drafts row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-84](#playbook-library-84)] [[playbook-library-50](#playbook-library-50)];
-- "Try the example" places the demo's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a draft with no source writes the picked file as the source, shown in the Source tab, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
+- "Try the example" places the example's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a draft with no source writes the picked file as the source, shown in the Source tab, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
 - the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
 - a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
@@ -632,15 +642,28 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
 - a draft seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];
 - Delete asks Delete or Keep and removes the row [[playbook-library-63](#playbook-library-63)];
-- the example card's Prefill opens the demo's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
+- the example card's Prefill opens the example's draft workspace in the Source tab's paste mode with the normalized text placed and nothing written or compiled [[playbook-library-35](#playbook-library-35)];
 - at the 320-pixel viewport with the rail collapsed the panes stack under a horizontal grip with the chip in view, every control keeps its accessible name, and the page scrolls in neither direction [[playbook-library-52](#playbook-library-52)].
 
 #### playbook-library-78
 
-Where the live journey lane is opted in ([DR-039](../decisions/039-browser-acceptance-journeys.md)) with the machine's real sign-in and the released `slc`, when the journey asks for "a two-role changelog playbook: Coder drafts release notes from the commits since the last tag and commits them; Reviewer checks them against the commits" and follows the agent's compile request and registration proposal, the test suite shall assert that a source declaring Coder and Reviewer was written [[playbook-library-56](#playbook-library-56)], that the agent's compile ran to Link [[playbook-library-57](#playbook-library-57)], that the derived roles are those two [[playbook-library-60](#playbook-library-60)], that `/changelog` was registered with a player per role [[playbook-library-61](#playbook-library-61)], that a new session's slash menu offers it, and that a session's `/changelog` turn then runs the registered playbook to a finished turn with both role players engaged and the repository carrying a commit of its notes [[playbook-library-14](#playbook-library-14)] ([DR-086](../decisions/086-tests-in-tiers.md)):
+Where the live journey lane is opted in ([DR-039](../decisions/039-browser-acceptance-journeys.md)) with the machine's real sign-in and the released `slc`, when the journey asks for "a two-role changelog playbook: Coder drafts release notes from the commits since the last tag and commits them; Reviewer checks them against the commits", follows the agent's compile request and registration proposal, and answers any player's question in the run through the Captain ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), the test suite shall assert that a source declaring Coder and Reviewer was written [[playbook-library-56](#playbook-library-56)], that the agent's compile ran to Link [[playbook-library-57](#playbook-library-57)], that the derived roles are those two [[playbook-library-60](#playbook-library-60)], that `/changelog` was registered with a player per role [[playbook-library-61](#playbook-library-61)], that a new session's slash menu offers it, and that a session's `/changelog` turn then runs the registered playbook to a finished turn with both role players engaged and the repository carrying a commit of its notes [[playbook-library-14](#playbook-library-14)] ([DR-086](../decisions/086-tests-in-tiers.md)):
 
 - the journey picks a roster player bound to `gpt-6-astra` at `xhigh` as the draft's agent before its first message, so the conversation and the compile run on that block [[playbook-library-55](#playbook-library-55)] [[playbook-library-42](#playbook-library-42)].
 
 #### playbook-library-85
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the passing stub `slc` on the toolchain path, when the journey opens the example's Prefill, uses the placed text as the source, compiles from the workspace's own control, and registers the result, the test suite shall assert through the page that the draft's source is the pasted text [[playbook-library-35](#playbook-library-35)] [[playbook-library-56](#playbook-library-56)], that the compile band reads asked by you and runs to Link [[playbook-library-57](#playbook-library-57)], that with the agent proposing nothing the Register tab's form stands unprefilled with a player per derived role, registering the example's `/workflow` [[playbook-library-61](#playbook-library-61)] [[playbook-library-7](#playbook-library-7)], that Register lists it [[playbook-library-10](#playbook-library-10)], and that a new session's slash menu offers it.
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered and the passing stub `slc` on the toolchain path, when the journey opens the example's Prefill, uses the placed text as the source, compiles from the workspace's own control, and registers the result, the test suite shall assert through the page that the draft's source is the pasted text [[playbook-library-35](#playbook-library-35)] [[playbook-library-56](#playbook-library-56)], that the compile band reads asked by you and runs to Link [[playbook-library-57](#playbook-library-57)], that with the agent proposing nothing the Register tab's form stands on its derived defaults — the draft's id as the command and, the example holding no prose paragraph, its title as the intent — with a player per derived role, registering the example's `/workflow` with no intent typed [[playbook-library-61](#playbook-library-61)] [[playbook-library-7](#playbook-library-7)], that Register lists it [[playbook-library-10](#playbook-library-10)], and that a new session's slash menu offers it.
+
+#### playbook-library-86
+
+Where the live journey lane runs with the machine's signed-in agents and the app's own `slc` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), when the journey opens the example's Prefill, uses the placed text as the source, compiles it from the workspace's own control, registers it on the Register tab's prefill, sends the registered command with a task in a new session, and answers any player's question through the Captain, the test suite shall assert through the page:
+
+- the draft's source is the pasted text [[playbook-library-35](#playbook-library-35)] [[playbook-library-56](#playbook-library-56)], and the compile band reads asked by you and its first compile runs to Link [[playbook-library-57](#playbook-library-57)], the chip reading "Compiled" with the example's two roles derived [[playbook-library-60](#playbook-library-60)];
+- the Register tab registers the example on its prefill with nothing typed [[playbook-library-61](#playbook-library-61)], and Register lists it [[playbook-library-10](#playbook-library-10)]: where the agent's turn after the compile proposed nothing, the derived defaults — the draft's id, `workflow`, as the command, the example's title as the intent, and each role on the roster's own lane for it as that lane stands — with nothing chosen; where it proposed a registration, the proposal with its command, a role it leaves on a lane off `claude` moved to the roster's own lane for it;
+- a new session's slash menu offers the registered command, and its turn runs the registered playbook to a finished turn with both role players engaged [[playbook-library-14](#playbook-library-14)];
+- the journey picks a roster player bound to `gpt-6-astra` at `xhigh` as the draft's agent before compiling, so the compile runs on that block [[playbook-library-55](#playbook-library-55)] [[playbook-library-42](#playbook-library-42)], while the roles' lanes run on `claude`.
+
+#### playbook-library-87
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the demo project registered, substitute agents, and a stub `slc` whose compile places a committed fixture — the example as the real `slc` compiled it for the playbook engine generation the repository installs ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)) — when the journey compiles the example from its Prefill, registers it on the Register tab's defaults, and sends `/workflow` with a task in a new session, the test suite shall assert through the page that Register lists `/workflow` among the configured playbooks [[playbook-library-10](#playbook-library-10)], and that the session's turn runs the fixture's compiled machine, through the registry module wrapping its entry, to a finished turn with both role players engaged [[playbook-library-14](#playbook-library-14)].

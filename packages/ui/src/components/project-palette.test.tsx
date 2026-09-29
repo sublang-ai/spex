@@ -176,6 +176,47 @@ describe("projects-22: with no project, the palette is an add flow", () => {
   });
 });
 
+describe("projects-26: the palette's path actions, live rows and plain words", () => {
+  test("Add and Create name what each does, a live row pulses, and nothing says forge", () => {
+    renderPalette();
+    const add = screen.getByTestId("palette-add") as HTMLButtonElement;
+    const create = screen.getByTestId("palette-create") as HTMLButtonElement;
+    // Two distinct actions on the typed path, each titled with what it
+    // does (projects-22, projects-25).
+    expect(add.textContent).toBe("Add");
+    expect(add.title).toBe("Register this existing repository");
+    expect(create.textContent).toBe("Create");
+    expect(create.title).toBe("Create a new repository at this path");
+    expect(add.disabled).toBe(true);
+    expect(create.disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("palette-path"), {
+      target: { value: "/tmp/new-repo" },
+    });
+    expect(add.disabled).toBe(false);
+    expect(create.disabled).toBe(false);
+
+    // The project with a live session reads its running count beside a
+    // pulsing dot; the other reads none (projects-23).
+    const live = screen.getByTestId("palette-project-p2");
+    expect(live.textContent).toContain("1 running");
+    expect(live.querySelector(".animate-pulse")).not.toBeNull();
+    const quiet = screen.getByTestId("palette-project-p1");
+    expect(quiet.textContent).not.toContain("running");
+    expect(quiet.querySelector(".animate-pulse")).toBeNull();
+
+    // Plain words throughout: no text, label or title says "forge"
+    // (projects-25).
+    const dialog = screen.getByRole("dialog");
+    const words = [
+      dialog.textContent ?? "",
+      ...Array.from(dialog.querySelectorAll("[title],[aria-label],[placeholder]")).flatMap(
+        (node) => ["title", "aria-label", "placeholder"].map((name) => node.getAttribute(name) ?? ""),
+      ),
+    ];
+    expect(words.filter((word) => /forge/i.test(word))).toEqual([]);
+  });
+});
+
 describe("palette rows carry live state", () => {
   test("a project with a parked question shows needs-you and running", () => {
     renderPalette();

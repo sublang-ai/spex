@@ -4,16 +4,21 @@
 # Release Smoke Checklist
 
 What to run before tagging, by tier
-([DR-086](../specs/decisions/086-tests-in-tiers.md)). The checks — unit,
-integration and browser journeys, on Linux and macOS — are CI's: tag
-only a commit whose CI run concluded `success` (release-15). Nothing
-below repeats them.
+([DR-086](../specs/decisions/086-tests-in-tiers.md),
+[DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)).
+The checks — unit, integration and browser journeys, on Linux and
+macOS — are CI's: tag only a commit whose CI run concluded `success`
+(release-15). Nothing below repeats them.
 
 | Tag | Smoke | Live smoke | Regression | Manual residue |
 | --- | --- | --- | --- | --- |
-| `app-vX.Y.Z` | yes | yes | yes | yes |
-| `app-vX.Y.Z-beta.N` | yes | yes | no | no |
-| `cli-vX.Y.Z` | yes | no | no | no |
+| `app-vX.Y.Z` | `npm run smoke -- --live` | its `live` stage | yes | yes |
+| `app-vX.Y.Z-beta.N` | `npm run smoke -- --live` | its `live` stage | no | no |
+| `cli-vX.Y.Z` | `npm run smoke` | no | no | no |
+
+An app tag runs the smoke and the live smoke as one command: the live
+smoke is the smoke's last stage, run inside the fresh install (section
+2).
 
 A CLI tag also runs the live migration smoke (`npm run smoke:migration`,
 release-24).
@@ -26,27 +31,37 @@ npm run smoke
 
 Four stages, fail-fast, each named: `build` → `lint` (the spec lint) →
 `fresh-install` → `cli-user`. No sign-in is involved; budget about ten
-minutes, most of it `npm ci` on an empty cache.
+minutes, most of it `npm ci` on an empty cache. Run it on a clean tree:
+the build, the lint and the CLI pass read the working tree while the
+fresh install clones `HEAD`, so the smoke refuses uncommitted changes
+unless `--allow-dirty` is given. The release records under
+`docs/releases/` are exempt: no stage reads them, and a release's record
+is written while its gates run (section 6).
 
 The fresh install (`scripts/install-smoke.mjs`) is a new user following
 the README on this machine:
 
-- It clones the committed tree — `HEAD`, not the working tree; a warning
-  names uncommitted changes — into a scratch directory, and installs it
-  with `npm ci` on an empty npm cache.
-- `npm run start:server` runs on a scratch Spex home and is walked over
-  its printed token URL: the page served, the socket's hello, the seeded
-  config valid with every template playbook, the built-in catalog and
-  the `/code` artifacts, readiness for each configured adapter (this
-  machine's sign-ins; none is asserted ready and no agent is called),
-  the compiler check naming the clone's own `@sublang/slc`, the Academy
-  example seeded and parsed. SIGTERM then exits it 0 with the port
-  closed.
+- It clones the committed tree — `HEAD`, not the working tree — into a
+  scratch directory, and installs it with `npm ci` on an empty npm
+  cache.
+- `npm run start:server` runs as the README runs it, with only
+  `SPEX_HOME` set to a scratch home and, beyond the README, an ephemeral
+  port (`--port=0`) so it never meets a server already on 8137. It is
+  walked over its printed token URL — the default loopback host with a
+  generated token: the page served, the socket's hello, the config
+  seeded at the home's `config/playbook.config.yaml` and valid with
+  every template playbook, the built-in catalog and the `/code`
+  artifacts, readiness for the Captain's and each bound player's adapter
+  (this machine's sign-ins; none is asserted ready and no agent is
+  called), the compiler check naming the clone's own `@sublang/slc`, the
+  Academy example seeded and parsed. SIGTERM then exits it 0 with the
+  port closed.
 - `npm start` builds, rebuilds the native module for Electron, renders
   the desktop in acceptance mode on scratch user data — opening
-  Playbooks, Settings and the Dashboard — writes a screenshot, and
-  restores the module, all inside the clone: the developer tree's native
-  module is never flipped.
+  Playbooks, Settings and the Dashboard by their English names, the
+  scratch home storing English as its language so the names hold on any
+  system — writes a screenshot, and restores the module, all inside the
+  clone: the developer tree's native module is never flipped.
 
 The CLI user pass packs the release tarball, installs it into an
 isolated prefix, and walks the README's fresh-user and upgrading-user
@@ -64,22 +79,39 @@ journeys through the installed `spex` bin.
 ## 2. The live smoke — every app release candidate
 
 ```bash
-npm run smoke:desktop
+npm run smoke -- --live
 ```
 
-Boots the real desktop app against a scratch home and walks the
-critical path over the app's own socket: seeded config valid →
-Academy seeds and parses → session starts → a minimal `/code` turn
-dispatches → the coder emits text, thinking or tool activity
-(initialization alone does not count) → abort → released session →
-clean teardown, with the ABI flipped and restored by the driver
-(release-22). Needs a locally signed-in Claude adapter; budget ~5–8
-minutes.
+The smoke with its `live` stage (release-20, release-22,
+[DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)):
+after the CLI user pass, the live desktop smoke runs from the fresh
+install's clone and inside it — the app as a new user installed it —
+on this machine's signed-in agents and a scratch Spex home. It boots
+the real desktop app and walks the critical path over the app's own
+socket: seeded config valid → Academy seeds and parses → session
+starts → a minimal `/code` turn dispatches → the coder emits text,
+thinking or tool activity (initialization alone does not count) →
+abort → released session → clean teardown, with the clone's native
+module flipped to Electron and restored by the driver. Needs a locally
+signed-in Claude adapter; budget ~5–8 minutes beyond the smoke's own.
 
-After a successful build, `SPEX_SMOKE_BUILD_READY=1 npm run
-smoke:desktop` reuses it while its build inputs remain unchanged; ABI
-setup and restoration still run.
+- The stage takes over the fresh install's scratch directory, and the
+  app's scratch profile — its home, user data and XDG homes, and the
+  Academy project it ran in — is made inside it: removed when the stage
+  passes, kept with its path printed when it fails or is interrupted,
+  kept always with `--keep`. An interrupt (Ctrl-C, or SIGTERM to the
+  smoke) stops the app and restores the clone's native module first.
+- A live run resumes only up to the fresh install
+  (`--from=fresh-install`), whose clone the stage needs.
+- `npm run smoke -- --live --dry-run` names the stages without running
+  any.
 
+`npm run smoke:desktop` runs the same driver from the developer tree,
+for development; it is not the gate. Its scratch profile goes under the
+system's temp directory, removed after a pass and kept, its path
+printed, after a failure or an interrupt. After a successful build,
+`SPEX_SMOKE_BUILD_READY=1 npm run smoke:desktop` reuses it while its
+build inputs remain unchanged; ABI setup and restoration still run.
 `SPEX_SMOKE_MANUAL=1` enables the scratch profile's abort notification
 and keeps the settled session open for inspection (section 4). Press
 Enter to finish; after five minutes the check fails and cleans up. No
@@ -91,30 +123,60 @@ beside the tag; an app-side failure blocks the tag.
 ## 3. The regression — regular app releases
 
 ```bash
+npm run build          # the journeys import the built core and server
 npm run regression
 ```
 
 The browser journeys' live lane: the served shell on a scratch home,
 this machine's real adapters and Captain, assertions through the page
-(release-25).
+(release-25). Both compiles run on the `compiler` roster player, bound
+to `gpt-6-astra` at effort `xhigh` — the only work Codex gets — and the
+compiled playbooks run on the template's claude players.
 
-1. A real `/code` is observed to live output and aborted cleanly.
-2. The chat-authored two-role changelog playbook compiles for real on
-   the `compiler` roster player, bound to `gpt-6-astra` at effort
-   `xhigh`, then registers and runs: the turn finishes with both players
-   engaged and their commit in the repository.
-3. A new project is developed through two `/code` intents: a fresh
-   repository with scaffolded specs is added from the palette, the
-   first intent started from the Dashboard and the second queued behind
-   it; each settles after its review, the queue hands off without
-   confirmation, the tests pass with both changes committed, and
-   History lists both intents.
+1. The app's own example (playbook-library-86): the text the
+   Prefill places is used as the source, compiled for real from the
+   workspace's Compile, registered on the Register tab's prefill, and
+   run by the command registered — `/workflow` unless the agent
+   proposed another: the turn finishes with both players engaged and
+   a commit in the repository. Its first compile is the one judged:
+   once it fails, the relay lets the agent change the source, so the
+   journey stops there with the compiler's output attached.
+2. The chat-authored two-role changelog playbook
+   (playbook-library-78): authored in the draft's conversation,
+   compiled, registered and run to a finished turn with both players
+   engaged and their commit in the repository — the harder case.
+3. A new project (dashboard-63, run-view-150): created from the
+   palette with specs scaffolded, then developed through a `/decide`
+   intent started from the Dashboard and a `/code` intent queued behind
+   it. Each settles after its review, the queue hands off without
+   confirmation, the repository's tests pass with a commit from each
+   cycle, and History lists both intents.
+
+In every run, a question a player asks is answered through the
+Captain with one neutral reply, and the transcripts at the question are
+attached.
 
 Needs Claude signed in for the Captain and the players that run
-playbooks, and Codex for the compile. It takes hours and real model
+playbooks, and Codex for the compiles. It takes hours and real model
 calls; each journey attaches the Captain's and the players'
-transcripts. A provider-side failure may be retried or waived, its
-reason recorded beside the tag; an app-side failure blocks the tag.
+transcripts, and a failed compile the compiler's output, which tells a
+provider-side cause in the compile's agent from the compiler refusing
+the source. Judge each failure by its class
+([DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)):
+
+| Failure | Outcome |
+| --- | --- |
+| Provider-side: a refusal, a quota, an outage | retried, or waived with its reason recorded beside the tag |
+| The bundled compiler refusing the app's own example on its first compile | blocks the tag |
+| The compiler refusing the chat-authored source after the bounded relay | may be waived, the compiler's output attached and an issue filed against `slc` |
+| Any other app-side failure | blocks the tag |
+
+The hermetic journeys run the example as the real `slc` compiled it
+(playbook-library-87) from a committed fixture, captured by the first
+journey: set `SPEX_E2E_CAPTURE_COMPILED` to the fixture's directory
+for the run, as `e2e/fixtures/compiled/README.md` says, whenever the
+playbook engine changes generation or the example's text changes, and
+commit what it writes.
 
 ## 4. The manual residue — regular app releases
 
@@ -134,8 +196,9 @@ A beta ships for early trial without the regression
   workflow refuses any other pre-release identifier.
 - Bump `apps/desktop` and `apps/server` together to `X.Y.Z-beta.N`,
   verbatim.
-- Gates: CI green for the tagged commit, the smoke, and the live smoke.
-  No regression, no manual residue.
+- Gates: CI green for the tagged commit and `npm run smoke -- --live` —
+  the smoke with the live smoke as its last stage. No regression, no
+  manual residue.
 - Notes: the changelog's `[Unreleased]` section as it stands at the tag,
   which must not be empty. The changelog gains no section for a beta:
   the regular release that follows moves `[Unreleased]` into its version
@@ -146,5 +209,9 @@ A beta ships for early trial without the regression
 
 ## 6. Record
 
-Note each run (date, commit, deviations, any waiver and its reason) in
-the release PR or tag message. Any red step blocks the tag.
+Record each run — date, commit, stage timings, deviations, any waiver
+and its reason — in `docs/releases/<version>-preparation.md`, shaped like
+the existing files there, as the release playbook
+([`playbooks/release.md`](../playbooks/release.md)) does; the smoke's
+clean-tree check exempts that directory, so a gate re-run needs no
+`--allow-dirty` over the record. Any red step blocks the tag.

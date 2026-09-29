@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -19,9 +20,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import WebSocket from "ws";
 import { parseDocument } from "yaml";
 
@@ -32,7 +34,7 @@ import type {
   ServerMessage,
   SpaceState,
 } from "@sublang/spex-core";
-import { templatePath } from "@sublang/spex-core";
+import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -46,6 +48,7 @@ import {
   fakeAdapterImports,
   parkingScript,
   askingScript,
+  compiledRunScript,
   prepareStorageGitFiles,
   STUB_SLC_RELEASE_FILE,
   stubSlcScriptedSource,
@@ -155,10 +158,23 @@ export interface AppOptions {
    */
   authoring?: {
     script?: FakeScript;
-    slc?: "ok" | "fail:gears2fsm" | "clarify" | "block";
+    /** `fixture` passes by placing the committed compiled fixture
+     * (`COMPILED_FIXTURE`) — the example as the real `slc` compiled it
+     * — in place of the stub's own artifacts (playbook-library-87). */
+    slc?: "ok" | "fail:gears2fsm" | "clarify" | "block" | "fixture";
     phaseDelayMs?: number;
     hold?: boolean;
   };
+  /**
+   * A compiled playbook run for real on substitute agents
+   * (playbook-library-87, DR-089): the real Captain shell, whose
+   * provider replies follow `compiledRunScript` — each hidden judgment
+   * taking the outcome that goes straight on, the coder committing, the
+   * reviewer finding nothing — behind an authoring agent that answers
+   * a passing compile's turn proposing nothing. Needs `project` for a
+   * repository to commit in.
+   */
+  compiled?: boolean;
   /**
    * A compile player (DR-086, release-25): the config is written
    * before boot as the installed template's text with one more roster
@@ -219,6 +235,7 @@ const AUTHORING_ROLES = "['Triager', 'Verifier']";
 /** The stub's scripted runs per `authoring.slc`: the last step repeats. */
 const STUB_STEPS: Record<NonNullable<AppOptions["authoring"]>["slc"] & string, StubSlcStep[]> = {
   ok: ["ok"],
+  fixture: ["ok"],
   "fail:gears2fsm": ["fail:gears2fsm", "ok"],
   clarify: ["clarify", "ok"],
   block: ["block"],
@@ -261,6 +278,17 @@ function adapterScript(options: AppOptions): FakeScript {
       ...(demo.rules ?? []),
     ],
     ...(demo.fallback ? { fallback: demo.fallback } : {}),
+  };
+}
+
+/** The compiled run's script behind the authoring agent's: a passing
+ * compile's turn is answered with no registration proposed, so the
+ * Register tab stands on its derived defaults. */
+function compiledScript(options: AppOptions): FakeScript {
+  const run = compiledRunScript({ delayMs: options.agentDelayMs ?? 400 });
+  return {
+    rules: [{ match: AUTHORING_PROMPT, response: { result: "Compiled." } }, ...(run.rules ?? [])],
+    ...(run.fallback ? { fallback: run.fallback } : {}),
   };
 }
 
@@ -607,6 +635,7 @@ async function arrangeApp(
       stubSlcScriptedSource(STUB_STEPS[options.authoring.slc ?? "ok"], AUTHORING_ROLES, {
         phaseDelayMs: options.authoring.phaseDelayMs ?? 800,
         hold: options.authoring.hold ?? false,
+        ...(options.authoring.slc === "fixture" ? { fixtureDir: COMPILED_FIXTURE } : {}),
       }),
     );
     env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
@@ -629,6 +658,8 @@ async function arrangeApp(
       : {
           adapterImports: options.park
             ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
+            : options.compiled
+            ? fakeAdapterImports(compiledScript(options)).imports
             : options.ask
             ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
@@ -636,7 +667,7 @@ async function arrangeApp(
             : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain || options.park || options.ask ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           ...(options.forge
@@ -1107,52 +1138,114 @@ export async function attachRun(page: Page, label: string): Promise<void> {
   });
 }
 
-/** What stops a live run that the journey will not move past by
- * itself: a failed turn, a question for the Boss (the lane answers
- * none), or a failure notice; undefined while the run goes on. One
- * read of the page, so hours of polling stay light in the trace. */
-async function runStop(page: Page): Promise<string | undefined> {
-  return page.evaluate(() => {
+/** Where a watched run stands on one read of the page: stopped short
+ * of what the journey waits for — a failed turn, a failure notice, or
+ * a question for the Boss unless the journey answers questions —
+ * waiting on the Boss's answer, or going on (undefined). One read, so
+ * hours of polling stay light in the trace. */
+async function runStand(
+  page: Page,
+  answering: boolean,
+): Promise<{ stop: string } | "question" | undefined> {
+  return page.evaluate((answering) => {
     const all = (id: string) =>
       Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
     if (all("captain-pane").some((pane) => /turn failed/i.test(pane.innerText))) {
-      return "the turn failed";
+      return { stop: "the turn failed" };
     }
     const question = all("question-bubble").at(-1);
-    if (question) return `the run asked the Boss: ${question.innerText}`;
-    for (const id of ["failed-workflow", "unparked-failure-notice"]) {
-      const notice = all(id)[0];
-      if (notice) return `${id}: ${notice.innerText}`;
-    }
+    if (question && !answering) return { stop: `the run asked the Boss: ${question.innerText}` };
+    // A run parked on a question wears the parked-run notice too
+    // (data-reason="question"): a journey that answers questions
+    // leaves that park to its answer, and stops on a failed one.
+    const parked = all("failed-workflow").find(
+      (notice) => !answering || notice.dataset.reason !== "question",
+    );
+    if (parked) return { stop: `failed-workflow: ${parked.innerText}` };
+    const unparked = all("unparked-failure-notice")[0];
+    if (unparked) return { stop: `unparked-failure-notice: ${unparked.innerText}` };
+    if (answering && all("boss-reply-banner").length > 0) return "question";
     return undefined;
-  });
+  }, answering);
+}
+
+/** How a journey watches a run it waits on. */
+export interface RunWatch {
+  /** Called in the open session while a question waits for the Boss:
+   * the journey answers it, and returns once the wait has cleared.
+   * Without it, a question stops the run. */
+  onQuestion?: () => Promise<void>;
+  /** How long to wait between reads of the page: ten seconds by
+   * default, for runs of minutes to hours. */
+  pollMs?: number;
 }
 
 /**
- * Watch the open session until `reached` holds, polling every ten
- * seconds, and fail at once — the transcripts attached — when the run
- * stops short of it or the time runs out.
+ * Watch the open session until `reached` holds, polling the page, and
+ * fail at once — the transcripts attached — when the run stops short
+ * of it or the time runs out. A question for the Boss stops it too,
+ * unless `onQuestion` answers it.
  */
 export async function awaitRun(
   page: Page,
   what: string,
   reached: () => Promise<boolean>,
   timeout: number,
+  watch: RunWatch = {},
 ): Promise<void> {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const stop = await runStop(page);
-    if (stop) {
+    const stand = await runStand(page, watch.onQuestion !== undefined);
+    if (stand && stand !== "question") {
       await attachRun(page, `stopped before ${what}`);
-      throw new Error(`${what}: ${stop}`);
+      throw new Error(`${what}: ${stand.stop}`);
     }
     if (await reached()) return;
+    if (stand === "question" && watch.onQuestion) {
+      await watch.onQuestion();
+      continue;
+    }
     if (Date.now() > deadline) {
       await attachRun(page, `timed out before ${what}`);
       throw new Error(`${what}: not reached in ${Math.round(timeout / 60_000)} minutes`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await new Promise((resolve) => setTimeout(resolve, watch.pollMs ?? 10_000));
   }
+}
+
+/** The Boss's one answer to any question a player asks in a live run
+ * (DR-089): neutral, so the run goes on as the request asked. */
+export const NEUTRAL_ANSWER = "Take the simplest option that satisfies the request, and go on.";
+
+/**
+ * A watch that answers each question a run asks through the session's
+ * composer, as the Boss would (DR-085): the question standing as the
+ * Captain's bubble with the banner naming the asking player, the
+ * transcripts attached as `question <n>`, then `answer` sent and the
+ * wait cleared within `clears`. `asked()` counts the questions
+ * answered.
+ */
+export function answeringWith(
+  page: Page,
+  answer: string = NEUTRAL_ANSWER,
+  clears = 60 * 60_000,
+): RunWatch & { asked: () => number } {
+  let asked = 0;
+  return {
+    asked: () => asked,
+    onQuestion: async () => {
+      asked += 1;
+      const banner = page.getByTestId("boss-reply-banner");
+      await expect(page.getByTestId("question-bubble").last()).toBeVisible();
+      await expect(banner).toContainText("is waiting");
+      await attachRun(page, `question ${asked}`);
+      const box = page.getByTestId("boss-composer");
+      await expect(box).toBeEnabled();
+      await box.fill(answer);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(banner).toHaveCount(0, { timeout: clears });
+    },
+  };
 }
 
 /** Wait until the Captain pane has narrated `line` `times` times —
@@ -1162,12 +1255,15 @@ export async function awaitCaptainLine(
   line: string,
   timeout: number,
   times = 1,
+  watch: RunWatch = {},
 ): Promise<void> {
-  const lines = page
-    .getByTestId("captain-pane")
-    .getByTestId("system-line")
-    .filter({ hasText: line });
-  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout);
+  const lines = captainLines(page, line);
+  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout, watch);
+}
+
+/** The Captain pane's status lines that carry `line`. */
+export function captainLines(page: Page, line: string) {
+  return page.getByTestId("captain-pane").getByTestId("system-line").filter({ hasText: line });
 }
 
 /** A player's pane carries the output of a call it served: no longer
@@ -1177,4 +1273,141 @@ export async function expectEngaged(page: Page, playerId: string, least = 50): P
   await expect(pane).toBeVisible();
   await expect(pane).not.toContainText("Idle until the playbook calls");
   expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
+}
+
+/** The calls a player's pane shows it served, by their positions in
+ * the session's record stream: each call opens on a prompt naming the
+ * role it served (run-view-7), and every earlier entry is shown first,
+ * so a long session's first calls count too. */
+export async function callsServed(page: Page, playerId: string): Promise<number[]> {
+  const pane = page.getByTestId(`player-pane-${playerId}`);
+  const earlier = pane.getByRole("button", { name: /earlier entries/ });
+  while ((await earlier.count()) > 0) await earlier.first().click();
+  const ids = await pane
+    .locator('[data-testid^="call-role-"]')
+    .evaluateAll((labels) => labels.map((label) => label.getAttribute("data-testid") ?? ""));
+  return ids.map((id) => Number(id.slice("call-role-".length))).sort((a, b) => a - b);
+}
+
+// ---------------------------------------------------------------------------
+// The compiled example (DR-089): captured from a live compile, run in CI
+// ---------------------------------------------------------------------------
+
+/** The committed fixture of playbook-library-87: the app's own example
+ * as the real `slc` compiled it, captured by playbook-library-86. */
+export const COMPILED_FIXTURE = join(repoRoot, "e2e", "fixtures", "compiled", "workflow");
+
+/** The example's draft id, which its Prefill opens and its compiled
+ * entry carries. */
+export const EXAMPLE_ID = "workflow";
+
+/** Where a capture records what compiled the fixture. */
+const CAPTURE_RECORD = "capture.json";
+
+/** What a capture records: the compiler, and the engine generation —
+ * the runtime ABI and the artifact schema — the fixture belongs to. */
+export interface CompiledCapture {
+  playbookId: string;
+  capturedAt: string;
+  compiler: { name: string; version: string };
+  engine: { name: string; version: string; runtimeAbi: number; artifactSchema: number };
+  agent?: { adapter: string; model: string; effort?: string };
+}
+
+/** A `@sublang/playbook` engine as Node resolves it from `fromDir`:
+ * its version and the runtime ABI it declares. */
+async function engineFrom(fromDir: string): Promise<{ version: string; runtimeAbi: number }> {
+  const modulePath = createRequire(join(fromDir, "package.json")).resolve(
+    "@sublang/playbook/xstate-runtime",
+  );
+  let dir = dirname(modulePath);
+  while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
+  const { version } = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { version: string };
+  const { RUNTIME_ABI } = (await import(pathToFileURL(modulePath).href)) as { RUNTIME_ABI: number };
+  return { version, runtimeAbi: RUNTIME_ABI };
+}
+
+/**
+ * Copy what the real compile of a draft produced — slc's `<id>.playbook/`
+ * layout and the registry entry beside it, with the source it compiled —
+ * into `dest`, replacing what stood there, and record the compiler and
+ * its engine generation in `capture.json`. The journey's own packaging
+ * (the bundles, the wrapper, the engine links) stays behind: the fixture
+ * is the compiler's output, which the stub `slc` of playbook-library-87
+ * places for the app to package again.
+ */
+export async function captureCompiled(
+  app: App,
+  id: string,
+  dest: string,
+  agent?: AppOptions["compiler"],
+): Promise<CompiledCapture> {
+  const draft = app.draftDir(id);
+  const compiler = suppliedCompiler();
+  if (!compiler) throw new Error("no supplied @sublang/slc to name in the capture");
+  const { version } = JSON.parse(readFileSync(join(compiler.packageDir, "package.json"), "utf8")) as {
+    version: string;
+  };
+  const engine = await engineFrom(compiler.packageDir);
+  const entry = readFileSync(join(draft, `${id}.ts`), "utf8");
+  const schema = /artifactSchema:\s*(\d+)/.exec(entry)?.[1];
+  if (!schema) throw new Error(`the compiled entry ${id}.ts declares no artifactSchema`);
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(dest, { recursive: true });
+  cpSync(join(draft, `${id}.playbook`), join(dest, `${id}.playbook`), {
+    recursive: true,
+    filter: (path) => !path.split(sep).includes("node_modules"),
+  });
+  cpSync(join(draft, `${id}.ts`), join(dest, `${id}.ts`));
+  cpSync(join(draft, `${id}.md`), join(dest, `${id}.md`));
+  const capture: CompiledCapture = {
+    playbookId: id,
+    capturedAt: new Date().toISOString(),
+    compiler: { name: "@sublang/slc", version },
+    engine: {
+      name: "@sublang/playbook",
+      version: engine.version,
+      runtimeAbi: engine.runtimeAbi,
+      artifactSchema: Number(schema),
+    },
+    ...(agent ? { agent } : {}),
+  };
+  writeFileSync(join(dest, CAPTURE_RECORD), `${JSON.stringify(capture, null, 2)}\n`);
+  return capture;
+}
+
+/** The committed compiled fixture and its capture record, or undefined
+ * while none has been captured. */
+export function compiledFixture(): { dir: string; capture: CompiledCapture } | undefined {
+  const record = join(COMPILED_FIXTURE, CAPTURE_RECORD);
+  if (!existsSync(record)) return undefined;
+  return {
+    dir: COMPILED_FIXTURE,
+    capture: JSON.parse(readFileSync(record, "utf8")) as CompiledCapture,
+  };
+}
+
+/**
+ * Refuse a fixture of another engine generation than the app installs
+ * (DR-089): the fixture is regenerated whenever the playbook engine
+ * changes its runtime ABI or artifact schema, so a stale one fails the
+ * journey — naming the capture that renews it — rather than skipping.
+ */
+export async function assertFixtureGeneration(capture: CompiledCapture): Promise<void> {
+  const app = await engineFrom(dirname(fileURLToPath(import.meta.resolve("@sublang/spex-core"))));
+  const stale: string[] = [];
+  if (capture.engine.runtimeAbi !== app.runtimeAbi) {
+    stale.push(`runtime ABI ${capture.engine.runtimeAbi}, the app's ${app.runtimeAbi}`);
+  }
+  if (!ARTIFACT_SCHEMAS.includes(capture.engine.artifactSchema)) {
+    stale.push(
+      `artifact schema ${capture.engine.artifactSchema}, the app's ${ARTIFACT_SCHEMAS.join("/")}`,
+    );
+  }
+  if (stale.length > 0) {
+    throw new Error(
+      `the compiled fixture belongs to another engine generation (${stale.join("; ")}): ` +
+        "recapture it as e2e/fixtures/compiled/README.md says",
+    );
+  }
 }

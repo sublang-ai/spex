@@ -5,8 +5,9 @@
 // player that answers them and are rebound in place (PBLIB-4),
 // unconfigured built-ins render from the catalog with browsable
 // sources and an add flow that mints a lane per role (PBLIB-34), and the
-// slc demo example card stages the pipeline (PBLIB-35); its prefill into
-// a draft's paste mode is covered with the workspace (DR-058).
+// example card, adapted from slc's demo, stages the pipeline (PBLIB-35);
+// its prefill into a draft's paste mode is covered with the workspace
+// (DR-058).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -775,7 +776,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
   });
 });
 
-describe("PBLIB-35: the slc demo example card", () => {
+describe("PBLIB-35: the example card", () => {
   test("the row stands on the card and opens all four in-memory stages", () => {
     renderLibrary();
     const card = screen.getByTestId("example-card");

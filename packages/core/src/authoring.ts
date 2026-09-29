@@ -175,7 +175,8 @@ export function authoringDocuments(packageDir = playbookPackageDir()): { path: s
   ];
 }
 
-/** The six-line slc demo, a core asset with a provenance header. */
+/** The app's six-line example, adapted from slc's demo: a core asset
+ * with a provenance header. */
 export function slcDemoText(): string {
   const path = fileURLToPath(new URL("../assets/slc-demo/workflow.txt", import.meta.url));
   return stripLeadingComments(readFileSync(path, "utf8")).trimEnd();
@@ -309,17 +310,6 @@ function noDraft(id: string): string {
   });
 }
 
-/** The source's first prose paragraph — the Register tab's default intent. */
-export function firstProseParagraph(markdown: string): string | undefined {
-  const paragraphs = markdown.split(/\r?\n\s*\r?\n/);
-  for (const paragraph of paragraphs) {
-    const text = paragraph.trim();
-    if (!text || /^(#|-|\*|>|```|\d+\.)/.test(text) || /^Roles:/i.test(text)) continue;
-    return text.replace(/\s+/g, " ");
-  }
-  return undefined;
-}
-
 export class AuthorManager {
   readonly events: AuthorManagerEvents = {
     onRecord: () => {},
@@ -446,12 +436,6 @@ export class AuthorManager {
       source: source ? { markdown: source.markdown, version: source.version, mtime: source.mtime } : null,
       records,
     };
-  }
-
-  /** The Register tab's derived defaults (playbook-library-61). */
-  derivedIntent(id: string): string | undefined {
-    const source = this.drafts.readSource(id);
-    return source ? firstProseParagraph(source.markdown) : undefined;
   }
 
   private read(id: string): StoredDraft {
@@ -1268,7 +1252,7 @@ export class AuthorManager {
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
       "",
-      "The shortest complete source is slc's demo:",
+      "The shortest complete source, adapted from slc's demo:",
       slcDemoText().split("\n").map((line) => `  ${line}`).join("\n"),
       "",
       "Documents (absolute paths in the installed @sublang/playbook package):",

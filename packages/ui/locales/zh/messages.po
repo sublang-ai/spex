@@ -930,6 +930,10 @@ msgstr "无条件"
 msgid "An agent failed"
 msgstr "有智能体失败"
 
+#: src/components/SpaceSync.tsx
+msgid "Another machine's space already there? Join first."
+msgstr "那里已有另一台机器的空间？请先加入。"
+
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "在下方回答，或放弃该运行"
@@ -1074,6 +1078,11 @@ msgstr "分支 {branch} · {status}"
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "把文件引入为源文，再请求改编它"
+
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+msgid "Brings both spaces into one and asks about anything that differs"
+msgstr "把两个空间合为一个，并就有差异之处询问你"
 
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
@@ -2560,13 +2569,13 @@ msgstr "它没有为 {roles} 指定 Player。"
 msgid "it would do nothing"
 msgstr "不会有任何作用"
 
-#: src/components/SpecView.tsx
-msgid "Its <0>specs/</0> tree still holds directories from an earlier layout — the <1>user/</1>, <2>dev/</2>, <3>test/</3>, or <4>items/</4> groups, or an <5>interactions/</5> or <6>compositions/</6> collection. Run this to refresh the spec law and print a migration prompt; an AI agent applies it, and this view opens once the tree is migrated:"
-msgstr "它的 <0>specs/</0> 目录树仍保留着早期布局的目录 — <1>user/</1>、<2>dev/</2>、<3>test/</3> 或 <4>items/</4> 分组，或 <5>interactions/</5>、<6>compositions/</6> 集合。运行以下命令可刷新规约法则并打印迁移提示词；由 AI 智能体执行迁移，目录树迁移完成后此视图即可打开："
-
 #: src/App.tsx
 msgid "its endpoint"
 msgstr "该端点"
+
+#: src/components/SpecView.tsx
+msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
+msgstr "它的 specs/ 目录树保留着早期布局的目录：user/、dev/、test/ 或 items/ 分组，或 interactions/、compositions/ 集合。"
 
 #. confirm: join both spaces into one
 #. confirm: join both spaces into one
@@ -2577,10 +2586,14 @@ msgstr "该端点"
 msgid "Join"
 msgstr "加入"
 
+#: src/components/SpaceSync.tsx
+msgid "Join both into one space, or check the remote URL."
+msgstr "用加入把两者并为一个空间，或检查远程地址。"
+
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
-msgid "Join both spaces into one? Anything in both will ask you to choose."
-msgstr "将两个空间合并为一个？双方都有的内容会让你选择。"
+msgid "Join both spaces into one? Anything that differs will ask you to choose."
+msgstr "将两个空间合并为一个？有差异的内容会让你选择。"
 
 #. the Join control, while the join runs
 #: src/components/SpaceSurface.tsx
@@ -2927,6 +2940,10 @@ msgstr "下一页"
 msgid "Next tab in Projects"
 msgstr "项目中的下一个标签页"
 
+#: src/components/SpecView.tsx
+msgid "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
+msgstr "还没有 <0>specs/</0> 目录 — 它存放规约包以及决策记录和意图记录。"
+
 #: src/lib/labels.ts
 msgid "No adapter named \"{adapter}\" — check the config"
 msgstr "没有名为“{adapter}”的适配器 — 请检查配置"
@@ -3055,8 +3072,8 @@ msgid "Normalized"
 msgstr "规范化"
 
 #: src/components/LibrarySurface.tsx
-msgid "Normalized text: slc's normalize phase turns the prose into workflow markdown"
-msgstr "规范化文本：slc 的规范化阶段把散文转成工作流 markdown"
+msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
+msgstr "规范化文本：散文写成的工作流 markdown，采用 slc 的规范化形式"
 
 #. the space's status, read in a title
 #: src/components/SpaceSurface.tsx
@@ -3248,10 +3265,6 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
-#: src/components/SettingsSurface.tsx
-msgid "Only sessions run from the playbook CLI use it — the tmux pane theme (e.g. a catppuccin flavor, or auto); Spex itself follows your OS theme."
-msgstr "仅从 playbook CLI 运行的会话会用到 — tmux 窗格主题（例如某种 catppuccin 风格，或 auto）；Spex 本身跟随系统主题。"
-
 #. open this draft's authoring workspace
 #: src/components/LibrarySurface.tsx
 msgid "Open"
@@ -3434,8 +3447,8 @@ msgid "pin a value…"
 msgstr "指定一个值…"
 
 #: src/components/DraftConversation.tsx
-msgid "Places slc's six-line demo as your first message"
-msgstr "把 slc 的六行示例放为你的第一条消息"
+msgid "Places the six-line example as your first message"
+msgstr "把六行示例放为你的第一条消息"
 
 #. one unit's kind: a playbook source
 #: src/lib/space.ts
@@ -4224,6 +4237,10 @@ msgstr "回复后发送 · {keys}"
 msgid "Sends after the reply…"
 msgstr "回复后发送…"
 
+#: src/components/SpaceSurface.tsx
+msgid "Sends what is here and brings back anything new"
+msgstr "发出这里的内容，并取回新的内容"
+
 #: src/components/Composer.tsx
 msgid "sends when this turn ends"
 msgstr "本轮结束后发送"
@@ -4521,6 +4538,10 @@ msgstr "Spex 无法读取此代码块"
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex 还没有配置文件 — 规程不可用。"
 
+#: src/components/SettingsSurface.tsx
+msgid "Spex itself follows your OS theme."
+msgstr "Spex 本身跟随系统主题。"
+
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex 导航"
@@ -4701,10 +4722,6 @@ msgstr "同步规则"
 #: src/lib/space.ts
 msgid "Sync rules"
 msgstr "同步规则"
-
-#: src/components/SpaceSync.tsx
-msgid "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs."
-msgstr "同步会发出这里的内容，并取回新的内容。若该地址上已有来自另一台机器的空间，请先加入 — 加入会把两者合为一个，并就有差异之处询问你。"
 
 #: src/components/SpaceSync.tsx
 msgid "Sync steps"
@@ -4909,8 +4926,8 @@ msgid "The queue could not be loaded. <0>Retry</0>"
 msgstr "无法加载队列。<0>重试</0>"
 
 #: src/components/LibrarySurface.tsx
-msgid "The raw prose the demo starts from"
-msgstr "演示所基于的原始文稿"
+msgid "The raw prose the example starts from"
+msgstr "示例所基于的原始文稿"
 
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"
@@ -4935,6 +4952,10 @@ msgstr "Spex 窗口与其核心的协议版本不一致 — 请重启应用（�
 #: src/lib/failure-catalogue.ts
 msgid "The step left no record of what it changed"
 msgstr "该步骤没有留下任何更改记录"
+
+#: src/components/SettingsSurface.tsx
+msgid "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
+msgstr "从 playbook CLI 运行的会话所用的 tmux 窗格主题 — 例如某种 catppuccin 风格，或 auto"
 
 #: src/components/FailureCard.tsx
 msgid "The workflow failed"
@@ -4962,6 +4983,10 @@ msgstr "这些会话"
 msgid "Thinking"
 msgstr "思考过程"
 
+#: src/components/SpecView.tsx
+msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
+msgstr "此命令会刷新规约法则并打印迁移提示词，由 AI 智能体执行迁移："
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "该对话正在别处使用 — 其设置为只读。"
@@ -4974,10 +4999,6 @@ msgstr "仅限本对话"
 msgid "This device against the common ancestor"
 msgstr "本设备相对共同祖先的差异"
 
-#: src/components/SpaceSync.tsx
-msgid "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation."
-msgstr "本设备与远程仓库的历史互不相关。用上方的加入把两者并为一个空间 — 两边都有但内容不同的部分会让你选择。另一种可能是远程地址填错了。"
-
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "打开之后，此文件在磁盘上已更改。"
@@ -4986,10 +5007,6 @@ msgstr "打开之后，此文件在磁盘上已更改。"
 #: src/components/LibrarySurface.tsx
 msgid "This lane also answers {positions} — one conversation across them"
 msgstr "此 Player 还担任 {positions} — 它们共用一个对话"
-
-#: src/components/SpecView.tsx
-msgid "This project has no <0>specs/</0> directory yet — it holds the spec packages and the decision and intent records this view navigates."
-msgstr "此项目还没有 <0>specs/</0> 目录 — 该目录存放本视图浏览的规约包以及决策记录和意图记录。"
 
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
@@ -5050,7 +5067,7 @@ msgstr "重试"
 msgid "Try the Academy example"
 msgstr "试试 Academy 示例"
 
-#. opener on the empty draft conversation: places slc's demo prose in the composer
+#. opener on the empty draft conversation: places the example's prose in the composer
 #: src/components/DraftConversation.tsx
 msgid "Try the example"
 msgstr "试试示例"

@@ -6,6 +6,7 @@ export * from "./scripted-captain.js";
 export * from "./demo.js";
 export * from "./authoring.js";
 export * from "./stub-slc.js";
+export * from "./compiled-run.js";
 // The managed Git rules writer, for fixtures that stand in for a peer
 // home (space-36): the same rules the core writes, so a joining home
 // meets no rules conflict of the fixture's making.

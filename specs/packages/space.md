@@ -29,7 +29,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | outside | each of the configuration file and the sessions directory lying outside the home [[storage-1](storage.md#storage-1)], named "outside the space; not shared" |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
-- the header ends with the primary control for the state — Set up space, or Sync — and the Sync and Explore tabs stand beneath it.
+- the header ends with the primary control for the state — Set up space, or Sync, titled as sending what is here and bringing back anything new — and the Sync and Explore tabs stand beneath it.
 
 #### space-2
 
@@ -84,7 +84,7 @@ When the user activates Set up space with a remote URL, the surface shall initia
 
 While the home is a repository on `main` whose `origin` is set and whose remote has never been checked, the Sync tab shall stand a Join card above the changes list offering Join, the join being inert where the histories share an ancestor ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
-- the card says that syncing sends what is here and brings back what is new, and that a remote already holding another space is joined into one, anything differing asked as a choice;
+- the card names the case in one phrase — another machine's space already at that remote is joined first — with Join titled as bringing both into one and asking about anything that differs ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - Join confirms inline with Cancel focused and Escape cancelling, then starts the joining sync of [[space-13](#space-13)];
 - the header's primary control stays Sync, the card never standing in its place;
 - the card goes after the first check or sync of that remote and returns when the remote changes, a changed remote clearing the last check [[space-5](#space-5)].
@@ -118,13 +118,12 @@ When the user adds a repair's project at the folder proposed [[space-53](#space-
 
 #### space-48
 
-When a repair's rebind succeeds, the Space surface shall replace that row in place with its outcome, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When adding a repair's project succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
-- the outcome names the project, the folder it now has and the count of sessions that resolved, and offers Open project, which is the only control here that leaves the surface;
-- the issues count falls [[space-1](#space-1)] and the live region says the project resolved and how many issues remain;
-- focus moves to the next repair's Set folder, or stays on Open project where none remains, the live region then saying every issue is resolved;
-- where the chosen folder differs from the recorded one, each later repair prefills that folder's parent joined to its own recorded last segment, labelled as taken from the folder just chosen and editable before Save;
-- the outcome stands until the reader's own re-read [[space-2](#space-2)], so no list reflows under the pointer.
+- the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
+- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says how many issues are left as that count reads — declined repairs not among them [[space-49](#space-49)] — or that every issue is resolved where none is;
+- focus moves to the first control of the next unanswered repair below it, wrapping to the list's top — its Add project where it proposes a folder, else its Choose folder… — or, where no unanswered repair remains, to the outcome's Open project;
+- the outcome holds that place, the issues list standing with it though the core reports no diagnostic, until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, when it leaves the list.
 
 #### space-49
 
@@ -169,11 +168,11 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 | --- | --- | --- |
 | unanswered | a filled dot | the project's name, where its sessions ran, what the core found, and its controls |
 | declined | a hollow dot | "not added" after the fact, in the surface's secondary tone, its controls kept |
-| resolved | a check | the project, the folder it is now at and the sessions that resolved, with Open project |
+| resolved | a check | the project, the folder it is now a project at and the sessions listed, with Open project [[space-48](#space-48)] |
 
 - the list's heading counts the unanswered repairs and names how many stand not added;
 - the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
-- a row that changes condition holds its place until the reader's own re-read [[space-48](#space-48)].
+- a declined row holds its place until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, then standing after the unanswered repairs [[space-46](#space-46)].
 
 ### Changes
 
@@ -256,7 +255,7 @@ When a sync is admitted, the core shall run these steps in order, the Sync contr
 Where `main` and the remote's `main` share no common ancestor, when a sync compares, the core shall stop with "Unrelated history" unless the sync was started as a join, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)]:
 
 - Join confirms inline, naming that both histories become one space and that a unit present on both sides differently will ask for a choice ([DR-010](../decisions/010-interface-craft.md) §4);
-- without the join, the surface offers Join in place of Sync with the guidance that a wrong remote URL is the other explanation.
+- without the join, the surface offers Join in place of Sync, titled as bringing both into one and asking about anything that differs, with the guidance that a wrong remote URL is the other explanation.
 
 #### space-14
 
@@ -643,6 +642,20 @@ When an integration suite fails a transport against a path holding no repository
 - a refused host classifies as unauthorized rather than falling through to the tool's own words [[space-15](#space-15)];
 - a report naming a remote prints no embedded user, and a URL carrying a credential in any form is refused before it is stored [[space-5](#space-5)] [[space-15](#space-15)];
 - the report names the identity the remote's form presents, a local path naming its permissions rather than an account, and a network failure naming none [[space-50](#space-50)].
+
+### Surface Coverage
+
+#### space-56
+
+Where the Space surface renders over a repository home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, adds the third, lets the core deliver a re-read, activates Refresh, adds the second and then the declined first, the core reporting after each act what then remains, the test suite shall assert through the surface:
+
+- the declined row keeps the first place, reading "not added", and the header's count falls to two issues [[space-55](#space-55)] [[space-49](#space-49)];
+- the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's count reading one issue and the live region "1 issue left." [[space-48](#space-48)];
+- focus rests on the second repair's Add project, wrapping past the declined row [[space-48](#space-48)];
+- the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
+- after Refresh the outcome is gone and the declined row stands after the second [[space-48](#space-48)] [[space-55](#space-55)];
+- the second's add leaves the live region reading "All issues resolved." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
+- the declined repair's add leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
 ### Browser Journeys
 

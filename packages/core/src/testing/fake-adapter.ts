@@ -42,6 +42,10 @@ export interface FakeResponse {
   thinking?: string;
   /** done.result — also the finalText the runtime reports. */
   result: string;
+  /** The result composed from the prompt, in place of `result` — a
+   * substitute judge reading the outcomes its prompt declares
+   * (playbook-library-87), whose names only the compiled machine knows. */
+  resultFor?: (prompt: string) => string;
   status?: "success" | "error" | "interrupted";
   usage?: FakeUsage;
   /** Sleep before the terminal done, to test in-flight behavior. */
@@ -154,7 +158,7 @@ export function fakeAdapterImports(
       const picked = pick(script, prompt);
       const response: FakeResponse = {
         ...picked,
-        result: named(picked.result),
+        result: named(picked.resultFor ? picked.resultFor(prompt) : picked.result),
         ...(picked.deltas ? { deltas: picked.deltas.map(named) } : {}),
       };
       const base = { agent: this.agent, sessionId };

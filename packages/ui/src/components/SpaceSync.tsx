@@ -9,7 +9,7 @@
 // (space-13), in-place line diffs (space-10) and the issues list. Every
 // side is "mine" or "remote" (space-27); Git's own words never lead.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type {
   DiagnosticRepair,
   ProjectInfo,
@@ -576,17 +576,14 @@ function Card({
 function RepairRow({
   repair,
   disabled,
-  resolved,
-  autoFocus,
-  onOpenProject,
+  focusSeq,
   onResolved,
   onNote,
 }: {
   repair: DiagnosticRepair;
   disabled: boolean;
-  resolved?: string;
-  autoFocus?: boolean;
-  onOpenProject(projectId: string): void;
+  /** Set when focus moves here; a new value moves it again. */
+  focusSeq?: number;
   onResolved(key: string, summary: string, projectId: string): void;
   onNote: Note;
 }) {
@@ -603,28 +600,14 @@ function RepairRow({
   const firstRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (autoFocus) firstRef.current?.focus();
-  }, [autoFocus]);
+    if (focusSeq !== undefined) firstRef.current?.focus();
+  }, [focusSeq]);
 
   useEffect(() => {
     if (!editing) return;
     fieldRef.current?.focus();
     fieldRef.current?.select();
   }, [editing]);
-
-  if (resolved) {
-    return (
-      <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
-        <span aria-hidden>✓</span>
-        <span className="min-w-0 flex-1">{resolved}</span>
-        {repair.projectId ? (
-          <button type="button" className={LINK} onClick={() => onOpenProject(repair.projectId!)}>
-            {i18n._("Open project")}
-          </button>
-        ) : null}
-      </li>
-    );
-  }
 
   const declined = repair.declined !== undefined;
   const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
@@ -840,11 +823,53 @@ function RepairRow({
   }
 }
 
+/** What the reader's own add made of a repair (space-48). */
+interface RepairOutcome {
+  summary: string;
+  projectId: string;
+}
+
+/** A resolved repair's outcome, standing in the row it replaced
+ * (space-48): Open project is the one way off the surface. */
+function RepairOutcomeRow({
+  outcome,
+  focusSeq,
+  onOpenProject,
+}: {
+  outcome: RepairOutcome;
+  /** Set when focus moves here; a new value moves it again. */
+  focusSeq?: number;
+  onOpenProject(projectId: string): void;
+}) {
+  const openRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focusSeq !== undefined) openRef.current?.focus();
+  }, [focusSeq]);
+  return (
+    <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
+      <span aria-hidden>✓</span>
+      <span className="min-w-0 flex-1">{outcome.summary}</span>
+      <button ref={openRef} type="button" className={LINK} onClick={() => onOpenProject(outcome.projectId)}>
+        {i18n._("Open project")}
+      </button>
+    </li>
+  );
+}
+
+type IssueEntry = SpaceState["diagnostics"][number];
+
+/** One row's place in the issues list: a repair keeps its place as it
+ * changes condition, its outcome taking the same one. */
+const issueRowId = (entry: IssueEntry): string =>
+  entry.repair ? `repair:${entry.repair.key}` : `diagnostic:${entry.file}:${entry.reason}`;
+const outcomeRowId = (key: string): string => `repair:${key}`;
+
 export function SyncTab({
   space,
   now,
   connected,
   issuesOpen,
+  refreshes,
   onOpenSession,
   onOpenProject,
   onNote,
@@ -853,6 +878,8 @@ export function SyncTab({
   now: number;
   connected: boolean;
   issuesOpen: boolean;
+  /** How many times the reader's own Refresh has re-read the state. */
+  refreshes: number;
   onOpenSession(sessionId: string): void;
   onOpenProject(projectId: string): void;
   onNote: Note;
@@ -874,13 +901,24 @@ export function SyncTab({
   const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
   const [dismissed, setDismissed] = useState<string>();
-  // A resolved repair stands where it was until the reader's own
-  // re-read (space-48), so no list reflows under the pointer.
-  const [resolved, setResolved] = useState<Record<string, string>>({});
-  const [resolvedProjects, setResolvedProjects] = useState<Record<string, string>>({});
+  // A resolved repair's outcome stands in its row's place, and a
+  // declined row keeps its place, until the reader's own Refresh or his
+  // leaving the tab (space-48, space-55), so no list reflows under the
+  // pointer. The layout is the order the list last drew, ids of rows
+  // gone meanwhile kept so an outcome landing late finds its place.
+  const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
+  const layout = useRef<string[]>([]);
+  const [focusTo, setFocusTo] = useState<{ id: string; seq: number }>();
+  const seenRefreshes = useRef(refreshes);
+  useEffect(() => {
+    if (refreshes === seenRefreshes.current) return;
+    seenRefreshes.current = refreshes;
+    layout.current = [];
+    setOutcomes({});
+    setFocusTo(undefined);
+  }, [refreshes]);
   // The first-meeting card holds its own confirm (space-45).
   const [firstJoin, setFirstJoin] = useState(false);
-  const [advanceTo, setAdvanceTo] = useState<string>();
   const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
 
   // The picker's choices outlive a stop and a re-plan: a choice for a
@@ -977,14 +1015,66 @@ export function SyncTab({
   const issueCount = space.issues;
   const declinedCount = space.diagnostics.filter((entry) => entry.repair?.declined !== undefined).length;
   const blocking = space.diagnostics.some((entry) => entry.blocking);
-  const listOpen = space.diagnostics.length > 0 && (issuesOpen || blocking);
-  // Standing rows first; a row that changes condition holds its place
-  // until the reader's own re-read (space-48).
-  const ordered = [...space.diagnostics].sort((a, b) =>
+  // The rows as a fresh layout orders them: the core's order, a
+  // declined repair after those still unanswered (space-46).
+  const fresh = [...space.diagnostics].sort((a, b) =>
     Number(a.repair?.declined !== undefined) - Number(b.repair?.declined !== undefined));
+  const rows = new Map<string, { outcomeKey: string } | { entry: IssueEntry }>();
+  for (const entry of fresh) {
+    rows.set(
+      issueRowId(entry),
+      entry.repair && outcomes[entry.repair.key] ? { outcomeKey: entry.repair.key } : { entry },
+    );
+  }
+  // An outcome outlives its repair's report (space-48).
+  for (const key of Object.keys(outcomes)) {
+    if (!rows.has(outcomeRowId(key))) rows.set(outcomeRowId(key), { outcomeKey: key });
+  }
+  // Each row keeps the place it last had; a row new since then follows.
+  const arrived = [...rows.keys()].filter((id) => !layout.current.includes(id));
+  const placed = [...layout.current.filter((id) => rows.has(id)), ...arrived];
+  const nextLayout = [...layout.current, ...arrived];
+  // What a resolution reads when its add lands: the store has often
+  // re-read the state by then, the repair's row already gone.
+  const latest = useRef({ space, outcomes });
+  useLayoutEffect(() => {
+    layout.current = nextLayout;
+    latest.current = { space, outcomes };
+  });
+  const listOpen = rows.size > 0 && (issuesOpen || blocking);
+
+  /** The reader's add resolved a repair (space-48): its outcome takes
+   * the row's place, and focus and the live region move on. */
+  const onResolved = (key: string, summary: string, projectId: string): void => {
+    const { space: state, outcomes: done } = latest.current;
+    const unanswered = (entry: IssueEntry): boolean =>
+      entry.repair !== undefined &&
+      entry.repair.key !== key &&
+      entry.repair.declined === undefined &&
+      !done[entry.repair.key];
+    // What the header will count: the other unanswered repairs, and
+    // every diagnostic no repair folds (space-1).
+    const left = state.diagnostics.filter((entry) => !entry.repair || unanswered(entry)).length;
+    // Focus moves to the next unanswered repair below, wrapping to the
+    // top, or else onto this outcome's Open project. The layout still
+    // holds the row's place even where its report is gone.
+    const id = outcomeRowId(key);
+    const order = layout.current;
+    const at = order.indexOf(id);
+    const targets = new Set(state.diagnostics.filter(unanswered).map(issueRowId));
+    const next = [...order.slice(at + 1), ...order.slice(0, Math.max(at, 0))]
+      .find((row) => targets.has(row));
+    setOutcomes((was) => ({ ...was, [key]: { summary, projectId } }));
+    setFocusTo((was) => ({ id: next ?? id, seq: (was?.seq ?? 0) + 1 }));
+    onNote(left
+      ? i18n._("{count, plural, one {# issue} other {# issues}} left.", { count: left })
+      : i18n._("All issues resolved."));
+  };
+  const focusSeq = (id: string): number | undefined =>
+    focusTo?.id === id ? focusTo.seq : undefined;
 
   const issues =
-    space.diagnostics.length > 0 && listOpen ? (
+    listOpen ? (
       <section
         data-testid="space-issues-list"
         aria-label={i18n._({
@@ -1018,65 +1108,52 @@ export function SyncTab({
             : ""}
         </h2>
         <ul className="flex flex-col gap-1">
-          {/* A repair the core no longer reports is resolved; its
-              outcome holds its place until the reader's own re-read
-              (space-48), so the work he just did is not simply gone. */}
-          {Object.entries(resolved)
-            .filter(([key]) => !space.diagnostics.some((entry) => entry.repair?.key === key))
-            .map(([key, summary]) => (
-              <li key={key} data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
-                <span aria-hidden>✓</span>
-                <span className="min-w-0 flex-1">{summary}</span>
-                {resolvedProjects[key] ? (
-                  <button type="button" className={LINK} onClick={() => onOpenProject(resolvedProjects[key]!)}>
-                    {i18n._("Open project")}
-                  </button>
+          {placed.map((id) => {
+            const row = rows.get(id)!;
+            if ("outcomeKey" in row) {
+              return (
+                <RepairOutcomeRow
+                  key={id}
+                  outcome={outcomes[row.outcomeKey]!}
+                  focusSeq={focusSeq(id)}
+                  onOpenProject={onOpenProject}
+                />
+              );
+            }
+            const entry = row.entry;
+            if (entry.file === MERGE_HEAD_FILE) {
+              return (
+                <li key={id} title={entry.file}>
+                  {i18n._("A Git merge is pending; finish or abort it in your terminal.")}
+                </li>
+              );
+            }
+            if (entry.repair) {
+              return (
+                <RepairRow
+                  key={id}
+                  repair={entry.repair}
+                  disabled={disabled || pending}
+                  focusSeq={focusSeq(id)}
+                  onResolved={onResolved}
+                  onNote={onNote}
+                />
+              );
+            }
+            return (
+              <li key={id} className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
+                  {entry.file}
+                </span>
+                <span className="min-w-0 flex-1">— {entry.reason}</span>
+                {entry.blocking ? (
+                  <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">
+                    {i18n._({ id: "blocking", comment: "mark on an issue that stops a sync" })}
+                  </span>
                 ) : null}
               </li>
-            ))}
-          {ordered.map((entry) => (
-            entry.file === MERGE_HEAD_FILE ? (
-              <li key={entry.file} title={entry.file}>
-                {i18n._("A Git merge is pending; finish or abort it in your terminal.")}
-              </li>
-            ) : entry.repair ? (
-              <RepairRow
-                key={entry.repair.key}
-                repair={entry.repair}
-                disabled={disabled || pending}
-                resolved={resolved[entry.repair.key]}
-                autoFocus={entry.repair.key === advanceTo}
-                onOpenProject={onOpenProject}
-                onResolved={(key, summary, projectId) => {
-                  setResolved((was) => ({ ...was, [key]: summary }));
-                  if (projectId) setResolvedProjects((was) => ({ ...was, [key]: projectId }));
-                  // Focus moves to the next repair still standing.
-                  const standing = space.diagnostics
-                    .map((d) => d.repair?.key)
-                    .filter((k): k is string => Boolean(k) && k !== key && !resolved[k!]);
-                  setAdvanceTo(standing[0]);
-                  onNote(standing.length
-                    ? i18n._("{count, plural, one {# issue} other {# issues}} left.", {
-                        count: standing.length,
-                      })
-                    : i18n._("All issues resolved."));
-                }}
-                onNote={onNote}
-              />
-            ) : (
-            <li key={`${entry.file}:${entry.reason}`} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
-                {entry.file}
-              </span>
-              <span className="min-w-0 flex-1">— {entry.reason}</span>
-              {entry.blocking ? (
-                <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">
-                  {i18n._({ id: "blocking", comment: "mark on an issue that stops a sync" })}
-                </span>
-              ) : null}
-            </li>
-            )
-          ))}
+            );
+          })}
         </ul>
       </section>
     ) : null;
@@ -1130,14 +1207,12 @@ export function SyncTab({
         <Card testId="space-first-meeting" tone="neutral">
           <span className="font-medium">{i18n._("This space has not met that remote yet.")}</span>
           <span className="text-xs">
-            {i18n._(
-              "Sync sends what is here and brings back anything new. If that address already holds a space from another machine, Join first — it brings both into one and asks about anything that differs.",
-            )}
+            {i18n._("Another machine's space already there? Join first.")}
           </span>
           {firstJoin ? (
             <InlineConfirm
               question={i18n._(
-                "Join both spaces into one? Anything in both will ask you to choose.",
+                "Join both spaces into one? Anything that differs will ask you to choose.",
               )}
               confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
               onConfirm={() => { setFirstJoin(false); void spaceSync({ join: true }); }}
@@ -1150,6 +1225,7 @@ export function SyncTab({
                 data-testid="space-first-join"
                 className={SECONDARY}
                 disabled={disabled || pending}
+                title={i18n._("Brings both spaces into one and asks about anything that differs")}
                 onClick={() => setFirstJoin(true)}
               >
                 {i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
@@ -1181,11 +1257,7 @@ export function SyncTab({
       {sync.phase === "unrelated" ? (
         <Card testId="space-unrelated" tone="amber">
           <span className="font-medium">{i18n._("Unrelated history")}</span>
-          <span>
-            {i18n._(
-              "This device and the remote have separate histories. Join both into one space with Join above — anything present in both differently will ask you to choose. A wrong remote URL is the other explanation.",
-            )}
-          </span>
+          <span>{i18n._("Join both into one space, or check the remote URL.")}</span>
         </Card>
       ) : null}
       {showStopped && sync.phase === "stopped" ? (

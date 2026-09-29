@@ -473,6 +473,122 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.getByTestId("space-issues-list").textContent).toContain("1 not added");
   });
 
+  test("an outcome and a declined row hold their places until the reader's Refresh, as focus and the count move on (space-56)", async () => {
+    const proposed = (path: string) => ({
+      directories: [path],
+      checked: [{ path, here: true, repo: true }],
+      proposal: { path, from: "recorded" as const },
+    });
+    const rows = {
+      infra: {
+        file: "projects.json",
+        reason: "infra has no folder on this device",
+        blocking: false,
+        repair: { kind: "project" as const, projectId: "p1", projectName: "infra", sessions: 5, key: "p1|/code/infra", ...proposed("/code/infra") },
+      },
+      slc: {
+        file: "sessions/a.json",
+        reason: "/code/slc has no project on this device",
+        blocking: false,
+        repair: { kind: "directory" as const, sessions: 2, key: "|/code/slc", ...proposed("/code/slc") },
+      },
+      docs: {
+        file: "sessions/b.json",
+        reason: "/code/docs has no project on this device",
+        blocking: false,
+        repair: { kind: "directory" as const, sessions: 1, key: "|/code/docs", ...proposed("/code/docs") },
+      },
+    };
+    type Name = keyof typeof rows;
+    // What the core still reports, in its own order: an add resolves a
+    // repair, and a decline marks it.
+    const standing = new Map<Name, "open" | "declined">([["infra", "open"], ["slc", "open"], ["docs", "open"]]);
+    const report = () => repoState({
+      diagnostics: [...standing].map(([name, how]) =>
+        how === "declined" ? { ...rows[name], repair: { ...rows[name].repair, declined: NOW } } : rows[name]),
+    });
+    const nameOf = (key: unknown) => (Object.keys(rows) as Name[]).find((name) => rows[name].repair.key === key)!;
+    const answer = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      switch (type) {
+        case "space.repair.decline":
+          standing.set(nameOf(fields.repair), "declined");
+          current = report();
+          return current;
+        case "project.rebind":
+          standing.delete("infra");
+          current = report();
+          return { id: "p1", name: "infra", path: fields.path, createdAt: 1 };
+        case "project.register": {
+          const name = fields.path === "/code/slc" ? "slc" : "docs";
+          standing.delete(name);
+          current = report();
+          return { id: `p-${name}`, name, path: fields.path, createdAt: 2 };
+        }
+        case "project.list":
+          return [];
+        default:
+          return answer(type, fields);
+      }
+    });
+    const { onOpenProject } = await renderSpace(report());
+    expect(screen.getByTestId("space-issues").textContent).toContain("3 issues");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const items = () => within(screen.getByTestId("space-issues-list")).getAllByRole("listitem");
+    const at = (index: number) => items()[index]!;
+    const [infra, , docs] = screen.getAllByTestId("space-repair");
+
+    // A declined row keeps its place, and counts no more.
+    fireEvent.click(within(infra!).getByRole("button", { name: "Don't add" }));
+    await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
+    expect(at(0).textContent).toContain("infra");
+    expect(screen.getByTestId("space-issues").textContent).toContain("2 issues");
+
+    // The last row gives way to its outcome in its own place.
+    fireEvent.click(within(docs!).getByRole("button", { name: "Add project" }));
+    await waitFor(() => expect(at(2).dataset.testid).toBe("space-repair-resolved"));
+    expect(at(2).textContent).toContain("docs · now a project at /code/docs, 1 session listed");
+    // The count falls, the live region counts what the header does —
+    // the declined row not among them — and focus wraps to the next
+    // unanswered repair's first control.
+    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
+    expect(live()).toBe("1 issue left.");
+    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Add project" })));
+    expect(at(1).textContent).toContain("slc");
+
+    // A re-read the core delivers moves nothing.
+    deliver(current);
+    expect(items().map((item) => item.dataset.testid)).toEqual(["space-repair-declined", "space-repair", "space-repair-resolved"]);
+
+    // The reader's Refresh lays the list out afresh: the outcome leaves
+    // and the declined row follows the unanswered one.
+    fireEvent.click(screen.getByTestId("space-refresh"));
+    await waitFor(() => expect(items().map((item) => item.dataset.testid)).toEqual(["space-repair", "space-repair-declined"]));
+    expect(at(0).textContent).toContain("slc");
+
+    // With no unanswered repair left, focus lands on the outcome's own
+    // Open project, the one way off the surface.
+    fireEvent.click(within(at(0)).getByRole("button", { name: "Add project" }));
+    await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-resolved"));
+    expect(live()).toBe("All issues resolved.");
+    const openSlc = within(at(0)).getByRole("button", { name: "Open project" });
+    await waitFor(() => expect(document.activeElement).toBe(openSlc));
+    fireEvent.click(openSlc);
+    expect(onOpenProject).toHaveBeenCalledWith("p-slc");
+
+    // The last repair resolved, the list stands with every outcome
+    // though the core reports nothing, until the reader's Refresh.
+    fireEvent.click(within(at(1)).getByRole("button", { name: "Add project" }));
+    await waitFor(() => expect(at(1).dataset.testid).toBe("space-repair-resolved"));
+    expect(at(1).textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
+    expect(live()).toBe("All issues resolved.");
+    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Open project" })));
+    expect(current.diagnostics).toEqual([]);
+    expect(items()).toHaveLength(2);
+    fireEvent.click(screen.getByTestId("space-refresh"));
+    await waitFor(() => expect(screen.queryByTestId("space-issues-list")).toBeNull());
+  });
+
   test("ahead and behind are absent until a check has run, and 'Never synced' stands with no sync", async () => {
     await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null }, lastSync: null }));
     expect(screen.queryByTestId("space-ahead-behind")).toBeNull();
@@ -703,7 +819,7 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     expect(screen.getByText("The remote is empty; Sync will send this space")).toBeTruthy();
     cleanup();
     await renderSpace(repoState({ repository: { ...REPO, unrelated: true }, incoming: [], sync: { phase: "unrelated" } }));
-    expect(screen.getByTestId("space-unrelated").textContent).toContain("separate histories");
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("check the remote URL");
     expect(screen.queryByTestId("space-ahead-behind")).toBeNull();
     expect(screen.getByRole("button", { name: "Join" })).toBeTruthy();
   });
@@ -820,10 +936,16 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
 
   test("unrelated histories offer Join, confirmed inline with Cancel focused (space-13)", async () => {
     await renderSpace(repoState({ repository: { ...REPO, unrelated: true }, sync: { phase: "unrelated" } }));
+    // Join in place of Sync says what it does in its title, beside the
+    // card's one phrase of guidance.
+    expect(screen.getByTestId("space-primary").title).toBe(
+      "Brings both spaces into one and asks about anything that differs",
+    );
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("check the remote URL");
     fireEvent.click(screen.getByRole("button", { name: "Join" }));
     const confirm = screen.getByTestId("space-join-confirm");
     expect(confirm.textContent).toContain("Join both spaces into one?");
-    expect(confirm.textContent).toContain("will ask you to choose");
+    expect(confirm.textContent).toContain("Anything that differs will ask you to choose.");
     expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByTestId("space-join-confirm")).toBeNull();

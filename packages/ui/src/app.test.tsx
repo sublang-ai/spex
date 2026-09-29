@@ -1099,7 +1099,7 @@ describe("run-view-88: Captain Home consumes the published next standing", () =>
   });
 });
 
-describe("spec-view-63: the Specs tab on a project with no specs/", () => {
+describe("spec-view-58: the Specs tab on a project with no specs/", () => {
   // The tree the core replies with when a project has no `specs/`
   // directory: absence stated with empty lists, never a failure and
   // never a reply missing them (spec-view-10). The view reads those
@@ -1111,7 +1111,7 @@ describe("spec-view-63: the Specs tab on a project with no specs/", () => {
     fireEvent.click(screen.getByTestId("workspace-tab-specs"));
 
     const empty = await screen.findByTestId("specs-empty");
-    expect(empty.textContent).toMatch(/npx @sublang\/spex/);
+    expect(empty.textContent).toMatch(/npx @sublang\/spex scaffold/);
     expect(commandMock).toHaveBeenCalledWith("specs.get", { projectId: "p1" });
     // The tab really is the shown one, so the empty state is what the
     // reader is looking at and not something rendered off-surface.

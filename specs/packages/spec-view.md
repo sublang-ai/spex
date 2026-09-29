@@ -285,7 +285,7 @@ While the spec view renders a read tree, the spec view shall show a manual refre
 
 Where the tree is absent or only partially parsed, the spec view shall degrade instructively and never render blank ([DR-011](../decisions/011-project-workspace.md)):
 
-- with no `specs/` directory, an instructive empty state states what `specs/` holds and presents the scaffold command (`npx @sublang/spex`) as a copyable block;
+- with no `specs/` directory, an instructive empty state states what `specs/` holds and presents the command that scaffolds it (`npx @sublang/spex scaffold`) as a copyable block;
 - a file that fails to parse renders a per-file notice inside its node while parsed content stays visible;
 - tree-level notices render under the header.
 
@@ -431,7 +431,7 @@ Where a fixture tree contains an unreadable file and unknown entries directly un
 - every other file's parse stays intact [[spec-view-10](#spec-view-10)];
 - a fixture project with no `specs/` directory yields a reply stating absence with empty lists [[spec-view-10](#spec-view-10)].
 
-#### spec-view-63
+#### spec-view-58
 
 Where the workspace serves a project whose tree states absence with empty lists [[spec-view-10](#spec-view-10)], when the Specs tab is shown, the test suite shall assert that the empty state renders with its scaffold command and that the tab stands as the shown one [[spec-view-9](#spec-view-9)]:
 

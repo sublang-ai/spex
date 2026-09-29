@@ -97,7 +97,7 @@ When the user confirms removal in the Overview tab, the workspace shall forget t
 
 #### projects-22
 
-The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, and the palette shall list projects with filter-as-you-type matching on name and path:
+The project palette's path row shall offer distinct "Add" (an existing repo) and "Create" (a new project) actions on the typed path, titled "Register this existing repository" and "Create a new repository at this path" and both disabled until a path is typed, and the palette shall list projects with filter-as-you-type matching on name and path:
 
 - With no project registered there is nothing to filter: the palette drops its filter, names itself an add flow, opens with the path field focused and its placeholder saying a project is added by path, and leads its list with the Academy-example action [[projects-27](#projects-27)];
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
@@ -202,6 +202,10 @@ Where a registered fixture repository's `origin` remote points at a GitHub repos
 
 Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `PATH`, or the registered repository has no GitHub `origin` remote, when the project's forge panel is loaded, the test suite shall assert that setup guidance naming the specific unmet condition is shown instead of issue and pull-request lists [[projects-7](#projects-7)], that the project card still shows repository state, and that the core keeps serving subsequent commands [[projects-16](#projects-16)].
 
+#### projects-29
+
+Where the Overview tab renders a project whose GitHub binding names an unmet condition, when the reader folds its Sources band and opens it again, the test suite shall assert that the header names the guidance beside the repository state only while the band is folded, and that the open band carries the guidance while the header repeats nothing [[projects-7](#projects-7)].
+
 ### Removal Coverage
 
 #### projects-21
@@ -212,7 +216,7 @@ Where a fixture repository is registered, when the project is removed and the co
 
 #### projects-26
 
-Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the mode choices read "Add an existing repo" and "Create a new project" with the submit label mirroring the selected mode [[projects-22](#projects-22)], that the live project's open control reads "Open live session" and carries the pulsing status dot while the other project's reads "Open session" [[projects-23](#projects-23)], and that no user-facing string on the surface contains the word "forge" [[projects-25](#projects-25)].
+Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the path row offers "Add" titled "Register this existing repository" and "Create" titled "Create a new repository at this path" [[projects-22](#projects-22)] [[projects-25](#projects-25)], both disabled until a path is typed [[projects-22](#projects-22)], that the live project's row reads its running count beside a pulsing dot while the other's reads none [[projects-23](#projects-23)], and that no text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
 
 ### Browser Journeys
 

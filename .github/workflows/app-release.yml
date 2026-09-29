@@ -71,37 +71,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The tag's form and both manifests' versions (release-19,
+      # release-27, app-shell-14): scripts/release-notes.mjs, tested by
+      # release-notes.test.mjs (release-28, app-shell-36). Built-ins
+      # only, before npm ci.
       - name: Verify version matches tag
         id: version
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#app-v}"
-          # MAJOR.MINOR.PATCH is a regular release and
-          # MAJOR.MINOR.PATCH-beta.N a beta, N counting from 1 (DR-087);
-          # no number carries a leading zero (SemVer).
-          FORM='^((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))(-beta\.([1-9][0-9]*))?$'
-          if [[ "$TAG_VERSION" =~ $FORM ]]; then
-            BASE="${BASH_REMATCH[1]}"
-            N="${BASH_REMATCH[6]}"
-          else
-            echo "::error::Tag $GITHUB_REF_NAME is neither app-vMAJOR.MINOR.PATCH nor app-vMAJOR.MINOR.PATCH-beta.N (N from 1, no leading zeros); no other pre-release identifier or build metadata is accepted."
-            exit 1
-          fi
-          if [ -n "$N" ]; then BETA=true; else BETA=false; fi
-          # Both manifests carry the tag's version verbatim, a beta's
-          # included.
-          for pkg in apps/desktop apps/server; do
-            PKG_VERSION="$(node -p "require('./$pkg/package.json').version")"
-            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-              echo "::error::Tag $TAG_VERSION does not match $pkg/package.json $PKG_VERSION"
-              exit 1
-            fi
-          done
-          {
-            echo "version=$TAG_VERSION"
-            echo "beta=$BETA"
-            echo "base=$BASE"
-            echo "n=$N"
-          } >> "$GITHUB_OUTPUT"
+        run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"
 
       - run: npm ci
       - run: npm run build
@@ -109,72 +85,20 @@ jobs:
       - name: Tests
         run: npm test
 
+      # A regular release's notes are its version's section of the app
+      # changelog; a beta's are [Unreleased] as it stands at the tag,
+      # under a line naming the beta (DR-087). Then the way to run this
+      # release from source, and for a beta the gates it skipped.
       - name: Extract release notes
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          BETA: ${{ steps.version.outputs.beta }}
-          BASE: ${{ steps.version.outputs.base }}
-          N: ${{ steps.version.outputs.n }}
-        run: |
-          # A regular release's notes are its version's section of the
-          # app changelog; a beta's are the [Unreleased] section as it
-          # stands at the tag, under a line naming the beta, since the
-          # changelog keeps no section for a beta (DR-087). Then the way
-          # to run this release from source.
-          if [ "$BETA" = true ]; then
-            SECTION=Unreleased
-          else
-            SECTION="$VERSION"
-          fi
-          # The last section runs to the file's end, where the link
-          # definitions live; those lines are not notes.
-          sed -n "/^## \[${SECTION}\]/,/^## \[/{/^## \[${SECTION}\]/d;/^## \[/d;p}" CHANGELOG.md \
-            | grep -v -E '^\[[^]]+\]: ' > /tmp/changelog-section.md || true
-          # Blank lines and headings alone are no notes: a section left
-          # empty by the last release still holds a blank line.
-          if ! grep -q -v -E '^(#.*|[[:space:]]*)$' /tmp/changelog-section.md; then
-            echo "::error::No release notes found under [${SECTION}] in CHANGELOG.md for ${GITHUB_REF_NAME}"
-            exit 1
-          fi
-          : > /tmp/release-notes.md
-          if [ "$BETA" = true ]; then
-            cat >> /tmp/release-notes.md <<EOF
-          Beta ${N} on the way to ${BASE} — everything unreleased at this tag.
-
-          EOF
-          fi
-          # A repo-relative link would resolve against the release page;
-          # point it into the tree at this tag instead.
-          sed -E "s#]\((specs/|docs/|packages/|apps/|README\.md)#](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/\1#g" \
-            /tmp/changelog-section.md >> /tmp/release-notes.md
-          cat >> /tmp/release-notes.md <<EOF
-
-          ## Run from source
-
-          This release ships no binaries: build it on macOS or Linux with Node.js 22 or later and a native build toolchain. Storage requires private POSIX permissions. Windows users can run the scaffold CLI or access a Spex server in their browser.
-
-          \`\`\`bash
-          git clone https://github.com/${GITHUB_REPOSITORY}.git
-          cd spex
-          git checkout ${GITHUB_REF_NAME}
-          npm ci
-          npm start              # the desktop app
-          npm run start:server   # the server shell: prints http://127.0.0.1:8137/?token=…
-          \`\`\`
-
-          Agent sign-in, GitHub, and playbook-compile prerequisites are in the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/README.md).
-          EOF
-          if [ "$BETA" = true ]; then
-            cat >> /tmp/release-notes.md <<EOF
-
-          This beta ran CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release ([DR-087](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/specs/decisions/087-beta-app-releases.md)).
-          EOF
-          fi
-          cat /tmp/release-notes.md
+        run: >-
+          node scripts/release-notes.mjs notes
+          --tag="$GITHUB_REF_NAME"
+          --repository="$GITHUB_REPOSITORY"
+          --out=/tmp/release-notes.md
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: Spex App v${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.title }}
           body_path: /tmp/release-notes.md
           prerelease: ${{ steps.version.outputs.beta == 'true' }}

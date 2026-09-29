@@ -1216,10 +1216,10 @@ describe("SPECV-9/17/18: empty, legacy, and loading states", () => {
   test("no specs/ shows the instructive scaffold empty state", () => {
     render(<Harness tree={EMPTY_TREE} />);
     const empty = screen.getByTestId("specs-empty");
-    expect(empty.textContent).toContain("npx @sublang/spex");
+    expect(empty.textContent).toContain("npx @sublang/spex scaffold");
     expect(
       within(empty).getByRole("button", {
-        name: "Copy command npx @sublang/spex",
+        name: "Copy command npx @sublang/spex scaffold",
       }),
     ).toBeTruthy();
     // Without a seeding wire-up, the Academy offer stays hidden.
@@ -1257,10 +1257,11 @@ describe("SPECV-9/17/18: empty, legacy, and loading states", () => {
     const legacy = screen.getByTestId("specs-legacy");
     // The notice covers both legacy shapes: group directories and the
     // compositions/ collection (SPECV-18).
-    expect(
-      within(legacy).getByText("This project uses a legacy specs layout"),
-    ).toBeTruthy();
-    expect(legacy.textContent).toContain("compositions/");
+    const heading = within(legacy).getByText("This project uses a legacy specs layout");
+    // Which directories mark the layout rides the heading's title, the
+    // notice itself one phrase (DR-069).
+    expect(heading.getAttribute("title")).toContain("user/, dev/, test/ or items/ groups");
+    expect(heading.getAttribute("title")).toContain("compositions/");
     expect(legacy.textContent).toContain("npx @sublang/spex scaffold --update");
     // The command prints a migration prompt rather than migrating, so
     // the notice must not promise the tree becomes browsable by

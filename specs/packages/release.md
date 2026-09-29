@@ -33,7 +33,7 @@ When preparing a release, the developer/agent shall review all commits since the
 
 #### release-5
 
-When creating a release tag, the developer/agent shall move items from `[Unreleased]` to a new version section in `CHANGELOG.md` with the release date, and update the comparison links at the bottom of the file.
+When creating a regular release tag — a CLI tag, or an app tag carrying no pre-release version ([DR-087](../decisions/087-beta-app-releases.md)) — the developer/agent shall move items from `[Unreleased]` to a new version section in `CHANGELOG.md` with the release date, and update the comparison links at the bottom of the file.
 
 #### release-6
 
@@ -111,9 +111,10 @@ When preparing a release tag, the developer/agent shall verify that all changes 
 
 #### release-16
 
-When preparing a release tag, the developer/agent shall verify that the channel's `CHANGELOG.md` [[release-3](#release-3)] is updated with the new version and date, and the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag:
+When preparing a release tag, the developer/agent shall verify that the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag — and that the channel's `CHANGELOG.md` [[release-3](#release-3)] carries the release's notes:
 
-- for a beta app tag, both shell manifests carry the tag's pre-release version `MAJOR.MINOR.PATCH-beta.N` verbatim ([DR-087](../decisions/087-beta-app-releases.md)).
+- for a regular tag, the notes stand in a new section with the new version and date [[release-5](#release-5)];
+- for a beta app tag ([DR-087](../decisions/087-beta-app-releases.md)), both shell manifests carry the tag's pre-release version `MAJOR.MINOR.PATCH-beta.N` verbatim, and `[Unreleased]` stays in place, non-empty, carrying the beta's notes [[release-27](#release-27)].
 
 #### release-17
 
@@ -123,10 +124,13 @@ When preparing a release tag, the developer/agent shall verify that the tarball 
 
 When preparing a release tag, the developer/agent shall run the automated smoke (`npm run smoke`) ([DR-086](../decisions/086-tests-in-tiers.md)) and see it pass every stage — the build, the spec lint, the fresh install, and the CLI user pass, which packs the release tarball, installs it into an isolated prefix, and walks the published README's fresh-user and upgrading-user journeys through the installed `spex` bin:
 
-- the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server` is walked over its printed token URL — the page served, the seeded config valid with every template playbook, the built-in catalog and the `/code` artifacts served, each configured adapter's readiness reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode and exits clean;
+- the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server`, given only the home and an ephemeral port, is walked over its printed token URL — the page served, the config seeded at the home's `config/playbook.config.yaml` and valid with every template playbook, the built-in catalog and the `/code` artifacts served, the readiness of the Captain's and each bound player's adapter reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode, its home storing English so the render's clicks by name hold on any system, and exits clean;
+- the smoke refuses a working tree with uncommitted changes outside the release records under `docs/releases/` unless `--allow-dirty` is given: the build, the lint and the CLI user pass read the working tree while the fresh install clones the committed one, and a release's record is written while its gates run;
 - the smoke re-runs neither the unit and integration suites nor the browser journeys: CI's success for the tagged commit [[release-15](#release-15)] is that evidence, and a local repeat adds none;
-- a stage's scratch tree is removed on success and kept, its path printed, on failure;
-- `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs.
+- with `--live` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), a `live` stage follows the CLI user pass: the live desktop smoke [[release-22](#release-22)], its driver taken from the fresh install's clone and run inside it on the machine's signed-in agents and a scratch Spex home;
+- a stage's scratch tree is removed on success and kept, its path printed, on failure or interrupt — under `--live`, the fresh install's tree passes to the `live` stage, which makes the app's scratch home, user data and project inside it, and the `live` stage's outcome decides;
+- `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs, and under `--live` only at a stage up to the fresh install, whose clone the `live` stage needs;
+- `--dry-run` names the stages a run would take, in order, and runs none.
 
 #### release-21
 
@@ -138,10 +142,11 @@ When preparing a regular app release tag, the developer/agent shall complete the
 
 #### release-22
 
-When preparing an app release tag — beta or regular ([DR-087](../decisions/087-beta-app-releases.md)) — the developer/agent shall run the live desktop smoke (`npm run smoke:desktop`) — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — and record its outcome with the tag:
+When preparing an app release tag — beta or regular ([DR-087](../decisions/087-beta-app-releases.md)) — the developer/agent shall run the live desktop smoke — the real desktop app walking config, example seeding, session, live playbook dispatch, and abort with signed-in agents ([DR-020](../decisions/020-desktop-live-smoke.md)) — in the installed shape, as the smoke's `live` stage (`npm run smoke -- --live`) [[release-20](#release-20)] ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), and record its outcome with the tag:
 
-- a provider-side failure may be retried or waived with the reason recorded;
-- an app-side failure blocks the tag.
+- a provider-side failure — a refusal, a quota, an outage — may be retried or waived with the reason recorded;
+- any other failure blocks the tag;
+- `npm run smoke:desktop` runs the same smoke from the developer tree during development and is not this gate.
 
 #### release-24
 
@@ -153,16 +158,18 @@ When preparing a CLI release tag, the developer/agent shall run the live migrati
 
 #### release-25
 
-When preparing a regular app release tag, the developer/agent shall run the regression (`npm run regression`) — the browser journeys' live lane on the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md)): a real `/code` observed to live output and aborted, the chat-authored two-role playbook compiled, registered and run, and a new project developed through two intents with the queue handing off between them — and record its outcome with the tag:
+When preparing a regular app release tag, the developer/agent shall run the regression (`npm run regression`) — the browser journeys' live lane on the machine's signed-in agents ([DR-086](../decisions/086-tests-in-tiers.md), [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)): the app's own example source pasted, compiled for real, registered on the Register form's prefill and run to a finished turn with both players engaged; the chat-authored two-role playbook compiled, registered and run; and a project created from the palette with specs scaffolded, developed through a `/decide` intent and a `/code` intent queued behind it with the queue handing off between them; in every run, a player's question answered through the Captain — and record its outcome with the tag, each failure judged by its class:
 
-- the authored playbook compiles on the roster player the journey picks as the draft's agent, bound to `gpt-6-astra` at `xhigh`; the players that run playbooks and the Captain run on `claude`;
-- a provider-side failure may be retried or waived with the reason recorded;
-- an app-side failure blocks the tag;
+- the playbooks compile on the roster player the journey picks as the draft's agent, bound to `gpt-6-astra` at `xhigh`; the players that run playbooks and the Captain run on `claude`;
+- a provider-side failure — a refusal, a quota, an outage — may be retried or waived with the reason recorded;
+- the bundled compiler refusing the app's own example on its first compile blocks the tag, the relay then letting the agent change the source;
+- the compiler refusing the chat-authored source after the bounded relay, a model outcome, may be waived with the compiler's output attached and an issue filed against `slc`;
+- any other app-side failure blocks the tag;
 - a beta app release tag is not gated on it ([DR-087](../decisions/087-beta-app-releases.md)).
 
 #### release-26
 
-When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify CI green for the commit to be tagged [[release-15](#release-15)], run the smoke [[release-20](#release-20)] and the live desktop smoke [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
+When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify CI green for the commit to be tagged [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
 
 #### release-27
 
@@ -178,6 +185,18 @@ When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releas
 #### release-23
 
 When a release candidate tarball is inspected via `npm pack --dry-run`, the inspection shall find no test files and no source files that are not required at runtime in the file list, asserting the runtime-files hygiene of the `files` field [[release-12](#release-12)] and the workflow's package validation [[release-13](#release-13)].
+
+### Release Workflow
+
+#### release-28
+
+When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests, the test suite shall assert:
+
+- an `app-vMAJOR.MINOR.PATCH` tag over manifests at its version is a regular release titled `Spex App vMAJOR.MINOR.PATCH` [[release-19](#release-19)] [[release-11](#release-11)], whose notes are its version's section alone — no neighbouring section, no link definition — with repository-relative links pointed at the tagged tree and other links left as they are [[release-11](#release-11)];
+- an `app-vMAJOR.MINOR.PATCH-beta.N` tag over manifests at its pre-release version is a beta titled with that version [[release-11](#release-11)], whose notes are the `[Unreleased]` section under the line naming the beta and the release it leads to, and end with the line naming the gates a beta skips [[release-27](#release-27)];
+- `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
+- a beta tag over manifests off its pre-release version refuses the release [[release-27](#release-27)];
+- a beta's `[Unreleased]` holding only headings and blank lines, its lines ending in LF or CRLF, is refused as empty notes [[release-27](#release-27)].
 
 ## References
 

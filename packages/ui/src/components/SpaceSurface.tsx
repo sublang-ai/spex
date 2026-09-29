@@ -508,6 +508,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
 
   const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
+  // The reader's own Refresh (space-2), counted: it lets the issues
+  // list lay itself out afresh (space-48, space-55).
+  const [refreshes, setRefreshes] = useState(0);
   const [remoteEditing, setRemoteEditing] = useState(false);
   const [remoteFocus, setRemoteFocus] = useState(0);
   const [busy, setBusy] = useState<"init" | "join" | "sync">();
@@ -727,7 +730,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
             data-testid="space-refresh"
             className={SECONDARY}
             disabled={!connected}
-            onClick={() => void loadSpace()}
+            onClick={() => void loadSpace().then(() => setRefreshes((count) => count + 1))}
           >
             {i18n._({ id: "Refresh", comment: "re-read the space's state" })}
           </button>
@@ -767,6 +770,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
                 now={now}
                 connected={connected}
                 issuesOpen={issuesOpen}
+                refreshes={refreshes}
                 onOpenSession={onOpenSession}
                 onOpenProject={onOpenProject}
                 onNote={onNote}
@@ -871,7 +875,7 @@ function Header({
     primary = joinConfirm ? (
       <span data-testid="space-join-confirm">
         <InlineConfirm
-          question={i18n._("Join both spaces into one? Anything in both will ask you to choose.")}
+          question={i18n._("Join both spaces into one? Anything that differs will ask you to choose.")}
           confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
           onConfirm={onJoin}
           onCancel={() => onJoinConfirm(false)}
@@ -884,6 +888,14 @@ function Header({
           data-testid="space-primary"
           className={PRIMARY}
           disabled={disabled || pending}
+          // What Join does is the control's to say (DR-069), as the
+          // first-meeting card's Join says it; a running join's word
+          // says it already.
+          title={
+            joining
+              ? undefined
+              : i18n._("Brings both spaces into one and asks about anything that differs")
+          }
           onClick={() => onJoinConfirm(true)}
         >
           {joining
@@ -921,6 +933,13 @@ function Header({
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={disabled || refusal !== undefined || pending}
           aria-describedby={refusal || actionError ? "space-primary-caption" : undefined}
+          // What Sync does is the control's to say, not a card's
+          // (DR-069); a running control's word says it already.
+          title={
+            joining || busy === "sync" || accepted === "sync" || running
+              ? undefined
+              : i18n._("Sends what is here and brings back anything new")
+          }
           onClick={onSync}
         >
           {label}

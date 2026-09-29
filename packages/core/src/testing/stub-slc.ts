@@ -8,7 +8,11 @@
 // preserves and the compile flow re-keys onto case-insensitively.
 // Its progress lines follow slc's own format, and scripted variants
 // fail a phase, ask for clarification, or block until killed, so the
-// authoring relay is covered without an agent (DR-058).
+// authoring relay is covered without an agent (DR-058). Given a
+// compiled fixture — a real `slc`'s output, captured with the source
+// it compiled (playbook-library-87) — a passing run places that output
+// instead of its own, refusing a draft whose id or source is not the
+// fixture's.
 
 import { ARTIFACT_SCHEMAS } from "../config.js";
 
@@ -53,7 +57,22 @@ async function phaseLines(upTo) {
     progress("✓ " + phase + " wrote " + base + ".playbook/" + base + "." + phase + " (1s)");
   }
 }
+// A compiled fixture stands only for the source it was compiled from.
+function checkFixture() {
+  if (!FIXTURE_DIR) return;
+  const capture = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "capture.json"), "utf8"));
+  const refuse = (why) => { progress("slc: " + why); process.exit(1); };
+  if (capture.playbookId !== base) refuse("the compiled fixture is " + capture.playbookId + ", not " + base);
+  if (fs.readFileSync(src, "utf8") !== fs.readFileSync(path.join(FIXTURE_DIR, base + ".md"), "utf8")) {
+    refuse("the draft's source is not the one the compiled fixture was compiled from; recapture the fixture");
+  }
+}
 function emitArtifacts() {
+  if (FIXTURE_DIR) {
+    fs.cpSync(path.join(FIXTURE_DIR, base + ".playbook"), path.join(srcDir, base + ".playbook"), { recursive: true });
+    fs.copyFileSync(path.join(FIXTURE_DIR, base + ".ts"), path.join(srcDir, base + ".ts"));
+    return;
+  }
   const dir = path.join(srcDir, base + ".playbook");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
@@ -139,6 +158,7 @@ function emitArtifacts() {
 }
 async function runStep(step) {
   if (step === "ok") {
+    checkFixture();
     await phaseLines(undefined);
     emitArtifacts();
     console.log("stub slc: compiled " + base);
@@ -206,13 +226,18 @@ export function stubSlcSource(rolesLiteral = "['Helper']"): string {
  * until a `STUB_SLC_RELEASE_FILE` token lands beside the source, so
  * the running state stands however slow the machine, and the journey
  * releases each run when it has seen enough (playbook-library-77).
+ * A `fixtureDir` makes a passing run place that compiled fixture —
+ * its `<id>.playbook/` layout and `<id>.ts` entry, beside a
+ * `capture.json` naming its id and the `<id>.md` it was compiled
+ * from — in place of the stub's own artifacts (playbook-library-87).
  */
 export function stubSlcScriptedSource(
   steps: readonly StubSlcStep[],
   rolesLiteral = "['Helper']",
-  options: { delayMs?: number; phaseDelayMs?: number; hold?: boolean } = {},
+  options: { delayMs?: number; phaseDelayMs?: number; hold?: boolean; fixtureDir?: string } = {},
 ): string {
   return `
+const FIXTURE_DIR = ${JSON.stringify(options.fixtureDir ?? null)};
 const PHASES = ${JSON.stringify(SLC_PHASES)};
 const REQUIRED_ROLE_IDS = ${rolesLiteral};
 const ARTIFACT_SCHEMA = ${ARTIFACT_SCHEMAS[0]};

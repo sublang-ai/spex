@@ -43,7 +43,7 @@ Spex answers each with one systematic design:
 
 ## Getting started
 
-Requires Node.js 22 or later. The desktop compiles playbooks on the Node
+Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
 inside its Electron; the server shell compiles them only when its Node, or a
 `node` on `PATH`, is 23.6 or later.
 

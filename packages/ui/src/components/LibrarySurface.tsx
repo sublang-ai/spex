@@ -4,8 +4,9 @@
 // Library surface (PBLIB): configured playbooks with per-role inline
 // agents (DR-019) and the pipeline stage row (Source → Gears →
 // State machine), the drafts in progress with the way to a new one
-// (DR-058), the built-ins catalog, and the slc demo example. A draft
-// opened here replaces the list with its authoring workspace.
+// (DR-058), the built-ins catalog, and the example adapted from slc's
+// demo. A draft opened here replaces the list with its authoring
+// workspace.
 
 import {
   useCallback,
@@ -321,7 +322,7 @@ function BuiltinCard({
   );
 }
 
-/** The demo's four stages. Each label and hint is read when the row
+/** The example's four stages. Each label and hint is read when the row
  * draws, never when this module loads, so the table never freezes the
  * language it was imported in (localization-4). */
 const EXAMPLE_STAGES = [
@@ -331,7 +332,7 @@ const EXAMPLE_STAGES = [
       return i18n._({ id: "Source", comment: "pipeline stage: the authored workflow" });
     },
     get hint() {
-      return i18n._("The raw prose the demo starts from");
+      return i18n._("The raw prose the example starts from");
     },
   },
   {
@@ -342,7 +343,7 @@ const EXAMPLE_STAGES = [
       return i18n._({ id: "Normalized", comment: "pipeline stage: slc's normalized workflow markdown" });
     },
     get hint() {
-      return i18n._("Normalized text: slc's normalize phase turns the prose into workflow markdown");
+      return i18n._("Normalized text: the prose as workflow markdown, in slc's normalized form");
     },
   },
   {
@@ -369,9 +370,9 @@ const EXAMPLE_STAGES = [
 ] as const;
 type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
 
-/** Read-only slc demo card (PBLIB-35, DR-015): the same stage row as
- * a configured playbook wears, over four in-memory stages, with a
- * prefill that opens a draft workspace in paste mode. */
+/** Read-only example card (PBLIB-35, DR-015, DR-089): the same stage
+ * row as a configured playbook wears, over four in-memory stages, with
+ * a prefill that opens a draft workspace in paste mode. */
 function ExampleCard({
   onPrefill,
   error,
