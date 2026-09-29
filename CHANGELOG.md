@@ -85,7 +85,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   values. A choice applies from your next message — a running turn keeps
   what it started with — and outranks a role binding's pin, the editor
   naming the roles it also sets. The chip reads the new setting at once.
-  The choice stays on this device and goes with the session; the
+  The choice stays on this device and is removed with the session; the
   `playbook` CLI and other devices run the configured values.
 - Each agent's pane header reads its completed active time this session,
   as `active · 3m 12s` ([DR-070](specs/decisions/070-agent-active-time.md),
@@ -149,11 +149,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   stands alone.
 - The compile row shows slc's new **Prefix** phase between Optimize and
   Machine.
-- The app's example now compiles on slc 0.12 without a clarification.
-  Adapted from slc's demo, it settles the two limits the compiler asked
-  about: the first agent's 3rd judgment concludes an argument, and
-  findings the review still raises after the 2nd loop are reported at
-  the finish.
+- The app's example settles the two limits slc 0.12 asked about.
+  Adapted from slc's demo, it counts the first agent's judgments per
+  loop, its last one in a loop being the conclusion, and ends after the
+  2nd loop's commit without another review.
 - A player's question reaches you only as the Captain's explanation of
   it, which completes [DR-085](specs/decisions/085-boss-talks-through-captain.md).
 - While a turn runs, the composer's field and Send are disabled, your
@@ -319,11 +318,19 @@ and `npm start` (desktop) or `npm run start:server` (server).
   in by running claude in a terminal, or set ANTHROPIC_API_KEY" (`codex`
   alike), and an expired sign-in says to sign in again with that agent's
   CLI, in a terminal.
-- Protocol version 17 (from 11): `session.restore` replaces
-  `session.retry`; `session.agent.set`, `language.get`, `language.set`
-  and `space.repair.decline` join, with the `language.state` message; a
-  storage diagnostic may carry a structured repair; and attention
-  entries are questions, failures, finishes and reviews only.
+- Protocol version 17 (from 11), in full in `packages/core/src/protocol.ts`:
+  `session.restore` replaces `session.retry`; `session.agent.set`,
+  `language.get`, `language.set` and `space.repair.decline` join, with
+  the `language.state` message; `session.control` may name the action
+  it runs by `actionId`; a session gains `parked`, `agentActiveMs` and
+  `agentSettings`, and its `recovery` gains `discardable`; an open
+  intent gains its queue standing, `next`, and loses the `permission`
+  reason; attention entries are questions, failures, finishes and
+  reviews only, a failure carrying `parked` and its `cause`; a draft's
+  failed compile names its `relay`; a storage diagnostic may carry a
+  structured repair, and the Space state its `issues` count, its
+  Settings unit named `config/playbook.config.yaml`; and an error reply
+  may carry `details`.
 
 ### Fixed
 
