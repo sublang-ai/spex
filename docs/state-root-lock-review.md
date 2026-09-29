@@ -3,16 +3,16 @@
 
 # State-root lock: incident and proposed direction
 
-**Status:** Proposal for review (2026-09-29). No behavior or spec change is approved by this document.
+**Status:** Revised proposal for review (2026-09-29). The owner selected candidate A for the state-root lease and included Playbook's session leases and repository claims in this review; they may be changed together during implementation. The remaining design details are open. No behavior or spec change is approved by this document.
 
 ## Purpose and scope
 
 Spex needs two distinct forms of single-instance protection:
 
 - The desktop shell uses Electron's `requestSingleInstanceLock()` to focus an existing app window when the same desktop app is launched again ([app-shell-2](../specs/packages/app-shell.md#app-shell-2), [implementation](../apps/desktop/src/main.ts)).
-- The core's state-root lease admits at most one writer for a Spex home, including a desktop core, a server core, and storage commands that mutate the home ([DR-036](../specs/decisions/036-file-state-store.md), [core-service-61](../specs/packages/core-service.md#core-service-61), [storage-14](../specs/packages/storage.md#storage-14)). Electron's app lock alone cannot cover those other writers.
+- The core's state-root lease admits one core or home-level storage operation at a time for Spex-owned files: a desktop core, a server core, or a storage command that mutates the home ([DR-036](../specs/decisions/036-file-state-store.md), [core-service-61](../specs/packages/core-service.md#core-service-61), [storage-14](../specs/packages/storage.md#storage-14)). Playbook CLI session writes use separate per-session leases and can coexist with a core. Electron's app lock alone cannot cover the home-level writers.
 
-This proposal concerns the **state-root lease**, not Playbook's separate per-session leases.
+This proposal compares ways to protect the **state-root lease** and reviews the related hostname/PID failure in Playbook's per-session leases and repository claims. The review covers all three coordination mechanisms; implementation may change them together, with Playbook-owned formats and CLI behavior coordinated upstream.
 The accepted contract is one core per state root; the particular `.lock/owner.json` mechanism is an implementation choice.
 
 ## Incident and observed behavior
@@ -28,6 +28,7 @@ npm start
 ```
 
 This preserved the old owner record while removing the active `.lock/` path; this particular successful retry was a manual recovery, not automatic stale-lock retirement.
+The `.lock.stale-*` backup is ignored by the home's Git rules and can be deleted after it is no longer needed for diagnosis.
 
 On 2026-09-29, the user also observed:
 
@@ -51,33 +52,44 @@ The [storage Git commands](../packages/core/src/storage-git.ts) reserve the same
 The directory protects cooperating Spex writers on one filesystem, but its presence survives abrupt process termination.
 Hostnames can change, and PID existence is weaker than proof that the original owner still holds the lease.
 The existing directory also cannot guarantee mutual exclusion between two machines whose separate filesystem copies are synchronized asynchronously; [DR-036](../specs/decisions/036-file-state-store.md) explicitly leaves concurrent multi-machine writes out of scope.
+The observed `Mac.lan`/`Minion.local` mismatch proves that the hostname changed, but does not establish which system setting or network event changed it.
 
-## Proposed direction
+The installed `@sublang/playbook` 15.0.0 session store (`reference/sdlc/code.playbook/bin/session-store.js`) likewise compares a lease owner's hostname before probing its PID.
+It accepts injected `hostname` and `probeProcess` options, but Spex currently supplies neither, and a standalone Playbook CLI constructs its own store.
+Injecting a stable identity only in Spex would not fix CLI-authored leases or old owner files; those need an upstream and transition plan.
+Its repository coordinator (`reference/sdlc/code.playbook/bin/repository-effects.js`) also uses hostname/PID ownership. The same review must cover its claim identity, stale-owner handling, and compatibility with existing claims.
 
-1. Keep Electron's single-instance lock for desktop window behavior.
-2. Use a **nonblocking OS advisory exclusive file lock** as the authority for admission to a Spex home on macOS and Linux. All home writers, including the core and storage Git commands, acquire the same lock before changing state and hold it until their work ends. A contender that cannot acquire it refuses and reports the active owner when owner information is available.
-3. Keep any lock file at a stable path and hold its descriptor open. Never unlink or replace that file as part of ordinary release; close the descriptor instead. The file may remain after exit, but an unheld file does not block startup. PID and hostname become diagnostic metadata only, written after lock acquisition and never used as the admission authority.
-4. Route Ctrl+C during `npm start` through a graceful Electron/core shutdown where practical, with a bounded forced-exit fallback. This preserves session cleanup, but correctness must not depend on a shutdown callback: crashes and forced termination must release the OS lock automatically.
+## Candidate approaches
 
-`flock(LOCK_EX | LOCK_NB)` is one candidate for the supported macOS/Linux hosts. Its lock is associated with an open file and released when the owning open descriptions close; it remains advisory, so every Spex home writer must cooperate ([Apple `flock(2)`](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/flock.2.html), [Linux `flock(2)`](https://man7.org/linux/man-pages/man2/flock.2.html)). Electron documents `requestSingleInstanceLock()` and `before-quit`, but the latter does not run for immediate exits ([Electron app API](https://www.electronjs.org/docs/latest/api/app)).
+Electron's single-instance lock remains for desktop window behavior in every candidate. It cannot protect the server or storage commands.
 
-This changes the failure mode: a dead process cannot leave an *active* local OS lock, even if a metadata file remains.
-It does not make uncoordinated cross-machine writes safe.
-If multi-machine concurrent access becomes a requirement, it needs an authoritative single writer or a genuine distributed coordination mechanism; a synchronized lock file is insufficient.
+| Candidate | Benefit | Cost and limitation |
+| --- | --- | --- |
+| **A. Harden the directory lease**: replace hostname with a generated machine identity stored outside the synced home; record and verify PID plus process start identity before retiring a local owner's lock. | Addresses this incident and PID reuse without a new lock dependency; can preserve the current foreign-host refusal. | Abrupt exit still leaves files, though verifiably dead local owners can be retired. Process-start verification, legacy owner files, lost machine identity, and Playbook/CLI coordination need explicit handling. Unreadable or unverifiable ownership must still fail closed. |
+| **B. Heartbeat with timeout**: periodically refresh the lease and retire it after a deadline. | No native binding; can recover from a dead owner without a process probe. | A sleeping, paused, or overloaded *live* owner can miss the deadline and continue writing after a contender takes over. A timeout alone cannot uphold the one-writer contract; it is suitable only as diagnostic evidence or with an additional authority/fencing design. |
+| **C. OS advisory file lock**: take a nonblocking exclusive lock for the local home writer's lifetime. | The OS releases a local lock after the owner dies, so residual metadata cannot block the next local start. | Node/Electron expose no built-in `flock`/`fcntl` API; an in-process implementation needs a native addon, while a packaged helper would be another maintained binary. All writer entry points, packaging, ABI rebuilds, descriptor inheritance, and old-version coexistence must be addressed. A local OS lock alone does not enforce the current root foreign-host refusal or fix Playbook session leases. |
+
+For candidate C, the lock target should be **outside the potentially synced home**, on a stable machine-local filesystem, keyed by the canonical state-root path and protected by private permissions. Hold its descriptor open; never unlink or replace the target during ordinary release. Verify that spawned agents cannot inherit and retain the descriptor. `flock(LOCK_EX | LOCK_NB)` is one macOS/Linux option, but its exact Node/Electron binding and packaging are prerequisites to selecting it ([Apple `flock(2)`](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/flock.2.html), [Linux `flock(2)`](https://man7.org/linux/man-pages/man2/flock.2.html)).
+
+**Selected direction for the state-root lease (2026-09-29):** harden the existing directory lease (A). B is not sufficient as the sole admission authority. C remains a comparison, not the planned root mechanism. Playbook's session leases and repository claims are included in the same design review and may be updated in the same implementation effort; their detailed changes and compatibility plan remain to be decided.
+
+Separately, the desktop can handle `SIGINT`/`SIGTERM` by requesting `app.quit()` so `before-quit` stops the core, with a bounded escalation in the source-runner. This improves shutdown under any candidate, but forced termination must remain safe ([desktop main](../apps/desktop/src/main.ts), [source-runner](../scripts/desktop-runner.mjs), [Electron app API](https://www.electronjs.org/docs/latest/api/app)). It is independent implementation work **after approval**, consistent with the earlier request to defer development until review.
+
+No candidate makes uncoordinated cross-machine writes safe over asynchronous file synchronization. True concurrent multi-machine access needs an authoritative single writer or a distributed coordination mechanism with enforced write ownership.
 
 ## Review decisions before specification or implementation
 
-- **Lock identity and location:** Choose a stable, machine-local lock target keyed by the canonical state-root path, with private permissions. The lock target must not be replaced by Git or a file-sync client while held. Confirm handling of symlinks, alternate spellings of one root, missing runtime directories, and per-user scope.
-- **Old-version coexistence:** A new OS-lock file would be invisible to older binaries that only inspect `.lock/`. Decide whether an upgrade requires all older writers to stop, or a temporary compatibility gate. Define how an existing stale legacy `.lock/` is handled once, without allowing an old writer and a new writer to run together.
-- **Writer inventory:** Confirm that desktop, server, storage Git commands, migrations, and any other state-root mutation all use the shared guard. Playbook's per-session lease remains a separate concern.
-- **Runtime binding:** Choose how Node/Electron obtains the OS lock on macOS and Linux, including packaging and native-ABI effects. Ensure child processes do not unintentionally keep the lock descriptor alive after the core exits.
-- **Diagnostics:** Define the refusal message when the OS reports a busy lock but metadata is missing or stale. Never infer that metadata alone proves ownership.
-- **Shutdown:** Define how the source-runner asks Electron to quit on SIGINT/SIGTERM, how long it waits, and when it escalates, while preserving its required Node ABI restoration ([app-shell-26](../specs/packages/app-shell.md#app-shell-26)).
+- **Foreign-host policy:** The root implementation currently refuses a visible foreign owner; DR-036 explicitly preserves that rule for *session* leases and leaves concurrent multi-machine writing out of scope. Specify how selected approach A recognizes a foreign machine and treats legacy hostname-only records; confirm whether the current refusal remains. Any change to the Playbook session rule requires an amendment to DR-036. Record the resulting root rule in the specs before implementation.
+- **Primary local mechanism:** A is selected for the state-root lease. Its machine identity, process-start verification, legacy compatibility, and failure handling still need a concrete design before specification or implementation.
+- **Playbook coordination:** Inclusion in this review is agreed, and implementation may be combined. Specify the upstream changes to session-lease and repository-claim identity, process probing, and compatibility with the standalone CLI and existing owner records. Passing `hostname` only from Spex would leave those paths behind.
+- **Compatibility and identity:** Define how old `.lock/owner.json` records, Playbook owners, older binaries, and lost machine identities are treated without allowing concurrent writers; unverifiable cases remain fail closed. Canonicalize root identity and account for symlinks and alternate paths.
+- **Writer and shutdown coverage:** Include desktop, server, storage Git commands, migrations, and session writers; define graceful desktop signal handling and bounded escalation without losing the Node ABI restoration required by [app-shell-26](../specs/packages/app-shell.md#app-shell-26).
+- **Diagnostics:** Report a proven active owner when possible, and clearly identify uncertainty otherwise; metadata alone never proves that an OS lock is held.
 
 ## Suggested verification after approval
 
-Run integration/system checks with real competing processes for: desktop versus desktop, desktop versus server, and core versus storage Git; normal close and Ctrl+C; forced termination followed by immediate restart; a remaining metadata file with no OS lock; a busy OS lock with missing metadata; and the legacy-version transition.
-Check that the losing writer changes no protected state, that the winning writer retains its lock throughout shutdown, and that the source-runner still restores the Node ABI after interruption.
+Run integration/system checks with real competing processes for desktop versus desktop, desktop versus server, and core versus storage Git; normal close and Ctrl+C; forced termination followed by immediate restart; hostname change; PID reuse; session takeover through Spex and the standalone Playbook CLI; competing Playbook repository operations and stale repository-claim recovery; and the legacy-version transition.
+For C, also cover residual metadata without an OS lock, a busy OS lock with missing metadata, a sync-backed home with a machine-local lock target, and agent child processes outliving the core. For A, cover missing or changed machine identity and unverifiable process start identity. Check that a losing writer changes no protected state and that the source-runner still restores the Node ABI after interruption.
 
-After review, record the accepted decision in the specs before implementation, updating the relevant core, shell, and storage contracts and their integration evidence.
+After review, record the accepted decision in the Spex specs before implementation, updating the relevant core, shell, and storage contracts and their integration evidence; coordinate the corresponding Playbook-owned specifications and implementation upstream.
 Run `spex lint` after those spec edits as required by [AGENTS.md](../AGENTS.md).
