@@ -3246,7 +3246,13 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     expect(interrupted.frames.map((frame) => [frame.active, frame.activePlayer?.running])).toEqual([["firstPhase", true]]);
     const view = applyRecords(initialSessionView(PLAYERS), [...MACHINE_INTERRUPTED, ...machineRestored()]);
     expect(view.frames.map((frame) => [frame.traceSessionId, frame.active, frame.activePlayer])).toEqual([["t-stop", "failed", undefined]]);
+    // The report starts the lost turn again under its own id and
+    // message: the message was sent once, and reads once.
+    expect(view.captain.filter((line) => line.kind === "boss").map((line) => [line.turnId, line.text])).toEqual([
+      [21, "/code fix the refresh path"],
+    ]);
     renderFailed({ view });
+    expect(screen.getAllByTestId("boss-bubble")).toHaveLength(1);
     expect(screen.getByText(/The process stopped during the first phase/)).toBeTruthy();
     expect(screen.getByTestId("failed-workflow-what").textContent).toBe(
       "The /code workflow failed and is waiting for you.",

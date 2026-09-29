@@ -324,7 +324,7 @@ While a stored session is uncertain, the run view shall show "Interrupted turn" 
 - Restore acts without a confirmation, its tooltip reading "Nothing is repeated";
 - Discard, where drawn, confirms that the unprocessed message is dropped, or a fresh session removed; where the summary says otherwise it is absent, and nothing explains its absence ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - confirmation focuses Cancel, Escape cancels, and pending or disconnected controls are disabled;
-- success follows the reported state in place, a restore's report standing as the Captain's reply; refusal shows its cause with the transcript and draft preserved.
+- success follows the reported state in place, a restore's report standing as the Captain's reply, and the report's start — the lost turn started again under its own id and message after the restore's marker [[core-service-82](core-service.md#core-service-82)] — draws no second Boss message; refusal shows its cause with the transcript and draft preserved.
 
 #### run-view-125
 
@@ -987,7 +987,7 @@ Where a replayed fixture stream ends with a playbook run standing parked on the 
 - activating Drop asks its confirm first — backing out sends nothing — and then sends exactly one command: for a fixture serving an open intent that intent's close as dropped and no control, the ending riding it, and for one serving none exactly one ending control naming the published ending's id and no close [[run-view-112](#run-view-112)];
 - while a command is in flight the activated control shows its busy form under the width rule it held at rest and no control of the notice can be activated; a refused command shows its cause beside the notice, which stands, with the transcript and draft intact [[run-view-130](#run-view-130)];
 - a fixture whose stream then reports the run leaving its failure state removes the notice, one whose stream reports the run ended removes it too, and one whose next turn only answers leaves it standing [[run-view-130](#run-view-130)];
-- a fixture run calling its player when its writer stopped, then restored by a recorded position holding it in its failure state with no traced move, draws that run failed with no call running and stands the notice with the summary's controls under the Captain's report [[run-view-74](#run-view-74)] [[run-view-128](#run-view-128)];
+- a fixture run calling its player when its writer stopped, then restored as a real core streams it — the marker, the report started again under the lost turn's id and message, and a recorded position holding the run in its failure state with no traced move — draws that run failed with no call running and the saved message once, and stands the notice with the summary's controls under the Captain's report [[run-view-74](#run-view-74)] [[run-view-110](#run-view-110)] [[run-view-128](#run-view-128)];
 - a recorded position holding no run settles that run's card unfinished and stands no notice [[run-view-74](#run-view-74)], and one holding a run's pending question raises the wait for its asker while one holding none clears a standing wait [[run-view-9](#run-view-9)];
 - the same fixture marked uncertain shows the interrupted-turn controls and no parked-run notice [[run-view-128](#run-view-128)] [[run-view-110](#run-view-110)], and marked externally owned shows neither [[run-view-125](#run-view-125)].
 

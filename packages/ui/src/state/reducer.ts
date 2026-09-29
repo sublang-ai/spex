@@ -8,6 +8,7 @@
 import {
   hasPresentationHeader,
   RESTORED_TOPIC,
+  RESTORING_TOPIC,
   type RestoredPosition,
   type TmuxPlayRecord,
   type MachineGraph,
@@ -177,6 +178,9 @@ export interface SessionView {
   pendingQuestion?: string;
   /** The asking player for the parked question (pane id). */
   pendingQuestionPlayer?: string;
+  /** Set by a restore's marker until the next turn starts: that turn is
+   * the restore's report of a message already drawn (run-view-110). */
+  restoring?: boolean;
   lastSeq: number;
 }
 
@@ -407,6 +411,13 @@ export function applyRecord(
       view.turnActive = true;
       const turn = r.turn as { id: number; prompt: string };
       view.currentTurnId = turn.id;
+      // A restore's report starts the interrupted turn again under its
+      // own id and message (run-view-110): the message was sent once,
+      // so where the lost attempt already drew it, it is not drawn again.
+      const reported = view.restoring === true && view.captain.some((line) =>
+        line.kind === "boss" && line.turnId === turn.id && line.text === turn.prompt);
+      view.restoring = undefined;
+      if (reported) break;
       pushCaptain(view, {
         kind: "boss",
         text: turn.prompt,
@@ -605,6 +616,8 @@ export function applyRecord(
         }
       } else if (topic === "playbook.captain.fsm.state") {
         view.captainMode = stateText(payload?.to);
+      } else if (topic === RESTORING_TOPIC) {
+        view.restoring = true;
       } else if (topic === RESTORED_TOPIC) {
         // A restore's recorded position (run-view-74, DR-088): the
         // restore traced no move, so the runs stand where the core

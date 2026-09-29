@@ -750,10 +750,12 @@ export const MACHINE_INTERRUPTED: FixtureEntry[] = [
   }),
 ];
 
-/** The restore of that turn (core-service-82): Playbook's report turn
- * moves no traced state, so the core records where each run stands —
- * here the run back at its failure state, as a step the process
- * stopped in is restored. */
+/** The restore of that turn (core-service-82), as a real core streams
+ * it: the core's marker carrying the saved input, then Playbook's
+ * report turn — started again under the lost turn's id and message —
+ * which moves no traced state, so the core records where each run
+ * stands: here the run back at its failure state, as a step the
+ * process stopped in is restored. */
 export function machineRestored(
   runs: Record<string, unknown>[] = [
     {
@@ -767,6 +769,13 @@ export function machineRestored(
   ],
 ): FixtureEntry[] {
   return [
+    rec(760, {
+      type: "captain_telemetry",
+      turnId: null,
+      timestamp: 21_999,
+      topic: "spex.session.restoring",
+      payload: { input: "/code fix the refresh path" },
+    }),
     rec(761, {
       type: "turn_started",
       turnId: 21,
