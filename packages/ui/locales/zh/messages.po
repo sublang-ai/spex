@@ -2816,11 +2816,6 @@ msgstr "缺少阶段：{stages}"
 msgid "model"
 msgstr "模型"
 
-#. the model field of an agent editor
-#: src/components/ModelField.tsx
-msgid "Model"
-msgstr "模型"
-
 #: src/components/AgentEditor.tsx
 msgid "Model (optional)"
 msgstr "模型（可选）"
@@ -3599,7 +3594,6 @@ msgstr "拟定的注册信息"
 msgid "provider default"
 msgstr "提供方默认"
 
-#. model choice: let the provider pick its own default model
 #. model choice: let the provider pick its own default model
 #: src/components/ModelField.tsx
 msgid "Provider default"

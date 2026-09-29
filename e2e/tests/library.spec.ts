@@ -29,13 +29,24 @@ test.describe("runtime binding options", () => {
     const edit = page.getByTestId("role-bind-code-coder");
     const editor = page.getByTestId("binding-editor-coder");
     await edit.click();
+    // The player's model, known only through an alias's resolution,
+    // is inherited by name as it reads (playbook-library-4).
+    await expect(editor.getByTestId("binding-model-mode").locator("option").first()).toHaveText("inherit the player (claude-opus-5)");
     await editor.getByTestId("binding-model-mode").selectOption("pin");
-    const model = editor.getByTestId("binding-model-value-select");
-    await expect(model).toHaveValue("claude-opus-5");
+    const model = editor.getByTestId("binding-model-value-trigger");
+    const list = editor.getByTestId("binding-model-value-listbox");
+    /** Open the model list and choose the row holding `value`. */
+    const choose = async (value: string) => {
+      await model.click();
+      await list.locator(`[role="option"][data-value="${value}"]`).click();
+      await expect(list).toHaveCount(0);
+    };
+    // A canonical pin reads as itself, never rewritten to its alias.
+    await expect(model).toHaveText("claude-opus-5");
     await expect(editor).not.toContainText("Not in this runtime's list");
     await expect(editor).not.toContainText("model support unverified");
     const configBefore = app.readConfig();
-    await model.selectOption({ label: "Custom model…" });
+    await choose("__spex_custom__");
     const custom = editor.getByTestId("binding-model-value");
     await custom.fill("");
     await expect(editor.getByTestId("binding-model-mode")).toHaveValue("pin");
@@ -50,8 +61,9 @@ test.describe("runtime binding options", () => {
     await expect.poll(readRole).toEqual({ player: "dev.coder", model: "claude-opus-5" });
 
     await edit.click();
-    await expect(model).toHaveValue("claude-opus-5");
-    await model.selectOption("claude-fable-5-1");
+    await expect(model).toHaveText("claude-opus-5");
+    await choose("claude-fable-5-1");
+    await expect(model).toHaveText("Claude Fable 5.1 claude-fable-5-1");
     await editor.getByTestId("binding-effort-mode").selectOption("pin");
     const effort = editor.getByTestId("binding-effort-value");
     await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "low", "high", "ultracode"]);
@@ -64,7 +76,8 @@ test.describe("runtime binding options", () => {
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
-    await model.selectOption("opus");
+    await choose("opus");
+    await expect(model).toHaveText("Claude Opus 5 claude-opus-5");
     await expect(editor.getByTestId("binding-save")).toBeEnabled();
     await effort.selectOption("ultracode");
     await editor.getByTestId("binding-save").click();

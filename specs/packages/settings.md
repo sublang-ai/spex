@@ -98,7 +98,7 @@ Where a model editor [[settings-34](#settings-34)] names a model value against t
 
 Where a model editor offers the runtime's model choices [[settings-34](#settings-34)], its model field shall present them as a single-select listbox opened from a trigger, each model read by the display rule [[settings-38](#settings-38)] ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
-- the trigger reads the value with its specific model muted, and the empty value reads "Provider default" followed, muted, by the runtime's `defaultModel` where reported;
+- the trigger reads the chosen row: the value with its specific model muted, "Custom model…" while the hand-typed field holds the value, and for the empty value "Provider default" followed, muted, by the runtime's `defaultModel` where reported;
 - the rows stand in this order: "Provider default" where the editor allows it, its second line the `defaultModel` where reported; a value recognized only through a resolution, as its own row; each catalog row in the runtime's order, its first line the name with the specific model muted beside it and its second line the runtime's `description` where reported; and "Custom model…" last;
 - the selected row wears a check and is marked selected to assistive technology, and a line too long for its row ends in an ellipsis, whole in the row's title;
 - choosing "Custom model…", or holding a value no row lists, shows the hand-typed model ID field beneath the trigger, the unlisted value with the hint that the runtime does not list it, and while the catalog is loading, unavailable or empty the hand-typed field stands alone;

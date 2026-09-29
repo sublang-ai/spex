@@ -151,6 +151,15 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("agent-editor")).toBeVisible();
     found.push(...(await scan(page, "Settings")));
 
+    // The model field's list open: a trigger naming its value, a
+    // labelled listbox, and two-line rows with the runtime's own
+    // descriptions (settings-39, DR-091).
+    await page.getByTestId("agent-model-trigger").click();
+    await expect(page.getByTestId("agent-model-listbox")).toBeVisible();
+    found.push(...(await scan(page, "Settings (model list)")));
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("agent-model-listbox")).toHaveCount(0);
+
     expect(found, found.join("\n")).toEqual([]);
   });
 }

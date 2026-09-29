@@ -18,21 +18,49 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   const captain = page.getByTestId("captain-section");
   const before = app.readConfig();
   await captain.getByTestId("captain-edit").click();
-  const modelSelect = captain.getByTestId("agent-model-select");
+  const modelTrigger = captain.getByTestId("agent-model-trigger");
+  const modelList = captain.getByTestId("agent-model-listbox");
   const custom = captain.getByTestId("agent-model");
   const effort = captain.getByTestId("agent-effort");
 
   // An omitted current model stays editable; discovery never replaces it.
-  await expect(modelSelect).toBeVisible();
+  await expect(modelTrigger).toHaveText("Custom model…");
   await expect(custom).toHaveValue("claude-opus-5");
   await expect(captain).toContainText("Not in this runtime's list");
   await expect(captain.getByTestId("agent-fast-mode")).toBeVisible();
   await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max", "ultracode"]);
 
-  // Exact discovered IDs are native select choices, with this model's
-  // narrower effort list and known lack of fast-mode support.
-  await modelSelect.selectOption("claude-fable-5-1");
-  await expect(modelSelect).toHaveValue("claude-fable-5-1");
+  // Each row names the specific model the runtime reports, with its own
+  // description; the provider default names the model it runs
+  // (settings-38, settings-39).
+  await modelTrigger.click();
+  await expect(modelList).toBeVisible();
+  const rows = modelList.getByRole("option");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).toHaveAccessibleName("Provider default");
+  await expect(rows.nth(0)).toHaveAccessibleDescription("Opus · claude-opus-5-5");
+  await expect(rows.nth(1)).toHaveAccessibleName("Opus claude-opus-5-5");
+  await expect(rows.nth(1)).toHaveAccessibleDescription("Opus 5.5 · Best for everyday, complex tasks");
+  await expect(rows.nth(2)).toHaveAccessibleName("Claude Fable 5.1 claude-fable-5-1");
+  await expect(rows.nth(3)).toHaveAccessibleName("Custom model…");
+  await expect(rows.nth(3)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(modelList).toHaveCount(0);
+  await expect(modelTrigger).toBeFocused();
+  await expect(captain.getByTestId("agent-editor")).toBeVisible();
+
+  // Exact discovered IDs are the list's choices, taken from the
+  // keyboard, with this model's narrower effort list and known lack of
+  // fast-mode support (settings-40).
+  await page.keyboard.press("Enter");
+  await expect(modelList).toBeFocused();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(modelList).toHaveCount(0);
+  await expect(modelTrigger).toBeFocused();
+  await expect(modelTrigger).toHaveText("Claude Fable 5.1 claude-fable-5-1");
   await expect(custom).toHaveCount(0);
   await expect.poll(() => effort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "high", "max", "ultracode"]);
   await expect(captain.getByTestId("agent-fast-mode")).toHaveCount(0);
@@ -43,8 +71,9 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   await expect.poll(() => app.readConfig()).toContain("model: claude-fable-5-1");
 
   await captain.getByTestId("captain-edit").click();
-  await expect(modelSelect).toHaveValue("claude-fable-5-1");
-  await modelSelect.selectOption({ label: "Custom model…" });
+  await expect(modelTrigger).toHaveText("Claude Fable 5.1 claude-fable-5-1");
+  await modelTrigger.click();
+  await modelList.getByRole("option", { name: "Custom model…" }).click();
   await custom.fill("manual-private-model");
   const refresh = captain.getByRole("button", { name: "Refresh models", exact: true });
   await refresh.click();
@@ -65,7 +94,7 @@ test("settings-36: runtime model choices narrow tuning and preserve custom draft
   await expect(effort).toHaveValue("high");
   await expect(captain.getByTestId("agent-fast-mode")).toBeChecked();
   await captain.getByTestId("agent-adapter-codex").click();
-  await expect(modelSelect).toHaveValue("");
+  await expect(modelTrigger).toHaveText("Provider default");
   await expect(effort).toHaveValue("");
   await expect(captain.getByTestId("agent-fast-mode")).not.toBeChecked();
   expect(app.readConfig()).toBe(beforeSwitch);

@@ -2816,11 +2816,6 @@ msgstr "missing stages: {stages}"
 msgid "model"
 msgstr "model"
 
-#. the model field of an agent editor
-#: src/components/ModelField.tsx
-msgid "Model"
-msgstr "Model"
-
 #: src/components/AgentEditor.tsx
 msgid "Model (optional)"
 msgstr "Model (optional)"
@@ -3599,7 +3594,6 @@ msgstr "Proposed registration"
 msgid "provider default"
 msgstr "provider default"
 
-#. model choice: let the provider pick its own default model
 #. model choice: let the provider pick its own default model
 #: src/components/ModelField.tsx
 msgid "Provider default"

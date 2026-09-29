@@ -292,16 +292,24 @@ function compiledScript(options: AppOptions): FakeScript {
   };
 }
 
-/** Deliberately omits the demo's current model, exercising retained custom IDs. */
+/** Deliberately omits the demo's current model, exercising retained
+ * custom IDs. Claude's catalog carries an alias with the specific model
+ * it resolves to, the runtime's own descriptions and the model it runs
+ * by default, as the runtime reports them (DR-091). */
 function fixtureModelDiscovery(adapter: AgentOptions["adapter"]): AgentOptions["discovery"] {
   return {
     status: "available",
-    ...(adapter === "claude" ? { unreportedEffortValues: ["ultracode"] } : {}),
+    ...(adapter === "claude" ? { unreportedEffortValues: ["ultracode"], defaultModel: "opus" } : {}),
     models: adapter === "claude" ? [{
+      id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5",
+      description: "Opus 5.5 · Best for everyday, complex tasks",
+      effortValues: ["low", "high", "max"], fastModeSupported: true,
+    }, {
       id: "claude-fable-5-1", name: "Claude Fable 5.1",
       effortValues: ["high", "max"], fastModeSupported: false,
     }] : adapter === "codex" ? [{
       id: "gpt-6-astra", name: "GPT-6 Astra",
+      description: "Workhorse model for coding and everyday work.",
       effortValues: ["high", "max"], fastModeSupported: true,
     }] : [],
   };
