@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The live lane — the regression of release-25 (DR-086): the machine's
-// signed-in agents and the real Captain, run by `npm run regression`
-// (SPEX_E2E_LIVE=1) before a regular app release and never in CI.
-// The live smoke observes a real /code to live output and aborts it
-// (DR-089), so the lane does not repeat it. playbook-library-78
-// authors a two-role changelog playbook, compiles it for real with the
-// released slc on the compile player the journey picks — Codex's
-// `gpt-6-astra` at `xhigh`, the only work the lane gives Codex — then
-// registers it and runs it on the template's claude players. The
+// The live lane — the regression of release-25 (DR-086, DR-089): the
+// machine's signed-in agents and the real Captain, run by `npm run
+// regression` (SPEX_E2E_LIVE=1) before a regular app release and never
+// in CI. The live smoke observes a real /code to live output and aborts
+// it (DR-089), so the lane does not repeat it. Both compiles run for
+// real with the released slc on the compile player the journey picks —
+// Codex's `gpt-6-astra` at `xhigh`, the only work the lane gives Codex
+// — and the compiled playbooks run on the template's claude players.
+// playbook-library-86 pastes the app's own example, a fixed source, so
+// a refusal is the app's; with SPEX_E2E_CAPTURE_COMPILED=<dir> it also
+// copies the compiler's output there, the capture that renews the
+// hermetic journey's committed fixture (playbook-library-87,
+// e2e/fixtures/compiled/README.md). playbook-library-78 authors a
+// two-role changelog playbook in chat, the harder case. The
 // new-project scenario lives in live-project.spec.ts.
 
+import { resolve } from "node:path";
 import { parse } from "yaml";
 
 import {
@@ -23,8 +29,10 @@ import {
   git,
   LIVE,
   COMPILER_PLAYER,
+  EXAMPLE_ID,
   attachRun,
   awaitCaptainLine,
+  captureCompiled,
   commitCount,
   commitIdentity,
   expectEngaged,
@@ -33,18 +41,193 @@ import {
 
 test.use({ appOptions: { config: "none", project: true } });
 
-test.describe("the changelog playbook", () => {
-  // The compile player (DR-086): a roster player on Codex's
-  // gpt-6-astra at xhigh, bound to no role, which this journey alone
-  // picks as the draft's agent; the Captain and every player a
-  // playbook runs stay on the template's claude.
-  test.use({
-    appOptions: {
-      config: "none",
-      project: true,
-      compiler: { adapter: "codex", model: "gpt-6-astra", effort: "xhigh" },
-    },
+/** The compile player (DR-086): a roster player on Codex's gpt-6-astra
+ * at xhigh, bound to no role, which a journey alone picks as a draft's
+ * agent; the Captain and every player a playbook runs stay on the
+ * template's claude. */
+const COMPILER = { adapter: "codex", model: "gpt-6-astra", effort: "xhigh" } as const;
+
+/** The example's title, its derived intent (playbook-library-61). */
+const EXAMPLE_TITLE = "Two-Agent Change-and-Review Workflow";
+
+/** An agent block as the config writes it: a shorthand or a block. */
+type Block = string | { adapter?: string } | undefined;
+const adapterOf = (block: Block) => (typeof block === "string" ? block : block?.adapter);
+
+test.describe("the app's own example", () => {
+  test.use({ appOptions: { config: "none", project: true, compiler: COMPILER } });
+
+  test("playbook-library-86 @live: the pasted example compiles for real, registers on its defaults, and runs", async ({
+    page,
+    app,
+  }) => {
+    test.skip(!LIVE, "live lane only");
+    // The compile has taken minutes to two hours (DR-058), the run of a
+    // change and its review tens of minutes.
+    test.setTimeout(200 * 60_000);
+    const TURN = 10 * 60_000;
+    await open(page, app);
+    await nav(page, "Playbooks").click();
+    await page.getByTestId("example-prefill").click();
+    await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    const chip = page.getByTestId("draft-chip");
+    await expect(chip).toContainText("No source");
+    const thread = page.getByTestId("draft-thread");
+    const attach = async (label: string) => {
+      await test.info().attach(label, {
+        body: [
+          "--- thread ---",
+          await thread.innerText(),
+          "--- compile ---",
+          await page.getByTestId("compile-band").innerText().catch(() => "(no band)"),
+        ].join("\n"),
+        contentType: "text/plain",
+      });
+    };
+
+    // The compile player answers the draft, so the compile runs on its
+    // block (playbook-library-55, playbook-library-42); nothing is sent.
+    const agent = page.getByTestId("draft-agent");
+    await agent.click();
+    const picker = page.getByTestId("agent-picker");
+    await picker.getByTestId(`agent-option-${COMPILER_PLAYER}`).click();
+    await expect(picker).toHaveCount(0);
+    await expect(agent).toContainText(COMPILER_PLAYER);
+    await expect(
+      thread.getByTestId("system-line").filter({ hasText: `Now answering: ${COMPILER_PLAYER}` }),
+    ).toBeVisible();
+
+    // The placed text, used as it stands, is the draft's source
+    // (playbook-library-35, playbook-library-56).
+    const pasted = page.getByTestId("paste-text");
+    const text = await pasted.inputValue();
+    expect(text).toContain("Roles:");
+    await page.getByTestId("paste-use").click();
+    await expect(pasted).toHaveCount(0);
+    await expect(page.getByTestId("source-markdown")).toContainText(EXAMPLE_TITLE);
+    const [draft] = await app.core.command("draft.list", {});
+    expect(draft.id).toBe(EXAMPLE_ID);
+
+    // Compiled for real from the workspace's own control, asked by the
+    // Boss, to Link (playbook-library-57). The source is fixed and the
+    // compiler the app's: a refusal is the app failing (DR-089), so the
+    // first failed compile stops the journey with the compiler's
+    // output attached, whatever the relay does next.
+    await page.getByTestId("compile-button").click();
+    await expect(page.getByTestId("compile-by")).toHaveText("asked by you");
+    const band = page.getByTestId("compile-band");
+    await expect
+      .poll(async () => band.getAttribute("data-outcome"), {
+        timeout: 130 * 60_000,
+        intervals: [10_000],
+      })
+      .not.toBe("running");
+    if ((await band.getAttribute("data-outcome")) !== "ok") {
+      await attach("the example refused");
+      throw new Error(
+        "the bundled compiler refused the app's own example (DR-089: a tag-blocking failure); " +
+          "the compiler's output is attached",
+      );
+    }
+    await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done");
+    await expect(chip).toContainText("Compiled");
+    // The example's two roles, in the casing the compiler emits
+    // (playbook-library-60).
+    await expect(page.getByTestId("compile-roles")).toHaveText(/^roles: coder, reviewer$/i);
+    await attach("the compile");
+    // The capture that renews playbook-library-87's fixture: the
+    // compiler's own output, taken before anything else touches it.
+    const captureDir = process.env.SPEX_E2E_CAPTURE_COMPILED;
+    if (captureDir) {
+      const capture = await captureCompiled(app, EXAMPLE_ID, resolve(captureDir), COMPILER);
+      await test.info().attach("the capture", {
+        body: JSON.stringify(capture, null, 2),
+        contentType: "application/json",
+      });
+    }
+
+    // Every passing compile is followed by the agent's turn, which may
+    // propose a registration (playbook-library-61); the form stands
+    // once it ends.
+    await expect(page.getByTestId("draft-working")).toHaveCount(0, { timeout: TURN });
+    const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
+    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    const form = page.getByTestId("register-form");
+    await expect(form).toBeVisible();
+    const playerFor = (role: string) => page.getByTestId(new RegExp(`^register-player-${role}$`, "i"));
+    await expect(page.getByTestId(/^register-player-/)).toHaveCount(2);
+    if (/Prefilled from the agent's proposal/.test(await form.innerText())) {
+      // A proposal fills the form instead of the derived defaults: the
+      // journey keeps it, moving only a role it leaves off claude — on
+      // the compile player, or on a new lane carrying the compile
+      // player's block — to the roster's own lane for it.
+      await attach("the proposal");
+      const roster = (parse(app.readConfig()) as { players: Record<string, Block> }).players;
+      for (const role of ["coder", "reviewer"]) {
+        const select = playerFor(role);
+        if (adapterOf(roster[await select.inputValue()]) !== "claude") {
+          await select.selectOption(`dev.${role}`);
+        }
+      }
+    } else {
+      // The derived defaults, nothing typed or chosen: the draft's id
+      // as the command, the example's title as the intent, and each
+      // role on the roster's own lane for it, as that lane stands.
+      await expect(form).toContainText("Prefilled from the source and the compiled roles");
+      await expect(page.getByTestId("register-command")).toHaveValue(EXAMPLE_ID);
+      await expect(page.getByTestId("register-intent")).toHaveValue(EXAMPLE_TITLE);
+      await expect(playerFor("coder")).toHaveValue("dev.coder");
+      await expect(playerFor("reviewer")).toHaveValue("dev.reviewer");
+    }
+    await page.getByTestId("register-submit").click();
+
+    // Register lists it and the draft leaves (playbook-library-10);
+    // both roles run on claude.
+    await expect(page.getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("drafts-section")).toHaveCount(0);
+    const config = parse(app.readConfig()) as {
+      players: Record<string, Block>;
+      playbooks: Record<string, { roles: Record<string, unknown> }>;
+    };
+    const roles = config.playbooks[EXAMPLE_ID].roles;
+    expect(Object.keys(roles).map((role) => role.toLowerCase()).sort()).toEqual(["coder", "reviewer"]);
+    const players = new Set<string>();
+    for (const binding of Object.values(roles)) {
+      const player = typeof binding === "string" ? binding : (binding as { player?: string }).player;
+      expect(player, JSON.stringify(binding)).toBeTruthy();
+      expect(adapterOf(config.players[player!]), `${player} runs on claude`).toBe("claude");
+      players.add(player!);
+    }
+
+    // A new session's slash menu offers it, and its turn runs the
+    // registered playbook to its finish with both role players engaged
+    // and the change committed (playbook-library-14).
+    await surfaceEntry(page, "Workspace").click();
+    await page.getByTestId("start-composer").fill("/");
+    await expect(page.getByRole("listbox")).toContainText(`/${EXAMPLE_ID}`);
+    commitIdentity(app.projectDir);
+    const head = git(app.projectDir, "rev-parse", "HEAD");
+    const commits = commitCount(app.projectDir);
+    await send(
+      page,
+      `/${EXAMPLE_ID} Add a NOTES.md at the repository root with one line naming this repository's purpose, and commit it.`,
+    );
+    const captain = page.getByTestId("captain-pane");
+    await expect(captain).toBeVisible();
+    await awaitCaptainLine(page, `/${EXAMPLE_ID} finished`, 60 * 60_000);
+    await attachRun(page, "the run");
+    await expect(captain).not.toContainText(/turn failed/i);
+    for (const player of players) await expectEngaged(page, player);
+    expect(commitCount(app.projectDir)).toBeGreaterThan(commits);
+    await test.info().attach("the commits", {
+      body: git(app.projectDir, "log", "--stat", `${head}..HEAD`),
+      contentType: "text/plain",
+    });
   });
+});
+
+test.describe("the changelog playbook", () => {
+  test.use({ appOptions: { config: "none", project: true, compiler: COMPILER } });
 
   test("playbook-library-78 @live: a two-role changelog playbook is authored, compiled, registered, and run", async ({
     page,
@@ -174,8 +357,6 @@ test.describe("the changelog playbook", () => {
     // new player, which carries the answering agent's block
     // (playbook-library-61), even one named like a roster lane it would
     // then overwrite — takes the template's player of its name.
-    type Block = string | { adapter?: string } | undefined;
-    const adapterOf = (block: Block) => (typeof block === "string" ? block : block?.adapter);
     const roster = (parse(app.readConfig()) as { players: Record<string, Block> }).players;
     for (const [role, fallback] of [
       ["coder", "dev.coder"],

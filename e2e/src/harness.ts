@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -19,9 +20,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import WebSocket from "ws";
 import { parseDocument } from "yaml";
 
@@ -32,7 +34,7 @@ import type {
   ServerMessage,
   SpaceState,
 } from "@sublang/spex-core";
-import { templatePath } from "@sublang/spex-core";
+import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -1177,4 +1179,127 @@ export async function expectEngaged(page: Page, playerId: string, least = 50): P
   await expect(pane).toBeVisible();
   await expect(pane).not.toContainText("Idle until the playbook calls");
   expect((await pane.innerText()).length, `${playerId}'s pane`).toBeGreaterThan(least);
+}
+
+// ---------------------------------------------------------------------------
+// The compiled example (DR-089): captured from a live compile, run in CI
+// ---------------------------------------------------------------------------
+
+/** The committed fixture of playbook-library-87: the app's own example
+ * as the real `slc` compiled it, captured by playbook-library-86. */
+export const COMPILED_FIXTURE = join(repoRoot, "e2e", "fixtures", "compiled", "workflow");
+
+/** The example's draft id, which its Prefill opens and its compiled
+ * entry carries. */
+export const EXAMPLE_ID = "workflow";
+
+/** Where a capture records what compiled the fixture. */
+const CAPTURE_RECORD = "capture.json";
+
+/** What a capture records: the compiler, and the engine generation —
+ * the runtime ABI and the artifact schema — the fixture belongs to. */
+export interface CompiledCapture {
+  playbookId: string;
+  capturedAt: string;
+  compiler: { name: string; version: string };
+  engine: { name: string; version: string; runtimeAbi: number; artifactSchema: number };
+  agent?: { adapter: string; model: string; effort?: string };
+}
+
+/** A `@sublang/playbook` engine as Node resolves it from `fromDir`:
+ * its version and the runtime ABI it declares. */
+async function engineFrom(fromDir: string): Promise<{ version: string; runtimeAbi: number }> {
+  const modulePath = createRequire(join(fromDir, "package.json")).resolve(
+    "@sublang/playbook/xstate-runtime",
+  );
+  let dir = dirname(modulePath);
+  while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
+  const { version } = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { version: string };
+  const { RUNTIME_ABI } = (await import(pathToFileURL(modulePath).href)) as { RUNTIME_ABI: number };
+  return { version, runtimeAbi: RUNTIME_ABI };
+}
+
+/**
+ * Copy what the real compile of a draft produced — slc's `<id>.playbook/`
+ * layout and the registry entry beside it, with the source it compiled —
+ * into `dest`, replacing what stood there, and record the compiler and
+ * its engine generation in `capture.json`. The journey's own packaging
+ * (the bundles, the wrapper, the engine links) stays behind: the fixture
+ * is the compiler's output, which the stub `slc` of playbook-library-87
+ * places for the app to package again.
+ */
+export async function captureCompiled(
+  app: App,
+  id: string,
+  dest: string,
+  agent?: AppOptions["compiler"],
+): Promise<CompiledCapture> {
+  const draft = app.draftDir(id);
+  const compiler = suppliedCompiler();
+  if (!compiler) throw new Error("no supplied @sublang/slc to name in the capture");
+  const { version } = JSON.parse(readFileSync(join(compiler.packageDir, "package.json"), "utf8")) as {
+    version: string;
+  };
+  const engine = await engineFrom(compiler.packageDir);
+  const entry = readFileSync(join(draft, `${id}.ts`), "utf8");
+  const schema = /artifactSchema:\s*(\d+)/.exec(entry)?.[1];
+  if (!schema) throw new Error(`the compiled entry ${id}.ts declares no artifactSchema`);
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(dest, { recursive: true });
+  cpSync(join(draft, `${id}.playbook`), join(dest, `${id}.playbook`), {
+    recursive: true,
+    filter: (path) => !path.split(sep).includes("node_modules"),
+  });
+  cpSync(join(draft, `${id}.ts`), join(dest, `${id}.ts`));
+  cpSync(join(draft, `${id}.md`), join(dest, `${id}.md`));
+  const capture: CompiledCapture = {
+    playbookId: id,
+    capturedAt: new Date().toISOString(),
+    compiler: { name: "@sublang/slc", version },
+    engine: {
+      name: "@sublang/playbook",
+      version: engine.version,
+      runtimeAbi: engine.runtimeAbi,
+      artifactSchema: Number(schema),
+    },
+    ...(agent ? { agent } : {}),
+  };
+  writeFileSync(join(dest, CAPTURE_RECORD), `${JSON.stringify(capture, null, 2)}\n`);
+  return capture;
+}
+
+/** The committed compiled fixture and its capture record, or undefined
+ * while none has been captured. */
+export function compiledFixture(): { dir: string; capture: CompiledCapture } | undefined {
+  const record = join(COMPILED_FIXTURE, CAPTURE_RECORD);
+  if (!existsSync(record)) return undefined;
+  return {
+    dir: COMPILED_FIXTURE,
+    capture: JSON.parse(readFileSync(record, "utf8")) as CompiledCapture,
+  };
+}
+
+/**
+ * Refuse a fixture of another engine generation than the app installs
+ * (DR-089): the fixture is regenerated whenever the playbook engine
+ * changes its runtime ABI or artifact schema, so a stale one fails the
+ * journey — naming the capture that renews it — rather than skipping.
+ */
+export async function assertFixtureGeneration(capture: CompiledCapture): Promise<void> {
+  const app = await engineFrom(dirname(fileURLToPath(import.meta.resolve("@sublang/spex-core"))));
+  const stale: string[] = [];
+  if (capture.engine.runtimeAbi !== app.runtimeAbi) {
+    stale.push(`runtime ABI ${capture.engine.runtimeAbi}, the app's ${app.runtimeAbi}`);
+  }
+  if (!ARTIFACT_SCHEMAS.includes(capture.engine.artifactSchema)) {
+    stale.push(
+      `artifact schema ${capture.engine.artifactSchema}, the app's ${ARTIFACT_SCHEMAS.join("/")}`,
+    );
+  }
+  if (stale.length > 0) {
+    throw new Error(
+      `the compiled fixture belongs to another engine generation (${stale.join("; ")}): ` +
+        "recapture it as e2e/fixtures/compiled/README.md says",
+    );
+  }
 }
