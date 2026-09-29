@@ -473,6 +473,75 @@ describe("SPACE: the header at a glance (space-1) and its re-reads (space-2)", (
     expect(screen.getByTestId("space-issues-list").textContent).toContain("1 not added");
   });
 
+  test("an added repair gives way to its outcome, and focus and the count move on (space-56)", async () => {
+    const infra = {
+      kind: "project" as const,
+      projectId: "p1",
+      projectName: "infra",
+      directories: ["/code/infra"],
+      sessions: 5,
+      key: "p1|/code/infra",
+      checked: [{ path: "/code/infra", here: true, repo: true }],
+      proposal: { path: "/code/infra", from: "recorded" as const },
+    };
+    const slc = {
+      kind: "directory" as const,
+      directories: ["/code/slc"],
+      sessions: 2,
+      key: "|/code/slc",
+      checked: [{ path: "/code/slc", here: true, repo: true }],
+      proposal: { path: "/code/slc", from: "recorded" as const },
+    };
+    const infraRow = { file: "projects.json", reason: "infra has no folder on this device", blocking: false, repair: infra };
+    const slcRow = { file: "sessions/a.json", reason: "/code/slc has no project on this device", blocking: false, repair: slc };
+    const answer = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      switch (type) {
+        // Each add resolves its repair, so the core's re-read no
+        // longer reports it.
+        case "project.rebind":
+          current = repoState({ diagnostics: [slcRow] });
+          return { id: "p1", name: "infra", path: fields.path, createdAt: 1 };
+        case "project.register":
+          current = repoState({ diagnostics: [] });
+          return { id: "p2", name: "slc", path: fields.path, createdAt: 2 };
+        case "project.list":
+          return [];
+        default:
+          return answer(type, fields);
+      }
+    });
+    const { onOpenProject } = await renderSpace(repoState({ diagnostics: [infraRow, slcRow] }));
+    expect(screen.getByTestId("space-issues").textContent).toContain("2 issues");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const [first] = screen.getAllByTestId("space-repair");
+    fireEvent.click(within(first).getByRole("button", { name: "Add project" }));
+
+    // The row gives way to its outcome at the head of the list.
+    const outcome = await screen.findByTestId("space-repair-resolved");
+    expect(outcome.textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
+    const list = screen.getByTestId("space-issues-list");
+    expect(within(list).getAllByRole("listitem")[0]).toBe(outcome);
+    // The count falls, the live region says what remains, and focus
+    // lands on the next repair's first control.
+    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
+    expect(live()).toBe("1 issue left.");
+    const next = screen.getByTestId("space-repair");
+    await waitFor(() => expect(document.activeElement).toBe(within(next).getByRole("button", { name: "Add project" })));
+    // Open project is the way off the surface.
+    fireEvent.click(within(outcome).getByRole("button", { name: "Open project" }));
+    expect(onOpenProject).toHaveBeenCalledWith("p1");
+    // A re-read leaves the outcome standing while the tab stays shown.
+    deliver(current);
+    expect(screen.getByTestId("space-repair-resolved").textContent).toContain("infra · now a project at /code/infra");
+
+    // With nothing left to report the list closes, outcomes with it,
+    // and the live region says so.
+    fireEvent.click(within(next).getByRole("button", { name: "Add project" }));
+    await waitFor(() => expect(live()).toBe("All issues resolved."));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+  });
+
   test("ahead and behind are absent until a check has run, and 'Never synced' stands with no sync", async () => {
     await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null }, lastSync: null }));
     expect(screen.queryByTestId("space-ahead-behind")).toBeNull();

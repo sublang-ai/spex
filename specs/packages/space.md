@@ -118,13 +118,13 @@ When the user adds a repair's project at the folder proposed [[space-53](#space-
 
 #### space-48
 
-When a repair's rebind succeeds, the Space surface shall replace that row in place with its outcome, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When adding a repair's project succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
-- the outcome names the project, the folder it now has and the count of sessions that resolved, and offers Open project, which is the only control here that leaves the surface;
-- the issues count falls [[space-1](#space-1)] and the live region says the project resolved and how many issues remain;
-- focus moves to the next repair's Set folder, or stays on Open project where none remains, the live region then saying every issue is resolved;
-- where the chosen folder differs from the recorded one, each later repair prefills that folder's parent joined to its own recorded last segment, labelled as taken from the folder just chosen and editable before Save;
-- the outcome stands until the reader's own re-read [[space-2](#space-2)], so no list reflows under the pointer.
+- the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
+- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)];
+- the live region says how many other repairs still stand in the list, declined ones among them, or that every issue is resolved where none does;
+- focus moves to the first control of the first other repair still standing in the core's order — its Add project where it proposes a folder, else its Choose folder…;
+- the outcome stands at the head of the issues list, before every reported row, while the Sync tab stays shown and the list stands, a re-read [[space-2](#space-2)] leaving it in place; the list closes with it once the core reports no diagnostic.
 
 #### space-49
 
@@ -172,8 +172,7 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 | resolved | a check | the project, the folder it is now at and the sessions that resolved, with Open project |
 
 - the list's heading counts the unanswered repairs and names how many stand not added;
-- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
-- a row that changes condition holds its place until the reader's own re-read [[space-48](#space-48)].
+- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does.
 
 ### Changes
 
@@ -643,6 +642,18 @@ When an integration suite fails a transport against a path holding no repository
 - a refused host classifies as unauthorized rather than falling through to the tool's own words [[space-15](#space-15)];
 - a report naming a remote prints no embedded user, and a URL carrying a credential in any form is refused before it is stored [[space-5](#space-5)] [[space-15](#space-15)];
 - the report names the identity the remote's form presents, a local path naming its permissions rather than an account, and a network failure naming none [[space-50](#space-50)].
+
+### Surface Coverage
+
+#### space-56
+
+Where the Space surface renders over a repository home whose issues list holds two unanswered repairs, each proposing its recorded folder, when the reader adds the first at that folder and then the second, the core reporting after each add only what remains, the test suite shall assert through the surface:
+
+- after the first add, the first row gives way to an outcome at the head of the list naming the project, the folder it is now a project at and the sessions listed, whose Open project opens that project [[space-48](#space-48)];
+- the header's count reads one issue and the live region "1 issue left." [[space-48](#space-48)];
+- focus rests on the second repair's Add project [[space-48](#space-48)];
+- a re-read the core delivers leaves the outcome standing [[space-48](#space-48)];
+- after the second add, the live region reads "All issues resolved." and the list is gone [[space-48](#space-48)].
 
 ### Browser Journeys
 
