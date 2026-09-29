@@ -1598,10 +1598,20 @@ msgstr "that link would close a waiting cycle"
 msgid "That turn has not ended, so it cannot be marked as read."
 msgstr "That turn has not ended, so it cannot be marked as read."
 
+#. Adapter requirement; the adapter's name, the platform package's name, the platform and architecture, and `npm ci` stay as they are
+#: src/config.ts
+msgid "the {adapter} executable is missing: {package} is not installed for {platform}-{arch} — run npm ci in the checkout, or reinstall the app"
+msgstr "the {adapter} executable is missing: {package} is not installed for {platform}-{arch} — run npm ci in the checkout, or reinstall the app"
+
 #. Adapter requirement; the adapter's name and `npm install` stay as they are
 #: src/config.ts
 msgid "the {adapter} runtime failed to load — reinstall the app, or run npm install in a checkout"
 msgstr "the {adapter} runtime failed to load — reinstall the app, or run npm install in a checkout"
+
+#. Adapter requirement; the adapter's name and the platform and architecture stay as they are
+#: src/config.ts
+msgid "the {adapter} SDK publishes no executable for {platform}-{arch}"
+msgstr "the {adapter} SDK publishes no executable for {platform}-{arch}"
 
 #. A failed authoring turn that carried no message; {status} is the runtime's own status word and stays as it is
 #: src/authoring.ts

@@ -463,6 +463,7 @@ When serving a stored session, the core service shall resolve its immutable part
 
 When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)) — and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
 
+- The runtime half is cligent's availability probe, which confirms the native executable a bundled SDK spawns as well as the SDK itself; when the probe fails and no published runtime target is at fault, the unmet requirement for `claude` or `codex` comes from cligent's executable lookup — a missing platform package, named with its platform and architecture and the repair of running `npm ci` in the checkout or reinstalling the app, or a host the SDK publishes no executable for, named with no repair — and otherwise states that the runtime failed to load ([DR-090](../decisions/090-readiness-names-what-cligent-finds-missing.md)).
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
 
 ### Persistence
@@ -867,6 +868,17 @@ Where a session finishes a turn bound to no intent, the test suite shall assert 
 #### core-service-23
 
 Where the config's agent blocks reference both an adapter whose readiness requirements are satisfied and one whose requirements are not (via controlled environment variables and home-directory fixtures), the test suite shall assert that readiness reporting marks each adapter's entry accordingly and names the unmet requirement for the not-ready adapter [[core-service-9](#core-service-9)].
+
+#### core-service-113
+
+Where readiness is evaluated for the `claude` and `codex` adapters with credentials satisfied, over this checkout's supplied SDKs and with cligent's availability probe and executable lookup substituted, the test suite shall assert each outcome's readiness:
+
+| Probe | Lookup | Readiness |
+| --- | --- | --- |
+| unavailable | a missing platform package | not ready, naming the package, its platform and architecture, and the `npm ci` or reinstall repair [[core-service-9](#core-service-9)] |
+| unavailable | an unsupported host | not ready, naming the host with no repair [[core-service-9](#core-service-9)] |
+| unavailable | no SDK, or the executable present | not ready, stating that the runtime failed to load [[core-service-9](#core-service-9)] |
+| available | any | ready [[core-service-9](#core-service-9)] |
 
 ### Compile Lifecycle Coverage
 

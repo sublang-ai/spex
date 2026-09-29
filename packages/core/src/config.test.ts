@@ -7,7 +7,11 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-import { AGENT_RUNTIME_TARGETS, classifyRuntime } from "@sublang/cligent";
+import {
+  AGENT_RUNTIME_TARGETS,
+  classifyRuntime,
+  type AgentExecutable,
+} from "@sublang/cligent";
 
 import {
   ARTIFACT_SCHEMAS,
@@ -666,6 +670,83 @@ test("supplied SDKs probe available through cligent's own loaders", async () => 
   // performs — answers available on every machine, CI included.
   assert.equal((await checkAdapterRuntime("claude")).usable, true);
   assert.equal((await checkAdapterRuntime("codex")).usable, true);
+});
+
+test("core-service-113: an unavailable runtime names the executable cligent finds missing", async () => {
+  // Availability and the executable lookup are cligent's; each outcome is
+  // injected so every one is reached on any machine, while the published
+  // targets and the credential half run for real over this checkout's
+  // supplied SDKs, which classify healthy — so the lookup has the say.
+  const home = scratchDir("spex-home-");
+  const env = { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k" };
+  const unavailable = async () => false;
+  for (const adapter of ["claude", "codex"] as const) {
+    const readiness = async (executable: AgentExecutable) => {
+      const asked: string[] = [];
+      const result = await checkAdapterReadiness(adapter, env, home, (name) =>
+        checkAdapterRuntime(name, {
+          available: unavailable,
+          locateExecutable: (runtime) => {
+            asked.push(runtime);
+            return executable;
+          },
+        }),
+      );
+      assert.deepEqual(asked, [adapter]);
+      return result;
+    };
+
+    // A dropped platform package: named, with its host and both repairs.
+    const missing = await readiness({
+      state: "missing",
+      package: `@example/${adapter}-sdk-darwin-arm64`,
+      platform: "darwin",
+      arch: "arm64",
+    });
+    assert.equal(missing.ready, false);
+    assert.equal(
+      missing.requirement,
+      `the ${adapter} executable is missing: @example/${adapter}-sdk-darwin-arm64 is not installed for darwin-arm64 — run npm ci in the checkout, or reinstall the app`,
+    );
+
+    // A host the SDK publishes nothing for: no install repairs it.
+    const unsupported = await readiness({
+      state: "unsupported",
+      platform: "aix",
+      arch: "ppc64",
+    });
+    assert.equal(unsupported.ready, false);
+    assert.equal(
+      unsupported.requirement,
+      `the ${adapter} SDK publishes no executable for aix-ppc64`,
+    );
+
+    // No second fault to name: the load failure speaks for itself.
+    const generic = `the ${adapter} runtime failed to load — reinstall the app, or run npm install in a checkout`;
+    for (const executable of [
+      { state: "no-sdk" },
+      { state: "present", path: `/opt/${adapter}` },
+    ] as const) {
+      const quiet = await readiness(executable);
+      assert.equal(quiet.ready, false);
+      assert.equal(quiet.requirement, generic);
+    }
+
+    // An available adapter stays ready whatever the lookup would say.
+    const available = await checkAdapterReadiness(adapter, env, home, (name) =>
+      checkAdapterRuntime(name, {
+        available: async () => true,
+        locateExecutable: () => ({
+          state: "missing",
+          package: "@example/unused",
+          platform: "darwin",
+          arch: "arm64",
+        }),
+      }),
+    );
+    assert.equal(available.ready, true);
+    assert.equal(available.requirement, undefined);
+  }
 });
 
 test("a fault's repair is rendered for its install tree", () => {

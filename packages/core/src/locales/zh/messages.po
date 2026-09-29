@@ -1598,10 +1598,20 @@ msgstr "该关联会让等待链形成循环"
 msgid "That turn has not ended, so it cannot be marked as read."
 msgstr "该轮次尚未结束，无法标记为已读。"
 
+#. Adapter requirement; the adapter's name, the platform package's name, the platform and architecture, and `npm ci` stay as they are
+#: src/config.ts
+msgid "the {adapter} executable is missing: {package} is not installed for {platform}-{arch} — run npm ci in the checkout, or reinstall the app"
+msgstr "缺少 {adapter} 可执行文件：{package} 未针对 {platform}-{arch} 安装 — 请在源码目录中运行 npm ci，或重新安装应用"
+
 #. Adapter requirement; the adapter's name and `npm install` stay as they are
 #: src/config.ts
 msgid "the {adapter} runtime failed to load — reinstall the app, or run npm install in a checkout"
 msgstr "{adapter} 运行时加载失败 — 请重新安装应用，或在源码目录中运行 npm install"
+
+#. Adapter requirement; the adapter's name and the platform and architecture stay as they are
+#: src/config.ts
+msgid "the {adapter} SDK publishes no executable for {platform}-{arch}"
+msgstr "{adapter} SDK 未发布适用于 {platform}-{arch} 的可执行文件"
 
 #. A failed authoring turn that carried no message; {status} is the runtime's own status word and stays as it is
 #: src/authoring.ts
