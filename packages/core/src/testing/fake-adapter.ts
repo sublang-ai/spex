@@ -67,6 +67,11 @@ export interface FakeRule {
 export interface FakeScript {
   rules?: FakeRule[];
   fallback?: FakeResponse;
+  /** The model the fake runtime names for a call, given the model the
+   * call asked for: a run it names one for opens with an `init` event
+   * carrying `reportedModel`, as a runtime reporting its model does
+   * (DR-091). Absent, a run reports no model and sends no `init`. */
+  reportModel?: (requested: string | undefined) => string | undefined;
 }
 
 interface FakeEvent {
@@ -162,6 +167,20 @@ export function fakeAdapterImports(
         ...(picked.deltas ? { deltas: picked.deltas.map(named) } : {}),
       };
       const base = { agent: this.agent, sessionId };
+      const reportedModel = script.reportModel?.(options?.model);
+      if (reportedModel !== undefined) {
+        yield {
+          ...base,
+          type: "init",
+          timestamp: Date.now(),
+          payload: {
+            model: options?.model ?? "unknown",
+            cwd: options?.cwd ?? "",
+            tools: [],
+            reportedModel,
+          },
+        };
+      }
       if (response.failWith && (!response.failWith.onlyResumed || options?.resume)) {
         yield {
           ...base,

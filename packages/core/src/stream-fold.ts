@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The record stream is the one persisted truth for a session
-// (DR-036, core-service-10): turns, usage, and active time fold from it. These
-// helpers are the single extraction the live path (session.ts) and
-// the store's load-time fold share, so a restart derives exactly what
-// live tracking derived.
+// (DR-036, core-service-10): turns, usage, active time, and the models
+// the runtimes reported fold from it. These helpers are the single
+// extraction the live path (session.ts) and the store's load-time fold
+// share, so a restart derives exactly what live tracking derived.
 
-import type { StoredRecord, TmuxPlayRecord } from "./protocol.js";
-import { hasPresentationHeader } from "./protocol.js";
+import type { AgentReportedModel, StoredRecord, TmuxPlayRecord } from "./protocol.js";
+import { CAPTAIN_AGENT_ID, hasPresentationHeader } from "./protocol.js";
 
 export interface UsageEntry {
   sessionId: string;
@@ -107,6 +107,107 @@ export function foldAgentActiveMs(
   }
 
   return totals.size > 0 ? Object.fromEntries(totals) : undefined;
+}
+
+type ReportedSettings = AgentReportedModel["settings"];
+
+/** A model or effort selection as the execution context records it: a
+ * pinned value, or the provider's default; anything else is unread. */
+function selectionOf(value: unknown): string | false | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const shape = value as { kind?: unknown; value?: unknown };
+  if (shape.kind === "value" && typeof shape.value === "string" && shape.value) return shape.value;
+  if (shape.kind === "provider-default") return false;
+  return undefined;
+}
+
+/** An agent block's model, effort and fast mode, or nothing when any of
+ * them cannot be read — nothing is guessed (DR-091). */
+function blockSettings(block: unknown): ReportedSettings | undefined {
+  if (!block || typeof block !== "object") return undefined;
+  const shape = block as { model?: unknown; effort?: unknown; fastMode?: unknown };
+  const model = selectionOf(shape.model);
+  const effort = selectionOf(shape.effort);
+  if (model === undefined || effort === undefined) return undefined;
+  if (shape.fastMode !== undefined && typeof shape.fastMode !== "boolean") return undefined;
+  return { model, effort, fastMode: shape.fastMode === true };
+}
+
+/** What `agentId` was set to run in one execution context. A player a
+ * role binding runs on a model of its own has no one reading: its
+ * latest report may name the binding's model rather than its own. */
+function contextSettings(configuration: unknown, agentId: string): ReportedSettings | undefined {
+  if (!configuration || typeof configuration !== "object") return undefined;
+  const config = configuration as { captain?: unknown; players?: unknown; catalog?: unknown };
+  if (agentId === CAPTAIN_AGENT_ID) return blockSettings(config.captain);
+  if (!Array.isArray(config.players)) return undefined;
+  const player: unknown = config.players.find((entry: unknown) =>
+    !!entry && typeof entry === "object" && (entry as { id?: unknown }).id === agentId);
+  const settings = blockSettings(player);
+  if (!settings) return undefined;
+  const playbooks = config.catalog && typeof config.catalog === "object"
+    ? Object.values(config.catalog as Record<string, unknown>)
+    : [];
+  for (const playbook of playbooks) {
+    const roles = playbook && typeof playbook === "object" ? (playbook as { roles?: unknown }).roles : undefined;
+    if (!roles || typeof roles !== "object") continue;
+    for (const binding of Object.values(roles as Record<string, unknown>)) {
+      if (!binding || typeof binding !== "object") continue;
+      if ((binding as { playerId?: unknown }).playerId !== agentId) continue;
+      if (selectionOf((binding as { model?: unknown }).model) !== settings.model) return undefined;
+    }
+  }
+  return settings;
+}
+
+/**
+ * The model each agent's runtime reported for its latest call to report
+ * one, with the settings that call began under (core-service-115,
+ * DR-091). A call reports in its `init` event's `reportedModel`; the
+ * settings come from the execution context the stream recorded — the
+ * `session_context` the reporting record's `contextSeq` names, else the
+ * latest one before it — so the fold is pure over stored records and a
+ * restart, a foreign session and live tracking all read the same map.
+ */
+export function foldAgentReportedModels(
+  entries: readonly Pick<StoredRecord, "seq" | "record">[],
+): Record<string, AgentReportedModel> | undefined {
+  const contexts = new Map<number, unknown>();
+  let latest: unknown;
+  const reported = new Map<string, AgentReportedModel>();
+  for (const { seq, record } of entries) {
+    if (!hasPresentationHeader(record)) continue;
+    const shape = record as unknown as {
+      type: string;
+      playerId?: unknown;
+      contextSeq?: unknown;
+      configuration?: unknown;
+      event?: { type?: unknown; payload?: unknown };
+    };
+    if (shape.type === "session_context") {
+      contexts.set(seq, shape.configuration);
+      latest = shape.configuration;
+      continue;
+    }
+    const agentId = shape.type === "captain_event"
+      ? CAPTAIN_AGENT_ID
+      : shape.type === "player_event" && typeof shape.playerId === "string"
+        ? shape.playerId
+        : undefined;
+    if (agentId === undefined || shape.event?.type !== "init") continue;
+    const model = (shape.event.payload as { reportedModel?: unknown } | undefined)?.reportedModel;
+    if (typeof model !== "string" || model.length === 0) continue;
+    const configuration = typeof shape.contextSeq === "number" && contexts.has(shape.contextSeq)
+      ? contexts.get(shape.contextSeq)
+      : latest;
+    const settings = contextSettings(configuration, agentId);
+    // The latest report is the one that counts: one whose settings
+    // cannot be read leaves the agent unnamed rather than falling back
+    // to an older report the reader could not compare.
+    if (settings) reported.set(agentId, { model, settings });
+    else reported.delete(agentId);
+  }
+  return reported.size > 0 ? Object.fromEntries(reported) : undefined;
 }
 
 /**
