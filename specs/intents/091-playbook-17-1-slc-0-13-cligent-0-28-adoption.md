@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress on `models-named-by-runtime`, in two steps: the first, Playbook 17.1, Cligent 0.28 and the agent SDK locks, is done and verified; the second, slc 0.13, waits for npm to serve it.
+Completed on `models-named-by-runtime` (2026-09-29) in two steps, Playbook 17.1 with Cligent 0.28 and the agent SDK locks, then slc 0.13 once npm served it; not merged, not released.
 
 ## Intent
 
@@ -17,7 +17,7 @@ Realize [DR-092](../decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.m
 - [x] The core's floors `^17.1.0` and `^0.28.0`, the lockfile regenerated from the public registry with the app's Playbook and Cligent at the tree's root, and the agent SDKs locked at Claude Agent SDK 0.3.284, Codex SDK 0.159.0 with Codex 0.159.0, and OpenCode SDK 1.18.33.
 - [x] The tests, fixtures and journeys following what the new releases change.
 - [x] The changelog.
-- [ ] Both shells on slc `^0.13.0`, the lockfile holding one Playbook, 17.1.0, and one Cligent, 0.28.0.
+- [x] Both shells on slc `^0.13.0`, the lockfile holding one Playbook, 17.1.0, and one Cligent, 0.28.0.
 
 ## Tasks
 
@@ -34,3 +34,6 @@ Run `npm ci`, `npm run build` and the root `npm test` under Node 22 as CI does, 
 
 The first step, verified on 2026-09-29 against the public registry's Cligent 0.28.0 and Playbook 17.1.0: `npm ci` installed the regenerated lockfile under Node 22; the root build passed; the root test gate passed 1,275/1,275 under Node 22 (34 script, 133 CLI, 355 core, 726 UI, 16 desktop and 11 server tests); the hermetic journeys passed 65 of 66 in Chromium on Node 25, the compiled example skipping for want of its captured fixture; the journeys typecheck; the core, UI and desktop catalogs are whole; `spex lint` passed.
 The lockfile holds Playbook 17.1.0 and Cligent 0.28.0 at the tree's root, and slc 0.12.0 nests Cligent 0.27.1 and Playbook 16.0.0 with Cligent 0.26.0, both engines on runtime ABI 1 and artifact schema 3; Cligent 0.28's availability probe reads the `claude` and `codex` adapters available on the locked SDKs.
+
+The second step, verified on 2026-09-29 against the public registry's slc 0.13.0: `npm ci` installed the regenerated lockfile under Node 22; the root build passed; the root test gate passed 1,275/1,275 under Node 22 (34 script, 133 CLI, 355 core, 726 UI, 16 desktop and 11 server tests); the hermetic journeys passed 65 of 66 in Chromium on Node 25, the compiled example skipping for want of its captured fixture; the journeys typecheck; the core, UI and desktop catalogs are whole; `spex lint` passed.
+The lockfile and the installed tree hold one Playbook, 17.1.0, one Cligent, 0.28.0, and slc 0.13.0, each at the tree's root with no copy nested under slc, and the compiler resolves the app's own engine module; the agent SDKs stay at Claude Agent SDK 0.3.284, Codex SDK 0.159.0 with Codex 0.159.0, and OpenCode SDK 1.18.33.

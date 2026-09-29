@@ -19,7 +19,7 @@ Completes [DR-091](091-models-named-by-the-runtime.md), whose model descriptions
 - Cligent 0.28's tested targets are Claude Agent SDK 0.3.284, Codex 0.159.0, Gemini CLI 0.61.0, Kimi Code 2.1.1 and OpenCode 1.18.33 [[1]].
 - The shells declare the agent SDKs at `*`, so the lockfile alone decides the release an install runs, and it held Codex 0.153.4 and OpenCode 1.18.23.
 - Playbook 17.1 seeds `claude-opus-5-5` and `gpt-6-sol`, its starter template names `claude-opus-5-5`, and it requires Cligent `^0.28.0` [[3]].
-- slc 0.13 adopts Playbook 17.1 and Cligent 0.28, so a compile links the app's own engine and the compiler nests no engine or Cligent of its own.
+- slc 0.13 adopts Playbook 17.1 and Cligent 0.28, so a compile links the app's own engine and the compiler nests no engine or Cligent of its own [[4]].
 - slc 0.13 changes no vendored definition relative to what Playbook 17 shipped.
 
 ## Decision
@@ -38,10 +38,11 @@ Considered and declined:
 - Where the runtime reports them, a fresh install lists each Claude and Codex model with its own description, names the model the provider default runs, and reads each chip's reported model ([DR-091](091-models-named-by-the-runtime.md)).
 - A fresh Spex home's starter configuration names `claude-opus-5-5`, as the app's own seeds do.
 - An install holding an agent SDK older than Cligent's floor reads that adapter not ready, with Cligent's verdict and the repair for its install tree ([DR-090](090-readiness-names-what-cligent-finds-missing.md)); the app's own lock never supplies one.
-- The compiler's nested engine, which DR-088 recorded trailing the app's, is gone once slc 0.13 is locked: a compile links the app's engine, and the engine check has one engine to agree with.
+- The compiler's nested engine, which DR-088 recorded trailing the app's, is gone: a compile links the app's engine, and the engine check has one engine to agree with.
 
 ## References
 
 [1]: https://github.com/sublang-ai/cligent/blob/main/CHANGELOG.md "Cligent changelog: 0.28.0"
 [2]: https://github.com/sublang-ai/cligent/blob/main/specs/decisions/027-latest-models-oldest-serving-runtime.md "Cligent DR-027: Latest models on the oldest serving runtime"
 [3]: https://github.com/sublang-ai/playbook/blob/main/specs/decisions/074-seeds-name-the-latest-models.md "Playbook DR-074: Seeds name the latest models"
+[4]: https://github.com/sublang-ai/slc/blob/main/CHANGELOG.md "slc changelog: 0.13.0"

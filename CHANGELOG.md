@@ -120,14 +120,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.1, slc 0.12 and Cligent 0.28 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.1, slc 0.13 and Cligent 0.28 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md)),
   and locks the agent SDKs at the releases Cligent 0.28 tests: Claude
-  Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33.
-  Cligent refuses an agent runtime older than the oldest release that
-  serves its provider's latest models, so an older runtime on your
-  `PATH`, such as an OpenCode CLI before 1.18.29, reads not ready with
-  the command that upgrades it.
+  Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
+  compiler now runs on the app's own Playbook and Cligent, with no older
+  copies of its own. Cligent refuses an agent runtime older than the
+  oldest release that serves its provider's latest models, so an older
+  runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
+  not ready with the command that upgrades it.
   **Upgrade every host that shares your Spex home together, and snapshot
   the home first** ([DR-050](specs/decisions/050-shared-storage-cutover.md)):
   once this build saves a session, a host on Playbook 16 or older — a
@@ -403,7 +404,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   package such as `@anthropic-ai/claude-agent-sdk-darwin-arm64` — read
   ready and failed at its first run. Readiness now reads it not ready,
   naming the package and the repair: `npm ci` in the checkout, or
-  reinstall the app. Requires Cligent 0.27.1.
+  reinstall the app. Requires Cligent 0.27.1 or later.
 
 ### Security
 
