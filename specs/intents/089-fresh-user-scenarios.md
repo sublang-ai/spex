@@ -5,7 +5,7 @@
 
 ## Status
 
-Merge-ready on `fresh-user-scenarios-v2`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) with its scratch-leak and restore fixes: parts 1 and 2 are built and verified hermetically, and the live runs below are recorded.
+Merged to `main` in c637948 on 2026-09-29, on top of the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) and its scratch-leak and restore fixes, and released in `app-v0.9.0-beta.1`: parts 1 and 2 are built and verified hermetically, and the live runs below are recorded.
 One deliverable waits on the compiler, not on this branch: slc 0.12 refuses the example's machine at `gears2fsm` on every compile so far ([sublang-ai/slc#29](https://github.com/sublang-ai/slc/issues/29)), so no compiled fixture has been captured, the hermetic compiled-fixture journey skips, and the example's displayed gears and state machine stay the original demo's until a capture refreshes them.
 
 ## Intent

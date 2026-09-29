@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `playbook-17-adoption`, awaiting merge to `main`; not released.
+Completed on `playbook-17-adoption`, merged to `main` in 88b9f88 on 2026-09-29, and released in `app-v0.9.0-beta.1`.
 
 ## Intent
 

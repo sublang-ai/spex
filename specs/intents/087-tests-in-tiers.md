@@ -5,7 +5,7 @@
 
 ## Status
 
-Completed on `ir-087-tests-in-tiers` and merged to `main` in 12856ef on 2026-09-28, with CI run 36436193657 green on Linux and macOS; not released.
+Completed on `ir-087-tests-in-tiers` and merged to `main` in 12856ef on 2026-09-28, with CI run 36436193657 green on Linux and macOS; released in `app-v0.9.0-beta.1` on 2026-09-29, the first beta of the kind [DR-087](../decisions/087-beta-app-releases.md) defines.
 
 ## Intent
 
