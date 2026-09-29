@@ -637,6 +637,8 @@ test("queue advance: a restore of an interrupted dispatch keeps its intent's sta
   const before = await client.expectOk("ledger.get", {});
   const stamped = entry(before, first.id).intent.dispatched;
   assert.equal(stamped?.turnId, 1, "the dispatch was stamped when its turn started");
+  // Until the restore, the lost attempt's failure is the lane's last word.
+  expectNext(before, first.id, "failed", true);
 
   const seen = client.messages.length;
   await client.expectOk("session.restore", { sessionId: session.id });
@@ -652,8 +654,10 @@ test("queue advance: a restore of an interrupted dispatch keeps its intent's sta
   assert.equal(entry(before, first.id).state, "queued");
   assert.equal(entry(after, first.id).state, "queued", "a restore's report finishes nothing");
   assert.deepEqual(entry(after, first.id).intent.dispatched, stamped, "the dispatch stamps stand as history");
-  // The failed dispatch's own error stays the lane's last word.
-  expectNext(after, first.id, "failed", true);
+  // The report reuses the lost attempt's turn id, yet that attempt's
+  // failure is not the report's: the lane reads the stop the report
+  // accounts for (core-service-107).
+  expectNext(after, first.id, "stopped", true);
   assert.equal(entry(after, next.id).intent.dispatched, undefined);
   assert.ok(!after.attention.some((row) => row.band === "finished"), "no finish or review is raised");
   assert.equal(starts(client).length, 2, "the dispatch and the restore's report, and nothing after");

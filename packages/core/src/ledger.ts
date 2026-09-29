@@ -580,9 +580,14 @@ export function queueSchedule(
 
   const latest = ledgerTurns(store, lane.sessionId).at(-1);
   if (latest) {
+    // A restore's report reuses the id of the turn it reports, whose
+    // lost attempt may have failed: only what failed once the report
+    // began is the report's own (core-service-107, DR-088).
+    const report = restoreReports(records).filter((entry) => entry.turnId === latest.turnId).at(-1);
+    const since = report?.startSeq ?? Number.NEGATIVE_INFINITY;
     const failed = records.some(({ seq, record }) => {
       if (record.type !== "runtime_error") return false;
-      if (abortErrors.has(seq)) return false;
+      if (abortErrors.has(seq) || seq <= since) return false;
       const turnId = (record as { turnId?: unknown }).turnId;
       return turnId === latest.turnId ||
         (turnId === null && record.timestamp >= latest.startedAt);
