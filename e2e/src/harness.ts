@@ -48,6 +48,7 @@ import {
   fakeAdapterImports,
   parkingScript,
   askingScript,
+  compiledRunScript,
   prepareStorageGitFiles,
   STUB_SLC_RELEASE_FILE,
   stubSlcScriptedSource,
@@ -157,10 +158,23 @@ export interface AppOptions {
    */
   authoring?: {
     script?: FakeScript;
-    slc?: "ok" | "fail:gears2fsm" | "clarify" | "block";
+    /** `fixture` passes by placing the committed compiled fixture
+     * (`COMPILED_FIXTURE`) — the example as the real `slc` compiled it
+     * — in place of the stub's own artifacts (playbook-library-87). */
+    slc?: "ok" | "fail:gears2fsm" | "clarify" | "block" | "fixture";
     phaseDelayMs?: number;
     hold?: boolean;
   };
+  /**
+   * A compiled playbook run for real on substitute agents
+   * (playbook-library-87, DR-089): the real Captain shell, whose
+   * provider replies follow `compiledRunScript` — each hidden judgment
+   * taking the outcome that goes straight on, the coder committing, the
+   * reviewer finding nothing — behind an authoring agent that answers
+   * a passing compile's turn proposing nothing. Needs `project` for a
+   * repository to commit in.
+   */
+  compiled?: boolean;
   /**
    * A compile player (DR-086, release-25): the config is written
    * before boot as the installed template's text with one more roster
@@ -221,6 +235,7 @@ const AUTHORING_ROLES = "['Triager', 'Verifier']";
 /** The stub's scripted runs per `authoring.slc`: the last step repeats. */
 const STUB_STEPS: Record<NonNullable<AppOptions["authoring"]>["slc"] & string, StubSlcStep[]> = {
   ok: ["ok"],
+  fixture: ["ok"],
   "fail:gears2fsm": ["fail:gears2fsm", "ok"],
   clarify: ["clarify", "ok"],
   block: ["block"],
@@ -263,6 +278,17 @@ function adapterScript(options: AppOptions): FakeScript {
       ...(demo.rules ?? []),
     ],
     ...(demo.fallback ? { fallback: demo.fallback } : {}),
+  };
+}
+
+/** The compiled run's script behind the authoring agent's: a passing
+ * compile's turn is answered with no registration proposed, so the
+ * Register tab stands on its derived defaults. */
+function compiledScript(options: AppOptions): FakeScript {
+  const run = compiledRunScript({ delayMs: options.agentDelayMs ?? 400 });
+  return {
+    rules: [{ match: AUTHORING_PROMPT, response: { result: "Compiled." } }, ...(run.rules ?? [])],
+    ...(run.fallback ? { fallback: run.fallback } : {}),
   };
 }
 
@@ -609,6 +635,7 @@ async function arrangeApp(
       stubSlcScriptedSource(STUB_STEPS[options.authoring.slc ?? "ok"], AUTHORING_ROLES, {
         phaseDelayMs: options.authoring.phaseDelayMs ?? 800,
         hold: options.authoring.hold ?? false,
+        ...(options.authoring.slc === "fixture" ? { fixtureDir: COMPILED_FIXTURE } : {}),
       }),
     );
     env = { ...baseEnv, SPEX_SLC: `${process.execPath} ${stubPath}`, SPEX_NODE: process.execPath };
@@ -631,6 +658,8 @@ async function arrangeApp(
       : {
           adapterImports: options.park
             ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
+            : options.compiled
+            ? fakeAdapterImports(compiledScript(options)).imports
             : options.ask
             ? fakeAdapterImports(askingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.realCaptain
@@ -638,7 +667,7 @@ async function arrangeApp(
             : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain || options.park || options.ask ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           ...(options.forge
