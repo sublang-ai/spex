@@ -5,8 +5,9 @@
 
 ## Status
 
-In progress on `fresh-user-scenarios`: part 1 (tasks 1–9) and task 15 done and verified; the rest of part 2 (tasks 10–14 and 16) follows on this branch once the Playbook 17 adoption merges.
-The branch merges to `main` only with part 2: the release rules (release-20, release-22, release-25, release-26) and the journey items (dashboard-63, dashboard-64, run-view-150, playbook-library-86, playbook-library-87) state the walks part 2 builds, so until then no app tag can meet the release rules — `npm run smoke -- --live` is refused as an unknown argument, and the release checklist and playbook still name `npm run smoke:desktop`.
+In progress on `fresh-user-scenarios`, restacked onto the Playbook 17 adoption ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)), whose question relay and slc 0.12 the live journeys need: parts 1 and 2 are built and verified hermetically (tasks 1–15, and task 16's rewrites).
+What remains is the owner's: one run of `npm run smoke -- --live` and of `npm run regression` on signed-in agents, their outcomes recorded here, and the compiled fixture that the regression's example journey captures, committed; until then the hermetic compiled-fixture journey skips.
+The branch merges to `main` once those runs are recorded.
 
 ## Intent
 
@@ -23,12 +24,15 @@ Implement [DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md
 - [x] Spec items matching what is built and tested: the palette, the Overview's GitHub line, the live journeys, spec-view's lowest free number.
 - [x] Inline explanations shortened to key phrases, in both catalogs.
 - [x] The changelog carrying what shipped unnoted.
-- [ ] The smoke's `live` stage (`npm run smoke -- --live`).
-- [ ] The regression's example journey: pasted, compiled for real, registered on the defaults, run to a finished turn.
-- [ ] The hermetic compiled-fixture journey.
-- [ ] The regression's new project created from the palette, through `/decide` then `/code`, a player's question answered through the Captain.
-- [ ] The hermetic two-intent handoff journey.
+- [x] The smoke's `live` stage (`npm run smoke -- --live`).
+- [x] The regression's example journey: pasted, compiled for real, registered on the form's prefill, run to a finished turn; its capture switch.
+- [x] The hermetic compiled-fixture journey, its fixture loader and the capture's README.
+- [ ] The compiled fixture, captured by the regression's example journey and committed.
+- [x] The regression's new project created from the palette, through `/decide` then `/code`, a player's question answered through the Captain.
+- [x] The hermetic two-intent handoff journey.
 - [x] The regression's observed-and-aborted `/code` removed.
+- [x] The release checklist, the release playbook and the changelog's tiers entry rewritten for the walks as built.
+- [ ] `npm run smoke -- --live` and `npm run regression` run once, their outcomes recorded.
 
 ## Tasks
 
@@ -79,5 +83,11 @@ The fresh-user wording review read every interface message over about 120 charac
 | Sources summary, Space ahead/behind | counts | kept: they name and count |
 | Session recovery | "Discard this attempt? …" | not reviewed: the Playbook 17 adoption owns recovery |
 
-The changelog's tiers entry describes the lane as it is built today, the observed `/code` gone with task 15, and is rewritten with the lane in task 16.
+The changelog's tiers entry described the lane as built in part 1, the observed `/code` gone with task 15, until task 16 rewrote it with the lane.
 [DR-039](../decisions/039-browser-acceptance-journeys.md)'s status still says the regression walks the three fresh-user scenarios: that line summarizes DR-086's extension, which DR-089 amends without rewriting.
+
+Part 2, on the restacked branch, verified hermetically on 2026-09-28: `npm run build`; `npm test` — 34 script, 133 CLI, 346 core, 708 interface, 16 desktop and 11 server tests; the hermetic journeys, 64 passed and the compiled-fixture journey skipped for want of its fixture, the new handoff journey among the passed; `spex lint` clean; the interface, core and desktop catalogs whole; the journeys typecheck, and `npm run journeys:live -w e2e -- --list` lists the three live journeys.
+The smoke's plan is read through its new `--dry-run` by a script test: `live` follows `cli-user` only with `--live`, and a live run resuming past the fresh install is refused.
+The compiled-fixture journey passed against a local, uncommitted stand-in — the example as slc 0.10 compiled it in slc's own `demo/reference`, the identical text — under Playbook 17: the stub placed it, the app packaged and registered it on the defaults, and the real Captain shell ran it to its finish on substitute agents, the judge picking each straight outcome from the declared ones; given a capture of another runtime ABI and artifact schema it failed naming both, and with no fixture it skips.
+The stand-in is not committed: it came from another compiler release than the one the app installs, and the fixture is only ever captured through the product path.
+The live journeys and the smoke's `live` stage were not run: they need the owner's signed-in agents and hours of real model calls, and a Codex compile from this session is refused by its harness.
