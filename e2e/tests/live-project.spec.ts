@@ -2,23 +2,22 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // A new project developed through two intents (dashboard-63,
-// run-view-150): the regression's second scenario (DR-086, release-25)
-// on the machine's signed-in agents and the real Captain, run by
-// `npm run regression` (SPEX_E2E_LIVE=1) and never in CI. A fresh
-// repository with scaffolded specs is added from the palette; the
-// first intent is captured on the Dashboard and started, the second
-// queued behind it; the first runs the real /code with its review to a
-// settled turn, the queue hands off to the second with nothing
-// pressed, and the second settles. Both are confirmed, History lists
-// them, and the repository's own tests pass with a commit from each
-// cycle. The lane answers no question in this version: one fails the
-// journey at once, its text attached.
+// run-view-150): the regression's second scenario (DR-086, DR-089,
+// release-25) on the machine's signed-in agents and the real Captain,
+// run by `npm run regression` (SPEX_E2E_LIVE=1) and never in CI. The
+// project starts where a fresh user starts one: created from the
+// palette with its specs scaffolded. The first intent, a `/decide`, is
+// captured on the Dashboard and started, and a `/code` implementing
+// the decision is queued behind it; the decision runs with its review
+// to a settled turn, the queue hands off to the `/code` with nothing
+// pressed, and it settles in turn. A question a player asks on the way
+// is answered through the Captain, as the Boss would. Both intents are
+// confirmed, History lists them, and the repository carries a commit
+// from each cycle and passes its own tests.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Page } from "@playwright/test";
 
 import {
   test,
@@ -36,130 +35,58 @@ import {
 } from "../src/harness";
 
 // The true first run: the core seeds its installed template, and the
-// journey brings its own project.
+// journey creates its project through the page.
 test.use({ appOptions: { config: "none" } });
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-
 const FIRST =
-  '/code Add a sum(a, b) function in src/index.js returning a + b, with a test under test/. Keep the change minimal.';
+  "/decide How should this repository lay out a small JavaScript package with a sum(a, b) function: its module format, where the source and its tests live, and how npm test runs them? Keep it to what such a package needs.";
 const SECOND =
-  '/code Add a product(a, b) function beside sum in src/index.js returning a * b, with a test under test/.';
-/** A real /code cycle with its review (DR-086: twenty to forty-five minutes). */
+  "/code Implement the recorded decision for the sum(a, b) package: a package.json whose npm test runs the tests with node --test, sum(a, b) returning a + b, and one test for it. Keep the change minimal.";
+/** The Boss's answer to any question a player asks on the way. */
+const ANSWER = "Take the simplest option that satisfies the request, and go on.";
+/** A real cycle with its review (DR-086: twenty to forty-five minutes). */
 const CYCLE = 60 * 60_000;
 /** From a settled turn to the queued intent's dispatch (DR-077). */
 const HANDOFF = 5 * 60_000;
 
-/**
- * A repository as a user starts one: a package with one passing test,
- * its specs scaffolded by this repository's CLI, one commit, and its
- * own committer for the agents that commit there.
- */
-function arrangeProject(dir: string): void {
-  mkdirSync(join(dir, "src"), { recursive: true });
-  mkdirSync(join(dir, "test"), { recursive: true });
-  execFileSync("git", ["init", "-q", "-b", "main", dir]);
-  writeFileSync(join(dir, "README.md"), "# greetings\n");
-  writeFileSync(
-    join(dir, "package.json"),
-    `${JSON.stringify(
-      {
-        name: "greetings",
-        version: "0.1.0",
-        type: "module",
-        scripts: { test: "node --test" },
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  writeFileSync(join(dir, "src", "index.js"), "export {};\n");
-  writeFileSync(
-    join(dir, "test", "index.test.js"),
-    [
-      'import { test } from "node:test";',
-      'import assert from "node:assert/strict";',
-      "",
-      'test("the package loads", async () => {',
-      '  assert.equal(typeof (await import("../src/index.js")), "object");',
-      "});",
-      "",
-    ].join("\n"),
-  );
-  execFileSync(
-    process.execPath,
-    [join(repoRoot, "packages", "cli", "dist", "cli.js"), "scaffold", "--agents=claude"],
-    { cwd: dir, stdio: "pipe" },
-  );
-  execFileSync("git", ["-C", dir, "add", "-A"]);
-  execFileSync("git", [
-    "-C",
-    dir,
-    "-c",
-    "user.name=Spex Test",
-    "-c",
-    "user.email=spex@example.test",
-    "-c",
-    "commit.gpgsign=false",
-    "commit",
-    "-q",
-    "-m",
-    "Start greetings",
-  ]);
-  commitIdentity(dir);
-}
-
-/** A run stopped on the Boss, read off the Dashboard: the lane answers
- * no question, so a summons fails the journey with its words. */
-async function expectNoSummons(page: Page): Promise<void> {
-  const summons = page.getByTestId(/^attention-.+-(question|failure)$/);
-  if ((await summons.count()) > 0) {
-    throw new Error(`the run stopped on the Boss: ${await summons.first().innerText()}`);
+/** The commits a repository holds: none before its first. */
+function commits(dir: string): number {
+  try {
+    return commitCount(dir);
+  } catch {
+    return 0;
   }
 }
 
-/** The settled turn's handoff to a queued intent (DR-077), read off
- * the Dashboard: the row leaves Up next, or its standing says at once
- * what the work ahead stopped on ("waiting — …"). */
-async function awaitHandoff(page: Page, intentId: string): Promise<void> {
-  const row = page.getByTestId(`upnext-row-${intentId}`);
-  const standing = page.getByTestId(`upnext-standing-${intentId}`);
-  const deadline = Date.now() + HANDOFF;
-  for (;;) {
-    if ((await row.count()) === 0) return;
-    await expectNoSummons(page);
-    const phrase = (await standing.count()) > 0 ? await standing.innerText() : "";
-    if (phrase.startsWith("waiting")) throw new Error(`the queue did not hand off: ${phrase}`);
-    if (Date.now() > deadline) {
-      throw new Error(`the queue did not hand off in ${HANDOFF / 60_000} minutes`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-  }
-}
-
-test("dashboard-63, run-view-150 @live: a new project develops through two intents", async ({
+test("dashboard-63, run-view-150 @live: a project created from the palette develops through /decide and /code", async ({
   page,
   app,
 }) => {
   test.skip(!LIVE, "live lane only");
-  test.setTimeout(180 * 60_000);
+  test.setTimeout(240 * 60_000);
   const projectDir = join(dirname(app.dataDir), "new-project");
-  arrangeProject(projectDir);
-  const seeded = commitCount(projectDir);
 
-  // ── The palette adds the repository, the Captain home names it, and
-  //    the Specs tab reads its scaffolded packages.
+  // ── The palette creates the repository with its specs scaffolded,
+  //    the Captain home names it, and the Specs tab reads the
+  //    scaffolded packages.
   await open(page, app);
   await page.getByRole("button", { name: "Switch or add a project" }).click();
   const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
   await palette.getByTestId("palette-path").fill(projectDir);
-  await palette.getByTestId("palette-add").click();
-  await expect(palette).toBeHidden();
+  await expect(palette.getByRole("checkbox", { name: "Scaffold specs when creating" })).toBeChecked();
+  await palette.getByTestId("palette-create").click();
+  // Scaffolding fetches the published CLI, as it does for a user.
+  await expect(palette).toBeHidden({ timeout: 5 * 60_000 });
   const home = page.getByTestId("captain-home");
   await expect(home).toContainText("new-project");
   // The seeded template's agents must be ready on this machine, or the
   // lane proves nothing: fail early, naming what is not signed in.
   await expect(home).not.toContainText(/aren't ready/i);
+  // The repository's own committer for the agents that commit there:
+  // an unset identity makes the Captain ask, and the machine's signing
+  // requirement can stall a commit — neither is the machine's to decide.
+  commitIdentity(projectDir);
+  const seeded = commits(projectDir);
   await page.getByRole("tab", { name: "Specs" }).click();
   await expect(page.getByTestId("specv-live")).toBeVisible();
   await expect(page.getByTestId("file-git")).toBeVisible();
@@ -180,7 +107,7 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
     await expect(row).toBeVisible();
     return (await row.getAttribute("data-intent-id"))!;
   };
-  const firstId = await capture(FIRST, "sum(a, b)");
+  const firstId = await capture(FIRST, "sum(a, b) function");
   await expect(page.getByTestId(`upnext-row-${firstId}`)).toHaveAttribute("data-next", "true");
   await page.getByTestId(`upnext-start-${firstId}`).click();
   await expect(page.getByTestId("start-composer")).toHaveValue(FIRST);
@@ -202,37 +129,72 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
 
   // ── The second intent queues behind it as the project's next
   //    (dashboard-29, DR-077): Queued, after the current work, no Start.
-  const secondId = await capture(SECOND, "product(a, b)");
+  const secondId = await capture(SECOND, "Implement the recorded decision");
   await expect(page.getByTestId(`upnext-row-${secondId}`)).toHaveAttribute("data-next", "true");
   await expect(page.getByTestId(`upnext-queued-${secondId}`)).toHaveText("Queued");
   await expect(page.getByTestId(`upnext-standing-${secondId}`)).toHaveText("after current work");
   await expect(page.getByTestId(`upnext-start-${secondId}`)).toHaveCount(0);
-  await expectNoSummons(page);
 
-  // ── The first cycle in its session (run-view-150): /code started,
-  //    the composer refusing input, the coder's live output, the run
-  //    settled with no failure, and the reviewer's output.
-  await page.getByTestId(`running-session-${sessionId}`).click();
-  await awaitCaptainLine(page, "/code started", 10 * 60_000);
+  // A question a player asks is answered through the Captain, as the
+  // Boss would (DR-085, DR-089): it stands as the Captain's bubble with
+  // the banner naming the asking player (run-view-9); the Dashboard
+  // lists it in the attention queue (dashboard-1) and reads the queued
+  // `/code` as waiting on the reply (dashboard-59); the answer goes
+  // through the session's composer, and the wait clears only once the
+  // runtime reports the question gone.
+  let questions = 0;
   const box = page.getByTestId("boss-composer");
+  const answering = {
+    onQuestion: async (): Promise<void> => {
+      questions += 1;
+      const banner = page.getByTestId("boss-reply-banner");
+      await expect(page.getByTestId("question-bubble").last()).toBeVisible();
+      await expect(banner).toContainText("is waiting");
+      await attachRun(page, `question ${questions}`);
+      await dashboard.click();
+      await expect(page.getByTestId(/^attention-.+-question$/).first()).toBeVisible();
+      if ((await page.getByTestId(`upnext-row-${secondId}`).count()) > 0) {
+        await expect(page.getByTestId(`upnext-standing-${secondId}`)).toHaveText("waiting — your reply");
+      }
+      await now.click();
+      await expect(box).toBeEnabled();
+      await box.fill(ANSWER);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(banner).toHaveCount(0, { timeout: CYCLE });
+    },
+  };
+
+  // ── The first cycle in its session (run-view-150): /decide started,
+  //    the composer refusing input, both players' live proposals, the
+  //    run settled with no failure after its review.
+  await page.getByTestId(`running-session-${sessionId}`).click();
+  await awaitCaptainLine(page, "/decide started", 10 * 60_000, 1, answering);
   await expect(box).toBeDisabled();
   await expect(box).toHaveAttribute("placeholder", "Captain is working…");
   const coder = page.getByTestId("player-pane-dev.coder");
-  await awaitRun(page, "the coder's live output", async () => (await coder.innerText()).length > 200, CYCLE);
+  await awaitRun(
+    page,
+    "the coder's live output",
+    async () => (await coder.innerText()).length > 200,
+    CYCLE,
+    answering,
+  );
   await attachRun(page, "cycle 1: live output");
-  await awaitCaptainLine(page, "/code finished", CYCLE);
+  await awaitCaptainLine(page, "/decide finished", CYCLE, 1, answering);
   await attachRun(page, "cycle 1: finished");
   await expect(captain).not.toContainText(/turn failed/i);
   await expectEngaged(page, "dev.coder", 200);
   await expectEngaged(page, "dev.reviewer");
-  const afterFirst = commitCount(projectDir);
+  const afterFirst = commits(projectDir);
   expect(afterFirst).toBeGreaterThan(seeded);
 
   // ── The handoff (DR-077): with nothing pressed, the settled turn
-  //    dispatched the second intent into the same conversation, while
-  //    the first stands finished in the attention queue with Confirm.
+  //    dispatches the queued /code into the same conversation; the
+  //    Dashboard no longer lists it in Up next, Now shows it, and the
+  //    first stands finished in the attention queue with Confirm.
+  await awaitCaptainLine(page, "/code started", HANDOFF, 1, answering);
   await dashboard.click();
-  await awaitHandoff(page, secondId);
+  await expect(page.getByTestId(`upnext-row-${secondId}`)).toHaveCount(0);
   await expect(now).toHaveAttribute("data-intent-id", secondId);
   await expect(page.getByTestId(`running-session-${sessionId}`)).toBeVisible();
   await expect(page.getByTestId(`attention-${firstId}-finish`)).toBeVisible();
@@ -241,24 +203,25 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
   // ── The second cycle, to its settlement: the composer refused input
   //    while it ran and reads ready after, and nothing ends (run-view-69).
   await page.getByTestId(`running-session-${sessionId}`).click();
-  await awaitCaptainLine(page, "/code started", 10 * 60_000, 2);
   await expect(box).toBeDisabled();
   await expect(box).toHaveAttribute("placeholder", "Captain is working…");
-  await awaitCaptainLine(page, "/code finished", CYCLE, 2);
+  await awaitCaptainLine(page, "/code finished", CYCLE, 1, answering);
   await attachRun(page, "cycle 2: finished");
   await expect(captain).not.toContainText(/turn failed/i);
+  await expectEngaged(page, "dev.coder", 200);
+  await expectEngaged(page, "dev.reviewer");
   await expect(box).toBeEnabled();
   await expect(page.getByTestId("end-session")).toHaveCount(0);
   await expect(page.getByTestId("history-notice")).toHaveCount(0);
   await expect(page.getByTestId(`sidebar-mark-${sessionId}`)).not.toHaveAttribute("data-life", "running");
-  const afterSecond = commitCount(projectDir);
+  const afterSecond = commits(projectDir);
   expect(afterSecond).toBeGreaterThan(afterFirst);
 
   // ── Both finished intents stand in the attention queue with Confirm
   //    and leave it on Confirm (dashboard-1, dashboard-4); History then
   //    lists both as done (dashboard-27).
   await dashboard.click();
-  await expectNoSummons(page);
+  await expect(page.getByTestId(/^attention-.+-(question|failure)$/)).toHaveCount(0);
   for (const intentId of [firstId, secondId]) {
     const entry = page.getByTestId(`attention-${intentId}-finish`);
     await expect(entry).toBeVisible();
@@ -275,14 +238,18 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
   await expect(box).toBeEnabled();
   await expect(page.getByTestId(`sidebar-mark-${sessionId}`)).toHaveAttribute("data-life", "idle");
 
-  // ── The repository: both changes committed, and its own tests pass.
+  // ── The repository: a commit from each cycle, the decision among
+  //    its specs, and its own tests passing.
   await test.info().attach("the commits", {
     body: git(projectDir, "log", "--stat"),
     contentType: "text/plain",
   });
-  const source = readFileSync(join(projectDir, "src", "index.js"), "utf8");
-  expect(source).toContain("sum");
-  expect(source).toContain("product");
+  await test.info().attach("questions answered", {
+    body: String(questions),
+    contentType: "text/plain",
+  });
+  expect(existsSync(join(projectDir, "package.json")), "the /code cycle wrote a package.json").toBe(true);
+  expect(git(projectDir, "grep", "-l", "sum", "--", "*.js", "*.mjs", "*.cjs", "*.ts")).not.toBe("");
   let output = "";
   try {
     output = execFileSync("npm", ["test"], { cwd: projectDir, encoding: "utf8", stdio: "pipe" });
@@ -293,4 +260,5 @@ test("dashboard-63, run-view-150 @live: a new project develops through two inten
   } finally {
     await test.info().attach("npm test", { body: output, contentType: "text/plain" });
   }
+  expect(output, "npm test ran at least one passing test").toMatch(/\bpass\s+[1-9]/);
 });

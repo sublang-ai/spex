@@ -1139,45 +1139,59 @@ export async function attachRun(page: Page, label: string): Promise<void> {
 }
 
 /** What stops a live run that the journey will not move past by
- * itself: a failed turn, a question for the Boss (the lane answers
- * none), or a failure notice; undefined while the run goes on. One
- * read of the page, so hours of polling stay light in the trace. */
-async function runStop(page: Page): Promise<string | undefined> {
-  return page.evaluate(() => {
+ * itself: a failed turn, a question for the Boss unless the journey
+ * answers questions, or a failure notice; undefined while the run goes
+ * on. One read of the page, so hours of polling stay light in the
+ * trace. */
+async function runStop(page: Page, answering: boolean): Promise<string | undefined> {
+  return page.evaluate((answering) => {
     const all = (id: string) =>
       Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
     if (all("captain-pane").some((pane) => /turn failed/i.test(pane.innerText))) {
       return "the turn failed";
     }
     const question = all("question-bubble").at(-1);
-    if (question) return `the run asked the Boss: ${question.innerText}`;
+    if (question && !answering) return `the run asked the Boss: ${question.innerText}`;
     for (const id of ["failed-workflow", "unparked-failure-notice"]) {
       const notice = all(id)[0];
       if (notice) return `${id}: ${notice.innerText}`;
     }
     return undefined;
-  });
+  }, answering);
+}
+
+/** How a journey that answers questions answers the one standing. */
+export interface Answering {
+  /** Called in the open session while a question waits for the Boss:
+   * the journey answers it, and returns once the wait has cleared. */
+  onQuestion?: () => Promise<void>;
 }
 
 /**
  * Watch the open session until `reached` holds, polling every ten
  * seconds, and fail at once — the transcripts attached — when the run
- * stops short of it or the time runs out.
+ * stops short of it or the time runs out. A question for the Boss
+ * stops it too, unless `onQuestion` answers it.
  */
 export async function awaitRun(
   page: Page,
   what: string,
   reached: () => Promise<boolean>,
   timeout: number,
+  answering: Answering = {},
 ): Promise<void> {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const stop = await runStop(page);
+    const stop = await runStop(page, answering.onQuestion !== undefined);
     if (stop) {
       await attachRun(page, `stopped before ${what}`);
       throw new Error(`${what}: ${stop}`);
     }
     if (await reached()) return;
+    if (answering.onQuestion && (await page.getByTestId("boss-reply-banner").count()) > 0) {
+      await answering.onQuestion();
+      continue;
+    }
     if (Date.now() > deadline) {
       await attachRun(page, `timed out before ${what}`);
       throw new Error(`${what}: not reached in ${Math.round(timeout / 60_000)} minutes`);
@@ -1193,12 +1207,13 @@ export async function awaitCaptainLine(
   line: string,
   timeout: number,
   times = 1,
+  answering: Answering = {},
 ): Promise<void> {
   const lines = page
     .getByTestId("captain-pane")
     .getByTestId("system-line")
     .filter({ hasText: line });
-  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout);
+  await awaitRun(page, `${line} ×${times}`, async () => (await lines.count()) >= times, timeout, answering);
 }
 
 /** A player's pane carries the output of a call it served: no longer
