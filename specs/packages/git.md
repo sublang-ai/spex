@@ -28,8 +28,8 @@ Where a commit message includes a body, when writing the body, the commit body s
 When AI assists in coding or authoring, the commit message shall include one or more `Co-authored-by` trailers in the final contiguous trailer block recognized by Git, with no blank lines between trailers and each trailer using the format `<model> (<role>) <email>`, where `<role>` is one of `coder|reviewer|maintainer` and `<email>` is `cligent@sublang.ai`:
 
 ```text
-Co-authored-by: GPT-5.2-Codex (coder) <cligent@sublang.ai>
-Co-authored-by: Claude Opus 4.1 (reviewer) <cligent@sublang.ai>
+Co-authored-by: GPT-6 Sol (coder) <cligent@sublang.ai>
+Co-authored-by: Claude Opus 5.5 (reviewer) <cligent@sublang.ai>
 ```
 
 ### git-5
