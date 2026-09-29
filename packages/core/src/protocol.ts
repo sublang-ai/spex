@@ -229,6 +229,13 @@ export interface ParkedRun {
  * view and the ledger read the restored park from it. */
 export const RESTORED_TOPIC = "spex.session.restored";
 
+/** The topic of the record a restore leaves before it runs
+ * (core-service-82, DR-088), carrying the saved input: it marks the
+ * turn that follows with that input as the restore's report, so the
+ * report reads as one even where the core stopped before recording
+ * its position, and the run view draws the saved message once. */
+export const RESTORING_TOPIC = "spex.session.restoring";
+
 /** One run engaged at the restored position, root to leaf. */
 export interface RestoredRun {
   sessionId: string;

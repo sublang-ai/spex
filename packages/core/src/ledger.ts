@@ -19,7 +19,7 @@ import type {
   QueueSchedule,
   StoredRecord,
 } from "./protocol.js";
-import { controlKind, isStoppedTurnReason, restoredPosition } from "./control-record.js";
+import { controlKind, isStoppedTurnReason, restoredPosition, restoreReports } from "./control-record.js";
 import type { Store } from "./store.js";
 
 /** What the session manager knows live: the lanes and their activity. */
@@ -159,13 +159,7 @@ function stateName(value: unknown): string | undefined {
 /** The turns a restore reported (core-service-82, DR-088): each is the
  * account of interrupted work, a stop rather than work that finished. */
 function restoredTurnIds(records: StoredRecord[]): Set<number> {
-  const ids = new Set<number>();
-  for (const { record } of records) {
-    if (!restoredPosition(record)) continue;
-    const turnId = (record as { turnId?: unknown }).turnId;
-    if (typeof turnId === "number") ids.add(turnId);
-  }
-  return ids;
+  return new Set(restoreReports(records).map((report) => report.turnId));
 }
 
 /** A session's turns as every ledger read takes them (core-service-82,

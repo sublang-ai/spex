@@ -5,7 +5,7 @@
 // turn record carries the control label but not whether it was a recovery
 // or an ending, so the core keeps that fact in the same durable stream.
 
-import { RESTORED_TOPIC, type FailureCause, type RestoredPosition, type RestoredRun, type TmuxPlayRecord } from "./protocol.js";
+import { RESTORED_TOPIC, RESTORING_TOPIC, type FailureCause, type RestoredPosition, type RestoredRun, type TmuxPlayRecord } from "./protocol.js";
 
 export type TurnControlKind = "recovery" | "ending";
 
@@ -126,4 +126,106 @@ export function restoredPosition(
         typeof (run as { sessionId?: unknown })?.sessionId === "string")
       : [],
   };
+}
+
+/** The visible record a restore leaves before it runs (core-service-82,
+ * DR-088): it carries the saved input, marking the turn that next
+ * starts with it as the restore's report. */
+export function restoringRecord(input: string, timestamp: number): TmuxPlayRecord {
+  return {
+    type: "captain_telemetry",
+    topic: RESTORING_TOPIC,
+    payload: { input },
+    turnId: null,
+    timestamp,
+  } as unknown as TmuxPlayRecord;
+}
+
+/** The saved input a restore marker carries, or undefined for any other
+ * record. */
+export function restoringInput(record: TmuxPlayRecord): string | undefined {
+  if (record.type !== "captain_telemetry") return undefined;
+  const telemetry = record as unknown as { topic?: unknown; payload?: { input?: unknown } };
+  if (telemetry.topic !== RESTORING_TOPIC) return undefined;
+  return typeof telemetry.payload?.input === "string" ? telemetry.payload.input : undefined;
+}
+
+/** One restore's report as the stream holds it (core-service-82). */
+export interface RestoreReport {
+  turnId: number;
+  /** The seq of the report's own turn_started. */
+  startSeq?: number;
+  /** The seq of the terminal record that ended the report. */
+  endSeq?: number;
+  /** The seq of the recorded position, once the core recorded it. */
+  positionSeq?: number;
+}
+
+/** The restores' reports a stream holds, in order (core-service-82,
+ * DR-088): each turn a restore marker names — the first turn starting
+ * after the marker with the saved input it carries, unless a failure
+ * recorded between says the restore never reported — and each turn a
+ * recorded position names. A position read with no marker before it
+ * names the latest start of its turn. */
+export function restoreReports(
+  records: readonly { seq: number; record: TmuxPlayRecord }[],
+): RestoreReport[] {
+  const reports: RestoreReport[] = [];
+  const lastStart = new Map<number, number>();
+  let marked: string | undefined;
+  for (const { seq, record } of records) {
+    const input = restoringInput(record);
+    if (input !== undefined) {
+      marked = input;
+      continue;
+    }
+    const turnId = (record as { turnId?: unknown }).turnId;
+    switch (record.type) {
+      case "runtime_error":
+        // The restore failed before its report started: the marker
+        // names no turn, so a later turn is never taken for it.
+        marked = undefined;
+        break;
+      case "turn_started": {
+        const turn = (record as { turn?: { id?: unknown; prompt?: unknown } }).turn;
+        if (typeof turn?.id !== "number") break;
+        lastStart.set(turn.id, seq);
+        if (marked !== undefined && turn.prompt === marked) reports.push({ turnId: turn.id, startSeq: seq });
+        marked = undefined;
+        break;
+      }
+      case "turn_finished":
+      case "turn_aborted": {
+        const report = reports.at(-1);
+        if (report && report.turnId === turnId && report.endSeq === undefined) report.endSeq = seq;
+        break;
+      }
+      case "captain_telemetry": {
+        if (!restoredPosition(record) || typeof turnId !== "number") break;
+        const report = [...reports].reverse().find((entry) => entry.turnId === turnId);
+        if (report && report.positionSeq === undefined) report.positionSeq = seq;
+        else if (!report) {
+          const startSeq = lastStart.get(turnId);
+          reports.push({ turnId, ...(startSeq !== undefined ? { startSeq } : {}), positionSeq: seq });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return reports;
+}
+
+/** A restore whose report settled with no position recorded after it —
+ * the core stopped between the two — while that report is still the
+ * stream's last turn, so the settled checkpoint is its position
+ * (core-service-82). */
+export function pendingRestore(
+  records: readonly { seq: number; record: TmuxPlayRecord }[],
+): RestoreReport | undefined {
+  const report = restoreReports(records).at(-1);
+  if (!report || report.positionSeq !== undefined || report.endSeq === undefined) return undefined;
+  const later = records.some(({ seq, record }) => seq > report.endSeq! && record.type === "turn_started");
+  return later ? undefined : report;
 }

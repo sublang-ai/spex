@@ -665,6 +665,9 @@ export class CoreService {
     await service.migrateLegacySessionDefault();
     await service.store.initializeSessions(service.sessionsDir());
     await service.syncForeignSessions();
+    // A restore a stopped core left without its recorded position is
+    // completed before anything reads the ledger (core-service-82).
+    await service.sessions.completeRestores();
     service.store.validateStorage();
     // A compile running when the core last stopped reads as interrupted
     // (playbook-library-59); a person restarts it.
@@ -734,6 +737,11 @@ export class CoreService {
       projectIds.add(projectId);
     }
     if (projectIds.size > 0) this.queueLedgerChange([...projectIds]);
+    // A session that joins the listing — its project registered, or
+    // another host's writes read — may hold a restore a stopped core
+    // left unrecorded (core-service-82).
+    const joined = changed.filter((entry) => !entry.unlistedProjectId).map((entry) => entry.id);
+    if (joined.length > 0) await this.sessions.completeRestores(joined);
   }
 
   private sessionsDir(): string {

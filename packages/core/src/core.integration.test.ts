@@ -32,6 +32,7 @@ import { parkingScript } from "./testing/demo.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultSpawner } from "./compile.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
+import { restoringRecord } from "./control-record.js";
 import type {
   Command,
   CommandResults,
@@ -42,6 +43,7 @@ import type {
   ServerMessage,
   SessionInfo,
   StoredRecord,
+  TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -3325,6 +3327,75 @@ test("core-service-84: a restore bringing back a run the Boss stopped himself ra
   assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === session.id), []);
   assert.equal(ledger.intents.find((entry) => entry.intent.id === intent.id)?.next?.standing, "failure-park");
   assert.equal(restored.session.parked?.reason, "failure");
+});
+
+test("core-service-84: a restore whose core stopped before recording the position is completed once when a core next reads it", { timeout: 180_000 }, async () => {
+  const dir = scratchDir("spex-restore-crash-");
+  const configPath = join(dir, "config.yaml");
+  const projectPath = join(dir, "project");
+  const dataDir = join(dir, "state");
+  const sessionsDir = join(dataDir, "sessions");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  seedRepository(projectPath);
+  writeFileSync(configPath, VALID_CONFIG);
+  const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
+  const { imports, stats } = fakeAdapterImports(parkingScript());
+
+  // A core marks the restore and reports it, then stops before it
+  // records where the runs stand: the stream holds the marker and the
+  // settled report, and no position.
+  const controller = await openSessionHost({
+    store: createSessionStore({ sessionsDir }), sessionId, mode: "recover", cwd: projectPath,
+    loadModule: (specifier: string) => import(specifier), adapterImports: imports,
+  });
+  const saved = await controller.read();
+  assert.equal(saved?.state, "uncertain");
+  await controller.lease.append(restoringRecord(saved!.uncertain!.input, Date.now()));
+  await controller.recover();
+  assert.equal((await controller.read())?.state, "settled");
+  await controller.dispose();
+
+  const start = () => CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
+  const positions = (records: { record: TmuxPlayRecord }[]) => records.flatMap(({ record }) =>
+    (record as { topic?: unknown }).topic === "spex.session.restored"
+      ? [record as unknown as { turnId: number; payload: { runs: { playbookId: string; state: { stateId?: string }; cause?: { code: string } }[] } }]
+      : []);
+  let service = await start();
+  try {
+    const client = new Client(service.port());
+    await client.open();
+    await client.expectOk("project.register", { path: projectPath });
+    const history = (await client.expectOk("history.get", { sessionId })).records;
+    const report = history.filter(({ record }) => record.type === "turn_started").at(-1)?.record as { turn: { id: number } } | undefined;
+    // The core reading the session completed the restore from the
+    // settled checkpoint: one position, naming the report's turn
+    // (core-service-82) ...
+    const recorded = positions(history);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0]?.turnId, report?.turn.id);
+    assert.deepEqual(recorded[0]?.payload.runs.map((run) => [run.playbookId, run.state.stateId, run.cause?.code]), [["code", "failed", "runtime-defect"]]);
+    // ... so the report reads as the stop it accounts for, and the run it
+    // brought back failed summons with the checkpoint's cause.
+    const ledger = await client.expectOk("ledger.get", {});
+    assert.deepEqual(ledger.attention.filter((entry) => entry.sessionId === sessionId)
+      .map((entry) => [entry.band, entry.kind, entry.parked, entry.cause?.code]), [["interrupted", "failure", true, "runtime-defect"]]);
+    const listed = (await client.expectOk("session.list", {})).find((entry) => entry.id === sessionId);
+    assert.equal(listed?.recovery, undefined);
+    assert.equal(listed?.continuable, true, listed?.continuationReason ?? "no reason given");
+    client.close();
+  } finally { await service.stop(); }
+
+  // Completing is idempotent: a later start appends nothing more.
+  service = await start();
+  try {
+    const client = new Client(service.port());
+    await client.open();
+    await client.expectOk("project.register", { path: projectPath });
+    assert.equal(positions((await client.expectOk("history.get", { sessionId })).records).length, 1);
+    client.close();
+  } finally { await service.stop(); }
+  assert.equal(stats.runs.length, 0, "completing a restore calls no agent");
 });
 
 test("core-service-84: Restore refuses a session with nothing interrupted and a relocated checkpoint, starting no turn", { timeout: 60_000 }, async (t) => {

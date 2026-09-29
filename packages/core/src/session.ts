@@ -18,7 +18,7 @@ import {
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
 import type { ComposedConfig, LoadModule } from "./config.js";
-import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, restoredRecord, restoredRuns, type TurnControlKind } from "./control-record.js";
+import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
@@ -384,13 +384,13 @@ export class SessionManager {
     if (info && !info.recovery && !info.externalWriter && !this.live.has(sessionId)) throw nothingToRestore();
     await this.open(project, undefined, sessionId, "recover");
     const entry = this.requireLive(sessionId);
-    let state: string | undefined;
-    try { state = (await entry.controller.read())?.state; } catch { state = undefined; }
-    if (state !== "uncertain") {
+    let saved: {state?: string; uncertain?: {input?: string}} | undefined;
+    try { saved = await entry.controller.read(); } catch { saved = undefined; }
+    if (saved?.state !== "uncertain" || typeof saved.uncertain?.input !== "string") {
       await this.disposeSession(sessionId);
       throw nothingToRestore();
     }
-    this.startTurn(entry, undefined, true);
+    this.startTurn(entry, undefined, { input: saved.uncertain.input });
   }
   async discardSession(sessionId: string): Promise<{removed: boolean}> {
     if (this.live.has(sessionId) || this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
@@ -520,6 +520,13 @@ export class SessionManager {
       if (!info) throw new Error("shared session has no readable project history");
       entry = {info, controller, runtime: controller.host, seq: this.store.maxSeq(sessionId), turnActive: false};
       this.live.set(sessionId, entry);
+      // A restore whose core stopped before it recorded the position is
+      // completed by whichever open holds the session next
+      // (core-service-82): the settled checkpoint is still its position.
+      if (mode !== "recover") {
+        try { await this.completeRestore(entry); }
+        catch (error) { console.error(`spex: restored position not recorded: ${String(error)}`); }
+      }
       this.publish(sessionId);
       return {...info, live:true, turnActive:false};
     } catch (error) {
@@ -548,7 +555,16 @@ export class SessionManager {
     let recovery: {state?: string} | undefined;
     try { recovery = await entry.controller.read(); } catch { recovery = undefined; }
     if (recovery?.state !== "settled") return;
-    this.captureParkedRun(entry);
+    // The restore's position is recorded before the park is read from
+    // the stream; where it cannot be, the park is read from the settled
+    // checkpoint instead, so its controls are still captured.
+    let unrecorded: unknown;
+    try { await this.completeRestore(entry); }
+    catch (error) {
+      console.error(`spex: restored position not recorded: ${String(error)}`);
+      unrecorded = (recovery as {snapshot?: unknown}).snapshot;
+    }
+    this.captureParkedRun(entry, unrecorded);
     try {
       await entry.controller.dispose();
       this.live.delete(id);
@@ -601,21 +617,78 @@ export class SessionManager {
     for (const item of added.entries) this.record(entry.info.id, item, entry);
   }
 
-  /** Record the position a restore settled (core-service-82, DR-088).
-   * Playbook's report moves no traced state — a run restored into its
-   * failure state never traced the move — so the stream would go on
-   * showing where the lost turn last was. The settled checkpoint says
-   * where each run stands; one visible record carries that, before the
-   * settlement's release reads the park from the stream. */
-  private async appendRestored(entry: LiveSession, turnId: number): Promise<void> {
+  /** Mark the restore before it runs (core-service-82, DR-088): the
+   * visible marker names the turn that next starts with the saved input
+   * as the restore's report, so that turn reads as one — and its
+   * position can still be recorded — whatever stops the core after. */
+  private async appendRestoring(entry: LiveSession, input: string): Promise<void> {
+    const afterSeq = this.store.maxSeq(entry.info.id);
+    await entry.controller.lease.append(restoringRecord(input, this.now()));
+    const added = await entry.controller.lease.readStream({ afterSeq });
+    for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
+  /** Record the position a restore settled (core-service-82, DR-088),
+   * once, for a report still standing without one. Playbook's report
+   * moves no traced state — a run restored into its failure state never
+   * traced the move — so the stream would go on showing where the lost
+   * turn last was. The settled checkpoint says where each run stands;
+   * one visible record carries that, before the settlement's release
+   * reads the park from the stream. */
+  private async completeRestore(entry: LiveSession, justRestored = false): Promise<void> {
+    const records = this.store.getRecords(entry.info.id);
+    let turnId = pendingRestore(records)?.turnId;
+    // The report the restore just settled is its last turn, whatever
+    // the marker could name.
+    if (turnId === undefined && justRestored) {
+      const last = this.store.listTurns(entry.info.id).at(-1)?.turnId;
+      const recorded = restoreReports(records).some((report) => report.turnId === last && report.positionSeq !== undefined);
+      if (!recorded) turnId = last;
+    }
+    if (turnId === undefined) return;
     const settled = await entry.controller.read();
-    // English, deliberately (core-service-111): recover() resolves only
-    // once the report settled, so an unsettled read is an internal fault.
+    // English, deliberately (core-service-111): the report settled, so
+    // an unsettled read is an internal fault.
     if (settled?.state !== "settled") throw new Error("the restore settled no readable checkpoint");
     const afterSeq = this.store.maxSeq(entry.info.id);
     await entry.controller.lease.append(restoredRecord(turnId, restoredRuns(settled.snapshot), this.now()));
     const added = await entry.controller.lease.readStream({ afterSeq });
     for (const item of added.entries) this.record(entry.info.id, item, entry);
+  }
+
+  /** Complete every restore a stopped core left unrecorded
+   * (core-service-82) in the named sessions — every session, at start —
+   * that no one holds: under its lease, the settled checkpoint's
+   * position is appended once, and the session's history and summary
+   * refresh with it. A session held elsewhere is left to the next open. */
+  async completeRestores(ids?: Iterable<string>): Promise<void> {
+    const named = ids ? new Set(ids) : undefined;
+    for (const session of this.store.listSessions()) {
+      if (named && !named.has(session.id)) continue;
+      if (session.live || session.externalWriter || this.live.has(session.id) || this.settling.has(session.id)) continue;
+      const pending = pendingRestore(this.store.getRecords(session.id));
+      if (!pending) continue;
+      try {
+        const lease = await this.store.sessionStore().acquire(session.id);
+        try {
+          const settled = await lease.read();
+          if (settled?.state !== "settled") continue;
+          await lease.append(restoredRecord(pending.turnId, restoredRuns(settled.snapshot), this.now()));
+        } finally { await lease.release(); }
+        const update = await this.store.refreshSession(session.id, false);
+        for (const entry of update?.appended ?? []) {
+          this.onRecord({
+            sessionId: session.id, seq: entry.seq, record: entry.record,
+            hidden: "visibility" in entry.record && entry.record.visibility === "hidden",
+            ...(entry.role ? { role: entry.role } : {}),
+          });
+        }
+        this.publish(session.id);
+        this.onLedgerChange(session.projectId);
+      } catch (error) {
+        console.error(`spex: restored position not recorded for ${session.id}: ${String(error)}`);
+      }
+    }
   }
 
   /** What the opened shell advertises now (core-service-98): the
@@ -644,9 +717,13 @@ export class SessionManager {
    * opening the session — and kept with the local preferences, so the
    * summary carries them after a restart (core-service-32, DR-074). A
    * settlement that finds no run parked leaves no reading behind. */
-  private captureParkedRun(entry: LiveSession): void {
+  private captureParkedRun(entry: LiveSession, unrecorded?: unknown): void {
     const id = entry.info.id;
-    const conditions = foldConditions(this.store.getRecords(id));
+    const records = this.store.getRecords(id);
+    const pending = unrecorded !== undefined ? pendingRestore(records) : undefined;
+    const conditions = foldConditions(pending
+      ? [...records, { seq: Number.MAX_SAFE_INTEGER, record: restoredRecord(pending.turnId, restoredRuns(unrecorded), this.now()) }]
+      : records);
     const reason = conditions.failure ? "failure" as const : conditions.question ? "question" as const : undefined;
     const actions = reason ? this.advertised(entry, "recovery") : [];
     const ending = reason ? this.advertised(entry, "ending")[0] : undefined;
@@ -731,7 +808,7 @@ export class SessionManager {
     this.startTurn(entry, text, false);
   }
 
-  private startTurn(entry: LiveSession, text: string | undefined, restore: boolean, control?: { kind: "recovery" | "ending"; controlId: string }): void {
+  private startTurn(entry: LiveSession, text: string | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     entry.turnIntentId = undefined;
     entry.turnActive = true;
     this.publish(entry.info.id);
@@ -739,9 +816,9 @@ export class SessionManager {
       let failed = false;
       try {
         if (restore) {
+          await this.appendRestoring(entry, restore.input);
           await entry.controller.recover();
-          const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
-          if (turnId !== undefined) await this.appendRestored(entry, turnId);
+          await this.completeRestore(entry, true);
         } else if (control) {
           const controller = entry.controller as {
             submitRuntimeAction(id: string): Promise<unknown>;
