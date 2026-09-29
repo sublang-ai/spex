@@ -49,11 +49,20 @@ and `npm start` (desktop) or `npm run start:server` (server).
   smoke installs the release from a fresh clone with `npm ci` on an
   empty npm cache and launches both shells as a user does: the server
   shell walked over its printed token URL and stopped with SIGTERM, the
-  desktop rendered by `npm start`. Before a regular release, a
-  regression walks the fresh-user scenarios with real agents: a
-  playbook authored in chat compiled, registered and run, and a new
-  project developed through two intents with the queue handing off. CI
-  runs the browser journeys on macOS as well as Linux.
+  desktop rendered by `npm start`. Every app tag runs
+  `npm run smoke -- --live`, whose last stage runs the live desktop
+  smoke inside that fresh install on the machine's signed-in agents
+  ([DR-089](specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)).
+  Before a regular release, a regression walks the fresh-user
+  scenarios with real agents: the app's own example pasted, compiled,
+  registered and run; a playbook authored in chat compiled, registered
+  and run; and a project created from the palette with its specs
+  scaffolded, developed through a `/decide` and a `/code` queued behind
+  it, the queue handing off and a player's question answered through
+  the Captain. A compiler refusing the app's own example blocks the
+  tag. CI runs the browser journeys on macOS as well as Linux, the
+  queue's handoff among them, and runs the example as the real `slc`
+  compiled it once that fixture is captured.
 
 ### Changed
 

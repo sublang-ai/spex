@@ -4,16 +4,21 @@
 # Release Smoke Checklist
 
 What to run before tagging, by tier
-([DR-086](../specs/decisions/086-tests-in-tiers.md)). The checks — unit,
-integration and browser journeys, on Linux and macOS — are CI's: tag
-only a commit whose CI run concluded `success` (release-15). Nothing
-below repeats them.
+([DR-086](../specs/decisions/086-tests-in-tiers.md),
+[DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)).
+The checks — unit, integration and browser journeys, on Linux and
+macOS — are CI's: tag only a commit whose CI run concluded `success`
+(release-15). Nothing below repeats them.
 
 | Tag | Smoke | Live smoke | Regression | Manual residue |
 | --- | --- | --- | --- | --- |
-| `app-vX.Y.Z` | yes | yes | yes | yes |
-| `app-vX.Y.Z-beta.N` | yes | yes | no | no |
-| `cli-vX.Y.Z` | yes | no | no | no |
+| `app-vX.Y.Z` | `npm run smoke -- --live` | its `live` stage | yes | yes |
+| `app-vX.Y.Z-beta.N` | `npm run smoke -- --live` | its `live` stage | no | no |
+| `cli-vX.Y.Z` | `npm run smoke` | no | no | no |
+
+An app tag runs the smoke and the live smoke as one command: the live
+smoke is the smoke's last stage, run inside the fresh install (section
+2).
 
 A CLI tag also runs the live migration smoke (`npm run smoke:migration`,
 release-24).
@@ -119,24 +124,47 @@ npm run regression
 
 The browser journeys' live lane: the served shell on a scratch home,
 this machine's real adapters and Captain, assertions through the page
-(release-25).
+(release-25). Both compiles run on the `compiler` roster player, bound
+to `gpt-6-astra` at effort `xhigh` — the only work Codex gets — and the
+compiled playbooks run on the template's claude players.
 
-1. The chat-authored two-role changelog playbook compiles for real on
-   the `compiler` roster player, bound to `gpt-6-astra` at effort
-   `xhigh`, then registers and runs: the turn finishes with both players
-   engaged and their commit in the repository.
-2. A new project is developed through two `/code` intents: a fresh
-   repository with scaffolded specs is added from the palette, the
-   first intent started from the Dashboard and the second queued behind
-   it; each settles after its review, the queue hands off without
-   confirmation, the tests pass with both changes committed, and
-   History lists both intents.
+1. The app's own example (playbook-library-86): the text the
+   Prefill places is used as the source, compiled for real from the
+   workspace's Compile, registered on the Register tab's prefill, and
+   run as `/workflow`: the turn finishes with both players engaged and
+   a commit in the repository.
+2. The chat-authored two-role changelog playbook
+   (playbook-library-78): authored in the draft's conversation,
+   compiled, registered and run to a finished turn with both players
+   engaged and their commit in the repository — the harder case.
+3. A new project (dashboard-63, run-view-150): created from the
+   palette with specs scaffolded, then developed through a `/decide`
+   intent started from the Dashboard and a `/code` intent queued behind
+   it. Each settles after its review, the queue hands off without
+   confirmation, a question a player asks is answered through the
+   Captain, the repository's tests pass with a commit from each cycle,
+   and History lists both intents.
 
 Needs Claude signed in for the Captain and the players that run
-playbooks, and Codex for the compile. It takes hours and real model
+playbooks, and Codex for the compiles. It takes hours and real model
 calls; each journey attaches the Captain's and the players'
-transcripts. A provider-side failure may be retried or waived, its
-reason recorded beside the tag; an app-side failure blocks the tag.
+transcripts, and a refused compile the compiler's output. Judge each
+failure by its class
+([DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)):
+
+| Failure | Outcome |
+| --- | --- |
+| Provider-side: a refusal, a quota, an outage | retried, or waived with its reason recorded beside the tag |
+| The bundled compiler refusing the app's own example | blocks the tag |
+| The compiler refusing the chat-authored source after the bounded relay | may be waived, the compiler's output attached and an issue filed against `slc` |
+| Any other app-side failure | blocks the tag |
+
+The hermetic journeys run the example as the real `slc` compiled it
+(playbook-library-87) from a committed fixture, captured by the first
+journey: set `SPEX_E2E_CAPTURE_COMPILED` to the fixture's directory
+for the run, as `e2e/fixtures/compiled/README.md` says, whenever the
+playbook engine changes generation or the example's text changes, and
+commit what it writes.
 
 ## 4. The manual residue — regular app releases
 
@@ -156,8 +184,9 @@ A beta ships for early trial without the regression
   workflow refuses any other pre-release identifier.
 - Bump `apps/desktop` and `apps/server` together to `X.Y.Z-beta.N`,
   verbatim.
-- Gates: CI green for the tagged commit, the smoke, and the live smoke.
-  No regression, no manual residue.
+- Gates: CI green for the tagged commit and `npm run smoke -- --live` —
+  the smoke with the live smoke as its last stage. No regression, no
+  manual residue.
 - Notes: the changelog's `[Unreleased]` section as it stands at the tag,
   which must not be empty. The changelog gains no section for a beta:
   the regular release that follows moves `[Unreleased]` into its version

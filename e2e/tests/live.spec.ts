@@ -57,7 +57,7 @@ const adapterOf = (block: Block) => (typeof block === "string" ? block : block?.
 test.describe("the app's own example", () => {
   test.use({ appOptions: { config: "none", project: true, compiler: COMPILER } });
 
-  test("playbook-library-86 @live: the pasted example compiles for real, registers on its defaults, and runs", async ({
+  test("playbook-library-86 @live: the pasted example compiles for real, registers on the form's prefill, and runs", async ({
     page,
     app,
   }) => {
