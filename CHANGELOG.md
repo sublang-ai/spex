@@ -318,12 +318,29 @@ and `npm start` (desktop) or `npm run start:server` (server).
   in by running claude in a terminal, or set ANTHROPIC_API_KEY" (`codex`
   alike), and an expired sign-in says to sign in again with that agent's
   CLI, in a terminal.
+- Models are named as the runtime names them ([DR-091](specs/decisions/091-models-named-by-the-runtime.md)).
+  The model field is a list whose rows read each model's name with the
+  specific model behind it — Claude's `opus` reads "Opus ·
+  claude-opus-5-5" rather than "Opus · opus" — and, where the runtime
+  gives them, its own description and the model it runs when none is
+  set. The editor gives the field its full width, and an inherited
+  model is named the same way. In a conversation, an agent's chip reads
+  the model its runtime reported for its latest call while the adapter
+  and model setting that call began under still stand, what is set kept
+  in its tooltip; a change of either shows at once, as before.
+  Descriptions, the default model and reported models appear once
+  Cligent reports them.
+- A new player lane and a new role assignment start on
+  `claude-opus-5-5`, the latest Claude model, where they started on
+  `claude-opus-5`.
 - Protocol version 17 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action
-  it runs by `actionId`; a session gains `parked`, `agentActiveMs` and
-  `agentSettings`, and its `recovery` gains `discardable`; an open
+  it runs by `actionId`; a session gains `parked`, `agentActiveMs`,
+  `agentReportedModels` and `agentSettings`, and its `recovery` gains
+  `discardable`; each model `agent.options` lists may carry its
+  `description`, and an available catalog its `defaultModel`; an open
   intent gains its queue standing, `next`, and loses the `permission`
   reason; attention entries are questions, failures, finishes and
   reviews only, a failure carrying `parked` and its `cause`; a draft's

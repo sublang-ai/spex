@@ -58,5 +58,5 @@ Considered and declined:
 ## Consequences
 
 - The protocol carries a model's `description`, an available catalog's `defaultModel` and a session summary's `agentReportedModels`, each optional and additive, so its version stands; records keep `reportedModel` as sent.
-- `settings-34`, `settings-35` and `settings-36` are amended and `settings-38` to `settings-41` added; `run-view-102`, `run-view-138`, `run-view-139` and `run-view-144` are amended and `run-view-152` added; `core-service-32` and `core-service-34` are amended and `core-service-115` and `core-service-116` added; `playbook-library-4` and `playbook-library-39` are amended.
+- `settings-29`, `settings-34`, `settings-35` and `settings-36` are amended and `settings-38` to `settings-41` added; `run-view-102`, `run-view-138`, `run-view-139`, `run-view-140` and `run-view-144` are amended and `run-view-152` added; `core-service-32` and `core-service-34` are amended and `core-service-115` and `core-service-116` added; `playbook-library-4` and `playbook-library-39` are amended.
 - Until Cligent reports these facts, rows carry no descriptions, the provider default names no model, and every chip reads its set value as before.
