@@ -26,6 +26,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
   gettext catalog beside the source that a human reads and edits in
   place, and a build refuses a language whose translation is
   incomplete, so no page mixes two.
+- The core's own messages speak the chosen language too ([DR-079](specs/decisions/079-the-core-speaks-the-homes-language.md)):
+  refusals, configuration errors, readiness requirements, storage
+  diagnostics, Space guidance and unit labels, compile lines and draft
+  diagnostics. Changing the language re-reads them in place, keeping an
+  unsaved draft, a form under edit and the composer's text. A record
+  already written keeps its language, and what a finished operation
+  composed — a Space stop, a diagnostic raised at load — keeps its
+  language until that operation runs again ([DR-083](specs/decisions/083-a-finished-operations-words-keep-their-language.md)).
+  Text relayed from an agent, a tool or Git stays as it came. A served
+  page whose browser prefers Chinese, on a host whose system does not,
+  reads the core's messages in English until you choose 简体中文.
 - A failure says what, why, and what now. The failed status line becomes
   a three-line card — the workflow and step that failed, the cause in a
   plain phrase with its evidence, and what to do next — from the
@@ -64,6 +75,48 @@ and `npm start` (desktop) or `npm run start:server` (server).
   journeys on macOS as well as Linux, the queue's handoff among them,
   and runs the example as the real `slc` compiled it once that fixture
   is captured.
+- An agent's settings for one conversation ([DR-067](specs/decisions/067-tuning-for-one-conversation.md),
+  [DR-068](specs/decisions/068-an-agents-settings-where-the-agent-is.md)).
+  The chip in the Captain pane's header, and in each player pane's
+  header, opens that agent's own model, effort and fast mode for this
+  conversation only; Settings and `playbook.config.yaml` never change.
+  Each field offers the configured value, the provider's default or a
+  pinned value, and one control returns the agent to its configured
+  values. A choice applies from your next message — a running turn keeps
+  what it started with — and outranks a role binding's pin, the editor
+  naming the roles it also sets. The chip reads the new setting at once.
+  The choice stays on this device and goes with the session; the
+  `playbook` CLI and other devices run the configured values.
+- Each agent's pane header reads its completed active time this session,
+  as `active · 3m 12s` ([DR-070](specs/decisions/070-agent-active-time.md),
+  [DR-071](specs/decisions/071-active-time-follows-held-calls.md)): the
+  sum of that agent's finished calls from prompt to finish, whatever
+  their outcome, a call whose clock stepped backward counting zero
+  ([DR-072](specs/decisions/072-backward-call-time-is-zero.md)).
+  Parallel calls each count in full, so the figures can add up to more
+  than the session's wall-clock time, and no total is shown. A figure
+  appears once a call finishes, reads the same after a restart, and is
+  the first header detail to yield in a narrow pane. The player header's
+  token count is gone; each call's usage stays on its result line.
+- Space repairs a project in place ([DR-063](specs/decisions/063-space-setup-and-repair.md),
+  [DR-065](specs/decisions/065-repairs-the-reader-answers.md)). Where
+  synced sessions ran in a folder that is not a project on this device,
+  the issues list holds one repair per project, named by the project and
+  resolving all its sessions, rather than a row per diagnostic. The app
+  checks the folders the repair names, and the same name in the folder
+  holding most of your projects, and proposes one only when exactly one
+  is an unclaimed Git repository; it never searches the disk. **Add
+  project** takes it and keeps the synced project's identity, so its
+  sessions, queue and history attach; **Choose folder…** names another;
+  **Don't add** records, on this device alone, that the project does not
+  belong here — the row stays, with its controls, and stops counting.
+  Adding keeps you on Space. Before, the only remedy was the project
+  palette, which registered a duplicate project and synced it to every
+  other device.
+- Each project's group on the Dashboard folds to its header from its
+  Collapse control and stays folded across launches. A folded group
+  keeps its most severe attention mark; the project's Overview always
+  shows every band.
 
 ### Changed
 
@@ -96,8 +149,22 @@ and `npm start` (desktop) or `npm run start:server` (server).
   stands alone.
 - The compile row shows slc's new **Prefix** phase between Optimize and
   Machine.
+- The app's example now compiles on slc 0.12 without a clarification.
+  Adapted from slc's demo, it settles the two limits the compiler asked
+  about: the first agent's 3rd judgment concludes an argument, and
+  findings the review still raises after the 2nd loop are reported at
+  the finish.
 - A player's question reaches you only as the Captain's explanation of
   it, which completes [DR-085](specs/decisions/085-boss-talks-through-captain.md).
+- While a turn runs, the composer's field and Send are disabled, your
+  draft kept and Abort beside them, the placeholder reading "Captain is
+  working…"; a message no longer queues behind the turn as **Send
+  next** ([DR-085](specs/decisions/085-boss-talks-through-captain.md)).
+  Between turns you may answer a waiting question or ask the Captain
+  about it: a message no longer counts as the answer, and the question
+  stands until the run reports it gone. Messages an earlier build
+  queued still show and send when a turn settles, but never answer a
+  waiting question.
 - The playbook-authoring agent is taught that each outcome has one
   repository effect: an outcome that may commit or leave the repository
   unchanged is two outcomes, as slc's link requires.
@@ -108,11 +175,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   XDG path, moves there once when the core starts: the file keeps its
   name, its permissions and the target of every relative locator
   reaching outside its directory, and the emptied `playbook/` directory
-  inside the home goes with it. The
-  Playbook CLI shares the same file again from the release that ships
-  its [DR-064](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/064-the-config-directory-is-named-config.md);
-  until a machine's CLI reaches it, that CLI seeds a file of its own at
-  the former location.
+  inside the home goes with it. The Playbook CLI shares the same file
+  again from Playbook 15; an older CLI seeds a file of its own at the
+  former location.
 - The app requires Node.js 22.19 or later, the floor of the catalog
   tooling ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md));
   CI drops Node 20, which reached end of life in April 2026.
@@ -141,10 +206,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Node 23.6 or later to compile. A compiler whose playbook engine the
   app cannot run is refused with both engines named. The compile's
   agent follows the draft's, or the Captain's, block — adapter, model,
-  effort and fast mode — unless the environment sets any `SLC_*`
-  variable, in which case it configures slc itself; an agent on an
-  adapter the compiler cannot drive is refused before it runs, and the
-  compile log names the agent and where it came from.
+  effort and fast mode, what the block leaves unset running at the
+  adapter's default rather than an slc configuration file's ([DR-084](specs/decisions/084-the-block-is-the-whole-compiler-agent.md))
+  — unless the environment sets any `SLC_*` variable, in which case it
+  configures slc itself; an agent on an adapter the compiler cannot
+  drive is refused before it runs, and the compile log names the agent
+  and where it came from.
 - `npm run smoke` no longer re-runs the unit, integration and journey
   suites — CI's run on the tagged commit is that evidence — and never
   flips the developer tree's native module: its stages are the build,
@@ -169,9 +236,94 @@ and `npm start` (desktop) or `npm run start:server` (server).
   intent defaults to the source's title, so the app's own example
   registers on its defaults.
 - Long inline explanations read as key phrases, the detail moving into
-  the control's tooltip: the Specs tab's legacy-layout notice, the
-  Space's unrelated-history and first-meeting cards, and the terminal
-  pane theme in Settings ([DR-069](specs/decisions/069-key-phrases-not-sentences.md)).
+  the control's tooltip ([DR-069](specs/decisions/069-key-phrases-not-sentences.md)):
+  the Specs tab's legacy-layout notice, the Space's setup,
+  unrelated-history and first-meeting cards, the terminal pane theme
+  and the config path in Settings, the agent editors' scope ("This
+  conversation only"), and the session start, which drops its tip.
+- Space sets up by naming its remote ([DR-063](specs/decisions/063-space-setup-and-repair.md)).
+  **Set up space** takes a required remote URL, makes the home a
+  repository, sets the remote and runs the first sync: an empty remote
+  is filled from this device, and a space already there is joined, any
+  differences asked. Initialize and the separate Join a space are gone,
+  and the app no longer makes a repository without a remote, which could
+  commit only once. Until a newly set remote has been checked, the Sync
+  tab offers Join by name, so joining another machine's space no longer
+  waits for an "Unrelated history" failure. A home that is already a
+  repository gets a remote added, never a second setup.
+- A Space sync that the host answers with "not found" no longer claims
+  the repository is absent ([DR-064](specs/decisions/064-honest-remote-failure.md)):
+  GitHub answers the same for a private repository this machine cannot
+  see. The stop reads "No repository this machine can see at ⟨URL⟩",
+  offers Retry, and names the remedies — check the URL, create the
+  repository, or give this machine access, in the remote's own terms:
+  `gh auth status` and `gh auth login` in a terminal for GitHub over
+  HTTPS, the SSH key an account must carry, a local folder you can read.
+  A host refusing with 401 or 403 reads as refused access rather than
+  as Git's own words.
+- Every Dashboard summons names what ends it and offers a way to end it
+  that works whatever the session's runtime is doing ([DR-066](specs/decisions/066-every-summons-has-a-door.md)).
+  An unread turn's row carries **Reviewed**, and an interrupted intent's
+  row **Drop**, behind a "Drop this work?" confirm; a question or
+  failure row names the reply, retry or drop that ends it, and opening
+  it lands on that control or the composer. A failure that parked no
+  run says "The last turn failed. Send a message to pick it up." above
+  the composer. The tab, the sidebar row, the project's mark, the
+  palette and the badge name each kind in the same words, the most
+  severe first.
+- A player's permission request no longer asks for you on the
+  Dashboard, since nothing in the app answers one; its pane shows it as
+  a line saying the agent's own default decided ([DR-066](specs/decisions/066-every-summons-has-a-door.md)).
+- Dropping interrupted work ends the run it left waiting ([DR-073](specs/decisions/073-letting-go-ends-the-parked-run.md)).
+  Drop on an intent whose run stands parked — on a failure or on a
+  question — ends that run first, spending no model call, and records
+  the verdict once it has; before, the verdict stood alone and your next
+  message reached the waiting player as its answer. A Drop that cannot
+  end the run — another device holds the session, a turn is running —
+  says why where you took it, and the intent stays open. The parked-run
+  notice now also stands for a run waiting on your reply, with Drop
+  beside the composer.
+- Up next is one committed queue ([DR-077](specs/decisions/077-up-next-is-a-committed-queue.md)).
+  Every row reads **Queued**; the first row not waiting on another
+  intent is next and says what it waits for — `after current work`,
+  `waiting — your reply`, `waiting — current work failed`,
+  `waiting — previous work failed` with its cause, or
+  `waiting — previous work stopped` — and carries Start only where going
+  on is yours to decide. A turn that settles cleanly hands the next
+  intent to the same conversation: an ordinary Captain reply and your
+  answer to a question now qualify, where before only a playbook's
+  typed success did. A failure, an abort, a run's ending, or a run still
+  waiting on you holds the queue. Delivery cards, the Captain home and
+  the all-clear name the same next with the same Start.
+- An empty playbook draft offers two acts where it offered three phrase
+  chips ([DR-082](specs/decisions/082-the-first-move-in-a-draft-is-an-act.md)).
+  **Use a SKILL.md…** picks a file where the app offers a file picker
+  and makes it the draft's source — or, when the draft already has one,
+  places it in the Source tab's paste mode for **Use as source** to
+  confirm — and otherwise opens that paste mode; the composer then holds
+  the ask to adapt it, one Enter from sending. **Try the example**
+  places the app's six-line example in the composer. Neither sends
+  anything, and the authoring agent now knows that a placed source may
+  be a SKILL.md to rewrite into a playbook.
+- The app reopens on the surface you left — after a restart, or a
+  reload of the page — rather than on Projects.
+- When a surface fails to render, the error screen offers **Try
+  again**, which keeps you where you were, beside **Reload the page**;
+  a reload was the only way on before.
+- The player grid fades at an edge while a pane lies beyond it, so a
+  lane scrolled out of view reads as more to scroll to rather than as a
+  pane cut off mid-glyph.
+- The Up next add field wraps and grows with its text, up to eight lines
+  before it scrolls; Shift+Enter adds a line and Enter queues the whole.
+- Sign-in guidance names the act: an agent not yet signed in reads "sign
+  in by running claude in a terminal, or set ANTHROPIC_API_KEY" (`codex`
+  alike), and an expired sign-in says to sign in again with that agent's
+  CLI, in a terminal.
+- Protocol version 17 (from 11): `session.restore` replaces
+  `session.retry`; `session.agent.set`, `language.get`, `language.set`
+  and `space.repair.decline` join, with the `language.state` message; a
+  storage diagnostic may carry a structured repair; and attention
+  entries are questions, failures, finishes and reviews only.
 
 ### Fixed
 
@@ -198,6 +350,32 @@ and `npm start` (desktop) or `npm run start:server` (server).
   draft's agent picker.
 - The Specs tab's empty state told you to run `npx @sublang/spex`, which
   only prints usage; it now offers `npx @sublang/spex scaffold`.
+- A turn that finished where this app was not watching — on another
+  device, synced through Space, or in the `playbook` CLI — asked for
+  review on the Dashboard forever, since opening the session never
+  marked it viewed. A conversation on screen now marks its finished
+  turns viewed, on every device sharing the home ([DR-066](specs/decisions/066-every-summons-has-a-door.md)).
+- A failed session serving no intent stopped asking for you at your next
+  message even while its run stayed parked in its failure state; like an
+  intent's failure, it now asks until the run leaves that state.
+- A delivery card in a conversation this device cannot continue disabled
+  Confirm and Drop although the Dashboard took the same verdict; the
+  card now takes it.
+- A mouse wheel over the Dashboard's side margins now scrolls it; only
+  the centered column did.
+- Filtering the Dashboard to a project with nothing waiting showed the
+  all-clear while another project still needed you; it now reads
+  "Nothing in ⟨project⟩ needs attention."
+- Removing the project the Dashboard was filtered to left the Dashboard
+  blank; the filter falls back to All projects.
+
+### Security
+
+- A remote URL carrying a bare token before the host, such as
+  `https://<token>@github.com/…`, was accepted, written to the home's
+  Git configuration and printed in Space's failure reports. Anything
+  before the host of an `http(s)` remote is now refused, and a printed
+  remote drops an `http(s)` user ([DR-064](specs/decisions/064-honest-remote-failure.md)).
 
 ## [0.8.0] - 2026-09-14
 
