@@ -74,22 +74,34 @@ journeys through the installed `spex` bin.
 ## 2. The live smoke — every app release candidate
 
 ```bash
-npm run smoke:desktop
+npm run smoke -- --live
 ```
 
-Boots the real desktop app against a scratch home and walks the
-critical path over the app's own socket: seeded config valid →
-Academy seeds and parses → session starts → a minimal `/code` turn
-dispatches → the coder emits text, thinking or tool activity
-(initialization alone does not count) → abort → released session →
-clean teardown, with the ABI flipped and restored by the driver
-(release-22). Needs a locally signed-in Claude adapter; budget ~5–8
-minutes.
+The smoke with its `live` stage (release-20, release-22,
+[DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)):
+after the CLI user pass, the live desktop smoke runs from the fresh
+install's clone and inside it — the app as a new user installed it —
+on this machine's signed-in agents and a scratch Spex home. It boots
+the real desktop app and walks the critical path over the app's own
+socket: seeded config valid → Academy seeds and parses → session
+starts → a minimal `/code` turn dispatches → the coder emits text,
+thinking or tool activity (initialization alone does not count) →
+abort → released session → clean teardown, with the clone's native
+module flipped to Electron and restored by the driver. Needs a locally
+signed-in Claude adapter; budget ~5–8 minutes beyond the smoke's own.
 
-After a successful build, `SPEX_SMOKE_BUILD_READY=1 npm run
-smoke:desktop` reuses it while its build inputs remain unchanged; ABI
-setup and restoration still run.
+- The stage takes over the fresh install's scratch directory: removed
+  when the stage passes, kept with its path printed when it fails, kept
+  always with `--keep`.
+- A live run resumes only up to the fresh install
+  (`--from=fresh-install`), whose clone the stage needs.
+- `npm run smoke -- --live --dry-run` names the stages without running
+  any.
 
+`npm run smoke:desktop` runs the same driver from the developer tree,
+for development; it is not the gate. There, after a successful build,
+`SPEX_SMOKE_BUILD_READY=1 npm run smoke:desktop` reuses it while its
+build inputs remain unchanged; ABI setup and restoration still run.
 `SPEX_SMOKE_MANUAL=1` enables the scratch profile's abort notification
 and keeps the settled session open for inspection (section 4). Press
 Enter to finish; after five minutes the check fails and cleans up. No

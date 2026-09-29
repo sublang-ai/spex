@@ -29,7 +29,10 @@
 // launch unless Electron's own download cache holds it) and a display
 // (xvfb-run on a headless Linux); never runs in CI. The scratch
 // directory is removed on success and kept, its path printed, on
-// failure; `--keep` keeps it always.
+// failure; `--keep` keeps it always. `--hand-off=<file>` keeps it on
+// success too and writes its path and the clone's to that file as
+// JSON, for the smoke's `live` stage to run in the same clone
+// (scripts/smoke.mjs), which then owns its removal.
 
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -51,6 +54,9 @@ import { WebSocket } from "ws";
 
 const root = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const keep = process.argv.includes("--keep");
+const handOff = process.argv
+  .find((arg) => arg.startsWith("--hand-off="))
+  ?.slice("--hand-off=".length);
 
 const INSTALL_BUDGET_MS = 20 * 60_000;
 // The launcher builds every workspace before it prints the URL.
@@ -750,7 +756,10 @@ try {
   say("native module: restored for Node");
 
   begin("clean");
-  if (keep) {
+  if (handOff) {
+    writeFileSync(handOff, `${JSON.stringify({ scratch, clone })}\n`);
+    say(`scratch handed to the live stage: ${scratch}`);
+  } else if (keep) {
     say(`scratch kept (--keep): ${scratch}`);
   } else {
     rmSync(scratch, { recursive: true, force: true });

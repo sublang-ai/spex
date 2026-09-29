@@ -127,9 +127,10 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 - the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server`, given only the home and an ephemeral port, is walked over its printed token URL — the page served, the config seeded at the home's `config/playbook.config.yaml` and valid with every template playbook, the built-in catalog and the `/code` artifacts served, the readiness of the Captain's and each bound player's adapter reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode, its home storing English so the render's clicks by name hold on any system, and exits clean;
 - the smoke refuses a working tree with uncommitted changes outside the release records under `docs/releases/` unless `--allow-dirty` is given: the build, the lint and the CLI user pass read the working tree while the fresh install clones the committed one, and a release's record is written while its gates run;
 - the smoke re-runs neither the unit and integration suites nor the browser journeys: CI's success for the tagged commit [[release-15](#release-15)] is that evidence, and a local repeat adds none;
-- with `--live` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), a `live` stage follows the CLI user pass: the live desktop smoke [[release-22](#release-22)] run inside the fresh install's clone on the machine's signed-in agents;
-- a stage's scratch tree is removed on success and kept, its path printed, on failure;
-- `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs.
+- with `--live` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), a `live` stage follows the CLI user pass: the live desktop smoke [[release-22](#release-22)], its driver taken from the fresh install's clone and run inside it on the machine's signed-in agents and a scratch Spex home;
+- a stage's scratch tree is removed on success and kept, its path printed, on failure — under `--live`, the fresh install's tree passes to the `live` stage, and its outcome decides;
+- `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs, and under `--live` only at a stage up to the fresh install, whose clone the `live` stage needs;
+- `--dry-run` names the stages a run would take, in order, and runs none.
 
 #### release-21
 

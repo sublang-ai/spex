@@ -5,7 +5,10 @@
 // Live desktop smoke (DR-020, RELEASE-22): boots the real Electron
 // app against a scratch home and walks the release-critical path over
 // the app's own socket — seeded config, Academy example, session,
-// live /code dispatch with real agents, abort, teardown. Requires a
+// live /code dispatch with real agents, abort, teardown. The release
+// gate runs it as the smoke's `live` stage (`npm run smoke -- --live`,
+// DR-089), this script from the fresh install's clone and in it;
+// `npm run smoke:desktop` runs it from the developer tree. Requires a
 // locally signed-in Claude adapter; NOT hermetic, NOT for CI. The
 // driver owns the native-ABI flip to Electron and restores it on
 // every exit path (skip flip with SPEX_SMOKE_ABI_READY=1). An unchanged
