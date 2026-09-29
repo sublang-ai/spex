@@ -132,3 +132,34 @@ With A selected there is no OS lock; the bullet should say what A reports when t
 A missing identity file after a reinstall makes every existing lock foreign and refused.
 Suggested rule: generate a new identity, refuse with a message naming the lock path and the reason, and never retire a lock whose identity cannot be matched.
 This keeps fail-closed and gives the operator the one action to take.
+
+---
+
+# Round 3 (2026-09-29): comments on the shared-identity revision
+
+The revision settles the round-2 points: one shared machine identity for all three mechanisms, upstream-first ordering with an explicit mixed-version warning, process-start identity deferred with the schema cost stated, DR-036 read as binding the root too, the diagnostics bullet rewritten for A, and a lost-identity rule.
+The new factual claims hold: PID reuse today yields a refusal rather than a second writer, Spex's root reader does not validate an exact key set, and Spex has no existing device identity to reuse (the per-device acknowledgement of [DR-063](../specs/decisions/063-space-setup-and-repair.md) lives in `prefs.json` inside the home).
+Three decisions are still implicit and should be written down.
+
+### 1. Which field carries the identity
+
+The text says a Spex lease would carry the identity "in Playbook's `hostname` field", but never decides this.
+The two options have different costs:
+
+- **Reuse the `hostname` field.** No schema change, so the upstream change is small. But the field's meaning changes, every "held by pid N on host H" message shows an opaque id, and the transition rule must tell a legacy hostname from a machine id by its format alone.
+- **Add a field.** Both Playbook readers reject extra keys, so this is the versioned owner format the proposal cites as the reason to defer process-start identity. If the format is versioned anyway, that deferral loses its rationale and both fields could ship together.
+
+Name the choice; the transition plan and the deferral both depend on it.
+
+### 2. The identity location should follow Playbook's existing convention
+
+Playbook resolves its directories XDG-style on every platform with no platform branch: `XDG_CONFIG_HOME` or `~/.config` for the user config, and formerly `$XDG_STATE_HOME/playbook/sessions` for sessions ([launch-config.js](../node_modules/@sublang/playbook/reference/sdlc/code.playbook/bin/launch-config.js), [storage-18](../specs/packages/storage.md#storage-18)).
+Proposing `~/Library/Application Support` on macOS introduces a platform split Playbook does not have.
+Suggest `$XDG_STATE_HOME/playbook/` (or `~/.local/state/playbook/`) on both hosts, so the identity sits where Playbook already keeps machine-local state.
+
+### 3. Legacy records: fail closed is stricter than today, and it hits the incident case
+
+The proposal has legacy hostname-only records fail closed "when their origin cannot be proved".
+Today a legacy record whose hostname equals the current hostname and whose PID is dead is retired automatically.
+Under the new rule, the exact incident scenario, a stale `.lock/` after a crash, always needs manual cleanup on the first run after upgrade.
+Keeping today's rule for legacy-shaped records during the transition is no less safe than the current release; whether to keep it or accept the one-time manual step is a decision to state, not leave to implementation.
