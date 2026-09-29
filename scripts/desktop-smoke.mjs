@@ -12,7 +12,12 @@
 // locally signed-in Claude adapter; NOT hermetic, NOT for CI. The
 // driver owns the native-ABI flip to Electron and restores it on
 // every exit path (skip flip with SPEX_SMOKE_ABI_READY=1). An unchanged
-// successful build can be reused with SPEX_SMOKE_BUILD_READY=1.
+// successful build can be reused with SPEX_SMOKE_BUILD_READY=1. The
+// scratch profile — the app's home and user data, its XDG homes, the
+// Academy project — is made under SPEX_SMOKE_SCRATCH_DIR when set (the
+// smoke's `live` stage points it into the fresh install's scratch) or
+// the system's temp directory, removed after a pass, and kept with its
+// path printed after a failure or an interrupt.
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -82,6 +87,49 @@ async function waitFor(check, budgetMs, what) {
 const flip = process.env.SPEX_SMOKE_ABI_READY !== "1";
 let electron;
 let scratch;
+let finished = false;
+
+/** Leave what the run made as its outcome asks, once: the scratch
+ * profile removed after a pass and kept, its path printed, after a
+ * failure; the native module restored either way. */
+function finish(failed) {
+  if (finished) return;
+  finished = true;
+  if (scratch) {
+    if (failed) process.stderr.write(`scratch kept for debugging: ${scratch}\n`);
+    else rmSync(scratch, { recursive: true, force: true });
+  }
+  if (flip) {
+    at("abi-restore");
+    const restore = spawnSync(
+      "npm",
+      ["run", "rebuild:node", "-w", "apps/desktop"],
+      { cwd: root, stdio: "inherit" },
+    );
+    if (restore.status !== 0) {
+      process.stderr.write(
+        "WARNING: ABI restore failed — run `npm run rebuild:node -w apps/desktop`\n",
+      );
+      process.exitCode = 1;
+    }
+  }
+}
+
+// The app runs in a process group of its own, which a terminal's
+// interrupt does not reach, and a signal's default exit would skip
+// every cleanup: stop the app here, keep the scratch, restore the
+// module, and exit as the signal would.
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+  process.on(signal, () => {
+    if (!finished) {
+      process.stderr.write(`\ndesktop-smoke FAILED at ${stage}: interrupted by ${signal}\n`);
+      stopApp("SIGKILL");
+      finish(true);
+    }
+    process.exit(code);
+  });
+}
+
 try {
   if (flip) {
     at("abi-flip");
@@ -96,7 +144,9 @@ try {
   }
 
   at("launch");
-  scratch = mkdtempSync(join(tmpdir(), "spex-desktop-smoke-"));
+  scratch = mkdtempSync(
+    join(process.env.SPEX_SMOKE_SCRATCH_DIR || tmpdir(), "spex-desktop-smoke-"),
+  );
   const handshakePath = join(scratch, "handshake.json");
   // Spawn Electron directly, detached: `npm start` wraps the real
   // process, so killing the wrapper would orphan the app.
@@ -112,6 +162,10 @@ try {
         SPEX_SMOKE_HANDSHAKE: handshakePath,
         SPEX_SMOKE_USERDATA: join(scratch, "userdata"),
         XDG_CONFIG_HOME: join(scratch, "config"),
+        // An XDG data home holding no former library: the core's
+        // one-time import would otherwise move this host's legacy
+        // playbooks into the scratch home, removed with it.
+        XDG_DATA_HOME: join(scratch, "xdg-data"),
       },
     },
   );
@@ -319,19 +373,5 @@ try {
   stopApp("SIGKILL");
   process.exitCode = 1;
 } finally {
-  if (scratch) rmSync(scratch, { recursive: true, force: true });
-  if (flip) {
-    at("abi-restore");
-    const restore = spawnSync(
-      "npm",
-      ["run", "rebuild:node", "-w", "apps/desktop"],
-      { cwd: root, stdio: "inherit" },
-    );
-    if (restore.status !== 0) {
-      process.stderr.write(
-        "WARNING: ABI restore failed — run `npm run rebuild:node -w apps/desktop`\n",
-      );
-      process.exitCode = 1;
-    }
-  }
+  finish(Boolean(process.exitCode));
 }

@@ -14,8 +14,11 @@
 // With `--live`, a `live` stage follows: the live desktop smoke
 // (scripts/desktop-smoke.mjs, release-22) run from the fresh install's
 // clone, in it, on this machine's signed-in agents and a scratch Spex
-// home — the app as a new user installed it, calling a real agent.
-// Fail-fast; each stage names itself. `--from=<stage>` resumes at a
+// home — the app as a new user installed it, calling a real agent —
+// its scratch profile made inside the fresh install's scratch, so a
+// failure keeps the failed run's home, user data and project there.
+// Fail-fast; each stage names itself; an interrupt stops the running
+// stage, whose own cleanup runs, and keeps the scratch. `--from=<stage>` resumes at a
 // stage once every earlier stage has passed on the current inputs;
 // `--keep` keeps the fresh install's scratch directory; `--dry-run`
 // names the stages a run would take and runs none.
@@ -27,9 +30,9 @@
 // release records under docs/releases/ are exempt: no stage reads
 // them, and a release's record is written while its gates run.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,6 +50,9 @@ let stage = "";
 /** The fresh install's scratch directory and clone, once handed to the
  * live stage; the smoke then owns their removal. */
 let handed;
+/** The running stage's process, and the signal that interrupted it. */
+let child;
+let interrupted;
 
 const USAGE = `Usage: npm run smoke [-- <options>]
 
@@ -78,12 +84,23 @@ function selected(name) {
   return include;
 }
 
-function run(name, command, commandArgs, options = {}) {
+/** Run a stage's process to its exit, the event loop free meanwhile,
+ * so an interrupt reaches the handler below while it runs. */
+async function run(name, command, commandArgs, options = {}) {
   stage = name;
   process.stdout.write(`\n=== smoke: ${name} ===\n`);
   const started = Date.now();
-  const result = spawnSync(command, commandArgs, { cwd: root, stdio: "inherit", ...options });
-  if (result.status !== 0) {
+  child = spawn(command, commandArgs, { cwd: root, stdio: "inherit", ...options });
+  const status = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) =>
+      resolve(code ?? 128 + (constants.signals[signal] ?? 0)),
+    );
+  }).finally(() => {
+    child = undefined;
+  });
+  if (interrupted) throw new Error(`interrupted by ${interrupted}`);
+  if (status !== 0) {
     throw new Error(`stage "${name}" failed (${command} ${commandArgs.join(" ")})`);
   }
   timings.push(`${name} ${elapsed(Date.now() - started)}`);
@@ -91,8 +108,10 @@ function run(name, command, commandArgs, options = {}) {
 
 /** A first-time user's shell on this machine for the live stage: its
  * HOME and PATH, so the agents' sign-ins are this machine's, but none
- * of this host's own Spex settings, a scratch Spex home, and an XDG
- * data home holding no former store to import. */
+ * of this host's own Spex settings. The driver makes its scratch
+ * profile — the app's home and user data, its XDG homes, the Academy
+ * project — inside the fresh install's scratch, which the smoke keeps
+ * when the stage fails. */
 function liveEnv(scratch) {
   const env = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -101,11 +120,7 @@ function liveEnv(scratch) {
     if (key === "ELECTRON_RUN_AS_NODE") continue;
     env[key] = value;
   }
-  return {
-    ...env,
-    SPEX_HOME: join(scratch, "home-live"),
-    XDG_DATA_HOME: join(scratch, "xdg-data-live"),
-  };
+  return { ...env, SPEX_SMOKE_SCRATCH_DIR: scratch };
 }
 
 /** The fresh install's scratch, handed to the live stage, goes once
@@ -117,6 +132,38 @@ function removeHanded() {
   } else {
     rmSync(handed.scratch, { recursive: true, force: true });
   }
+}
+
+/** Say where the smoke stopped and what it keeps: the live stage's
+ * failure keeps the clone it failed in, and a failure before it lets
+ * the fresh install's passed scratch go. */
+function failed(message) {
+  process.stderr.write(`\nsmoke FAILED at ${stage || "arguments"}: ${message}\n`);
+  if (handed && (stage === "live" || interrupted)) {
+    process.stderr.write(`scratch kept for debugging: ${handed.scratch}\n`);
+  } else {
+    removeHanded();
+  }
+}
+
+// A terminal's interrupt reaches the running stage with the smoke, in
+// one process group; a SIGTERM reaches the smoke alone, so it is passed
+// on. Either way the stage runs its own cleanup — the live stage stops
+// its app, keeps its scratch and restores its native module — and its
+// exit ends the smoke, the scratch kept; between stages the smoke ends
+// at once.
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+  process.on(signal, () => {
+    if (interrupted) return;
+    interrupted = signal;
+    process.exitCode = code;
+    if (child) {
+      if (signal === "SIGTERM") child.kill(signal);
+      return;
+    }
+    failed(`interrupted by ${signal}`);
+    process.exit(code);
+  });
 }
 
 try {
@@ -169,8 +216,8 @@ try {
         "reach build, lint and cli-user but not the fresh install\n",
     );
   }
-  if (selected("build")) run("build", "npm", ["run", "build"]);
-  if (selected("lint")) run("lint", "node", ["packages/cli/dist/cli.js", "lint"]);
+  if (selected("build")) await run("build", "npm", ["run", "build"]);
+  if (selected("lint")) await run("lint", "node", ["packages/cli/dist/cli.js", "lint"]);
   // The app as a new user gets it: a fresh clone of the committed tree,
   // `npm ci`, the server shell walked over its token URL, and the
   // desktop rendered by `npm start` — all in a scratch directory, which
@@ -180,7 +227,7 @@ try {
       ? join(mkdtempSync(join(tmpdir(), "spex-smoke-")), "hand-off.json")
       : undefined;
     try {
-      run("fresh-install", "node", [
+      await run("fresh-install", "node", [
         "scripts/install-smoke.mjs",
         ...(keep ? ["--keep"] : []),
         ...(handOff ? [`--hand-off=${handOff}`] : []),
@@ -193,12 +240,12 @@ try {
   // The CLI as a new user gets it: pack the real tarball, install it
   // into an isolated prefix, and walk the README journeys (fresh
   // scaffold, lint, --lang, --update, legacy detection) via the bin.
-  if (selected("cli-user")) run("cli-user", "node", ["scripts/cli-smoke.mjs"]);
+  if (selected("cli-user")) await run("cli-user", "node", ["scripts/cli-smoke.mjs"]);
   // The live desktop smoke as the new user would run it: the clone's
   // own driver, in the clone, flipping and restoring the clone's
   // native module, its app on this machine's signed-in agents.
   if (live) {
-    run("live", "node", [join(handed.clone, "scripts", "desktop-smoke.mjs")], {
+    await run("live", "node", [join(handed.clone, "scripts", "desktop-smoke.mjs")], {
       cwd: handed.clone,
       env: liveEnv(handed.scratch),
     });
@@ -211,15 +258,6 @@ try {
       : "smoke: selected stages passed; earlier results reused\n",
   );
 } catch (error) {
-  process.stderr.write(
-    `\nsmoke FAILED at ${stage || "arguments"}: ${error.message}\n`,
-  );
-  // The live stage's own failure keeps the clone it failed in; a
-  // failure before it lets the fresh install's passed scratch go.
-  if (handed && stage === "live") {
-    process.stderr.write(`scratch kept for debugging: ${handed.scratch}\n`);
-  } else {
-    removeHanded();
-  }
-  process.exit(1);
+  failed(error.message);
+  process.exit(interrupted ? process.exitCode : 1);
 }

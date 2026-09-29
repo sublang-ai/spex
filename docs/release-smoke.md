@@ -95,16 +95,21 @@ abort → released session → clean teardown, with the clone's native
 module flipped to Electron and restored by the driver. Needs a locally
 signed-in Claude adapter; budget ~5–8 minutes beyond the smoke's own.
 
-- The stage takes over the fresh install's scratch directory: removed
-  when the stage passes, kept with its path printed when it fails, kept
-  always with `--keep`.
+- The stage takes over the fresh install's scratch directory, and the
+  app's scratch profile — its home, user data and XDG homes, and the
+  Academy project it ran in — is made inside it: removed when the stage
+  passes, kept with its path printed when it fails or is interrupted,
+  kept always with `--keep`. An interrupt (Ctrl-C, or SIGTERM to the
+  smoke) stops the app and restores the clone's native module first.
 - A live run resumes only up to the fresh install
   (`--from=fresh-install`), whose clone the stage needs.
 - `npm run smoke -- --live --dry-run` names the stages without running
   any.
 
 `npm run smoke:desktop` runs the same driver from the developer tree,
-for development; it is not the gate. There, after a successful build,
+for development; it is not the gate. Its scratch profile goes under the
+system's temp directory, removed after a pass and kept, its path
+printed, after a failure or an interrupt. After a successful build,
 `SPEX_SMOKE_BUILD_READY=1 npm run smoke:desktop` reuses it while its
 build inputs remain unchanged; ABI setup and restoration still run.
 `SPEX_SMOKE_MANUAL=1` enables the scratch profile's abort notification
