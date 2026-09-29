@@ -70,13 +70,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Interrupted work offers **Restore** where it offered Retry. Restore
   brings back the saved position and reports what was recorded; nothing
   is repeated and the saved message is not run again. You then continue
-  with the run's own controls or a new message. A turn stopped after its
-  work was saved — an abort included — now settles there and simply
-  continues, the run it left waiting showing its controls.
+  with the run's own controls or a new message. Your message reads once,
+  and the call that was interrupted no longer shows as working. A turn
+  stopped after its work was saved — an abort included — now settles
+  there and simply continues, the run it left waiting showing its
+  controls; an abort during the Captain's own call leaves Up next
+  stopped, with Start.
 - A Restore's report finishes nothing: it raises no Finished entry and
-  starts no queued work, and an interrupted intent returns to Up next
-  with its history kept. A run it brings back failed asks for you on the
-  Dashboard.
+  starts no queued work, and an interrupted intent returns to Up next,
+  stopped, with its history kept. A run it brings back failed asks for
+  you on the Dashboard and says why on its card and notice; a run you had
+  stopped yourself stays your stop. A Restore the app was closed in the
+  middle of is completed the next time the app reads the session.
 - **Discard** appears only when nothing was recorded: no step, no
   abandonment, and unchanged repository evidence. Otherwise Restore
   stands alone.
