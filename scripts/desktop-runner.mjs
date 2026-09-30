@@ -80,6 +80,10 @@ export async function runDesktop(options = {}) {
   const stderr = options.stderr ?? process.stderr;
   const killProcess = options.killProcess ?? process.kill.bind(process);
   const launchArgs = options.launchArgs ?? [];
+  // A signalled launch stage that does not exit within this bound is
+  // killed, so the Node ABI restore is never held by a hung app
+  // (app-shell-26 §5, DR-093).
+  const escalationMs = options.escalationMs ?? 15_000;
 
   const steps = {
     build: {
@@ -113,6 +117,8 @@ export async function runDesktop(options = {}) {
   };
 
   let activeChild;
+  let activeStep;
+  let escalation;
   let failure;
   let restoreFailure;
   let restoreRequired = false;
@@ -142,6 +148,18 @@ export async function runDesktop(options = {}) {
           `desktop: could not signal the active stage: ${stopError.message}\n`,
         );
       }
+      if (activeChild && activeStep?.id === "launch" && !escalation) {
+        const signalled = activeChild;
+        escalation = setTimeout(() => {
+          escalation = undefined;
+          if (activeChild !== signalled) return;
+          stderr.write(
+            `desktop: the app has not exited ${escalationMs}ms after ${signal}; killing it\n`,
+          );
+          stopChild(signalled, "SIGKILL", platform, killProcess);
+        }, escalationMs);
+        escalation.unref?.();
+      }
     };
     signalHandlers.set(signal, handler);
     signalSource.on(signal, handler);
@@ -151,11 +169,17 @@ export async function runDesktop(options = {}) {
     stdout.write(`\n=== desktop: ${step.label} ===\n`);
     let result;
     try {
+      activeStep = step;
       result = await execute(step, (child) => {
         activeChild = child;
       });
     } finally {
       activeChild = undefined;
+      activeStep = undefined;
+      if (escalation) {
+        clearTimeout(escalation);
+        escalation = undefined;
+      }
     }
     if (result.error || result.code !== 0) throw new StepFailure(step, result);
   };
