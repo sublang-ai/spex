@@ -47,6 +47,8 @@ import type {
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -1633,8 +1635,51 @@ test("core-service-63: a second core service on a held root refuses naming the h
     },
   );
   await first.stop();
+  // The stopped service's lease stands retired, permanently (storage-24).
+  const retired = join(options.dataDir, ".lock.retired");
+  assert.equal(readdirSync(retired).length, 1);
   const third = await CoreService.start(options);
   await third.stop();
+  assert.equal(readdirSync(retired).length, 2);
+  assert.equal(existsSync(join(options.dataDir, ".lock")), false);
+
+  // A lock a killed process of this machine left is reclaimed by the
+  // next start: the child takes the root with this home's identity.
+  const identity = readFileSync(join(options.home, ".local", "state", "playbook", "machine-id"), "utf8").trim();
+  const holder = spawn(process.execPath, ["--input-type=module", "--eval", `
+    import { acquireRootLease } from ${JSON.stringify(new URL("./root-lease.js", import.meta.url).href)};
+    acquireRootLease(${JSON.stringify(options.dataDir)}, { machineIdentity: ${JSON.stringify(identity)} });
+    process.stdout.write("held\\n");
+    setInterval(() => {}, 1000);
+  `], { stdio: ["ignore", "pipe", "inherit"] });
+  await new Promise<void>((resolveHeld) => holder.stdout?.once("data", () => resolveHeld()));
+  holder.kill("SIGKILL");
+  await new Promise<void>((resolveExit) => holder.once("exit", () => resolveExit()));
+  const fourth = await CoreService.start(options);
+  await fourth.stop();
+  assert.equal(readdirSync(retired).length, 4);
+
+  // Another machine's identity is never broken, and is named as one.
+  mkdirSync(join(options.dataDir, ".lock"), { mode: 0o700 });
+  writeFileSync(join(options.dataDir, ".lock", "owner.json"), JSON.stringify({ pid: 4242, hostname: `machine-id:v1:${randomUUID()}`, acquiredAt: Date.now(), token: randomUUID() }), { mode: 0o600 });
+  await assert.rejects(CoreService.start(options), /held by another machine \(identity machine-id:v1:/);
+  rmSync(join(options.dataDir, ".lock"), { recursive: true });
+
+  // An unusable identity file refuses the start naming it, before the
+  // lock is inspected. The identity is read once per process, so the
+  // unusable one belongs to another home.
+  const brokenHome = join(dir, "broken-home");
+  const identityFile = join(brokenHome, ".local", "state", "playbook", "machine-id");
+  mkdirSync(dirname(identityFile), { recursive: true, mode: 0o700 });
+  writeFileSync(identityFile, "nonsense\n", { mode: 0o600 });
+  const brokenDataDir = join(dir, "broken-state");
+  await assert.rejects(CoreService.start({ ...options, home: brokenHome, dataDir: brokenDataDir }), (error: Error) => {
+    assert.match(error.message, /^Spex cannot identify this machine: /);
+    assert.ok(error.message.includes(identityFile));
+    return true;
+  });
+  assert.equal(existsSync(join(brokenDataDir, ".lock")), false);
+  assert.equal(readFileSync(identityFile, "utf8"), "nonsense\n");
 });
 
 // ---------------------------------------------------------------------------
@@ -2194,7 +2239,7 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   writeForeignSession(sessionsDir, sessionId, projectDir, [opening]);
   // Sorting ahead of the healthy manifest exposed the old whole-scan
   // catch, which let one malformed neighbor hide every later session.
-  const bindingStore = new Store({dir:join(dir, "state"), sessionsDir});
+  const bindingStore = new Store({machineIdentity, dir:join(dir, "state"), sessionsDir});
   bindingStore.registerProject(projectDir, "project", Date.now());
   bindingStore.close();
   const malformed = join(sessionsDir, "00000000-0000-4000-8000-000000000000.json");

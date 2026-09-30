@@ -20,6 +20,8 @@ import {
 } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 /** The roster the installed template binds, in config order. */
 function templateRoster(): string[] {
   const top = parseYaml(readFileSync(templatePath(), "utf8")) as {
@@ -40,7 +42,7 @@ async function setup(
   const scratch = scratchDir("spex-sess-");
   const projectDir = join(scratch, "project"); mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
-  const store = new Store({ dir: join(scratch, "state") });
+  const store = new Store({ machineIdentity, dir: join(scratch, "state") });
   const { imports, stats } = fakeAdapterImports({
     rules: overrides?.rules ?? [
       {
