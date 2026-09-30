@@ -336,6 +336,28 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await captain.getByTestId("agent-save-captain").click();
     await expect(captain).toHaveCount(0);
 
+    // The coder's subagent model is chosen in the same editor (DR-093),
+    // unset in the configuration and so inherited as the provider's words,
+    // and a reload finds the choice where it was made.
+    await page.getByTestId("agent-chip-dev.coder").click();
+    const subagent = page.getByTestId("agent-settings-dev.coder");
+    await expect(subagent.getByTestId("agent-dev.coder-subagent-model-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default)");
+    await subagent.getByTestId("agent-dev.coder-subagent-model-mode").selectOption("pin");
+    await subagent.getByTestId("agent-dev.coder-subagent-model-value").fill("claude-sub-coder");
+    await subagent.getByTestId("agent-save-dev.coder").click();
+    await expect(subagent).toHaveCount(0);
+    await page.reload();
+    await page.getByRole("tree", { name: "Projects and sessions" })
+      .getByText(/fix the token r/i).click();
+    await page.getByTestId("agent-chip-dev.coder").click();
+    await expect(subagent.getByTestId("agent-dev.coder-subagent-model-mode")).toHaveValue("pin");
+    await expect(subagent.getByTestId("agent-dev.coder-subagent-model-value")).toHaveValue("claude-sub-coder");
+    await subagent.getByRole("button", { name: "Cancel" }).click();
+    await expect(subagent).toHaveCount(0);
+    // The chip reads adapter, model and effort, never the subagent model.
+    await expect(page.getByTestId("agent-chip-dev.coder")).not.toContainText("claude-sub-coder");
+
     // A chip is a setting: both read the choice before any message.
     await expect(page.getByTestId("agent-chip-dev.coder")).toContainText("claude-tuned-coder");
     await expect(page.getByTestId("agent-chip-captain")).toContainText("claude-tuned-captain");
@@ -347,7 +369,7 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     const session = listed.find((entry) => (entry.title ?? "").startsWith("Fix the token refresh"))!;
     const sessionId = session.id;
     expect(session.agentSettings, JSON.stringify(listed.map((e) => [e.id, e.title, e.agentSettings])))
-      .toMatchObject({ captain: { model: "claude-tuned-captain" }, "dev.coder": { model: "claude-tuned-coder" } });
+      .toMatchObject({ captain: { model: "claude-tuned-captain" }, "dev.coder": { model: "claude-tuned-coder", subagentModel: "claude-sub-coder" } });
     await send(page, "And once more");
     await expect
       .poll(async () => (await app.core.command("session.list", {})).find((e) => e.id === sessionId)?.turns ?? 0, { timeout: 30_000 })
@@ -355,10 +377,11 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await settled(app);
     const applied = (JSON.parse(
       readFileSync(join(app.dataDir, "sessions", `${sessionId}.json`), "utf8"),
-    ) as { lastAppliedExecutionProjection: { captain: { model: { value?: string } }; catalog: Record<string, { roles: Record<string, { model: { value?: string } }> }> } })
+    ) as { lastAppliedExecutionProjection: { captain: { model: { value?: string } }; catalog: Record<string, { roles: Record<string, { model: { value?: string }; subagentModel?: string }> }> } })
       .lastAppliedExecutionProjection;
     expect(applied.captain.model.value).toBe("claude-tuned-captain");
     expect(applied.catalog.code?.roles.coder?.model.value).toBe("claude-tuned-coder");
+    expect(applied.catalog.code?.roles.coder?.subagentModel).toBe("claude-sub-coder");
     expect(app.readConfig()).toBe(configBefore);
 
     // Settings still shows the configured values.
