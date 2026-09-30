@@ -162,7 +162,8 @@ export function AgentSettingsPopover({
   const discovery = useAgentOptions(agent.adapter);
   const pinnedModel = draft.model === false ? "" : draft.model ?? agent.configured.model ?? "";
   const tuning = modelTuning(discovery.options, pinnedModel);
-  const models = discovery.options?.discovery?.status === "available" ? discovery.options.discovery.models ?? [] : [];
+  const catalog = discovery.options?.discovery?.status === "available" ? discovery.options.discovery : undefined;
+  const models = catalog?.models ?? [];
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? agent.configured.effort;
   const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !tuning.efforts.includes(effectiveEffort));
   const invalidModel = typeof draft.model === "string" && !draft.model.trim();
@@ -199,6 +200,7 @@ export function AgentSettingsPopover({
         value={draft.model}
         playerDefault={agent.configured.model}
         models={models}
+        defaultModel={catalog?.defaultModel}
         onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
       />
       <TuningField

@@ -121,6 +121,11 @@ msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, ot
 msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, other {# 项}}"
 
+#. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
+#: src/components/TuningField.tsx
+msgid "{choice} ({value})"
+msgstr "{choice}（{value}）"
+
 #: src/components/SpaceSync.tsx
 msgid "{chosen} of {total} chosen"
 msgstr "已选 {chosen}/{total}"
@@ -3594,8 +3599,8 @@ msgstr "拟定的注册信息"
 msgid "provider default"
 msgstr "提供方默认"
 
-#. model choice: let the provider pick its own default model
-#: src/components/ModelField.tsx
+#. a model or effort left to the provider's own default
+#: src/lib/agent-options.ts
 msgid "Provider default"
 msgstr "提供方默认"
 

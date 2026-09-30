@@ -65,7 +65,8 @@ export function BindingEditorPopover({
   const discovery = useAgentOptions(lane?.agent.adapter ?? "claude");
   const effectiveModel = draft.model === false ? "" : draft.model ?? lane?.agent.model ?? "";
   const tuning = modelTuning(discovery.options, effectiveModel);
-  const models = discovery.options?.discovery.status === "available" ? discovery.options.discovery.models : [];
+  const catalog = discovery.options?.discovery.status === "available" ? discovery.options.discovery : undefined;
+  const models = catalog?.models ?? [];
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? lane?.agent.effort;
   const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !tuning.efforts.includes(effectiveEffort));
   const effectiveFastMode = draft.fastMode ?? lane?.agent.fastMode ?? false;
@@ -117,6 +118,7 @@ export function BindingEditorPopover({
         value={draft.model === null ? undefined : draft.model}
         playerDefault={lane?.agent.model}
         models={models}
+        defaultModel={catalog?.defaultModel}
         onChange={(next) => setDraft((current) => ({ ...current, model: next }))}
       />
       <TuningField

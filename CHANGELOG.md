@@ -80,9 +80,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   The chip in the Captain pane's header, and in each player pane's
   header, opens that agent's own model, effort and fast mode for this
   conversation only; Settings and `playbook.config.yaml` never change.
-  Each field offers the configured value, the provider's default or a
-  pinned value, and one control returns the agent to its configured
-  values. A choice applies from your next message — a running turn keeps
+  Each field offers the configured value by name — "Provider default"
+  where Settings sets none — the provider's default, or a pinned value,
+  and one control returns the agent to its configured values. A choice applies from your next message — a running turn keeps
   what it started with — and outranks a role binding's pin, the editor
   naming the roles it also sets. The chip reads the new setting at once.
   The choice stays on this device and is removed with the session; the
@@ -332,10 +332,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   claude-opus-5-5" rather than "Opus · opus" — and, where the runtime
   gives them, its own description and the model it runs when none is
   set. The editor gives the field its full width, and an inherited
-  model is named the same way. In a conversation, an agent's chip reads
-  the model its runtime reported for its latest call while the adapter
-  and model setting that call began under still stand, what is set kept
-  in its tooltip; a change of either shows at once, as before.
+  model — the provider's default included — is named the same way. In
+  a conversation, an agent's chip reads the model its runtime reported
+  for its latest call while the adapter and model setting that call
+  began under still stand, what is set kept in its tooltip; a change of
+  either shows at once, as before.
   Cligent 0.28 supplies the descriptions, the default model and the
   reported models, wherever the runtime reports them.
 - A new Spex home's starter configuration, a new player lane and a new

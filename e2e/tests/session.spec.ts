@@ -284,6 +284,8 @@ test.describe("a long active turn", () => {
 
 test.describe("run-view-141: an agent's settings for one conversation", () => {
   test("each agent is changed from its own chip, and stays where it was changed", async ({ page, app }) => {
+    // The Captain runs the provider's default: its block sets no model.
+    await app.core.command("config.edit", { op: { kind: "captain.set", patch: { model: null } } });
     await open(page, app);
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("player-pane-dev.coder")).toBeVisible();
@@ -299,6 +301,15 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await expect(coder).toBeVisible();
     await expect(coder).toContainText("This conversation only");
     await expect(page.getByTestId("agent-settings-captain")).toHaveCount(0);
+    // What it inherits is named by the display rule: the configured
+    // canonical pin, which the runtime lists only through an alias,
+    // reads as itself.
+    await expect(coder.getByTestId("agent-dev.coder-model-mode").locator("option").first())
+      .toHaveText("from Settings (claude-opus-5-5)");
+    // An effort the configuration leaves unset takes the same
+    // provider-default words, never a bare "from Settings".
+    await expect(coder.getByTestId("agent-dev.coder-effort-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default)");
     await coder.getByTestId("agent-dev.coder-model-mode").selectOption("pin");
     // The pinned seed is listed through an alias, so a hand-typed id
     // goes through the list's custom entry.
@@ -311,11 +322,16 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     // The Captain's own chip opens the Captain's.
     await page.getByTestId("agent-chip-captain").click();
     const captain = page.getByTestId("agent-settings-captain");
+    // An unset model is inherited as the provider's default, named as
+    // the model field names it: the words, then the model the runtime
+    // reports running by default, itself by the display rule.
+    await expect(captain.getByTestId("agent-captain-model-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default · Opus · claude-opus-5-5)");
+    await expect(captain.getByTestId("agent-captain-effort-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default)");
     await captain.getByTestId("agent-captain-model-mode").selectOption("pin");
-    // The pinned seed is listed through an alias, so a hand-typed id
-    // goes through the list's custom entry.
-    await captain.getByTestId("agent-captain-model-value-trigger").click();
-    await captain.getByTestId("agent-captain-model-value-listbox").getByRole("option", { name: "Custom model…" }).click();
+    // Pinning from the provider's default seeds no model, so the typed
+    // field stands open at once.
     await captain.getByTestId("agent-captain-model-value").fill("claude-tuned-captain");
     await captain.getByTestId("agent-save-captain").click();
     await expect(captain).toHaveCount(0);
@@ -351,13 +367,32 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await expect(page.getByText("claude-tuned-captain")).toHaveCount(0);
     await expect(page.getByText("claude-tuned-coder")).toHaveCount(0);
 
-    // And each agent goes back from its own chip.
+    // A second session of the project opens on them: the first
+    // conversation's choices stay where they were made. The Captain,
+    // on the provider's default, reads its adapter.
+    await page.getByTestId(`sidebar-new-${app.projectId}`).click();
+    await expect(page.getByTestId("captain-home")).toBeVisible();
+    await send(page, "Tighten the retry backoff");
+    await expect(page.getByTestId("player-pane-dev.coder")).toBeVisible();
+    await expect(page.getByTestId("agent-chip-captain")).toHaveText("claude");
+    await expect(page.getByTestId("agent-chip-dev.coder")).toHaveText("claude-opus-5-5");
+    for (const agent of ["captain", "dev.coder"]) {
+      await expect(page.getByTestId(`agent-chip-${agent}`)).not.toHaveAttribute("data-changed", "true");
+    }
+    await settled(app);
+
+    // And each agent goes back from its own chip, both panes reading
+    // the configured values again.
     await page.getByRole("tree", { name: "Projects and sessions" })
       .getByText(/fix the token r/i).click();
-    await page.getByTestId("agent-chip-dev.coder").click();
-    await page.getByTestId("agent-default-dev.coder").click();
-    await page.getByTestId("agent-save-dev.coder").click();
-    await expect(page.getByTestId("agent-chip-dev.coder")).not.toContainText("claude-tuned-coder");
-    await expect(page.getByTestId("agent-chip-dev.coder")).not.toHaveAttribute("data-changed", "true");
+    for (const agent of ["dev.coder", "captain"]) {
+      await page.getByTestId(`agent-chip-${agent}`).click();
+      await page.getByTestId(`agent-default-${agent}`).click();
+      await page.getByTestId(`agent-save-${agent}`).click();
+      await expect(page.getByTestId(`agent-settings-${agent}`)).toHaveCount(0);
+      await expect(page.getByTestId(`agent-chip-${agent}`)).not.toHaveAttribute("data-changed", "true");
+    }
+    await expect(page.getByTestId("agent-chip-captain")).toHaveText("claude");
+    await expect(page.getByTestId("agent-chip-dev.coder")).toHaveText("claude-opus-5-5");
   });
 });

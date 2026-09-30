@@ -289,7 +289,7 @@ When the user opens the captain identity's editor control (or another agent's ed
 When the reader opens an agent's settings control — the chip in the Captain pane's header, or the chip in a player pane's header [[run-view-139](#run-view-139)] — the run view shall show an anchored popover editing that agent's own model, effort, and fast mode for this conversation [[core-service-100](core-service.md#core-service-100)], without leaving the surface and without editing the shared configuration ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-009](../decisions/009-at-hand-interaction.md)):
 
 - it edits the agent whose chip was opened and no other, anchored at that chip and taking the side and the bound of the agent editor's popover [[run-view-32](#run-view-32)], under the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters on open and returns to the chip on close, and Escape, an outside click, and Cancel close it;
-- each field offers the configured value named — a model by the display rule [[settings-38](settings.md#settings-38)] — the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)] in the model field [[settings-39](settings.md#settings-39)], and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
+- each field offers the configured value, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)] in the model field [[settings-39](settings.md#settings-39)], the configured value named — a model by the display rule [[settings-38](settings.md#settings-38)], one the configuration leaves unset as the provider's default, and an unset effort by the same "Provider default" words — and fast mode is offered where the adapter accepts the request or a choice already stands, so a stale one is always clearable;
 - it reads the agent's name with "This conversation only" beneath it, and explains neither Settings nor the adapter, instruction and permissions it does not offer, which a new session alone changes [[core-service-92](core-service.md#core-service-92)] ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - where a playbook's binding tunes this agent of its own accord, the editor names those roles in one phrase, because one choice here runs them alike and silence would be a lie;
 - one control returns the whole agent to its configured values while any of them stands, and a save is refused in the editor's own frame with the draft kept, unavailable model discovery showing its reason with a retry while every field stays usable ([DR-052](../decisions/052-runtime-model-options.md));
@@ -1011,7 +1011,8 @@ Where a replayed fixture stream stands settled with a Captain and two player lan
 - saving sends exactly one session-scoped agent command naming the session, the agent, and the chosen values, and sends no config edit [[run-view-138](#run-view-138)];
 - the pane's chip reads the chosen value as soon as the change is accepted, and says that this conversation changed it [[run-view-139](#run-view-139)];
 - a refused save keeps the editor open with its draft, and returning the agent to its configured values clears the chip's mark [[run-view-138](#run-view-138)];
-- with the runtime's catalog loaded, the model field's inherit choice names the configured model by the display rule [[run-view-138](#run-view-138)];
+- with the runtime's catalog loaded, the model field's inherit choice names the configured model by the display rule, and one the configuration leaves unset as the provider's default, followed by the catalog's default model where it reports one and by nothing where it does not [[run-view-138](#run-view-138)];
+- the effort field's inherit choice names the configured effort, and an unset one by the "Provider default" words [[run-view-138](#run-view-138)];
 - no session-wide roster or count of changed agents stands anywhere in the view [[run-view-139](#run-view-139)].
 
 #### run-view-152
@@ -1172,9 +1173,10 @@ Where the hermetic lane's demo shell has run a task to its end ([DR-039](../deci
 
 #### run-view-141
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey changes the Captain's and the coder's settings from their own panes and then sends a message, the test suite shall assert through the page that a conversation's own settings run and stay where they were made:
+Where the harness boots with the demo project registered, the Captain configured on the provider's default, and the scripted Captain, when the journey changes the Captain's and the coder's settings from their own panes and then sends a message, the test suite shall assert through the page that a conversation's own settings run and stay where they were made:
 
 - each chip is opened from its own pane and edits its own agent, both panes wearing the chosen values before the message is sent [[run-view-138](#run-view-138)] [[run-view-139](#run-view-139)];
+- each editor's inherit choice names what the configuration sets, the coder's model by the display rule and the Captain's unset one as the provider's default followed by the model the runtime reports running by default, and each unset effort by the "Provider default" words [[run-view-138](#run-view-138)];
 - the turn runs on those values, the run's own record of what it applied naming them [[run-view-14](#run-view-14)];
 - the Settings surface still shows the configured values, and a second session of the same project opens with its panes wearing them [[run-view-139](#run-view-139)];
 - returning each agent to its configured values from its own chip leaves both panes reading them again [[run-view-138](#run-view-138)].

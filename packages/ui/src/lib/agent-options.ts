@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import type { AdapterName, AgentModelOption, AgentOptions } from "@sublang/spex-core/protocol";
+import { i18n } from "../i18n.js";
 import { useAppStore } from "../state/store.js";
 
 /** Discovery belongs to an open editor, never application startup. */
@@ -68,6 +69,22 @@ export function modelDisplay(models: readonly AgentModelOption[], value: string)
  * reads it. */
 export function modelDisplayText(display: ModelDisplay): string {
   return display.specific === undefined ? display.name : `${display.name} · ${display.specific}`;
+}
+
+/** The words for the empty value — a model's, and an inherited
+ * effort's — read on each render, never at module load, so they follow
+ * the reader's language (localization-4). */
+export function providerDefaultLabel(): string {
+  return i18n._({ id: "Provider default", comment: "a model or effort left to the provider's own default" });
+}
+
+/** How the empty value reads under the same rule (settings-38): the
+ * provider-default words, then the model the runtime runs by default,
+ * itself read by the rule, where the runtime reports one — alike in the
+ * model field and wherever an editor inherits it. */
+export function providerDefaultDisplay(models: readonly AgentModelOption[], defaultModel: string | undefined): ModelDisplay {
+  const name = providerDefaultLabel();
+  return defaultModel ? { name, specific: modelDisplayText(modelDisplay(models, defaultModel)) } : { name };
 }
 
 export function modelTuning(options: AgentOptions | undefined, model: string) {

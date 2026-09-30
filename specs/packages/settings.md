@@ -83,15 +83,16 @@ When the core receives `agent.options` for a known adapter, it shall return Clig
 
 #### settings-38
 
-Where a model editor [[settings-34](#settings-34)] names a model value against the runtime's catalog [[settings-35](#settings-35)] — a row, the field's value, the runtime's `defaultModel`, or a value the editor inherits — it shall read the value by one display rule, naming the specific model wherever the runtime reports one ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
+Where a model editor [[settings-34](#settings-34)] names a model value against the runtime's catalog [[settings-35](#settings-35)] — a row, the runtime's `defaultModel`, or a value the field holds or the editor inherits, an empty one included — it shall read the value by one display rule, naming the specific model wherever the runtime reports one ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
 | The value is | It reads as |
 | --- | --- |
 | a row's id | the row's name, then the row's specific model: its `resolvedModel` where the id is an alias of it — differing from it and not beginning with it — else the id where it differs from the name ignoring case, else nothing |
 | only a row's `resolvedModel` | itself, a canonical pin recognized without rewriting it [[settings-34](#settings-34)] |
 | no row's id or `resolvedModel` | itself |
+| empty, taking the provider's default | "Provider default", then the runtime's `defaultModel` read by this rule where reported |
 
-- in one line of text the name and the specific model join with " · ", as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]" and "GPT-6-Astra";
+- in one line of text the name and the specific model join with " · ", and so do "Provider default" and the default model, as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]", "GPT-6-Astra" and "Provider default · opus[1m]";
 - a name, an id, a resolved model and a description are the runtime's words, rendered as they came [[localization-1](localization.md#localization-1)].
 
 #### settings-39
@@ -270,7 +271,7 @@ Where runtime discovery supplies model-specific metadata, unavailable discovery,
 Where the agent editor and the role-binding editor render against fixture catalogs modeled on the Claude and Codex runtimes — aliases resolving to specific models, a row whose id extends its resolved model, rows named as their ids, descriptions on some rows, and a `defaultModel` in one catalog and none in the other — the test suite shall assert through the rendered editors:
 
 - the trigger and every row read by the display rule, and a value recognized only through a resolution and a value no row lists each read as themselves, the unlisted one with its hint [[settings-38](#settings-38)] [[settings-39](#settings-39)];
-- the provider default reads the `defaultModel` where the catalog reports one and nothing more where it does not, and each description stands as its row's second line [[settings-39](#settings-39)];
+- the provider default reads "Provider default" with the `defaultModel` where the catalog reports one, joined by " · " in the trigger's title, and nothing more where it does not [[settings-38](#settings-38)] [[settings-39](#settings-39)], and each description stands as its row's second line [[settings-39](#settings-39)];
 - the keyboard opens the listbox on its selected row, walks it with the arrows, Home and End, chooses with Enter, and closes it with Escape leaving the editor open and focus on the trigger, while a click chooses a row and a press outside closes it [[settings-40](#settings-40)];
 - choosing "Custom model…" shows the hand-typed field, which keeps what is typed [[settings-39](#settings-39)];
 - the Captain's and a player's editor lays the model field across its full width [[settings-39](#settings-39)].
