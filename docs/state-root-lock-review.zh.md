@@ -57,7 +57,7 @@ npm start
 观察到的 `Mac.lan`／`Minion.local` 差异证明主机名发生了变化，但不能据此确定是哪项系统设置或网络事件导致的。
 
 故障发生时，安装的 `@sublang/playbook` 15.0.0 会话存储（`reference/sdlc/code.playbook/bin/session-store.js`）同样先比较租约所有者的主机名，再探测 PID。
-更新依赖后，Spex 声明、锁定并已安装 Playbook 17.0.0；本地 Playbook 仓库也是 17.0.0。故障时的 15.0.0 仍作为历史背景保留。将来验证 PR 时，须使用 Spex 依赖声明和锁文件所记录、已发布且包含新接口的 Playbook 版本（[Spex 依赖声明](../packages/core/package.json)、[锁文件](../package-lock.json)）。
+随后按 [DR-092](../specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) 升级工具链后，Spex 声明 `@sublang/playbook` `^17.1.0`，锁定并已安装 17.1.0；本地 Playbook 仓库也已处于 17.1.0。故障时的 15.0.0 仍作为历史背景保留。将来验证 PR 时，须使用 Spex 依赖声明和锁文件所记录、已发布且包含新接口的 Playbook 版本（[Spex 依赖声明](../packages/core/package.json)、[锁文件](../package-lock.json)）。
 它允许注入 `hostname` 和 `probeProcess`，但 Spex 目前都没有传入，而独立运行的 Playbook CLI 会自行创建存储实例。
 只在 Spex 注入稳定身份，会使同一机器上的接管能力退化：Spex 将机器身份写入 Playbook 的 `hostname` 字段后，仍按 `os.hostname()` 比较的独立 CLI 会把它当作外部主机，Spex 也会把 CLI 写的租约当作外部主机。因此，协调升级须让两种写入者在恢复写入共用存储前都已采用 Playbook 的身份约定。
 其仓库协调器（`reference/sdlc/code.playbook/bin/repository-effects.js`）也使用主机名／PID 判断所有权。同一次审查还需覆盖仓库 claim 的身份、残留所有者处理，以及现有 claim 的兼容方案。
