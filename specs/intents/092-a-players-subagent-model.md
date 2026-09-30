@@ -15,10 +15,10 @@ Realize [DR-093](../decisions/093-a-players-subagent-model.md): the subagent mod
 
 - [x] DR-093, the amended records' status lines, the map, and the settings, playbook-library, run-view, core-service and storage items.
 - [ ] Cligent 0.29.0 and Playbook 17.2.0 published; the core's floors `^0.29.0` and `^17.2.0` with the lockfile regenerated from the public registry.
-- [ ] The core: the agent block, patch, resolved agent, binding, summary, session agent settings, projection application, draft runner and `agent.options` capability; protocol 18.
-- [ ] The interface: the field in the shared agent editor, the role-binding editor and the session agent editor; the chip unchanged; both catalogs.
-- [ ] Tests by layer: the core's config-edit, validation and session-tuning suites, the interface suites, and one step in the existing session and library journeys.
-- [ ] The changelog.
+- [x] The core: the agent block, patch, resolved agent, binding, summary, session agent settings, projection application, draft runner and `agent.options` capability; protocol 18.
+- [x] The interface: the field in the shared agent editor, the role-binding editor and the session agent editor; the chip unchanged; both catalogs.
+- [x] Tests by layer: the core's config-edit, validation and session-tuning suites, the interface suites, and one step in the existing session and library journeys.
+- [x] The changelog.
 
 ## Tasks
 

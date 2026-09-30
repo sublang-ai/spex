@@ -87,6 +87,19 @@ and `npm start` (desktop) or `npm run start:server` (server).
   naming the roles it also sets. The chip reads the new setting at once.
   The choice stays on this device and is removed with the session; the
   `playbook` CLI and other devices run the configured values.
+- A player's subagent model ([DR-093](specs/decisions/093-a-players-subagent-model.md)).
+  On Claude, an agent's subagents run on a model you choose, and the
+  agent is told to hand them well-defined, fine-grained work while it
+  keeps the deep thinking, reasoning and design itself. The field sits
+  wherever the model does — the Captain's and each player's editor in
+  Settings, a role's binding editor in Playbooks, and an agent's
+  settings for one conversation — with the same choices: the inherited
+  value, the provider's default, or a model from the runtime's list.
+  It is offered where the adapter takes one, or where a choice already
+  stands so it can be cleared, and applies from your next message. The
+  chip still reads adapter, model and effort: its editor shows the
+  subagent model, and a conversation's own choice marks the chip
+  changed. The compile does not carry it.
 - Each agent's pane header reads its completed active time this session,
   as `active · 3m 12s` ([DR-070](specs/decisions/070-agent-active-time.md),
   [DR-071](specs/decisions/071-active-time-follows-held-calls.md)): the
@@ -120,9 +133,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.1, slc 0.13 and Cligent 0.28 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
-  [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md)),
-  and locks the agent SDKs at the releases Cligent 0.28 tests: Claude
+- The app requires Playbook 17.2, slc 0.13 and Cligent 0.29 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+  [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
+  [DR-093](specs/decisions/093-a-players-subagent-model.md)),
+  and locks the agent SDKs at the releases Cligent 0.29 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
   compiler now runs on the app's own Playbook and Cligent, with no older
   copies of its own. Cligent refuses an agent runtime older than the
@@ -342,14 +356,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - A new Spex home's starter configuration, a new player lane and a new
   role assignment start on `claude-opus-5-5`, the latest Claude model,
   where they started on `claude-opus-5`.
-- Protocol version 17 (from 11), in full in `packages/core/src/protocol.ts`:
+- Protocol version 18 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action
   it runs by `actionId`; a session gains `parked`, `agentActiveMs`,
   `agentReportedModels` and `agentSettings`, and its `recovery` gains
-  `discardable`; each model `agent.options` lists may carry its
-  `description`, and an available catalog its `defaultModel`; an open
+  `discardable`; an agent block, a role binding and a session's agent
+  settings take a `subagentModel`, and `agent.options` and readiness
+  report `subagentModelSupported`; each model `agent.options` lists may
+  carry its `description`, and an available catalog its `defaultModel`; an open
   intent gains its queue standing, `next`, and loses the `permission`
   reason; attention entries are questions, failures, finishes and
   reviews only, a failure carrying `parked` and its `cause`; a draft's
