@@ -189,6 +189,27 @@ test("prefs round-trip JSON values", () => {
   store.close();
 });
 
+test("storage-5: a session's own agent settings survive a restart field by field, subagent model included", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir });
+  const session = sampleSession(store);
+  store.setSessionAgentSettingsMap(session.id, {
+    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, fastMode: true },
+    "dev.coder": { subagentModel: false },
+  });
+  store.close();
+
+  const reopened = new Store({ dir });
+  assert.deepEqual(reopened.sessionAgentSettings(session.id), {
+    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, fastMode: true },
+    "dev.coder": { subagentModel: false },
+  });
+  // A hand-edited value of the wrong shape is dropped alone.
+  reopened.setPref(`session:${session.id}:agents`, { captain: { subagentModel: "", model: "kept" }, "dev.coder": { subagentModel: 7 } });
+  assert.deepEqual(reopened.sessionAgentSettings(session.id), { captain: { model: "kept" } });
+  reopened.close();
+});
+
 test("core-service-32: session.list carries each session's conversation summary", () => {
   // The rail's rows are only scannable if the listing carries scent:
   // the session's own first words, its size, and whether it ended badly.

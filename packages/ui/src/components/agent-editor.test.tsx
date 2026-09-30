@@ -40,19 +40,19 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import type { ReadinessEntry } from "@sublang/spex-core/protocol";
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain"], fastModeSupported: true },
+  { adapter: "claude", ready: true, usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: ["code.reviewer"],
-    fastModeSupported: false,
+    fastModeSupported: false, subagentModelSupported: false,
   },
   {
     adapter: "gemini",
     ready: null,
     usedBy: ["review.reviewer"],
-    fastModeSupported: false,
+    fastModeSupported: false, subagentModelSupported: false,
   },
 ];
 

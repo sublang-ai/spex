@@ -51,7 +51,7 @@ const READY: ReadinessEntry[] = [
     adapter: "claude",
     ready: true,
     usedBy: ["captain", "code.coder"],
-    fastModeSupported: true,
+    fastModeSupported: true, subagentModelSupported: true,
   },
 ];
 
@@ -372,7 +372,7 @@ describe("RUN-45: readiness heals at hand", () => {
           ready: false,
           requirement: "set ANTHROPIC_API_KEY or sign in with Claude Code",
           usedBy: ["captain", "code.coder"],
-          fastModeSupported: true,
+          fastModeSupported: true, subagentModelSupported: true,
         },
       ],
     });

@@ -17,7 +17,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
-import type { ComposedConfig, LoadModule } from "./config.js";
+import { assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
@@ -149,15 +149,23 @@ export class SettingsDriftError extends Error {
  * DR-067): a string pins, `false` takes the provider's current
  * default, and an absent field leaves the configured selection. The
  * shell is told the outcome, exactly as composition tells it one. */
-function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean}>(block: T, tuning: SessionAgentSettings | undefined): T {
+function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; subagentModel?: string}>(block: T, tuning: SessionAgentSettings | undefined, agent?: {adapter: string; path: string}): T {
   if (!tuning) return block;
   const selection = (value: string | false): unknown => value === false ? {kind: "provider-default"} : {kind: "value", value};
+  // A subagent model is validated where the agent's adapter is known —
+  // cligent's support, cligent's words (DR-093); a binding shares its
+  // player's check.
+  if (agent && typeof tuning.subagentModel === "string") assertSubagentModel(tuning.subagentModel, agent.adapter, agent.path);
+  // The shell takes no sentinel for it: `false` is the provider's, omission.
+  const {subagentModel: configured, ...rest} = block;
+  const subagentModel = tuning.subagentModel === undefined ? configured : tuning.subagentModel === false ? undefined : tuning.subagentModel;
   return {
-    ...block,
+    ...rest,
     ...(tuning.model !== undefined ? {model: selection(tuning.model)} : {}),
     ...(tuning.effort !== undefined ? {effort: selection(tuning.effort)} : {}),
     ...(tuning.fastMode !== undefined ? {fastMode: tuning.fastMode} : {}),
-  };
+    ...(subagentModel !== undefined ? {subagentModel} : {}),
+  } as T;
 }
 
 export function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers, tuning?: SessionAgentSettingsMap): SessionExecutionProjection {
@@ -179,8 +187,8 @@ export function executionConfig(composed: ComposedConfig, cwd: string, members?:
   }
   return validateCaptainSessionExecutionProjection({
     schemaVersion: 2,
-    captain: tuned(composed.captainOptions.sessionAgents.captain, tuning?.[CAPTAIN_AGENT_ID]),
-    players: playerIds.map((id) => ({ id, ...tuned(composed.captainOptions.sessionAgents.players[id], tuning?.[id]) })),
+    captain: tuned(composed.captainOptions.sessionAgents.captain, tuning?.[CAPTAIN_AGENT_ID], {adapter: composed.captainOptions.sessionAgents.captain.adapter, path: CAPTAIN_AGENT_ID}),
+    players: playerIds.map((id) => ({ id, ...tuned(composed.captainOptions.sessionAgents.players[id], tuning?.[id], {adapter: composed.captainOptions.sessionAgents.players[id].adapter, path: `players.${id}`}) })),
     catalog: Object.fromEntries((playbooks as ComposedConfig["playbooks"]).map((playbook) => {
       const block = composed.captainOptions.playbooks[playbook.id];
       return [playbook.id, {

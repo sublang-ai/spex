@@ -100,14 +100,14 @@ const READINESS: ReadinessEntry[] = [
     adapter: "claude",
     ready: true,
     usedBy: ["captain", "dev.coder (code.coder)"],
-    fastModeSupported: true,
+    fastModeSupported: true, subagentModelSupported: true,
   },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: [],
-    fastModeSupported: false,
+    fastModeSupported: false, subagentModelSupported: false,
   },
 ];
 
@@ -150,7 +150,7 @@ function renderLibrary() {
 beforeEach(() => {
   useAppStore.setState({ loadAgentOptions: async (adapter) => ({
     adapter, effortValues: adapter === "claude" ? ["high", "ultracode"] : adapter === "codex" ? ["high", "ultra"] : ["high"],
-    fastModeSupported: adapter === "claude" || adapter === "codex",
+    fastModeSupported: adapter === "claude" || adapter === "codex", subagentModelSupported: adapter === "claude",
     discovery: { status: "unavailable", reason: "Fixture" },
   }) });
   commandMock.mockReset();

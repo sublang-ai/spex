@@ -305,6 +305,16 @@ msgstr "{path}.profile is retired: agents carry their own adapter, model, effort
 msgid "{path}.profile names \"{name}\", which no profiles entry defines"
 msgstr "{path}.profile names \"{name}\", which no profiles entry defines"
 
+#. Config error; `subagentModel` is the config file's own field name and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentModel is not supported for adapter \"{adapter}\""
+msgstr "{path}.subagentModel is not supported for adapter \"{adapter}\""
+
+#. Config error; `subagentModel` is the config file's own field name
+#: src/config.ts
+msgid "{path}.subagentModel must be a nonblank string"
+msgstr "{path}.subagentModel must be a nonblank string"
+
 #. What blocks a Space operation: a playbook compile is running
 #: src/service.ts
 msgid "{playbookId} is compiling"

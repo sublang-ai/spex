@@ -83,14 +83,14 @@ const READINESS: ReadinessEntry[] = [
     adapter: "claude",
     ready: true,
     usedBy: ["captain", "dev.coder (code.coder)"],
-    fastModeSupported: true,
+    fastModeSupported: true, subagentModelSupported: true,
   },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or sign in with the Codex CLI",
     usedBy: ["dev.reviewer (code.reviewer)"],
-    fastModeSupported: false,
+    fastModeSupported: false, subagentModelSupported: false,
   },
 ];
 
