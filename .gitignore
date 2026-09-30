@@ -10,6 +10,6 @@ packages/core/assets/academy/
 # Recording output (scripts/record-demo.mjs).
 demo*.mp4
 
-# Browser journey output (e2e/).
-e2e/test-results/
-e2e/playwright-report/
+# Browser journey output (e2e/), and a run started from the root.
+test-results/
+playwright-report/
