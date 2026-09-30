@@ -422,6 +422,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   ready and failed at its first run. Readiness now reads it not ready,
   naming the package and the repair: `npm ci` in the checkout, or
   reinstall the app. Requires Cligent 0.27.1 or later.
+- A player's fast mode never reached the roles bound to it: a role that
+  set none of its own ran at the provider's default, while the
+  `playbook` CLI ran it at the player's. Such a role now takes its
+  player's fast mode, as the CLI does ([DR-032](specs/decisions/032-session-players.md),
+  core-service-16).
 
 ### Security
 

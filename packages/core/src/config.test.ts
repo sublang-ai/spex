@@ -828,6 +828,7 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   // (DR-038; playbook 11 treats `false` as a literal disabled request).
   const top = baseConfig();
   (top.captain as Record<string, unknown>).fastMode = true;
+  (roster(top)["dev.coder"] as Record<string, unknown>).fastMode = true;
   roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
   codeRoles(top).coder = { player: "dev.coder", fastMode: false };
   const composed = await composeConfig(top, stubLoader);
@@ -836,6 +837,18 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
     composed.captainOptions.sessionAgents.players["dev.reviewer"]?.fastMode,
     false,
   );
-  assert.equal(composed.captainOptions.playbooks.code.roles.coder.fastMode, false);
-  assert.ok(!("fastMode" in composed.captainOptions.playbooks.code.roles));
+  // Playbook builds a role's call from its binding alone, so the
+  // binding carries the resolved choice, as the launcher resolves
+  // `binding ?? player`: a binding's own override stands, a bare
+  // binding takes its player's — `false` as literally as `true` —
+  // and a player setting none leaves it to the provider.
+  const { playbooks } = composed.captainOptions;
+  assert.equal(playbooks.code.roles.coder.fastMode, false, "a binding's own override beats its player's");
+  assert.equal(playbooks.review.roles.coder.fastMode, true, "a bare binding takes its player's fast mode");
+  assert.equal(playbooks.review.roles.reviewer.fastMode, false, "a player's literal false reaches its bare binding");
+  assert.ok(!("fastMode" in playbooks.dev.roles.analyst), "a player setting none leaves the binding without one");
+  // The summary keeps each binding's own value, not the resolved one.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.ok(review && !("fastMode" in review.roles.coder));
 });

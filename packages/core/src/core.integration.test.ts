@@ -3883,9 +3883,10 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
     "    roles:\n      coder: dev.coder\n",
     "    roles:\n      coder:\n        player: dev.coder\n        effort: low\n",
   ).replace(
-    // The player's own subagent model (DR-093), which the binding inherits.
+    // The player's own subagent model (DR-093) and fast mode, which the
+    // binding inherits.
     "    model: claude-test\nplaybooks:",
-    "    model: claude-test\n    subagentModel: claude-sub-config\nplaybooks:",
+    "    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\nplaybooks:",
   );
   writeFileSync(configPath, config);
   const projectDir = join(dir, "project");
@@ -3944,13 +3945,17 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
       players: { id: string; subagentModel?: string }[];
-      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string }; subagentModel?: string }> }>;
+      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string }; fastMode?: boolean; subagentModel?: string }> }>;
     };
   }).lastAppliedExecutionProjection;
   assert.equal(other.captain.model.value, "claude-test", "an untuned session keeps the config's Captain");
   assert.equal(other.captain.subagentModel, undefined, "and the provider's subagent model where the config sets none");
   assert.equal(other.players[0]?.subagentModel, "claude-sub-config", "the config's subagent model at the player");
   assert.equal(other.catalog.code?.roles.coder?.subagentModel, "claude-sub-config", "and at the binding inheriting it");
+  // Playbook builds the call from the binding alone, so a binding setting
+  // no fast mode carries its player's, as the launcher resolves it
+  // (core-service-16).
+  assert.equal(other.catalog.code?.roles.coder?.fastMode, true, "the player's fast mode at the binding inheriting it");
   assert.equal(other.catalog.code?.roles.coder?.model.value, "claude-test", "and the config's player");
   assert.equal(other.catalog.code?.roles.coder?.effort.value, "low", "binding pins still stand where nothing tuned them");
   assert.deepEqual(readFileSync(configPath), configBefore, "the shared config file is byte-identical");
@@ -3976,6 +3981,24 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: null, subagentModel: null });
   const bare = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
   assert.equal(bare?.agentSettings, undefined, "a session tuning nothing carries none");
+
+  // A structural change is named before the tuning it strands: the
+  // player's adapter moved to one serving no subagent model, so
+  // continuing the session tuned with one is refused as the adapter's
+  // drift, offering a new session (core-service-92).
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", subagentModel: "claude-sub-tuned" });
+  const onCodexConfig = config.replace(
+    "  dev.coder:\n    adapter: claude\n    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\n",
+    "  dev.coder:\n    adapter: codex\n    model: claude-test\n",
+  );
+  assert.notEqual(onCodexConfig, config, "the player's adapter moved");
+  writeFileSync(configPath, onCodexConfig);
+  await service.reloadConfig();
+  const drift = await client.command("turn.submit", { sessionId: tuned.id, text: "on codex" });
+  assert.ok(!drift.ok && drift.error.code === "invalid_config", `refused as drift: ${JSON.stringify(drift)}`);
+  assert.match(drift.error.message, /dev\.coder's adapter changed/, "names the adapter change");
+  assert.match(drift.error.message, /new session/, "offers a new session");
+  assert.doesNotMatch(drift.error.message, /subagentModel/, "not the tuning the change stranded");
 
   // A subagent model on a player whose adapter cligent serves none for is
   // refused in cligent's words, with nothing written (DR-093).

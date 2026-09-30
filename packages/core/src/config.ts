@@ -1362,11 +1362,15 @@ export async function composeConfig(
       if (typeof binding.subagentModel === "string") {
         assertSubagentModel(binding.subagentModel, player.adapter, path);
       }
+      // Playbook builds a role's call from its binding alone, so a bare
+      // binding takes its player's fast mode here, as the launcher's
+      // `binding ?? player` does; `false` stays a literal request.
+      const fastMode = binding.fastMode ?? player.fastMode;
       hostBindings[role] = {
         playerId: binding.playerId,
         model: select(binding.model, player.model),
         effort: select(binding.effort, player.effort),
-        ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
+        ...(fastMode !== undefined ? { fastMode } : {}),
         ...(subagentModel !== undefined ? { subagentModel } : {}),
       };
       if (!referenced.has(binding.playerId)) {

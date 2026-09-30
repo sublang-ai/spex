@@ -209,6 +209,23 @@ export function executionConfig(composed: ComposedConfig, cwd: string, members?:
   });
 }
 
+/** The projection a session opens on, its own tuning read on. A
+ * continued session's tuning was validated against the adapters it
+ * started with, so when that tuning no longer fits, a structural drift
+ * behind it is named first — the change the session can act on, with a
+ * new session offered — and the tuning's own refusal only when the
+ * structure still matches (core-service-92). */
+function tunedExecution(composed: ComposedConfig, cwd: string, members: StoredMembers | undefined, tuning: SessionAgentSettingsMap | undefined, stored: SessionStructuralProjection | undefined): SessionExecutionProjection {
+  try { return executionConfig(composed, cwd, members, tuning); }
+  catch (error) {
+    if (!stored || error instanceof SettingsDriftError) throw error;
+    const untuned = executionConfig(composed, cwd, members);
+    try { assertCaptainSessionExecutionCompatible(stored, untuned); }
+    catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(untuned))); }
+    throw error;
+  }
+}
+
 /** Name every structural field whose change makes the current projection
  * incompatible with the stored one — Playbook's own refusal names none
  * (core-service-92). */
@@ -471,7 +488,7 @@ export class SessionManager {
       // never after the provider hints are consumed (core-service-92).
       const stored = composed && mode === "continue" ? await this.storedStructure(sessionId) : undefined;
       const members = stored ? storedMembers(stored) : undefined;
-      const config = composed ? executionConfig(composed, project.path, members, this.store.sessionAgentSettings(sessionId)) : undefined;
+      const config = composed ? tunedExecution(composed, project.path, members, this.store.sessionAgentSettings(sessionId), stored) : undefined;
       if (stored && config) {
         try { assertCaptainSessionExecutionCompatible(stored, config); }
         catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(config))); }
