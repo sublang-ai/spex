@@ -17,7 +17,7 @@ Integration coverage is exercised through the core service's WebSocket protocol 
 
 #### settings-1
 
-Where the Settings surface is open, the Settings surface shall present the Captain as a row of the session players' shape [[settings-26](#settings-26)] — its agent with that adapter's readiness, and no removal control — whose edit control opens, in place, the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model and reasoning effort selected from runtime options [[settings-34](#settings-34)], an optional subagent model selected from the same runtime model options where the adapter accepts one ([DR-093](../decisions/093-a-players-subagent-model.md)), a fast-mode switch following the selected model's known support or the adapter's declared support when model metadata is absent ([DR-038](../decisions/038-history-is-done-work.md)), and permissions (mode `auto` or `bypass`, optional writable paths):
+Where the Settings surface is open, the Settings surface shall present the Captain as a row of the session players' shape [[settings-26](#settings-26)] — its agent with that adapter's readiness, and no removal control — whose edit control opens, in place, the Captain's agent editor over the shared config's top-level `captain` entry, with the fields of an inline agent block: adapter (one of the embedded runtime's known adapters, each carrying its readiness indicator), optional model and reasoning effort selected from runtime options [[settings-34](#settings-34)], an optional subagent model selected from the same runtime model options where the adapter accepts one or a value already stands, so a stale one is always clearable ([DR-093](../decisions/093-a-players-subagent-model.md)), a fast-mode switch following the selected model's known support or the adapter's declared support when model metadata is absent ([DR-038](../decisions/038-history-is-done-work.md)), and permissions (mode `auto` or `bypass`, optional writable paths):
 
 - The editor offers Save and Cancel, and closes on either — Escape cancels too — handing focus back to the row's edit control ([DR-010](../decisions/010-interface-craft.md) §6); one row's editor stands open at a time across the Captain and the players, a second opening closing the first.
 - When a captain edit is saved, the change appears in the shared config file's `captain` entry as a merge patch that alters only the fields the editor surfaced, preserving hand-written fields such as `instruction` and granular permissions (see [[settings-21](#settings-21)]).
@@ -64,18 +64,18 @@ Where the Settings surface is open, the Settings surface shall offer adding a se
 
 When an agent, role-binding, or session-tuning editor opens or the adapter it uses changes, the editor shall request Cligent's model and tuning options through the core protocol [[settings-35](#settings-35)] ([DR-052](../decisions/052-runtime-model-options.md), [DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
-- Offer runtime model IDs, provider default, and explicit custom entry in the model field [[settings-39](#settings-39)], each model named by the display rule [[settings-38](#settings-38)]; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
+- Offer runtime model IDs, provider default, and explicit custom entry in the model field and in the subagent-model field [[settings-39](#settings-39)], the latter only where Cligent reports the adapter serves a subagent model or a value already stands ([DR-093](../decisions/093-a-players-subagent-model.md)), each model named by the display rule [[settings-38](#settings-38)]; recognize a saved ID reported as an alias's resolution without rewriting it, and retain unlisted values.
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
-- Explicitly switching an agent's adapter resets model, effort, and fast mode to defaults because those settings belong to the previous adapter.
+- Explicitly switching an agent's adapter resets model, subagent model, effort, and fast mode to defaults because those settings belong to the previous adapter.
 
 #### settings-35
 
 When the core receives `agent.options` for a known adapter, it shall return Cligent's adapter capabilities and bounded, task-free model discovery result without changing shared config or opening a Spex session:
 
 - Discovery uses the core's captured environment.
-- Adapter effort values and fast-mode support accompany the discovery result.
+- Adapter effort values, fast-mode support and subagent-model support accompany the discovery result ([DR-093](../decisions/093-a-players-subagent-model.md)).
 - Available results carry Cligent's optional `unreportedEffortValues` separately from each model's effort list: adapter efforts the discovery interface cannot report.
 - Available results carry each model's optional `description` and the result's optional `defaultModel` — the model the runtime runs when none is configured — as Cligent reported them, absent where it reported none ([DR-091](../decisions/091-models-named-by-the-runtime.md)).
 - Unknown adapters are rejected by the protocol.
@@ -91,6 +91,7 @@ Where a model editor [[settings-34](#settings-34)] names a model value against t
 | only a row's `resolvedModel` | itself, a canonical pin recognized without rewriting it [[settings-34](#settings-34)] |
 | no row's id or `resolvedModel` | itself |
 | empty, taking the provider's default | "Provider default", then the runtime's `defaultModel` read by this rule where reported |
+| empty, in a subagent-model field | "Provider default" alone: the runtime chooses a subagent's model by its own order, so the catalog's `defaultModel` never follows ([DR-093](../decisions/093-a-players-subagent-model.md)) |
 
 - in one line of text the name and the specific model join with " · ", and so do "Provider default" and the default model, as in "Opus · claude-opus-5-5", "Fable · claude-fable-5-1[1m]", "GPT-6-Astra" and "Provider default · opus[1m]";
 - a name, an id, a resolved model and a description are the runtime's words, rendered as they came [[localization-1](localization.md#localization-1)].
@@ -100,7 +101,7 @@ Where a model editor [[settings-34](#settings-34)] names a model value against t
 Where a model editor offers the runtime's model choices [[settings-34](#settings-34)], its model field shall present them as a single-select listbox opened from a trigger, each model read by the display rule [[settings-38](#settings-38)] ([DR-091](../decisions/091-models-named-by-the-runtime.md)):
 
 - the trigger reads the chosen row: the value with its specific model muted, "Custom model…" while the hand-typed field holds the value, and for the empty value "Provider default" followed, muted, by the runtime's `defaultModel` where reported;
-- the rows stand in this order: "Provider default" where the editor allows it, its second line the `defaultModel` where reported; a value recognized only through a resolution, as its own row; each catalog row in the runtime's order, its first line the name with the specific model muted beside it and its second line the runtime's `description` where reported; and "Custom model…" last;
+- the rows stand in this order: "Provider default" where the editor allows it, its second line the `defaultModel` where reported and the field is not a subagent-model field [[settings-38](#settings-38)]; a value recognized only through a resolution, as its own row; each catalog row in the runtime's order, its first line the name with the specific model muted beside it and its second line the runtime's `description` where reported; and "Custom model…" last;
 - the selected row wears a check and is marked selected to assistive technology, and a line too long for its row ends in an ellipsis, whole in the row's title;
 - choosing "Custom model…", or holding a value no row lists, shows the hand-typed model ID field beneath the trigger, the unlisted value with the hint that the runtime does not list it, and while the catalog is loading, unavailable or empty the hand-typed field stands alone;
 - the Captain's and a player's agent editor [[settings-1](#settings-1)] lays the model field across its full width.
@@ -264,7 +265,7 @@ When an in-place editor saves an agent-block tweak — the captain's or a player
 
 #### settings-36
 
-Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, adapter switches resetting model/subagent model/effort/fast mode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery and with each model's description and the catalog's default model carried as reported [[settings-35](#settings-35)].
+Where runtime discovery supplies model-specific metadata, unavailable discovery, and a delayed response for a previously selected adapter, the test suite shall exercise the protocol and editors to verify model IDs and alias resolutions, model-specific tuning with only discovery-declared supplements, preserved custom values, adapter switches resetting model/subagent model/effort/fast mode, refresh, and rejection of stale results [[settings-34](#settings-34)], without task execution or config mutation during discovery and with each model's description and the catalog's default model carried as reported, and each adapter's subagent-model support as Cligent reports it [[settings-35](#settings-35)].
 
 #### settings-41
 
