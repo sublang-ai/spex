@@ -361,13 +361,32 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     await expect(page.getByText("claude-tuned-captain")).toHaveCount(0);
     await expect(page.getByText("claude-tuned-coder")).toHaveCount(0);
 
-    // And each agent goes back from its own chip.
+    // A second session of the project opens on them: the first
+    // conversation's choices stay where they were made. The Captain,
+    // on the provider's default, reads its adapter.
+    await page.getByTestId(`sidebar-new-${app.projectId}`).click();
+    await expect(page.getByTestId("captain-home")).toBeVisible();
+    await send(page, "Tighten the retry backoff");
+    await expect(page.getByTestId("player-pane-dev.coder")).toBeVisible();
+    await expect(page.getByTestId("agent-chip-captain")).toHaveText("claude");
+    await expect(page.getByTestId("agent-chip-dev.coder")).toHaveText("claude-opus-5-5");
+    for (const agent of ["captain", "dev.coder"]) {
+      await expect(page.getByTestId(`agent-chip-${agent}`)).not.toHaveAttribute("data-changed", "true");
+    }
+    await settled(app);
+
+    // And each agent goes back from its own chip, both panes reading
+    // the configured values again.
     await page.getByRole("tree", { name: "Projects and sessions" })
       .getByText(/fix the token r/i).click();
-    await page.getByTestId("agent-chip-dev.coder").click();
-    await page.getByTestId("agent-default-dev.coder").click();
-    await page.getByTestId("agent-save-dev.coder").click();
-    await expect(page.getByTestId("agent-chip-dev.coder")).not.toContainText("claude-tuned-coder");
-    await expect(page.getByTestId("agent-chip-dev.coder")).not.toHaveAttribute("data-changed", "true");
+    for (const agent of ["dev.coder", "captain"]) {
+      await page.getByTestId(`agent-chip-${agent}`).click();
+      await page.getByTestId(`agent-default-${agent}`).click();
+      await page.getByTestId(`agent-save-${agent}`).click();
+      await expect(page.getByTestId(`agent-settings-${agent}`)).toHaveCount(0);
+      await expect(page.getByTestId(`agent-chip-${agent}`)).not.toHaveAttribute("data-changed", "true");
+    }
+    await expect(page.getByTestId("agent-chip-captain")).toHaveText("claude");
+    await expect(page.getByTestId("agent-chip-dev.coder")).toHaveText("claude-opus-5-5");
   });
 });
