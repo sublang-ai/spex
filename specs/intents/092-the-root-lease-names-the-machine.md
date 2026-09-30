@@ -33,6 +33,6 @@ Realize [DR-093](../decisions/093-the-root-lease-names-the-machine.md): the root
 
 Under Node 22 as CI runs it: `npm ci`, `npm run build`, the root `npm test`, `npm run e2e`, and `npx spex lint`; the lock's one Playbook at the tree's root and none nested under slc; and, by hand, `Ctrl+C` in `npm start` leaving no `.lock/` in the home.
 
-Tasks 1 to 5, verified on 2026-09-30 under Node 24.21.0 against a local pack of the Playbook branch carrying its DR-075 (installed with `npm install --no-save`, the lock untouched): `npm run build` passed for every workspace; the root `npm test` passed — the scripts suite 36, the CLI 133, the core 366 including the new root-lease suite and the extended core-service-63 case, the UI 726 across 33 files, the desktop 16 and the server 11 — and `spex lint` found no problems.
+Tasks 1 to 5, verified on 2026-09-30 under Node 24.21.0 against a local pack of the Playbook branch carrying its DR-075 (installed with `npm install --no-save`, the lock untouched): `npm run build` passed for every workspace; the root `npm test` passed — the scripts suite 36, the CLI 133, the core 366 including the new root-lease suite and the extended core-service-63 case, the UI 726 across 33 files, the desktop 16 and the server 11 — and `spex lint` found no problems; `npm run e2e` passed its 65 browser journeys with 1 skipped.
 The root-lease suite's killed and live owners are real child processes.
 Task 6 waits for the Playbook release; the CI run on Node 22 and the `Ctrl+C` residue are recorded with it.
