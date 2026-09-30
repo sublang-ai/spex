@@ -15,10 +15,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { hostname, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
+import { acquireRootLease, type RootLease } from "./root-lease.js";
 import { isAbsolute, join, relative } from "node:path";
-import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { execFileSync } from "node:child_process";
 import {
@@ -69,27 +69,14 @@ function discardable(manifest: SessionManifest): boolean {
   catch { return false; }
 }
 
-/** Another core instance holds the state root (CORE-61). */
-export class StateRootHeldError extends Error {
-  constructor(
-    readonly holder: { pid: number; hostname: string; acquiredAt: number },
-    dir: string,
-  ) {
-    super(
-      i18n._({
-        id: "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)",
-        comment:
-          "Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are",
-        values: { dir, pid: holder.pid, host: holder.hostname },
-      }),
-    );
-    this.name = "StateRootHeldError";
-  }
-}
+export { StateRootHeldError, StateRootLeaseError } from "./root-lease.js";
 
 export interface StoreOptions {
   /** State root directory; unset runs the store in memory only. */
   dir?: string;
+  /** This machine's identity from Playbook's facade, required with
+   * `dir`: the root lease carries it (storage-24, DR-093). */
+  machineIdentity?: string;
   /** Sessions directory; defaults to `<dir>/sessions`. */
   sessionsDir?: string;
   /** A legacy SQLite store to import once (CORE-64). */
@@ -351,8 +338,7 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
 export class Store {
   private readonly dir?: string;
   private readonly sessionsDir?: string;
-  private lockDir?: string;
-  private leaseToken = "";
+  private lease?: RootLease;
 
   private meta: StoreMeta = { version: META_VERSION };
   private readonly projects = new Map<string, ProjectInfo>();
@@ -386,7 +372,10 @@ export class Store {
     // this one works rather than failing at the CLI's first launch.
     mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 });
     mkdirSync(join(this.dir, "intents"), { recursive: true });
-    this.acquireRootLease();
+    if (options.machineIdentity === undefined) {
+      throw new TypeError("a state root store requires this machine's identity (storage-24)");
+    }
+    this.lease = acquireRootLease(this.dir, { machineIdentity: options.machineIdentity });
     try {
       this.meta = existsSync(this.metaFile()) ? readJsonFile(this.metaFile()) as StoreMeta : { version: 0 };
       if (!this.meta || typeof this.meta !== "object" || Array.isArray(this.meta) || ![0, META_VERSION].includes(this.meta.version) || Object.keys(this.meta).some((key) => !["version", "importedLegacy"].includes(key)) ||
@@ -407,88 +396,13 @@ export class Store {
     }
   }
 
-  // -- root lease (CORE-61) -------------------------------------------------
+  // -- root lease (CORE-61, storage-24) --------------------------------------
 
-  /** The lock's owner file, or undefined when absent or unparsable —
-   * the lease paths must classify damage, never crash on it. */
-  private readLeaseOwner(
-    lock: string,
-  ): { pid: number; hostname: string; acquiredAt: number; token?: string } | undefined {
-    try {
-      return readJson(join(lock, "owner.json"));
-    } catch {
-      return undefined;
-    }
-  }
-
-  private acquireRootLease(): void {
-    const dir = this.dir as string;
-    const lock = join(dir, ".lock");
-    this.leaseToken = randomUUID();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      // Stage-then-rename: the lock is published atomically with its
-      // owner file inside, so a reader never sees an ownerless lock.
-      const stage = join(dir, `.lock.stage.${this.leaseToken}`);
-      try {
-        mkdirSync(stage);
-        writeFileSync(
-          join(stage, "owner.json"),
-          JSON.stringify({
-            pid: process.pid,
-            hostname: hostname(),
-            acquiredAt: Date.now(),
-            token: this.leaseToken,
-          }),
-        );
-        renameSync(stage, lock);
-        this.lockDir = lock;
-        return;
-      } catch {
-        rmSync(stage, { recursive: true, force: true });
-        const owner = this.readLeaseOwner(lock);
-        if (!owner) {
-          // A published lock always carries its owner; an unreadable
-          // one is fail-closed — deleting it is the operator's call.
-          throw new Error(
-            i18n._({
-              id: "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)",
-              comment:
-                "Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are",
-              values: { dir, lock },
-            }),
-          );
-        }
-        // A foreign host's lease is never broken (DR-036): liveness
-        // cannot be probed across machines.
-        if (owner.hostname !== hostname()) throw new StateRootHeldError(owner, dir);
-        if (processAlive(owner.pid)) throw new StateRootHeldError(owner, dir);
-        // Same host, dead pid: retire by rename-aside, which only one
-        // contender can win — the loser just loops and re-reads.
-        const retired = join(dir, `.lock.retired.${owner.token ?? randomUUID()}`);
-        try {
-          renameSync(lock, retired);
-          rmSync(retired, { recursive: true, force: true });
-        } catch {
-          // Another contender retired it first.
-        }
-      }
-    }
-    throw new Error(i18n._({
-      id: "state root {dir} lease could not be acquired",
-      comment: "Startup refusal the shell shows in a dialog",
-      values: { dir },
-    }));
-  }
-
+  /** Retire this store's own lease (storage-24); a successor stands. */
   private releaseRootLease(): void {
-    if (!this.lockDir) return;
-    // Release only a lease this instance still owns: a stale loser
-    // must never delete the winner's lock.
-    const owner = this.readLeaseOwner(this.lockDir);
-    if (owner?.token === this.leaseToken) {
-      rmSync(this.lockDir, { recursive: true, force: true });
-    }
-    this.lockDir = undefined;
+    const lease = this.lease;
+    this.lease = undefined;
+    lease?.release();
   }
 
   // -- files ----------------------------------------------------------------
@@ -1775,15 +1689,5 @@ export class Store {
       }
     }
     if (dropped) this.saveForgeCache();
-  }
-}
-
-function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM answers "alive but not ours"; only ESRCH proves death.
-    return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }

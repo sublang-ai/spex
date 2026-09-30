@@ -498,6 +498,11 @@ msgstr "an open intent already holds this source: \"{title}\""
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
 msgstr "Another process is writing to the home; wait for it to finish, then Retry."
 
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "another writer published while this one was retrying"
+msgstr "another writer published while this one was retrying"
+
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
 msgid "bind the existing project before changing its session's agents"
@@ -996,6 +1001,11 @@ msgstr "item-ID prefix \"{prefix}\" disagrees with basename \"{basename}\""
 #: src/specs.ts
 msgid "items under unexpected section \"{section}\""
 msgstr "items under unexpected section \"{section}\""
+
+#. Why a state-root lock cannot be verified; the path stays as it is
+#: src/root-lease.ts
+msgid "its retired path {retired} is already occupied"
+msgstr "its retired path {retired} is already occupied"
 
 #. Spec notice; the two directory paths and the `spex scaffold --update` command stay as they are
 #: src/specs.ts
@@ -1548,6 +1558,11 @@ msgstr "Space is syncing; wait for it to finish"
 msgid "Spec items"
 msgstr "Spec items"
 
+#. Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file
+#: src/service.ts
+msgid "Spex cannot identify this machine: {reason}"
+msgstr "Spex cannot identify this machine: {reason}"
+
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
@@ -1563,20 +1578,26 @@ msgstr "Spex: the compile failed at {where} — asking the agent to fix the sour
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: the compile succeeded — asking for a registration proposal"
 
-#. Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are
-#: src/store.ts
-msgid "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)"
-msgstr "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)"
+#. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-093)"
+msgstr "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-093)"
 
 #. Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are
-#: src/store.ts
+#. Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are
+#: src/root-lease.ts
 msgid "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)"
 msgstr "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)"
 
-#. Startup refusal the shell shows in a dialog
-#: src/store.ts
-msgid "state root {dir} lease could not be acquired"
-msgstr "state root {dir} lease could not be acquired"
+#. Startup refusal the shell shows in a dialog; the path, the process id and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} is held by pid {pid} on this machine; one core serves a root at a time (DR-036)"
+msgstr "state root {dir} is held by pid {pid} on this machine; one core serves a root at a time (DR-036)"
+
+#. Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-093)"
+msgstr "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-093)"
 
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
@@ -1612,6 +1633,11 @@ msgstr "the {adapter} runtime failed to load — reinstall the app, or run npm i
 #: src/config.ts
 msgid "the {adapter} SDK publishes no executable for {platform}-{arch}"
 msgstr "the {adapter} SDK publishes no executable for {platform}-{arch}"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the active lock is empty"
+msgstr "the active lock is empty"
 
 #. A failed authoring turn that carried no message; {status} is the runtime's own status word and stays as it is
 #: src/authoring.ts
@@ -1688,10 +1714,35 @@ msgstr "the intent is already dispatched"
 msgid "the intent waits on \"{title}\""
 msgstr "the intent waits on \"{title}\""
 
+#. Why a state-root lock cannot be verified; the error code stays as it is
+#: src/root-lease.ts
+msgid "the lock cannot be inspected ({code})"
+msgstr "the lock cannot be inspected ({code})"
+
 #. Refusal, read after the file it names
 #: src/space.ts
 msgid "the migration is incomplete; finish or remove it before initializing"
 msgstr "the migration is incomplete; finish or remove it before initializing"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the moved owner's token changed"
+msgstr "the moved owner's token changed"
+
+#. Why a state-root lock cannot be verified; the error code stays as it is
+#: src/root-lease.ts
+msgid "the owner process cannot be probed ({code})"
+msgstr "the owner process cannot be probed ({code})"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the owner record is malformed"
+msgstr "the owner record is malformed"
+
+#. Why a state-root lock cannot be verified; the value stays as it is
+#: src/root-lease.ts
+msgid "the owner's machine identity {value} is unverifiable"
+msgstr "the owner's machine identity {value} is unverifiable"
 
 #. Refusal: the explorer was given a path leading outside the home
 #: src/space.ts

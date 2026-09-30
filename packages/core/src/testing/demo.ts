@@ -10,6 +10,7 @@
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { sha256, writeApplicationFile } from "../app-storage.js";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -81,8 +82,12 @@ export async function seedDemoHistory(
   dataDir: string,
   projectDir: string,
   count: number,
+  identity: { env?: NodeJS.ProcessEnv; homeDir?: string } = {},
 ): Promise<void> {
-  const store = new Store({ dir: dataDir });
+  // The seed takes the root lease with the identity the core it seeds
+  // for will read (storage-24): the harness's scratch home, not the
+  // developer's.
+  const store = new Store({ dir: dataDir, machineIdentity: await resolveMachineIdentity(identity) });
   try {
     const project = store.registerProject(projectDir, "demo-project", 1);
     const sessionId = randomUUID();

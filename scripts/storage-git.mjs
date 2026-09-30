@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { Store } from "../packages/core/dist/store.js";
 import { isWorkTreeRoot } from "../packages/core/dist/forge.js";
-import { planStorageMerge, reserveStorageHome, selectStorageMerge, validateStorageTree } from "../packages/core/dist/storage-git.js";
+import { planStorageMerge, reserveStorageHome, selectStorageMerge, storageMachineIdentity, validateStorageTree } from "../packages/core/dist/storage-git.js";
 
 const args = process.argv.slice(2);
 const homeAt = args.indexOf("--home");
@@ -24,7 +24,7 @@ try {
     }
     console.log(JSON.stringify(await selectStorageMerge(home, choices), null, 2));
   } else if (operation === "validate" && args.length === 0) {
-    const release = reserveStorageHome(home);
+    const release = reserveStorageHome(home, await storageMachineIdentity());
     try { console.log(JSON.stringify(await validateStorageTree(home), null, 2)); } finally { release(); }
   } else if (operation === "rebind" && args.length >= 2) {
     const id = args.shift(); const path = resolve(args.shift().replace(/^~(?=\/|$)/, homedir()));
@@ -37,7 +37,7 @@ try {
     }
     if (!(await isWorkTreeRoot(path))) throw new Error(`${path} is not the root of a Git work tree`);
     if (revision && !(await isWorkTreeRoot(home))) throw new Error("restoring from Git requires Spex home itself to be the work-tree root");
-    const store = new Store({ dir: resolve(home) });
+    const store = new Store({ dir: resolve(home), machineIdentity: await storageMachineIdentity() });
     try {
       const project = store.rebindProject({ id, path, ...(aliases ? { aliases } : {}), ...(revision ? { revision } : {}) });
       await store.initializeSessions();
