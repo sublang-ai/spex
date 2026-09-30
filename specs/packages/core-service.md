@@ -511,7 +511,16 @@ The core service shall mutate a session from either interface only through Playb
 
 #### core-service-61
 
-When the core service starts against a state root that another core instance holds, the core service shall refuse to serve, reporting the holding instance to the host — one core per state root at a time ([DR-036](../decisions/036-file-state-store.md)).
+When the core service starts against a state root, the core service shall take this machine's identity from Playbook's facade [[3]] and the root lease by the shared rule [[storage-24](storage.md#storage-24)], refusing to serve — one core per state root at a time ([DR-036](../decisions/036-file-state-store.md), [DR-093](../decisions/093-the-root-lease-names-the-machine.md)) — with a message the host shows that names the lock path and the cause:
+
+| Cause | Message |
+| --- | --- |
+| a live process of this machine holds the root | the holder's `pid` and its recorded host name or machine identity |
+| another machine's owner holds the root | the owner's machine identity, or its legacy host name, named as such |
+| the owner cannot be verified: malformed, tokenless, empty, a probe failing otherwise than `ESRCH`, or an occupied retired target | the reason, with the instruction to stop every Spex writer before removing the lock by hand |
+| the machine identity is unavailable | the identity file and the reason, before the lock is inspected |
+
+- A dead owner of this machine is reclaimed and the start proceeds.
 
 #### core-service-64
 
@@ -788,7 +797,7 @@ When the integration suite settles and restarts a shared-store session, it shall
 
 #### core-service-63
 
-While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder, and after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds.
+While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder's `pid`; after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds and the stopped service's lease stands retired under `.lock.retired/`; a root whose lock a killed process of this machine left is reclaimed by the next start; a lock tagged with another machine's identity refuses naming it as a machine identity; and a start whose identity file is malformed refuses naming that file, leaving the lock untouched [[core-service-61](#core-service-61)].
 
 #### core-service-68
 
@@ -990,3 +999,4 @@ When an integration suite aborts a real session's turn while a scripted call is 
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared session format and host lifecycle"
 [2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/recovery.md "Prepare and resume interrupted work"
+[3]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-95 "The machine identity facade"

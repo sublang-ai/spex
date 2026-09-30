@@ -14,7 +14,10 @@ import { Store } from "./store.js";
 import { ApplicationRegistry, sha256 } from "./app-storage.js";
 import { templatePath } from "./config.js";
 import { speak } from "./i18n.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, validateStorageTree, type StorageChoice } from "./storage-git.js";
+
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+const selectStorageMerge = (home: string, choices: Record<string, StorageChoice> = {}, options: { join?: boolean } = {}) => selectStorageMergeWith(home, choices, { ...options, machineIdentity: "machine-id:v1:00000000-0000-4000-8000-0000000000aa" });
 
 const git = (home: string, ...args: string[]): string => execFileSync("git", ["-C", home, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 function setup() {
@@ -56,7 +59,7 @@ test("delete versus modify needs explicit bundle choice; active core or CLI leas
   const { home, sessionId, bundle, commit } = setup(); git(home, "branch", "other");
   rmSync(join(home, "sessions", `${sessionId}.json`)); rmSync(join(home, "sessions", `${sessionId}.records.jsonl`)); commit("delete");
   git(home, "checkout", "other"); bundle("changed"); commit("modify"); git(home, "checkout", "main"); merge(home);
-  const release = reserveStorageHome(home); await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/); release();
+  const release = reserveStorageHome(home, machineIdentity); await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/); release();
   const shared = createSessionStore({ sessionsDir: join(home, "sessions") }); await shared.prepare(); const lease = await shared.acquireManagement(sessionId);
   await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "ours" }), /held|owner|active|lease/i); await lease.release();
   await selectStorageMerge(home, { [`sessions/${sessionId}`]: "ours" });
@@ -121,7 +124,7 @@ test("the apply seam plans over a caller-supplied ancestor and writes under a le
   git(home, "checkout", "main");
   assert.notEqual(readFileSync(join(home, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
   const plan = planStorageMerge(home, ours, theirs);
-  const release = reserveStorageHome(home);
+  const release = reserveStorageHome(home, machineIdentity);
   try {
     await assert.rejects(() => selectStorageMerge(home, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/);
     let marked = false;
@@ -208,7 +211,7 @@ test("Git validation and core reopening agree on selected dispatch boundaries", 
     const before = readFileSync(log);
     if (valid) await validateStorageTree(home);
     else await assert.rejects(() => validateStorageTree(home),/invalid dispatch/);
-    const store = new Store({dir:home});
+    const store = new Store({machineIdentity, dir:home});
     try {
       await store.initializeSessions();
       if (valid) store.assertWritable({projectId:project.id});
@@ -232,13 +235,13 @@ test("the rebind command restores a Git ancestor's identity and recorded-path hi
   const script = resolve(dirname(fileURLToPath(import.meta.url)), "../../../scripts/storage-git.mjs");
   const output = JSON.parse(execFileSync(process.execPath, [script, "--home", home, "rebind", project.id, checkout, "--alias", project.path, "--revision", "HEAD^"], { encoding: "utf8" }));
   assert.equal(output.project.id, project.id); assert.equal(output.project.path, checkout); assert.deepEqual(output.diagnostics, []);
-  const store = new Store({ dir: home });
+  const store = new Store({ machineIdentity, dir: home });
   try { await store.initializeSessions(); assert.equal(store.listSessions()[0]?.id, sessionId); assert.equal(store.listSessions()[0]?.projectId, project.id); }
   finally { store.close(); }
   const before = readFileSync(join(home, "projects.json")); const child = join(checkout, "child"); mkdirSync(child);
   assert.throws(() => execFileSync(process.execPath, [script, "--home", home, "rebind", project.id, child], { stdio: "pipe" }), /not the root/);
   assert.deepEqual(readFileSync(join(home, "projects.json")), before);
-  const release = reserveStorageHome(home);
+  const release = reserveStorageHome(home, machineIdentity);
   try { assert.throws(() => execFileSync(process.execPath, [script, "--home", home, "rebind", project.id, checkout], { stdio: "pipe" }), /held|one core/); }
   finally { release(); }
   rmSync(home, { recursive: true, force: true }); rmSync(checkout, { recursive: true, force: true });
@@ -254,7 +257,7 @@ test("Git rules replace stale generated session ignores after successful validat
   writeFileSync(file,authored+canonical.join("\n")+`\n/sessions/${sessionId}.json\n/sessions/${sessionId}.records.jsonl\n`);
   const manifestFile=join(home,"sessions",`${sessionId}.json`); const valid=readFileSync(manifestFile);
   const future={...JSON.parse(valid.toString()),schemaVersion:99}; writeFileSync(manifestFile,JSON.stringify(future));
-  const store=new Store({dir:home});
+  const store=new Store({machineIdentity, dir:home});
   try {
     await store.initializeSessions(); prepareStorageGitFiles(home,store.untrackedSessionPaths());
     assert.equal(git(home,"check-ignore","--no-index",`sessions/${sessionId}.json`),`sessions/${sessionId}.json`);

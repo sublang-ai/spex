@@ -64,6 +64,13 @@ While at least one project session has an active turn, when the user initiates q
 - When the user cancels that confirmation, the app keeps running with those sessions unaffected.
 - When the app quits, the app disposes every live session's runtime [[core-service-39](core-service.md#core-service-39)] before the process exits, leaving no orphan agent processes; the confirmation says a message continues the conversation later ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 
+#### app-shell-37
+
+When the desktop's main process receives `SIGINT` or `SIGTERM`, the app shall stop the core [[core-service-39](core-service.md#core-service-39)] without the active-turn confirmation of [[app-shell-7](#app-shell-7)] and exit with status 130 or 143 respectively once the core has stopped or after 10 seconds, whichever comes first ([DR-093](../decisions/093-the-root-lease-names-the-machine.md)):
+
+- a second signal during that wait exits at once with the same status;
+- the core's stop releases the state root, so `Ctrl+C` in `npm start` leaves no `.lock/` behind.
+
 ### Offline Operation
 
 #### app-shell-8
@@ -98,6 +105,7 @@ Where `npm ci` has installed the repository dependencies and built `better-sqlit
 2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
 4. A failed Node rebuild reports the restore failure with an actionable warning and any preceding stage failure, then selects the command outcome in this order: a signal that interrupted an active stage returns 130 or 143; otherwise, a preceding stage failure keeps its status; otherwise, a signal first received during restoration returns 130 or 143 even when restoration fails; otherwise, the restore failure returns 1.
+5. On a POSIX host, a signal forwarded to the launch stage's process group is followed, 15 seconds later if that stage has not exited, by `SIGKILL` to the same group, so the Node rebuild is never held by an app that ignores the signal ([DR-093](../decisions/093-the-root-lease-names-the-machine.md)).
 
 #### app-shell-31
 
@@ -237,7 +245,8 @@ Where executable npm and Electron fixtures stand in for their external effects, 
 - a normal run invokes the repository-root build, Electron rebuild, app launch, and Node restore in order, forwarding the launch arguments unchanged [[app-shell-26](#app-shell-26)];
 - build, Electron-rebuild, launch, and restore failures take the required restore path, report both a stage and restore failure when they coincide, and return the required status [[app-shell-26](#app-shell-26)];
 - on a POSIX host, real SIGINT and SIGTERM delivery during launch terminates the detached fixture app and its grandchild, leaves neither orphaned, runs the Node restore, and returns 130 and 143 respectively [[app-shell-26](#app-shell-26)];
-- on a POSIX host, a signal first delivered during a failing restore waits for the restore and reports its failure; after otherwise successful stages it returns the signal status, while after an app-launch failure it also reports that failure and preserves its status [[app-shell-26](#app-shell-26)].
+- on a POSIX host, a signal first delivered during a failing restore waits for the restore and reports its failure; after otherwise successful stages it returns the signal status, while after an app-launch failure it also reports that failure and preserves its status [[app-shell-26](#app-shell-26)];
+- a launch stage that ignores the forwarded signal is killed with `SIGKILL` after the bounded wait and the run still restores Node and returns the signal status, while a stage that exits within the wait is never killed [[app-shell-26](#app-shell-26)].
 
 #### app-shell-32
 

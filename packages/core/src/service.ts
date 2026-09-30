@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
 import type { Server as HttpServer } from "node:http";
@@ -115,6 +116,9 @@ export interface CoreServiceOptions {
   /** A legacy SQLite store the shell hands over for the one-time
    * import (core-service-64); the file is left in place. */
   legacyDbPath?: string;
+  /** This machine's identity for the root lease (core-service-61);
+   * resolved through Playbook's facade when unset. */
+  machineIdentity?: string;
   /** A legacy compiled-playbook library to relocate into the root,
    * with config `from` paths rewritten (core-service-64). */
   legacyLibraryDir?: string;
@@ -411,6 +415,7 @@ export class CoreService {
     if (options.dataDir) speak(resolveLanguage(readStoredLanguage(options.dataDir), this.preferredLanguages()));
     this.store = new Store({
       ...(options.dataDir ? { dir: options.dataDir } : {}),
+      ...(options.machineIdentity !== undefined ? { machineIdentity: options.machineIdentity } : {}),
       sessionsDir: options.sessionsDir ?? resolveSessionsDir(this.configPath, { ...this.env, HOME: this.home, SPEX_HOME: options.dataDir ?? this.env.SPEX_HOME }),
       ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
     });
@@ -635,7 +640,23 @@ export class CoreService {
         comment: "Startup refusal shown in the shell's dialog on an unsupported host",
       }));
     }
-    const service = new CoreService(options);
+    // The root lease carries this machine's identity (core-service-61,
+    // storage-24), read once through Playbook's facade before the store
+    // opens; an unusable identity file refuses the start naming it.
+    let machineIdentity = options.machineIdentity;
+    if (machineIdentity === undefined && options.dataDir) {
+      const env = options.env ?? process.env;
+      try {
+        machineIdentity = await resolveMachineIdentity({ env, homeDir: options.home ?? env.HOME ?? homedir() });
+      } catch (error) {
+        throw new Error(i18n._({
+          id: "Spex cannot identify this machine: {reason}",
+          comment: "Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file",
+          values: { reason: error instanceof Error ? error.message : String(error) },
+        }));
+      }
+    }
+    const service = new CoreService({ ...options, ...(machineIdentity !== undefined ? { machineIdentity } : {}) });
     try {
     service.store.markAllSessionsNotLive();
     // A config still at a former location relocates once, nearest

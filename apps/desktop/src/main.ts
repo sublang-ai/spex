@@ -67,6 +67,27 @@ const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) {
   app.quit();
 } else {
+  // A terminal's Ctrl+C or a runner's SIGTERM stops the core the way a
+  // quit does — releasing the state root — without the active-turn
+  // confirmation, and exits 130 or 143 once the core has stopped or
+  // after a bounded wait (app-shell-37, DR-093). Electron would
+  // otherwise end the process at once, leaving `.lock/` behind.
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      const status = signal === "SIGINT" ? 130 : 143;
+      if (quitting) {
+        app.exit(status);
+        return;
+      }
+      quitting = true;
+      const bound = setTimeout(() => app.exit(status), 10_000);
+      void shutdown().finally(() => {
+        clearTimeout(bound);
+        app.exit(status);
+      });
+    });
+  }
+
   app.on("second-instance", () => {
     if (window) {
       if (window.isMinimized()) window.restore();

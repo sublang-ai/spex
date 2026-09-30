@@ -6,6 +6,7 @@ export const CORE_NAME = "@sublang/spex-core";
 export * from "./protocol.js";
 export * from "./config.js";
 export { Store } from "./store.js";
+export { StateRootHeldError, StateRootLeaseError, acquireRootLease, type RootLease } from "./root-lease.js";
 export {
   SessionManager,
   CoreError,
