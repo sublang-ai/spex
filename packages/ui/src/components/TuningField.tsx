@@ -4,7 +4,8 @@
 // The one tri-state tuning control (DR-032): inherit what the tier
 // below resolves, take the provider's current default, or pin a value.
 // The role-binding editor inherits a player; a session's own tuning
-// inherits the configured value (DR-067). One grammar, two homes.
+// inherits the configured value (DR-067). One grammar, two homes; the
+// subagent model takes it as the model does (DR-093).
 
 import { useId } from "react";
 import type { AgentModelOption } from "@sublang/spex-core/protocol";
@@ -35,7 +36,7 @@ export function TuningField({
   additionalEfforts,
   testIdPrefix = "binding",
 }: {
-  label: "model" | "effort";
+  label: "model" | "subagent model" | "effort";
   models?: readonly AgentModelOption[];
   /** The model the runtime runs when none is configured, where it
    * reported one (settings-35). */
@@ -52,12 +53,18 @@ export function TuningField({
 }) {
   const labelId = useId();
   const mode = value === undefined ? "inherit" : value === false ? "provider" : "pin";
+  // A model's list serves both model fields; the test ids key on the
+  // field, hyphenated.
+  const picksModel = label !== "effort";
+  const key = label.replace(" ", "-");
   // `label` names the field it edits and keys its test ids; what the
   // reader reads is the word for that field.
   const fieldWord =
     label === "model"
       ? i18n._({ id: "model", comment: "the model field of a tuning editor" })
-      : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
+      : label === "subagent model"
+        ? i18n._({ id: "subagent model", comment: "the tuning editor's field for the model an agent's subagents run on" })
+        : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
   // An inherited model is named by the one display rule, so the value
   // the reader departs from reads as the model the runtime runs — one
   // left unset as the provider's default, with the model it runs by
@@ -65,18 +72,22 @@ export function TuningField({
   // (settings-38, DR-091); an effort is its adapter's own word, and one
   // left unset takes the same provider-default words, so no inherit
   // choice reads bare (run-view-138, DR-067).
+  // A subagent model left unset follows the runtime's own order, which
+  // names no one model, so it reads as the provider-default words alone.
   const inherited = label === "model"
     ? modelDisplayText(playerDefault === undefined
       ? providerDefaultDisplay(models ?? [], defaultModel)
       : modelDisplay(models ?? [], playerDefault))
-    : playerDefault ?? providerDefaultLabel();
+    : label === "subagent model" && playerDefault !== undefined
+      ? modelDisplayText(modelDisplay(models ?? [], playerDefault))
+      : playerDefault ?? providerDefaultLabel();
   return (
     // Not a <label>: the model field's list sits inside it, and a label
     // would pass every press on the list to the field's first control.
     <div className="flex flex-col gap-1 text-xs">
       <span id={labelId} className="text-neutral-500 dark:text-neutral-400">{fieldWord}</span>
       <select
-        data-testid={`${testIdPrefix}-${label}-mode`}
+        data-testid={`${testIdPrefix}-${key}-mode`}
         aria-labelledby={labelId}
         value={mode}
         onChange={(event) => {
@@ -101,9 +112,9 @@ export function TuningField({
         <option value="provider">{i18n._({ id: "the provider's default", comment: "tuning choice: take the provider's own current default" })}</option>
         <option value="pin">{i18n._({ id: "pin a value…", comment: "tuning choice: set an explicit value here" })}</option>
       </select>
-      {mode === "pin" && (label === "model" ? (
+      {mode === "pin" && (picksModel ? (
         <ModelField value={typeof value === "string" ? value : ""} models={models ?? []}
-          onChange={onChange} allowDefault={false} labelId={labelId} testId={`${testIdPrefix}-model-value`} />
+          onChange={onChange} allowDefault={false} labelId={labelId} testId={`${testIdPrefix}-${key}-value`} />
       ) : (
         <select data-testid={`${testIdPrefix}-effort-value`} aria-labelledby={labelId} value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.target.value)}

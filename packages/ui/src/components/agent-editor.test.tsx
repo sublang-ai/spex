@@ -27,6 +27,7 @@ vi.mock("../lib/agent-options.js", async (original) => {
   };
   return { ...actual, useAgentOptions: (adapter: string) => ({
     options: { adapter, effortValues: efforts[adapter], fastModeSupported: adapter === "claude",
+      subagentModelSupported: adapter === "claude",
       discovery: { status: "unavailable", reason: "Fixture has no model catalog" } },
     loading: false, refresh: vi.fn(),
   }) };
@@ -496,5 +497,64 @@ describe("DR-038: fast mode is offered where the runtime declares it", () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ adapter: "codex", fastMode: null }),
     );
+  });
+});
+
+describe("DR-093: a subagent model where the adapter serves one", () => {
+  const subagent = () => screen.getByTestId("agent-subagent-model") as HTMLInputElement;
+
+  test("the field shows for a supporting adapter and hides for the rest [settings-1]", () => {
+    renderEditor({ adapter: "claude" }, { readiness: READINESS });
+    expect(subagent().value).toBe("");
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
+  });
+
+  test("a choice pins the key, blanking a pinned one unsets it, and an untouched field emits none", () => {
+    const first = renderEditor({ adapter: "claude" });
+    fireEvent.change(subagent(), { target: { value: " claude-sonnet-5-5 " } });
+    fireEvent.click(first.save());
+    expect(first.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: "claude-sonnet-5-5" }));
+    cleanup();
+
+    const second = renderEditor({ adapter: "claude", subagentModel: "claude-sonnet-5-5" });
+    expect(subagent().value).toBe("claude-sonnet-5-5");
+    fireEvent.change(subagent(), { target: { value: "" } });
+    fireEvent.click(second.save());
+    expect(second.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: null }));
+    cleanup();
+
+    const third = renderEditor({ adapter: "claude" });
+    fireEvent.change(third.model(), { target: { value: "claude-opus-5" } });
+    fireEvent.click(third.save());
+    expect(third.onSave.mock.calls[0][0]).not.toHaveProperty("subagentModel");
+  });
+
+  test("a stale choice on an adapter that serves none stays clearable", () => {
+    const editor = renderEditor({ adapter: "codex", subagentModel: "gpt-6" });
+    expect(subagent().value).toBe("gpt-6");
+    fireEvent.change(subagent(), { target: { value: "" } });
+    expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
+    fireEvent.click(editor.save());
+    expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: null }));
+  });
+
+  test("switching the adapter resets it [settings-36]", () => {
+    const editor = renderEditor({ adapter: "claude", subagentModel: "claude-sonnet-5-5" });
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    expect(screen.queryByTestId("agent-subagent-model")).toBeNull();
+    fireEvent.click(editor.save());
+    expect(editor.onSave).toHaveBeenCalledWith(expect.objectContaining({ adapter: "codex", subagentModel: null }));
+  });
+
+  test("Same as Captain copies it", () => {
+    const editor = renderEditor(
+      { adapter: "claude" },
+      { captain: { adapter: "claude", model: "claude-opus-5-5", subagentModel: "claude-haiku-5" } },
+    );
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    expect(subagent().value).toBe("claude-haiku-5");
+    fireEvent.click(editor.save());
+    expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: "claude-haiku-5" }));
   });
 });

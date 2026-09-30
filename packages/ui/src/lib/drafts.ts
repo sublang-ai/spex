@@ -159,10 +159,12 @@ export function busyReason(draft: DraftInfo): string | undefined {
 }
 
 /** The agent block a new lane minted from a draft carries: the draft's
- * effective agent, less the fields a lane does not take from it. */
+ * effective agent, less the fields a lane does not take from it; the
+ * subagent model travels with the model (DR-093). */
 export function agentBlockOf(agent: AgentSummary): AgentBlockInput {
   const block: AgentBlockInput = { adapter: agent.adapter };
   if (agent.model) block.model = agent.model;
+  if (agent.subagentModel) block.subagentModel = agent.subagentModel;
   if (agent.effort) block.effort = agent.effort;
   block.permissions = agent.permissions?.mode
     ? { mode: agent.permissions.mode }

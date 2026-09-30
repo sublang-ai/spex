@@ -132,6 +132,15 @@ describe("new lanes", () => {
       effort: "high",
       permissions: { mode: "bypass" },
     });
+    // The subagent model travels with the model (DR-093).
+    expect(
+      agentBlockOf({ adapter: "claude", model: "claude-opus-5-5", subagentModel: "claude-sonnet-5-5" }),
+    ).toEqual({
+      adapter: "claude",
+      model: "claude-opus-5-5",
+      subagentModel: "claude-sonnet-5-5",
+      permissions: { mode: "auto" },
+    });
     expect(agentBlockOf({ adapter: "claude" })).toEqual({
       adapter: "claude",
       permissions: { mode: "auto" },

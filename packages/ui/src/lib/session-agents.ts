@@ -33,7 +33,7 @@ export interface SessionAgent {
   /** What the reader calls it: "Captain", or the player's own id. */
   name: string;
   adapter: AdapterName;
-  configured: { model?: string; effort?: string; fastMode?: boolean };
+  configured: { model?: string; subagentModel?: string; effort?: string; fastMode?: boolean };
   settings?: SessionAgentSettings;
   /** `<playbook>.<role>` for every binding that tunes this player of
    * its own accord — one session tuning runs them all alike. */
@@ -48,6 +48,8 @@ export interface SessionAgent {
  * field, else the configured one. A chip is a setting, not a receipt. */
 export function effectiveSettings(agent: SessionAgent): {
   model?: string;
+  /** Read by the editor alone: the chip never reads it (DR-093). */
+  subagentModel?: string;
   effort?: string;
   fastMode?: boolean;
 } {
@@ -55,6 +57,7 @@ export function effectiveSettings(agent: SessionAgent): {
     chosen === false ? providerDefaultReading() : chosen ?? configured;
   return {
     ...(pick(agent.settings?.model, agent.configured.model) !== undefined ? { model: pick(agent.settings?.model, agent.configured.model) } : {}),
+    ...(pick(agent.settings?.subagentModel, agent.configured.subagentModel) !== undefined ? { subagentModel: pick(agent.settings?.subagentModel, agent.configured.subagentModel) } : {}),
     ...(pick(agent.settings?.effort, agent.configured.effort) !== undefined ? { effort: pick(agent.settings?.effort, agent.configured.effort) } : {}),
     ...((agent.settings?.fastMode ?? agent.configured.fastMode) !== undefined ? { fastMode: agent.settings?.fastMode ?? agent.configured.fastMode } : {}),
   };
@@ -93,6 +96,7 @@ export function changedFields(settings: SessionAgentSettings | undefined): strin
   if (!settings) return [];
   const named: string[] = [];
   if (settings.model !== undefined) named.push("model");
+  if (settings.subagentModel !== undefined) named.push("subagent model");
   if (settings.effort !== undefined) named.push("effort");
   if (settings.fastMode !== undefined) named.push("fast mode");
   return named;
@@ -110,7 +114,7 @@ export function sessionAgents(
       Object.entries(playbook.roles)
         .filter(([, binding]) =>
           binding.playerId === playerId &&
-          (binding.model !== undefined || binding.effort !== undefined || binding.fastMode !== undefined))
+          (binding.model !== undefined || binding.subagentModel !== undefined || binding.effort !== undefined || binding.fastMode !== undefined))
         .map(([role]) => `${playbook.id}.${role}`));
   const agentOf = (id: string, name: string, block: ConfigSummary["captain"] | undefined, adapter: AdapterName, divergentRoles: string[]): SessionAgent => ({
     id,
@@ -118,6 +122,7 @@ export function sessionAgents(
     adapter,
     configured: {
       ...(block?.model !== undefined ? { model: block.model } : {}),
+      ...(block?.subagentModel !== undefined ? { subagentModel: block.subagentModel } : {}),
       ...(block?.effort !== undefined ? { effort: block.effort } : {}),
       ...(block?.fastMode !== undefined ? { fastMode: block.fastMode } : {}),
     },

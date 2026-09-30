@@ -16,6 +16,8 @@ import { getClient } from "../state/store.js";
 export type AgentPatch = {
   adapter?: string;
   model?: string | null;
+  /** The model the agent's subagents run on (DR-093); null unsets it. */
+  subagentModel?: string | null;
   effort?: string | null;
   /** Adapter-scoped fast mode (DR-038); null returns to the default. */
   fastMode?: boolean | null;
@@ -48,6 +50,7 @@ export function bindRole(
   next: {
     playerId: string;
     model?: string | false | null;
+    subagentModel?: string | false | null;
     effort?: string | false | null;
     fastMode?: boolean | null;
   },
@@ -55,7 +58,7 @@ export function bindRole(
   // An untouched tuning is absent, not `undefined`: the op means
   // "preserve the existing value" when a key does not appear; null clears it.
   const tuning = Object.fromEntries(
-    Object.entries({ model: next.model, effort: next.effort, fastMode: next.fastMode }).filter(
+    Object.entries({ model: next.model, subagentModel: next.subagentModel, effort: next.effort, fastMode: next.fastMode }).filter(
       ([, value]) => value !== undefined,
     ),
   );
@@ -70,9 +73,10 @@ export function bindRole(
   });
 }
 
-/** Fixed neutral default for a new role assignment (DR-019); the
- * "Same as Captain" action in the editor copies the Captain's
- * adapter, model, effort, and permissions instead. */
+/** Fixed neutral default for a new role assignment (DR-019), leaving
+ * the subagent model to the provider (DR-093); the "Same as Captain"
+ * action in the editor copies the Captain's adapter, model, subagent
+ * model, effort, fast mode, and permissions instead. */
 export const NEUTRAL_BLOCK: AgentBlockInput = {
   adapter: "claude",
   model: "claude-opus-5-5",

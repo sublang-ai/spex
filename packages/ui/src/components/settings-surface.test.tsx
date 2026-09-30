@@ -471,3 +471,25 @@ describe("settings-1, DR-038: fast mode is visible and switchable", () => {
     expect(within(reviewer).queryByTestId("agent-fast-mode")).toBeNull();
   });
 });
+
+describe("settings-1, DR-093: the Captain's subagent model", () => {
+  test("the editor offers it where the adapter serves one and writes it in the captain.set patch", async () => {
+    renderSettings();
+    // codex serves none, so its lane's editor offers no field.
+    const reviewer = screen.getByTestId("player-row-dev.reviewer");
+    fireEvent.click(screen.getByTestId("player-edit-dev.reviewer"));
+    expect(within(reviewer).queryByTestId("agent-subagent-model")).toBeNull();
+
+    const section = screen.getByTestId("captain-section");
+    fireEvent.click(within(section).getByTestId("captain-edit"));
+    fireEvent.change(within(section).getByTestId("agent-subagent-model"), {
+      target: { value: "claude-sonnet-5-5" },
+    });
+    fireEvent.click(within(section).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", expect.objectContaining({
+        op: expect.objectContaining({ kind: "captain.set", patch: expect.objectContaining({ subagentModel: "claude-sonnet-5-5" }) }),
+      })),
+    );
+  });
+});

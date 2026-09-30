@@ -227,6 +227,39 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
     );
   });
 
+  test("the gear pins the role's subagent model where the lane's adapter serves one (DR-093)", async () => {
+    renderLibrary();
+    // A codex lane is offered no subagent model.
+    fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
+    const reviewer = screen.getByTestId("binding-editor-reviewer");
+    await within(reviewer).findByText("Model list unavailable: Fixture");
+    expect(within(reviewer).queryByTestId("binding-subagent-model-mode")).toBeNull();
+    fireEvent.keyDown(reviewer, { key: "Escape" });
+
+    fireEvent.click(screen.getByTestId("role-bind-code-coder"));
+    const editor = screen.getByTestId("binding-editor-coder");
+    await within(editor).findByText("Model list unavailable: Fixture");
+    const mode = within(editor).getByTestId("binding-subagent-model-mode") as HTMLSelectElement;
+    // An unset player's subagent model inherits as the provider's words.
+    expect(mode.options[0]?.textContent).toBe("inherit the player (Provider default)");
+    fireEvent.change(mode, { target: { value: "pin" } });
+    fireEvent.change(within(editor).getByTestId("binding-subagent-model-value"), {
+      target: { value: "claude-haiku-5" },
+    });
+    fireEvent.click(within(editor).getByTestId("binding-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "playbook.role.bind",
+          playbookId: "code",
+          role: "coder",
+          playerId: "dev.coder",
+          subagentModel: "claude-haiku-5",
+        },
+      }),
+    );
+  });
+
   test("choosing a busy lane warns that the conversation is shared", () => {
     renderLibrary();
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));

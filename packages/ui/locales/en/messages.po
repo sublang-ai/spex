@@ -1601,8 +1601,8 @@ msgid "copies made while writing"
 msgstr "copies made while writing"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, fast mode, and permissions"
-msgstr "Copies the Captain's adapter, model, effort, fast mode, and permissions"
+msgid "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
+msgstr "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -2252,6 +2252,7 @@ msgstr "Filter projects"
 msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
 
+#. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
 msgid "finished"
@@ -4678,6 +4679,16 @@ msgstr "Stopped before it finished"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "Stopping…"
+
+#. the tuning editor's field for the model an agent's subagents run on
+#: src/components/TuningField.tsx
+msgid "subagent model"
+msgstr "subagent model"
+
+#. the field choosing the model an agent's subagents run on
+#: src/components/AgentEditor.tsx
+msgid "Subagent model"
+msgstr "Subagent model"
 
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one

@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The one shared agent editor (DR-019): adapter (with readiness
-// dots), model, adapter-scoped effort, a fast-mode switch where the
+// dots), model, a subagent model where the adapter serves one
+// (DR-093), adapter-scoped effort, a fast-mode switch where the
 // runtime declares it (DR-038), permission mode and writable paths.
 // It edits a local draft and emits a merge patch on save;
 // AgentEditorPopover wraps it for the at-hand flows (DR-007/009).
@@ -78,8 +79,9 @@ export interface AgentEditorProps {
   /** Adapter-keyed readiness entries; dots render when passed, and
    * the fast-mode switch shows for adapters declaring it (DR-038). */
   readiness?: ReadinessEntry[];
-  /** When set, offers "Same as Captain": copies the Captain's
-   * adapter, model, effort, fast mode, and permissions into the draft. */
+  /** When set, offers "Same as Captain": copies the Captain's adapter,
+   * model, subagent model, effort, fast mode, and permissions into the
+   * draft. */
   captain?: ChipAgent;
   saveLabel?: string;
   /** Creation forms save an untouched draft: the seeded block is
@@ -95,6 +97,7 @@ export function AgentEditor(props: AgentEditorProps) {
     knownAdapter(initial?.adapter),
   );
   const [model, setModel] = useState(initial?.model ?? "");
+  const [subagentModel, setSubagentModel] = useState(initial?.subagentModel ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
   const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
@@ -119,14 +122,19 @@ export function AgentEditor(props: AgentEditorProps) {
   const catalog = discovery.options?.discovery.status === "available" ? discovery.options.discovery : undefined;
   const models = catalog?.models ?? [];
   const modelLabelId = useId();
+  const subagentLabelId = useId();
   const supportsFastMode = tuning.fastModeSupported ?? readinessByAdapter.get(adapter)?.fastModeSupported ?? false;
   const invalidEffort = Boolean(discovery.options && effort && !tuning.efforts.includes(effort));
   const invalidFastMode = Boolean(fastMode && discovery.options && !supportsFastMode);
+  // Offered where the adapter serves one or a choice stands, so a stale
+  // one is always clearable — fast mode's rule (DR-093).
+  const supportsSubagentModel = tuning.subagentModelSupported ?? readinessByAdapter.get(adapter)?.subagentModelSupported ?? false;
 
   function pickAdapter(next: AdapterName): void {
     if (next === adapter) return;
     setAdapter(next);
     setModel("");
+    setSubagentModel("");
     setEffort("");
     setFastMode(false);
   }
@@ -134,6 +142,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const dirty =
     adapter !== knownAdapter(initial?.adapter) ||
     model !== (initial?.model ?? "") ||
+    subagentModel !== (initial?.subagentModel ?? "") ||
     effort !== (initial?.effort ?? "") ||
     fastMode !== (initial?.fastMode ?? false) ||
     mode !== initialMode(initial) ||
@@ -153,6 +162,9 @@ export function AgentEditor(props: AgentEditorProps) {
     const trimmedModel = model.trim();
     if (trimmedModel) patch.model = trimmedModel;
     else if (initial?.model) patch.model = null;
+    const trimmedSubagentModel = subagentModel.trim();
+    if (trimmedSubagentModel) patch.subagentModel = trimmedSubagentModel;
+    else if (initial?.subagentModel) patch.subagentModel = null;
     if (effort) patch.effort = effort;
     else if (initial?.effort) patch.effort = null;
     // Fast mode is off by default, so the switch writes true or unsets
@@ -253,6 +265,22 @@ export function AgentEditor(props: AgentEditorProps) {
             testId="agent-model"
           />
         </div>
+        {(supportsSubagentModel || subagentModel) ? (
+          <div className="col-span-2 flex min-w-0 flex-col gap-0.5">
+            <span id={subagentLabelId} className="text-xs text-neutral-500">{i18n._({ id: "Subagent model", comment: "the field choosing the model an agent's subagents run on" })}</span>
+            {/* The same list as the model; its empty value is the
+                runtime's own order of choosing, which names no one model,
+                so no default model is shown beside it. */}
+            <ModelField
+              key={adapter}
+              value={subagentModel}
+              models={models}
+              onChange={setSubagentModel}
+              labelId={subagentLabelId}
+              testId="agent-subagent-model"
+            />
+          </div>
+        ) : null}
         <label className="col-span-2 flex flex-col gap-0.5">
           <span className="text-xs text-neutral-500">{i18n._("Reasoning effort")}</span>
           <select
@@ -373,12 +401,13 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title={i18n._("Copies the Captain's adapter, model, effort, fast mode, and permissions")}
+            title={i18n._("Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
               setAdapter(nextAdapter);
               setModel(captain.model ?? "");
+              setSubagentModel(captain.subagentModel ?? "");
               setEffort(captain.effort ?? "");
               setFastMode(Boolean(captain.fastMode));
               setMode(initialMode(captain));
