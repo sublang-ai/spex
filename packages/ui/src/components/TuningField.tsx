@@ -9,7 +9,7 @@
 import { useId } from "react";
 import type { AgentModelOption } from "@sublang/spex-core/protocol";
 
-import { modelDisplay, modelDisplayText } from "../lib/agent-options.js";
+import { modelDisplay, modelDisplayText, providerDefaultDisplay } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 
@@ -25,12 +25,16 @@ export function TuningField({
   }),
   onChange,
   models,
+  defaultModel,
   efforts,
   additionalEfforts,
   testIdPrefix = "binding",
 }: {
   label: "model" | "effort";
   models?: readonly AgentModelOption[];
+  /** The model the runtime runs when none is configured, where it
+   * reported one (settings-35). */
+  defaultModel?: string;
   efforts?: readonly string[];
   additionalEfforts?: readonly string[];
   value: string | false | undefined;
@@ -50,13 +54,15 @@ export function TuningField({
       ? i18n._({ id: "model", comment: "the model field of a tuning editor" })
       : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
   // An inherited model is named by the one display rule, so the value
-  // the reader departs from reads as the model the runtime runs
+  // the reader departs from reads as the model the runtime runs — one
+  // left unset as the provider's default, with the model it runs by
+  // default where the runtime reports one, as the model field reads it
   // (settings-38, DR-091); an effort is its adapter's own word.
-  const inherited = playerDefault === undefined
-    ? undefined
-    : label === "model"
-      ? modelDisplayText(modelDisplay(models ?? [], playerDefault))
-      : playerDefault;
+  const inherited = label === "model"
+    ? modelDisplayText(playerDefault === undefined
+      ? providerDefaultDisplay(models ?? [], defaultModel)
+      : modelDisplay(models ?? [], playerDefault))
+    : playerDefault;
   return (
     // Not a <label>: the model field's list sits inside it, and a label
     // would pass every press on the list to the field's first control.

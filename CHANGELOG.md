@@ -332,10 +332,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   claude-opus-5-5" rather than "Opus · opus" — and, where the runtime
   gives them, its own description and the model it runs when none is
   set. The editor gives the field its full width, and an inherited
-  model is named the same way. In a conversation, an agent's chip reads
-  the model its runtime reported for its latest call while the adapter
-  and model setting that call began under still stand, what is set kept
-  in its tooltip; a change of either shows at once, as before.
+  model — the provider's default included — is named the same way. In
+  a conversation, an agent's chip reads the model its runtime reported
+  for its latest call while the adapter and model setting that call
+  began under still stand, what is set kept in its tooltip; a change of
+  either shows at once, as before.
   Cligent 0.28 supplies the descriptions, the default model and the
   reported models, wherever the runtime reports them.
 - A new Spex home's starter configuration, a new player lane and a new

@@ -3595,7 +3595,7 @@ msgid "provider default"
 msgstr "提供方默认"
 
 #. model choice: let the provider pick its own default model
-#: src/components/ModelField.tsx
+#: src/lib/agent-options.ts
 msgid "Provider default"
 msgstr "提供方默认"
 

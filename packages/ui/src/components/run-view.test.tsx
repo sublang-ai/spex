@@ -53,7 +53,7 @@ import {
 import codeGraph from "../fixtures/machines/code.json";
 import reviewGraph from "../fixtures/machines/review.json";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
-import { currentLocale } from "../i18n.js";
+import { activateLanguage, currentLocale } from "../i18n.js";
 
 const SESSION: SessionInfo = {
   id: "s1",
@@ -3595,12 +3595,14 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     ],
   };
 
-  function mount(agentSettings?: SessionInfo["agentSettings"]) {
+  /** `defaultModel` is the model the runtime reports running when none
+   * is configured, where the catalog reports one. */
+  function mount(agentSettings?: SessionInfo["agentSettings"], defaultModel?: string) {
     const previous = useAppStore.getState();
     const command = vi.fn(async (name: string) =>
       name === "agent.options"
         ? { adapter: "claude", effortValues: ["low", "high", "max"], fastModeSupported: true,
-            discovery: { status: "available", models: [
+            discovery: { status: "available", ...(defaultModel ? { defaultModel } : {}), models: [
               { id: "claude-opus", name: "Opus" },
               { id: "claude-test", name: "Test", resolvedModel: "claude-test-5-5" },
             ] } }
@@ -3707,6 +3709,41 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     // its name and the model it resolves to (run-view-138, DR-091).
     await waitFor(() => expect(mode.options[0]?.textContent).toBe("from Settings (Test · claude-test-5-5)"));
     restore();
+  });
+
+  test.each([
+    { defaultModel: "claude-test", reads: "from Settings (Provider default · Test · claude-test-5-5)" },
+    { defaultModel: "opus[1m]", reads: "from Settings (Provider default · opus[1m])" },
+    { defaultModel: undefined, reads: "from Settings (Provider default)" },
+  ])("an unset configured model is inherited as the provider's default ($defaultModel)", async ({ defaultModel, reads }) => {
+    // The reviewer's block sets no model: it runs the provider's default.
+    const { restore } = mount(undefined, defaultModel);
+    fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
+    const editor = await screen.findByTestId("agent-settings-dev.reviewer");
+    await waitFor(() => expect(within(editor).queryByText("Loading model options…")).toBeNull());
+    const mode = within(editor).getByTestId("agent-dev.reviewer-model-mode") as HTMLSelectElement;
+    // Named as the model field names its empty value, never bare: the
+    // words, then the model the runtime runs by default where the
+    // catalog reports one, by the same rule (run-view-138, settings-38).
+    expect(mode.options[0]?.textContent).toBe(reads);
+    restore();
+  });
+
+  test("the inherited provider's default reads in the reader's language", async () => {
+    // A requirement on a phrase holds in each offered language
+    // (localization-1): the words are the catalog's, the model the
+    // runtime's own.
+    activateLanguage("zh");
+    const { restore } = mount(undefined, "claude-test");
+    try {
+      fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
+      const editor = await screen.findByTestId("agent-settings-dev.reviewer");
+      const mode = within(editor).getByTestId("agent-dev.reviewer-model-mode") as HTMLSelectElement;
+      await waitFor(() => expect(mode.options[0]?.textContent).toBe("取自设置 (提供方默认 · Test · claude-test-5-5)"));
+    } finally {
+      restore();
+      activateLanguage("en");
+    }
   });
 
   test("Use default returns the whole agent, and read-only reads only", async () => {

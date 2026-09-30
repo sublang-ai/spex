@@ -21,7 +21,8 @@ import type { AgentModelOption } from "@sublang/spex-core/protocol";
 import {
   findModel,
   modelDisplay,
-  modelDisplayText,
+  providerDefaultDisplay,
+  providerDefaultLabel,
 } from "../lib/agent-options.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import { i18n } from "../i18n.js";
@@ -48,12 +49,8 @@ interface Choice {
   detail?: string;
 }
 
-/** Texts read on each render, never at module load, so the words
+/** A text read on each render, never at module load, so the words
  * follow the reader's language (localization-4). */
-function providerDefaultLabel(): string {
-  return i18n._({ id: "Provider default", comment: "model choice: let the provider pick its own default model" });
-}
-
 function customLabel(): string {
   return i18n._({ id: "Custom model…", comment: "model choice: type a model id by hand" });
 }
@@ -113,14 +110,14 @@ export function ModelField({
     if (models.length === 0) setOpen(false);
   }, [models.length]);
 
-  const defaultText = defaultModel ? modelDisplayText(modelDisplay(models, defaultModel)) : undefined;
+  const providerDefault = providerDefaultDisplay(models, defaultModel);
   const choices: Choice[] = [];
   if (allowDefault) {
     choices.push({
       key: "provider-default",
       value: "",
-      line: { text: providerDefaultLabel() },
-      ...(defaultText !== undefined ? { detail: defaultText } : {}),
+      line: { text: providerDefault.name },
+      ...(providerDefault.specific !== undefined ? { detail: providerDefault.specific } : {}),
     });
   }
   // A canonical pin recognized through an alias's resolution is its own
@@ -148,7 +145,7 @@ export function ModelField({
         : `resolved:${value}`;
   const chosenIndex = Math.max(0, choices.findIndex((choice) => choice.key === chosenKey));
   const shown: Line = chosenKey === "provider-default"
-    ? { text: providerDefaultLabel(), ...(defaultText !== undefined ? { muted: defaultText } : {}) }
+    ? { text: providerDefault.name, ...(providerDefault.specific !== undefined ? { muted: providerDefault.specific } : {}) }
     : choices[chosenIndex]?.line ?? { text: value };
 
   function openList(): void {
