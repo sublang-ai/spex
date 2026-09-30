@@ -600,7 +600,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster | a top-level `players` map of player id to inline agent block; a scalar adapter id normalizes to a bare-adapter block; an id outside `^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`, or the reserved `captain`, is refused |
 | Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`subagentModel`/`effort`/`fastMode`; a role left unbound, or bound to an absent player, is refused naming it |
 | Binding keys | `adapter`, `permissions`, `instruction` and `workspace` inside a binding are refused: they belong to the player's envelope |
-| Tuning | an omitted `model`/`subagentModel`/`effort` inherits the player's, `false` selects the provider's current default, and a string pins it; the composed selection is complete on every call; a `subagentModel` is accepted only where Cligent serves one for the player's adapter, refused in Cligent's own words otherwise ([DR-093](../decisions/093-a-players-subagent-model.md)) |
+| Tuning | an omitted `model`/`subagentModel`/`effort`/`fastMode` inherits the player's; for the first three, `false` selects the provider's current default and a string pins it, while a `fastMode` boolean is a literal request; the composed selection is complete on every call; a `subagentModel` is accepted only where Cligent serves one for the player's adapter, refused in Cligent's own words otherwise ([DR-093](../decisions/093-a-players-subagent-model.md)) |
 | Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
@@ -710,14 +710,15 @@ Where a live session's runtime fails its disposal, the test suite shall request 
 
 #### core-service-101
 
-Where two sessions of one project share a player and the config pins that player's model and effort, when the test suite tunes that player and the Captain in the first session over the protocol and opens both sessions in turn, the test suite shall assert that a session's tuning reaches its own runtime and nothing else ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+Where two sessions of one project share a player and the config pins that player's model, effort and fast mode, when the test suite tunes that player and the Captain in the first session over the protocol and opens both sessions in turn, the test suite shall assert that a session's tuning reaches its own runtime and nothing else ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
 
 - the first session's projection carries the tuned values at the Captain, at the player's block, and at every role binding naming that player [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
-- the second session's projection carries the config's values at all three [[core-service-92](#core-service-92)];
+- the second session's projection carries the config's values at all three [[core-service-92](#core-service-92)], the role binding setting no fast mode carrying its player's [[core-service-16](#core-service-16)];
 - the shared config file's bytes are identical before and after [[core-service-100](#core-service-100)];
 - clearing the tuning returns the first session's projection to the config's values, and deleting the session leaves no tuning behind [[core-service-100](#core-service-100)];
 - a value the player's adapter cannot enforce is refused with the session's tuning unchanged [[core-service-100](#core-service-100)];
-- the player's subagent model, tuned alike, reaches the same three sites and is refused on a player whose adapter Cligent serves none for [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)].
+- the player's subagent model, tuned alike, reaches the same three sites and is refused on a player whose adapter Cligent serves none for [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
+- once the config moves that player to such an adapter, continuing the first session tuned with a subagent model is refused naming the adapter's change and offering a new session, not naming the tuning [[core-service-92](#core-service-92)].
 
 ### Shutdown Coverage
 
