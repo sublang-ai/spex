@@ -33,7 +33,7 @@ When the user toggles a playbook's enabled state, the Library shall persist the 
 
 #### playbook-library-4
 
-When the user edits a role's binding, the Library shall write which session player answers that role together with that role's own model, effort, and fast mode ([DR-032](../decisions/032-session-players.md)), and shall reject an edit the shared-config write path refuses, naming the affected role:
+When the user edits a role's binding, the Library shall write which session player answers that role together with that role's own model, subagent model, effort, and fast mode ([DR-032](../decisions/032-session-players.md), [DR-093](../decisions/093-a-players-subagent-model.md)), and shall reject an edit the shared-config write path refuses, naming the affected role:
 
 - The players offered are the shared config's roster [[settings-26](settings.md#settings-26)]; the editor mints none and offers no adapter or permissions, which belong to the player's envelope.
 - Model and effort are inherit-the-player, the provider's current default, or a pinned value, written as omission, `false`, and the value respectively; the inherit choice names the player's value, a model by the display rule [[settings-38](settings.md#settings-38)], one the player leaves unset as the provider's default ([DR-091](../decisions/091-models-named-by-the-runtime.md)), and an unset effort by the same "Provider default" words; pinned values use the player's runtime model and effort choices [[settings-34](settings.md#settings-34)], a model through the model field [[settings-39](settings.md#settings-39)].
@@ -400,7 +400,7 @@ When a draft turn starts, the conversation runner shall run the draft's agent bl
 
 | Option | Value |
 | --- | --- |
-| model, effort, fastMode | the block's |
+| model, subagentModel, effort, fastMode | the block's |
 | cwd | the draft directory `<library-root>/<id>/` [[playbook-library-12](#playbook-library-12)] |
 | permissions | `{ mode: "auto" }` — the block's own policy and `writablePaths` dropped |
 | allowedTools, disallowedTools, maxTurns | absent |
@@ -553,7 +553,7 @@ When each installed built-in playbook's artifacts are requested, the test suite 
 
 #### playbook-library-39
 
-Where a configured playbook binds two roles, one to a player another playbook also names, the test suite shall assert the Library prints each role's bound player with what that binding effectively runs [[playbook-library-1](#playbook-library-1)], marks the shared role and names the other position holding it [[playbook-library-38](#playbook-library-38)], and leaves the unshared role unmarked; and that rebinding through the editor offers exactly the config's roster, writes the chosen player with pinned effort and inherit/on/off fast mode while preserving untouched tuning and comments, checks effective inherited tuning against known model support, names in its inherit choice the player's model by the display rule and a player's unset one as the provider's default followed by the catalog's default model where it reports one, names a player's unset effort in the effort's inherit choice by the "Provider default" words, keeps a cleared pin in pin mode with an inline error and no write, and surfaces a refusal inline while keeping the editor open [[playbook-library-4](#playbook-library-4)]; and that the editor opens with focus inside and closes on Escape, on an outside click, and on Cancel with focus back on the role's control [[playbook-library-4](#playbook-library-4)].
+Where a configured playbook binds two roles, one to a player another playbook also names, the test suite shall assert the Library prints each role's bound player with what that binding effectively runs [[playbook-library-1](#playbook-library-1)], marks the shared role and names the other position holding it [[playbook-library-38](#playbook-library-38)], and leaves the unshared role unmarked; and that rebinding through the editor offers exactly the config's roster, writes the chosen player with pinned effort, a pinned subagent model and inherit/on/off fast mode while preserving untouched tuning and comments, checks effective inherited tuning against known model support, names in its inherit choice the player's model by the display rule and a player's unset one as the provider's default followed by the catalog's default model where it reports one, names a player's unset effort in the effort's inherit choice by the "Provider default" words, keeps a cleared pin in pin mode with an inline error and no write, and surfaces a refusal inline while keeping the editor open [[playbook-library-4](#playbook-library-4)]; and that the editor opens with focus inside and closes on Escape, on an outside click, and on Cancel with focus back on the role's control [[playbook-library-4](#playbook-library-4)].
 
 #### playbook-library-40
 

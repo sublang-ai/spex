@@ -96,7 +96,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 | Case | Outcome |
 | --- | --- |
 | Same structure, same tuning | the runtime opens on the stored projection |
-| Same structure, changed model, effort, or fast mode | the runtime opens on the new projection, applied from the next call |
+| Same structure, changed model, subagent model, effort, or fast mode | the runtime opens on the new projection, applied from the next call |
 | A stored playbook disabled, or changed in its source, command, options, or a binding's player; the Captain's or a stored player's adapter, instruction, or permissions changed; a stored player gone | refused `invalid_config` naming each changed field and offering a new session, the runtime never opened |
 
 - a playbook or player the session never had is left out of the projection and changes nothing;
@@ -105,7 +105,7 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 
 #### core-service-100
 
-When a client sends `session.agent.set` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's own agent settings [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md): the same act as the configuration's own agent edits, at a different scope):
+When a client sends `session.agent.set` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, subagent model, effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's own agent settings [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md): the same act as the configuration's own agent edits, at a different scope):
 
 | The field's value is | The agent runs |
 | --- | --- |
@@ -114,7 +114,7 @@ When a client sends `session.agent.set` naming a session, one of its agents — 
 | `null` | the configured value — the session's tuning of that field is cleared |
 | absent | what the session's tuning already held for it |
 
-- validation composes the projection and applies the shared execution validator's own adapter-scoped rules, so a model, effort, or fast mode the agent's adapter cannot enforce is refused `invalid_config` naming it, with nothing written;
+- validation composes the projection and applies the shared execution validator's own adapter-scoped rules, so a model, subagent model, effort, or fast mode the agent's adapter cannot enforce is refused `invalid_config` naming it, with nothing written;
 - an unknown session, or an agent outside the session's stored members, is refused `invalid_request` naming it;
 - runtime discovery narrows a client's choices [[settings-34](settings.md#settings-34)] and gates no save here, so tuning stays available while discovery is unavailable ([DR-052](../decisions/052-runtime-model-options.md));
 - a session whose tuning holds nothing carries none, and deleting a session drops its tuning with the rest of its per-session state [[core-service-70](#core-service-70)].
@@ -600,7 +600,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster | a top-level `players` map of player id to inline agent block; a scalar adapter id normalizes to a bare-adapter block; an id outside `^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`, or the reserved `captain`, is refused |
 | Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`effort`; a role left unbound, or bound to an absent player, is refused naming it |
 | Binding keys | `adapter`, `permissions`, `instruction` and `workspace` inside a binding are refused: they belong to the player's envelope |
-| Tuning | an omitted `model`/`effort` inherits the player's, `false` selects the provider's current default, and a string pins it; the composed selection is complete on every call |
+| Tuning | an omitted `model`/`subagentModel`/`effort` inherits the player's, `false` selects the provider's current default, and a string pins it; the composed selection is complete on every call; a `subagentModel` is accepted only where Cligent serves one for the player's adapter, refused in Cligent's own words otherwise ([DR-093](../decisions/093-a-players-subagent-model.md)) |
 | Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |

@@ -21,6 +21,7 @@ Cites [DR-052](052-runtime-model-options.md) for where the model, effort, and fa
 Amended by [DR-068](068-an-agents-settings-where-the-agent-is.md) in §"Where it is shown and changed" alone: one agent's control opens that agent's own settings, there is no session-wide panel and no count, and the act carries no name of its own.
 The scope, the precedence, the storage, the three application sites, the discovery-free validation, and §"A chip is a setting, not a receipt" stand as written.
 
+Amended by [DR-093](093-a-players-subagent-model.md) in §"Why this is affordable at all" and §"The scope is one session and one agent": the runtime erases a fourth tuning field, the subagent model, which a session's own tuning may hold and the three application sites carry.
 Amended by [DR-091](091-models-named-by-the-runtime.md) in §"A chip is a setting, not a receipt" alone: while an agent still runs on the adapter and model setting its latest reporting call began under, its chip's model reads what the runtime reported for that call, and a choice still shows the moment it is taken.
 
 ## Context

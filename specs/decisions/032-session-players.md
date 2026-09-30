@@ -13,6 +13,7 @@ Replaces [DR-003](003-runtime-reuse.md)'s pane roster: panes are player lanes, n
 Amended by [DR-052](052-runtime-model-options.md): role editors use runtime choices and expose fast-mode inheritance.
 
 Amended by [DR-067](067-tuning-for-one-conversation.md): the two tuning tiers below become three, with a session's own tuning above the player and the binding both.
+Amended by [DR-093](093-a-players-subagent-model.md): a role binding's tuning is four fields — model, subagent model, effort and fast mode — in the same tri-state.
 The tri-state encoding, the player/binding ownership split, and the editor fork are used there unchanged.
 
 ## Context
