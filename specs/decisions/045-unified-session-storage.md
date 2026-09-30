@@ -9,6 +9,7 @@ Accepted (2026-09-05).
 Amended by [DR-047](047-explicit-session-recovery.md) for desktop uncertain-turn recovery.
 Amended by [DR-050](050-shared-storage-cutover.md) for default-store discovery and damage isolation.
 Amended by [DR-057](057-space-surface.md): the app syncs one shared `main` under the running core's lease between turns; per-device branches and stopped writers remain the command-line path.
+Extended by [DR-093](093-the-root-lease-names-the-machine.md): the storage Git tool takes the root lease by the core's rule and recovers a dead owner of this machine.
 Amends:
 
 - [DR-036](036-file-state-store.md): storage ownership, default locations, local data and Git synchronization.

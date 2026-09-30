@@ -16,6 +16,22 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- The root lease names the machine ([DR-093](specs/decisions/093-the-root-lease-names-the-machine.md)).
+  The core and the storage Git tool record Playbook's machine identity
+  in the home's `.lock/owner.json` instead of the host name the network
+  renames, so a renamed Mac still reclaims its own dead lease; an owner
+  from another machine is still never broken, and a legacy record left
+  by an older writer is reclaimed only under the old same-host rule.
+  Every retirement — a dead owner's or a normal release — moves the lock
+  to `.lock.retired/<token>/` and keeps it, so a delayed reclaimer can no
+  longer delete a successor's lease; only `ESRCH` proves an owner dead;
+  a mutating storage command reclaims a dead local owner instead of
+  refusing every existing lock; and `Ctrl+C` in `npm start` stops the
+  core and releases the home. **Upgrade together:** stop every Playbook
+  CLI and Spex shell sharing the home before the first new writer runs,
+  after the home snapshot; an older binary reads the new lock as a
+  foreign host's and refuses it.
+
 - The interface speaks your language ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md)).
   Settings offers System, English and 简体中文, one choice per Spex home
   that reaches every page of it on both shells and the desktop's own
