@@ -3731,15 +3731,15 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
 
   test("the inherited provider's default reads in the reader's language", async () => {
     // A requirement on a phrase holds in each offered language
-    // (localization-1): the words are the catalog's, the model the
-    // runtime's own.
+    // (localization-1): the words and their brackets are the catalog's,
+    // the model the runtime's own.
     activateLanguage("zh");
     const { restore } = mount(undefined, "claude-test");
     try {
       fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
       const editor = await screen.findByTestId("agent-settings-dev.reviewer");
       const mode = within(editor).getByTestId("agent-dev.reviewer-model-mode") as HTMLSelectElement;
-      await waitFor(() => expect(mode.options[0]?.textContent).toBe("取自设置 (提供方默认 · Test · claude-test-5-5)"));
+      await waitFor(() => expect(mode.options[0]?.textContent).toBe("取自设置（提供方默认 · Test · claude-test-5-5）"));
     } finally {
       restore();
       activateLanguage("en");

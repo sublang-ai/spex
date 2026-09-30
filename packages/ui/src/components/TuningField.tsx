@@ -81,7 +81,15 @@ export function TuningField({
         className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
       >
         <option value="inherit">
-          {inheritLabel}{inherited ? ` (${inherited})` : ""}
+          {/* The value in its brackets is a catalog message, so each
+              language sets them as its own text does. */}
+          {inherited
+            ? i18n._({
+                id: "{choice} ({value})",
+                comment: "an inherit choice, then the value it inherits: a model, an effort, or the provider-default words",
+                values: { choice: inheritLabel, value: inherited },
+              })
+            : inheritLabel}
         </option>
         <option value="provider">{i18n._({ id: "the provider's default", comment: "tuning choice: take the provider's own current default" })}</option>
         <option value="pin">{i18n._({ id: "pin a value…", comment: "tuning choice: set an explicit value here" })}</option>

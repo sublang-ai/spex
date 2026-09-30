@@ -121,6 +121,11 @@ msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, ot
 msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, other {# 项}}"
 
+#. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
+#: src/components/TuningField.tsx
+msgid "{choice} ({value})"
+msgstr "{choice}（{value}）"
+
 #: src/components/SpaceSync.tsx
 msgid "{chosen} of {total} chosen"
 msgstr "已选 {chosen}/{total}"

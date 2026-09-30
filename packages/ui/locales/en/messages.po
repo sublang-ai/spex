@@ -121,6 +121,11 @@ msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural
 msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, one {# entry} other {# entries}}"
 
+#. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
+#: src/components/TuningField.tsx
+msgid "{choice} ({value})"
+msgstr "{choice} ({value})"
+
 #: src/components/SpaceSync.tsx
 msgid "{chosen} of {total} chosen"
 msgstr "{chosen} of {total} chosen"
