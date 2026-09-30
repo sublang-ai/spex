@@ -510,7 +510,7 @@ test.each([
 test.each([
   { adapter: "claude" as const, reads: "inherit the player (Provider default · Sonnet · claude-sonnet-5)" },
   { adapter: "codex" as const, reads: "inherit the player (Provider default)" },
-])("playbook-library-39: the inherit choice names a $adapter player's provider default as the model field does", async ({ adapter, reads }) => {
+])("playbook-library-39: the inherit choices name a $adapter player's unset model and effort as the provider's default", async ({ adapter, reads }) => {
   // Claude's catalog reports the model it runs by default; Codex's
   // reports none, so its provider default is named by the words alone.
   useAppStore.setState({ loadAgentOptions: catalogs("sonnet") });
@@ -520,6 +520,9 @@ test.each([
   await ready();
   const inherit = (screen.getByTestId("binding-model-mode") as HTMLSelectElement).options[0];
   expect(inherit.textContent).toBe(reads);
+  // An unset effort takes the same words: no inherit choice reads bare.
+  const effort = (screen.getByTestId("binding-effort-mode") as HTMLSelectElement).options[0];
+  expect(effort.textContent).toBe("inherit the player (Provider default)");
 });
 
 test("settings-36: a switched adapter's field starts over on the provider default", async () => {

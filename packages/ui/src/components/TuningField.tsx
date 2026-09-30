@@ -9,7 +9,12 @@
 import { useId } from "react";
 import type { AgentModelOption } from "@sublang/spex-core/protocol";
 
-import { modelDisplay, modelDisplayText, providerDefaultDisplay } from "../lib/agent-options.js";
+import {
+  modelDisplay,
+  modelDisplayText,
+  providerDefaultDisplay,
+  providerDefaultLabel,
+} from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 
@@ -57,12 +62,14 @@ export function TuningField({
   // the reader departs from reads as the model the runtime runs — one
   // left unset as the provider's default, with the model it runs by
   // default where the runtime reports one, as the model field reads it
-  // (settings-38, DR-091); an effort is its adapter's own word.
+  // (settings-38, DR-091); an effort is its adapter's own word, and one
+  // left unset takes the same provider-default words, so no inherit
+  // choice reads bare (run-view-138, DR-067).
   const inherited = label === "model"
     ? modelDisplayText(playerDefault === undefined
       ? providerDefaultDisplay(models ?? [], defaultModel)
       : modelDisplay(models ?? [], playerDefault))
-    : playerDefault;
+    : playerDefault ?? providerDefaultLabel();
   return (
     // Not a <label>: the model field's list sits inside it, and a label
     // would pass every press on the list to the field's first control.

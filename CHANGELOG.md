@@ -80,9 +80,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   The chip in the Captain pane's header, and in each player pane's
   header, opens that agent's own model, effort and fast mode for this
   conversation only; Settings and `playbook.config.yaml` never change.
-  Each field offers the configured value, the provider's default or a
-  pinned value, and one control returns the agent to its configured
-  values. A choice applies from your next message — a running turn keeps
+  Each field offers the configured value by name — "Provider default"
+  where Settings sets none — the provider's default, or a pinned value,
+  and one control returns the agent to its configured values. A choice applies from your next message — a running turn keeps
   what it started with — and outranks a role binding's pin, the editor
   naming the roles it also sets. The chip reads the new setting at once.
   The choice stays on this device and is removed with the session; the

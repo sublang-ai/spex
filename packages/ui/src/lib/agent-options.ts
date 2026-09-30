@@ -71,10 +71,11 @@ export function modelDisplayText(display: ModelDisplay): string {
   return display.specific === undefined ? display.name : `${display.name} · ${display.specific}`;
 }
 
-/** The words for the empty value, read on each render, never at module
- * load, so they follow the reader's language (localization-4). */
+/** The words for the empty value — a model's, and an inherited
+ * effort's — read on each render, never at module load, so they follow
+ * the reader's language (localization-4). */
 export function providerDefaultLabel(): string {
-  return i18n._({ id: "Provider default", comment: "model choice: let the provider pick its own default model" });
+  return i18n._({ id: "Provider default", comment: "a model or effort left to the provider's own default" });
 }
 
 /** How the empty value reads under the same rule (settings-38): the

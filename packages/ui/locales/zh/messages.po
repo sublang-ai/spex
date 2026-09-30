@@ -3599,7 +3599,7 @@ msgstr "拟定的注册信息"
 msgid "provider default"
 msgstr "提供方默认"
 
-#. model choice: let the provider pick its own default model
+#. a model or effort left to the provider's own default
 #: src/lib/agent-options.ts
 msgid "Provider default"
 msgstr "提供方默认"

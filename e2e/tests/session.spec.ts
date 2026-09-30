@@ -306,6 +306,10 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     // reads as itself.
     await expect(coder.getByTestId("agent-dev.coder-model-mode").locator("option").first())
       .toHaveText("from Settings (claude-opus-5-5)");
+    // An effort the configuration leaves unset takes the same
+    // provider-default words, never a bare "from Settings".
+    await expect(coder.getByTestId("agent-dev.coder-effort-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default)");
     await coder.getByTestId("agent-dev.coder-model-mode").selectOption("pin");
     // The pinned seed is listed through an alias, so a hand-typed id
     // goes through the list's custom entry.
@@ -323,6 +327,8 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
     // reports running by default, itself by the display rule.
     await expect(captain.getByTestId("agent-captain-model-mode").locator("option").first())
       .toHaveText("from Settings (Provider default · Opus · claude-opus-5-5)");
+    await expect(captain.getByTestId("agent-captain-effort-mode").locator("option").first())
+      .toHaveText("from Settings (Provider default)");
     await captain.getByTestId("agent-captain-model-mode").selectOption("pin");
     // Pinning from the provider's default seeds no model, so the typed
     // field stands open at once.

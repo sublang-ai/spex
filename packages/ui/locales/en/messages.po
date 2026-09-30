@@ -3599,7 +3599,7 @@ msgstr "Proposed registration"
 msgid "provider default"
 msgstr "provider default"
 
-#. model choice: let the provider pick its own default model
+#. a model or effort left to the provider's own default
 #: src/lib/agent-options.ts
 msgid "Provider default"
 msgstr "Provider default"

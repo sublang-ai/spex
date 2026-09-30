@@ -3729,6 +3729,23 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     restore();
   });
 
+  test("an unset configured effort is inherited as the provider's default", async () => {
+    const { restore } = mount();
+    // The Captain's effort is configured, and named as it is.
+    fireEvent.click(screen.getByTestId("agent-chip-captain"));
+    const captain = await screen.findByTestId("agent-settings-captain");
+    expect((within(captain).getByTestId("agent-captain-effort-mode") as HTMLSelectElement).options[0]?.textContent)
+      .toBe("from Settings (high)");
+    fireEvent.click(within(captain).getByRole("button", { name: "Cancel" }));
+    // The reviewer's block sets none: it reads the words the model
+    // field gives the provider's default, never bare (run-view-138).
+    fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
+    const reviewer = await screen.findByTestId("agent-settings-dev.reviewer");
+    expect((within(reviewer).getByTestId("agent-dev.reviewer-effort-mode") as HTMLSelectElement).options[0]?.textContent)
+      .toBe("from Settings (Provider default)");
+    restore();
+  });
+
   test("the inherited provider's default reads in the reader's language", async () => {
     // A requirement on a phrase holds in each offered language
     // (localization-1): the words and their brackets are the catalog's,
