@@ -489,6 +489,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   sideways with no keyboard stop, which axe reports as serious. The
   sheet is now a named stop, "Keyboard shortcuts", so the keyboard
   reaches what a pointer scrolls (run-view-50).
+- A project created from the palette told its coding agents to run
+  `spex lint`, a command the desktop install puts on no PATH, so a
+  coder's lint check failed with "command not found". The scaffolded
+  instruction now runs the linter through `npx @sublang/spex lint`.
 
 ### Security
 
