@@ -466,6 +466,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- Creating a project from the palette scaffolds with the app's own
+  CLI — the checkout's `packages/cli` on the app's own Node — instead
+  of fetching `@sublang/spex` from the npm registry through `npx`, so
+  Create works offline, pays no download and generates exactly what the
+  app ships ([DR-096](specs/decisions/096-the-app-supplies-the-scaffold.md)).
+  Only a checkout without a built CLI still runs the registry's, and a
+  failed scaffold names the command that ran.
 
 ### Security
 

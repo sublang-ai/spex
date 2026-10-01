@@ -10,6 +10,7 @@ Amends [DR-005](005-compilation-integration.md): the compiler is the app's own c
 Extends [DR-024](024-app-supplied-agent-runtimes.md): the compiler joins the runtimes both shells supply, for the reason the agent SDKs did.
 Amended by [DR-084](084-the-block-is-the-whole-compiler-agent.md) in the handoff alone: `--config` names an empty configuration when the block drives the compile, so what the block leaves unset is the adapter's default.
 Followed by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md), which bumps both shells to `@sublang/slc` `^0.12.0` under the explicit-bump rule below; nothing here changes.
+Extended by [DR-096](096-the-app-supplies-the-scaffold.md): the scaffold CLI joins what the shells supply, over the same module directories and executable.
 
 ## Context
 

@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { moduleDirectoriesAbove, suppliedCompiler } from "@sublang/spex-core";
+import { moduleDirectoriesAbove, suppliedCompiler, suppliedScaffold } from "@sublang/spex-core";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -34,4 +34,18 @@ test("the server declares the compiler beside the agent SDKs, and resolves it (s
     supplied.cli.endsWith(join("@sublang", "slc", "dist", "cli.js")),
     supplied.cli,
   );
+});
+
+test("the server resolves the checkout's own scaffold CLI on its own Node (server-shell-7)", () => {
+  const scaffold = suppliedScaffold({
+    execPath: process.execPath,
+    electron: false,
+    modulePaths: moduleDirectoriesAbove(import.meta.url),
+  });
+  assert.ok(scaffold, "the scaffold CLI resolves from the server's module tree");
+  assert.deepEqual(scaffold.scaffoldCommand, [
+    process.execPath,
+    join(packageRoot, "..", "..", "packages", "cli", "dist", "cli.js"),
+  ]);
+  assert.equal(scaffold.scaffoldEnv, undefined);
 });

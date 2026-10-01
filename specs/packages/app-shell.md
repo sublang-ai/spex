@@ -135,7 +135,7 @@ When the app starts, the shell shall capture the user's login-shell environment 
 
 #### app-shell-33
 
-The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)) and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], so compiles run on the app's own Node and find the compiler and the SDKs the app ships.
+The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)) and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that binary run as Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so compiles and scaffolds run on the app's own Node and find the compiler, the scaffold CLI and the SDKs the app ships.
 
 ### Packaging
 
@@ -226,7 +226,7 @@ Where an environment variable consulted by an adapter readiness check (for examp
 
 #### app-shell-34
 
-When the desktop's test suite reads the package manifest and resolves the compile toolchain with the desktop's Electron binary as the runtime over the module directories above the desktop's own module, the test suite shall assert that the three SDKs and the compiler are declared and that the resolved compiler is the app's own copy run on that binary [[app-shell-33](#app-shell-33)].
+When the desktop's test suite reads the package manifest and resolves the compile toolchain with the desktop's Electron binary as the runtime over the module directories above the desktop's own module, the test suite shall assert that the three SDKs and the compiler are declared, that the resolved compiler is the app's own copy run on that binary, and that the scaffold command resolved over those directories is the checkout's own `packages/cli` entry on that binary run as Node [[app-shell-33](#app-shell-33)].
 
 ### Source-Run Coverage
 

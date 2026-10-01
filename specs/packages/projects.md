@@ -33,11 +33,17 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
-3. generate the spex specs scaffold in it when the scaffold option is on, and generate no scaffold when it is off,
+3. generate the spex specs scaffold in it with the scaffold command [[projects-31](#projects-31)] when the scaffold option is on, and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, and
 5. register the project and make it the workspace's current project.
 
-- Any step failing: the palette reports the failure, does not register the project, and leaves already-created files on disk for inspection.
+- Any step failing: the palette reports the failure — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
+
+#### projects-31
+
+When a shell starts the core naming a scaffold command — the app's own copy of the scaffold CLI on the shell's own executable, with the variables that executable runs as Node under — the create flow shall generate the scaffold by running that command ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), and with no command named, the registry's `npx --yes @sublang/spex`:
+
+- Scaffold exiting non-zero: the failure names the command that ran and its output, and, for the registry's, that the app's own CLI was not supplied.
 
 #### projects-27
 
@@ -191,6 +197,14 @@ Where a temporary parent directory exists, when the create-project flow complete
 
 - Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
 - Scaffold option off: the directory, git repository, initial commit, and project card still result while no specs scaffold is generated [[projects-3](#projects-3)].
+
+#### projects-32
+
+Where the core starts with a scaffold command and its variables under a command runner that records what it is asked to run, when the test suite creates a project with the scaffold option on, the test suite shall assert the scaffold command's cases below:
+
+- Command exiting zero: the runner ran that command with `scaffold` and the project path appended, in the project directory, under those variables, and the project is registered [[projects-31](#projects-31)].
+- Command exiting non-zero: the refusal names that command and its output, and the project is not registered [[projects-31](#projects-31)].
+- No command named: the runner ran `npx --yes @sublang/spex`, and its failure names that command and that the app's own CLI was not supplied [[projects-31](#projects-31)].
 
 ### Forge Coverage
 

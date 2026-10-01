@@ -464,7 +464,14 @@ try {
   const serverHome = join(scratch, "home");
   const server = launch("npm", ["run", "start:server", "--", "--port=0"], {
     cwd: clone,
-    env: userEnv({ SPEX_HOME: serverHome, ...xdg }),
+    // The registry unreachable: a scaffold the shell did not supply
+    // would fetch @sublang/spex through npx and fail here, so the
+    // scaffolded Create below proves the clone's own CLI ran.
+    env: userEnv({
+      SPEX_HOME: serverHome,
+      ...xdg,
+      npm_config_registry: "http://127.0.0.1:9/",
+    }),
   });
   const url = await waitFor(
     () => {
@@ -639,6 +646,20 @@ try {
       `files=${tree.files.length} broken=${broken}`,
   );
   say(`academy: seeded, ${tree.files.length} packages, all parsed clean`);
+
+  // The scaffold is the clone's own packages/cli on the shell's Node
+  // (server-shell-7, projects-31): with the registry unreachable above,
+  // only the supplied CLI can have generated these specs.
+  const scaffolded = await core.command("project.create", {
+    path: join(scratch, "scaffolded"),
+    scaffold: true,
+  });
+  const scaffoldTree = await core.command("specs.get", { projectId: scaffolded.id });
+  assert(
+    scaffoldTree.present && !scaffoldTree.legacy,
+    `scaffolded tree unexpected: present=${scaffoldTree.present} legacy=${scaffoldTree.legacy}`,
+  );
+  say(`scaffold: ${join(clone, "packages", "cli", "dist", "cli.js")} generated ${scaffoldTree.files.length} files with the registry unreachable`);
 
   core.socket.close();
   const stopping = Date.now();

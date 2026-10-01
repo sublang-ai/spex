@@ -38,7 +38,7 @@ import {
   gzipSync,
 } from "node:zlib";
 
-import { CoreService, moduleDirectoriesAbove, type CoreServiceOptions } from "@sublang/spex-core";
+import { CoreService, moduleDirectoriesAbove, suppliedScaffold, type CoreServiceOptions } from "@sublang/spex-core";
 
 export interface ServerShellOptions {
   host: string;
@@ -456,6 +456,11 @@ export async function startServer(
     : createHttpServer(handler);
   mkdirSync(options.dataDir, { recursive: true });
   const legacy = options.legacyDb;
+  const runtime = {
+    execPath: process.execPath,
+    electron: false,
+    modulePaths: moduleDirectoriesAbove(import.meta.url),
+  };
   const service = await CoreService.start({
     httpServer: server,
     token: options.token,
@@ -464,11 +469,11 @@ export async function startServer(
     ...(options.configPath ? { configPath: options.configPath } : {}),
     // Compiles run on this shell's own Node, with the compiler and the
     // SDKs this package declares (server-shell-7, DR-081).
-    compileRuntime: {
-      execPath: process.execPath,
-      electron: false,
-      modulePaths: moduleDirectoriesAbove(import.meta.url),
-    },
+    compileRuntime: runtime,
+    // The scaffold runs the checkout's own CLI on that Node too
+    // (server-shell-7, projects-31); with none built, the create flow
+    // falls back to the registry's and names it.
+    ...(suppliedScaffold(runtime) ?? {}),
     ...(options.core ?? {}),
   });
   try {

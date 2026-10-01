@@ -194,6 +194,8 @@ async function startHarness(
     seedCommit?: boolean;
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
+    scaffoldCommand?: string[];
+    scaffoldEnv?: Record<string, string>;
     compileSpawner?: import("./compile.js").LineSpawner;
     adapterRuntime?: import("./service.js").CoreServiceOptions["adapterRuntime"];
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
@@ -244,6 +246,8 @@ async function startHarness(
     home: join(dir, "home"),
     watchConfig: false,
     ...(options.runCommand ? { runCommand: options.runCommand } : {}),
+    ...(options.scaffoldCommand ? { scaffoldCommand: options.scaffoldCommand } : {}),
+    ...(options.scaffoldEnv ? { scaffoldEnv: options.scaffoldEnv } : {}),
     ...(options.compileSpawner
       ? { compileSpawner: options.compileSpawner }
       : {}),
@@ -1082,6 +1086,82 @@ test("CORE-27: compile.abort cancels the run; the ◇ line closes progress", asy
 // ---------------------------------------------------------------------------
 // PROJ-16..19: registration validation, create flow, stubbed forge, removal
 // ---------------------------------------------------------------------------
+
+test("PROJ: the create flow scaffolds with the supplied command, else the registry's, named on failure (projects-31)", async () => {
+  const { defaultRunCommand } = await import("./forge.js");
+  type Call = { command: string; args: string[]; cwd?: string; env?: Record<string, string> };
+  const calls: Call[] = [];
+  let exitCode = 0;
+  const recorder: import("./forge.js").RunCommand = async (command, args, cwd, env) => {
+    if (command === "git") return defaultRunCommand(command, args, cwd, env);
+    calls.push({ command, args, cwd, env });
+    if (exitCode === 0) {
+      mkdirSync(join(args[args.length - 1], "specs"), { recursive: true });
+      writeFileSync(join(args[args.length - 1], "specs", "map.md"), "# map\n");
+    }
+    return { code: exitCode, stdout: "", stderr: exitCode ? `${command} refused` : "" };
+  };
+  const supplied = await startHarness(VALID_CONFIG, {
+    runCommand: recorder,
+    scaffoldCommand: ["/opt/app/electron", "/opt/app/packages/cli/dist/cli.js"],
+    scaffoldEnv: { ELECTRON_RUN_AS_NODE: "1" },
+  });
+  const client = new Client(supplied.service.port());
+  await client.open();
+
+  // The supplied command runs on its variables, in the project, with
+  // `scaffold <path>` appended, and the project registers.
+  const made = join(supplied.dir, "made");
+  const created = await client.expectOk("project.create", { path: made, scaffold: true });
+  assert.equal(created.path, made);
+  assert.deepEqual(calls, [
+    {
+      command: "/opt/app/electron",
+      args: ["/opt/app/packages/cli/dist/cli.js", "scaffold", made],
+      cwd: made,
+      env: { ELECTRON_RUN_AS_NODE: "1" },
+    },
+  ]);
+  assert.ok(existsSync(join(made, "specs", "map.md")));
+
+  // A failure names the command that ran, and registers nothing.
+  exitCode = 1;
+  const failed = await client.command("project.create", {
+    path: join(supplied.dir, "refused"),
+    scaffold: true,
+  });
+  assert.ok(!failed.ok);
+  assert.match(
+    failed.error.message,
+    /scaffold failed running \/opt\/app\/electron \/opt\/app\/packages\/cli\/dist\/cli\.js scaffold: \/opt\/app\/electron refused/,
+  );
+  assert.doesNotMatch(failed.error.message, /registry/);
+  const projects = await client.expectOk("project.list", {});
+  assert.deepEqual(projects.map((project: { path: string }) => project.path), [made]);
+  client.close();
+  await supplied.service.stop();
+
+  // No command named: the registry's runs, and its failure says so.
+  calls.length = 0;
+  const bare = await startHarness(VALID_CONFIG, { runCommand: recorder });
+  const bareClient = new Client(bare.service.port());
+  await bareClient.open();
+  const fallback = await bareClient.command("project.create", {
+    path: join(bare.dir, "fallback"),
+    scaffold: true,
+  });
+  assert.ok(!fallback.ok);
+  assert.deepEqual(calls.map((call) => [call.command, ...call.args.slice(0, 3)]), [
+    ["npx", "--yes", "@sublang/spex", "scaffold"],
+  ]);
+  assert.equal(calls[0].env, undefined);
+  assert.match(
+    fallback.error.message,
+    /scaffold failed running npx --yes @sublang\/spex scaffold \(the app's own scaffold CLI was not supplied, so the registry's ran\): npx refused/,
+  );
+  bareClient.close();
+  await bare.service.stop();
+});
 
 test("PROJ: work-tree validation, create flow, forge states, removal", async () => {
   const { defaultRunCommand } = await import("./forge.js");
