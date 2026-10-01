@@ -72,9 +72,9 @@ prints an agent prompt for the judgment work, including migration of a
 spex 0.x tree ([scaffold-11](specs/packages/scaffold.md#scaffold-11),
 [scaffold-26](specs/packages/scaffold.md#scaffold-26)).
 The instruction files the scaffold installs tell agents to run
-`spex lint`; `npx` does not put `spex` on `PATH`, and neither does a clone
-of this repository, so install it with `npm install -g @sublang/spex` or
-run `npx @sublang/spex lint`.
+`npx @sublang/spex lint`, or `spex lint` where the CLI is installed
+(`npm install -g @sublang/spex`)
+([scaffold-56](specs/packages/scaffold.md#scaffold-56)).
 
 **2. Develop through playbook workflows that keep the specs in sync.**
 Use the built-ins, typically `/decide` to record a decision and `/code` to
