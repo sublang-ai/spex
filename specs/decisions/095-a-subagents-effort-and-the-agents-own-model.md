@@ -26,7 +26,8 @@ The editors also wasted their width: a model on one full-width row and its effor
 
 ### "Same as agent" is the default, and reads as such
 
-The subagent-model field offers "Same as agent" first and by default — the configured omission, which Playbook resolves to the agent's own model — then the adapter's models and the custom entry, as the model field offers them.
+The subagent-model field offers "Same as agent" first and by default — the configured omission, which Playbook's launcher and this host's composition alike resolve to the agent's own model wherever Cligent serves a subagent model, by the launcher-parity rule of [DR-019](019-inline-agent-configuration.md) — then the adapter's models and the custom entry, as the model field offers them.
+A configured `false` is carried as an explicit Off through composition, so a subagent effort set beside it, at any tier, is refused in Cligent's words rather than switching delegation back on.
 A configured `false`, which switches delegation off, is shown as "Off" only while it stands, so it is always clearable, and is not otherwise offered.
 In a binding and in a session the inherit choice names the player's value, "Same as agent" where the player leaves it unset.
 
