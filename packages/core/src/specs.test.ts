@@ -17,6 +17,7 @@ import {
   readFileSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -27,6 +28,7 @@ import { WebSocket } from "ws";
 import {
   parseSpecFileText,
   parseSpecTree,
+  readRecordCommitTimes,
   readSpecFile,
   resolveSpecPath,
   specVersion,
@@ -569,6 +571,69 @@ test("spec-view-14: a record's status classifies by its leading word, verbatim k
   assert.equal(byId.get("DR-002")?.finished, "superseded");
 });
 
+test("spec-view-63: a tracked record's last change is its last commit; an untracked one keeps its mtime", async () => {
+  const dir = fixture({
+    "specs/intents/001-dated.md":
+      "# IR-001: Dated\n\n## Status\n\nDone (2026-03-04).\n",
+    "specs/intents/002-undated.md":
+      "# IR-002: Undated\n\n## Status\n\nDone.\n",
+  });
+  const git = (args: string[], env: Record<string, string> = {}): void => {
+    execFileSync("git", args, { cwd: dir, env: { ...process.env, ...env } });
+  };
+  git(["init", "-q", "-b", "main", "."]);
+  git(["config", "user.email", "t@example.com"]);
+  git(["config", "user.name", "t"]);
+  git(["config", "commit.gpgsign", "false"]);
+  git(["add", "-A"]);
+  const committed = "2026-01-15T10:00:00Z";
+  git(["commit", "-q", "-m", "records"], {
+    GIT_AUTHOR_DATE: committed,
+    GIT_COMMITTER_DATE: committed,
+  });
+  // A clone's checkout: every file's mtime reads "now", long after
+  // the commit that last touched it.
+  const now = new Date();
+  for (const name of ["001-dated.md", "002-undated.md"]) {
+    utimesSync(join(dir, "specs", "intents", name), now, now);
+  }
+  // A record written and never committed.
+  writeFileSync(
+    join(dir, "specs", "intents", "003-untracked.md"),
+    "# IR-003: Untracked\n\n## Status\n\nDone.\n",
+  );
+
+  const committedAt = await readRecordCommitTimes(dir);
+  const tree = parseSpecTree(dir, { committedAt });
+  const byId = new Map(tree.intents.map((record) => [record.id, record]));
+  const commitTime = Date.parse(committed);
+  assert.ok(commitTime < now.getTime() - 24 * 3600 * 1000, "the commit is old");
+  // The dated status line rides along verbatim for History to prefer.
+  assert.equal(byId.get("IR-001")?.status, "Done (2026-03-04).");
+  assert.equal(byId.get("IR-001")?.updatedAt, commitTime);
+  // mtime says now; Git says January — Git dates the record.
+  assert.equal(byId.get("IR-002")?.updatedAt, commitTime);
+  // Untracked: the file's own last change, newer than any commit.
+  const untracked = byId.get("IR-003")?.updatedAt ?? 0;
+  assert.equal(
+    untracked,
+    Math.round(statSync(join(dir, "specs", "intents", "003-untracked.md")).mtimeMs),
+  );
+  assert.ok(untracked > commitTime);
+
+  // Outside any work tree Git names nothing, and every record keeps
+  // its mtime.
+  const plain = fixture({
+    "specs/intents/001-x.md": "# IR-001: X\n\n## Status\n\nDone.\n",
+  });
+  const none = await readRecordCommitTimes(plain);
+  assert.equal(none.size, 0);
+  assert.equal(
+    parseSpecTree(plain, { committedAt: none }).intents[0]?.updatedAt,
+    Math.round(statSync(join(plain, "specs", "intents", "001-x.md")).mtimeMs),
+  );
+});
+
 test("duplicate record numbers are kept and noticed", () => {
   const dir = fixture({
     "specs/decisions/001-first.md": "# DR-001: First\n",
@@ -882,6 +947,26 @@ test("specs.get and specs.read serve over the protocol", async () => {
       "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne sentence.\n",
   });
   execFileSync("git", ["init", "-q", project]);
+  // One committed record, its commit older than the checkout, so the
+  // served tree proves specs.get dates a record by Git (spec-view-14).
+  mkdirSync(join(project, "specs", "intents"), { recursive: true });
+  writeFileSync(
+    join(project, "specs", "intents", "001-done.md"),
+    "# IR-001: Done\n\n## Status\n\nDone.\n",
+  );
+  const committed = "2026-02-01T00:00:00Z";
+  for (const args of [
+    ["config", "user.email", "t@example.com"],
+    ["config", "user.name", "t"],
+    ["config", "commit.gpgsign", "false"],
+    ["add", "-A"],
+  ]) {
+    execFileSync("git", args, { cwd: project });
+  }
+  execFileSync("git", ["commit", "-q", "-m", "record"], {
+    cwd: project,
+    env: { ...process.env, GIT_AUTHOR_DATE: committed, GIT_COMMITTER_DATE: committed },
+  });
   const service = await CoreService.start({
     token: "test",
     watchConfig: false,
@@ -944,6 +1029,8 @@ test("specs.get and specs.read serve over the protocol", async () => {
     assert.equal(state.legacy, false);
     assert.equal(state.files[0]?.key, "auth");
     assert.equal(state.files[0]?.basename, "auth");
+    assert.equal(state.intents[0]?.id, "IR-001");
+    assert.equal(state.intents[0]?.updatedAt, Date.parse(committed));
 
     const read = await call("specs.read", { projectId, path: "packages/auth.md" });
     assert.equal(read.ok, true);

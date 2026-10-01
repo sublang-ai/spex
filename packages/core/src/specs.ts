@@ -22,6 +22,7 @@ import {
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
+import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { i18n } from "./i18n.js";
 import type {
   SpecFileInfo,
@@ -480,9 +481,10 @@ function parseIntentRecords(
   specsDir: string,
   baseReal: string,
   notices: string[],
+  committedAt: ReadonlyMap<string, number>,
 ): SpecRecordInfo[] {
-  const current = parseRecords(specsDir, "intents", baseReal, notices);
-  const legacy = parseRecords(specsDir, "iterations", baseReal, notices);
+  const current = parseRecords(specsDir, "intents", baseReal, notices, committedAt);
+  const legacy = parseRecords(specsDir, "iterations", baseReal, notices, committedAt);
   if (legacy.length === 0) return noticeDuplicateRecordIds(current, notices);
   if (current.length === 0) return noticeDuplicateRecordIds(legacy, notices);
   notices.push(
@@ -566,6 +568,7 @@ function parseRecords(
   sub: "decisions" | "intents" | "iterations",
   baseReal: string,
   notices: string[],
+  committedAt: ReadonlyMap<string, number>,
 ): SpecRecordInfo[] {
   const dir = join(specsDir, sub);
   if (realInside(dir, baseReal) === undefined) return [];
@@ -604,19 +607,81 @@ function parseRecords(
       path: `${sub}/${entry.name}`,
       ...(status !== undefined ? { status } : {}),
       ...(finished !== undefined ? { finished } : {}),
-      // The file's last change orders finished records in History
-      // (DR-038).
-      updatedAt: Math.round(stats.mtimeMs),
+      // The record's last change orders finished records in History
+      // (DR-038): its last commit where Git tracks the file, else the
+      // file's mtime — which a fresh clone sets alike on every file.
+      updatedAt:
+        committedAt.get(`${sub}/${entry.name}`) ?? Math.round(stats.mtimeMs),
     });
   }
   return out;
+}
+
+/** The `specs/` subdirectories holding records (spec-view-14). */
+const RECORD_DIRS = ["decisions", "intents", "iterations"] as const;
+
+/** When Git last touched each record file: one `git log` over the
+ * record directories, newest commit first, so a file's first listing
+ * is the last commit touching it (DR-038). Keys are `specs/`-relative
+ * paths as the records carry them; an untracked file has no entry,
+ * and the map is empty where the project is no work tree or git
+ * fails, so the parse falls back to the file's mtime. */
+export async function readRecordCommitTimes(
+  projectPath: string,
+  run: RunCommand = defaultRunCommand,
+): Promise<ReadonlyMap<string, number>> {
+  const times = new Map<string, number>();
+  let result: Awaited<ReturnType<RunCommand>>;
+  try {
+    result = await run(
+      "git",
+      [
+        // Paths as the tree spells them: no octal quoting of
+        // non-ASCII names, and relative to the project rather than
+        // the repository root.
+        "-c",
+        "core.quotepath=off",
+        "log",
+        "--relative",
+        "--format=@%ct",
+        "--name-only",
+        "--",
+        ...RECORD_DIRS.map((sub) => `specs/${sub}`),
+      ],
+      projectPath,
+    );
+  } catch {
+    return times;
+  }
+  if (result.code !== 0) return times;
+  let at: number | undefined;
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const stamp = /^@(\d+)$/.exec(line);
+    if (stamp) {
+      at = Number(stamp[1]) * 1000;
+      continue;
+    }
+    if (at === undefined || !line.startsWith("specs/")) continue;
+    const key = line.slice("specs/".length);
+    if (!times.has(key)) times.set(key, at);
+  }
+  return times;
 }
 
 // ---------------------------------------------------------------------------
 // The tree parse (specs.get)
 // ---------------------------------------------------------------------------
 
-export function parseSpecTree(projectPath: string): SpecTreeState {
+export function parseSpecTree(
+  projectPath: string,
+  options: {
+    /** Each record's last commit time by `specs/`-relative path, as
+     * readRecordCommitTimes reads it; a record absent here dates by
+     * its file's mtime. */
+    committedAt?: ReadonlyMap<string, number>;
+  } = {},
+): SpecTreeState {
+  const committedAt = options.committedAt ?? new Map<string, number>();
   const readAt = Date.now();
   const absent: SpecTreeState = {
     present: false,
@@ -659,10 +724,10 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
       legacy: true,
       files: [],
       decisions: noticeDuplicateRecordIds(
-        parseRecords(specsDir, "decisions", baseReal, discarded),
+        parseRecords(specsDir, "decisions", baseReal, discarded, committedAt),
         discarded,
       ),
-      intents: parseIntentRecords(specsDir, baseReal, discarded),
+      intents: parseIntentRecords(specsDir, baseReal, discarded, committedAt),
       notices: [],
       readAt,
     };
@@ -696,10 +761,10 @@ export function parseSpecTree(projectPath: string): SpecTreeState {
     legacy: false,
     files,
     decisions: noticeDuplicateRecordIds(
-      parseRecords(specsDir, "decisions", baseReal, notices),
+      parseRecords(specsDir, "decisions", baseReal, notices, committedAt),
       notices,
     ),
-    intents: parseIntentRecords(specsDir, baseReal, notices),
+    intents: parseIntentRecords(specsDir, baseReal, notices, committedAt),
     notices,
     readAt,
   };
