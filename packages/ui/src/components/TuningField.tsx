@@ -5,16 +5,22 @@
 // below resolves, take the provider's current default, or pin a value.
 // The role-binding editor inherits a player; a session's own tuning
 // inherits the configured value (DR-067). One grammar, two homes; the
-// subagent model takes it as the model does (DR-093).
+// subagent model takes it as the model does (DR-093), its provider
+// default the "Off" a configured `false` reads as and offered only while
+// it stands, and the subagent effort as the effort does, its provider
+// default the agent's own choice (DR-095).
 
 import { useId } from "react";
 import type { AgentModelOption } from "@sublang/spex-core/protocol";
 
 import {
+  agentChoosesLabel,
   modelDisplay,
   modelDisplayText,
   providerDefaultDisplay,
   providerDefaultLabel,
+  subagentModelText,
+  subagentOffLabel,
 } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
@@ -36,7 +42,7 @@ export function TuningField({
   additionalEfforts,
   testIdPrefix = "binding",
 }: {
-  label: "model" | "subagent model" | "effort";
+  label: "model" | "subagent model" | "effort" | "subagent effort";
   models?: readonly AgentModelOption[];
   /** The model the runtime runs when none is configured, where it
    * reported one (settings-35). */
@@ -44,7 +50,9 @@ export function TuningField({
   efforts?: readonly string[];
   additionalEfforts?: readonly string[];
   value: string | false | undefined;
-  playerDefault: string | undefined;
+  /** What inheriting runs: the tier below's value; a subagent model's
+   * may be its configured `false`. */
+  playerDefault: string | false | undefined;
   /** What inheriting means here, named so the reader can see what they
    * are departing from before they depart from it. */
   inheritLabel?: string;
@@ -55,7 +63,7 @@ export function TuningField({
   const mode = value === undefined ? "inherit" : value === false ? "provider" : "pin";
   // A model's list serves both model fields; the test ids key on the
   // field, hyphenated.
-  const picksModel = label !== "effort";
+  const picksModel = label === "model" || label === "subagent model";
   const key = label.replace(" ", "-");
   // `label` names the field it edits and keys its test ids; what the
   // reader reads is the word for that field.
@@ -64,7 +72,9 @@ export function TuningField({
       ? i18n._({ id: "model", comment: "the model field of a tuning editor" })
       : label === "subagent model"
         ? i18n._({ id: "subagent model", comment: "the tuning editor's field for the model an agent's subagents run on" })
-        : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
+        : label === "subagent effort"
+          ? i18n._({ id: "subagent effort", comment: "the tuning editor's field for the reasoning effort an agent's subagents run at" })
+          : i18n._({ id: "effort", comment: "the reasoning-effort field of a tuning editor" });
   // An inherited model is named by the one display rule, so the value
   // the reader departs from reads as the model the runtime runs — one
   // left unset as the provider's default, with the model it runs by
@@ -72,15 +82,25 @@ export function TuningField({
   // (settings-38, DR-091); an effort is its adapter's own word, and one
   // left unset takes the same provider-default words, so no inherit
   // choice reads bare (run-view-138, DR-067).
-  // A subagent model left unset follows the runtime's own order, which
-  // names no one model, so it reads as the provider-default words alone.
+  // A subagent model left unset runs on the agent's own model and reads
+  // "Same as agent"; a subagent effort left unset is the agent's choice
+  // (settings-38, DR-095).
   const inherited = label === "model"
-    ? modelDisplayText(playerDefault === undefined
+    ? modelDisplayText(playerDefault === undefined || playerDefault === false
       ? providerDefaultDisplay(models ?? [], defaultModel)
       : modelDisplay(models ?? [], playerDefault))
-    : label === "subagent model" && playerDefault !== undefined
-      ? modelDisplayText(modelDisplay(models ?? [], playerDefault))
-      : playerDefault ?? providerDefaultLabel();
+    : label === "subagent model"
+      ? subagentModelText(models ?? [], playerDefault)
+      : label === "subagent effort"
+        ? (typeof playerDefault === "string" ? playerDefault : agentChoosesLabel())
+        : (typeof playerDefault === "string" ? playerDefault : providerDefaultLabel());
+  // The provider's default is "Off" for a subagent model — offered only
+  // while it stands — and the agent's own choice for its effort.
+  const providerChoice = label === "subagent model"
+    ? (value === false ? subagentOffLabel() : undefined)
+    : label === "subagent effort"
+      ? agentChoosesLabel()
+      : i18n._({ id: "the provider's default", comment: "tuning choice: take the provider's own current default" });
   return (
     // Not a <label>: the model field's list sits inside it, and a label
     // would pass every press on the list to the field's first control.
@@ -94,7 +114,7 @@ export function TuningField({
           const next = event.target.value;
           if (next === "inherit") onChange(null);
           else if (next === "provider") onChange(false);
-          else onChange(playerDefault ?? "");
+          else onChange(typeof playerDefault === "string" ? playerDefault : "");
         }}
         className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
       >
@@ -109,14 +129,15 @@ export function TuningField({
               })
             : inheritLabel}
         </option>
-        <option value="provider">{i18n._({ id: "the provider's default", comment: "tuning choice: take the provider's own current default" })}</option>
+        {providerChoice !== undefined && <option value="provider">{providerChoice}</option>}
         <option value="pin">{i18n._({ id: "pin a value…", comment: "tuning choice: set an explicit value here" })}</option>
       </select>
       {mode === "pin" && (picksModel ? (
         <ModelField value={typeof value === "string" ? value : ""} models={models ?? []}
-          onChange={onChange} allowDefault={false} labelId={labelId} testId={`${testIdPrefix}-${key}-value`} />
+          onChange={onChange} allowDefault={false} labelId={labelId} testId={`${testIdPrefix}-${key}-value`}
+          {...(label === "subagent model" ? { subagent: "inherit" as const } : {})} />
       ) : (
-        <select data-testid={`${testIdPrefix}-effort-value`} aria-labelledby={labelId} value={typeof value === "string" ? value : ""}
+        <select data-testid={`${testIdPrefix}-${key}-value`} aria-labelledby={labelId} value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.target.value)}
           className="rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900">
           {/* An effort key is the adapter's wire word; only what stands

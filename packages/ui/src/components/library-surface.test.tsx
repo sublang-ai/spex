@@ -132,10 +132,10 @@ const BUILTINS: BuiltinPlaybookInfo[] = [
   },
 ];
 
-function renderLibrary() {
+function renderLibrary(configState: ConfigState = CONFIG_STATE) {
   useAppStore.setState({
     connection: "open",
-    configState: CONFIG_STATE,
+    configState,
     readiness: READINESS,
     compileProgress: {},
     activeCompile: undefined,
@@ -151,6 +151,8 @@ beforeEach(() => {
   useAppStore.setState({ loadAgentOptions: async (adapter) => ({
     adapter, effortValues: adapter === "claude" ? ["high", "ultracode"] : adapter === "codex" ? ["high", "ultra"] : ["high"],
     fastModeSupported: adapter === "claude" || adapter === "codex", subagentModelSupported: adapter === "claude",
+    // The core lists a subagent's efforts less the orchestration value.
+    subagentEffortValues: adapter === "claude" ? ["high"] : [],
     discovery: { status: "unavailable", reason: "Fixture" },
   }) });
   commandMock.mockReset();
@@ -227,25 +229,47 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
     );
   });
 
-  test("the gear pins the role's subagent model where the lane's adapter serves one (DR-093)", async () => {
+  test("the gear pins the role's subagent model and effort where the lane's adapter serves one (DR-093, DR-095)", async () => {
     renderLibrary();
-    // A codex lane is offered no subagent model.
+    // A codex lane is offered neither.
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
     const reviewer = screen.getByTestId("binding-editor-reviewer");
     await within(reviewer).findByText("Model list unavailable: Fixture");
     expect(within(reviewer).queryByTestId("binding-subagent-model-mode")).toBeNull();
+    expect(within(reviewer).queryByTestId("binding-subagent-effort-mode")).toBeNull();
     fireEvent.keyDown(reviewer, { key: "Escape" });
 
     fireEvent.click(screen.getByTestId("role-bind-code-coder"));
     const editor = screen.getByTestId("binding-editor-coder");
     await within(editor).findByText("Model list unavailable: Fixture");
+    // [playbook-library-4] the model and its effort, then the subagent
+    // model and its effort, as the cells of one paired grid.
+    const rows = within(editor).getByTestId("binding-tuning-rows");
+    expect(rows.className).toContain("@xs:grid-cols-2");
+    expect([...rows.querySelectorAll("select[data-testid$='-mode']")].map((select) => select.getAttribute("data-testid"))).toEqual([
+      "binding-model-mode", "binding-effort-mode", "binding-subagent-model-mode", "binding-subagent-effort-mode",
+    ]);
     const mode = within(editor).getByTestId("binding-subagent-model-mode") as HTMLSelectElement;
-    // An unset player's subagent model inherits as the provider's words.
-    expect(mode.options[0]?.textContent).toBe("inherit the player (Provider default)");
+    // [playbook-library-4] an unset player's subagent model inherits as
+    // "Same as agent", and "Off" is offered only while it stands.
+    expect([...mode.options].map((option) => option.textContent)).toEqual([
+      "inherit the player (Same as agent)", "pin a value…",
+    ]);
     fireEvent.change(mode, { target: { value: "pin" } });
     fireEvent.change(within(editor).getByTestId("binding-subagent-model-value"), {
       target: { value: "claude-haiku-5" },
     });
+    // [playbook-library-4] an unset player's subagent effort inherits as
+    // "Agent chooses", which is also the provider-default choice; a pin
+    // lists the adapter's subagent efforts, never its orchestration one.
+    const effort = within(editor).getByTestId("binding-subagent-effort-mode") as HTMLSelectElement;
+    expect([...effort.options].map((option) => option.textContent)).toEqual([
+      "inherit the player (Agent chooses)", "Agent chooses", "pin a value…",
+    ]);
+    fireEvent.change(effort, { target: { value: "pin" } });
+    const pinned = within(editor).getByTestId("binding-subagent-effort-value") as HTMLSelectElement;
+    expect([...pinned.options].map((option) => option.value)).toEqual(["", "high"]);
+    fireEvent.change(pinned, { target: { value: "high" } });
     fireEvent.click(within(editor).getByTestId("binding-save"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
@@ -255,7 +279,35 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
           role: "coder",
           playerId: "dev.coder",
           subagentModel: "claude-haiku-5",
+          subagentEffort: "high",
         },
+      }),
+    );
+  });
+
+  test("a binding's standing Off reads as such and stays clearable (DR-095)", async () => {
+    const summary = structuredClone(CONFIG_STATE.summary!);
+    const code = summary.playbooks.find((playbook) => playbook.id === "code")!;
+    code.roles.coder = { ...code.roles.coder!, subagentModel: false, subagentEffort: false };
+    renderLibrary({ ...CONFIG_STATE, summary });
+    fireEvent.click(screen.getByTestId("role-bind-code-coder"));
+    const editor = screen.getByTestId("binding-editor-coder");
+    await within(editor).findByText("Model list unavailable: Fixture");
+    const mode = within(editor).getByTestId("binding-subagent-model-mode") as HTMLSelectElement;
+    expect(mode.value).toBe("provider");
+    expect([...mode.options].map((option) => option.textContent)).toEqual([
+      "inherit the player (Same as agent)", "Off", "pin a value…",
+    ]);
+    expect((within(editor).getByTestId("binding-subagent-effort-mode") as HTMLSelectElement).value).toBe("provider");
+    fireEvent.change(mode, { target: { value: "inherit" } });
+    // Cleared, the Off choice is gone: it is offered only while it stands.
+    expect([...mode.options].map((option) => option.textContent)).toEqual([
+      "inherit the player (Same as agent)", "pin a value…",
+    ]);
+    fireEvent.click(within(editor).getByTestId("binding-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: expect.objectContaining({ kind: "playbook.role.bind", role: "coder", subagentModel: null, subagentEffort: false }),
       }),
     );
   });

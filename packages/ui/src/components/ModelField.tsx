@@ -23,12 +23,16 @@ import {
   modelDisplay,
   providerDefaultDisplay,
   providerDefaultLabel,
+  sameAsAgentLabel,
+  subagentOffLabel,
 } from "../lib/agent-options.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 
 const CUSTOM = "__spex_custom__";
+/** The row standing for a subagent model's configured `false`. */
+const OFF = "__spex_off__";
 const fieldClass = "w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900";
 const mutedClass = "text-neutral-500 dark:text-neutral-400";
 
@@ -41,7 +45,8 @@ interface Line {
 /** One row of the listbox. */
 interface Choice {
   key: string;
-  /** "" takes the provider's default; CUSTOM asks for a typed id. */
+  /** "" takes the provider's default; CUSTOM asks for a typed id; OFF
+   * keeps a subagent model's `false`. */
   value: string;
   line: Line;
   /** The row's second line: the runtime's description, or the model
@@ -83,6 +88,8 @@ export function ModelField({
   testId,
   labelId,
   allowDefault = true,
+  subagent,
+  off,
 }: {
   value: string;
   models: readonly AgentModelOption[];
@@ -95,31 +102,48 @@ export function ModelField({
    * the listbox alike. */
   labelId: string;
   allowDefault?: boolean;
+  /** A subagent-model field (settings-39, DR-095): "empty" reads its
+   * empty row as "Same as agent" with no default model beside it;
+   * "inherit" — a pin with no empty row — reads the literal `inherit`
+   * as "Same as agent", its own row while it stands. */
+  subagent?: "empty" | "inherit";
+  /** A subagent model's configured `false`, offered as "Off" only while
+   * it stands (settings-34); `selected` while the field holds it. */
+  off?: { selected: boolean; onSelect(): void };
 }) {
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const baseId = useId();
+  const offSelected = off?.selected === true;
+  // A pinned `inherit` is the agent's own model, read as its words.
+  const inheritPin = subagent === "inherit" && value === "inherit";
   const selected = findModel(models, value);
-  const unlisted = Boolean(value) && !selected;
-  const manual = custom || unlisted || models.length === 0 || (!allowDefault && !value);
+  const unlisted = Boolean(value) && !selected && !inheritPin;
+  const manual = custom || unlisted || models.length === 0 || (!allowDefault && !value && !offSelected);
   // A catalog that leaves while the list is open — a refresh reloading
   // it — takes the list with it rather than reopening it later.
   useEffect(() => {
     if (models.length === 0) setOpen(false);
   }, [models.length]);
 
-  const providerDefault = providerDefaultDisplay(models, defaultModel);
+  // A subagent model left empty runs on the agent's own model, which
+  // names no model of the catalog: its words stand alone (settings-38).
+  const providerDefault = subagent === "empty"
+    ? { name: sameAsAgentLabel() }
+    : providerDefaultDisplay(models, defaultModel);
   const choices: Choice[] = [];
   if (allowDefault) {
     choices.push({
       key: "provider-default",
       value: "",
       line: { text: providerDefault.name },
-      ...(providerDefault.specific !== undefined ? { detail: providerDefault.specific } : {}),
+      ...("specific" in providerDefault && providerDefault.specific !== undefined ? { detail: providerDefault.specific } : {}),
     });
   }
+  if (off) choices.push({ key: "off", value: OFF, line: { text: subagentOffLabel() } });
+  if (inheritPin) choices.push({ key: "inherit", value: "inherit", line: { text: sameAsAgentLabel() } });
   // A canonical pin recognized through an alias's resolution is its own
   // row, reading as itself: never rewritten to the alias (DR-052).
   if (value && selected && selected.id !== value) {
@@ -136,16 +160,20 @@ export function ModelField({
   }
   choices.push({ key: "custom", value: CUSTOM, line: { text: customLabel() } });
 
-  const chosenKey = manual
-    ? "custom"
-    : !value
-      ? "provider-default"
-      : selected?.id === value
-        ? `model:${value}`
-        : `resolved:${value}`;
+  const chosenKey = offSelected && !custom
+    ? "off"
+    : manual
+      ? "custom"
+      : inheritPin
+        ? "inherit"
+        : !value
+          ? "provider-default"
+          : selected?.id === value
+            ? `model:${value}`
+            : `resolved:${value}`;
   const chosenIndex = Math.max(0, choices.findIndex((choice) => choice.key === chosenKey));
   const shown: Line = chosenKey === "provider-default"
-    ? { text: providerDefault.name, ...(providerDefault.specific !== undefined ? { muted: providerDefault.specific } : {}) }
+    ? { text: providerDefault.name, ...("specific" in providerDefault && providerDefault.specific !== undefined ? { muted: providerDefault.specific } : {}) }
     : choices[chosenIndex]?.line ?? { text: value };
 
   function openList(): void {
@@ -162,7 +190,10 @@ export function ModelField({
     const choice = choices[index];
     if (!choice) return;
     if (choice.value === CUSTOM) setCustom(true);
-    else {
+    else if (choice.value === OFF) {
+      setCustom(false);
+      off?.onSelect();
+    } else {
       setCustom(false);
       onChange(choice.value);
     }
@@ -221,9 +252,13 @@ export function ModelField({
       {manual && <input
         aria-label={i18n._({ id: "Custom model", comment: "the hand-typed model id field" })}
         data-testid={testId}
-        value={value}
+        value={offSelected ? "" : value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={allowDefault ? providerDefaultLabel() : i18n._({ id: "Model ID", comment: "placeholder of the hand-typed model id field" })}
+        placeholder={offSelected
+          ? subagentOffLabel()
+          : allowDefault
+            ? (subagent === "empty" ? sameAsAgentLabel() : providerDefaultLabel())
+            : i18n._({ id: "Model ID", comment: "placeholder of the hand-typed model id field" })}
         className={fieldClass}
       />}
       {unlisted && models.length > 0 && <span className="text-xs text-neutral-500">{i18n._("Not in this runtime's list. Check the model ID.")}</span>}

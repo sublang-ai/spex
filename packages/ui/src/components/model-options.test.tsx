@@ -11,7 +11,7 @@ import { createRef } from "react";
 
 const originalLoad = useAppStore.getState().loadAgentOptions;
 const options = (adapter: AdapterName = "claude"): AgentOptions => ({
-  adapter, effortValues: ["low", "high", "max", ...(adapter === "claude" ? ["ultracode"] : adapter === "codex" ? ["ultra"] : [])], fastModeSupported: true, subagentModelSupported: adapter === "claude",
+  adapter, effortValues: ["low", "high", "max", ...(adapter === "claude" ? ["ultracode"] : adapter === "codex" ? ["ultra"] : [])], fastModeSupported: true, subagentModelSupported: adapter === "claude", subagentEffortValues: [],
   discovery: { status: "available", ...(adapter === "claude" ? { unreportedEffortValues: ["ultracode"] } : {}), models: [
     { id: "claude-fable-5-1", name: "Fable", effortValues: ["low", "high"], fastModeSupported: false },
     { id: "plain-model", name: "Plain", effortValues: [], fastModeSupported: false },
@@ -217,7 +217,7 @@ test.each([
   { scope: "unknown efforts", efforts: undefined, valid: true },
 ])("Codex $scope governs agent and inherited role tuning", async ({ efforts, valid }) => {
   useAppStore.setState({ loadAgentOptions: async () => ({
-    adapter: "codex", effortValues: ["low", "high", "ultra"], fastModeSupported: true, subagentModelSupported: false,
+    adapter: "codex", effortValues: ["low", "high", "ultra"], fastModeSupported: true, subagentModelSupported: false, subagentEffortValues: [],
     discovery: { status: "available", models: [{ id: "codex-fixture", name: "Codex", effortValues: efforts }] },
   }) });
   const save = vi.fn();
@@ -264,7 +264,7 @@ test("a reported tier is never relabeled as an added adapter choice", async () =
 // around them are Spex's (settings-38, DR-091).
 const OPUS_WORDS = "Opus 5.5 · Best for everyday, complex tasks";
 const claudeCatalog = (defaultModel?: string): AgentOptions => ({
-  adapter: "claude", effortValues: ["low", "medium", "high", "max"], fastModeSupported: true, subagentModelSupported: true,
+  adapter: "claude", effortValues: ["low", "medium", "high", "max"], fastModeSupported: true, subagentModelSupported: true, subagentEffortValues: [],
   discovery: { status: "available", ...(defaultModel ? { defaultModel } : {}), models: [
     { id: "default", name: "Default (recommended)", resolvedModel: "claude-opus-5-5", description: OPUS_WORDS },
     { id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5", description: OPUS_WORDS },
@@ -274,7 +274,7 @@ const claudeCatalog = (defaultModel?: string): AgentOptions => ({
   ] },
 });
 const codexCatalog = (): AgentOptions => ({
-  adapter: "codex", effortValues: ["low", "medium", "high"], fastModeSupported: true, subagentModelSupported: false,
+  adapter: "codex", effortValues: ["low", "medium", "high"], fastModeSupported: true, subagentModelSupported: false, subagentEffortValues: [],
   discovery: { status: "available", models: [
     { id: "gpt-6-astra", name: "GPT-6-Astra", description: "Workhorse model for coding and everyday work." },
     { id: "gpt-6-sol", name: "GPT-6-Sol" },
@@ -482,15 +482,58 @@ test("settings-41: Custom model… opens the typed field, which keeps what is ty
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ model: "opus[1m]" }));
 });
 
-test("settings-41: the agent editor lays the model field across its full width", async () => {
+test("settings-41: the agent editor stands each model beside its effort", async () => {
   useAppStore.setState({ loadAgentOptions: catalogs() });
   render(<AgentEditor initial={{ adapter: "claude", model: "opus" }} onSave={vi.fn()} />);
   await ready();
-  const trigger = screen.getByTestId("agent-model-trigger");
-  // A simulated document measures no layout: the field's cell spans
-  // both columns of the editor's grid.
-  const cell = trigger.closest(".grid > *");
-  expect(cell?.className).toContain("col-span-2");
+  // A simulated document measures no layout: the four fields are the
+  // cells of one grid, in pairs — model and effort, then subagent model
+  // and subagent effort — two columns from the container's @xs step and
+  // one below it, the 320-pixel floor's (settings-1, DR-095).
+  const rows = screen.getByTestId("agent-tuning-rows");
+  expect(rows.className).toContain("grid-cols-1");
+  expect(rows.className).toContain("@xs:grid-cols-2");
+  expect(rows.parentElement?.className).toContain("@container");
+  expect([...rows.children].map((cell) => cell.getAttribute("data-testid"))).toEqual([
+    "agent-model-cell", "agent-effort-cell", "agent-subagent-model-cell", "agent-subagent-effort-cell",
+  ]);
+  expect(within(rows).getByTestId("agent-model-trigger")).toBeTruthy();
+});
+
+test("settings-41: the subagent fields read Same as agent and Agent chooses, and Off only while it stands", async () => {
+  // A catalog reporting a default model, which the subagent field's
+  // empty choice never names: it runs on the agent's own (settings-38).
+  useAppStore.setState({ loadAgentOptions: vi.fn(async () => ({ ...claudeCatalog("opus"), subagentEffortValues: ["low", "medium", "high", "max"] })) });
+  const save = vi.fn();
+  render(<AgentEditor initial={{ adapter: "claude" }} onSave={save} />);
+  await ready();
+  const trigger = screen.getByTestId("agent-subagent-model-trigger");
+  expect(trigger.textContent).toBe("Same as agent");
+  expect(trigger.getAttribute("title")).toBe("Same as agent");
+  fireEvent.click(trigger);
+  const listed = rows("agent-subagent-model");
+  // [settings-39] "Same as agent" first with no second line, no "Off".
+  expect(listed[0]).toEqual({ name: "Same as agent", detail: undefined, selected: true });
+  expect(listed.map((row) => row.name)).not.toContain("Off");
+  fireEvent.keyDown(screen.getByTestId("agent-subagent-model-listbox"), { key: "Escape" });
+  // [settings-34] "Agent chooses" first, then the adapter's subagent
+  // efforts — never its orchestration value.
+  const effort = screen.getByTestId("agent-subagent-effort") as HTMLSelectElement;
+  expect([...effort.options].map((option) => option.textContent)).toEqual(["Agent chooses", "low", "medium", "high", "max"]);
+  cleanup();
+
+  // A configured `false` reads "Off" while it stands, and clearing it
+  // writes the omission.
+  render(<AgentEditor initial={{ adapter: "claude", subagentModel: false }} onSave={save} />);
+  await ready();
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Off");
+  chooseModel("agent-subagent-model", "");
+  expect(screen.getByTestId("agent-subagent-model-trigger").textContent).toBe("Same as agent");
+  fireEvent.click(screen.getByTestId("agent-subagent-model-trigger"));
+  expect(rows("agent-subagent-model").slice(0, 2).map((row) => row.name)).toEqual(["Same as agent", "Off"]);
+  fireEvent.keyDown(screen.getByTestId("agent-subagent-model-listbox"), { key: "Escape" });
+  fireEvent.click(screen.getByTestId("agent-save"));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ subagentModel: null })));
 });
 
 test.each([

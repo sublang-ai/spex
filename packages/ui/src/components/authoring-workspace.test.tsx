@@ -282,7 +282,7 @@ beforeEach(() => {
     loadAgentOptions: async (adapter) => ({
       adapter,
       effortValues: ["high"],
-      fastModeSupported: false, subagentModelSupported: adapter === "claude",
+      fastModeSupported: false, subagentModelSupported: adapter === "claude", subagentEffortValues: adapter === "claude" ? ["low", "high"] : [],
       discovery: { status: "unavailable", reason: "Fixture" },
     }),
   });

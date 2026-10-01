@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The one shared agent editor (DR-019): adapter (with readiness
-// dots), model, a subagent model where the adapter serves one
-// (DR-093), adapter-scoped effort, a fast-mode switch where the
+// dots), model and adapter-scoped effort on one row, a subagent model
+// and a subagent effort on the next where the adapter serves one
+// (DR-093, DR-095), a fast-mode switch where the
 // runtime declares it (DR-038), permission mode and writable paths.
 // It edits a local draft and emits a merge patch on save;
 // AgentEditorPopover wraps it for the at-hand flows (DR-007/009).
@@ -16,7 +17,7 @@ import {
   type ReadinessEntry,
 } from "@sublang/spex-core/protocol";
 
-import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { agentChoosesLabel, useAgentOptions, modelTuning } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
 import { ModelField } from "./ModelField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
@@ -51,6 +52,14 @@ function knownAdapter(adapter: string | undefined): AdapterName {
     : "claude";
 }
 
+/** The subagent model as the field holds it: "" for "Same as agent" —
+ * the omission and the literal `inherit` alike — `false` for "Off", or
+ * a model (DR-095). */
+function subagentModelOf(agent: ChipAgent | undefined): string | false {
+  const value = agent?.subagentModel;
+  return value === undefined || value === "inherit" ? "" : value;
+}
+
 function initialMode(agent: ChipAgent | undefined): Mode {
   const mode = agent?.permissions?.mode;
   return mode === "auto" || mode === "bypass" ? mode : "none";
@@ -80,8 +89,8 @@ export interface AgentEditorProps {
    * the fast-mode switch shows for adapters declaring it (DR-038). */
   readiness?: ReadinessEntry[];
   /** When set, offers "Same as Captain": copies the Captain's adapter,
-   * model, subagent model, effort, fast mode, and permissions into the
-   * draft. */
+   * model, subagent model, effort, subagent effort, fast mode, and
+   * permissions into the draft. */
   captain?: ChipAgent;
   saveLabel?: string;
   /** Creation forms save an untouched draft: the seeded block is
@@ -97,7 +106,8 @@ export function AgentEditor(props: AgentEditorProps) {
     knownAdapter(initial?.adapter),
   );
   const [model, setModel] = useState(initial?.model ?? "");
-  const [subagentModel, setSubagentModel] = useState(initial?.subagentModel ?? "");
+  const [subagentModel, setSubagentModel] = useState<string | false>(subagentModelOf(initial));
+  const [subagentEffort, setSubagentEffort] = useState(initial?.subagentEffort ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
   const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
@@ -129,12 +139,16 @@ export function AgentEditor(props: AgentEditorProps) {
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
   const supportsSubagentModel = tuning.subagentModelSupported ?? readinessByAdapter.get(adapter)?.subagentModelSupported ?? false;
+  // The subagent effort stands where the subagent model does (DR-095).
+  const offersSubagent = supportsSubagentModel || subagentModel !== "" || Boolean(subagentEffort);
+  const invalidSubagentEffort = Boolean(discovery.options && subagentEffort && !tuning.subagentEfforts.includes(subagentEffort));
 
   function pickAdapter(next: AdapterName): void {
     if (next === adapter) return;
     setAdapter(next);
     setModel("");
     setSubagentModel("");
+    setSubagentEffort("");
     setEffort("");
     setFastMode(false);
   }
@@ -142,7 +156,8 @@ export function AgentEditor(props: AgentEditorProps) {
   const dirty =
     adapter !== knownAdapter(initial?.adapter) ||
     model !== (initial?.model ?? "") ||
-    subagentModel !== (initial?.subagentModel ?? "") ||
+    subagentModel !== subagentModelOf(initial) ||
+    subagentEffort !== (initial?.subagentEffort ?? "") ||
     effort !== (initial?.effort ?? "") ||
     fastMode !== (initial?.fastMode ?? false) ||
     mode !== initialMode(initial) ||
@@ -162,9 +177,16 @@ export function AgentEditor(props: AgentEditorProps) {
     const trimmedModel = model.trim();
     if (trimmedModel) patch.model = trimmedModel;
     else if (initial?.model) patch.model = null;
-    const trimmedSubagentModel = subagentModel.trim();
-    if (trimmedSubagentModel) patch.subagentModel = trimmedSubagentModel;
-    else if (initial?.subagentModel) patch.subagentModel = null;
+    // "Same as agent" is the omission, and "Off" the configured `false`
+    // kept only while it stands (DR-095): either is written only when it
+    // changes what the block holds.
+    if (subagentModel !== subagentModelOf(initial)) {
+      if (subagentModel === false) patch.subagentModel = false;
+      else if (subagentModel.trim()) patch.subagentModel = subagentModel.trim();
+      else patch.subagentModel = null;
+    }
+    if (subagentEffort) patch.subagentEffort = subagentEffort;
+    else if (initial?.subagentEffort) patch.subagentEffort = null;
     if (effort) patch.effort = effort;
     else if (initial?.effort) patch.effort = null;
     // Fast mode is off by default, so the switch writes true or unsets
@@ -245,61 +267,85 @@ export function AgentEditor(props: AgentEditorProps) {
           })}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        {/* The model and its effort each take the editor's full width:
-            a model reads as its name and the specific model behind it,
-            which half a column cuts (settings-39, DR-091). Not a
-            <label>: the model's list sits inside it, and a label would
-            pass every press on the list to the trigger. */}
-        <div className="col-span-2 flex min-w-0 flex-col gap-0.5">
-          <span id={modelLabelId} className="text-xs text-neutral-500">{i18n._("Model (optional)")}</span>
-          <ModelField
-            // Another adapter is another catalog: the field starts over
-            // on the default its switch reset the model to (settings-34).
-            key={adapter}
-            value={model}
-            models={models}
-            {...(catalog?.defaultModel ? { defaultModel: catalog.defaultModel } : {})}
-            onChange={setModel}
-            labelId={modelLabelId}
-            testId="agent-model"
-          />
-        </div>
-        {(supportsSubagentModel || subagentModel) ? (
-          <div className="col-span-2 flex min-w-0 flex-col gap-0.5">
-            <span id={subagentLabelId} className="text-xs text-neutral-500">{i18n._({ id: "Subagent model", comment: "the field choosing the model an agent's subagents run on" })}</span>
-            {/* The same list as the model; its empty value is the
-                runtime's own order of choosing, which names no one model,
-                so no default model is shown beside it. */}
+      {/* A model and its effort share a row, the subagent model and its
+          effort the next — each pair the chip's own "model @ effort" —
+          and each pair stacks where the editor is narrower than the
+          row needs, as at the 320-pixel floor (settings-1, DR-095,
+          DR-041). Not <label>s: a model's list sits inside its field,
+          and a label would pass every press on the list to the trigger. */}
+      <div className="@container">
+        <div data-testid="agent-tuning-rows" className="grid grid-cols-1 gap-2 text-sm @xs:grid-cols-2">
+          <div data-testid="agent-model-cell" className="flex min-w-0 flex-col gap-0.5">
+            <span id={modelLabelId} className="text-xs text-neutral-500">{i18n._("Model (optional)")}</span>
             <ModelField
+              // Another adapter is another catalog: the field starts over
+              // on the default its switch reset the model to (settings-34).
               key={adapter}
-              value={subagentModel}
+              value={model}
               models={models}
-              onChange={setSubagentModel}
-              labelId={subagentLabelId}
-              testId="agent-subagent-model"
+              {...(catalog?.defaultModel ? { defaultModel: catalog.defaultModel } : {})}
+              onChange={setModel}
+              labelId={modelLabelId}
+              testId="agent-model"
             />
           </div>
-        ) : null}
-        <label className="col-span-2 flex flex-col gap-0.5">
-          <span className="text-xs text-neutral-500">{i18n._("Reasoning effort")}</span>
-          <select
-            data-testid="agent-effort"
-            value={effort}
-            onChange={(event) => setEffort(event.target.value)}
-            className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            {/* An effort key is the adapter's wire word; only what
-                stands beside it is a text. */}
-            <option value="">{i18n._({ id: "(default)", comment: "effort choice: leave the adapter's own default" })}</option>
-            {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
-            {tuning.efforts.map((name) => (
-              <option key={name} value={name}>
-                {tuning.additionalEfforts.includes(name) ? i18n._("{effort} (adapter-wide)", { effort: name }) : name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label data-testid="agent-effort-cell" className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs text-neutral-500">{i18n._("Reasoning effort")}</span>
+            <select
+              data-testid="agent-effort"
+              value={effort}
+              onChange={(event) => setEffort(event.target.value)}
+              className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+            >
+              {/* An effort key is the adapter's wire word; only what
+                  stands beside it is a text. */}
+              <option value="">{i18n._({ id: "(default)", comment: "effort choice: leave the adapter's own default" })}</option>
+              {effort && !tuning.efforts.includes(effort) && <option value={effort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort }) : i18n._("{effort} (current)", { effort })}</option>}
+              {tuning.efforts.map((name) => (
+                <option key={name} value={name}>
+                  {tuning.additionalEfforts.includes(name) ? i18n._("{effort} (adapter-wide)", { effort: name }) : name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {offersSubagent ? (
+            <>
+              <div data-testid="agent-subagent-model-cell" className="flex min-w-0 flex-col gap-0.5">
+                <span id={subagentLabelId} className="text-xs text-neutral-500">{i18n._({ id: "Subagent model", comment: "the field choosing the model an agent's subagents run on" })}</span>
+                {/* The same list as the model, under "Same as agent" —
+                    the agent's own model, so no default model beside it —
+                    and "Off" only while a configured `false` stands. */}
+                <ModelField
+                  key={adapter}
+                  value={subagentModel === false ? "" : subagentModel}
+                  models={models}
+                  onChange={setSubagentModel}
+                  labelId={subagentLabelId}
+                  testId="agent-subagent-model"
+                  subagent="empty"
+                  {...(initial?.subagentModel === false
+                    ? { off: { selected: subagentModel === false, onSelect: () => setSubagentModel(false) } }
+                    : {})}
+                />
+              </div>
+              <label data-testid="agent-subagent-effort-cell" className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-xs text-neutral-500">{i18n._({ id: "Subagent effort", comment: "the field choosing the reasoning effort an agent's subagents run at" })}</span>
+                <select
+                  data-testid="agent-subagent-effort"
+                  value={subagentEffort}
+                  onChange={(event) => setSubagentEffort(event.target.value)}
+                  className="w-full min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
+                >
+                  <option value="">{agentChoosesLabel()}</option>
+                  {subagentEffort && !tuning.subagentEfforts.includes(subagentEffort) && <option value={subagentEffort}>{discovery.options ? i18n._("{effort} (unsupported)", { effort: subagentEffort }) : i18n._("{effort} (current)", { effort: subagentEffort })}</option>}
+                  {tuning.subagentEfforts.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </label>
+            </>
+          ) : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-sm">
         {(supportsFastMode || fastMode) ? (
           <label className="col-span-2 flex items-center gap-2">
             <input
@@ -371,6 +417,7 @@ export function AgentEditor(props: AgentEditorProps) {
       <ModelDiscoveryStatus state={discovery} />
       {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort or the provider default.")}</p>}
+      {invalidSubagentEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed subagent effort, or let the agent choose.")}</p>}
       {invalidFastMode && <p role="alert" className="text-xs text-red-600">{i18n._("Turn off fast mode for this selection.")}</p>}
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -381,7 +428,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || invalidEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
+          disabled={busy || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -401,13 +448,14 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title={i18n._("Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions")}
+            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
               setAdapter(nextAdapter);
               setModel(captain.model ?? "");
-              setSubagentModel(captain.subagentModel ?? "");
+              setSubagentModel(subagentModelOf(captain));
+              setSubagentEffort(captain.subagentEffort ?? "");
               setEffort(captain.effort ?? "");
               setFastMode(Boolean(captain.fastMode));
               setMode(initialMode(captain));

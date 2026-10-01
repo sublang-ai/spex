@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The role-binding editor (DR-032): which session player answers a
-// role, plus that role's own model, subagent model (DR-093), effort and
-// fast mode. Adapter, permissions
+// role, plus that role's own model, effort, subagent model (DR-093),
+// subagent effort (DR-095) and fast mode. Adapter, permissions
 // and workspace belong to the player's envelope and have no control
 // here, because in the released model a binding cannot carry them.
 
@@ -25,6 +25,7 @@ export interface BindingChange {
   model?: string | false | null;
   subagentModel?: string | false | null;
   effort?: string | false | null;
+  subagentEffort?: string | false | null;
   fastMode?: boolean | null;
 }
 
@@ -52,6 +53,7 @@ export function BindingEditorPopover({
     model: binding.model,
     subagentModel: binding.subagentModel,
     effort: binding.effort,
+    subagentEffort: binding.subagentEffort,
     fastMode: binding.fastMode,
   });
   const [error, setError] = useState<string>();
@@ -78,7 +80,11 @@ export function BindingEditorPopover({
   const invalidModel = [draft.model, draft.subagentModel].some((value) => typeof value === "string" && !value.trim());
   // Offered where the lane's adapter serves one or a choice stands, so a
   // stale one is always clearable — fast mode's rule (DR-093).
-  const offersSubagentModel = discovery.options?.subagentModelSupported === true || draft.subagentModel != null;
+  const offersSubagentModel = discovery.options?.subagentModelSupported === true || draft.subagentModel != null || draft.subagentEffort != null;
+  // A pinned subagent effort is one of the adapter's, never blank
+  // (DR-095); "Agent chooses" is the provider-default choice.
+  const invalidSubagentEffort = draft.subagentEffort === ""
+    || Boolean(discovery.options && typeof draft.subagentEffort === "string" && !tuning.subagentEfforts.includes(draft.subagentEffort));
   // Every other position this lane already answers: picking it here
   // joins that one conversation rather than opening a new one.
   const others = (lane?.boundBy ?? []).filter((held) => held !== position);
@@ -89,7 +95,7 @@ export function BindingEditorPopover({
       data-testid={`binding-editor-${role}`}
       role="dialog"
       aria-label={i18n._("Bind {role}", { role })}
-      className="absolute left-0 top-7 z-20 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+      className="absolute left-0 top-7 z-20 flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
     >
       <label className="flex flex-col gap-1 text-xs">
         <span className="text-neutral-500 dark:text-neutral-400">
@@ -119,29 +125,44 @@ export function BindingEditorPopover({
         ) : null}
       </label>
 
-      <TuningField
-        label="model"
-        value={draft.model === null ? undefined : draft.model}
-        playerDefault={lane?.agent.model}
-        models={models}
-        defaultModel={catalog?.defaultModel}
-        onChange={(next) => setDraft((current) => ({ ...current, model: next }))}
-      />
-      {offersSubagentModel && <TuningField
-        label="subagent model"
-        value={draft.subagentModel === null ? undefined : draft.subagentModel}
-        playerDefault={lane?.agent.subagentModel}
-        models={models}
-        onChange={(next) => setDraft((current) => ({ ...current, subagentModel: next }))}
-      />}
-      <TuningField
-        label="effort"
-        value={draft.effort === null ? undefined : draft.effort}
-        playerDefault={lane?.agent.effort}
-        efforts={tuning.efforts}
-        additionalEfforts={tuning.additionalEfforts}
-        onChange={(next) => setDraft((current) => ({ ...current, effort: next }))}
-      />
+      {/* Each model beside its effort, stacking at the floor
+          (playbook-library-4, DR-095). */}
+      <div className="@container">
+        <div data-testid="binding-tuning-rows" className="grid grid-cols-1 gap-2 @xs:grid-cols-2">
+          <TuningField
+            label="model"
+            value={draft.model === null ? undefined : draft.model}
+            playerDefault={lane?.agent.model}
+            models={models}
+            defaultModel={catalog?.defaultModel}
+            onChange={(next) => setDraft((current) => ({ ...current, model: next }))}
+          />
+          <TuningField
+            label="effort"
+            value={draft.effort === null ? undefined : draft.effort}
+            playerDefault={lane?.agent.effort}
+            efforts={tuning.efforts}
+            additionalEfforts={tuning.additionalEfforts}
+            onChange={(next) => setDraft((current) => ({ ...current, effort: next }))}
+          />
+          {offersSubagentModel && <>
+            <TuningField
+              label="subagent model"
+              value={draft.subagentModel === null ? undefined : draft.subagentModel}
+              playerDefault={lane?.agent.subagentModel}
+              models={models}
+              onChange={(next) => setDraft((current) => ({ ...current, subagentModel: next }))}
+            />
+            <TuningField
+              label="subagent effort"
+              value={draft.subagentEffort === null ? undefined : draft.subagentEffort}
+              playerDefault={lane?.agent.subagentEffort}
+              efforts={tuning.subagentEfforts}
+              onChange={(next) => setDraft((current) => ({ ...current, subagentEffort: next }))}
+            />
+          </>}
+        </div>
+      </div>
 
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && <label className="flex flex-col gap-1 text-xs">
         <span className="text-neutral-500 dark:text-neutral-400">{i18n._({ id: "Fast mode", comment: "switch: run this agent in its adapter's fast mode" })}</span>
@@ -163,6 +184,7 @@ export function BindingEditorPopover({
       {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
       {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? i18n._("Clear the fast-mode override; this adapter does not accept it.") : i18n._("Turn off fast mode for this model.")}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort, inherit, or use the provider default.")}</p>}
+      {invalidSubagentEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed subagent effort, inherit, or let the agent choose.")}</p>}
       {invalidModel && <p role="alert" className="text-xs text-red-600">{i18n._("Enter a model ID, inherit, or use the provider default.")}</p>}
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
@@ -178,7 +200,7 @@ export function BindingEditorPopover({
         <button
           type="button"
           data-testid="binding-save"
-          disabled={busy || invalidEffort || invalidModel || invalidFastMode}
+          disabled={busy || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
           onClick={() => {
             setBusy(true);
             setError(undefined);

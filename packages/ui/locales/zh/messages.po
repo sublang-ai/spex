@@ -864,6 +864,11 @@ msgstr "刚刚"
 msgid "age.weeks"
 msgstr "{weeks} 周"
 
+#. subagent-effort choice: the agent picks each subagent's effort per task
+#: src/lib/agent-options.ts
+msgid "Agent chooses"
+msgstr "由代理选择"
+
 #: src/state/reducer.ts
 msgid "agent error"
 msgstr "智能体错误"
@@ -1260,6 +1265,18 @@ msgstr "选择列出的推理强度、继承，或使用服务商默认值。"
 msgid "Choose a listed effort, take the configured value, or use the provider default."
 msgstr "选择列出的推理强度、采用配置值，或使用服务商默认值。"
 
+#: src/components/BindingEditor.tsx
+msgid "Choose a listed subagent effort, inherit, or let the agent choose."
+msgstr "选择列出的子代理推理强度、继承，或由代理选择。"
+
+#: src/components/AgentEditor.tsx
+msgid "Choose a listed subagent effort, or let the agent choose."
+msgstr "选择列出的子代理推理强度，或由代理选择。"
+
+#: src/components/AgentSettings.tsx
+msgid "Choose a listed subagent effort, take the configured value, or let the agent choose."
+msgstr "选择列出的子代理推理强度、采用配置值，或由代理选择。"
+
 #: src/components/ProjectPalette.tsx
 msgid "Choose a project"
 msgstr "选择项目"
@@ -1601,8 +1618,8 @@ msgid "copies made while writing"
 msgstr "写入过程中产生的副本"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
-msgstr "沿用 Captain 的适配器、模型、子代理模型、推理强度、快速模式与权限"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
+msgstr "沿用 Captain 的适配器、模型、推理强度、子代理模型、子代理推理强度、快速模式与权限"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -3211,8 +3228,10 @@ msgstr "关闭"
 
 #. fast mode is pinned off
 #. fast mode is pinned off
+#. subagent-model choice: send no subagent model, so the agent is not told to delegate
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/lib/agent-options.ts
 msgid "Off"
 msgstr "关闭"
 
@@ -4106,6 +4125,11 @@ msgstr "正在执行工作流的操作"
 msgid "Runs slc over the draft's source — 30 to 120 minutes"
 msgstr "对草稿源文运行 slc — 约 30 到 120 分钟"
 
+#. subagent-model choice: every subagent runs on the agent's own model
+#: src/lib/agent-options.ts
+msgid "Same as agent"
+msgstr "与代理相同"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
@@ -4679,6 +4703,16 @@ msgstr "未完成即被停止"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "停止中…"
+
+#. the tuning editor's field for the reasoning effort an agent's subagents run at
+#: src/components/TuningField.tsx
+msgid "subagent effort"
+msgstr "子代理推理强度"
+
+#. the field choosing the reasoning effort an agent's subagents run at
+#: src/components/AgentEditor.tsx
+msgid "Subagent effort"
+msgstr "子代理推理强度"
 
 #. the tuning editor's field for the model an agent's subagents run on
 #: src/components/TuningField.tsx

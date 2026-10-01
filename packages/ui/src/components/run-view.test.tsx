@@ -3604,6 +3604,7 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
         ? { adapter: "claude", effortValues: ["low", "high", "max"], fastModeSupported: true,
             // Cligent serves a subagent model on Claude alone (DR-093).
             subagentModelSupported: payload?.adapter === "claude",
+            subagentEffortValues: payload?.adapter === "claude" ? ["low", "medium", "high", "max"] : [],
             discovery: { status: "available", ...(defaultModel ? { defaultModel } : {}), models: [
               { id: "claude-opus", name: "Opus" },
               { id: "claude-test", name: "Test", resolvedModel: "claude-test-5-5" },
@@ -3790,8 +3791,9 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     fireEvent.click(screen.getByTestId("agent-chip-dev.coder"));
     const editor = await screen.findByTestId("agent-settings-dev.coder");
     const mode = await within(editor).findByTestId("agent-dev.coder-subagent-model-mode") as HTMLSelectElement;
-    // [run-view-138] the configured value named; unset, the provider's words alone.
-    expect(mode.options[0]?.textContent).toBe("from Settings (Provider default)");
+    // [run-view-138] the configured value named — unset, "Same as agent"
+    // — and "Off" offered only while it stands (DR-095).
+    expect([...mode.options].map((option) => option.textContent)).toEqual(["from Settings (Same as agent)", "pin a value…"]);
     fireEvent.change(mode, { target: { value: "pin" } });
     fireEvent.change(within(editor).getByTestId("agent-dev.coder-subagent-model-value"), { target: { value: "claude-opus" } });
     fireEvent.click(screen.getByTestId("agent-save-dev.coder"));
@@ -3799,6 +3801,53 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     const [, payload] = (command.mock.calls as unknown as [string, Record<string, unknown>][])
       .find(([name]) => name === "session.agent.set")!;
     expect(payload).toMatchObject({ agentId: "dev.coder", subagentModel: "claude-opus", model: null, effort: null, fastMode: null });
+    restore();
+  });
+
+  test("the subagent effort stands beside the subagent model, Agent chooses by default, and saves with the rest (DR-095)", async () => {
+    const { command, restore } = mount();
+    // The codex reviewer is offered neither subagent field.
+    fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
+    const reviewer = await screen.findByTestId("agent-settings-dev.reviewer");
+    await waitFor(() => expect(within(reviewer).queryByText("Loading model options…")).toBeNull());
+    expect(within(reviewer).queryByTestId("agent-dev.reviewer-subagent-effort-mode")).toBeNull();
+    fireEvent.click(within(reviewer).getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByTestId("agent-chip-dev.coder"));
+    const editor = await screen.findByTestId("agent-settings-dev.coder");
+    const mode = await within(editor).findByTestId("agent-dev.coder-subagent-effort-mode") as HTMLSelectElement;
+    // [run-view-138] each model beside its effort, in one paired grid.
+    const rows = within(editor).getByTestId("agent-dev.coder-tuning-rows");
+    expect(rows.className).toContain("@xs:grid-cols-2");
+    expect([...rows.querySelectorAll("select[data-testid$='-mode']")].map((select) => select.getAttribute("data-testid"))).toEqual([
+      "agent-dev.coder-model-mode", "agent-dev.coder-effort-mode", "agent-dev.coder-subagent-model-mode", "agent-dev.coder-subagent-effort-mode",
+    ]);
+    // [run-view-138] an unset configured effort is the agent's choice,
+    // which is also the provider-default choice.
+    expect([...mode.options].map((option) => option.textContent)).toEqual([
+      "from Settings (Agent chooses)", "Agent chooses", "pin a value…",
+    ]);
+    fireEvent.change(mode, { target: { value: "pin" } });
+    const pinned = within(editor).getByTestId("agent-dev.coder-subagent-effort-value") as HTMLSelectElement;
+    // [run-view-140] the adapter's subagent efforts, no orchestration value.
+    expect([...pinned.options].map((option) => option.value)).toEqual(["", "low", "medium", "high", "max"]);
+    fireEvent.change(pinned, { target: { value: "medium" } });
+    fireEvent.click(screen.getByTestId("agent-save-dev.coder"));
+    await waitFor(() => expect((command.mock.calls as unknown as [string][]).some(([name]) => name === "session.agent.set")).toBe(true));
+    const [, payload] = (command.mock.calls as unknown as [string, Record<string, unknown>][])
+      .find(([name]) => name === "session.agent.set")!;
+    expect(payload).toMatchObject({ agentId: "dev.coder", subagentEffort: "medium", subagentModel: null, model: null, effort: null, fastMode: null });
+    restore();
+  });
+
+  test("a changed subagent effort marks the chip changed and leaves its reading alone (DR-095)", () => {
+    const { restore } = mount({ "dev.coder": { subagentEffort: "max" } });
+    const chip = screen.getByTestId("agent-chip-dev.coder");
+    // [run-view-139] the chip never reads the subagent effort.
+    expect(chip.textContent).toBe("claude-test");
+    expect(chip.getAttribute("aria-label")).not.toMatch(/max/);
+    expect(chip.getAttribute("data-changed")).toBe("true");
+    expect(chip.getAttribute("aria-label")).toMatch(/changed for this conversation/);
     restore();
   });
 
