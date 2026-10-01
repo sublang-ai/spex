@@ -66,15 +66,6 @@ playbooks:
       coder: dev.coder
 `;
 
-/** VALID_CONFIG for a writer Playbook's own launcher composes: the
- * launcher sends a Claude agent `inherit` as its subagent model by
- * default (playbook DR-076), and cligent takes a subagent model only from
- * an adapter it knows, which the substitute is not — so these agents
- * switch delegation off (DR-095). */
-const LAUNCHER_SUBSTITUTE_CONFIG = VALID_CONFIG
-  .replace("  model: claude-test\nplayers:", "  model: claude-test\n  subagentModel: false\nplayers:")
-  .replace("    model: claude-test\nplaybooks:", "    model: claude-test\n    subagentModel: false\nplaybooks:");
-
 class Client {
   private readonly socket: WebSocket;
   readonly messages: ServerMessage[] = [];
@@ -321,15 +312,20 @@ test("CORE-19: fake-adapter session end to end over the WebSocket", async () => 
   assert.equal(types[types.length - 1], "turn_finished");
   assert.ok(!types.includes("captain_prompt"), "hidden records leaked");
 
-  // No network: every event came from the fake adapter.
+  // No network: every event came from the substitute, which stands in
+  // for the Claude runtime under its own name and served every call.
   const playerEvents = sessionRecords.filter(
     (m) => m.record.type === "player_event",
   );
   assert.ok(playerEvents.length > 0);
   for (const message of playerEvents) {
     const event = (message.record as { event: { agent: string } }).event;
-    assert.equal(event.agent, "fake");
+    assert.equal(event.agent, "claude-code");
   }
+  assert.ok(
+    harness.stats.runs.some((run) => run.agent === "claude-code" && run.prompt.includes("slow: build the feature")),
+    "the substitute served the player's call",
+  );
 
   client.close();
   await harness.service.stop();
@@ -3407,7 +3403,7 @@ test("core-service-84: a writer stopped mid-step restores to its saved step and 
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, LAUNCHER_SUBSTITUTE_CONFIG);
+  writeFileSync(configPath, VALID_CONFIG);
   const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
   const { imports, stats } = fakeAdapterImports(parkingScript());
   const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
@@ -3470,7 +3466,7 @@ test("core-service-84: a restore bringing back a run the Boss stopped himself ra
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, LAUNCHER_SUBSTITUTE_CONFIG);
+  writeFileSync(configPath, VALID_CONFIG);
   const { imports } = fakeAdapterImports(parkingScript({ held: true }));
   const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
   t.after(async () => { await service.stop(); });
@@ -3526,7 +3522,7 @@ test("core-service-84: a restore whose core stopped before recording the positio
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, LAUNCHER_SUBSTITUTE_CONFIG);
+  writeFileSync(configPath, VALID_CONFIG);
   const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
   const { imports, stats } = fakeAdapterImports(parkingScript());
 
