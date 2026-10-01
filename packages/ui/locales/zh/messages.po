@@ -236,7 +236,7 @@ msgstr "{count, plural, other {改动了 # 个文件却未提交}}"
 
 #: src/components/SpaceSync.tsx
 msgid "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
-msgstr "{count, plural, other {保留本设备版本的全部 # 个单元？远程版本仍留在 Git 历史中。}}"
+msgstr "{count, plural, other {保留这 # 个单元的本设备版本？远程版本仍留在 Git 历史中。}}"
 
 #: src/components/LibrarySurface.tsx
 msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
@@ -325,7 +325,7 @@ msgstr "未找到 {id}"
 #. a call's tokens in and out; tok is short for tokens
 #: src/components/PlayerPane.tsx
 msgid "{input}→{output} tok"
-msgstr "{input}→{output} token"
+msgstr "{input}→{output} tok"
 
 #: src/components/DeliveryCard.tsx
 msgid "{kind} {ref}"
@@ -440,7 +440,7 @@ msgstr "{playbookId} 状态机，当前处于 {state}"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
-msgstr "{role} 的扮演者"
+msgstr "{role} 的 Player"
 
 #: src/lib/time.ts
 msgid "{seconds}s"
@@ -540,7 +540,7 @@ msgstr "/ 打开规程 · Enter 发送"
 
 #: src/components/LibrarySurface.tsx
 msgid "/{id} is already a configured playbook"
-msgstr "/{id} 已是已配置的规程"
+msgstr "/{id} 已在配置中"
 
 #. a run's one-line strip: the workflow, where it stands, who called it
 #: src/components/MachineCard.tsx
@@ -955,7 +955,7 @@ msgstr "回答问题…"
 #. follows a role name, before the player that answers it
 #: src/components/DraftConversation.tsx
 msgid "answered by"
-msgstr "的答复者是"
+msgstr "的 Player 是"
 
 #: src/components/DraftConversation.tsx
 msgid "Answering agent"
@@ -1300,7 +1300,7 @@ msgstr "选择由哪个智能体答复"
 
 #: src/components/LibrarySurface.tsx
 msgid "Choose which session player answers {role}"
-msgstr "选择由哪个会话 Player 答复 {role}"
+msgstr "选择由哪个会话 Player 担任 {role}"
 
 #: src/components/SpecView.tsx
 msgid "Citations: {summary}"
@@ -1362,7 +1362,7 @@ msgstr "关闭当前会话标签页"
 
 #: src/lib/shortcuts.ts
 msgid "Close the menu, palette, or editor at hand"
-msgstr "关闭当前的菜单、面板或编辑器"
+msgstr "关闭当前的菜单、项目选择器或编辑器"
 
 #: src/components/ProjectGroup.tsx
 msgid "Close this intent as dropped — the session keeps running"
@@ -1471,7 +1471,7 @@ msgstr "{age}编译"
 
 #: src/lib/drafts.ts
 msgid "Compiled {age}; the source changed since"
-msgstr "{age}编译；此后源已更改"
+msgstr "{age}编译；此后源文已更改"
 
 #: src/components/LibrarySurface.tsx
 msgid "Compiled {id}"
@@ -1497,7 +1497,7 @@ msgstr "正在编译 {id}"
 
 #: src/lib/drafts.ts
 msgid "Compiling since {age}"
-msgstr "自 {age}起编译中"
+msgstr "{age}开始编译"
 
 #. a compile is in flight
 #: src/components/AuthoringWorkspace.tsx
@@ -2102,11 +2102,11 @@ msgstr "结束本轮；对话记录保留已收到的内容"
 
 #: src/components/BindingEditor.tsx
 msgid "Enter a model ID, inherit, or use the provider default."
-msgstr "输入模型 ID、继承，或使用提供方默认。"
+msgstr "输入模型 ID、继承，或使用服务商默认值。"
 
 #: src/components/AgentSettings.tsx
 msgid "Enter a model ID, take the configured value, or use the provider default."
-msgstr "输入模型 ID、采用已配置的值，或使用提供方默认。"
+msgstr "输入模型 ID、采用已配置的值，或使用服务商默认值。"
 
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
@@ -2373,7 +2373,7 @@ msgstr "Git 数据 — 仓库自身的文件；不予显示。"
 
 #: src/components/SpaceSurface.tsx
 msgid "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
-msgstr "本机未配置 Git 提交者身份，应用将以 Spex 加本机主机名提交"
+msgstr "本机未配置 Git 提交者身份，应用将以“Spex@主机名”的身份提交"
 
 #: src/components/SpaceSurface.tsx
 msgid "Git is not installed"
@@ -2442,7 +2442,7 @@ msgstr "隐藏 {project} 中的会话"
 
 #: src/components/LibrarySurface.tsx
 msgid "Hide source"
-msgstr "隐藏源文本"
+msgstr "隐藏源文"
 
 #: src/components/CaptainHome.tsx
 msgid "Hide the quick-start card"
@@ -2499,7 +2499,7 @@ msgstr "图片"
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
-msgstr "他处占用"
+msgstr "别处使用中"
 
 #. tuning choice: take whatever the player lane resolves
 #: src/components/TuningField.tsx
@@ -2611,7 +2611,7 @@ msgstr "加入"
 
 #: src/components/SpaceSync.tsx
 msgid "Join both into one space, or check the remote URL."
-msgstr "用加入把两者并为一个空间，或检查远程地址。"
+msgstr "用“加入”将两者并为一个空间，或检查远程地址。"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -2803,7 +2803,7 @@ msgstr "标记中…"
 
 #: src/lib/space.ts
 msgid "May hold provider tokens — not shown"
-msgstr "可能包含提供方令牌 — 不予显示"
+msgstr "可能包含服务商令牌 — 不予显示"
 
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
@@ -2872,7 +2872,7 @@ msgstr "上移"
 
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
-msgstr "为本设备上的文件夹命名。"
+msgstr "请填写本设备上的文件夹路径。"
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3027,7 +3027,7 @@ msgstr "没有名为“{player}”的 Player — 请检查配置"
 
 #: src/components/SettingsSurface.tsx
 msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
-msgstr "还没有 Player — 在库中启用规程会自动添加其角色所需的 Player。"
+msgstr "还没有 Player — 在“规程”界面启用规程会自动添加其角色所需的 Player。"
 
 #: src/components/SpaceExplorer.tsx
 msgid "No preview for this file."
@@ -3052,15 +3052,15 @@ msgstr "无远程仓库"
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
 msgid "No source"
-msgstr "无源文本"
+msgstr "无源文"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "No source yet"
-msgstr "还没有源文本"
+msgstr "还没有源文"
 
 #: src/components/DraftSourceTab.tsx
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
-msgstr "还没有源文本 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
+msgstr "还没有源文 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
 
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
@@ -3091,7 +3091,7 @@ msgstr "规范化"
 
 #: src/components/LibrarySurface.tsx
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
-msgstr "规范化文本：散文写成的工作流 markdown，采用 slc 的规范化形式"
+msgstr "规范化文本：自由文本写成的工作流 markdown，采用 slc 的规范化形式"
 
 #. the space's status, read in a title
 #: src/components/SpaceSurface.tsx
@@ -3189,7 +3189,7 @@ msgstr "远程仓库没有新内容"
 
 #: src/components/DashboardSurface.tsx
 msgid "Nothing owed — open it, or mark it reviewed."
-msgstr "没有待办 — 可以打开，或标记为已审阅。"
+msgstr "无需处理 — 打开查看，或标记为已审阅。"
 
 #: src/components/ProjectGroup.tsx
 msgid "Nothing queued — add an intent below, or Queue an issue, PR, or record from Sources."
@@ -3312,7 +3312,7 @@ msgstr "打开 {title} — 正在 {project} 中运行"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
-msgstr "打开并发送一条消息即可接手。"
+msgstr "打开并发送一条消息即可接续。"
 
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceSync.tsx
@@ -3330,7 +3330,7 @@ msgstr "未完成记录"
 
 #: src/components/DraftConversation.tsx
 msgid "Open Register"
-msgstr "打开注册"
+msgstr "打开“注册”"
 
 #: src/components/SpaceExplorer.tsx
 #: src/components/SpaceSync.tsx
@@ -3437,11 +3437,11 @@ msgstr "粘贴"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Paste a source or pick a file"
-msgstr "粘贴源文本或选择文件"
+msgstr "粘贴源文或选择文件"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
-msgstr "粘贴规程源文本 — 散文、SKILL.md 或工作流 markdown…"
+msgstr "粘贴规程源文 — 自由文本、SKILL.md 或工作流 markdown…"
 
 #. field holding a path to select and copy
 #: src/components/SpaceSurface.tsx
@@ -3550,7 +3550,7 @@ msgstr "已按智能体的提议预填 — 可随意修改"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Prefilled from the source and the compiled roles — edit anything"
-msgstr "已按源文本与编译出的角色预填 — 可随意修改"
+msgstr "已按源文与编译出的角色预填 — 可随意修改"
 
 #. compile phase: slc moves each prompt's relayed values after its instructions, so calls share a cached prefix
 #: src/lib/compile-log.ts
@@ -3617,19 +3617,19 @@ msgstr "拟定的注册信息"
 #. an agent chip's model reading when the provider's own default is taken
 #: src/lib/session-agents.ts
 msgid "provider default"
-msgstr "提供方默认"
+msgstr "服务商默认"
 
 #. a model or effort left to the provider's own default
 #: src/lib/agent-options.ts
 msgid "Provider default"
-msgstr "提供方默认"
+msgstr "服务商默认"
 
 #. a file family that stays on this device
 #. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "provider hints"
-msgstr "提供方提示"
+msgstr "服务商提示"
 
 #. Sources tab: the repo's open pull requests
 #: src/components/SourcesTabs.tsx
@@ -3703,7 +3703,7 @@ msgstr "队列"
 #: src/components/DeliveryCard.tsx
 #: src/components/ForgeItemRow.tsx
 msgid "Queuing…"
-msgstr "加入中…"
+msgstr "排队中…"
 
 #: src/components/CaptainHome.tsx
 msgid "Quick start"
@@ -3835,7 +3835,7 @@ msgstr "注册"
 
 #: src/components/ProjectPalette.tsx
 msgid "Register this existing repository"
-msgstr "登记这个已有的仓库"
+msgstr "注册这个已有的仓库"
 
 #: src/components/LibrarySurface.tsx
 msgid "Registered /{command}"
@@ -3921,7 +3921,7 @@ msgstr "从 Spex 移除？仓库会保留在磁盘上。"
 
 #: src/components/LibrarySurface.tsx
 msgid "Remove from the config (compiled artifacts stay in the library)"
-msgstr "从配置中移除（编译产物保留在库中）"
+msgstr "从配置中移除（编译产物保留在规程库中）"
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove project"
@@ -4339,7 +4339,7 @@ msgstr "会话目录在空间之外；不共享"
 
 #: src/components/SpaceSurface.tsx
 msgid "Set this space up first"
-msgstr "请先设置此空间"
+msgstr "请先初始化此空间"
 
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
@@ -4348,7 +4348,7 @@ msgstr "设为 {set}，运行时报告 {model}"
 
 #: src/components/SpaceSurface.tsx
 msgid "Set up space"
-msgstr "设置空间"
+msgstr "初始化空间"
 
 #. one unit's kind: the settings file
 #: src/lib/space.ts
@@ -4359,7 +4359,7 @@ msgstr "设置"
 #. the setup control, while the setup runs
 #: src/components/SpaceSurface.tsx
 msgid "Setting up…"
-msgstr "设置中…"
+msgstr "初始化中…"
 
 #. catalog family: the shared config the Settings surface edits
 #: src/components/NavRail.tsx
@@ -4431,11 +4431,11 @@ msgstr "显示消息"
 
 #: src/components/NavRail.tsx
 msgid "Show the sidebar"
-msgstr "显示侧边栏"
+msgstr "显示侧栏"
 
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
-msgstr "显示侧边栏（{keys}）"
+msgstr "显示侧栏（{keys}）"
 
 #: src/components/SpecGraph.tsx
 msgid "Show the whole graph (0)"
@@ -4502,15 +4502,15 @@ msgstr "此规程的来源：{from}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
-msgstr "来源：{issues, plural, other {# 个 Issue}} · {prs, plural, other {# 个 PR}} · {records, plural, other {# 条未结记录}}"
+msgstr "来源：{issues, plural, other {# 个 Issue}} · {prs, plural, other {# 个 PR}} · {records, plural, other {# 条未完成记录}}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: GitHub not connected · {records, plural, one {# open record} other {# open records}}"
-msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未结记录}}"
+msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未完成记录}}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
-msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未结记录}}"
+msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未完成记录}}"
 
 #: src/components/NavRail.tsx
 #: src/components/SpaceSurface.tsx
@@ -4796,7 +4796,7 @@ msgstr "同步中…"
 
 #: src/components/SpaceSurface.tsx
 msgid "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
-msgstr "同步会话、队列、项目、设置和规程源文 — <0>查看哪些留在本机</0>。设置之前不会联系任何地址。"
+msgstr "同步会话、队列、项目、设置和规程源文 — <0>查看哪些留在本机</0>。初始化之前不会联系任何远程地址。"
 
 #: src/components/SettingsSurface.tsx
 msgid "System"
@@ -4804,7 +4804,7 @@ msgstr "跟随系统"
 
 #: src/components/SettingsSurface.tsx
 msgid "System follows your device"
-msgstr "跟随系统：设备的语言"
+msgstr "跟随系统即设备的语言"
 
 #. conflict choice: take the remote's version
 #: src/components/SpaceSync.tsx
@@ -5034,7 +5034,7 @@ msgstr "思考过程"
 
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
-msgstr "此命令会刷新规约法则并打印迁移提示词，由 AI 智能体执行迁移："
+msgstr "此命令会刷新规约规则并打印迁移提示词，由 AI 智能体执行迁移："
 
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
@@ -5287,7 +5287,7 @@ msgstr "等待 — 前序工作已停止"
 #. queued row standing: the work ahead parked on a question
 #: src/components/QueuedIntentPresentation.tsx
 msgid "waiting — your reply"
-msgstr "等待 — 你的回复"
+msgstr "等待 — 需你回复"
 
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"
