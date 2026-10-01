@@ -210,6 +210,7 @@ const owner = (sessionId: string, title: string) => ({
 const TREE: Record<string, SpaceEntry[]> = {
   "": [
     { name: "sessions", path: "sessions", kind: "dir", family: "session bundles", sync: "shared", count: 4, preview: "none" },
+    { name: "intents", path: "intents", kind: "dir", family: "project queues", sync: "pending", count: 0, preview: "none" },
     { name: "local", path: "local", kind: "dir", family: "local project paths", sync: "local", count: 1, preview: "none" },
     { name: "prefs.json", path: "prefs.json", kind: "file", family: "preferences", sync: "local", size: 512, preview: "text" },
     { name: "projects.json", path: "projects.json", kind: "file", family: "project registry", sync: "shared", size: 4200, preview: "text" },
@@ -955,6 +956,24 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
     await waitFor(() => expect(calls("space.sync")).toEqual([{ join: true }]));
   });
 
+  test("the Join card stands until the remote is checked, on a synced home too, and goes after the check (space-45)", async () => {
+    // A home that synced before, its remote changed since: the change
+    // cleared the last check, so the card is back above the lists.
+    await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null } }));
+    const card = screen.getByTestId("space-first-meeting");
+    expect(card.textContent).toContain("This space has not met that remote yet.");
+    expect(within(card).getByTestId("space-first-join").title).toBe(
+      "Brings both spaces into one and asks about anything that differs",
+    );
+    expect(screen.getByTestId("space-primary").textContent).toContain("Sync");
+    // The check records its time: the card goes.
+    deliver(repoState());
+    expect(screen.queryByTestId("space-first-meeting")).toBeNull();
+    // Unrelated histories offer Join in the header instead (space-13).
+    deliver(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null, unrelated: true }, sync: { phase: "unrelated" } }));
+    expect(screen.queryByTestId("space-first-meeting")).toBeNull();
+  });
+
   test("controls are disabled while disconnected", async () => {
     await renderSpace(repoState());
     act(() => useAppStore.setState({ connection: "closed" }));
@@ -1142,6 +1161,13 @@ describe("SPACE: the explorer (space-23, space-24)", () => {
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not a Spex file");
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not yet shared");
     expect(screen.getByTestId("space-node-sessions").textContent).toContain("4 entries");
+    // An empty directory of a tracked kind reads not yet shared, never
+    // "Stays here" (space-23).
+    const queues = screen.getByTestId("space-node-intents");
+    expect(queues.textContent).toContain("project queues");
+    expect(queues.textContent).toContain("0 entries");
+    expect(queues.textContent).toContain("Not yet shared");
+    expect(queues.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("pending");
     const git = screen.getByTestId("space-node-.git");
     expect(git.textContent).toContain("Git data");
     expect(git.getAttribute("aria-expanded")).toBeNull();

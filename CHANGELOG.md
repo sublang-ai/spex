@@ -516,6 +516,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   moment. An undated record now dates by the last commit touching its
   file, and by the file's last change only where Git tracks none
   (dashboard-27, spec-view-14).
+- Space's Join card never came back on a home that had synced once:
+  changing the remote cleared the last check, but the card was gated on
+  the last sync, so joining another occupied space meant syncing into
+  "Unrelated history" first. The card now stands whenever the remote has
+  not been checked, a changed remote included (space-45).
+- Space's Explore tab read an empty `sessions/` or `intents/` as "Stays
+  here", the mark reserved for the families that never sync; a tracked
+  kind with nothing committed yet now reads "Not yet shared" (space-23).
 
 ### Security
 

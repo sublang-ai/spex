@@ -1584,7 +1584,10 @@ export class SpaceManager {
     if (staysHere(rel, family)) sync = "local";
     else if (!marks.repo) sync = "pending";
     else if (marks.ignored.has(rel)) sync = "local";
-    else if (directory) sync = under(marks.status) ? "pending" : under(marks.tracked) ? "shared" : "local";
+    // A directory of a tracked kind holding nothing committed — an empty
+    // sessions/ or intents/ — is not yet shared; "Stays here" is for the
+    // ignored families alone (space-23).
+    else if (directory) sync = under(marks.tracked) && !under(marks.status) ? "shared" : "pending";
     else sync = marks.status.has(rel) ? "pending" : marks.tracked.has(rel) ? "shared" : "pending";
     const owner = this.owner(rel);
     if (directory) {
