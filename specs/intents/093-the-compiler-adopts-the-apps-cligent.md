@@ -14,7 +14,7 @@ Realize [DR-094](../decisions/094-the-compiler-adopts-the-apps-cligent.md): both
 ## Deliverables
 
 - [x] DR-094, the amended records' status lines and the map.
-- [ ] Both shells at `@sublang/slc` `^0.14.0`, no root `overrides`, the lockfile regenerated from the public registry; the changelog.
+- [x] Both shells at `@sublang/slc` `^0.14.0`, no root `overrides`, the lockfile regenerated from the public registry; the changelog.
 - [ ] `app-v0.9.0-beta.5`.
 
 ## Tasks
