@@ -155,14 +155,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.3, slc 0.14 and Cligent 0.30 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.3, slc 0.15 and Cligent 0.30 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
   [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md)),
-  and locks the agent SDKs at the releases Cligent 0.29 tests: Claude
+  and locks the agent SDKs at the releases Cligent 0.30 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
-  compiler runs on the app's own Playbook and Cligent, which slc 0.14
+  compiler runs on the app's own Playbook and Cligent, which slc 0.15
   declares. Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads

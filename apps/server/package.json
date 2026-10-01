@@ -23,7 +23,7 @@
     "@anthropic-ai/claude-agent-sdk": "*",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/slc": "^0.14.0",
+    "@sublang/slc": "^0.15.0",
     "@sublang/spex-core": "*"
   },
   "devDependencies": {
