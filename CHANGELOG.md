@@ -466,6 +466,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A machine that once ran the SQLite-era app imported its former store
+  into every new Spex home — a second home, the smoke's scratch home, a
+  reinstall into a fresh one — since the import's only record was the
+  home's own. A store a home has imported is now marked beside itself
+  (`spex.db.imported`, `server.db.imported`), no later home reads a
+  marked store, and a home that took the store before this fix marks it
+  at its next start (core-service-64).
 
 ### Security
 

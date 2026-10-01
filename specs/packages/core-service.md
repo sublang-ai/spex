@@ -515,9 +515,10 @@ When the core service starts against a state root that another core instance hol
 
 #### core-service-64
 
-Where the host shell names a legacy SQLite store, when the core service starts on a state root that has not yet imported it, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], and the legacy file left in place ([DR-036](../decisions/036-file-state-store.md)):
+Where the host shell names a legacy SQLite store that neither the state root's own record nor a `<store>.imported` marker beside the file shows imported, when the core service starts, the core service shall import the store's rows into the file state once, before serving — the imported data served identically to data written natively [[core-service-10](#core-service-10)], the legacy file left in place, and the marker written beside it on success so that no state root created later imports it again ([DR-036](../decisions/036-file-state-store.md)):
 
 - The same import relocates a legacy library directory into the state root, rewriting the shared config's `from` paths that point into it with the comment-preserving targeted edit ([DR-005](../decisions/005-compilation-integration.md)).
+- A marker that cannot be written is reported and the root's own record alone stands; a root whose record lists a store the file does not yet mark writes the marker at its next start.
 
 ### Shutdown
 
@@ -759,7 +760,7 @@ Where a session has completed a Boss turn, the test suite shall stop the core se
 - Where the stream file becomes unappendable mid-session, the suite shall assert the fail-soft contract of [[core-service-10](#core-service-10)]: the record is still served from memory, the listing marks the stream incomplete after the last durable sequence and carries no `agentActiveMs`, and both facts survive a restart [[core-service-102](#core-service-102)].
 - Where a native stream is damaged before restart, the suite shall assert its valid history remains readable, its persisted incomplete marker keeps any earlier boundary [[core-service-10](#core-service-10)], and a Boss submission refuses continuation without appending to the damaged stream [[core-service-73](#core-service-73)].
 - With opaque v1 objects interspersed, restart preserves records, sequences, later turn, usage, and active-time folds and stream bytes without marking incompleteness [[core-service-10](#core-service-10)] [[core-service-102](#core-service-102)].
-- Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched, and a second startup imports nothing twice.
+- Where the shell names a legacy SQLite store holding sessions and intents, beside a legacy library directory the shared config's `from` paths point into, the suite shall assert the one-time import of [[core-service-64](#core-service-64)]: the rows serve identically from the file state, the library relocates with its `from` paths rewritten and comments kept, the legacy store file is untouched but marked `<store>.imported` beside itself, a second startup imports nothing twice, a state root created later against the marked store imports nothing, an unreadable store stays unmarked for a later retry, and a store whose directory refuses the mark imports once per root all the same.
 
 #### core-service-62
 
