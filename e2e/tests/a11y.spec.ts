@@ -6,7 +6,9 @@
 // violations fail the run. The authoring workspace is scanned in each
 // of its states (playbook-library-77): empty, paste mode, a turn with
 // the source appearing, compiling, failed, compiled with each tab,
-// the editor, and the agent picker.
+// the editor, and the agent picker. Settings is scanned again at a
+// phone's width, where its shortcut sheet scrolls sideways and must
+// take a keyboard stop of its own (run-view-50).
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
@@ -163,3 +165,30 @@ for (const theme of ["light", "dark"] as const) {
     expect(found, found.join("\n")).toEqual([]);
   });
 }
+
+// The narrow sweep (run-view-102): Settings at 360×640, where the
+// shortcut sheet overflows sideways. A box the reader can scroll that
+// holds nothing focusable must be a keyboard stop with a name
+// (run-view-50); axe reports one that is not as serious.
+test.describe("narrow", () => {
+  test.use({ appOptions: { project: true }, viewport: { width: 360, height: 640 } });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`run-view-102: no serious or critical violation on Settings at 360px (${theme})`, async ({
+      page,
+      app,
+    }) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await open(page, app);
+      await nav(page, "Settings").click();
+      await expect(page.getByTestId("captain-section")).toBeVisible();
+      const sheet = page.getByRole("group", { name: "Keyboard shortcuts" });
+      await expect(sheet).toBeVisible();
+      // The sheet scrolls sideways here and is itself the stop.
+      expect(await sheet.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+      await expect(sheet).toHaveAttribute("tabindex", "0");
+      const found = await scan(page, `Settings 360px (${theme})`);
+      expect(found, found.join("\n")).toEqual([]);
+    });
+  }
+});

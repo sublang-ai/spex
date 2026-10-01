@@ -402,6 +402,11 @@ describe("settings-10: the shortcut sheet and the mode guidance", () => {
     expect(rows[0].textContent).toContain("Switch or add a project");
     expect(sheet.textContent).toContain("Escape");
     expect(sheet.textContent).toContain("Shift+Enter");
+    // The box the sheet scrolls in is itself a named keyboard stop
+    // (run-view-50): at a phone's width it overflows sideways.
+    const box = within(sheet).getByRole("group", { name: "Keyboard shortcuts" });
+    expect(box.getAttribute("tabindex")).toBe("0");
+    expect(box.className).toContain("overflow-x-auto");
   });
 
   test("the permission mode explains its stakes", () => {

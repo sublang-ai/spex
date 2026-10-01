@@ -383,6 +383,7 @@ Where Dashboard state is assembled, the dashboard read model shall source live-s
 Where the Sources band's issue and pull-request tabs are served, the dashboard read model shall serve them from a per-project cache persisted in the app store and refreshed through the forge adapter ([DR-006](../decisions/006-projects-and-forge.md)):
 
 - While the Dashboard is displayed, a cache entry older than 10 minutes triggers a background refresh; a fresher entry triggers no adapter call.
+- The served lists carry the moment they were fetched, so the Sources summary's age [[dashboard-20](#dashboard-20)] is the data's own on every client, never the client's read.
 - When the user triggers a manual refresh, the read model calls the forge adapter regardless of cache age.
 - When an adapter call fails, the read model retains the last cached entries and surfaces the failure together with the data age; it does not clear cached lists on failure.
 

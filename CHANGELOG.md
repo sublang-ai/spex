@@ -410,6 +410,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- The Chinese catalogs' terms, after a native-speaker audit: setting a
+  space up reads 初始化 on every surface and in the core's refusals,
+  keeping 设置 for Settings; a model's provider reads 服务商 everywhere;
+  the library reads 规程库; a playbook's source reads 源文; the roles
+  a player answers read Player; and some thirty other phrases in the
+  interface, the core and the desktop notifications read as a native
+  speaker would say them.
 - `npm start` on a Mac whose PATH leads with a GNU `libtool` (Homebrew's
   `libtool` formula): the native rebuild of `better-sqlite3` now links
   with the Apple `libtool` that `xcrun` names instead of failing on
@@ -466,6 +473,22 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A project's Sources summary read "just now" whenever a client first
+  saw the lists, however old the core's cache was, and a group kept on
+  screen never asked again — a freshly connected page showed a
+  35-minute-old issue list as current. The lists now carry their fetch
+  moment, the summary shows that age, and a group on screen asks again
+  once the lists pass the ten-minute window (dashboard-14,
+  dashboard-20).
+- A surface shortcut — ⌘1, ⌘3, ⌘4, ⌘5 or ⌘, (Ctrl on other hosts) —
+  left keyboard focus on the page body, and so did ⌘B. Focus now lands
+  inside the surface the shortcut opened, on its composer where it has
+  one, and ⌘B lands on the sidebar's own collapse control, so the next
+  Tab continues from where the reader went (run-view-50, run-view-71).
+- At a phone's width the Settings keyboard-shortcut sheet scrolled
+  sideways with no keyboard stop, which axe reports as serious. The
+  sheet is now a named stop, "Keyboard shortcuts", so the keyboard
+  reaches what a pointer scrolls (run-view-50).
 - A project created from the palette told its coding agents to run
   `spex lint`, a command the desktop install puts on no PATH, so a
   coder's lint check failed with "command not found". The scaffolded

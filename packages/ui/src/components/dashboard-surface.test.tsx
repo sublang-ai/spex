@@ -2198,6 +2198,107 @@ describe("dashboard-19/20/24/25/30/37: the Sources band", () => {
     ]);
   });
 
+  test("the summary's age is the served lists' own fetch moment; the read's only without one (dashboard-14)", () => {
+    seedSources({
+      projectMeta: {
+        p1: { forge: { ...FORGE, at: NOW - 35 * MIN } },
+        p2: { forge: FORGE },
+      },
+    });
+    renderSurface();
+
+    // A client that first sees a cached list shows the data's own age
+    // (dashboard-14), the moment in the tooltip (dashboard-20) — never
+    // its own read's.
+    const served = screen.getByTestId("sources-toggle-p1");
+    expect(served.textContent).toContain("1 issue · 1 PR · 1 open record");
+    expect(served.textContent).toContain("35m ago");
+    expect(
+      within(served).getByTitle(
+        new Date(NOW - 35 * MIN).toLocaleString(currentLocale()),
+      ),
+    ).toBeTruthy();
+    // A core that carries no moment leaves the read's own.
+    expect(screen.getByTestId("sources-toggle-p2").textContent).toContain(
+      "just now",
+    );
+  });
+
+  test("a list past the cache window is asked for again on the slow clock; a fresh one is not (dashboard-14)", async () => {
+    vi.useFakeTimers();
+    try {
+      commandMock.mockImplementation(async (type: string) => {
+        if (type === "forge.items") return { ...FORGE, at: Date.now() };
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        if (type === "ledger.history") return { intents: [], more: false };
+        return {};
+      });
+      seedSources({
+        projectMeta: {
+          p1: { forge: { ...FORGE, at: Date.now() - 12 * MIN } },
+          p2: { forge: { ...FORGE, at: Date.now() - 2 * MIN } },
+        },
+      });
+      renderSurface();
+      // Served state loads nothing on its own.
+      expect(callsOf("forge.items")).toEqual([]);
+
+      // One minute on: the stale project's lists are asked for again,
+      // without the manual-refresh flag; the fresh project's are not.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(callsOf("forge.items")).toEqual([
+        { projectId: "p1", refresh: false },
+      ]);
+      expect(screen.getByTestId("sources-toggle-p1").textContent).toContain(
+        "just now",
+      );
+
+      // Re-served fresh, it stays quiet on the next tick.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(callsOf("forge.items")).toEqual([
+        { projectId: "p1", refresh: false },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a failed background read keeps the served lists and their moment (dashboard-14)", async () => {
+    vi.useFakeTimers();
+    try {
+      commandMock.mockImplementation(async (type: string) => {
+        if (type === "forge.items") throw new Error("gh: rate limited");
+        if (type === "ledger.get") return useAppStore.getState().ledger;
+        if (type === "ledger.history") return { intents: [], more: false };
+        return {};
+      });
+      const at = Date.now() - 12 * MIN;
+      seedSources({
+        projectMeta: {
+          p1: { forge: { ...FORGE, at } },
+          p2: { forge: { ...FORGE, at: Date.now() } },
+        },
+      });
+      renderSurface();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(callsOf("forge.items")).toEqual([{ projectId: "p1", refresh: false }]);
+      const meta = useAppStore.getState().projectMeta.p1;
+      expect(meta?.forge?.at).toBe(at);
+      expect(meta?.forgeError).toBe("gh: rate limited");
+      expect(screen.getByTestId("sources-toggle-p1").textContent).toContain(
+        "1 issue · 1 PR · 1 open record",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("an adapter failure keeps the last lists and surfaces itself", () => {
     seedSources({
       projectMeta: {

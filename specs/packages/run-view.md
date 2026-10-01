@@ -1153,12 +1153,16 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 - the platform modifier with P opens the palette, arrow keys move its selection, Enter picks, Escape closes [[run-view-42](#run-view-42)];
 - the modifier with 1 through 5 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
+- after the modifier with 1, 3, 4, 5 or comma, focus stands inside the surface opened, and after the modifier with 2 it stands in the Boss composer [[run-view-50](#run-view-50)];
+- after the modifier with B, focus stands on the sidebar's collapse control in both of its states [[run-view-71](#run-view-71)];
 - in the composer Enter sends while Shift+Enter inserts a line break [[run-view-8](#run-view-8)];
 - a Tab sequence from the page start reaches the composer, and no shortcut leaves focus stranded on the document body.
 
 #### run-view-102
 
-Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, Settings, and Settings with an agent editor's model list open — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, Settings, and Settings with an agent editor's model list open — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, and Settings is scanned again in a 360 by 640 viewport where its shortcut sheet scrolls sideways, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)]:
+
+- in the narrow viewport the shortcut sheet is a keyboard stop named "Keyboard shortcuts" [[run-view-50](#run-view-50)].
 
 #### run-view-103
 
