@@ -460,6 +460,88 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   await composeConfig(onCodex, stubLoader);
 });
 
+test("a subagent effort and the inherit literal compose; an effort outside the vocabulary, beside no model, or off its adapter is refused", async () => {
+  // DR-095 (core-service-16): `inherit` names the agent's own model and
+  // `false` sends none; a subagent effort is the adapter's effort less
+  // its orchestration value, beside a subagent model — an unset one
+  // composing as `inherit`, as Playbook's launcher resolves it.
+  const top = baseConfig();
+  const coderId = String(codeRoles(top).coder);
+  const reviewerId = String(reviewRoles(top).reviewer);
+  Object.assign(top.captain as Record<string, unknown>, { subagentModel: "inherit", subagentEffort: "high" });
+  (roster(top)[coderId] as Record<string, unknown>).subagentEffort = "low";
+  (roster(top)[reviewerId] as Record<string, unknown>).subagentModel = false;
+  codeRoles(top).coder = { player: coderId, subagentEffort: "max" };
+  reviewRoles(top).coder = { player: coderId, subagentEffort: false };
+  reviewRoles(top).reviewer = { player: reviewerId, subagentModel: "claude-haiku-5", subagentEffort: "medium" };
+  const composed = await composeConfig(top, stubLoader);
+  const agents = composed.captainOptions.sessionAgents;
+  assert.equal(agents.captain.subagentModel, "inherit");
+  assert.equal(agents.captain.subagentEffort, "high");
+  // An effort beside an unset model runs on the agent's own model.
+  assert.equal(agents.players[coderId]?.subagentModel, "inherit");
+  assert.equal(agents.players[coderId]?.subagentEffort, "low");
+  // `false` sends none, and the composition sets no default of its own.
+  assert.ok(!("subagentModel" in (agents.players[reviewerId] ?? {})));
+  const analystId = String(((top.playbooks as Record<string, Record<string, unknown>>).dev.roles as Record<string, unknown>).analyst);
+  assert.ok(!("subagentModel" in (agents.players[analystId] ?? {})), "an untuned agent carries no subagent model");
+  // A binding's effort wins over its player's; `false` leaves it to the
+  // agent and keeps nothing else beside it.
+  const roles = composed.captainOptions.playbooks;
+  assert.deepEqual(
+    { model: roles.code.roles.coder.subagentModel, effort: roles.code.roles.coder.subagentEffort },
+    { model: "inherit", effort: "max" },
+  );
+  assert.ok(!("subagentEffort" in roles.review.roles.coder));
+  assert.deepEqual(
+    { model: roles.review.roles.reviewer.subagentModel, effort: roles.review.roles.reviewer.subagentEffort },
+    { model: "claude-haiku-5", effort: "medium" },
+  );
+
+  // The summary keeps what the file says: the literal, `false`, the omission.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.equal(summary.captain.subagentModel, "inherit");
+  assert.equal(summary.captain.subagentEffort, "high");
+  const coder = summary.players.find((p) => p.id === coderId)?.agent;
+  assert.ok(coder && !("subagentModel" in coder));
+  assert.equal(coder?.subagentEffort, "low");
+  assert.equal(summary.players.find((p) => p.id === reviewerId)?.agent.subagentModel, false);
+  assert.equal(summary.playbooks.find((p) => p.id === "review")?.roles.coder.subagentEffort, false);
+  assert.equal(summary.playbooks.find((p) => p.id === "code")?.roles.coder.subagentEffort, "max");
+
+  // An orchestration effort is no subagent's.
+  const orchestration = baseConfig();
+  (orchestration.captain as Record<string, unknown>).subagentEffort = "ultracode";
+  await expectError(orchestration, /^captain\.subagentEffort for adapter "claude" must be one of: minimal, low, medium, high, xhigh, max$/);
+
+  // An effort beside a model switched off has no subagents to govern.
+  const off = baseConfig();
+  Object.assign(off.captain as Record<string, unknown>, { subagentModel: false, subagentEffort: "low" });
+  await expectError(off, /^captain\.subagentEffort for adapter "claude" requires subagentModel$/);
+  const offBinding = baseConfig();
+  codeRoles(offBinding).coder = { player: coderId, subagentModel: false, subagentEffort: "low" };
+  await expectError(offBinding, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
+  // A player's effort reaching a binding that turns its model off is
+  // refused at the binding.
+  const inheritedOff = baseConfig();
+  (roster(inheritedOff)[coderId] as Record<string, unknown>).subagentEffort = "low";
+  codeRoles(inheritedOff).coder = { player: coderId, subagentModel: false };
+  await expectError(inheritedOff, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
+
+  // An adapter cligent serves no subagent model for takes no effort.
+  const onCodex = baseConfig();
+  roster(onCodex)[coderId] = { adapter: "codex", subagentEffort: "low" };
+  await expectError(onCodex, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "codex"$`));
+  // `false` asks nothing of the adapter, so a codex lane may carry it.
+  roster(onCodex)[coderId] = { adapter: "codex", subagentModel: false };
+  await composeConfig(onCodex, stubLoader);
+
+  // A binding's effort is one of its keys, its blank refused as the others are.
+  const blank = baseConfig();
+  codeRoles(blank).coder = { player: coderId, subagentEffort: "" };
+  await expectError(blank, /^playbooks\.code\.roles\.coder\.subagentEffort must be a string or false/);
+});
+
 test("a player no binding names is listed as bound to no role and opens no session lane", async () => {
   // settings-26 and playbook-library-55: the summary lists every
   // declared player so Settings can show the unbound lane and a draft

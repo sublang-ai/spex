@@ -189,23 +189,25 @@ test("prefs round-trip JSON values", () => {
   store.close();
 });
 
-test("storage-5: a session's own agent settings survive a restart field by field, subagent model included", () => {
+test("storage-5: a session's own agent settings survive a restart field by field, subagent model and effort included", () => {
   const dir = tempRoot();
   const store = new Store({ dir });
   const session = sampleSession(store);
   store.setSessionAgentSettingsMap(session.id, {
-    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, fastMode: true },
-    "dev.coder": { subagentModel: false },
+    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, subagentEffort: "high", fastMode: true },
+    "dev.coder": { subagentModel: false, subagentEffort: false },
+    "dev.reviewer": { subagentModel: "inherit" },
   });
   store.close();
 
   const reopened = new Store({ dir });
   assert.deepEqual(reopened.sessionAgentSettings(session.id), {
-    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, fastMode: true },
-    "dev.coder": { subagentModel: false },
+    captain: { model: "claude-captain", subagentModel: "claude-sonnet-5-5", effort: false, subagentEffort: "high", fastMode: true },
+    "dev.coder": { subagentModel: false, subagentEffort: false },
+    "dev.reviewer": { subagentModel: "inherit" },
   });
   // A hand-edited value of the wrong shape is dropped alone.
-  reopened.setPref(`session:${session.id}:agents`, { captain: { subagentModel: "", model: "kept" }, "dev.coder": { subagentModel: 7 } });
+  reopened.setPref(`session:${session.id}:agents`, { captain: { subagentModel: "", subagentEffort: "", model: "kept" }, "dev.coder": { subagentModel: 7, subagentEffort: 3 } });
   assert.deepEqual(reopened.sessionAgentSettings(session.id), { captain: { model: "kept" } });
   reopened.close();
 });

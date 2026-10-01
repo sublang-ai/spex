@@ -305,6 +305,21 @@ msgstr "{path}.profile 已废弃：每个智能体自带 adapter、model、effor
 msgid "{path}.profile names \"{name}\", which no profiles entry defines"
 msgstr "{path}.profile 指向“{name}”，但 profiles 中没有该条目"
 
+#. Config error; `subagentEffort` is the config file's own field name, and the adapter's name and the values the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort for adapter \"{adapter}\" must be one of: {values}"
+msgstr "“{adapter}”适配器的 {path}.subagentEffort 必须是以下之一：{values}"
+
+#. Config error; `subagentEffort` and `subagentModel` are the config file's own field names and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort for adapter \"{adapter}\" requires subagentModel"
+msgstr "“{adapter}”适配器的 {path}.subagentEffort 需要同时设置 subagentModel"
+
+#. Config error; `subagentEffort` is the config file's own field name and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort is not supported for adapter \"{adapter}\""
+msgstr "{path}.subagentEffort 不受“{adapter}”适配器支持"
+
 #. Config error; `subagentModel` is the config file's own field name and the adapter's name the runtime's own
 #: src/config.ts
 msgid "{path}.subagentModel is not supported for adapter \"{adapter}\""

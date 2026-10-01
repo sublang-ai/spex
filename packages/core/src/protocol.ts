@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -62,8 +62,13 @@ export interface AgentSummary {
   effort?: string;
   /** Adapter-scoped fast mode; the chip wears a lightning mark (DR-038). */
   fastMode?: boolean;
-  /** The model the agent's subagents run on; the chip never reads it (DR-093). */
-  subagentModel?: string;
+  /** The model the agent's subagents run on — a model, `inherit` for
+   * the agent's own, or `false` for none; absent, the delegation default
+   * (DR-093, DR-095). The chip never reads it. */
+  subagentModel?: string | false;
+  /** The effort every subagent runs at; absent, the agent chooses
+   * (DR-095). The chip never reads it. */
+  subagentEffort?: string;
   instruction?: string;
   permissions?: AgentPermissionsSummary;
 }
@@ -89,6 +94,7 @@ export interface RoleBindingSummary {
   effort?: string | false;
   fastMode?: boolean;
   subagentModel?: string | false;
+  subagentEffort?: string | false;
   /** What this role effectively runs, after inheritance. */
   display: string;
 }
@@ -102,6 +108,9 @@ export interface SessionAgentSettings {
   /** The model the agent's subagents run on (DR-093). */
   subagentModel?: string | false;
   effort?: string | false;
+  /** The effort every subagent runs at; `false`, the agent chooses
+   * (DR-095). */
+  subagentEffort?: string | false;
   fastMode?: boolean;
 }
 
@@ -348,6 +357,10 @@ export interface AgentOptions {
   fastModeSupported: boolean;
   /** Whether cligent serves a subagent model for this adapter (DR-093). */
   subagentModelSupported: boolean;
+  /** The efforts a subagent may run at: the adapter's effort values less
+   * its orchestration values, empty where it serves no subagent model
+   * (DR-095). */
+  subagentEffortValues: readonly string[];
   discovery: {
     status: "available";
     models: readonly AgentModelOption[];
@@ -567,7 +580,9 @@ const id = z.string().min(1);
 export const agentBlockSchema = z.object({
   adapter: z.string().min(1),
   model: z.string().optional(),
-  subagentModel: z.string().optional(),
+  // A model, `inherit`, or `false` to send none (DR-095).
+  subagentModel: z.union([z.string(), z.literal(false)]).optional(),
+  subagentEffort: z.string().optional(),
   effort: z.string().optional(),
   instruction: z.string().optional(),
   permissions: z
@@ -589,7 +604,8 @@ export type AgentBlockInput = z.infer<typeof agentBlockSchema>;
 export const agentPatchSchema = z.object({
   adapter: z.string().min(1).optional(),
   model: z.string().nullable().optional(),
-  subagentModel: z.string().nullable().optional(),
+  subagentModel: z.union([z.string(), z.literal(false)]).nullable().optional(),
+  subagentEffort: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   fastMode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
@@ -632,6 +648,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     // clears the override so the role inherits the player (DR-032).
     model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     // Fast mode is literal: false disables; null inherits the player.
     fastMode: z.boolean().nullable().optional(),
@@ -741,6 +758,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     // clears this session's own, absent preserves it (DR-032/DR-067).
     model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     fastMode: z.boolean().nullable().optional(),
   }).strict(),
