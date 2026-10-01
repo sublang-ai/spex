@@ -639,7 +639,8 @@ The tab strip shall show the current project's open sessions, working and idle a
 The app shall provide keyboard shortcuts implemented in the web UI (so they work identically in a browser), each preventing the host's own default: Cmd/Ctrl+1..5 switch surfaces in the sidebar's order [[run-view-67](#run-view-67)], Cmd/Ctrl+, opens Settings, Cmd/Ctrl+P opens the project palette, Cmd/Ctrl+N opens the new-session tab (or the palette when no project is chosen), Cmd/Ctrl+B collapses and restores the sidebar [[run-view-71](#run-view-71)], Cmd/Ctrl+Shift+S toggles the Specs tab with the previous tab, Cmd/Ctrl+Shift+[ and ] cycle the current project's open tabs including the pinned ones [[run-view-48](#run-view-48)], and a printable key pressed outside any input and outside the sidebar refocuses the Boss composer:
 
 - every control that names its binding prints the platform's own modifier — ⌘ on a Mac, Ctrl elsewhere — from one shared table of the bindings;
-- that table is listed as a sheet on the Settings surface [[settings-10](settings.md#settings-10)], the modifier bindings and the plain keys alike.
+- that table is listed as a sheet on the Settings surface [[settings-10](settings.md#settings-10)], the modifier bindings and the plain keys alike;
+- a binding that opens a surface lands focus inside it — on its Boss composer where it shows one, else on the surface's region named for it — and Cmd/Ctrl+B lands focus on the sidebar's collapse control in both of its states, unless the project palette is open, which keeps focus [[run-view-42](#run-view-42)].
 
 ### First-Hour Integrity (DR-010 §5)
 
@@ -1153,8 +1154,8 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 - the platform modifier with P opens the palette, arrow keys move its selection, Enter picks, Escape closes [[run-view-42](#run-view-42)];
 - the modifier with 1 through 5 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
-- after the modifier with 1, 3, 4, 5 or comma, focus stands inside the surface opened, and after the modifier with 2 it stands in the Boss composer [[run-view-50](#run-view-50)];
-- after the modifier with B, focus stands on the sidebar's collapse control in both of its states [[run-view-71](#run-view-71)];
+- after the modifier with 1, 3, 4, 5 or comma, focus stands inside the surface opened, and after the modifier with 2 it stands in the Boss composer [[run-view-49](#run-view-49)];
+- after the modifier with B, focus stands on the sidebar's collapse control in both of its states [[run-view-49](#run-view-49)];
 - in the composer Enter sends while Shift+Enter inserts a line break [[run-view-8](#run-view-8)];
 - a Tab sequence from the page start reaches the composer, and no shortcut leaves focus stranded on the document body.
 

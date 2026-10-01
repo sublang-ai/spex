@@ -219,8 +219,7 @@ Where `copyRootLicense(basePath)` is called, it shall copy the bundled `scaffold
 Where `pinHeaderFormat(basePath, { apacheLicense })` is called after the templates are copied, it shall rewrite `<basePath>/specs/packages/licensing.md` with every `<year>`, `<license>` and `<holder>` placeholder replaced as [[scaffold-58](#scaffold-58)] resolves them and return the placeholders left unresolved:
 
 - the holder reads `git config user.name` and `user.email` in `basePath`, so a repository-local identity wins over a global one, and a failing or absent `git` leaves the holder unresolved;
-- `apacheLicense` false leaves `<license>` unresolved;
-- the create flow calls it only when `specs/packages/licensing.md` did not exist before the run, and prints one stderr warning per unresolved placeholder.
+- `apacheLicense` false leaves `<license>` unresolved.
 
 #### scaffold-13
 
@@ -399,7 +398,7 @@ Where the `scaffold` subcommand creates a project, the test suite shall assert t
 
 Where the `scaffold` subcommand creates a project, the test suite shall run the real CLI and assert the pinned header format ([[scaffold-58](#scaffold-58)]) in the written `specs/packages/licensing.md`:
 
-- given a repository with `user.name` and `user.email` configured, `licensing-9` carries the current year, `<name> <<email>>` as the holder and `Apache-2.0` in both the Markdown and the `//` header, with no placeholder and no template holder, while every bundled file keeps its upstream SPDX line, and the tree lints clean;
+- given a repository with `user.name` and `user.email` configured, `licensing-9` carries the current year, `<name> <<email>>` as the holder ([[scaffold-59](#scaffold-59)]) and `Apache-2.0` in both the Markdown and the `//` header, with no placeholder and no template holder, while every bundled file keeps its upstream SPDX line, and the tree lints clean;
 - given no repository and no global or system git identity, `licensing-9` keeps `<holder>`, the run exits zero and warns on stderr naming `user.name`, the placeholder and the file, and the tree lints clean;
 - given a root `LICENSE` that is not the bundled text, `licensing-9` keeps `<license>` and warns ([[scaffold-37](#scaffold-37)]) while the holder is still pinned.
 

@@ -8,6 +8,7 @@
 Accepted; [DR-033](033-remote-gui-serving.md) extends the SDK-supply duty to the server shell.
 Extended by [DR-081](081-the-app-supplies-the-compiler.md): the playbook compiler joins the runtimes both shells supply.
 Extended by [DR-090](090-readiness-names-what-cligent-finds-missing.md): the runtime half's diagnosis names the executable cligent's lookup finds missing.
+Extended by [DR-096](096-the-app-supplies-the-scaffold.md): the scaffold CLI joins the compiler and the agent SDKs both shells supply.
 
 ## Context
 

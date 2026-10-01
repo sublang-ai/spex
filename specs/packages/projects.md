@@ -41,7 +41,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 #### projects-31
 
-When a shell starts the core naming a scaffold command — the app's own copy of the scaffold CLI on the shell's own executable, with the variables that executable runs as Node under — the create flow shall generate the scaffold by running that command ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), and with no command named, the registry's `npx --yes @sublang/spex`:
+When the create flow scaffolds a project [[projects-3](#projects-3)], the core shall run the scaffold command the shell named when starting it — the app's own copy of the scaffold CLI on the shell's own executable, under the variables that executable runs as Node with — or, with none named, the registry's `npx --yes @sublang/spex`, with `scaffold` and the project path appended, in the project directory ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)):
 
 - Scaffold exiting non-zero: the failure names the command that ran and its output, and, for the registry's, that the app's own CLI was not supplied.
 
