@@ -502,7 +502,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   LICENSE it emits — while the template files keep their upstream
   lines. With no git identity it leaves a `<holder>` placeholder and
   says so, never SubLang's name (projects-3, scaffold-58). The palette
-  picks this up with the next `@sublang/spex` release it runs.
+  runs the app's own CLI, so a project created from it carries the
+  holder at once.
 - A machine that once ran the SQLite-era app imported its former store
   into every new Spex home — a second home, the smoke's scratch home, a
   reinstall into a fresh one — since the import's only record was the
