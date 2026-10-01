@@ -502,7 +502,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   LICENSE it emits — while the template files keep their upstream
   lines. With no git identity it leaves a `<holder>` placeholder and
   says so, never SubLang's name (projects-3, scaffold-58). The palette
-  picks this up with the next `@sublang/spex` release it runs.
+  runs the app's own CLI, so a project created from it carries the
+  holder at once.
 - A machine that once ran the SQLite-era app imported its former store
   into every new Spex home — a second home, the smoke's scratch home, a
   reinstall into a fresh one — since the import's only record was the
@@ -524,6 +525,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Space's Explore tab read an empty `sessions/` or `intents/` as "Stays
   here", the mark reserved for the families that never sync; a tracked
   kind with nothing committed yet now reads "Not yet shared" (space-23).
+- Creating a project from the palette scaffolds with the app's own
+  CLI — the checkout's `packages/cli` on the app's own Node — instead
+  of fetching `@sublang/spex` from the npm registry through `npx`, so
+  Create works offline, pays no download and generates exactly what the
+  app ships ([DR-096](specs/decisions/096-the-app-supplies-the-scaffold.md)).
+  Only a checkout without a built CLI still runs the registry's, and a
+  failed scaffold names the command that ran.
 
 ### Security
 

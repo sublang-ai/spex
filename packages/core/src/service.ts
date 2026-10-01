@@ -149,8 +149,11 @@ export interface CoreServiceOptions {
   /** Injectable external-command runner (git/gh; tests stub this). */
   runCommand?: RunCommand;
   forgeAdapter?: ForgeAdapter;
-  /** Scaffold command for project creation, e.g. ["npx","-y","@sublang/spex"]. */
+  /** The shell's own scaffold CLI on its own executable (projects-31);
+   * unset, the create flow runs the registry's and names it. */
   scaffoldCommand?: string[];
+  /** Variables that command runs under: Electron's run-as-Node one. */
+  scaffoldEnv?: Record<string, string>;
   /** Compiled-playbook library directory (DR-005). */
   libraryDir?: string;
   /**
@@ -1339,7 +1342,12 @@ export class CoreService {
               scaffold: command.scaffold,
               run: this.runCommand,
               ...(this.options.scaffoldCommand
-                ? { scaffoldCommand: this.options.scaffoldCommand }
+                ? {
+                    scaffoldCommand: this.options.scaffoldCommand,
+                    ...(this.options.scaffoldEnv
+                      ? { scaffoldEnv: this.options.scaffoldEnv }
+                      : {}),
+                  }
                 : {}),
             });
           }

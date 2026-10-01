@@ -118,6 +118,52 @@ function rawRequest(
   });
 }
 
+test("the server scaffolds with the checkout's own CLI on its own Node (SERVER-SHELL-7)", async () => {
+  const calls: { command: string; args: string[]; cwd?: string; env?: Record<string, string> }[] = [];
+  const running = await startServer(
+    tempOptions({
+      core: {
+        runCommand: async (command, args, cwd, env) => {
+          if (command === "git") return { code: 0, stdout: "", stderr: "" };
+          calls.push({ command, args, cwd, env });
+          return { code: 0, stdout: "", stderr: "" };
+        },
+      },
+    }),
+  );
+  try {
+    const project = join(scratchDir("spex-server-scaffold-"), "made");
+    const base = `http://127.0.0.1:${running.port}`;
+    const socket = new WebSocket(`${base.replace("http", "ws")}/?token=secret`, {
+      origin: base,
+    });
+    const reply = await new Promise<{ ok: boolean }>((resolveReply, rejectReply) => {
+      socket.once("error", rejectReply);
+      socket.once("close", (code) => rejectReply(new Error(`socket closed: ${code}`)));
+      socket.on("message", (data) => {
+        const message = JSON.parse(String(data)) as { type: string; id?: string; ok?: boolean };
+        if (message.type === "hello") {
+          socket.send(JSON.stringify({ type: "project.create", id: "c1", path: project, scaffold: true }));
+        } else if (message.type === "reply" && message.id === "c1") {
+          resolveReply(message as { ok: boolean });
+        }
+      });
+    });
+    socket.close();
+    assert.ok(reply.ok, JSON.stringify(reply));
+    assert.deepEqual(calls, [
+      {
+        command: process.execPath,
+        args: [resolve(here, "..", "..", "..", "packages", "cli", "dist", "cli.js"), "scaffold", project],
+        cwd: project,
+        env: undefined,
+      },
+    ]);
+  } finally {
+    await running.close();
+  }
+});
+
 test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async () => {
   const running = await startServer(tempOptions());
   try {

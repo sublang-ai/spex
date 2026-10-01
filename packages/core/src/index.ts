@@ -14,6 +14,7 @@ export {
   type SessionManagerOptions,
 } from "./session.js";
 export { CoreService, createCoreService, type CoreServiceOptions } from "./service.js";
+export { suppliedScaffold, type SuppliedScaffold } from "./forge.js";
 export {
   checkToolchain,
   compilerAgentEnv,

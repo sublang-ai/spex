@@ -114,7 +114,7 @@ Where `npm ci` has installed the repository dependencies, when a contributor inv
 
 #### server-shell-7
 
-The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], so SDK-backed adapters and the compiler resolve when its embedded core loads or runs them.
+The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so SDK-backed adapters, the compiler and the scaffold CLI resolve when its embedded core loads or runs them.
 
 #### server-shell-8
 
@@ -188,7 +188,7 @@ Where built server artifacts and a controlled npm executable are available on a 
 
 #### server-shell-23
 
-Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to the home's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to the home's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler and a project created over it with the scaffold option scaffolds with the npm registry unreachable [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
 
 - the same socket then carries the smoke's first-run walk of the installed core, as the release rules describe it.
 
@@ -216,7 +216,7 @@ Where the server shell serves mutable fixture assets, when the integration suite
 
 #### server-shell-22
 
-When the server's test suite reads the package manifest and resolves the compiler over the module directories above the server's own module, the test suite shall assert that the three SDKs and the compiler are declared and that the compiler resolved is the app's own copy [[server-shell-7](#server-shell-7)].
+When the server's test suite reads the package manifest and resolves the compiler over the module directories above the server's own module, the test suite shall assert that the three SDKs and the compiler are declared, that the compiler resolved is the app's own copy, and that a project created with the scaffold option over the started server's socket runs the checkout's own `packages/cli` entry on the server's Node as the scaffold command [[server-shell-7](#server-shell-7)].
 
 ### Browser Journey Coverage
 

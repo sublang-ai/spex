@@ -7,10 +7,11 @@
 // the v1 implementation. No credentials are ever stored.
 
 import { execFile } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { ToolchainRuntime } from "./compile.js";
 import { i18n } from "./i18n.js";
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
 
@@ -21,14 +22,21 @@ export type RunCommand = (
   command: string,
   args: string[],
   cwd?: string,
+  /** Variables added to this process's environment for the command. */
+  env?: Record<string, string>,
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-export const defaultRunCommand: RunCommand = (command, args, cwd) =>
+export const defaultRunCommand: RunCommand = (command, args, cwd, env) =>
   new Promise((resolve) => {
     execFile(
       command,
       args,
-      { cwd, timeout: 15_000, maxBuffer: 4 * 1024 * 1024 },
+      {
+        cwd,
+        timeout: 15_000,
+        maxBuffer: 4 * 1024 * 1024,
+        ...(env ? { env: { ...process.env, ...env } } : {}),
+      },
       (error, stdout, stderr) => {
         const code =
           error && typeof (error as { code?: unknown }).code === "number"
@@ -112,11 +120,55 @@ export async function repoStatus(
   };
 }
 
+/** The registry's scaffold CLI: what runs when no shell supplied the
+ * app's own (projects-31). */
+const REGISTRY_SCAFFOLD = ["npx", "--yes", "@sublang/spex"];
+
+/** The scaffold command a shell supplies (projects-31). */
+export interface SuppliedScaffold {
+  /** The app's own scaffold CLI on the app's own executable. */
+  scaffoldCommand: string[];
+  /** What the executable needs to run as Node: Electron's variable. */
+  scaffoldEnv?: Record<string, string>;
+}
+
+/** The app-supplied scaffold CLI (projects-31): `@sublang/spex` in the
+ * first of the given module directories holding it with its bin — the
+ * checkout's own `packages/cli` — run on the runtime's executable,
+ * Electron's as Node. Undefined when no tree holds a built copy, so
+ * the create flow falls back to the registry's and says so. */
+export function suppliedScaffold(
+  runtime: ToolchainRuntime,
+): SuppliedScaffold | undefined {
+  for (const dir of runtime.modulePaths ?? []) {
+    const linked = resolvePath(dir, "@sublang", "spex");
+    const manifest = resolvePath(linked, "package.json");
+    if (!existsSync(manifest)) continue;
+    const { bin } = JSON.parse(readFileSync(manifest, "utf8")) as {
+      bin?: string | { spex?: string };
+    };
+    const relative = typeof bin === "string" ? bin : bin?.spex;
+    if (!relative) continue;
+    // The real file, not the workspace link: a failure names where
+    // the CLI lives.
+    const cli = resolvePath(realpathSync(linked), relative);
+    if (!existsSync(cli)) continue;
+    return {
+      scaffoldCommand: [runtime.execPath, cli],
+      ...(runtime.electron ? { scaffoldEnv: { ELECTRON_RUN_AS_NODE: "1" } } : {}),
+    };
+  }
+  return undefined;
+}
+
 export interface CreateProjectOptions {
   path: string;
   scaffold?: boolean;
-  /** Command used for scaffolding, e.g. ["npx", "-y", "@sublang/spex"]. */
+  /** The scaffold command a shell supplied (projects-31); the
+   * registry's `npx --yes @sublang/spex` when none. */
   scaffoldCommand?: string[];
+  /** Variables the supplied command runs under. */
+  scaffoldEnv?: Record<string, string>;
   run?: RunCommand;
 }
 
@@ -136,20 +188,23 @@ export async function createProjectRepo(
         existsSync(resolvePath(options.path, path)),
       ),
     );
-    const [command, ...args] = options.scaffoldCommand ?? [
-      "npx",
-      "--yes",
-      "@sublang/spex",
-    ];
+    const [command, ...args] = options.scaffoldCommand ?? REGISTRY_SCAFFOLD;
     const scaffoldRun = await run(
       command,
       [...args, "scaffold", options.path],
       options.path,
+      options.scaffoldCommand ? options.scaffoldEnv : undefined,
     );
     scaffolded = scaffoldRun.code === 0;
     if (!scaffolded) {
+      // The failure names what ran (projects-31): the shell's own CLI,
+      // or the registry's when no shell supplied one.
+      const ran = [command, ...args, "scaffold"].join(" ");
+      const source = options.scaffoldCommand
+        ? ""
+        : " (the app's own scaffold CLI was not supplied, so the registry's ran)";
       throw new Error(
-        `scaffold failed: ${scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim()}`,
+        `scaffold failed running ${ran}${source}: ${scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim()}`,
       );
     }
     // Commit the generated scaffold without pulling a pre-existing

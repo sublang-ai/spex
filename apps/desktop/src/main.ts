@@ -19,7 +19,7 @@ import {
   Notification as ElectronNotification,
   shell,
 } from "electron";
-import { CoreService, moduleDirectoriesAbove } from "@sublang/spex-core";
+import { CoreService, moduleDirectoriesAbove, suppliedScaffold } from "@sublang/spex-core";
 import { resolveLanguage } from "@sublang/spex-core/language";
 import type { I18n } from "@lingui/core";
 
@@ -153,6 +153,13 @@ async function main(): Promise<void> {
   const dataDir = isolatedUserData
     ? join(isolatedUserData, "spex-home")
     : process.env.SPEX_HOME?.trim() ? process.env.SPEX_HOME : join(homedir(), ".spex");
+  // This Electron run as Node is the runtime of the compiler and the
+  // scaffold CLI alike (app-shell-33).
+  const runtime = {
+    execPath: process.execPath,
+    electron: true,
+    modulePaths: moduleDirectoriesAbove(import.meta.url),
+  };
   service = await CoreService.start({
     dataDir,
     legacyDbPath: join(app.getPath("userData"), "spex.db"),
@@ -163,11 +170,11 @@ async function main(): Promise<void> {
     systemLanguages: app.getPreferredSystemLanguages(),
     // Compiles run on this Electron as Node, with the compiler and
     // the SDKs this package declares (app-shell-33, DR-081).
-    compileRuntime: {
-      execPath: process.execPath,
-      electron: true,
-      modulePaths: moduleDirectoriesAbove(import.meta.url),
-    },
+    compileRuntime: runtime,
+    // The scaffold runs the checkout's own CLI on this Electron as
+    // Node too (app-shell-33, projects-31); with none built, the
+    // create flow falls back to the registry's and names it.
+    ...(suppliedScaffold(runtime) ?? {}),
   });
 
   // The menu waits for the core: its one item of the shell's own text

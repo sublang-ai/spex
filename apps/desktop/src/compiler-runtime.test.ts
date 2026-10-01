@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { checkToolchain, moduleDirectoriesAbove } from "@sublang/spex-core";
+import { checkToolchain, moduleDirectoriesAbove, suppliedScaffold } from "@sublang/spex-core";
 
 /** Every scratch directory a test here makes, removed once the file's
  * tests end. */
@@ -100,5 +100,31 @@ test(
     const report = JSON.parse(seen.stdout) as { node: string; flag: string | null };
     assert.equal(report.node, status.node.version?.slice(1));
     assert.equal(report.flag, null);
+  },
+);
+
+test(
+  "the desktop scaffolds with the checkout's own CLI on its Electron as Node (app-shell-33)",
+  { skip: electron && existsSync(electron) ? false : "needs the Electron binary" },
+  () => {
+    const scaffold = suppliedScaffold({
+      execPath: electron!,
+      electron: true,
+      modulePaths: moduleDirectoriesAbove(import.meta.url),
+    });
+    assert.ok(scaffold, "the scaffold CLI resolves from the desktop's module tree");
+    const cli = join(packageRoot, "..", "..", "packages", "cli", "dist", "cli.js");
+    assert.deepEqual(scaffold.scaffoldCommand, [electron, cli]);
+    assert.deepEqual(scaffold.scaffoldEnv, { ELECTRON_RUN_AS_NODE: "1" });
+    // That command really scaffolds: the CLI on Electron as Node.
+    const target = scratchDir("spex-desktop-scaffold-");
+    spawnSync("git", ["init", target], { stdio: "ignore" });
+    const run = spawnSync(scaffold.scaffoldCommand[0], [...scaffold.scaffoldCommand.slice(1), "scaffold", target], {
+      cwd: target,
+      env: { ...process.env, ...scaffold.scaffoldEnv },
+      encoding: "utf8",
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.ok(existsSync(join(target, "specs", "map.md")), "the scaffold wrote specs/map.md");
   },
 );
