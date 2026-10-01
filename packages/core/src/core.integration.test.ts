@@ -1142,6 +1142,13 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   assert.equal(forge.authenticated, true);
   assert.equal(forge.repo, "sublang-ai/demo");
   assert.equal(forge.issues[0]?.number, 3);
+  // The lists carry their fetch moment, and a read within the cache
+  // window serves that same moment (dashboard-14).
+  assert.equal(typeof forge.at, "number");
+  const cachedForge = await client.expectOk("forge.items", {
+    projectId: created.id,
+  });
+  assert.equal(cachedForge.at, forge.at);
 
   // Removal keeps the repo on disk (PROJ-8/19).
   await client.expectOk("project.remove", { projectId: created.id });

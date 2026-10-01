@@ -436,6 +436,10 @@ export interface ForgeState {
   prs: ForgeItem[];
   /** Setup guidance when data cannot be served. */
   guidance?: string;
+  /** Epoch milliseconds when the lists were fetched from the forge, so
+   * every reader shows the data's age rather than its own read's
+   * (dashboard-14); absent until a fetch happened. */
+  at?: number;
 }
 
 // ---------------------------------------------------------------------------
