@@ -48,7 +48,10 @@ Product names and the role names Playbook defines stay as authored; everything e
 | spec package / spec item | 规约包 / 规约条目 | |
 | decision record (DR) / intent record (IR) | 决策记录 / 意图记录 | |
 | draft | 草稿 | an authoring draft |
-| library | 库 | the compiled-artifact store; the surface itself says 规程 |
+| library | 规程库 | the compiled-artifact store; the surface itself says 规程 |
+| provider / provider default | 服务商 / 服务商默认 | a model's provider; never 提供方 |
+| Set up (a space) / Setting up… | 初始化 / 初始化中… | the act that initializes the home and names its remote; not 设置, which is the Settings surface; the core's refusals use the same word |
+| project palette | 项目选择器 | the project picker |
 | compile / register / publish | 编译 / 注册 / 发布 | |
 | Normalize / Spec items / Optimize / Prefix / Machine / Link / Package | 规范化 / 规约条目 / 优化 / 前缀 / 状态机 / 链接 / 打包 | the compile pipeline's stages, as the band and the chips name them |
 | adapter | 适配器 | |

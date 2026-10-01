@@ -501,6 +501,9 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     const collapsed = screen.getByTestId("sidebar");
     expect(collapsed.dataset.collapsed).toBe("1");
+    // The binding lands focus on the sidebar's own control, so
+    // collapsing never strands it (run-view-71).
+    expect(document.activeElement).toBe(screen.getByTestId("sidebar-collapse"));
     // Collapsed entries keep their names and the count survives.
     expect(screen.getByLabelText(/^Playbooks$/)).toBeTruthy();
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
@@ -523,6 +526,25 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
 
     fireEvent.click(screen.getByTestId("sidebar-collapse"));
     expect(screen.getByTestId("sidebar").dataset.collapsed).toBe("0");
+  });
+
+  test("a surface shortcut lands focus inside the surface it opens", () => {
+    render(<App />);
+    const main = screen.getByRole("main");
+    // From the Boss composer, Dashboard by number: the surface region,
+    // named for what it is, takes focus (run-view-50).
+    screen.getByTestId("boss-composer").focus();
+    fireEvent.keyDown(window, { key: "1", metaKey: true });
+    expect(main.getAttribute("aria-label")).toBe("Dashboard");
+    expect(main.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+    // Playbooks by number, from the Dashboard's region.
+    fireEvent.keyDown(window, { key: "3", metaKey: true });
+    expect(main.getAttribute("aria-label")).toBe("Playbooks");
+    expect(main.contains(document.activeElement)).toBe(true);
+    // Back to Projects by number: the composer is the stop.
+    fireEvent.keyDown(window, { key: "2", metaKey: true });
+    expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
   });
 
   test("a broken config keeps its red voice while collapsed", () => {

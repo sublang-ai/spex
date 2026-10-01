@@ -49,7 +49,7 @@ msgstr "继续运行"
 
 #: src/notifications.ts
 msgid "Playbook error"
-msgstr "规程错误"
+msgstr "运行时错误"
 
 #: src/notifications.ts
 msgid "Playbook failed"

@@ -160,8 +160,14 @@ export function useNow(): number {
   return now;
 }
 
+/** The core's forge cache window (dashboard-14): lists older than this
+ * are asked for again while a group stays on screen, on a slow clock. */
+const FORGE_STALE_MS = 600_000;
+const FORGE_STALE_CHECK_MS = 60_000;
+
 /** The one fold, plus each group's inputs — meta, specs tree, History
- * first page — load on demand once connected. */
+ * first page — load on demand once connected; forge lists past the
+ * cache window are asked for again while the groups stay on screen. */
 export function useGroupInputs(projects: readonly ProjectInfo[]): void {
   const connection = useAppStore((state) => state.connection);
   const key = projects.map((project) => project.id).join("\n");
@@ -176,11 +182,28 @@ export function useGroupInputs(projects: readonly ProjectInfo[]): void {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, key]);
+  useEffect(() => {
+    if (connection !== "open") return;
+    const timer = setInterval(() => {
+      const state = useAppStore.getState();
+      const now = Date.now();
+      for (const project of projects) {
+        const meta = state.projectMeta[project.id];
+        const at = meta?.forge?.at;
+        if (meta && !meta.loading && at !== undefined && now - at >= FORGE_STALE_MS) {
+          void state.loadProjectMeta(project.id);
+        }
+      }
+    }, FORGE_STALE_CHECK_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, key]);
 }
 
-/** When this client observed each project's served forge data — the
- * Sources line's data age (dashboard-14). (The read model's own fetch
- * time is not on the wire yet — see the report.) */
+/** When each project's served forge lists were fetched — the moment
+ * the core carries with them (dashboard-14), so a client that first
+ * sees a cached list shows the data's age and not its own read's; a
+ * core without the moment falls back to the read. */
 export function useForgeAge(
   projects: readonly ProjectInfo[],
 ): (projectId: string) => number | undefined {
@@ -193,7 +216,7 @@ export function useForgeAge(
       const meta = projectMeta[project.id];
       if (meta && !meta.loading && metaSeen.current.get(project.id) !== meta) {
         metaSeen.current.set(project.id, meta);
-        updates[project.id] = Date.now();
+        updates[project.id] = meta.forge?.at ?? Date.now();
       }
     }
     if (Object.keys(updates).length > 0) {

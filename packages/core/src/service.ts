@@ -1368,11 +1368,17 @@ export class CoreService {
           cached &&
           Date.now() - cached.at < FORGE_CACHE_MS
         ) {
-          return cached.state;
+          // The lists travel with their fetch moment, so a client reading
+          // the cache shows the data's age, not its own read's.
+          return { ...cached.state, at: cached.at };
         }
         const status = await repoStatus(project.path, this.runCommand);
-        const state = await this.forge.state(project.path, status.originUrl);
-        this.store.setForgeCache(project.id, { at: Date.now(), state });
+        const at = Date.now();
+        const state = {
+          ...(await this.forge.state(project.path, status.originUrl)),
+          at,
+        };
+        this.store.setForgeCache(project.id, { at, state });
         return state;
       }
       case "project.remove": {
