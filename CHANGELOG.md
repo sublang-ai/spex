@@ -106,14 +106,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the runtime's models, in place of the provider's default; a configured
   `false` reads "Off" while it stands, so it can always be cleared.
   Beside it, a fifth tuning field, the subagent effort, offers "Agent
-  chooses" first — each subagent's effort left to the agent, task by
-  task — then the adapter's efforts without `ultracode`, so an agent at
-  `ultracode` no longer delegates at `ultracode`. It has the same three
-  homes and tiers as the subagent model. In the Captain's and each
-  player's editor, a role's binding editor and an agent's settings for
-  one conversation, the model and its effort now share a row, and the
-  subagent model and its effort the next; the pairs stack at the
-  320-pixel floor. The chip is unchanged.
+  chooses" first — each delegated task's effort left to the agent —
+  then the adapter's efforts without `ultracode`. Pinned or chosen, it
+  governs the delegate subagents Cligent registers and the
+  `general-purpose` subagent it replaces — at the pinned effort, or at
+  `medium` where the agent chooses and names no subagent type — so
+  those no longer inherit an agent's `ultracode`; Claude's built-in
+  `Explore` and `Plan` subagents keep the agent's own effort. It has
+  the same three homes and tiers as the subagent model. In the
+  Captain's and each player's editor, a role's binding editor and an
+  agent's settings for one conversation, the model and its effort now
+  share a row, and the subagent model and its effort the next; the
+  pairs stack at the 320-pixel floor. The chip is unchanged.
   Delegation is now the default, in Spex's sessions and draft
   conversations as in the `playbook` CLI: every Claude agent whose
   subagent model is unset runs its subagents on its own model and is
@@ -169,9 +173,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   not ready with the command that upgrades it.
   **Upgrade every host that shares your Spex home together, and snapshot
   the home first** ([DR-050](specs/decisions/050-shared-storage-cutover.md)):
-  once this build saves a session, a host on Playbook 16 or older — a
-  `playbook` CLI sharing the home, or another device syncing it through
-  Space — cannot open that session.
+  once this build saves a session, an older host — a `playbook` CLI
+  sharing the home, or another device syncing it through Space — may
+  not open it. Playbook 16 or older opens none of this build's
+  sessions. Playbook 17.1 or earlier cannot open a session whose record
+  carries a subagent model, as every Claude agent's now does by
+  default, and Playbook 17.2 or earlier cannot open one whose record
+  carries a subagent effort.
 - A session parked on a question inside a built-in state that Playbook 16
   renamed — `/code` waiting in its former `runFirstPhase`, for example —
   no longer resumes from your answer. Drop it, or send a new request.
