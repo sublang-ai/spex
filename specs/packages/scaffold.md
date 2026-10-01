@@ -155,6 +155,10 @@ Where the `scaffold` subcommand is invoked, the CLI shall reconcile Spex's manag
 - `--agents=<comma-separated names>` selects targets without prompting, and `all` selects every target; without interactive input or that option, the same inference applies and a fresh target selects all. An invalid selection or canceled prompt exits before any scaffold write.
 - A selected target is created, appended, refreshed, or skipped when identical. A deselected target loses only the managed section and is deleted only when no other content remains; an unmanaged deselected file stays untouched.
 
+#### scaffold-56
+
+Where the managed section directs the agent to lint the specs tree, the instruction shall name an invocation that needs no `spex` command on PATH — `npx @sublang/spex lint` — offering `spex lint` only as the alternative where the CLI is installed: a project created from the Spex app has the CLI on no PATH.
+
 ### Error Handling
 
 #### scaffold-6
@@ -395,6 +399,10 @@ Where agent-instruction reconciliation is exercised ([[scaffold-5](#scaffold-5)]
 Where interactive selection is exercised ([[scaffold-5](#scaffold-5)]), the test suite shall drive the selection through the production terminal reader with the reply supplied only after the prompt is shown, asserting the targets the reply resolves to and the canceled end-of-input outcome:
 
 - A reply buffered before the reader starts cannot discharge this item: a reader that fails while waiting for input is the regression it guards.
+
+#### scaffold-57
+
+Where a selected target is written ([[scaffold-5](#scaffold-5)]), the test suite shall assert that its managed section's lint instruction names `npx @sublang/spex lint` [[scaffold-56](#scaffold-56)], both on a fresh scaffold and when `--update` refreshes a section carrying the bare `spex lint` form.
 
 ## References
 

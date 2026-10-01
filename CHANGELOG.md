@@ -466,6 +466,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A project created from the palette told its coding agents to run
+  `spex lint`, a command the desktop install puts on no PATH, so a
+  coder's lint check failed with "command not found". The scaffolded
+  instruction now runs the linter through `npx @sublang/spex lint`.
 
 ### Security
 

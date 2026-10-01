@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (DR-079). Raising the supported runtime is a breaking change: the
   next release is a major.
 
+### Fixed
+
+- The managed agent-instruction section told coding agents to run
+  `spex lint`, which fails wherever no `spex` command is on PATH — a
+  project created from the Spex app, for one. It now names
+  `npx @sublang/spex lint`, with `spex lint` as the alternative where
+  the CLI is installed; an existing project picks the sentence up on
+  `spex scaffold --update`.
+
 ## [3.0.0] - 2026-08-13
 
 ### Changed
