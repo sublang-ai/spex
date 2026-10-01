@@ -410,6 +410,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- The Chinese catalogs' terms, after a native-speaker audit: setting a
+  space up reads 初始化 on every surface and in the core's refusals,
+  keeping 设置 for Settings; a model's provider reads 服务商 everywhere;
+  the library reads 规程库; a playbook's source reads 源文; the roles
+  a player answers read Player; and some thirty other phrases in the
+  interface, the core and the desktop notifications read as a native
+  speaker would say them.
 - `npm start` on a Mac whose PATH leads with a GNU `libtool` (Homebrew's
   `libtool` formula): the native rebuild of `better-sqlite3` now links
   with the Apple `libtool` that `xcrun` names instead of failing on
