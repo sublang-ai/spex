@@ -121,10 +121,10 @@ export interface ResolvedAgent {
   effort?: string;
   /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
   fastMode?: boolean;
-  /** Adapter-scoped subagent model (DR-093): a model, `inherit` for the
-   * agent's own, or `false` to send none; absent, Playbook's delegation
-   * default, which the projection resolves only beside an effort
-   * (DR-095). */
+  /** Adapter-scoped subagent model (DR-093) as the file says it: a
+   * model, `inherit` for the agent's own, or `false` — Off; absent, the
+   * delegation default, which composition resolves to `inherit` where
+   * cligent serves a subagent model (DR-095). */
   subagentModel?: string | false;
   /** The effort every subagent runs at; absent, the agent chooses per
    * task (DR-095). */
@@ -154,9 +154,12 @@ export interface SessionAgentBlock {
   /** Adapter-scoped fast mode, forwarded so the setting takes effect
    * (playbook 11: `false` is a literal disabled request). */
   fastMode?: boolean;
-  /** The model every subagent runs on, `inherit` for the agent's own;
-   * absent sends none (playbook 17.3 carries no sentinel, DR-095). */
-  subagentModel?: string;
+  /** The model every subagent runs on, `inherit` for the agent's own,
+   * or `false` — Off — carried through composition and the session's
+   * tuning so an effort set beside it is refused, and dropped only as
+   * the projection is built: the shell takes no sentinel for it
+   * (playbook 17.3, DR-095). Absent where cligent serves none. */
+  subagentModel?: string | false;
   /** The effort every subagent runs at; absent, the agent chooses. */
   subagentEffort?: string;
   instruction?: string;
@@ -184,9 +187,10 @@ export interface HostRoleBinding {
   effort: TuningSelection;
   /** A role's own fast-mode override; absent inherits the player's. */
   fastMode?: boolean;
-  /** The role's subagent model with inheritance resolved; absent sends
-   * none (DR-093, DR-095). */
-  subagentModel?: string;
+  /** The role's subagent model with inheritance resolved, `false` — Off —
+   * carried until the projection is built, as the player's is
+   * (DR-093, DR-095). */
+  subagentModel?: string | false;
   /** The role's subagent effort with inheritance resolved; absent, the
    * agent chooses (DR-095). */
   subagentEffort?: string;
@@ -820,8 +824,8 @@ function toResolvedAgent(
       }),
     );
   }
-  // `false` sends none and is valid on any adapter, as the launcher
-  // drops it before cligent sees the block (DR-095).
+  // `false` is Off and valid on any adapter, as the launcher drops it
+  // before cligent sees the block (DR-095).
   if (rest.subagentModel !== undefined && rest.subagentModel !== false) {
     assertSubagentModel(rest.subagentModel, adapter, path);
   }
@@ -829,28 +833,35 @@ function toResolvedAgent(
     assertSubagentEffort(
       rest.subagentEffort,
       adapter,
-      delegatedModel(adapter, rest.subagentModel as string | false | undefined, rest.subagentEffort),
+      delegatedModel(adapter, rest.subagentModel as string | false | undefined),
       path,
     );
   }
   return rest as unknown as ResolvedAgent;
 }
 
-/** The subagent model an agent's call carries (DR-095): a string as it
- * is, `false` as none, and an unset one beside a subagent effort as
- * `inherit` — the agent's own model — where cligent serves a subagent
- * model for the adapter, as Playbook's launcher resolves it, so an
- * effort the launcher accepts runs here too. An unset one with no
- * effort composes as absent: the delegation default is Playbook's to
- * resolve, and the configuration and its summary keep the omission. */
-export function delegatedModel(
+/** The subagent model an agent delegates on (DR-095), exactly as
+ * Playbook's launcher resolves it: a string as it is, `false` as Off,
+ * and an unset one as `inherit` — the agent's own model — wherever
+ * cligent serves a subagent model for the adapter, with or without an
+ * effort beside it; absent where it serves none. The configuration file
+ * and its summary keep the omission. */
+function delegationOf(
   adapter: string,
   subagentModel: string | false | undefined,
-  subagentEffort: unknown,
-): string | undefined {
-  if (subagentModel === false) return undefined;
+): string | false | undefined {
   if (subagentModel !== undefined) return subagentModel;
-  return subagentEffort !== undefined && isSubagentModelSupported(adapter as never) ? "inherit" : undefined;
+  return isSubagentModelSupported(adapter as never) ? "inherit" : undefined;
+}
+
+/** The subagent model an agent's call carries: its delegation with Off
+ * sent as none, as the launcher strips it (DR-095). */
+function delegatedModel(
+  adapter: string,
+  subagentModel: string | false | undefined,
+): string | undefined {
+  const delegation = delegationOf(adapter, subagentModel);
+  return delegation === false ? undefined : delegation;
 }
 
 /** The efforts a subagent may run at: the adapter's effort values less
@@ -1082,12 +1093,13 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   };
 }
 
-/** An agent's subagent tuning as its call carries it: `false` dropped,
- * and the effort beside the model it was validated with (DR-095). */
+/** An agent's subagent tuning as its call carries it: the delegation
+ * default resolved, Off sent as none, and the effort beside the model it
+ * was validated with (DR-095). */
 export function subagentTuningOf(
   agent: Pick<ResolvedAgent, "adapter" | "subagentModel" | "subagentEffort">,
 ): { subagentModel?: string; subagentEffort?: string } {
-  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel, agent.subagentEffort);
+  const subagentModel = delegatedModel(agent.adapter, agent.subagentModel);
   return {
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
@@ -1095,6 +1107,9 @@ export function subagentTuningOf(
 }
 
 function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
+  // The delegation default resolved, Off carried until the projection is
+  // built (DR-095).
+  const subagentModel = delegationOf(agent.adapter, agent.subagentModel);
   return {
     adapter: agent.adapter,
     // Both selections travel on every call: an omitted pin means the
@@ -1102,7 +1117,10 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
-    ...subagentTuningOf(agent),
+    ...(subagentModel !== undefined ? { subagentModel } : {}),
+    ...(agent.subagentEffort !== undefined
+      ? { subagentEffort: agent.subagentEffort }
+      : {}),
     ...(agent.instruction !== undefined
       ? { instruction: agent.instruction }
       : {}),
@@ -1465,24 +1483,30 @@ export async function composeConfig(
         override === false
           ? providerDefault
           : tuningOf(override ?? fallback);
-      // The subagent tuning carries no sentinel on the shell's side: a
-      // binding's `false` reaches it as omission, and an omitted one
-      // takes the player's as its call would run it (DR-093, DR-095).
+      // An omitted subagent tuning takes the player's as the file says
+      // it — its `false` an Off still — and the delegation default then
+      // resolves as the launcher's does; a binding's `false` is Off for
+      // the model and the agent's own choice for the effort, so an
+      // effort beside an Off, at either tier, is refused (DR-093,
+      // DR-095).
       if (typeof binding.subagentModel === "string") {
         assertSubagentModel(binding.subagentModel, player.adapter, path);
       }
-      const inherited = subagentTuningOf(player);
       const subagentEffort =
         binding.subagentEffort === false
           ? undefined
-          : (binding.subagentEffort ?? inherited.subagentEffort);
-      const subagentModel = delegatedModel(
+          : (binding.subagentEffort ?? player.subagentEffort);
+      const subagentModel = delegationOf(
         player.adapter,
-        binding.subagentModel ?? inherited.subagentModel,
-        subagentEffort,
+        binding.subagentModel ?? player.subagentModel,
       );
       if (subagentEffort !== undefined) {
-        assertSubagentEffort(subagentEffort, player.adapter, subagentModel, path);
+        assertSubagentEffort(
+          subagentEffort,
+          player.adapter,
+          subagentModel === false ? undefined : subagentModel,
+          path,
+        );
       }
       // Playbook builds a role's call from its binding alone, so a bare
       // binding takes its player's fast mode here, as the launcher's

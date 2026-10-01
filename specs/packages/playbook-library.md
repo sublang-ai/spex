@@ -402,7 +402,7 @@ When a draft turn starts, the conversation runner shall run the draft's agent bl
 
 | Option | Value |
 | --- | --- |
-| model, subagentModel, effort, subagentEffort, fastMode | the block's, a `false` subagentModel taken as absent and an unset one beside a subagentEffort as `inherit`, on an adapter Cligent serves one for ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| model, subagentModel, effort, subagentEffort, fastMode | the block's, an unset subagentModel taken as `inherit` on an adapter Cligent serves one for and a `false` one as absent, as Playbook's launcher resolves them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 | cwd | the draft directory `<library-root>/<id>/` [[playbook-library-12](#playbook-library-12)] |
 | permissions | `{ mode: "auto" }` — the block's own policy and `writablePaths` dropped |
 | allowedTools, disallowedTools, maxTurns | absent |

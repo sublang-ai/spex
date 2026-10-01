@@ -26,6 +26,7 @@ import {
   templatePath,
   type LoadModule,
 } from "./config.js";
+import { executionConfig } from "./session.js";
 import { scratchDir } from "./testing/scratch.js";
 
 // Mirrors the real @sublang/playbook/code/registry entry shape: the
@@ -426,10 +427,10 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   assert.equal(composed.captainAgent.subagentModel, "claude-sonnet-5-5");
   assert.equal(composed.captainOptions.sessionAgents.captain.subagentModel, "claude-sonnet-5-5");
   assert.equal(composed.captainOptions.sessionAgents.players[coderId]?.subagentModel, "claude-haiku-5");
-  // An omitted binding inherits the player's; `false` reaches the shell
-  // as omission (the provider's default); a pin stands.
+  // An omitted binding inherits the player's; `false` is Off, carried
+  // until the projection is built (DR-095); a pin stands.
   assert.equal(composed.captainOptions.playbooks.code.roles.coder.subagentModel, "claude-haiku-5");
-  assert.ok(!("subagentModel" in composed.captainOptions.playbooks.review.roles.coder));
+  assert.equal(composed.captainOptions.playbooks.review.roles.coder.subagentModel, false);
   assert.equal(composed.captainOptions.playbooks.review.roles.reviewer.subagentModel, "claude-haiku-5");
 
   // The summary carries each agent's and each binding's own.
@@ -481,10 +482,11 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   // An effort beside an unset model runs on the agent's own model.
   assert.equal(agents.players[coderId]?.subagentModel, "inherit");
   assert.equal(agents.players[coderId]?.subagentEffort, "low");
-  // `false` sends none, and the composition sets no default of its own.
-  assert.ok(!("subagentModel" in (agents.players[reviewerId] ?? {})));
+  // `false` is Off, carried as itself so an effort beside it is refused.
+  assert.equal(agents.players[reviewerId]?.subagentModel, false);
   const analystId = String(((top.playbooks as Record<string, Record<string, unknown>>).dev.roles as Record<string, unknown>).analyst);
-  assert.ok(!("subagentModel" in (agents.players[analystId] ?? {})), "an untuned agent carries no subagent model");
+  assert.equal(agents.players[analystId]?.subagentModel, "inherit", "an untuned agent delegates on its own model");
+  assert.ok(!("subagentEffort" in (agents.players[analystId] ?? {})), "at efforts of its own choosing");
   // A binding's effort wins over its player's; `false` leaves it to the
   // agent and keeps nothing else beside it.
   const roles = composed.captainOptions.playbooks;
@@ -527,6 +529,12 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   (roster(inheritedOff)[coderId] as Record<string, unknown>).subagentEffort = "low";
   codeRoles(inheritedOff).coder = { player: coderId, subagentModel: false };
   await expectError(inheritedOff, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
+  // And a binding's effort over a player whose model is off: the
+  // player's Off reaches the binding as itself, never the default.
+  const overOff = baseConfig();
+  (roster(overOff)[coderId] as Record<string, unknown>).subagentModel = false;
+  codeRoles(overOff).coder = { player: coderId, subagentEffort: "low" };
+  await expectError(overOff, /^playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel$/);
 
   // An adapter cligent serves no subagent model for takes no effort.
   const onCodex = baseConfig();
@@ -540,6 +548,44 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   const blank = baseConfig();
   codeRoles(blank).coder = { player: coderId, subagentEffort: "" };
   await expectError(blank, /^playbooks\.code\.roles\.coder\.subagentEffort must be a string or false/);
+});
+
+test("an unset subagent model delegates on the agent's own model wherever cligent serves one, as the launcher resolves it", async () => {
+  // DR-095 (core-service-16): with or without an effort beside it, at
+  // the Captain, each player and each binding; the summary keeps the
+  // omission, and an adapter cligent serves none for composes none.
+  const top = baseConfig();
+  const coderId = String(codeRoles(top).coder);
+  const reviewerId = String(reviewRoles(top).reviewer);
+  roster(top)[reviewerId] = { adapter: "codex" };
+  const composed = await composeConfig(top, stubLoader);
+  const agents = composed.captainOptions.sessionAgents;
+  assert.equal(agents.captain.subagentModel, "inherit");
+  assert.equal(agents.players[coderId]?.subagentModel, "inherit");
+  assert.ok(!("subagentEffort" in agents.players[coderId]!), "the agent chooses its subagents' efforts");
+  assert.equal(composed.captainOptions.playbooks.code.roles.coder.subagentModel, "inherit");
+  assert.ok(!("subagentModel" in agents.players[reviewerId]!), "an adapter serving none composes none");
+  assert.ok(!("subagentModel" in composed.captainOptions.playbooks.review.roles.reviewer));
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.ok(!("subagentModel" in summary.captain), "the summary keeps the omission");
+  assert.ok(!("subagentModel" in summary.players.find((p) => p.id === coderId)!.agent));
+
+  // The projection the shell opens on carries the default, and an Off
+  // carried through composition is dropped only there.
+  (roster(top)[coderId] as Record<string, unknown>).subagentModel = false;
+  reviewRoles(top).coder = { player: coderId, subagentModel: "claude-haiku-5" };
+  const off = await composeConfig(top, stubLoader);
+  assert.equal(off.captainOptions.sessionAgents.players[coderId]?.subagentModel, false);
+  assert.equal(off.captainOptions.playbooks.code.roles.coder.subagentModel, false);
+  const projection = executionConfig(off, "/work") as unknown as {
+    captain: { subagentModel?: string };
+    players: { id: string; subagentModel?: string }[];
+    catalog: Record<string, { roles: Record<string, { subagentModel?: string }> }>;
+  };
+  assert.equal(projection.captain.subagentModel, "inherit");
+  assert.ok(!("subagentModel" in projection.players.find((p) => p.id === coderId)!), "Off sends none");
+  assert.ok(!("subagentModel" in projection.catalog.code!.roles.coder!), "nor at the binding inheriting it");
+  assert.equal(projection.catalog.review!.roles.coder!.subagentModel, "claude-haiku-5", "a binding's pin over an Off stands");
 });
 
 test("a player no binding names is listed as bound to no role and opens no session lane", async () => {

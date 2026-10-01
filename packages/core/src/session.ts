@@ -17,7 +17,7 @@ import {
 } from "@sublang/playbook/session-store";
 import { resolveArtifacts } from "./artifacts.js";
 import { i18n } from "./i18n.js";
-import { assertSubagentEffort, assertSubagentModel, delegatedModel, type ComposedConfig, type LoadModule } from "./config.js";
+import { assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
 import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
@@ -148,33 +148,35 @@ export class SettingsDriftError extends Error {
 /** One agent's tuning read onto a composed block (core-service-100,
  * DR-067): a string pins, `false` takes the provider's current
  * default, and an absent field leaves the configured selection. The
- * shell is told the outcome, exactly as composition tells it one. */
-function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; subagentModel?: string; subagentEffort?: string}>(block: T, tuning: SessionAgentSettings | undefined, agent: {adapter: string; path: string}): T {
-  if (!tuning) return block;
+ * shell is told the outcome, exactly as composition tells it one. Every
+ * block passes through here, tuned or not: a subagent model's `false` —
+ * Off, carried this far so an effort beside it is refused — is dropped
+ * only now, as the shell takes no sentinel for it (DR-095). */
+function tuned<T extends {model: unknown; effort: unknown; fastMode?: boolean; subagentModel?: string | false; subagentEffort?: string}>(block: T, tuning: SessionAgentSettings | undefined, agent: {adapter: string; path: string}): Omit<T, "subagentModel"> & {subagentModel?: string} {
   const selection = (value: string | false): unknown => value === false ? {kind: "provider-default"} : {kind: "value", value};
   // A subagent model is validated where the agent's adapter is known —
   // cligent's support, cligent's words (DR-093).
-  if (typeof tuning.subagentModel === "string") assertSubagentModel(tuning.subagentModel, agent.adapter, agent.path);
-  // The shell takes no sentinel for either: `false` sends none — for the
-  // effort, the agent chooses — and an absent field keeps the block's;
-  // an effort beside no model runs on the agent's own (DR-095).
+  if (typeof tuning?.subagentModel === "string") assertSubagentModel(tuning.subagentModel, agent.adapter, agent.path);
+  // A session's `false` is Off for the model and the agent's own choice
+  // for the effort; an absent field keeps the block's, whose delegation
+  // default composition already resolved (DR-095).
   const {subagentModel: configuredModel, subagentEffort: configuredEffort, ...rest} = block;
-  const subagentEffort = tuning.subagentEffort === undefined ? configuredEffort : tuning.subagentEffort === false ? undefined : tuning.subagentEffort;
-  const subagentModel = delegatedModel(agent.adapter, tuning.subagentModel === undefined ? configuredModel : tuning.subagentModel, subagentEffort);
+  const subagentEffort = tuning?.subagentEffort === undefined ? configuredEffort : tuning.subagentEffort === false ? undefined : tuning.subagentEffort;
+  const subagentModel = tuning?.subagentModel === undefined ? configuredModel : tuning.subagentModel;
   // The effort is checked against the model it now runs beside, at every
-  // site: a binding may turn its subagent model off where the player's
-  // effort stands, and a session may tune either one alone.
-  if (subagentEffort !== undefined && (tuning.subagentEffort !== undefined || tuning.subagentModel !== undefined)) {
-    assertSubagentEffort(subagentEffort, agent.adapter, subagentModel, agent.path);
+  // site: a session may tune either one alone, and its Off reaches a
+  // binding whose own effort stands.
+  if (subagentEffort !== undefined && (tuning?.subagentEffort !== undefined || tuning?.subagentModel !== undefined)) {
+    assertSubagentEffort(subagentEffort, agent.adapter, subagentModel === false ? undefined : subagentModel, agent.path);
   }
   return {
     ...rest,
-    ...(tuning.model !== undefined ? {model: selection(tuning.model)} : {}),
-    ...(tuning.effort !== undefined ? {effort: selection(tuning.effort)} : {}),
-    ...(tuning.fastMode !== undefined ? {fastMode: tuning.fastMode} : {}),
-    ...(subagentModel !== undefined ? {subagentModel} : {}),
+    ...(tuning?.model !== undefined ? {model: selection(tuning.model)} : {}),
+    ...(tuning?.effort !== undefined ? {effort: selection(tuning.effort)} : {}),
+    ...(tuning?.fastMode !== undefined ? {fastMode: tuning.fastMode} : {}),
+    ...(typeof subagentModel === "string" ? {subagentModel} : {}),
     ...(subagentEffort !== undefined ? {subagentEffort} : {}),
-  } as T;
+  } as Omit<T, "subagentModel"> & {subagentModel?: string};
 }
 
 export function executionConfig(composed: ComposedConfig, cwd: string, members?: StoredMembers, tuning?: SessionAgentSettingsMap): SessionExecutionProjection {

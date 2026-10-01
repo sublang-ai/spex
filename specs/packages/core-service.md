@@ -114,7 +114,7 @@ When a client sends `session.agent.set` naming a session, one of its agents — 
 | `null` | the configured value — the session's tuning of that field is cleared |
 | absent | what the session's tuning already held for it |
 
-- validation composes the projection and applies the shared execution validator's own adapter-scoped rules, so a model, subagent model, effort, subagent effort, or fast mode the agent's adapter cannot enforce — a subagent effort where no subagent model composes among them — is refused `invalid_config` naming it, with nothing written;
+- validation composes the projection and applies the shared execution validator's own adapter-scoped rules, so a model, subagent model, effort, subagent effort, or fast mode the agent's adapter cannot enforce — a subagent effort beside an Off among them, whether the session, the agent's configuration or a binding naming it sets that Off [[core-service-16](#core-service-16)] — is refused `invalid_config` naming it, with nothing written;
 - an unknown session, or an agent outside the session's stored members, is refused `invalid_request` naming it;
 - runtime discovery narrows a client's choices [[settings-34](settings.md#settings-34)] and gates no save here, so tuning stays available while discovery is unavailable ([DR-052](../decisions/052-runtime-model-options.md));
 - a session whose tuning holds nothing carries none, and deleting a session drops its tuning with the rest of its per-session state [[core-service-70](#core-service-70)].
@@ -601,8 +601,8 @@ The core package shall compose the session-player roster, the playbook registry,
 | Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`subagentModel`/`effort`/`subagentEffort`/`fastMode`; a role left unbound, or bound to an absent player, is refused naming it |
 | Binding keys | `adapter`, `permissions`, `instruction` and `workspace` inside a binding are refused: they belong to the player's envelope |
 | Tuning | an omitted `model`/`subagentModel`/`effort`/`subagentEffort`/`fastMode` inherits the player's; for the first four, `false` selects the provider's current default and a string pins it, while a `fastMode` boolean is a literal request; the composed selection is complete on every call; a `subagentModel` string is accepted only where Cligent serves one for the player's adapter, refused in Cligent's own words otherwise ([DR-093](../decisions/093-a-players-subagent-model.md)) |
-| Delegation | an agent block's `subagentModel` is a model, the literal `inherit` — the agent's own model — or `false`, which composes as absent; where Cligent serves a subagent model for the adapter, an unset one beside a subagent effort composes as `inherit`, as Playbook's launcher resolves it, and the configuration and its summary keep the omission ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
-| Subagent effort | a `subagentEffort` in an agent block or a binding is accepted only from the adapter's effort values less its orchestration values and only where a subagent model composes beside it, refused naming the field otherwise ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| Delegation | an agent block's `subagentModel` is a model, the literal `inherit` — the agent's own model — or `false`, Off; where Cligent serves a subagent model for the adapter, an unset one composes as `inherit`, with or without a subagent effort beside it, at the Captain, at each player and at each binding inheriting it, as Playbook's launcher resolves it, while the configuration and its summary keep the omission; an Off is carried as itself through composition and the session's own tuning [[core-service-100](#core-service-100)], a binding omitting the field inheriting it as Off, and is sent as no subagent model only once the projection is built ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| Subagent effort | a `subagentEffort` in an agent block or a binding is accepted only from the adapter's effort values less its orchestration values and only where a subagent model composes beside it — never beside an Off, whichever of the player and the binding sets either — refused in Cligent's words naming the field otherwise ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
 | Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
@@ -712,17 +712,19 @@ Where a live session's runtime fails its disposal, the test suite shall request 
 
 #### core-service-101
 
-Where two sessions of one project share a player and the config pins that player's model, effort and fast mode, when the test suite tunes that player and the Captain in the first session over the protocol and opens both sessions in turn, the test suite shall assert that a session's tuning reaches its own runtime and nothing else ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
+Where two sessions of one project share a player and the config pins that player's model, effort and fast mode, and a second player leaves its subagent model unset, when the test suite tunes those players and the Captain in the first session over the protocol and opens both sessions in turn, the test suite shall assert that a session's tuning reaches its own runtime and nothing else ([DR-067](../decisions/067-tuning-for-one-conversation.md)):
 
 - the first session's projection carries the tuned values at the Captain, at the player's block, and at every role binding naming that player [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
 - the second session's projection carries the config's values at all three [[core-service-92](#core-service-92)], the role binding setting no fast mode carrying its player's [[core-service-16](#core-service-16)];
+- the second session's projection carries `inherit` and no subagent effort at the Captain, at the second player's block and at the binding naming it, where the config sets no subagent model [[core-service-16](#core-service-16)];
 - the shared config file's bytes are identical before and after [[core-service-100](#core-service-100)];
 - clearing the tuning returns the first session's projection to the config's values, and deleting the session leaves no tuning behind [[core-service-100](#core-service-100)];
 - a value the player's adapter cannot enforce is refused with the session's tuning unchanged [[core-service-100](#core-service-100)];
 - the player's subagent model, tuned alike, reaches the same three sites and is refused on a player whose adapter Cligent serves none for [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
 - the player's subagent effort, tuned alike, reaches the same three sites, and is refused with the session's tuning unchanged where the session also turns the subagent model off or names an orchestration effort [[core-service-100](#core-service-100)] [[core-service-92](#core-service-92)];
-- a subagent effort tuned on a player whose subagent model is unset reaches the three sites beside `inherit` [[core-service-16](#core-service-16)] [[core-service-100](#core-service-100)];
-- once the config moves that player to such an adapter, continuing the first session tuned with a subagent model is refused naming the adapter's change and offering a new session, not naming the tuning [[core-service-92](#core-service-92)].
+- a subagent effort tuned on the second player reaches its block and the binding naming it beside `inherit`, and one tuned on the Captain reaches the Captain's block beside `inherit` [[core-service-16](#core-service-16)] [[core-service-100](#core-service-100)];
+- once the config moves that player to such an adapter, continuing the first session tuned with a subagent model is refused naming the adapter's change and offering a new session, not naming the tuning [[core-service-92](#core-service-92)];
+- once the config sets the Captain's subagent model and the second player's binding's to `false`, a subagent effort tuned on the Captain, or on that player, is refused in Cligent's words naming the Captain or the binding, with the session's tuning unchanged [[core-service-16](#core-service-16)] [[core-service-100](#core-service-100)].
 
 ### Shutdown Coverage
 
@@ -744,7 +746,7 @@ Where the fake adapter script contains records marked hidden, the test suite sha
 
 #### core-service-21
 
-Where the config file carries a defect from each launcher fail-closed defect class recorded in [DR-004](../decisions/004-config-and-persistence.md) as amended by [DR-019](../decisions/019-inline-agent-configuration.md) [[core-service-16](#core-service-16)], the test suite shall assert, per defect, that the core service reports a config error naming the offending entry and rejects a session creation request while that config is active [[core-service-2](#core-service-2)].
+Where the config file carries a defect from each launcher fail-closed defect class recorded in [DR-004](../decisions/004-config-and-persistence.md) as amended by [DR-019](../decisions/019-inline-agent-configuration.md) — a subagent effort beside an Off, from the player or the binding, among them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) — [[core-service-16](#core-service-16)], the test suite shall assert, per defect, that the core service reports a config error naming the offending entry and rejects a session creation request while that config is active [[core-service-2](#core-service-2)].
 
 ### Persistence Coverage
 
