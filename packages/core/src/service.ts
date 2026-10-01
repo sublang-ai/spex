@@ -89,6 +89,7 @@ import { AuthorManager } from "./authoring.js";
 import { DraftStore } from "./drafts.js";
 import {
   parseSpecTree,
+  readRecordCommitTimes,
   readSpecFile,
   resolveSpecPath,
   writeSpecFile,
@@ -1684,7 +1685,9 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
-        return parseSpecTree(project.path);
+        return parseSpecTree(project.path, {
+          committedAt: await readRecordCommitTimes(project.path, this.runCommand),
+        });
       }
       case "specs.read": {
         const project = this.store.getProject(command.projectId);

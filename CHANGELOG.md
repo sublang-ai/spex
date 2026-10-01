@@ -510,6 +510,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   (`spex.db.imported`, `server.db.imported`), no later home reads a
   marked store, and a home that took the store before this fix marks it
   at its next start (core-service-64).
+- A project registered from a fresh clone listed every finished intent
+  record in History as "just now", in no order: the records' status
+  lines carry no date, and a clone sets every file's last change to one
+  moment. An undated record now dates by the last commit touching its
+  file, and by the file's last change only where Git tracks none
+  (dashboard-27, spec-view-14).
 
 ### Security
 
