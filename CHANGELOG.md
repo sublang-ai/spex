@@ -114,12 +114,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   one conversation, the model and its effort now share a row, and the
   subagent model and its effort the next; the pairs stack at the
   320-pixel floor. The chip is unchanged.
-  Playbook 17.3 makes delegation the default: the `playbook` CLI runs
-  every Claude agent whose subagent model is unset on its own model and
-  tells it to delegate, so existing configurations change behavior
-  there; "Off" (`subagentModel: false`) is the way back. In Spex's own
-  sessions an unset subagent model runs on the agent's own model where
-  a subagent effort stands beside it, and sends none otherwise.
+  Delegation is now the default, in Spex's sessions and draft
+  conversations as in the `playbook` CLI: every Claude agent whose
+  subagent model is unset runs its subagents on its own model and is
+  told to delegate, so existing configurations change behavior. "Off"
+  (`subagentModel: false`) is the way back, and a subagent effort set
+  beside an Off — in the agent's block, a role's binding or one
+  conversation's settings — is refused rather than switching delegation
+  back on.
 - Each agent's pane header reads its completed active time this session,
   as `active · 3m 12s` ([DR-070](specs/decisions/070-agent-active-time.md),
   [DR-071](specs/decisions/071-active-time-follows-held-calls.md)): the
