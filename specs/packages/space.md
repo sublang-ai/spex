@@ -665,6 +665,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - Space reads "Not a repository yet" with one setup control over a remote field, and activating it empty marks the field required rather than making a repository [[space-3](#space-3)];
 - the bare path then sets the space up in one motion — the control reading "Setting up…" from its click to the last frame and never its own name in between — the header ending at `main`, the remote and a sync time, with the setup's own sync naming each step it passes and counting what the empty remote took [[space-4](#space-4)] [[space-6](#space-6)] [[space-12](#space-12)];
+- with the remote then changed to a second bare repository, the Join card stands on this synced home until Check remote runs, and the remote restored stands it again until the next sync ends [[space-45](#space-45)] [[space-5](#space-5)];
 - a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)];
 - an intent queued while Space is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].
 

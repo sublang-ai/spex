@@ -955,6 +955,24 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
     await waitFor(() => expect(calls("space.sync")).toEqual([{ join: true }]));
   });
 
+  test("the Join card stands until the remote is checked, on a synced home too, and goes after the check (space-45)", async () => {
+    // A home that synced before, its remote changed since: the change
+    // cleared the last check, so the card is back above the lists.
+    await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null } }));
+    const card = screen.getByTestId("space-first-meeting");
+    expect(card.textContent).toContain("This space has not met that remote yet.");
+    expect(within(card).getByTestId("space-first-join").title).toBe(
+      "Brings both spaces into one and asks about anything that differs",
+    );
+    expect(screen.getByTestId("space-primary").textContent).toContain("Sync");
+    // The check records its time: the card goes.
+    deliver(repoState());
+    expect(screen.queryByTestId("space-first-meeting")).toBeNull();
+    // Unrelated histories offer Join in the header instead (space-13).
+    deliver(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null, unrelated: true }, sync: { phase: "unrelated" } }));
+    expect(screen.queryByTestId("space-first-meeting")).toBeNull();
+  });
+
   test("controls are disabled while disconnected", async () => {
     await renderSpace(repoState());
     act(() => useAppStore.setState({ connection: "closed" }));
