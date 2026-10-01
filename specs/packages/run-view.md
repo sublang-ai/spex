@@ -1153,6 +1153,8 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 - the platform modifier with P opens the palette, arrow keys move its selection, Enter picks, Escape closes [[run-view-42](#run-view-42)];
 - the modifier with 1 through 5 switches surfaces, and the modifier with B collapses and restores the sidebar [[run-view-71](#run-view-71)];
+- after the modifier with 1, 3, 4, 5 or comma, focus stands inside the surface opened, and after the modifier with 2 it stands in the Boss composer [[run-view-50](#run-view-50)];
+- after the modifier with B, focus stands on the sidebar's collapse control in both of its states [[run-view-71](#run-view-71)];
 - in the composer Enter sends while Shift+Enter inserts a line break [[run-view-8](#run-view-8)];
 - a Tab sequence from the page start reaches the composer, and no shortcut leaves focus stranded on the document body.
 
