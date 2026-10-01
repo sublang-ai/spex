@@ -466,6 +466,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A project created from the palette pinned no copyright holder of its
+  own: every scaffolded file carried SubLang's upstream SPDX line, so
+  an agent adding the project's first spec copied it. The scaffold now
+  writes `licensing-9` into the project's `specs/packages/licensing.md`
+  with the project's own header — the creator's `git config user.name`
+  and email as the holder, the current year, and `Apache-2.0` for the
+  LICENSE it emits — while the template files keep their upstream
+  lines. With no git identity it leaves a `<holder>` placeholder and
+  says so, never SubLang's name (projects-3, scaffold-56). The palette
+  picks this up with the next `@sublang/spex` release it runs.
 
 ### Security
 

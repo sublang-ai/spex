@@ -24,7 +24,7 @@ import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@subla
 import { CoreService } from "./service.js";
 import { speak } from "./i18n.js";
 import { templatePath, resolveModulePath, resolveSessionsDir, REGISTRY_CONTRACT } from "./config.js";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
@@ -194,6 +194,8 @@ async function startHarness(
     seedCommit?: boolean;
     env?: NodeJS.ProcessEnv;
     runCommand?: import("./forge.js").RunCommand;
+    /** The scaffold generator project.create runs (the built CLI). */
+    scaffoldCommand?: string[];
     compileSpawner?: import("./compile.js").LineSpawner;
     adapterRuntime?: import("./service.js").CoreServiceOptions["adapterRuntime"];
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
@@ -243,6 +245,9 @@ async function startHarness(
     env: options.env ?? {},
     home: join(dir, "home"),
     watchConfig: false,
+    ...(options.scaffoldCommand
+      ? { scaffoldCommand: options.scaffoldCommand }
+      : {}),
     ...(options.runCommand ? { runCommand: options.runCommand } : {}),
     ...(options.compileSpawner
       ? { compileSpawner: options.compileSpawner }
@@ -1085,7 +1090,50 @@ test("CORE-27: compile.abort cancels the run; the ◇ line closes progress", asy
 
 test("PROJ: work-tree validation, create flow, forge states, removal", async () => {
   const { defaultRunCommand } = await import("./forge.js");
+  // The real scaffold generator, as the palette's Create runs it
+  // (projects-3): the CLI this checkout builds beside the core.
+  const scaffoldCli = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "cli",
+    "dist",
+    "cli.js",
+  );
+  assert.ok(existsSync(scaffoldCli), `built CLI at ${scaffoldCli}`);
+  // The host's own git identity must not decide the holder: the
+  // scaffold sees no global or system config, only the repository's.
+  const noIdentity = join(scratchDir("spex-no-identity-"), "gitconfig");
+  writeFileSync(noIdentity, "");
+  const identified = new Set<string>();
   const ghStub: import("./forge.js").RunCommand = async (command, args, cwd) => {
+    if (command === process.execPath && args[0] === scaffoldCli) {
+      return new Promise((done) => {
+        const child = spawn(command, args, {
+          cwd,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: noIdentity, GIT_CONFIG_NOSYSTEM: "1" },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+        child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+        child.on("close", (code) => done({ code: code ?? 1, stdout, stderr }));
+      });
+    }
+    if (command === "git" && args[0] === "init") {
+      const result = await defaultRunCommand(command, args, cwd);
+      // Only the first created project carries an identity, as a
+      // repository the creator configured would.
+      if (identified.has(args[1])) {
+        for (const [key, value] of [
+          ["user.name", "Spex Test"],
+          ["user.email", "spex@example.test"],
+          ["commit.gpgsign", "false"],
+        ]) execFileSync("git", ["-C", args[1], "config", key, value]);
+      }
+      return result;
+    }
     if (command !== "gh") return defaultRunCommand(command, args, cwd);
     if (args[0] === "auth") return { code: 0, stdout: "ok", stderr: "" };
     return {
@@ -1096,7 +1144,10 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
       stderr: "",
     };
   };
-  const harness = await startHarness(VALID_CONFIG, { runCommand: ghStub });
+  const harness = await startHarness(VALID_CONFIG, {
+    runCommand: ghStub,
+    scaffoldCommand: [process.execPath, scaffoldCli],
+  });
   const client = new Client(harness.service.port());
   await client.open();
 
@@ -1107,15 +1158,51 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   assert.ok(!rejected.ok && rejected.error.code === "invalid_request");
   assert.match(rejected.error.message, /git work tree/);
 
-  // Create flow produces a registered, statusable repo (PROJ-2/3).
+  // Create flow produces a registered, statusable repo (PROJ-2/3)
+  // whose scaffold names the creator as the copyright holder
+  // (projects-18).
+  identified.add(join(harness.dir, "fresh"));
   const created = await client.expectOk("project.create", {
     path: join(harness.dir, "fresh"),
+    scaffold: true,
   });
   const status = await client.expectOk("project.status", {
     projectId: created.id,
   });
   assert.ok(status.branch.length > 0);
   assert.equal(status.dirty, false);
+  const licensing = readFileSync(
+    join(created.path, "specs", "packages", "licensing.md"),
+    "utf-8",
+  );
+  const pinned = licensing.slice(licensing.indexOf("### licensing-9"));
+  assert.ok(
+    pinned.includes(
+      `<!-- SPDX-FileCopyrightText: ${new Date().getFullYear()} Spex Test <spex@example.test> -->`,
+    ),
+    `licensing-9 names the configured holder:\n${pinned}`,
+  );
+  assert.doesNotMatch(pinned, /<holder>|SubLang/);
+  assert.match(
+    licensing.split("\n")[1] ?? "",
+    /SubLang International/,
+    "the template keeps its upstream line",
+  );
+
+  // Without a git identity the scaffold leaves the placeholder, never
+  // the template's holder (projects-18).
+  const anonymous = await client.expectOk("project.create", {
+    path: join(harness.dir, "anonymous"),
+    scaffold: true,
+  });
+  const unpinned = readFileSync(
+    join(anonymous.path, "specs", "packages", "licensing.md"),
+    "utf-8",
+  );
+  const left = unpinned.slice(unpinned.indexOf("### licensing-9"));
+  assert.ok(left.includes("SPDX-FileCopyrightText: " + new Date().getFullYear() + " <holder>"));
+  assert.doesNotMatch(left, /SubLang/);
+  await client.expectOk("project.remove", { projectId: anonymous.id });
 
   // Creating on a registered folder is a conflict carrying the
   // registered path as a fact, apart from its words (core-service-111).

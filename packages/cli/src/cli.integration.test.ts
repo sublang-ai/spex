@@ -49,13 +49,14 @@ const LEGACY_REPO_FILES = [
 
 function run(
   args: string[],
-  opts?: { cwd?: string },
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv },
 ): { stdout: string; stderr: string; exitCode: number } {
   // spawnSync captures stderr on success too, so warnings emitted on a
   // zero-exit run (e.g. replaced user-modified framework files) are visible.
   const result = spawnSync(process.execPath, [CLI, ...args], {
     encoding: "utf-8",
     cwd: opts?.cwd,
+    env: opts?.env === undefined ? process.env : { ...process.env, ...opts.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   return {
@@ -299,6 +300,110 @@ describe("CLI integration", () => {
         "existing LICENSE must not be overwritten",
       );
       assert.match(result.stdout, /LICENSE \(already exists\)/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  // scaffold-56 / scaffold-58: the licensing seed names the project's
+  // own holder, so an agent adding a file copies the project's line,
+  // not the template's upstream one.
+  it("scaffold pins the git identity as the copyright holder in licensing-9", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      const result = run(["scaffold", "--agents=claude", dir]);
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.doesNotMatch(result.stderr, /placeholder/);
+
+      const licensing = readFileSync(
+        join(dir, "specs", "packages", "licensing.md"),
+        "utf-8",
+      );
+      const year = new Date().getFullYear();
+      const item = licensing.slice(licensing.indexOf("### licensing-9"));
+      assert.ok(
+        item.includes(
+          `<!-- SPDX-FileCopyrightText: ${year} Test <test@example.com> -->`,
+        ),
+        `markdown header names the holder:\n${item}`,
+      );
+      assert.ok(
+        item.includes(`// SPDX-FileCopyrightText: ${year} Test <test@example.com>`),
+      );
+      assert.ok(item.includes("// SPDX-License-Identifier: Apache-2.0"));
+      assert.doesNotMatch(item, /<holder>|<license>|<year>|SubLang/);
+
+      // Template files keep their upstream SPDX lines (licensing-5).
+      for (const relPath of [
+        "specs/map.md",
+        "specs/meta.md",
+        "specs/packages/licensing.md",
+        "specs/packages/git.md",
+        "specs/intents/000-spdx-headers.md",
+        "specs/decisions/000-spec-structure-format.md",
+      ]) {
+        assert.match(
+          readFileSync(join(dir, relPath), "utf-8").split("\n")[1] ?? "",
+          /SPDX-FileCopyrightText: \d{4} SubLang International/,
+          `${relPath} keeps the upstream line`,
+        );
+      }
+      const lint = run(["lint", dir]);
+      assert.equal(lint.exitCode, 0, lint.stdout + lint.stderr);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold without a git identity keeps the <holder> placeholder and says so", () => {
+    const dir = makeTmp();
+    try {
+      // No repository, and no global or system identity either.
+      const noGlobal = join(dir, "no-identity.gitconfig");
+      writeFileSync(noGlobal, "");
+      const result = run(["scaffold", "--agents=claude", dir], {
+        env: { GIT_CONFIG_GLOBAL: noGlobal, GIT_CONFIG_NOSYSTEM: "1" },
+      });
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.match(result.stderr, /user\.name/);
+      assert.match(result.stderr, /<holder>/);
+      assert.match(result.stderr, /specs\/packages\/licensing\.md/);
+
+      const licensing = readFileSync(
+        join(dir, "specs", "packages", "licensing.md"),
+        "utf-8",
+      );
+      const item = licensing.slice(licensing.indexOf("### licensing-9"));
+      const year = new Date().getFullYear();
+      assert.ok(item.includes(`<!-- SPDX-FileCopyrightText: ${year} <holder> -->`));
+      assert.ok(item.includes("<!-- SPDX-License-Identifier: Apache-2.0 -->"));
+      assert.doesNotMatch(item, /SubLang/);
+      const lint = run(["lint", dir]);
+      assert.equal(lint.exitCode, 0, lint.stdout + lint.stderr);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("scaffold keeps the <license> placeholder when LICENSE is not the bundled text", () => {
+    const dir = makeTmp();
+    try {
+      initGit(dir);
+      writeFileSync(join(dir, "LICENSE"), "Downstream project license\n");
+      const result = run(["scaffold", "--agents=claude", dir]);
+      assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
+      assert.match(result.stderr, /<license>/);
+      const item = readFileSync(
+        join(dir, "specs", "packages", "licensing.md"),
+        "utf-8",
+      );
+      assert.ok(item.includes("<!-- SPDX-License-Identifier: <license> -->"));
+      assert.ok(
+        item.includes(
+          `// SPDX-FileCopyrightText: ${new Date().getFullYear()} Test <test@example.com>`,
+        ),
+      );
     } finally {
       rmSync(dir, { recursive: true });
     }
