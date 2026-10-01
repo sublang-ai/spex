@@ -446,7 +446,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "players-section",
         [
           "会话 Player", // Session players
-          "还没有 Player — 在库中启用规程会自动添加其角色所需的 Player。",
+          "还没有 Player — 在“规程”界面启用规程会自动添加其角色所需的 Player。",
           "添加 Player", // Add a player
         ],
       ],
@@ -472,7 +472,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "language-section",
         [
           "语言", // Language
-          "跟随系统：设备的语言", // System follows your device
+          "跟随系统即设备的语言", // System follows your device
         ],
       ],
       [

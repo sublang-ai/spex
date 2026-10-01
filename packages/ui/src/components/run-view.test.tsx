@@ -3759,7 +3759,7 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
       fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
       const editor = await screen.findByTestId("agent-settings-dev.reviewer");
       const mode = within(editor).getByTestId("agent-dev.reviewer-model-mode") as HTMLSelectElement;
-      await waitFor(() => expect(mode.options[0]?.textContent).toBe("取自设置（提供方默认 · Test · claude-test-5-5）"));
+      await waitFor(() => expect(mode.options[0]?.textContent).toBe("取自设置（服务商默认 · Test · claude-test-5-5）"));
     } finally {
       restore();
       activateLanguage("en");

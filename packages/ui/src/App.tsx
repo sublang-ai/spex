@@ -29,7 +29,12 @@ import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
 import { OverviewTab } from "./components/ProjectsSurface.js";
 import { ProjectPalette } from "./components/ProjectPalette.js";
-import { NavRail, SURFACES, type Surface } from "./components/NavRail.js";
+import {
+  NavRail,
+  SURFACES,
+  SURFACE_LABELS,
+  type Surface,
+} from "./components/NavRail.js";
 import {
   SpecView,
   initialSpecViewState,
@@ -1074,6 +1079,35 @@ export function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  // A shortcut that opens a surface lands focus inside it, and the
+  // sidebar binding lands on the sidebar's own control, so no shortcut
+  // strands focus on the body (run-view-50, run-view-71, DR-010 §6).
+  // The landing waits for the surface to render: the Boss composer
+  // where the surface shows one, else the surface region itself, named
+  // for what it is.
+  const mainRef = useRef<HTMLElement>(null);
+  const [landing, setLanding] = useState<{ on: "surface" | "rail" }>();
+  useEffect(() => {
+    if (!landing) return;
+    setLanding(undefined);
+    if (landing.on === "rail") {
+      const toggle = document.querySelector<HTMLElement>(
+        '[data-testid="sidebar-collapse"]',
+      );
+      if (toggle) {
+        toggle.focus();
+        return;
+      }
+    }
+    const main = mainRef.current;
+    if (!main) return;
+    const composer = main.querySelector<HTMLElement>(
+      '[data-testid="boss-composer"], [data-testid="start-composer"]',
+    );
+    composer?.focus();
+    if (document.activeElement !== composer) main.focus();
+  }, [landing]);
+
   // Application shortcuts (DR-010 §6, DR-011), renderer-side so the
   // UI runs unmodified in a browser (SHELL-10).
   useEffect(() => {
@@ -1086,11 +1120,13 @@ export function App() {
         if (index >= 1 && index <= SURFACES.length) {
           event.preventDefault();
           setSurface(SURFACES[index - 1]);
+          setLanding({ on: "surface" });
           return;
         }
         if (event.key === ",") {
           event.preventDefault();
           setSurface("Settings");
+          setLanding({ on: "surface" });
           return;
         }
         if (event.key.toLowerCase() === "p") {
@@ -1101,13 +1137,16 @@ export function App() {
         if (event.key.toLowerCase() === "n") {
           event.preventDefault();
           setSurface("Workspace");
-          if (projectId) state.setWorkspaceTab(projectId, "start");
-          else setPaletteOpen(true);
+          if (projectId) {
+            state.setWorkspaceTab(projectId, "start");
+            setLanding({ on: "surface" });
+          } else setPaletteOpen(true);
           return;
         }
         if (event.key.toLowerCase() === "b") {
           event.preventDefault();
           state.setRailCollapsed(!state.railCollapsed);
+          setLanding({ on: "rail" });
           return;
         }
       }
@@ -1286,7 +1325,15 @@ export function App() {
           onOpenPalette={() => setPaletteOpen(true)}
           foot={configFoot}
         />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main
+          ref={mainRef}
+          // The surface region takes focus programmatically, never by
+          // Tab: a shortcut lands here when the surface has no
+          // composer, so the reader hears where they are.
+          tabIndex={-1}
+          aria-label={SURFACE_LABELS[surface]()}
+          className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
+        >
           {surface === "Playbooks" ? (
             <LibrarySurface onNavigate={setSurface} />
           ) : surface === "Settings" ? (
