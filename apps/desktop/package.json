@@ -1,6 +1,6 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.6",
+  "version": "0.9.0-beta.7",
   "private": true,
   "description": "Spex — the desktop app for running playbooks",
   "author": {
