@@ -9,6 +9,7 @@ Accepted; the seeded lineup is amended by [DR-025](025-playbook-7-adoption.md) �
 
 Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come from runtime discovery.
 Amended by [DR-093](093-a-players-subagent-model.md) in §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
+Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
 
 ## Context
 

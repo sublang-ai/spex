@@ -7,7 +7,8 @@
 
 Accepted (2026-10-01) on the owner's review of the field [DR-093](093-a-players-subagent-model.md) shipped: a player's effort silently governed its subagents, the subagent-model field had no way to say "the same as the agent", and each model and its effort sat on separate full-width rows.
 
-Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices are "Same as agent" and the adapter's models, with "Same as agent" the default; a fifth tuning field, the subagent effort, joins it; the two pair on one row.
+Amends [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-effort field, and each model pairs with its effort on one row.
+Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices are "Same as agent" and the adapter's models, with "Same as agent" the default; a fifth tuning field, the subagent effort, joins it; the two pair on one row; and in its floors: Cligent `^0.30.0`, Playbook `^17.3.0`.
 Amends [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in its floors alone: Cligent `^0.30.0`, Playbook `^17.3.0`, slc `^0.15.0`.
 Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-players.md) in their field count alone: five tuning fields.
 Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
@@ -17,7 +18,8 @@ Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
 Measured against Cligent 0.29 and Claude Code 2.1.284: a Claude session's effort is one setting, the Agent tool's call carries a model but no effort, and the only effort a subagent can own is its definition's.
 So a player on `ultracode` delegated at `ultracode` — the loophole the owner named — and nothing in the interface could say otherwise.
 
-Cligent 0.30 answers at the adapter: `subagentModel` admits `inherit`, the agent's own model; `subagentEffort` pins every subagent's effort or, omitted, leaves it to the agent per task through definitions the Agent tool lists; the directive's first sentence follows the two.
+Cligent 0.30 answers at the adapter: `subagentModel` admits `inherit`, the agent's own model; `subagentEffort` pins the effort of the delegate definitions the Agent tool lists and of the `general-purpose` definition that replaces the built-in or, omitted, leaves it to the agent per task through those definitions, with `general-purpose` — where a call names no type — at `medium`; the directive's first sentence follows the two.
+`Explore` and `Plan` are never replaced, so they keep the agent's own effort under either setting.
 Playbook 17.3 carries the effort as a fifth tuning field and resolves an unset subagent model to `inherit` where the adapter serves one, so delegation is on by default for every Claude agent, with `false` as the way off.
 
 The editors also wasted their width: a model on one full-width row and its effort on the next, though the chip already reads them as one phrase, "model @ effort".
