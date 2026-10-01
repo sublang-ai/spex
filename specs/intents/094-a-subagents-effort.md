@@ -14,10 +14,10 @@ Realize [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md
 ## Deliverables
 
 - [x] DR-095, the amended records' status lines and the map.
-- [ ] The settings, playbook-library, run-view, core-service and storage items.
+- [x] The settings, playbook-library, run-view, core-service and storage items.
 - [ ] Cligent 0.30.0, Playbook 17.3.0 and slc 0.15.0 published; the floors and the lockfile from the public registry.
-- [ ] The core: the fifth field and the `inherit` literal through the block, patch, resolved agent, binding, summary, session settings, projection application and `agent.options`; the protocol version.
-- [ ] The interface: "Same as agent", "Agent chooses", "Off" while it stands, the paired rows; both catalogs.
+- [x] The core: the fifth field and the `inherit` literal through the block, patch, resolved agent, binding, summary, session settings, projection application and `agent.options`; the protocol version.
+- [x] The interface: "Same as agent", "Agent chooses", "Off" while it stands, the paired rows; both catalogs.
 - [ ] Tests by layer; the changelog; `app-v0.9.0-beta.6`.
 
 ## Tasks
