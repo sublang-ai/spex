@@ -478,6 +478,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   inside the surface the shortcut opened, on its composer where it has
   one, and ⌘B lands on the sidebar's own collapse control, so the next
   Tab continues from where the reader went (run-view-50, run-view-71).
+- At a phone's width the Settings keyboard-shortcut sheet scrolled
+  sideways with no keyboard stop, which axe reports as serious. The
+  sheet is now a named stop, "Keyboard shortcuts", so the keyboard
+  reaches what a pointer scrolls (run-view-50).
 
 ### Security
 

@@ -1160,7 +1160,9 @@ Where the harness boots with the demo project registered, the test suite shall a
 
 #### run-view-102
 
-Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, Settings, and Settings with an agent editor's model list open — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)].
+Where the harness boots with the demo project registered, a finished session, and the authoring fake with a stub `slc` that fails once, when each surface — Captain home, a session, a session with a player's settings editor open [[run-view-138](#run-view-138)], a session whose playbook run stands in its recoverable failure state [[run-view-128](#run-view-128)], the Dashboard, the Overview, the Specs tab, Playbooks, a playbook draft's workspace in each of its states (no source, paste mode, a turn with the source appearing, compiling, failed, compiled with each tab open, the editor, the agent picker), Space, Settings, and Settings with an agent editor's model list open — is scanned by axe-core at WCAG 2.1 AA in the light and the dark theme, and Settings is scanned again in a 360 by 640 viewport where its shortcut sheet scrolls sideways, the test suite shall assert no serious or critical violation [[run-view-50](#run-view-50)] [[run-view-12](#run-view-12)]:
+
+- in the narrow viewport the shortcut sheet is a keyboard stop named "Keyboard shortcuts" [[run-view-50](#run-view-50)].
 
 #### run-view-103
 
