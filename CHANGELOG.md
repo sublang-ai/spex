@@ -466,6 +466,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A project's Sources summary read "just now" whenever a client first
+  saw the lists, however old the core's cache was, and a group kept on
+  screen never asked again — a freshly connected page showed a
+  35-minute-old issue list as current. The lists now carry their fetch
+  moment, the summary shows that age, and a group on screen asks again
+  once the lists pass the ten-minute window (dashboard-14,
+  dashboard-20).
 
 ### Security
 
