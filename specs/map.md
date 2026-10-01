@@ -127,7 +127,7 @@ meta.md       The spec of specs
 
 | File | Summary |
 | --- | --- |
-| [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler and agent SDKs; packaged-app acceptance |
+| [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler, scaffold CLI and agent SDKs; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core: WebSocket protocol, shared session lifecycle/recovery/deletion, per-agent summary folds, scoped storage diagnostics, config, records and readiness |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, Running band, per-project History/Now/Up next/Sources groups, one-gesture capture, and shared queued-intent standing presentation; one deterministic core fold |
 | [desktop-session.md](packages/desktop-session.md) | A Boss session in the packaged app: shell process topology, core streaming, and run-view rendering over one protocol |
@@ -141,7 +141,7 @@ meta.md       The spec of specs
 | [release.md](packages/release.md) | Versioning, changelog, release process, CI-green publish gate, package hygiene, the tiers a tag runs (smoke with a fresh install, live smoke, regression), beta app releases, the live migration smoke |
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, paused sessions a message continues, protocol-only rendering, fixture-stream and browser-journey coverage |
 | [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, a pinned copyright holder, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
-| [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection; supplied compiler and agent SDKs |
+| [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection; supplied compiler, scaffold CLI and agent SDKs |
 | [storage.md](packages/storage.md) | Spex home catalog, file encodings, local project bindings, migration and Git selection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, runtime model options named by one display rule in a listbox model field, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |

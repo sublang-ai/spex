@@ -25,5 +25,5 @@ Amends [DR-006](006-projects-and-forge.md) in the create flow's scaffold step al
 ## Consequences
 
 - Create works offline and with the registry down, pays no download, and scaffolds exactly what the app's CLI generates; a CLI fix ships with the app.
-- The fresh-install smoke creates a scaffolded project with the registry unreachable, so a shell that stopped naming its CLI fails the smoke.
+- The fresh-install smoke creates a scaffolded project through the server shell with the registry unreachable, so a server shell that stopped naming its CLI fails the smoke; the desktop's own test suite asserts the scaffold command the desktop resolves.
 - The core's command runner accepts the variables a command runs under; nothing else in its contract changes.
