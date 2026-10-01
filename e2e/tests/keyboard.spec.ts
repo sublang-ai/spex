@@ -38,9 +38,15 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await expect(page.getByTestId("captain-home")).toContainText("demo-project");
   await page.keyboard.press(`${MOD}+p`);
   await expect(palette).toBeVisible();
+  // A surface shortcut switches the surface behind the open palette,
+  // which keeps focus (run-view-42).
+  await page.keyboard.press(`${MOD}+1`);
+  await expect(page.getByTestId("attention-all-clear")).toBeVisible();
+  await expect(palette).toBeVisible();
+  expect(await palette.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(palette).toBeHidden();
-  expect(await focusedIsBody()).toBe(false);
+  expect(await focusedIn()).toBe("surface");
 
   // Surfaces by number — Dashboard, Projects, Playbooks, Space,
   // Settings — and by comma; each lands focus inside the surface it
