@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress on `subagent-effort` (2026-10-01).
+Completed on `subagent-effort`, merged to `main` in 1b41478 on 2026-10-01, and released in `app-v0.9.0-beta.6`.
 
 ## Intent
 
@@ -15,10 +15,10 @@ Realize [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md
 
 - [x] DR-095, the amended records' status lines and the map.
 - [x] The settings, playbook-library, run-view, core-service and storage items.
-- [ ] Cligent 0.30.0, Playbook 17.3.0 and slc 0.15.0 published; the floors and the lockfile from the public registry.
+- [x] Cligent 0.30.0, Playbook 17.3.0 and slc 0.15.0 published; the floors and the lockfile from the public registry.
 - [x] The core: the fifth field and the `inherit` literal through the block, patch, resolved agent, binding, summary, session settings, projection application and `agent.options`; the protocol version.
 - [x] The interface: "Same as agent", "Agent chooses", "Off" while it stands, the paired rows; both catalogs.
-- [ ] Tests by layer; the changelog; `app-v0.9.0-beta.6`.
+- [x] Tests by layer; the changelog; `app-v0.9.0-beta.6`.
 
 ## Tasks
 
@@ -46,3 +46,5 @@ Verified on 2026-10-01 at `5e30f55` on local packs of Cligent 0.30.0 and Playboo
 | `spex lint` | no problems |
 
 - The core suite runs on Electron's Node because this checkout's `better-sqlite3` is built for Electron's ABI; there the CLI-continuation and compiler tests spawn Electron where they expect Node, so those two run on plain Node.
+Verified again on 2026-10-01 on the registry's Cligent 0.30.0, Playbook 17.3.0 and slc 0.15.0: the root build passed; the interface, CLI, desktop and server suites passed (753, 133, 16 and 11); the core suite passed 359 of 361 on Electron's Node, whose ABI this checkout's native module is built for while the owner's desktop runs from it, and the two that spawn plain Node passed under it (16 of 16); the hermetic journeys passed 65 with 1 skipped; every catalog is whole; `spex lint` passed; the lock resolves one Cligent, one Playbook and one slc.
+`npm run smoke -- --live` passed every stage on `e5e2451`; CI concluded `success` on the merge, and the App Release workflow published `app-v0.9.0-beta.6` at 2026-10-01 08:04 UTC.
