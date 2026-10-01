@@ -96,7 +96,7 @@ test("createProjectRepo surfaces scaffold failures", async () => {
   };
   await assert.rejects(
     createProjectRepo({ path: dir, scaffold: true, run }),
-    /scaffold failed: scaffold exploded/,
+    /scaffold failed running npx --yes @sublang\/spex scaffold \(the app's own scaffold CLI was not supplied, so the registry's ran\): scaffold exploded/,
   );
 });
 
