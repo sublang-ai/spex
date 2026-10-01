@@ -8,6 +8,7 @@
 Accepted; the seeded lineup is amended by [DR-025](025-playbook-7-adoption.md) — single-role CODE plus the review and decide blocks.
 
 Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come from runtime discovery.
+Amended by [DR-093](093-a-players-subagent-model.md) in §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
 
 ## Context
 

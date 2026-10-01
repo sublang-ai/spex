@@ -284,6 +284,7 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
   };
 }
 
@@ -953,15 +954,15 @@ export class AuthorManager {
     return {
       playerId,
       agent,
-      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? "")].join("|"),
+      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), agent.subagentModel ?? ""].join("|"),
     };
   }
 
-  private async loadAdapter(adapter: AdapterName): Promise<new () => AgentAdapter<string, boolean>> {
+  private async loadAdapter(adapter: AdapterName): Promise<new () => AgentAdapter<string, boolean, string>> {
     const table = this.options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS;
     const load = (table as unknown as Record<string, (() => Promise<unknown>) | undefined>)[adapter];
     if (!load) throw new Error(`no adapter runtime for ${adapter}`);
-    return (await load()) as new () => AgentAdapter<string, boolean>;
+    return (await load()) as new () => AgentAdapter<string, boolean, string>;
   }
 
   // -- turns ----------------------------------------------------------------
@@ -1065,24 +1066,26 @@ export class AuthorManager {
     id: string,
     live: LiveDraft,
     turnId: number,
-    Adapter: new () => AgentAdapter<string, boolean>,
+    Adapter: new () => AgentAdapter<string, boolean, string>,
     agent: ResolvedAgent,
     prompt: string,
     controller: AbortController,
     resume: string | undefined,
   ): Promise<{ status: string; result?: string; text: string; resumeToken?: string; resumeRejected: boolean; error?: string }> {
     this.append(id, live, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
-    // The block's model, effort, and fast mode; `{ mode: "auto" }` alone
+    // The block's model, subagent model, effort, and fast mode (DR-093);
+    // `{ mode: "auto" }` alone
     // as permissions; no tool lists, no maxTurns, no role — the records
     // name the player, not the events (playbook-library-64).
-    const options: CligentOptions<string, boolean> = {
+    const options: CligentOptions<string, boolean, string> = {
       cwd: this.drafts.draftDir(id),
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+      ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
       permissions: { mode: "auto" },
     };
-    const cligent = new Cligent<string, boolean>(new Adapter(), options);
+    const cligent = new Cligent<string, boolean, string>(new Adapter(), options);
     const text: string[] = [];
     let status = "error";
     let result: string | undefined;

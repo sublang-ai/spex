@@ -10,6 +10,7 @@ Amends [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its floors
 Amends [DR-090](090-readiness-names-what-cligent-finds-missing.md) in its Cligent floor alone, now `^0.28.0`; the readiness it decided stands.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Completes [DR-091](091-models-named-by-the-runtime.md), whose model descriptions, default model and reported model this Cligent release reports.
+Amended by [DR-093](093-a-players-subagent-model.md) in its floors — Cligent `^0.29.0` and Playbook `^17.2.0` — and, until slc adopts Cligent 0.29, in how one Cligent is kept: a root override of slc's Cligent range.
 
 ## Context
 

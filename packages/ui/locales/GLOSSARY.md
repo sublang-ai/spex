@@ -54,6 +54,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | adapter | 适配器 | |
 | readiness / ready / not ready / unverified | 就绪状态 / 就绪 / 未就绪 / 未验证 | |
 | model / effort / fast mode | 模型 / 推理强度 / 快速模式 | |
+| subagent model | 子代理模型 | the model an agent's subagents run on |
 | GitHub, issue, PR | GitHub, Issue, PR | the interface never says "forge" |
 | repo, repository | 仓库 | |
 | remote | 远程仓库 | a Git remote |

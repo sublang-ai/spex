@@ -3,7 +3,8 @@
 
 // One agent's settings for one conversation (DR-068, run-view-138):
 // the chip in a pane's header reads what that agent is set to run and
-// opens an editor for that agent alone — model, effort, fast mode, in
+// opens an editor for that agent alone — model, subagent model (DR-093),
+// effort, fast mode, in
 // the tri-state grammar the role-binding editor already uses. There is
 // no roster and no name for the act: it is an agent's settings, here.
 //
@@ -50,6 +51,7 @@ function fromSettings(): string {
  * this conversation's own, and an absent key preserves it (DR-032). */
 export interface AgentSettingsChange {
   model?: string | false | null;
+  subagentModel?: string | false | null;
   effort?: string | false | null;
   fastMode?: boolean | null;
 }
@@ -133,7 +135,7 @@ export function AgentChipButton({
 }
 
 /** This agent's settings for this conversation, anchored at its own
- * chip (run-view-138). Three fields under the agent's name and its
+ * chip (run-view-138). Its fields under the agent's name and its
  * scope — the role-binding editor's shape, one scope over. */
 export function AgentSettingsPopover({
   agent,
@@ -166,7 +168,11 @@ export function AgentSettingsPopover({
   const models = catalog?.models ?? [];
   const effectiveEffort = draft.effort === false ? undefined : draft.effort ?? agent.configured.effort;
   const invalidEffort = draft.effort === "" || Boolean(discovery.options && effectiveEffort && !tuning.efforts.includes(effectiveEffort));
-  const invalidModel = typeof draft.model === "string" && !draft.model.trim();
+  const invalidModel = [draft.model, draft.subagentModel].some((value) => typeof value === "string" && !value.trim());
+  // Offered where the adapter serves one or a choice stands, so a stale
+  // one is always clearable — fast mode's rule (DR-093).
+  const offersSubagentModel = discovery.options?.subagentModelSupported === true
+    || draft.subagentModel !== undefined || agent.configured.subagentModel !== undefined;
   const adapterFastMode = discovery.options?.fastModeSupported;
   const effectiveFastMode = draft.fastMode ?? agent.configured.fastMode ?? false;
   const invalidFastMode = (adapterFastMode === false && draft.fastMode != null) || (effectiveFastMode && tuning.fastModeSupported === false);
@@ -203,6 +209,17 @@ export function AgentSettingsPopover({
         defaultModel={catalog?.defaultModel}
         onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
       />
+      {offersSubagentModel && (
+        <TuningField
+          label="subagent model"
+          testIdPrefix={`agent-${agent.id}`}
+          inheritLabel={fromSettings()}
+          value={draft.subagentModel}
+          playerDefault={agent.configured.subagentModel}
+          models={models}
+          onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { subagentModel: undefined } : { subagentModel: next }) }))}
+        />
+      )}
       <TuningField
         label="effort"
         testIdPrefix={`agent-${agent.id}`}
@@ -292,6 +309,7 @@ export function AgentSettingsPopover({
               setError(undefined);
               void Promise.resolve(onSave({
                 model: draft.model ?? null,
+                subagentModel: draft.subagentModel ?? null,
                 effort: draft.effort ?? null,
                 fastMode: draft.fastMode ?? null,
               }))

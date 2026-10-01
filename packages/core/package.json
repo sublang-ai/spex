@@ -37,8 +37,8 @@
   },
   "dependencies": {
     "@lingui/core": "^6.7.0",
-    "@sublang/cligent": "^0.28.0",
-    "@sublang/playbook": "^17.1.0",
+    "@sublang/cligent": "^0.29.0",
+    "@sublang/playbook": "^17.2.0",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",

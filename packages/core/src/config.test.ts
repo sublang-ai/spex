@@ -412,6 +412,54 @@ test("fast mode composes on agents and roles; a non-boolean is refused", async (
   await expectError(bad, /^captain\.fastMode must be a boolean$/);
 });
 
+test("a subagent model composes on agents and bindings; blank or on an adapter cligent does not serve it is refused", async () => {
+  // DR-093: a fourth tuning field — a pin, `false` for the provider's
+  // default, omission to inherit the player's — validated in cligent's
+  // words and resolved before the shell sees it.
+  const top = baseConfig();
+  (top.captain as Record<string, unknown>).subagentModel = "claude-sonnet-5-5";
+  const coderId = String(codeRoles(top).coder);
+  (roster(top)[coderId] as Record<string, unknown>).subagentModel = "claude-haiku-5";
+  reviewRoles(top).coder = { player: coderId, subagentModel: false };
+  reviewRoles(top).reviewer = { player: String(reviewRoles(top).reviewer), subagentModel: "claude-haiku-5" };
+  const composed = await composeConfig(top, stubLoader);
+  assert.equal(composed.captainAgent.subagentModel, "claude-sonnet-5-5");
+  assert.equal(composed.captainOptions.sessionAgents.captain.subagentModel, "claude-sonnet-5-5");
+  assert.equal(composed.captainOptions.sessionAgents.players[coderId]?.subagentModel, "claude-haiku-5");
+  // An omitted binding inherits the player's; `false` reaches the shell
+  // as omission (the provider's default); a pin stands.
+  assert.equal(composed.captainOptions.playbooks.code.roles.coder.subagentModel, "claude-haiku-5");
+  assert.ok(!("subagentModel" in composed.captainOptions.playbooks.review.roles.coder));
+  assert.equal(composed.captainOptions.playbooks.review.roles.reviewer.subagentModel, "claude-haiku-5");
+
+  // The summary carries each agent's and each binding's own.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  assert.equal(summary.captain.subagentModel, "claude-sonnet-5-5");
+  assert.equal(summary.players.find((p) => p.id === coderId)?.agent.subagentModel, "claude-haiku-5");
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.equal(review?.roles.coder.subagentModel, false);
+  assert.equal(review?.roles.reviewer.subagentModel, "claude-haiku-5");
+  assert.ok(!("subagentModel" in (summary.playbooks.find((p) => p.id === "code")?.roles.coder ?? {})));
+
+  const blank = baseConfig();
+  (blank.captain as Record<string, unknown>).subagentModel = "  ";
+  await expectError(blank, /^captain\.subagentModel must be a nonblank string$/);
+
+  const unsupported = baseConfig();
+  roster(unsupported)[coderId] = { adapter: "codex", subagentModel: "gpt-6" };
+  await expectError(unsupported, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentModel is not supported for adapter "codex"$`));
+
+  // A binding's pin is checked against its player's adapter; `false`
+  // asks nothing of it and composes.
+  const onCodex = baseConfig();
+  roster(onCodex)[coderId] = { adapter: "codex" };
+  codeRoles(onCodex).coder = { player: coderId, subagentModel: "gpt-6" };
+  await expectError(onCodex, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "codex"$/);
+  codeRoles(onCodex).coder = { player: coderId, subagentModel: false };
+  reviewRoles(onCodex).coder = { player: coderId, subagentModel: false };
+  await composeConfig(onCodex, stubLoader);
+});
+
 test("a player no binding names is listed as bound to no role and opens no session lane", async () => {
   // settings-26 and playbook-library-55: the summary lists every
   // declared player so Settings can show the unbound lane and a draft
@@ -780,6 +828,7 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   // (DR-038; playbook 11 treats `false` as a literal disabled request).
   const top = baseConfig();
   (top.captain as Record<string, unknown>).fastMode = true;
+  (roster(top)["dev.coder"] as Record<string, unknown>).fastMode = true;
   roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
   codeRoles(top).coder = { player: "dev.coder", fastMode: false };
   const composed = await composeConfig(top, stubLoader);
@@ -788,6 +837,18 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
     composed.captainOptions.sessionAgents.players["dev.reviewer"]?.fastMode,
     false,
   );
-  assert.equal(composed.captainOptions.playbooks.code.roles.coder.fastMode, false);
-  assert.ok(!("fastMode" in composed.captainOptions.playbooks.code.roles));
+  // Playbook builds a role's call from its binding alone, so the
+  // binding carries the resolved choice, as the launcher resolves
+  // `binding ?? player`: a binding's own override stands, a bare
+  // binding takes its player's — `false` as literally as `true` —
+  // and a player setting none leaves it to the provider.
+  const { playbooks } = composed.captainOptions;
+  assert.equal(playbooks.code.roles.coder.fastMode, false, "a binding's own override beats its player's");
+  assert.equal(playbooks.review.roles.coder.fastMode, true, "a bare binding takes its player's fast mode");
+  assert.equal(playbooks.review.roles.reviewer.fastMode, false, "a player's literal false reaches its bare binding");
+  assert.ok(!("fastMode" in playbooks.dev.roles.analyst), "a player setting none leaves the binding without one");
+  // The summary keeps each binding's own value, not the resolved one.
+  const summary = summarizeConfig({ path: "/cfg", raw: top, composed });
+  const review = summary.playbooks.find((p) => p.id === "review");
+  assert.ok(review && !("fastMode" in review.roles.coder));
 });

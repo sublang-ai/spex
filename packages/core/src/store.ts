@@ -261,7 +261,7 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const source = value as Record<string, unknown>;
   const entry: SessionAgentSettings = {};
-  for (const field of ["model", "effort"] as const) {
+  for (const field of ["model", "subagentModel", "effort"] as const) {
     const held = source[field];
     if (held === false || (typeof held === "string" && held.length > 0)) entry[field] = held;
   }

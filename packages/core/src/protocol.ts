@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -62,6 +62,8 @@ export interface AgentSummary {
   effort?: string;
   /** Adapter-scoped fast mode; the chip wears a lightning mark (DR-038). */
   fastMode?: boolean;
+  /** The model the agent's subagents run on; the chip never reads it (DR-093). */
+  subagentModel?: string;
   instruction?: string;
   permissions?: AgentPermissionsSummary;
 }
@@ -86,6 +88,7 @@ export interface RoleBindingSummary {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
+  subagentModel?: string | false;
   /** What this role effectively runs, after inheritance. */
   display: string;
 }
@@ -96,6 +99,8 @@ export interface RoleBindingSummary {
  * key leaves the configured value in place. */
 export interface SessionAgentSettings {
   model?: string | false;
+  /** The model the agent's subagents run on (DR-093). */
+  subagentModel?: string | false;
   effort?: string | false;
   fastMode?: boolean;
 }
@@ -341,6 +346,8 @@ export interface AgentOptions {
   adapter: AdapterName;
   effortValues: readonly string[];
   fastModeSupported: boolean;
+  /** Whether cligent serves a subagent model for this adapter (DR-093). */
+  subagentModelSupported: boolean;
   discovery: {
     status: "available";
     models: readonly AgentModelOption[];
@@ -364,6 +371,8 @@ export interface ReadinessEntry {
   /** Whether the embedded runtime declares fast mode for this adapter
    * (DR-038); the editor offers the switch only then. */
   fastModeSupported: boolean;
+  /** Whether cligent serves a subagent model for this adapter (DR-093). */
+  subagentModelSupported: boolean;
 }
 
 /** What a run reported spending. `costSources` names every provenance
@@ -558,6 +567,7 @@ const id = z.string().min(1);
 export const agentBlockSchema = z.object({
   adapter: z.string().min(1),
   model: z.string().optional(),
+  subagentModel: z.string().optional(),
   effort: z.string().optional(),
   instruction: z.string().optional(),
   permissions: z
@@ -579,6 +589,7 @@ export type AgentBlockInput = z.infer<typeof agentBlockSchema>;
 export const agentPatchSchema = z.object({
   adapter: z.string().min(1).optional(),
   model: z.string().nullable().optional(),
+  subagentModel: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   fastMode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
@@ -620,6 +631,7 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
     // A concrete value pins, false selects the provider default, null
     // clears the override so the role inherits the player (DR-032).
     model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     // Fast mode is literal: false disables; null inherits the player.
     fastMode: z.boolean().nullable().optional(),
@@ -728,6 +740,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     // A concrete value pins, false selects the provider default, null
     // clears this session's own, absent preserves it (DR-032/DR-067).
     model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+    subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     fastMode: z.boolean().nullable().optional(),
   }).strict(),

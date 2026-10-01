@@ -305,6 +305,16 @@ msgstr "{path}.profile 已废弃：每个智能体自带 adapter、model、effor
 msgid "{path}.profile names \"{name}\", which no profiles entry defines"
 msgstr "{path}.profile 指向“{name}”，但 profiles 中没有该条目"
 
+#. Config error; `subagentModel` is the config file's own field name and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentModel is not supported for adapter \"{adapter}\""
+msgstr "{path}.subagentModel 不受“{adapter}”适配器支持"
+
+#. Config error; `subagentModel` is the config file's own field name
+#: src/config.ts
+msgid "{path}.subagentModel must be a nonblank string"
+msgstr "{path}.subagentModel 必须是非空字符串"
+
 #. What blocks a Space operation: a playbook compile is running
 #: src/service.ts
 msgid "{playbookId} is compiling"

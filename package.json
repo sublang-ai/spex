@@ -37,5 +37,10 @@
     "better-sqlite3@12.11.1": true,
     "electron@44.0.0": true,
     "esbuild@0.28.2": true
+  },
+  "overrides": {
+    "@sublang/slc": {
+      "@sublang/cligent": "^0.29.0"
+    }
   }
 }

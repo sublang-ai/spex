@@ -31,6 +31,7 @@ import {
   classifyRuntime,
   describeRuntimeReadiness,
   isEffortSupported,
+  isSubagentModelSupported,
   locateAgentExecutable,
   readRuntimeVersion,
   supportedEffortValues,
@@ -82,6 +83,9 @@ const AGENT_FIELDS = new Set([
   // so a config the launcher accepts is never rejected here
   // (shared-config-roundtrip-1); cligent owns which adapters allow it.
   "fastMode",
+  // The model the agent's subagents run on (cligent 0.29, DR-093); cligent
+  // owns which adapters serve it.
+  "subagentModel",
   // Read-only legacy alias for `effort` (cligent 0.14 rename, DR-014);
   // composition normalizes it and Spex never writes it back.
   "reasoningEffort",
@@ -112,6 +116,8 @@ export interface ResolvedAgent {
   effort?: string;
   /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
   fastMode?: boolean;
+  /** Adapter-scoped subagent model (DR-093); absent is the provider's. */
+  subagentModel?: string;
 }
 
 export interface ComposedPlayer extends ResolvedAgent {
@@ -137,6 +143,9 @@ export interface SessionAgentBlock {
   /** Adapter-scoped fast mode, forwarded so the setting takes effect
    * (playbook 11: `false` is a literal disabled request). */
   fastMode?: boolean;
+  /** The model every subagent runs on; absent is the provider default
+   * (playbook 17.2 carries no sentinel for it, DR-093). */
+  subagentModel?: string;
   instruction?: string;
   permissions?: unknown;
 }
@@ -150,6 +159,7 @@ export interface ResolvedBinding {
   model?: string | false;
   effort?: string | false;
   fastMode?: boolean;
+  subagentModel?: string | false;
 }
 
 /** The binding as the shell takes it: the lane, plus this role's
@@ -160,6 +170,9 @@ export interface HostRoleBinding {
   effort: TuningSelection;
   /** A role's own fast-mode override; absent inherits the player's. */
   fastMode?: boolean;
+  /** The role's subagent model with inheritance resolved; absent is the
+   * provider default (DR-093). */
+  subagentModel?: string;
 }
 
 export interface ComposedPlaybook {
@@ -790,7 +803,41 @@ function toResolvedAgent(
       }),
     );
   }
+  if (rest.subagentModel !== undefined) {
+    assertSubagentModel(rest.subagentModel, adapter, path);
+  }
   return rest as unknown as ResolvedAgent;
+}
+
+/** A subagent model is a nonblank string on an adapter cligent serves
+ * one for (DR-093): the support is cligent's, and so is the refusal's
+ * wording. Shared by the config's blocks and bindings and a session's
+ * own tuning (core-service-100). */
+export function assertSubagentModel(
+  value: unknown,
+  adapter: string,
+  path: string,
+): void {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(
+      i18n._({
+        id: "{path}.subagentModel must be a nonblank string",
+        comment:
+          "Config error; `subagentModel` is the config file's own field name",
+        values: { path },
+      }),
+    );
+  }
+  if (!isSubagentModelSupported(adapter as never)) {
+    throw new Error(
+      i18n._({
+        id: "{path}.subagentModel is not supported for adapter \"{adapter}\"",
+        comment:
+          "Config error; `subagentModel` is the config file's own field name and the adapter's name the runtime's own",
+        values: { path, adapter },
+      }),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -870,7 +917,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   }
-  const allowed = new Set(["player", "model", "effort", "fastMode"]);
+  const allowed = new Set(["player", "model", "effort", "fastMode", "subagentModel"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
     throw new Error(
@@ -893,7 +940,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
       }),
     );
   }
-  const tuning = (key: "model" | "effort"): string | false | undefined => {
+  const tuning = (key: "model" | "effort" | "subagentModel"): string | false | undefined => {
     const raw = value[key];
     if (raw === undefined) return undefined;
     // `false` is a positive choice — the provider's current default —
@@ -927,6 +974,9 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     ...(tuning("model") !== undefined ? { model: tuning("model") } : {}),
     ...(tuning("effort") !== undefined ? { effort: tuning("effort") } : {}),
     ...(fastMode !== undefined ? { fastMode } : {}),
+    ...(tuning("subagentModel") !== undefined
+      ? { subagentModel: tuning("subagentModel") }
+      : {}),
   };
 }
 
@@ -938,6 +988,9 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.subagentModel !== undefined
+      ? { subagentModel: agent.subagentModel }
+      : {}),
     ...(agent.instruction !== undefined
       ? { instruction: agent.instruction }
       : {}),
@@ -1300,11 +1353,25 @@ export async function composeConfig(
         override === false
           ? providerDefault
           : tuningOf(override ?? fallback);
+      // A subagent model carries no sentinel on the shell's side: `false`
+      // and an unset player's both reach it as omission (DR-093).
+      const subagentModel =
+        binding.subagentModel === false
+          ? undefined
+          : (binding.subagentModel ?? player.subagentModel);
+      if (typeof binding.subagentModel === "string") {
+        assertSubagentModel(binding.subagentModel, player.adapter, path);
+      }
+      // Playbook builds a role's call from its binding alone, so a bare
+      // binding takes its player's fast mode here, as the launcher's
+      // `binding ?? player` does; `false` stays a literal request.
+      const fastMode = binding.fastMode ?? player.fastMode;
       hostBindings[role] = {
         playerId: binding.playerId,
         model: select(binding.model, player.model),
         effort: select(binding.effort, player.effort),
-        ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
+        ...(fastMode !== undefined ? { fastMode } : {}),
+        ...(subagentModel !== undefined ? { subagentModel } : {}),
       };
       if (!referenced.has(binding.playerId)) {
         referenced.add(binding.playerId);
@@ -1448,6 +1515,9 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.subagentModel !== undefined
+      ? { subagentModel: agent.subagentModel }
+      : {}),
     ...(agent.instruction !== undefined
       ? { instruction: agent.instruction }
       : {}),
@@ -1501,6 +1571,9 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
               ...(binding.model !== undefined ? { model: binding.model } : {}),
               ...(binding.effort !== undefined ? { effort: binding.effort } : {}),
               ...(binding.fastMode !== undefined ? { fastMode: binding.fastMode } : {}),
+              ...(binding.subagentModel !== undefined
+                ? { subagentModel: binding.subagentModel }
+                : {}),
               display,
             },
           ];

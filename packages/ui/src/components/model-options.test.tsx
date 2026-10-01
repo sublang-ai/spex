@@ -11,7 +11,7 @@ import { createRef } from "react";
 
 const originalLoad = useAppStore.getState().loadAgentOptions;
 const options = (adapter: AdapterName = "claude"): AgentOptions => ({
-  adapter, effortValues: ["low", "high", "max", ...(adapter === "claude" ? ["ultracode"] : adapter === "codex" ? ["ultra"] : [])], fastModeSupported: true,
+  adapter, effortValues: ["low", "high", "max", ...(adapter === "claude" ? ["ultracode"] : adapter === "codex" ? ["ultra"] : [])], fastModeSupported: true, subagentModelSupported: adapter === "claude",
   discovery: { status: "available", ...(adapter === "claude" ? { unreportedEffortValues: ["ultracode"] } : {}), models: [
     { id: "claude-fable-5-1", name: "Fable", effortValues: ["low", "high"], fastModeSupported: false },
     { id: "plain-model", name: "Plain", effortValues: [], fastModeSupported: false },
@@ -217,7 +217,7 @@ test.each([
   { scope: "unknown efforts", efforts: undefined, valid: true },
 ])("Codex $scope governs agent and inherited role tuning", async ({ efforts, valid }) => {
   useAppStore.setState({ loadAgentOptions: async () => ({
-    adapter: "codex", effortValues: ["low", "high", "ultra"], fastModeSupported: true,
+    adapter: "codex", effortValues: ["low", "high", "ultra"], fastModeSupported: true, subagentModelSupported: false,
     discovery: { status: "available", models: [{ id: "codex-fixture", name: "Codex", effortValues: efforts }] },
   }) });
   const save = vi.fn();
@@ -264,7 +264,7 @@ test("a reported tier is never relabeled as an added adapter choice", async () =
 // around them are Spex's (settings-38, DR-091).
 const OPUS_WORDS = "Opus 5.5 · Best for everyday, complex tasks";
 const claudeCatalog = (defaultModel?: string): AgentOptions => ({
-  adapter: "claude", effortValues: ["low", "medium", "high", "max"], fastModeSupported: true,
+  adapter: "claude", effortValues: ["low", "medium", "high", "max"], fastModeSupported: true, subagentModelSupported: true,
   discovery: { status: "available", ...(defaultModel ? { defaultModel } : {}), models: [
     { id: "default", name: "Default (recommended)", resolvedModel: "claude-opus-5-5", description: OPUS_WORDS },
     { id: "opus", name: "Opus", resolvedModel: "claude-opus-5-5", description: OPUS_WORDS },
@@ -274,7 +274,7 @@ const claudeCatalog = (defaultModel?: string): AgentOptions => ({
   ] },
 });
 const codexCatalog = (): AgentOptions => ({
-  adapter: "codex", effortValues: ["low", "medium", "high"], fastModeSupported: true,
+  adapter: "codex", effortValues: ["low", "medium", "high"], fastModeSupported: true, subagentModelSupported: false,
   discovery: { status: "available", models: [
     { id: "gpt-6-astra", name: "GPT-6-Astra", description: "Workhorse model for coding and everyday work." },
     { id: "gpt-6-sol", name: "GPT-6-Sol" },

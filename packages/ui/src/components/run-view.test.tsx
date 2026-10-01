@@ -3599,9 +3599,11 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
    * is configured, where the catalog reports one. */
   function mount(agentSettings?: SessionInfo["agentSettings"], defaultModel?: string) {
     const previous = useAppStore.getState();
-    const command = vi.fn(async (name: string) =>
+    const command = vi.fn(async (name: string, payload?: { adapter?: string }) =>
       name === "agent.options"
         ? { adapter: "claude", effortValues: ["low", "high", "max"], fastModeSupported: true,
+            // Cligent serves a subagent model on Claude alone (DR-093).
+            subagentModelSupported: payload?.adapter === "claude",
             discovery: { status: "available", ...(defaultModel ? { defaultModel } : {}), models: [
               { id: "claude-opus", name: "Opus" },
               { id: "claude-test", name: "Test", resolvedModel: "claude-test-5-5" },
@@ -3772,7 +3774,43 @@ describe("run-view-138/139/140: an agent's settings for one conversation", () =>
     await waitFor(() => expect(command).toHaveBeenCalled());
     const [, payload] = (command.mock.calls as unknown as [string, Record<string, unknown>][])
       .find(([name]) => name === "session.agent.set")!;
-    expect(payload).toMatchObject({ agentId: "dev.coder", model: null, effort: null, fastMode: null });
+    expect(payload).toMatchObject({ agentId: "dev.coder", model: null, subagentModel: null, effort: null, fastMode: null });
+    restore();
+  });
+
+  test("the subagent model is chosen in the editor and saved with the rest, where the adapter serves one (DR-093)", async () => {
+    const { command, restore } = mount();
+    // The codex reviewer is offered none.
+    fireEvent.click(screen.getByTestId("agent-chip-dev.reviewer"));
+    const reviewer = await screen.findByTestId("agent-settings-dev.reviewer");
+    await waitFor(() => expect(within(reviewer).queryByText("Loading model options…")).toBeNull());
+    expect(within(reviewer).queryByTestId("agent-dev.reviewer-subagent-model-mode")).toBeNull();
+    fireEvent.click(within(reviewer).getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByTestId("agent-chip-dev.coder"));
+    const editor = await screen.findByTestId("agent-settings-dev.coder");
+    const mode = await within(editor).findByTestId("agent-dev.coder-subagent-model-mode") as HTMLSelectElement;
+    // [run-view-138] the configured value named; unset, the provider's words alone.
+    expect(mode.options[0]?.textContent).toBe("from Settings (Provider default)");
+    fireEvent.change(mode, { target: { value: "pin" } });
+    fireEvent.change(within(editor).getByTestId("agent-dev.coder-subagent-model-value"), { target: { value: "claude-opus" } });
+    fireEvent.click(screen.getByTestId("agent-save-dev.coder"));
+    await waitFor(() => expect((command.mock.calls as unknown as [string][]).some(([name]) => name === "session.agent.set")).toBe(true));
+    const [, payload] = (command.mock.calls as unknown as [string, Record<string, unknown>][])
+      .find(([name]) => name === "session.agent.set")!;
+    expect(payload).toMatchObject({ agentId: "dev.coder", subagentModel: "claude-opus", model: null, effort: null, fastMode: null });
+    restore();
+  });
+
+  test("a changed subagent model marks the chip changed and leaves its reading alone (DR-093)", () => {
+    const { restore } = mount({ "dev.coder": { subagentModel: "claude-opus" } });
+    const chip = screen.getByTestId("agent-chip-dev.coder");
+    // [run-view-139] the chip reads adapter, model and effort, never the subagent model.
+    expect(chip.textContent).toBe("claude-test");
+    expect(chip.getAttribute("aria-label")).not.toMatch(/claude-opus/);
+    // [run-view-139] a changed field still counts the chip changed.
+    expect(chip.getAttribute("data-changed")).toBe("true");
+    expect(chip.getAttribute("aria-label")).toMatch(/changed for this conversation/);
     restore();
   });
 

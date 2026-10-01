@@ -70,9 +70,14 @@ test.describe("runtime binding options", () => {
     await effort.selectOption("high");
     await expect(editor.getByTestId("binding-save")).toBeDisabled();
     await editor.getByTestId("binding-fast-mode").selectOption("off");
+    // The role's own subagent model (DR-093): the player sets none, so
+    // inheriting it reads as the provider's words.
+    await expect(editor.getByTestId("binding-subagent-model-mode").locator("option").first()).toHaveText("inherit the player (Provider default)");
+    await editor.getByTestId("binding-subagent-model-mode").selectOption("pin");
+    await editor.getByTestId("binding-subagent-model-value").fill("claude-haiku-5");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "claude-fable-5-1", effort: "high", fastMode: false });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "claude-fable-5-1", subagentModel: "claude-haiku-5", effort: "high", fastMode: false });
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
@@ -82,11 +87,13 @@ test.describe("runtime binding options", () => {
     await effort.selectOption("ultracode");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", effort: "ultracode", fastMode: false });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", subagentModel: "claude-haiku-5", effort: "ultracode", fastMode: false });
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
     await editor.getByTestId("binding-fast-mode").selectOption("inherit");
+    await expect(editor.getByTestId("binding-subagent-model-mode")).toHaveValue("pin");
+    await editor.getByTestId("binding-subagent-model-mode").selectOption("inherit");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
     await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", effort: "ultracode" });

@@ -23,6 +23,7 @@ export async function readAgentOptions(
     adapter,
     effortValues: effort?.values ?? [],
     fastModeSupported: cligent.isFastModeSupported(adapter),
+    subagentModelSupported: cligent.isSubagentModelSupported(adapter),
     discovery,
   };
 }

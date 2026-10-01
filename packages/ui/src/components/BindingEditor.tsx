@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The role-binding editor (DR-032): which session player answers a
-// role, plus that role's own model and effort. Adapter, permissions
+// role, plus that role's own model, subagent model (DR-093), effort and
+// fast mode. Adapter, permissions
 // and workspace belong to the player's envelope and have no control
 // here, because in the released model a binding cannot carry them.
 
@@ -22,6 +23,7 @@ import { usePopover } from "../lib/usePopover.js";
 export interface BindingChange {
   playerId: string;
   model?: string | false | null;
+  subagentModel?: string | false | null;
   effort?: string | false | null;
   fastMode?: boolean | null;
 }
@@ -48,6 +50,7 @@ export function BindingEditorPopover({
   const [draft, setDraft] = useState<BindingChange>({
     playerId: binding.playerId,
     model: binding.model,
+    subagentModel: binding.subagentModel,
     effort: binding.effort,
     fastMode: binding.fastMode,
   });
@@ -72,7 +75,10 @@ export function BindingEditorPopover({
   const effectiveFastMode = draft.fastMode ?? lane?.agent.fastMode ?? false;
   const adapterFastMode = discovery.options?.fastModeSupported;
   const invalidFastMode = (adapterFastMode === false && draft.fastMode != null) || (effectiveFastMode && tuning.fastModeSupported === false);
-  const invalidModel = typeof draft.model === "string" && !draft.model.trim();
+  const invalidModel = [draft.model, draft.subagentModel].some((value) => typeof value === "string" && !value.trim());
+  // Offered where the lane's adapter serves one or a choice stands, so a
+  // stale one is always clearable — fast mode's rule (DR-093).
+  const offersSubagentModel = discovery.options?.subagentModelSupported === true || draft.subagentModel != null;
   // Every other position this lane already answers: picking it here
   // joins that one conversation rather than opening a new one.
   const others = (lane?.boundBy ?? []).filter((held) => held !== position);
@@ -121,6 +127,13 @@ export function BindingEditorPopover({
         defaultModel={catalog?.defaultModel}
         onChange={(next) => setDraft((current) => ({ ...current, model: next }))}
       />
+      {offersSubagentModel && <TuningField
+        label="subagent model"
+        value={draft.subagentModel === null ? undefined : draft.subagentModel}
+        playerDefault={lane?.agent.subagentModel}
+        models={models}
+        onChange={(next) => setDraft((current) => ({ ...current, subagentModel: next }))}
+      />}
       <TuningField
         label="effort"
         value={draft.effort === null ? undefined : draft.effort}

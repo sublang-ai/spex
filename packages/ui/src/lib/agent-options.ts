@@ -100,5 +100,8 @@ export function modelTuning(options: AgentOptions | undefined, model: string) {
     effortKnown: selected?.effortValues !== undefined,
     fastModeSupported: selected?.fastModeSupported ?? options?.fastModeSupported,
     fastModeKnown: selected?.fastModeSupported !== undefined,
+    /** Whether the adapter serves a subagent model — the adapter's, never
+     * a model's (DR-093). */
+    subagentModelSupported: options?.subagentModelSupported,
   };
 }

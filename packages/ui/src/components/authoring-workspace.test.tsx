@@ -91,13 +91,13 @@ const CONFIG_STATE: ConfigState = {
 };
 
 const READINESS: ReadinessEntry[] = [
-  { adapter: "claude", ready: true, usedBy: ["captain"], fastModeSupported: true },
+  { adapter: "claude", ready: true, usedBy: ["captain"], fastModeSupported: true, subagentModelSupported: true },
   {
     adapter: "codex",
     ready: false,
     requirement: "set OPENAI_API_KEY or run `codex login`",
     usedBy: [],
-    fastModeSupported: false,
+    fastModeSupported: false, subagentModelSupported: false,
   },
 ];
 
@@ -282,7 +282,7 @@ beforeEach(() => {
     loadAgentOptions: async (adapter) => ({
       adapter,
       effortValues: ["high"],
-      fastModeSupported: false,
+      fastModeSupported: false, subagentModelSupported: adapter === "claude",
       discovery: { status: "unavailable", reason: "Fixture" },
     }),
   });

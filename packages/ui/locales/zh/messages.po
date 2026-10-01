@@ -1601,8 +1601,8 @@ msgid "copies made while writing"
 msgstr "写入过程中产生的副本"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, fast mode, and permissions"
-msgstr "沿用 Captain 的适配器、模型、推理强度、快速模式与权限"
+msgid "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
+msgstr "沿用 Captain 的适配器、模型、子代理模型、推理强度、快速模式与权限"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -2252,6 +2252,7 @@ msgstr "筛选项目"
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
+#. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
 msgid "finished"
@@ -4678,6 +4679,16 @@ msgstr "未完成即被停止"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "停止中…"
+
+#. the tuning editor's field for the model an agent's subagents run on
+#: src/components/TuningField.tsx
+msgid "subagent model"
+msgstr "子代理模型"
+
+#. the field choosing the model an agent's subagents run on
+#: src/components/AgentEditor.tsx
+msgid "Subagent model"
+msgstr "子代理模型"
 
 #. history row tag: a later record replaced this one
 #. history row tag: a later record replaced this one
