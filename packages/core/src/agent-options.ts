@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import * as cligent from "@sublang/cligent";
+import { subagentEffortValues } from "./config.js";
 import type { AdapterName, AgentOptions } from "./protocol.js";
 
 export type AgentModelDiscovery = (adapter: AdapterName, options: { env: NodeJS.ProcessEnv; timeoutMs: number }) => Promise<AgentOptions["discovery"]>;
@@ -24,6 +25,8 @@ export async function readAgentOptions(
     effortValues: effort?.values ?? [],
     fastModeSupported: cligent.isFastModeSupported(adapter),
     subagentModelSupported: cligent.isSubagentModelSupported(adapter),
+    // The adapter's efforts less its orchestration values (DR-095).
+    subagentEffortValues: subagentEffortValues(adapter),
     discovery,
   };
 }

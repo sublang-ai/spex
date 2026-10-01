@@ -1,6 +1,6 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.5",
+  "version": "0.9.0-beta.6",
   "private": true,
   "description": "Spex — the desktop app for running playbooks",
   "author": {
@@ -29,7 +29,7 @@
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/slc": "^0.14.0",
+    "@sublang/slc": "^0.15.0",
     "@sublang/spex-core": "*"
   },
   "devDependencies": {

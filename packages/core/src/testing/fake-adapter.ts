@@ -3,7 +3,12 @@
 
 // Scripted fake adapter (CORE-18): satisfies cligent's AgentAdapter
 // contract in-memory so contract tests exercise the full record path
-// with no network access and no agent credentials.
+// with no network access and no agent credentials. Each adapter slot
+// loads a substitute naming the runtime it stands in for — Claude's is
+// `claude-code`, as the real adapter names itself — so cligent's checks
+// keyed on that name, the subagent model and effort among them, take
+// the requests a real run takes; the substitute accepts and ignores
+// them.
 
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -102,6 +107,9 @@ export interface FakeRunOptions {
   resume?: string;
   cwd?: string;
   model?: string;
+  /** Accepted as the runtime takes them, and ignored (DR-095). */
+  subagentModel?: string;
+  subagentEffort?: string;
   permissions?: Record<string, unknown>;
   allowedTools?: string[];
   disallowedTools?: string[];
@@ -112,26 +120,41 @@ export interface FakeAdapterStats {
   constructed: number;
   runs: {
     prompt: string;
+    /** The runtime the substitute stood in for. */
+    agent: string;
     resume?: string;
     cwd?: string;
     model?: string;
+    subagentModel?: string;
+    subagentEffort?: string;
     permissions?: Record<string, unknown>;
     allowedTools?: string[];
     disallowedTools?: string[];
   }[];
 }
 
+/** The name each real adapter reports as its `agent`, which cligent's
+ * capability checks key on. */
+const RUNTIME_AGENTS = {
+  claude: "claude-code",
+  codex: "codex",
+  gemini: "gemini",
+  opencode: "opencode",
+} as const;
+
 /**
- * Build an adapterImports map whose four entries all resolve to the
- * same scripted fake class. `stats` observes construction and runs so
- * tests can assert no real adapter was ever involved.
+ * Build an adapterImports map whose four entries each resolve to the
+ * scripted fake, named for the runtime its slot loads. `stats` observes
+ * construction and runs so tests can assert no real adapter was ever
+ * involved.
  */
 export function fakeAdapterImports(
   script: FakeScript,
   stats: FakeAdapterStats = { constructed: 0, runs: [] },
 ): { imports: PlayerAdapterImports; stats: FakeAdapterStats } {
-  class FakeAdapter {
-    readonly agent = "fake";
+  abstract class FakeAdapter {
+    /** The runtime this substitute stands in for. */
+    abstract readonly agent: string;
 
     constructor() {
       stats.constructed += 1;
@@ -143,9 +166,12 @@ export function fakeAdapterImports(
     ): AsyncGenerator<FakeEvent, void, void> {
       stats.runs.push({
         prompt,
+        agent: this.agent,
         ...(options?.resume ? { resume: options.resume } : {}),
         ...(options?.cwd ? { cwd: options.cwd } : {}),
         ...(options?.model ? { model: options.model } : {}),
+        ...(options?.subagentModel ? { subagentModel: options.subagentModel } : {}),
+        ...(options?.subagentEffort ? { subagentEffort: options.subagentEffort } : {}),
         ...(options?.permissions ? { permissions: options.permissions } : {}),
         ...(options?.allowedTools ? { allowedTools: options.allowedTools } : {}),
         ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
@@ -299,17 +325,17 @@ export function fakeAdapterImports(
     }
   }
 
-  // One fake constructor serves every adapter slot. cligent's
-  // PlayerAdapterImports parameterizes each loader by adapter name (each slot
-  // wants an AgentAdapter over that adapter's own effort vocabulary), so the
-  // single fake loader is assigned through one object-level cast rather than
-  // matching four distinct per-adapter signatures.
-  const load = async () => FakeAdapter;
-  const imports = {
-    claude: load,
-    codex: load,
-    gemini: load,
-    opencode: load,
-  } as unknown as PlayerAdapterImports;
+  // One fake serves every adapter slot, each slot's subclass naming the
+  // runtime it stands in for. cligent's PlayerAdapterImports parameterizes
+  // each loader by adapter name (each slot wants an AgentAdapter over that
+  // adapter's own effort vocabulary), so the fake loaders are assigned
+  // through one object-level cast rather than matching four distinct
+  // per-adapter signatures.
+  const load = (agent: string) => async () => class extends FakeAdapter {
+    readonly agent = agent;
+  };
+  const imports = Object.fromEntries(
+    Object.entries(RUNTIME_AGENTS).map(([slot, agent]) => [slot, load(agent)]),
+  ) as unknown as PlayerAdapterImports;
   return { imports, stats };
 }

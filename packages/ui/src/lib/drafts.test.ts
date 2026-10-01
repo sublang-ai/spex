@@ -141,6 +141,15 @@ describe("new lanes", () => {
       subagentModel: "claude-sonnet-5-5",
       permissions: { mode: "auto" },
     });
+    // And so do its effort and a standing Off (DR-095).
+    expect(
+      agentBlockOf({ adapter: "claude", subagentModel: false, subagentEffort: "high" }),
+    ).toEqual({
+      adapter: "claude",
+      subagentModel: false,
+      subagentEffort: "high",
+      permissions: { mode: "auto" },
+    });
     expect(agentBlockOf({ adapter: "claude" })).toEqual({
       adapter: "claude",
       permissions: { mode: "auto" },

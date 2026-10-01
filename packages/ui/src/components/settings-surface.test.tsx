@@ -5,7 +5,7 @@
 // shared agent editor and writing merge patches, and the per-adapter
 // readiness panel naming the positions each adapter serves.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 afterEach(cleanup);
@@ -489,6 +489,32 @@ describe("settings-1, DR-093: the Captain's subagent model", () => {
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", expect.objectContaining({
         op: expect.objectContaining({ kind: "captain.set", patch: expect.objectContaining({ subagentModel: "claude-sonnet-5-5" }) }),
+      })),
+    );
+  });
+});
+
+describe("settings-1, DR-095: the Captain's subagent effort", () => {
+  test("the editor pairs it with the subagent model, offers Agent chooses first, and writes it in the captain.set patch", async () => {
+    const load = useAppStore.getState().loadAgentOptions;
+    onTestFinished(() => useAppStore.setState({ loadAgentOptions: load }));
+    useAppStore.setState({ loadAgentOptions: async (adapter) => ({
+      adapter, effortValues: ["low", "high", "ultracode"], fastModeSupported: true, subagentModelSupported: adapter === "claude",
+      subagentEffortValues: adapter === "claude" ? ["low", "high"] : [], discovery: { status: "unavailable", reason: "Fixture" },
+    }) });
+    renderSettings();
+    const section = screen.getByTestId("captain-section");
+    fireEvent.click(within(section).getByTestId("captain-edit"));
+    const effort = within(section).getByTestId("agent-subagent-effort") as HTMLSelectElement;
+    await vi.waitFor(() =>
+      expect([...effort.options].map((option) => option.textContent)).toEqual(["Agent chooses", "low", "high"]),
+    );
+    expect((within(section).getByTestId("agent-subagent-model") as HTMLInputElement).placeholder).toBe("Same as agent");
+    fireEvent.change(effort, { target: { value: "high" } });
+    fireEvent.click(within(section).getByTestId("agent-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", expect.objectContaining({
+        op: expect.objectContaining({ kind: "captain.set", patch: expect.objectContaining({ subagentEffort: "high" }) }),
       })),
     );
   });

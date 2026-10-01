@@ -3,8 +3,8 @@
 
 // One agent's settings for one conversation (DR-068, run-view-138):
 // the chip in a pane's header reads what that agent is set to run and
-// opens an editor for that agent alone — model, subagent model (DR-093),
-// effort, fast mode, in
+// opens an editor for that agent alone — model, effort, subagent model
+// (DR-093), subagent effort (DR-095), fast mode, in
 // the tri-state grammar the role-binding editor already uses. There is
 // no roster and no name for the act: it is an agent's settings, here.
 //
@@ -53,6 +53,7 @@ export interface AgentSettingsChange {
   model?: string | false | null;
   subagentModel?: string | false | null;
   effort?: string | false | null;
+  subagentEffort?: string | false | null;
   fastMode?: boolean | null;
 }
 
@@ -172,7 +173,12 @@ export function AgentSettingsPopover({
   // Offered where the adapter serves one or a choice stands, so a stale
   // one is always clearable — fast mode's rule (DR-093).
   const offersSubagentModel = discovery.options?.subagentModelSupported === true
-    || draft.subagentModel !== undefined || agent.configured.subagentModel !== undefined;
+    || draft.subagentModel !== undefined || agent.configured.subagentModel !== undefined
+    || draft.subagentEffort !== undefined || agent.configured.subagentEffort !== undefined;
+  // A pinned subagent effort is one of the adapter's, never blank
+  // (DR-095); "Agent chooses" is the provider-default choice.
+  const invalidSubagentEffort = draft.subagentEffort === ""
+    || Boolean(discovery.options && typeof draft.subagentEffort === "string" && !tuning.subagentEfforts.includes(draft.subagentEffort));
   const adapterFastMode = discovery.options?.fastModeSupported;
   const effectiveFastMode = draft.fastMode ?? agent.configured.fastMode ?? false;
   const invalidFastMode = (adapterFastMode === false && draft.fastMode != null) || (effectiveFastMode && tuning.fastModeSupported === false);
@@ -186,7 +192,7 @@ export function AgentSettingsPopover({
       data-testid={`agent-settings-${agent.id}`}
       role="dialog"
       aria-label={i18n._("{name} settings for this conversation", { name: agent.name })}
-      className={`absolute ${side === "left" ? "left-0" : "right-0"} top-7 z-20 flex max-h-[min(26rem,calc(100vh-4rem))] w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900`}
+      className={`absolute ${side === "left" ? "left-0" : "right-0"} top-7 z-20 flex max-h-[min(26rem,calc(100vh-4rem))] w-96 max-w-[calc(100vw-1rem)] flex-col gap-2 overflow-y-auto rounded-lg border border-neutral-300 bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900`}
     >
       <div>
         <p className="text-xs font-semibold">{agent.name}</p>
@@ -199,37 +205,54 @@ export function AgentSettingsPopover({
         </p>
       ) : null}
 
-      <TuningField
-        label="model"
-        testIdPrefix={`agent-${agent.id}`}
-        inheritLabel={fromSettings()}
-        value={draft.model}
-        playerDefault={agent.configured.model}
-        models={models}
-        defaultModel={catalog?.defaultModel}
-        onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
-      />
-      {offersSubagentModel && (
-        <TuningField
-          label="subagent model"
-          testIdPrefix={`agent-${agent.id}`}
-          inheritLabel={fromSettings()}
-          value={draft.subagentModel}
-          playerDefault={agent.configured.subagentModel}
-          models={models}
-          onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { subagentModel: undefined } : { subagentModel: next }) }))}
-        />
-      )}
-      <TuningField
-        label="effort"
-        testIdPrefix={`agent-${agent.id}`}
-        inheritLabel={fromSettings()}
-        value={draft.effort}
-        playerDefault={agent.configured.effort}
-        efforts={tuning.efforts}
-        additionalEfforts={tuning.additionalEfforts}
-        onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { effort: undefined } : { effort: next }) }))}
-      />
+      {/* Each model beside its effort, stacking at the floor
+          (run-view-138, DR-095). */}
+      <div className="@container">
+        <div data-testid={`agent-${agent.id}-tuning-rows`} className="grid grid-cols-1 gap-2 @xs:grid-cols-2">
+          <TuningField
+            label="model"
+            testIdPrefix={`agent-${agent.id}`}
+            inheritLabel={fromSettings()}
+            value={draft.model}
+            playerDefault={agent.configured.model}
+            models={models}
+            defaultModel={catalog?.defaultModel}
+            onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { model: undefined } : { model: next }) }))}
+          />
+          <TuningField
+            label="effort"
+            testIdPrefix={`agent-${agent.id}`}
+            inheritLabel={fromSettings()}
+            value={draft.effort}
+            playerDefault={agent.configured.effort}
+            efforts={tuning.efforts}
+            additionalEfforts={tuning.additionalEfforts}
+            onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { effort: undefined } : { effort: next }) }))}
+          />
+          {offersSubagentModel && (
+            <>
+              <TuningField
+                label="subagent model"
+                testIdPrefix={`agent-${agent.id}`}
+                inheritLabel={fromSettings()}
+                value={draft.subagentModel}
+                playerDefault={agent.configured.subagentModel}
+                models={models}
+                onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { subagentModel: undefined } : { subagentModel: next }) }))}
+              />
+              <TuningField
+                label="subagent effort"
+                testIdPrefix={`agent-${agent.id}`}
+                inheritLabel={fromSettings()}
+                value={draft.subagentEffort}
+                playerDefault={agent.configured.subagentEffort}
+                efforts={tuning.subagentEfforts}
+                onChange={(next) => setDraft((current) => ({ ...current, ...(next === null ? { subagentEffort: undefined } : { subagentEffort: next }) }))}
+              />
+            </>
+          )}
+        </div>
+      </div>
       {(adapterFastMode === true || draft.fastMode != null || effectiveFastMode) && (
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-neutral-500 dark:text-neutral-400">{fastModeWord()}</span>
@@ -277,6 +300,7 @@ export function AgentSettingsPopover({
       {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
       {invalidFastMode && <p role="alert" className="text-xs text-red-600">{adapterFastMode === false ? i18n._("Clear the fast-mode choice; this adapter does not accept it.") : i18n._("Turn off fast mode for this model.")}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort, take the configured value, or use the provider default.")}</p>}
+      {invalidSubagentEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed subagent effort, take the configured value, or let the agent choose.")}</p>}
       {invalidModel && <p role="alert" className="text-xs text-red-600">{i18n._("Enter a model ID, take the configured value, or use the provider default.")}</p>}
 
       {error ? <p role="alert" data-testid={`agent-error-${agent.id}`} className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
@@ -303,7 +327,7 @@ export function AgentSettingsPopover({
           <button
             type="button"
             data-testid={`agent-save-${agent.id}`}
-            disabled={busy || invalidEffort || invalidModel || invalidFastMode}
+            disabled={busy || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
             onClick={() => {
               setBusy(true);
               setError(undefined);
@@ -311,6 +335,7 @@ export function AgentSettingsPopover({
                 model: draft.model ?? null,
                 subagentModel: draft.subagentModel ?? null,
                 effort: draft.effort ?? null,
+                subagentEffort: draft.subagentEffort ?? null,
                 fastMode: draft.fastMode ?? null,
               }))
                 .then(() => onClose())

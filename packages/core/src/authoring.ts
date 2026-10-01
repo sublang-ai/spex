@@ -27,7 +27,7 @@ import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 import { stripLeadingComments } from "./artifacts.js";
 import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
-import type { ComposedConfig, ResolvedAgent } from "./config.js";
+import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { i18n } from "./i18n.js";
@@ -285,6 +285,7 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
     ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
+    ...(agent.subagentEffort !== undefined ? { subagentEffort: agent.subagentEffort } : {}),
   };
 }
 
@@ -954,7 +955,7 @@ export class AuthorManager {
     return {
       playerId,
       agent,
-      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), agent.subagentModel ?? ""].join("|"),
+      key: [playerId ?? "captain", agent.adapter, agent.model ?? "", agent.effort ?? "", String(agent.fastMode ?? ""), String(agent.subagentModel ?? ""), agent.subagentEffort ?? ""].join("|"),
     };
   }
 
@@ -1073,16 +1074,18 @@ export class AuthorManager {
     resume: string | undefined,
   ): Promise<{ status: string; result?: string; text: string; resumeToken?: string; resumeRejected: boolean; error?: string }> {
     this.append(id, live, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
-    // The block's model, subagent model, effort, and fast mode (DR-093);
-    // `{ mode: "auto" }` alone
-    // as permissions; no tool lists, no maxTurns, no role — the records
-    // name the player, not the events (playbook-library-64).
+    // The block's model, effort and fast mode, and its subagent model
+    // and effort (DR-093) — an unset subagent model resolved to
+    // `inherit` and an Off sent as none, as the launcher resolves them
+    // (DR-095); `{ mode: "auto" }` alone as permissions; no tool lists,
+    // no maxTurns, no role — the records name the player, not the events
+    // (playbook-library-64).
     const options: CligentOptions<string, boolean, string> = {
       cwd: this.drafts.draftDir(id),
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
-      ...(agent.subagentModel !== undefined ? { subagentModel: agent.subagentModel } : {}),
+      ...subagentTuningOf(agent),
       permissions: { mode: "auto" },
     };
     const cligent = new Cligent<string, boolean, string>(new Adapter(), options);

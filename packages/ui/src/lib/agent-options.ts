@@ -78,6 +78,33 @@ export function providerDefaultLabel(): string {
   return i18n._({ id: "Provider default", comment: "a model or effort left to the provider's own default" });
 }
 
+/** The subagent-model field's empty choice — the configured omission,
+ * every subagent on the agent's own model — and how the literal
+ * `inherit` reads too (settings-38, DR-095). */
+export function sameAsAgentLabel(): string {
+  return i18n._({ id: "Same as agent", comment: "subagent-model choice: every subagent runs on the agent's own model" });
+}
+
+/** The subagent-model field's configured `false`, offered only while it
+ * stands: no subagent model is sent (settings-34, DR-095). */
+export function subagentOffLabel(): string {
+  return i18n._({ id: "Off", comment: "subagent-model choice: send no subagent model, so the agent is not told to delegate" });
+}
+
+/** The subagent-effort field's empty choice: each subagent's effort is
+ * left to the agent, task by task (settings-34, DR-095). */
+export function agentChoosesLabel(): string {
+  return i18n._({ id: "Agent chooses", comment: "subagent-effort choice: the agent picks each subagent's effort per task" });
+}
+
+/** How a subagent-model value reads (settings-38): unset or `inherit`
+ * as "Same as agent", `false` as "Off", a model by the display rule. */
+export function subagentModelText(models: readonly AgentModelOption[], value: string | false | undefined): string {
+  if (value === undefined || value === "inherit") return sameAsAgentLabel();
+  if (value === false) return subagentOffLabel();
+  return modelDisplayText(modelDisplay(models, value));
+}
+
 /** How the empty value reads under the same rule (settings-38): the
  * provider-default words, then the model the runtime runs by default,
  * itself read by the rule, where the runtime reports one — alike in the
@@ -103,5 +130,8 @@ export function modelTuning(options: AgentOptions | undefined, model: string) {
     /** Whether the adapter serves a subagent model — the adapter's, never
      * a model's (DR-093). */
     subagentModelSupported: options?.subagentModelSupported,
+    /** The efforts a subagent may run at: the adapter's, less its
+     * orchestration values (DR-095). */
+    subagentEfforts: options?.subagentEffortValues ?? [],
   };
 }

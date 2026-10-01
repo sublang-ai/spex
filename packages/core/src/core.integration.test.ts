@@ -312,15 +312,20 @@ test("CORE-19: fake-adapter session end to end over the WebSocket", async () => 
   assert.equal(types[types.length - 1], "turn_finished");
   assert.ok(!types.includes("captain_prompt"), "hidden records leaked");
 
-  // No network: every event came from the fake adapter.
+  // No network: every event came from the substitute, which stands in
+  // for the Claude runtime under its own name and served every call.
   const playerEvents = sessionRecords.filter(
     (m) => m.record.type === "player_event",
   );
   assert.ok(playerEvents.length > 0);
   for (const message of playerEvents) {
     const event = (message.record as { event: { agent: string } }).event;
-    assert.equal(event.agent, "fake");
+    assert.equal(event.agent, "claude-code");
   }
+  assert.ok(
+    harness.stats.runs.some((run) => run.agent === "claude-code" && run.prompt.includes("slow: build the feature")),
+    "the substitute served the player's call",
+  );
 
   client.close();
   await harness.service.stop();
@@ -460,6 +465,30 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     config: VALID_CONFIG.replace(
       "    model: claude-test\n",
       "    model: claude-test\n    effort: extreme\n",
+    ),
+  },
+  // An Off carried through composition: an effort beside it, from either
+  // tier, is refused rather than switching delegation back on (DR-095).
+  {
+    name: "a binding's subagent effort over its player's Off",
+    pattern: /playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel/,
+    config: VALID_CONFIG.replace(
+      "    model: claude-test\nplaybooks:",
+      "    model: claude-test\n    subagentModel: false\nplaybooks:",
+    ).replace(
+      "      coder: dev.coder\n",
+      "      coder:\n        player: dev.coder\n        subagentEffort: low\n",
+    ),
+  },
+  {
+    name: "a binding's Off beside its player's subagent effort",
+    pattern: /playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel/,
+    config: VALID_CONFIG.replace(
+      "    model: claude-test\nplaybooks:",
+      "    model: claude-test\n    subagentEffort: low\nplaybooks:",
+    ).replace(
+      "      coder: dev.coder\n",
+      "      coder:\n        player: dev.coder\n        subagentModel: false\n",
     ),
   },
 ];
@@ -674,16 +703,20 @@ test("settings-36: model discovery uses the captured environment without opening
   const filesBefore = readdirSync(sessionsDir).sort();
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "claude" }), {
     adapter: "claude", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultracode"],
-    fastModeSupported: true, subagentModelSupported: true, discovery: discovered,
+    fastModeSupported: true, subagentModelSupported: true,
+    // A subagent runs at the adapter's efforts less its orchestration
+    // value (DR-095).
+    subagentEffortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
+    discovery: discovered,
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "codex" }), {
     adapter: "codex", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
-    fastModeSupported: true, subagentModelSupported: false,
+    fastModeSupported: true, subagentModelSupported: false, subagentEffortValues: [],
     discovery: { status: "unavailable", reason: "Fixture discovery failed" },
   });
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "gemini" }), {
     adapter: "gemini", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max"],
-    fastModeSupported: false, subagentModelSupported: false,
+    fastModeSupported: false, subagentModelSupported: false, subagentEffortValues: [],
     discovery: { status: "unavailable", reason: "Fixture runtime is offline" },
   });
   client.sendRaw(JSON.stringify({ type: "agent.options", id: "unknown-adapter", adapter: "unknown" }));
@@ -3884,10 +3917,11 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
     "    roles:\n      coder:\n        player: dev.coder\n        effort: low\n",
   ).replace(
     // The player's own subagent model (DR-093) and fast mode, which the
-    // binding inherits.
+    // binding inherits; and a second player leaving its subagent model
+    // unset, which delegates on its own model (DR-095).
     "    model: claude-test\nplaybooks:",
-    "    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\nplaybooks:",
-  );
+    "    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\n  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:",
+  ) + `  review:\n    from: "@sublang/playbook/review/registry"\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n`;
   writeFileSync(configPath, config);
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
@@ -3912,7 +3946,9 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   // The Captain and the player are tuned for this session alone.
   const afterCaptain = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: "claude-captain-tuned", subagentModel: "claude-sub-captain" });
   assert.deepEqual(afterCaptain.agentSettings?.captain, { model: "claude-captain-tuned", subagentModel: "claude-sub-captain" }, "the reply carries the session's own agent settings");
-  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: "claude-coder-tuned", effort: "high", subagentModel: "claude-sub-tuned" });
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: "claude-coder-tuned", effort: "high", subagentModel: "claude-sub-tuned", subagentEffort: "medium" });
+  // The second player is tuned in its subagent effort alone.
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.reviewer", subagentEffort: "high" });
 
   // The projection the next message opens on carries it at all three
   // sites: the Captain, the player's block, and the role binding the
@@ -3923,8 +3959,8 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   const applied = (JSON.parse(readFileSync(manifest, "utf8")) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
-      players: { id: string; model: { value?: string }; effort: { value?: string }; subagentModel?: string }[];
-      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string }; subagentModel?: string }> }>;
+      players: { id: string; model: { value?: string }; effort: { value?: string }; subagentModel?: string; subagentEffort?: string }[];
+      catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string }; subagentModel?: string; subagentEffort?: string }> }>;
     };
   }).lastAppliedExecutionProjection;
   assert.equal(applied.captain.model.value, "claude-captain-tuned", "the Captain ran the session's own model");
@@ -3935,6 +3971,23 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   assert.equal(applied.captain.subagentModel, "claude-sub-captain", "the Captain's subagents run the session's own choice");
   assert.equal(applied.players[0]?.subagentModel, "claude-sub-tuned", "the player's block carries its subagent model");
   assert.equal(applied.catalog.code?.roles.coder?.subagentModel, "claude-sub-tuned", "and so does its binding"); 
+  // And so does the subagent effort (DR-095).
+  assert.equal(applied.players[0]?.subagentEffort, "medium", "the player's block carries its subagent effort");
+  assert.equal(applied.catalog.code?.roles.coder?.subagentEffort, "medium", "and so does its binding");
+  // An effort tuned on a player whose subagent model is unset runs on
+  // that player's own model, at its block and at the binding naming it
+  // (core-service-16).
+  const reviewer = applied.players.find((player) => player.id === "dev.reviewer");
+  assert.deepEqual(
+    { model: reviewer?.subagentModel, effort: reviewer?.subagentEffort },
+    { model: "inherit", effort: "high" },
+    "the unset player's block delegates on its own model at the tuned effort",
+  );
+  assert.deepEqual(
+    { model: applied.catalog.review?.roles.reviewer?.subagentModel, effort: applied.catalog.review?.roles.reviewer?.subagentEffort },
+    { model: "inherit", effort: "high" },
+    "and so does the binding naming it",
+  );
 
   // Another session of the same project and the same player opens on
   // the config's values, and the config file itself never moved.
@@ -3944,12 +3997,22 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   const other = (JSON.parse(readFileSync(join(dir, "state", "sessions", `${plain.id}.json`), "utf8")) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
-      players: { id: string; subagentModel?: string }[];
+      players: { id: string; subagentModel?: string; subagentEffort?: string }[];
       catalog: Record<string, { roles: Record<string, { model: { value?: string }; effort: { value?: string }; fastMode?: boolean; subagentModel?: string }> }>;
     };
   }).lastAppliedExecutionProjection;
   assert.equal(other.captain.model.value, "claude-test", "an untuned session keeps the config's Captain");
-  assert.equal(other.captain.subagentModel, undefined, "and the provider's subagent model where the config sets none");
+  // An unset subagent model delegates on the agent's own model by
+  // default, with no effort beside it (core-service-16).
+  assert.equal(other.captain.subagentModel, "inherit", "and its own model for its subagents where the config sets none");
+  assert.equal(other.players[0]?.subagentEffort, undefined, "and no subagent effort where the config sets none");
+  const untunedReviewer = other.players.find((player) => player.id === "dev.reviewer");
+  assert.deepEqual(
+    { model: untunedReviewer?.subagentModel, effort: untunedReviewer?.subagentEffort },
+    { model: "inherit", effort: undefined },
+    "the unset player delegates on its own model at efforts of its choosing",
+  );
+  assert.equal(other.catalog.review?.roles.reviewer?.subagentModel, "inherit", "and so does the binding naming it");
   assert.equal(other.players[0]?.subagentModel, "claude-sub-config", "the config's subagent model at the player");
   assert.equal(other.catalog.code?.roles.coder?.subagentModel, "claude-sub-config", "and at the binding inheriting it");
   // Playbook builds the call from the binding alone, so a binding setting
@@ -3967,7 +4030,8 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   assert.equal(unchanged?.agentSettings?.["dev.coder"]?.effort, "high", "the refusal left the session's tuning as it was");
 
   // `false` is stored as the provider's default, distinct from clearing.
-  const providerDefault = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", subagentModel: false });
+  // Its effort goes with it: with no subagent model there is none to set.
+  const providerDefault = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", subagentModel: false, subagentEffort: null });
   assert.equal(providerDefault.agentSettings?.["dev.coder"]?.subagentModel, false);
 
   // An agent the session does not hold is refused as a request.
@@ -3976,9 +4040,40 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
 
   // Clearing returns the session to the config's values, and deleting
   // it leaves no tuning behind (core-service-70).
-  const cleared = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: null, effort: null, fastMode: null, subagentModel: null });
+  // A subagent effort beside a subagent model switched off, or naming
+  // the orchestration effort, is refused with the tuning unchanged
+  // (DR-095).
+  for (const [change, words] of [
+    [{ subagentEffort: "low" }, /subagentEffort for adapter "claude" requires subagentModel/],
+    [{ subagentModel: "claude-sub-tuned", subagentEffort: "ultracode" }, /subagentEffort for adapter "claude" must be one of: minimal, low, medium, high, xhigh, max/],
+  ] as const) {
+    const refusedEffort = await client.command("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", ...change });
+    assert.ok(!refusedEffort.ok && refusedEffort.error.code === "invalid_config", `refused: ${JSON.stringify(refusedEffort)}`);
+    assert.match(refusedEffort.error.message, words);
+  }
+  const keptEffort = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
+  assert.deepEqual(
+    { model: keptEffort?.agentSettings?.["dev.coder"]?.subagentModel, effort: keptEffort?.agentSettings?.["dev.coder"]?.subagentEffort },
+    { model: false, effort: undefined },
+    "the refusals left the session's tuning as it was",
+  );
+
+  const cleared = await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.coder", model: null, effort: null, fastMode: null, subagentModel: null, subagentEffort: null });
   assert.equal(cleared.agentSettings?.["dev.coder"], undefined, "the agent's tuning is gone");
-  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: null, subagentModel: null });
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "dev.reviewer", subagentEffort: null });
+  // An effort tuned on an agent whose subagent model is unset runs on
+  // the agent's own model (core-service-16).
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", subagentModel: null, subagentEffort: "low" });
+  await client.expectOk("turn.submit", { sessionId: tuned.id, text: "at low" });
+  await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.turns === 3 && m.session.live === false);
+  const own = (JSON.parse(readFileSync(manifest, "utf8")) as {
+    lastAppliedExecutionProjection: { captain: { subagentModel?: string; subagentEffort?: string } };
+  }).lastAppliedExecutionProjection;
+  assert.deepEqual(
+    { model: own.captain.subagentModel, effort: own.captain.subagentEffort },
+    { model: "inherit", effort: "low" },
+  );
+  await client.expectOk("session.agent.set", { sessionId: tuned.id, agentId: "captain", model: null, subagentModel: null, subagentEffort: null });
   const bare = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === tuned.id);
   assert.equal(bare?.agentSettings, undefined, "a session tuning nothing carries none");
 
@@ -4002,10 +4097,12 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
 
   // A subagent model on a player whose adapter cligent serves none for is
   // refused in cligent's words, with nothing written (DR-093).
-  writeFileSync(configPath, `${config}  review:\n    from: "@sublang/playbook/review/registry"\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n`.replace(
-    "playbooks:",
-    "  dev.reviewer:\n    adapter: codex\nplaybooks:",
-  ));
+  const reviewerOnCodex = config.replace(
+    "  dev.reviewer:\n    adapter: claude\n    model: claude-test\n",
+    "  dev.reviewer:\n    adapter: codex\n",
+  );
+  assert.notEqual(reviewerOnCodex, config, "the second player moved to codex");
+  writeFileSync(configPath, reviewerOnCodex);
   await service.reloadConfig();
   const mixed = await client.expectOk("session.create", { projectId: project.id });
   const onCodex = await client.command("session.agent.set", { sessionId: mixed.id, agentId: "dev.reviewer", subagentModel: "gpt-6" });
@@ -4013,6 +4110,30 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   assert.match(onCodex.error.message, /subagentModel is not supported for adapter "codex"/);
   const untouched = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === mixed.id);
   assert.equal(untouched?.agentSettings, undefined, "the refusal wrote nothing");
+
+  // A configured Off survives composition as itself, so a subagent
+  // effort a session tunes beside it — at the Captain's own `false`, or
+  // at a binding whose `false` the tuned player's effort reaches — is
+  // refused in cligent's words, never switching delegation back on, with
+  // nothing written (DR-095).
+  const offConfig = config
+    .replace("captain:\n  adapter: claude\n  model: claude-test\n", "captain:\n  adapter: claude\n  model: claude-test\n  subagentModel: false\n")
+    .replace("      reviewer: dev.reviewer\n", "      reviewer:\n        player: dev.reviewer\n        subagentModel: false\n");
+  assert.equal(offConfig.match(/subagentModel: false/g)?.length, 2, "the Captain and the binding are off");
+  writeFileSync(configPath, offConfig);
+  await service.reloadConfig();
+  // The session opened above has run no message, so it opens on this
+  // configuration, every player of it its own.
+  for (const [agentId, words] of [
+    ["captain", /^captain\.subagentEffort for adapter "claude" requires subagentModel/],
+    ["dev.reviewer", /^playbooks\.review\.roles\.reviewer\.subagentEffort for adapter "claude" requires subagentModel/],
+  ] as const) {
+    const refusedOff = await client.command("session.agent.set", { sessionId: mixed.id, agentId, subagentEffort: "low" });
+    assert.ok(!refusedOff.ok && refusedOff.error.code === "invalid_config", `refused: ${JSON.stringify(refusedOff)}`);
+    assert.match(refusedOff.error.message, words);
+  }
+  const stillOff = (await client.expectOk("session.list", {})).find((s: SessionInfo) => s.id === mixed.id);
+  assert.equal(stillOff?.agentSettings, undefined, "the Off refusals wrote nothing");
 });
 
 // ---------------------------------------------------------------------------

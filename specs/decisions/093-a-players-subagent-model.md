@@ -12,6 +12,7 @@ Amends [DR-032](032-session-players.md): a role binding's tuning is four fields,
 Amends [DR-067](067-tuning-for-one-conversation.md) §"Why this is affordable at all" and §"The scope is one session and one agent": the runtime now erases four tuning fields, and a session's own tuning of an agent may hold a subagent model.
 Amends [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) in its floors — Cligent `^0.29.0` and Playbook `^17.2.0` — and, until slc adopts Cligent 0.29, in how its one Cligent is kept: slc 0.13 declares `^0.28.0`, so the root overrides the compiler's Cligent range to the app's `^0.29.0`, an additive release, and one Cligent serves the app and its compiler.
 Amended by [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in that one-Cligent consequence alone: slc 0.14 declares the app's Cligent, and the override retires.
+Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md): the field's choices are "Same as agent" and the adapter's models, "Same as agent" by default; a subagent effort joins it; the two pair on one row.
 Cites [DR-052](052-runtime-model-options.md) for where the choices come from and [DR-041](041-chrome-that-fits.md) for why the chip does not read it.
 
 ## Context

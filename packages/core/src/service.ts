@@ -938,7 +938,7 @@ export class CoreService {
    * the projection the session's next message would open on validates
    * with it applied, then persist it and republish the session
    * (DR-067, DR-068). */
-  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; fastMode?: boolean | null}): Promise<SessionInfo> {
+  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null}): Promise<SessionInfo> {
     const session = this.store.describeSession(command.sessionId);
     if (!session) throw noSession(command.sessionId);
     const project = this.store.getProject(session.projectId);
@@ -965,7 +965,7 @@ export class CoreService {
     const stored = await this.sessions.storedStructure(session.id).catch(() => undefined);
     const current = this.store.sessionAgentSettings(session.id) ?? {};
     const entry: SessionAgentSettings = {...current[command.agentId]};
-    for (const field of ["model", "subagentModel", "effort"] as const) {
+    for (const field of ["model", "subagentModel", "effort", "subagentEffort"] as const) {
       const change = command[field];
       if (change === undefined) continue;
       if (change === null) delete entry[field];

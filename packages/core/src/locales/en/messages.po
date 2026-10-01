@@ -305,6 +305,21 @@ msgstr "{path}.profile is retired: agents carry their own adapter, model, effort
 msgid "{path}.profile names \"{name}\", which no profiles entry defines"
 msgstr "{path}.profile names \"{name}\", which no profiles entry defines"
 
+#. Config error; `subagentEffort` is the config file's own field name, and the adapter's name and the values the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort for adapter \"{adapter}\" must be one of: {values}"
+msgstr "{path}.subagentEffort for adapter \"{adapter}\" must be one of: {values}"
+
+#. Config error; `subagentEffort` and `subagentModel` are the config file's own field names and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort for adapter \"{adapter}\" requires subagentModel"
+msgstr "{path}.subagentEffort for adapter \"{adapter}\" requires subagentModel"
+
+#. Config error; `subagentEffort` is the config file's own field name and the adapter's name the runtime's own
+#: src/config.ts
+msgid "{path}.subagentEffort is not supported for adapter \"{adapter}\""
+msgstr "{path}.subagentEffort is not supported for adapter \"{adapter}\""
+
 #. Config error; `subagentModel` is the config file's own field name and the adapter's name the runtime's own
 #: src/config.ts
 msgid "{path}.subagentModel is not supported for adapter \"{adapter}\""

@@ -8,6 +8,7 @@
 Accepted (2026-10-01).
 Amends [DR-093](093-a-players-subagent-model.md) in its one-Cligent consequence alone: the root override of slc's Cligent range retires; everything else DR-093 decided stands.
 Amends [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) in its slc floor alone: both shells declare `@sublang/slc` `^0.14.0`, and its one engine and one Cligent follow from the dependencies alone again.
+Amended by [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in its floors alone: Cligent `^0.30.0`, Playbook `^17.3.0` and slc `^0.15.0`.
 
 ## Context
 

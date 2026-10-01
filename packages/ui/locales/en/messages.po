@@ -864,6 +864,11 @@ msgstr "now"
 msgid "age.weeks"
 msgstr "{weeks}w"
 
+#. subagent-effort choice: the agent picks each subagent's effort per task
+#: src/lib/agent-options.ts
+msgid "Agent chooses"
+msgstr "Agent chooses"
+
 #: src/state/reducer.ts
 msgid "agent error"
 msgstr "agent error"
@@ -1260,6 +1265,18 @@ msgstr "Choose a listed effort, inherit, or use the provider default."
 msgid "Choose a listed effort, take the configured value, or use the provider default."
 msgstr "Choose a listed effort, take the configured value, or use the provider default."
 
+#: src/components/BindingEditor.tsx
+msgid "Choose a listed subagent effort, inherit, or let the agent choose."
+msgstr "Choose a listed subagent effort, inherit, or let the agent choose."
+
+#: src/components/AgentEditor.tsx
+msgid "Choose a listed subagent effort, or let the agent choose."
+msgstr "Choose a listed subagent effort, or let the agent choose."
+
+#: src/components/AgentSettings.tsx
+msgid "Choose a listed subagent effort, take the configured value, or let the agent choose."
+msgstr "Choose a listed subagent effort, take the configured value, or let the agent choose."
+
 #: src/components/ProjectPalette.tsx
 msgid "Choose a project"
 msgstr "Choose a project"
@@ -1601,8 +1618,8 @@ msgid "copies made while writing"
 msgstr "copies made while writing"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
-msgstr "Copies the Captain's adapter, model, subagent model, effort, fast mode, and permissions"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
+msgstr "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -3211,8 +3228,10 @@ msgstr "off"
 
 #. fast mode is pinned off
 #. fast mode is pinned off
+#. subagent-model choice: send no subagent model, so the agent is not told to delegate
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/lib/agent-options.ts
 msgid "Off"
 msgstr "Off"
 
@@ -4106,6 +4125,11 @@ msgstr "Running the workflow's control"
 msgid "Runs slc over the draft's source — 30 to 120 minutes"
 msgstr "Runs slc over the draft's source — 30 to 120 minutes"
 
+#. subagent-model choice: every subagent runs on the agent's own model
+#: src/lib/agent-options.ts
+msgid "Same as agent"
+msgstr "Same as agent"
+
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "Same as Captain"
@@ -4679,6 +4703,16 @@ msgstr "Stopped before it finished"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "Stopping…"
+
+#. the tuning editor's field for the reasoning effort an agent's subagents run at
+#: src/components/TuningField.tsx
+msgid "subagent effort"
+msgstr "subagent effort"
+
+#. the field choosing the reasoning effort an agent's subagents run at
+#: src/components/AgentEditor.tsx
+msgid "Subagent effort"
+msgstr "Subagent effort"
 
 #. the tuning editor's field for the model an agent's subagents run on
 #: src/components/TuningField.tsx

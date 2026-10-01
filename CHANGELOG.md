@@ -100,6 +100,28 @@ and `npm start` (desktop) or `npm run start:server` (server).
   chip still reads adapter, model and effort: its editor shows the
   subagent model, and a conversation's own choice marks the chip
   changed. The compile does not carry it.
+- A subagent's effort, and the agent's own model by default ([DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
+  The subagent-model field now offers "Same as agent" first — the
+  configured omission, every subagent on the agent's own model — then
+  the runtime's models, in place of the provider's default; a configured
+  `false` reads "Off" while it stands, so it can always be cleared.
+  Beside it, a fifth tuning field, the subagent effort, offers "Agent
+  chooses" first — each subagent's effort left to the agent, task by
+  task — then the adapter's efforts without `ultracode`, so an agent at
+  `ultracode` no longer delegates at `ultracode`. It has the same three
+  homes and tiers as the subagent model. In the Captain's and each
+  player's editor, a role's binding editor and an agent's settings for
+  one conversation, the model and its effort now share a row, and the
+  subagent model and its effort the next; the pairs stack at the
+  320-pixel floor. The chip is unchanged.
+  Delegation is now the default, in Spex's sessions and draft
+  conversations as in the `playbook` CLI: every Claude agent whose
+  subagent model is unset runs its subagents on its own model and is
+  told to delegate, so existing configurations change behavior. "Off"
+  (`subagentModel: false`) is the way back, and a subagent effort set
+  beside an Off — in the agent's block, a role's binding or one
+  conversation's settings — is refused rather than switching delegation
+  back on.
 - Each agent's pane header reads its completed active time this session,
   as `active · 3m 12s` ([DR-070](specs/decisions/070-agent-active-time.md),
   [DR-071](specs/decisions/071-active-time-follows-held-calls.md)): the
@@ -133,13 +155,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.2, slc 0.14 and Cligent 0.29 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.3, slc 0.15 and Cligent 0.30 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
-  [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md)),
-  and locks the agent SDKs at the releases Cligent 0.29 tests: Claude
+  [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
+  [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md)),
+  and locks the agent SDKs at the releases Cligent 0.30 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
-  compiler runs on the app's own Playbook and Cligent, which slc 0.14
+  compiler runs on the app's own Playbook and Cligent, which slc 0.15
   declares. Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
@@ -357,15 +380,17 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - A new Spex home's starter configuration, a new player lane and a new
   role assignment start on `claude-opus-5-5`, the latest Claude model,
   where they started on `claude-opus-5`.
-- Protocol version 18 (from 11), in full in `packages/core/src/protocol.ts`:
+- Protocol version 19 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action
   it runs by `actionId`; a session gains `parked`, `agentActiveMs`,
   `agentReportedModels` and `agentSettings`, and its `recovery` gains
   `discardable`; an agent block, a role binding and a session's agent
-  settings take a `subagentModel`, and `agent.options` and readiness
-  report `subagentModelSupported`; each model `agent.options` lists may
+  settings take a `subagentModel` and a `subagentEffort`, an agent
+  block's `subagentModel` admitting `false`, and `agent.options` and
+  readiness report `subagentModelSupported`, `agent.options` its
+  `subagentEffortValues` too; each model `agent.options` lists may
   carry its `description`, and an available catalog its `defaultModel`; an open
   intent gains its queue standing, `next`, and loses the `permission`
   reason; attention entries are questions, failures, finishes and

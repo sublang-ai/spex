@@ -16,8 +16,11 @@ import { writeApplicationBytes } from "./app-storage.js";
 export interface AgentBlock {
   adapter: string;
   model?: string;
-  /** The model the agent's subagents run on (DR-093). */
-  subagentModel?: string;
+  /** The model the agent's subagents run on (DR-093): a model,
+   * `inherit` for the agent's own, or `false` for none (DR-095). */
+  subagentModel?: string | false;
+  /** The effort every subagent runs at (DR-095). */
+  subagentEffort?: string;
   effort?: string;
   fastMode?: boolean;
   instruction?: string;
@@ -35,7 +38,9 @@ export interface AgentBlock {
 export type AgentPatch = {
   adapter?: string;
   model?: string | null;
-  subagentModel?: string | null;
+  /** A string or `false` writes the key; null removes it (DR-095). */
+  subagentModel?: string | false | null;
+  subagentEffort?: string | null;
   effort?: string | null;
   /** `true`/`false` write the key; null removes it (DR-038). */
   fastMode?: boolean | null;
@@ -60,6 +65,7 @@ export type ConfigEditOp =
       model?: string | false | null;
       subagentModel?: string | false | null;
       effort?: string | false | null;
+      subagentEffort?: string | false | null;
       /** Omitted preserves the override; null inherits; false disables. */
       fastMode?: boolean | null;
     }
@@ -147,7 +153,7 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     case "playbook.role.bind": {
       const path = ["playbooks", op.playbookId, "roles", op.role];
       const existing = doc.getIn(path, true);
-      const keys = ["model", "subagentModel", "effort", "fastMode"] as const;
+      const keys = ["model", "subagentModel", "effort", "subagentEffort", "fastMode"] as const;
       if (!isMap(existing)) {
         if (!keys.some((key) => op[key] !== undefined && op[key] !== null)) {
           doc.setIn(path, op.playerId);

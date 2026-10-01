@@ -28,6 +28,7 @@ vi.mock("../lib/agent-options.js", async (original) => {
   return { ...actual, useAgentOptions: (adapter: string) => ({
     options: { adapter, effortValues: efforts[adapter], fastModeSupported: adapter === "claude",
       subagentModelSupported: adapter === "claude",
+      subagentEffortValues: adapter === "claude" ? efforts.claude!.filter((effort) => effort !== "ultracode") : [],
       discovery: { status: "unavailable", reason: "Fixture has no model catalog" } },
     loading: false, refresh: vi.fn(),
   }) };
@@ -556,5 +557,112 @@ describe("DR-093: a subagent model where the adapter serves one", () => {
     expect(subagent().value).toBe("claude-haiku-5");
     fireEvent.click(editor.save());
     expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: "claude-haiku-5" }));
+  });
+});
+
+describe("DR-095: Same as agent, Agent chooses, and Off only while it stands", () => {
+  const subagent = () => screen.getByTestId("agent-subagent-model") as HTMLInputElement;
+  const effort = () => screen.getByTestId("agent-subagent-effort") as HTMLSelectElement;
+
+  test("an unset subagent model reads Same as agent, and an untouched save writes neither field [settings-1]", () => {
+    for (const initial of [{ adapter: "claude" }, { adapter: "claude", subagentModel: "inherit" }] as ChipAgent[]) {
+      const editor = renderEditor(initial);
+      // Without a catalog the field is the typed one; its empty value
+      // reads as the agent's own model, the literal `inherit` alike.
+      expect(subagent().value).toBe("");
+      expect(subagent().placeholder).toBe("Same as agent");
+      expect(effort().value).toBe("");
+      fireEvent.change(editor.model(), { target: { value: "claude-opus-5" } });
+      fireEvent.click(editor.save());
+      expect(editor.onSave.mock.calls[0][0]).not.toHaveProperty("subagentModel");
+      expect(editor.onSave.mock.calls[0][0]).not.toHaveProperty("subagentEffort");
+      cleanup();
+    }
+  });
+
+  test("the subagent effort offers Agent chooses and the adapter's efforts without ultracode [settings-34]", () => {
+    const editor = renderEditor({ adapter: "claude" });
+    expect([...effort().options].map((option) => option.textContent)).toEqual([
+      "Agent chooses", "minimal", "low", "medium", "high", "xhigh", "max",
+    ]);
+    fireEvent.change(effort(), { target: { value: "high" } });
+    fireEvent.click(editor.save());
+    expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentEffort: "high" }));
+    cleanup();
+
+    // Agent chooses again unsets a pinned one; a standing orchestration
+    // value is shown as needing correction and blocks the save.
+    const pinned = renderEditor({ adapter: "claude", subagentEffort: "ultracode" });
+    expect(effort().options[1]?.textContent).toBe("ultracode (unsupported)");
+    expect(pinned.save().disabled).toBe(true);
+    fireEvent.change(effort(), { target: { value: "" } });
+    fireEvent.click(pinned.save());
+    expect(pinned.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentEffort: null }));
+  });
+
+  test("Same as Captain copying a false reads Off, saves false, and Same as agent clears it [settings-1]", () => {
+    const captain: ChipAgent = { adapter: "claude", subagentModel: false };
+    const copied = renderEditor({ adapter: "claude" }, { captain });
+    expect(subagent().placeholder).toBe("Same as agent");
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    // The copy holds the Captain's Off, and the field says so.
+    expect(subagent().value).toBe("");
+    expect(subagent().placeholder).toBe("Off");
+    fireEvent.click(copied.save());
+    expect(copied.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: false }));
+    cleanup();
+
+    // A model typed over the copied Off replaces it, and blanking it
+    // again reads "Same as agent", the Off no longer standing.
+    const replaced = renderEditor({ adapter: "claude" }, { captain });
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    fireEvent.change(subagent(), { target: { value: "claude-haiku-5" } });
+    fireEvent.change(subagent(), { target: { value: "" } });
+    expect(subagent().placeholder).toBe("Same as agent");
+    fireEvent.change(replaced.model(), { target: { value: "claude-opus-5" } });
+    fireEvent.click(replaced.save());
+    expect(replaced.onSave.mock.calls[0][0]).not.toHaveProperty("subagentModel");
+  });
+
+  test("a configured false reads Off while it stands and a model replaces it [settings-1]", () => {
+    const editor = renderEditor({ adapter: "claude", subagentModel: false });
+    expect(subagent().placeholder).toBe("Off");
+    fireEvent.change(subagent(), { target: { value: "claude-haiku-5" } });
+    fireEvent.click(editor.save());
+    expect(editor.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: "claude-haiku-5" }));
+  });
+
+  test("the four fields stand as two pairs, the effort beside its model [settings-1]", () => {
+    renderEditor({ adapter: "claude" });
+    const rows = screen.getByTestId("agent-tuning-rows");
+    expect(rows.className).toContain("@xs:grid-cols-2");
+    expect([...rows.children].map((cell) => cell.getAttribute("data-testid"))).toEqual([
+      "agent-model-cell", "agent-effort-cell", "agent-subagent-model-cell", "agent-subagent-effort-cell",
+    ]);
+    // An adapter serving no subagent model leaves the first pair alone.
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    expect([...rows.children].map((cell) => cell.getAttribute("data-testid"))).toEqual([
+      "agent-model-cell", "agent-effort-cell",
+    ]);
+  });
+
+  test("switching the adapter resets the subagent effort, and Same as Captain copies it [settings-36]", () => {
+    const editor = renderEditor({ adapter: "claude", subagentEffort: "low" });
+    fireEvent.click(screen.getByTestId("agent-adapter-codex"));
+    expect(screen.queryByTestId("agent-subagent-effort")).toBeNull();
+    fireEvent.click(editor.save());
+    expect(editor.onSave).toHaveBeenCalledWith(expect.objectContaining({ adapter: "codex", subagentEffort: null }));
+    cleanup();
+
+    const copied = renderEditor(
+      { adapter: "claude" },
+      { captain: { adapter: "claude", subagentModel: "inherit", subagentEffort: "max" } },
+    );
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    expect(subagent().value).toBe("");
+    expect(effort().value).toBe("max");
+    fireEvent.click(copied.save());
+    expect(copied.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentEffort: "max" }));
+    expect(copied.onSave.mock.calls[0][0]).not.toHaveProperty("subagentModel");
   });
 });

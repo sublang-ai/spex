@@ -418,7 +418,8 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   const inherit = await editConfigFile(path, { ...bind, subagentModel: null }, stubLoader);
   assert.ok(inherit.ok, inherit.error ?? "edit refused");
   const inherited = readFileSync(path, "utf8");
-  assert.equal(inherited.match(/subagentModel:/g)?.length, 1, "only the player's own key remains");
+  // The template's own comments name the key, so only key lines count.
+  assert.equal(inherited.match(/^\s+subagentModel:/gm)?.length, 1, "only the player's own key remains");
   assertCommentsSurvive(pinned, inherited);
 
   // null removes the player's key again.
@@ -429,7 +430,7 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   );
   assert.ok(cleared.ok, cleared.error ?? "edit refused");
   const after = readFileSync(path, "utf8");
-  assert.doesNotMatch(after, /subagentModel:/);
+  assert.doesNotMatch(after, /^\s+subagentModel:/m);
   assertCommentsSurvive(seeded, after);
 
   // An adapter cligent serves no subagent model for is refused in the
@@ -442,6 +443,62 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   assert.ok(!refused.ok);
   assert.match(refused.error ?? "", /players\.dev\.reviewer\.subagentModel is not supported for adapter "codex"/);
   assert.equal(readFileSync(path, "utf8"), after);
+});
+
+test("a subagent effort, the inherit literal and Off write their keys, null clears them, comments kept (DR-095)", async () => {
+  const path = templateFile();
+  const seeded = readFileSync(path, "utf8");
+  assert.doesNotMatch(seeded, /^\s+subagentEffort:/m);
+
+  // The shared editor's patch writes the literal and the effort in the
+  // lane it names, and "Off" as `false` on the Captain.
+  const player = await editConfigFile(
+    path,
+    { kind: "player.set", playerId: "dev.coder", patch: { subagentModel: "inherit", subagentEffort: "high" } },
+    stubLoader,
+  );
+  assert.ok(player.ok, player.error ?? "edit refused");
+  const off = await editConfigFile(path, { kind: "captain.set", patch: { subagentModel: false } }, stubLoader);
+  assert.ok(off.ok, off.error ?? "edit refused");
+  const pinned = readFileSync(path, "utf8");
+  assert.match(block(pinned, "dev.coder"), /\n\s+subagentModel: inherit\n\s+subagentEffort: high/);
+  assert.match(block(pinned, "captain"), /\n\s+subagentModel: false/);
+  assertCommentsSurvive(seeded, pinned);
+
+  // A role binding pins it, `false` leaves it to the agent, and null
+  // returns the role to the player's own.
+  const bind = { kind: "playbook.role.bind" as const, playbookId: "code", role: "coder", playerId: "dev.coder" };
+  for (const [subagentEffort, expected] of [
+    ["low", /\n\s+subagentEffort: low/],
+    [false, /\n\s+subagentEffort: false/],
+  ] as const) {
+    const bound = await editConfigFile(path, { ...bind, subagentEffort }, stubLoader);
+    assert.ok(bound.ok, bound.error ?? "edit refused");
+    assert.match(readFileSync(path, "utf8"), expected);
+  }
+  const inherit = await editConfigFile(path, { ...bind, subagentEffort: null }, stubLoader);
+  assert.ok(inherit.ok, inherit.error ?? "edit refused");
+  assert.equal(readFileSync(path, "utf8").match(/^\s+subagentEffort:/gm)?.length, 1, "only the player's own key remains");
+
+  // An effort beside a subagent model switched off is refused in its
+  // own words, the file unmoved.
+  const before = readFileSync(path, "utf8");
+  const refused = await editConfigFile(path, { ...bind, subagentModel: false }, stubLoader);
+  assert.ok(!refused.ok);
+  assert.match(refused.error ?? "", /playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel/);
+  assert.equal(readFileSync(path, "utf8"), before);
+
+  // null removes every key again.
+  for (const op of [
+    { kind: "player.set" as const, playerId: "dev.coder", patch: { subagentModel: null, subagentEffort: null } },
+    { kind: "captain.set" as const, patch: { subagentModel: null } },
+  ]) {
+    const cleared = await editConfigFile(path, op, stubLoader);
+    assert.ok(cleared.ok, cleared.error ?? "edit refused");
+  }
+  const after = readFileSync(path, "utf8");
+  assert.doesNotMatch(after, /^\s+subagent(Model|Effort):/m);
+  assertCommentsSurvive(seeded, after);
 });
 
 test("applyConfigOp on an empty file creates the mapping", () => {

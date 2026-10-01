@@ -65,6 +65,16 @@ function expectInside(inner: Box, outer: Box, what: string): void {
   ).toBeLessThanOrEqual(Math.round(outer.y + outer.height) + TOLERANCE);
 }
 
+/** How two paired fields stand (settings-1, playbook-library-4,
+ * DR-095): beside each other on one row, or the second under the first. */
+async function pairing(first: Locator, second: Locator): Promise<"side by side" | "stacked"> {
+  const a = await boxOf(first);
+  const b = await boxOf(second);
+  if (Math.abs(a.y - b.y) <= TOLERANCE && b.x >= a.x + a.width - TOLERANCE) return "side by side";
+  if (b.y >= a.y + a.height - TOLERANCE) return "stacked";
+  throw new Error(`the pair overlaps: ${JSON.stringify({ a, b })}`);
+}
+
 async function viewport(page: Page): Promise<Box> {
   const size = page.viewportSize()!;
   return { x: 0, y: 0, width: size.width, height: size.height };
@@ -133,6 +143,10 @@ test.describe("the role editors on the Playbooks surface", () => {
         await boxOf(popover),
         `the adapter group at ${width}px`,
       );
+      // Each model beside its effort, stacked at the floor (settings-1).
+      const paired = width === FLOOR ? "stacked" : "side by side";
+      expect(await pairing(popover.getByTestId("agent-model-cell"), popover.getByTestId("agent-effort-cell")), `the agent editor's model and effort at ${width}px`).toBe(paired);
+      expect(await pairing(popover.getByTestId("agent-subagent-model-cell"), popover.getByTestId("agent-subagent-effort-cell")), `the agent editor's subagent pair at ${width}px`).toBe(paired);
       await pageDoesNotScroll(page);
       await page.keyboard.press("Escape");
       await expect(popover).toHaveCount(0);
@@ -150,6 +164,9 @@ test.describe("the role editors on the Playbooks surface", () => {
         `the binding editor at ${width}px`,
       );
       await finishDiscovery(editor);
+      // Each model beside its effort, stacked at the floor
+      // (playbook-library-4).
+      expect(await pairing(editor.getByTestId("binding-model-mode"), editor.getByTestId("binding-effort-mode")), `the binding editor's model and effort at ${width}px`).toBe(width === FLOOR ? "stacked" : "side by side");
       await editor.getByTestId("binding-model-mode").selectOption("pin");
       await expect(editor.getByTestId("binding-model-value")).toBeVisible();
       await expect(async () => expectInside(
