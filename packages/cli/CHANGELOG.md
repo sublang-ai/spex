@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolve stays a `<holder>` or `<license>` placeholder, reported on
   stderr, and IR-000 now asks for it to be replaced rather than for
   `licensing-9` to be written. Template files keep their upstream
-  lines (scaffold-56).
+  lines (scaffold-58).
 
 ## [3.0.0] - 2026-08-13
 

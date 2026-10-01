@@ -43,7 +43,7 @@ Where the `scaffold` subcommand is invoked without `--update`, the CLI shall emi
 
 ### Header Format
 
-#### scaffold-56
+#### scaffold-58
 
 Where the `scaffold` subcommand is invoked without `--update`, when it writes `specs/packages/licensing.md`, the CLI shall pin the project's own header format into that file's `licensing-9` item by resolving the seed's placeholders, so that a file the project adds carries the project's copyright rather than one copied from a template file:
 
@@ -208,11 +208,11 @@ Where `copyRootLicense(basePath)` is called, it shall copy the bundled `scaffold
 - when a file exists at `<basePath>/LICENSE`, it leaves it unmodified and reports an `(already exists)` indicator;
 - the bundled `scaffold/LICENSE` holds the full, verbatim Apache License 2.0 text from its authoritative source [[1]];
 - `copyRootLicense()` is invoked only on the initial (non-`--update`) scaffold flow; it does not localize the file, and the bundled root `LICENSE` participates in neither `--update` refresh nor the file-history manifest ([[scaffold-21](#scaffold-21)]);
-- it returns whether `<basePath>/LICENSE` now holds the bundled text, by the canonical content hash ([[scaffold-21](#scaffold-21)]), for the header format pinned by [[scaffold-57](#scaffold-57)].
+- it returns whether `<basePath>/LICENSE` now holds the bundled text, by the canonical content hash ([[scaffold-21](#scaffold-21)]), for the header format pinned by [[scaffold-59](#scaffold-59)].
 
-#### scaffold-57
+#### scaffold-59
 
-Where `pinHeaderFormat(basePath, { apacheLicense })` is called after the templates are copied, it shall rewrite `<basePath>/specs/packages/licensing.md` with every `<year>`, `<license>` and `<holder>` placeholder replaced as [[scaffold-56](#scaffold-56)] resolves them and return the placeholders left unresolved:
+Where `pinHeaderFormat(basePath, { apacheLicense })` is called after the templates are copied, it shall rewrite `<basePath>/specs/packages/licensing.md` with every `<year>`, `<license>` and `<holder>` placeholder replaced as [[scaffold-58](#scaffold-58)] resolves them and return the placeholders left unresolved:
 
 - the holder reads `git config user.name` and `user.email` in `basePath`, so a repository-local identity wins over a global one, and a failing or absent `git` leaves the holder unresolved;
 - `apacheLicense` false leaves `<license>` unresolved;
@@ -391,9 +391,9 @@ Where the `scaffold` subcommand creates a project, the test suite shall assert t
 
 ### Header Format Coverage
 
-#### scaffold-58
+#### scaffold-60
 
-Where the `scaffold` subcommand creates a project, the test suite shall run the real CLI and assert the pinned header format ([[scaffold-56](#scaffold-56)]) in the written `specs/packages/licensing.md`:
+Where the `scaffold` subcommand creates a project, the test suite shall run the real CLI and assert the pinned header format ([[scaffold-58](#scaffold-58)]) in the written `specs/packages/licensing.md`:
 
 - given a repository with `user.name` and `user.email` configured, `licensing-9` carries the current year, `<name> <<email>>` as the holder and `Apache-2.0` in both the Markdown and the `//` header, with no placeholder and no template holder, while every bundled file keeps its upstream SPDX line, and the tree lints clean;
 - given no repository and no global or system git identity, `licensing-9` keeps `<holder>`, the run exits zero and warns on stderr naming `user.name`, the placeholder and the file, and the tree lints clean;

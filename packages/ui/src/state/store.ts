@@ -1817,11 +1817,21 @@ export const useAppStore = create<AppState>((set, get) => {
         getClient().command("project.status", { projectId }),
         getClient().command("forge.items", { projectId, refresh }),
       ]);
+      // A failed read keeps what was last served beside its failure
+      // (dashboard-14): the lists, with their fetch moment, stay on the
+      // page and a later read can replace them.
+      const last = get().projectMeta[projectId];
       const meta: ProjectMeta = { loading: false };
       if (status.status === "fulfilled") meta.status = status.value;
-      else meta.statusError = (status.reason as Error).message;
+      else {
+        if (last?.status) meta.status = last.status;
+        meta.statusError = (status.reason as Error).message;
+      }
       if (forge.status === "fulfilled") meta.forge = forge.value;
-      else meta.forgeError = (forge.reason as Error).message;
+      else {
+        if (last?.forge) meta.forge = last.forge;
+        meta.forgeError = (forge.reason as Error).message;
+      }
       set({ projectMeta: { ...get().projectMeta, [projectId]: meta } });
     },
 

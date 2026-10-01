@@ -876,7 +876,16 @@ export function SettingsSurface() {
         <h2 className="text-sm font-semibold text-neutral-500">
           {i18n._("Keyboard shortcuts")}
         </h2>
-        <div className="relative overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div
+          data-testid="shortcuts-sheet"
+          // At a phone's width the sheet scrolls sideways and holds
+          // nothing focusable of its own, so the box itself takes the
+          // keyboard stop and says what it holds (run-view-50).
+          tabIndex={0}
+          role="group"
+          aria-label={i18n._("Keyboard shortcuts")}
+          className="relative overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+        >
           <table className="w-full text-left text-sm">
             <caption className="sr-only">{i18n._("Keyboard shortcuts")}</caption>
             <thead>

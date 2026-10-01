@@ -33,7 +33,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
-3. generate the spex specs scaffold in it when the scaffold option is on — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-56](scaffold.md#scaffold-56)] — and generate no scaffold when it is off,
+3. generate the spex specs scaffold in it when the scaffold option is on — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, and
 5. register the project and make it the workspace's current project.
 

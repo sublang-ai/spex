@@ -305,7 +305,7 @@ describe("CLI integration", () => {
     }
   });
 
-  // scaffold-56 / scaffold-58: the licensing seed names the project's
+  // scaffold-58 / scaffold-60: the licensing seed names the project's
   // own holder, so an agent adding a file copies the project's line,
   // not the template's upstream one.
   it("scaffold pins the git identity as the copyright holder in licensing-9", () => {
