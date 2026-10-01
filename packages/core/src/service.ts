@@ -114,7 +114,8 @@ export interface CoreServiceOptions {
   /** Sessions directory; defaults to `<dataDir>/sessions`. */
   sessionsDir?: string;
   /** A legacy SQLite store the shell hands over for the one-time
-   * import (core-service-64); the file is left in place. */
+   * import (core-service-64); the file is left in place, marked
+   * `<store>.imported` beside itself once a root has taken it. */
   legacyDbPath?: string;
   /** A legacy compiled-playbook library to relocate into the root,
    * with config `from` paths rewritten (core-service-64). */
