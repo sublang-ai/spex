@@ -71,6 +71,10 @@ chosen agent: `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`
 prints an agent prompt for the judgment work, including migration of a
 spex 0.x tree ([scaffold-11](specs/packages/scaffold.md#scaffold-11),
 [scaffold-26](specs/packages/scaffold.md#scaffold-26)).
+The instruction files the scaffold installs tell agents to run
+`spex lint`; `npx` does not put `spex` on `PATH`, and neither does a clone
+of this repository, so install it with `npm install -g @sublang/spex` or
+run `npx @sublang/spex lint`.
 
 **2. Develop through playbook workflows that keep the specs in sync.**
 Use the built-ins, typically `/decide` to record a decision and `/code` to
@@ -90,14 +94,34 @@ npm ci
 npm start
 ```
 
-`npm start` builds the workspaces and launches the desktop app. Real
-playbook runs need a ready coding-agent adapter; issue and PR panels need
-an authenticated `gh` CLI; compiling playbooks needs only a ready adapter, since
-the compiler is installed in this checkout.
-Claude and Codex run through SDK dependencies installed in this checkout.
-Updating a separate CLI or desktop app does not update those copies.
-If a model requires a newer runtime, run
-`npm update @anthropic-ai/claude-agent-sdk @openai/codex-sdk` here, then restart Spex.
+`npm ci` fetches the packages and the first `npm start` fetches the
+Electron binary, so the first run needs the network. `npm start` builds
+the workspaces, rebuilds the `better-sqlite3` native module for Electron
+from source, and launches the desktop app; the rebuild needs a C/C++
+toolchain — the Xcode Command Line Tools on macOS, Python 3, `make` and
+`g++` on Linux.
+Real playbook runs need a ready coding-agent adapter: Claude Code signed
+in (run `claude` once in a terminal, or set `ANTHROPIC_API_KEY`) or Codex
+signed in (`codex`, or `OPENAI_API_KEY`); the SDKs in this checkout do
+not sign you in. Settings → Agents shows each adapter's readiness and
+what it still needs. Compiling playbooks needs only a ready adapter,
+since the compiler is installed in this checkout.
+The Claude, Codex and OpenCode SDKs are pinned by `package-lock.json` to
+the releases Cligent tests; `npm ci` restores them, and is the app's own
+repair when one is missing.
+
+**First run.** The app opens on Projects. Add a project from the palette:
+register an existing repository, create a new one at a path, or "Try the
+Academy example", which seeds a sample project with a complete `specs/`
+tree built from [`demo/`](demo). Then write to the Captain — a request,
+or `/code …`; `/` in the composer lists the playbooks the starter config
+enables, the six built-ins `/code`, `/review`, `/decide`, `/dev`,
+`/branch` and `/pr`, and the quick-start card shows the first of them.
+Runs commit in your repository, so Git needs `user.name` and
+`user.email`; the issue and PR panels, the Dashboard's Sources and Space
+on a GitHub remote need `gh auth login`. Config and sessions live in the
+Spex home — `~/.spex`, or `SPEX_HOME` — with the config at
+`config/playbook.config.yaml` ([storage](docs/storage.md)).
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) ship as source with a changelog: check out the tag and run
@@ -114,6 +138,11 @@ default, and prints an SSH tunnel line; a public bind needs
 npm run start:server     # prints http://127.0.0.1:8137/?token=...
 ```
 
+Options take the `--name=value` form after `--` — `--host=`, `--port=`
+(default 8137), `--token=` or `SPEX_TOKEN`, `--data-dir=` or `SPEX_HOME`,
+`--tls-cert=`/`--tls-key=`, and `--insecure` — e.g.
+`npm run start:server -- --port=0`.
+
 ## Repository
 
 | Path | Purpose |
@@ -121,8 +150,8 @@ npm run start:server     # prints http://127.0.0.1:8137/?token=...
 | [`specs/`](specs) | Source of truth for this repository; start at the [spec map](specs/map.md) |
 | [`scaffold/`](scaffold), [`packages/cli`](packages/cli) | Shipped templates and the npm CLI |
 | [`packages/core`](packages/core), [`packages/ui`](packages/ui) | Headless service and protocol-only web UI |
-| [`apps/desktop`](apps/desktop) | Electron shell |
-| [`apps/server`](apps/server) | Server shell for remote browser access |
+| [`apps/desktop`](apps/desktop) | Electron shell, specified in [app-shell](specs/packages/app-shell.md) |
+| [`apps/server`](apps/server) | Server shell for remote browser access, specified in [server-shell](specs/packages/server-shell.md) |
 | [`demo/`](demo) | Academy example and spec-package case study |
 
 For development: `npm ci`, `npm run build`, `npm test`; `npm run e2e` drives

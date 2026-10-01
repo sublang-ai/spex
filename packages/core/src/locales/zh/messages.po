@@ -107,7 +107,7 @@ msgstr "{count, plural, other {# 个轮次}}"
 #. Adapter requirement; `described` is the runtime's own verdict and `npm install` the command to run
 #: src/config.ts
 msgid "{described} — bundled with Spex; reinstall the app, or run npm install in a checkout"
-msgstr "{described} — 随 Spex 内置；请重新安装应用，或在源码检出目录中运行 npm install"
+msgstr "{described} — 随 Spex 内置；请重新安装应用，或在源码目录中运行 npm install"
 
 #. Adapter requirement; `described` is the runtime's own verdict and the npm line is the command to run
 #: src/config.ts
@@ -149,7 +149,7 @@ msgstr "{host} 拒绝了本机的访问"
 #. Refusal: the id offered for a new draft is taken by a playbook already
 #: src/authoring.ts
 msgid "{id} is already a configured playbook or a built-in; pick another id"
-msgstr "{id} 已是已配置的规程或内置规程；请换一个 id"
+msgstr "{id} 已被配置中的规程或内置规程占用；请换一个 id"
 
 #. Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label
 #: src/space.ts
@@ -795,7 +795,7 @@ msgstr "未安装 Git。请安装 Git，然后重新打开空间。"
 #. Guidance after a transfer ran past its time limit
 #: src/space-git.ts
 msgid "Git runs without prompts, so a helper that prompts fails instead of hanging. Check the connection, then try again."
-msgstr "Git 以无提示方式运行，需要输入的凭据助手会直接失败，而不会一直挂起。请检查连接后重试。"
+msgstr "Git 以无交互方式运行，因此需要交互的凭据助手会直接失败，而不会一直挂起。请检查连接后重试。"
 
 #. Forge guidance where the gh command is absent; the command stays as it is
 #: src/forge.ts
@@ -1055,7 +1055,7 @@ msgstr "确保当前用户有权读取该文件夹"
 #. Why the explorer offers no preview of a file that may hold a provider's secret
 #: src/space.ts
 msgid "May hold provider tokens — not shown"
-msgstr "可能包含提供方令牌 — 不予显示"
+msgstr "可能包含服务商令牌 — 不予显示"
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
@@ -1177,7 +1177,7 @@ msgstr "规范化"
 #. Refusal: the home's HEAD names no branch; main is a branch's own name
 #: src/space.ts
 msgid "Not on a branch; check out main in a terminal"
-msgstr "当前不在任何分支上；请在终端中检出 main"
+msgstr "当前不在任何分支上；请在终端中切换到 main"
 
 #. Guidance where a file under the home failed validation before the save
 #: src/space.ts
@@ -1192,7 +1192,7 @@ msgstr "未保存任何内容。请修复同步规则文件，然后重新同步
 #. Refusal: the home sits on another branch; main is a branch's own name
 #: src/space.ts
 msgid "On {branch}; check out main in a terminal"
-msgstr "当前在 {branch} 分支上；请在终端中检出 main"
+msgstr "当前在 {branch} 分支上；请在终端中切换到 main"
 
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
@@ -1531,12 +1531,12 @@ msgstr "在终端运行 codex 登录，或设置 OPENAI_API_KEY"
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
 msgid "sign this machine in at that host as an account that can see it"
-msgstr "在该主机上用有权访问它的账号为本机登录"
+msgstr "在该主机上用有权访问它的账户为本机登录"
 
 #. The act that gives access to an http(s) remote, opening a sentence
 #: src/space-git.ts
 msgid "Sign this machine in at that host as an account that can see it"
-msgstr "在该主机上用有权访问它的账号为本机登录"
+msgstr "在该主机上用有权访问它的账户为本机登录"
 
 #. Spec notice: a link under specs/ pointed outside the project and was not read
 #: src/specs.ts
@@ -1576,7 +1576,7 @@ msgstr "规约条目"
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
-msgstr "Spex 桌面端与服务端需要 macOS 或 Linux，并支持私有的 POSIX 文件权限。在 Windows 上，请使用 scaffold 命令行，或在浏览器中连接到 Spex 服务器。"
+msgstr "Spex 桌面端与服务端需要支持私有 POSIX 文件权限的 macOS 或 Linux。在 Windows 上，请使用 scaffold 命令行，或在浏览器中连接到 Spex 服务器。"
 
 #. Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening
 #: src/authoring.ts
@@ -1591,12 +1591,12 @@ msgstr "Spex: 编译成功 — 正在请求注册方案"
 #. Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are
 #: src/store.ts
 msgid "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)"
-msgstr "状态根目录 {dir} 在 {lock} 处有一个无法读取的锁；若没有其他 Spex 核心在运行，请删除它 (DR-036)"
+msgstr "状态根目录 {dir} 在 {lock} 处有一个无法读取的锁；若没有其他 Spex 核心在运行，请删除它（DR-036）"
 
 #. Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are
 #: src/store.ts
 msgid "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)"
-msgstr "状态根目录 {dir} 已被 {host} 上的进程 {pid} 占用；同一时间只有一个核心可服务一个根目录 (DR-036)"
+msgstr "状态根目录 {dir} 已被 {host} 上的进程 {pid} 占用；同一时间只有一个核心可服务一个根目录（DR-036）"
 
 #. Startup refusal the shell shows in a dialog
 #: src/store.ts
@@ -1656,12 +1656,12 @@ msgstr "应用不保存任何凭据：请从 URL 中删去用户名和密钥，�
 #. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
 #: src/compile.ts
 msgid "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together."
-msgstr "应用自带的编译器面向规程引擎 {compiler}，而应用运行的是 {app}；请同时更新 @sublang/slc 与 @sublang/playbook。"
+msgstr "应用自带的编译器面向 Playbook 引擎 {compiler}，而应用运行的是 {app}；请同时更新 @sublang/slc 与 @sublang/playbook。"
 
 #. The toolchain's guidance when the compiler the app ships is not installed; `@sublang/slc` is a package name and `npm ci` a command, both as they are
 #: src/compile.ts
 msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
-msgstr "应用自带的 @sublang/slc 副本缺失；请在 Spex 检出目录中运行 npm ci 以恢复。"
+msgstr "应用自带的 @sublang/slc 副本缺失；请在 Spex 源码目录中运行 npm ci 以恢复。"
 
 #. The session's Captain, named inside a settings-drift line
 #: src/session.ts
@@ -1866,7 +1866,7 @@ msgstr "未注册的项目 {projectId}"
 #. Storage diagnostic: an act's kind or version is not one this Spex reads
 #: src/app-storage.ts
 msgid "unsupported act/version"
-msgstr "不支持的行为类型或版本"
+msgstr "不支持的动作类型或版本"
 
 #. Diagnostic for a draft file this Spex cannot read
 #: src/drafts.ts
