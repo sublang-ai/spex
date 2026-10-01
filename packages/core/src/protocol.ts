@@ -1230,7 +1230,9 @@ export interface SpecRecordInfo {
   /** The core's classification of that line (spec-view-14, DR-038):
    * absent while open; "done" or "superseded" once finished. */
   finished?: "done" | "superseded";
-  /** The file's last change, for History's timeline (DR-038). */
+  /** The record's last change, for History's timeline (DR-038): the
+   * last commit touching the file where Git tracks it, else the
+   * file's mtime. */
   updatedAt?: number;
 }
 

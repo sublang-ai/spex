@@ -466,6 +466,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading landed below the visible box — `run-view.md` opened on
   run-view-147 for run-view-4. The landing now measures the heading's
   rendered position, wraps counted (spec-view-48).
+- A project registered from a fresh clone listed every finished intent
+  record in History as "just now", in no order: the records' status
+  lines carry no date, and a clone sets every file's last change to one
+  moment. An undated record now dates by the last commit touching its
+  file, and by the file's last change only where Git tracks none
+  (dashboard-27, spec-view-14).
 
 ### Security
 
