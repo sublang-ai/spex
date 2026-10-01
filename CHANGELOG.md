@@ -138,8 +138,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   [DR-093](specs/decisions/093-a-players-subagent-model.md)),
   and locks the agent SDKs at the releases Cligent 0.29 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
-  compiler runs on the app's own Playbook; until slc adopts Cligent 0.29
-  it keeps its own Cligent 0.28 beneath it. Cligent refuses an agent runtime older than the
+  compiler runs on the app's own Playbook and Cligent, its own Cligent
+  range overridden to 0.29 at the root until slc adopts it. Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
   not ready with the command that upgrades it.

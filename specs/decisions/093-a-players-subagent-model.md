@@ -10,7 +10,7 @@ Accepted (2026-09-30) on the owner's request that a player's subagents run on a 
 Amends [DR-019](019-inline-agent-configuration.md) §"UX": the shared agent editor gains a subagent-model field where the adapter accepts one.
 Amends [DR-032](032-session-players.md): a role binding's tuning is four fields, not three.
 Amends [DR-067](067-tuning-for-one-conversation.md) §"Why this is affordable at all" and §"The scope is one session and one agent": the runtime now erases four tuning fields, and a session's own tuning of an agent may hold a subagent model.
-Amends [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) in its floors — Cligent `^0.29.0` and Playbook `^17.2.0` — and, until slc adopts Cligent 0.29, in its one-Cligent consequence: slc 0.13 declares `^0.28.0`, so the compiler keeps a Cligent 0.28 of its own nested beneath it.
+Amends [DR-092](092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md) in its floors — Cligent `^0.29.0` and Playbook `^17.2.0` — and, until slc adopts Cligent 0.29, in how its one Cligent is kept: slc 0.13 declares `^0.28.0`, so the root overrides the compiler's Cligent range to the app's `^0.29.0`, an additive release, and one Cligent serves the app and its compiler.
 Cites [DR-052](052-runtime-model-options.md) for where the choices come from and [DR-041](041-chrome-that-fits.md) for why the chip does not read it.
 
 ## Context
@@ -85,6 +85,6 @@ Each layer proves its own claim once, and no layer repeats another's:
 - The core's agent block, patch, resolved agent, session agent settings, projection application, config summary, `agent.options` capability, and the protocol schemas each gain one optional field; the protocol version rises and the shells move together.
 - The shared agent editor, the role-binding editor and the session agent editor each gain one field; the tuning-field control learns a third label; both catalogs gain its strings.
 - The floors rise to Cligent `^0.29.0` and Playbook `^17.2.0`, installed from the public registry; both are additive releases.
-- slc 0.13 still declares Cligent `^0.28.0`, which a `0.x` caret closes below 0.29, so the tree holds two Cligents until slc adopts 0.29: the app's at the root, and the compiler's own beneath slc; a compile still links the app's one engine, and the compiler's agent needs nothing of 0.29.
+- slc 0.13 still declares Cligent `^0.28.0`, which a `0.x` caret closes below 0.29; left to itself the lock hoists that 0.28 to the root and nests two 0.29 copies, so the root's `overrides` entry points slc's Cligent at `^0.29.0` — an additive release whose one compatibility note is a type-level narrowing slc's imports do not meet — and one Cligent serves the app and its compiler, as DR-092 decided; the override retires when slc adopts 0.29.
 - A session tuned with a subagent model is recorded, like any tuning, in the projection each turn opens on; the playbook CLI continuing the conversation runs the config's value, as it does for the model.
 - This ships in the next beta of the 0.9.0 line.
