@@ -1469,6 +1469,16 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
 
+#. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
+#: src/forge.ts
+msgid "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
+msgstr "执行 {command} 时 scaffold 失败（应用未提供自带的 scaffold 命令行，因此运行了 npm 仓库中的版本）：{output}"
+
+#. Refusal when the app's own scaffold CLI exits non-zero; command and output are verbatim
+#: src/forge.ts
+msgid "scaffold failed running {command}: {output}"
+msgstr "执行 {command} 时 scaffold 失败：{output}"
+
 #. Refusal: a source write must carry one of the two, not both and not neither
 #: src/authoring.ts
 msgid "send either the source text or a file path"

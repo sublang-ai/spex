@@ -1469,6 +1469,16 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
 
+#. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
+#: src/forge.ts
+msgid "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
+msgstr "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
+
+#. Refusal when the app's own scaffold CLI exits non-zero; command and output are verbatim
+#: src/forge.ts
+msgid "scaffold failed running {command}: {output}"
+msgstr "scaffold failed running {command}: {output}"
+
 #. Refusal: a source write must carry one of the two, not both and not neither
 #: src/authoring.ts
 msgid "send either the source text or a file path"

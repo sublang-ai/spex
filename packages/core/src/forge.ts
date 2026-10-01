@@ -200,11 +200,19 @@ export async function createProjectRepo(
       // The failure names what ran (projects-31): the shell's own CLI,
       // or the registry's when no shell supplied one.
       const ran = [command, ...args, "scaffold"].join(" ");
-      const source = options.scaffoldCommand
-        ? ""
-        : " (the app's own scaffold CLI was not supplied, so the registry's ran)";
+      const output = scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim();
       throw new Error(
-        `scaffold failed running ${ran}${source}: ${scaffoldRun.stderr.trim() || scaffoldRun.stdout.trim()}`,
+        options.scaffoldCommand
+          ? i18n._({
+              id: "scaffold failed running {command}: {output}",
+              values: { command: ran, output },
+              comment: "Refusal when the app's own scaffold CLI exits non-zero; command and output are verbatim",
+            })
+          : i18n._({
+              id: "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}",
+              values: { command: ran, output },
+              comment: "Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim",
+            }),
       );
     }
     // Commit the generated scaffold without pulling a pre-existing
