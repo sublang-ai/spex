@@ -148,17 +148,21 @@ export function copyTemplates(
  *
  * SCAF-37: writes scaffold/LICENSE (verbatim Apache-2.0) to
  * <basePath>/LICENSE only when the target is absent, so an existing
- * downstream license is never overwritten. Not localized.
+ * downstream license is never overwritten. Not localized. Returns
+ * whether the root LICENSE now holds the bundled Apache-2.0 text —
+ * written by this run or already there — so the header format pinned
+ * in the licensing seed (SCAF-56) can name that license.
  */
-export function copyRootLicense(basePath: string): void {
+export function copyRootLicense(basePath: string): boolean {
   const source = join(getScaffoldDir(), "LICENSE");
   const target = join(basePath, "LICENSE");
   if (existsSync(target)) {
     console.log(`  LICENSE (already exists)`);
-    return;
+    return hashFile(target) === hashFile(source);
   }
   copyFileSync(source, target);
   console.log(`  LICENSE`);
+  return true;
 }
 
 // SCAF-13.

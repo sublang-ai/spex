@@ -17,6 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (DR-079). Raising the supported runtime is a breaking change: the
   next release is a major.
 
+### Fixed
+
+- The managed agent-instruction section told coding agents to run
+  `spex lint`, which fails wherever no `spex` command is on PATH — a
+  project created from the Spex app, for one. It now names
+  `npx @sublang/spex lint`, with `spex lint` as the alternative where
+  the CLI is installed; an existing project picks the sentence up on
+  `spex scaffold --update`.
+- `spex scaffold` pinned no copyright holder for the project: every
+  seeded file carried SubLang's upstream SPDX line and nothing named
+  the project's own, so an agent adding a file copied the template's.
+  The licensing seed now carries `licensing-9` with the project's
+  header format, resolved at scaffold time — `git config user.name`
+  and email as the holder, the current year, and `Apache-2.0` when the
+  root `LICENSE` is the bundled text. A value the scaffold cannot
+  resolve stays a `<holder>` or `<license>` placeholder, reported on
+  stderr, and IR-000 now asks for it to be replaced rather than for
+  `licensing-9` to be written. Template files keep their upstream
+  lines (scaffold-58).
+
 ## [3.0.0] - 2026-08-13
 
 ### Changed
