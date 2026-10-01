@@ -11,6 +11,7 @@ Amends [DR-090](090-readiness-names-what-cligent-finds-missing.md) in its Cligen
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Completes [DR-091](091-models-named-by-the-runtime.md), whose model descriptions, default model and reported model this Cligent release reports.
 Amended by [DR-093](093-a-players-subagent-model.md) in its floors — Cligent `^0.29.0` and Playbook `^17.2.0` — and, until slc adopts Cligent 0.29, in how one Cligent is kept: a root override of slc's Cligent range.
+Amended by [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in its slc floor alone, now `^0.14.0`; the override retires and one Cligent follows from the dependencies alone.
 
 ## Context
 
