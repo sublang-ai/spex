@@ -1200,12 +1200,12 @@ export function SyncTab({
           {i18n._("A merge is in progress in your terminal. Finish or abort it there.")}
         </Card>
       ) : null}
-      {/* Until this space has checked that remote, Join stands by name
-          (space-45) — on a home that has synced before as much as on a
-          fresh one, since a changed remote clears the last check: the
-          join flag is inert where the histories share an ancestor, so
-          offering it costs nothing and needs no transport. */}
-      {repo.remote && repo.branch === "main" && repo.checkedAt === null && !repo.unrelated && !running ? (
+      {/* Until this space has checked or synced that remote, Join stands
+          by name (space-45); a changed remote clears both the last check
+          and the last sync. The join flag is inert where the histories
+          share an ancestor, so offering it costs nothing and needs no
+          transport. */}
+      {repo.remote && repo.branch === "main" && repo.checkedAt === null && !space.lastSync && !repo.unrelated && !running ? (
         <Card testId="space-first-meeting" tone="neutral">
           <span className="font-medium">{i18n._("This space has not met that remote yet.")}</span>
           <span className="text-xs">

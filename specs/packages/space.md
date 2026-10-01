@@ -68,7 +68,7 @@ When the user saves a remote URL, or clears it, the core shall set or remove `or
 | blank, or containing whitespace or control characters | refused as malformed |
 | carrying anything before the host on `http://` or `https://`, with or without a colon (`https://user:secret@host`, `https://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
 
-- a changed remote clears the last check, so ahead and behind read as unknown until the next check;
+- a changed remote clears the last check and the last sync, so ahead and behind read as unknown until the next check;
 - the row edits in place with Save and Cancel, Escape cancelling, and the header's remote field follows the save ([DR-010](../decisions/010-interface-craft.md) §3).
 
 #### space-6
@@ -87,7 +87,7 @@ While the home is a repository on `main` whose `origin` is set and whose remote 
 - the card names the case in one phrase — another machine's space already at that remote is joined first — with Join titled as bringing both into one and asking about anything that differs ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - Join confirms inline with Cancel focused and Escape cancelling, then starts the joining sync of [[space-13](#space-13)];
 - the header's primary control stays Sync, the card never standing in its place;
-- the card goes after the first check or sync of that remote and returns when the remote changes, a changed remote clearing the last check [[space-5](#space-5)].
+- the card goes after the first check or sync of that remote and returns when the remote changes, a changed remote clearing the last check and the last sync [[space-5](#space-5)].
 
 ### Repairs
 
@@ -592,6 +592,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a clean `space.init` yields `main` with one commit tracking no hint, lease, binding, preference or migration file and the managed rules present, the committer reading the fallback identity where none is configured [[space-4](#space-4)];
 - `space.remote.set` accepts the bare path, refuses a blank URL, whitespace and an embedded credential leaving `origin` unchanged, and clears the check time [[space-5](#space-5)];
 - `space.sync` against the empty bare repository pushes `main`, sets the upstream, and ends `done` with `pushed` and `space:lastSync` recorded [[space-12](#space-12)] [[space-22](#space-22)];
+- a core restarted on that synced home reads no check time but the same last sync, and a changed remote then clears the last sync from the state and the preferences [[space-45](#space-45)] [[space-5](#space-5)];
 - a join against the empty bare repository — `space.init` with the remote, then a joining `space.sync` — completes as a first push [[space-6](#space-6)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `SpaceState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile each make `space.sync` and `space.init` refuse `busy` by name [[space-11](#space-11)] [[space-4](#space-4)];

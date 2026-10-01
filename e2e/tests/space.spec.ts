@@ -180,10 +180,10 @@ test.describe("first-time setup", () => {
     expect(git(app.remotePath!, "rev-parse", "main")).toBe(git(app.dataDir, "rev-parse", "main"));
 
     // The setup's sync checked the remote, so no Join card stands. A
-    // changed remote clears that check: the card is back — on this
-    // synced home as on a fresh one — until Check remote runs, and the
-    // remote restored brings it back until the next sync ends
-    // (space-45, space-5).
+    // changed remote clears that check and the last sync: the card is
+    // back — on this synced home as on a fresh one — until Check remote
+    // runs, and the remote restored brings it back until the next sync
+    // ends (space-45, space-5).
     const meeting = page.getByTestId("space-first-meeting");
     await expect(meeting).toHaveCount(0);
     const other = join(dirname(app.remotePath!), "other.git");

@@ -910,10 +910,11 @@ export class SpaceManager {
       if (url !== repo.remote) await this.git.ok(repo.remote === null ? ["remote", "add", "origin", url] : ["remote", "set-url", "origin", url]);
     }
     if (url !== repo.remote) {
-      // A changed remote clears the last check (space-5): what the old
-      // remote held says nothing about the new one.
+      // A changed remote clears the last check and the last sync (space-5):
+      // what the old remote held says nothing about the new one.
       await this.git.run(["update-ref", "-d", "refs/remotes/origin/main"]);
       this.checkedAt = null;
+      this.host.store.deletePref("space:lastSync");
       this.remoteEmpty = false;
       this.unrelated = false;
       this.phase = { phase: "idle" };
