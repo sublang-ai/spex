@@ -535,6 +535,8 @@ test.describe("exploring", () => {
     const session = await app.core.command("session.create", { projectId: app.projectId! });
     await runTurn(app, session.id, SESSION_TITLE);
     writeFileSync(join(app.dataDir, "sessions", `${session.id}.hints.json`), "{}\n");
+    // intents/ with nothing queued yet: a tracked kind, nothing committed.
+    mkdirSync(join(app.dataDir, "intents"), { recursive: true });
     await app.core.command("space.init", {});
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: app.origin });
 
@@ -567,6 +569,13 @@ test.describe("exploring", () => {
     await expect(hints.locator("[data-sync]")).toHaveAttribute("data-sync", "local");
     await expect(tree.getByTestId("space-node-.git")).toContainText("Git data");
     await expect(tree.getByTestId("space-node-.git")).not.toHaveAttribute("aria-expanded", /.*/);
+    // An empty directory of a tracked kind — intents/ before any queued
+    // intent — reads not yet shared, never "Stays here" (space-23).
+    const queues = tree.getByTestId("space-node-intents");
+    await expect(queues).toContainText("project queues");
+    await expect(queues).toContainText("0 entries");
+    await expect(queues).toContainText("Not yet shared");
+    await expect(queues.locator("[data-sync]")).toHaveAttribute("data-sync", "pending");
 
     // The manifest previews as pretty-printed JSON; the records offer
     // Open session; the hints read withheld (space-24).

@@ -478,6 +478,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the last sync, so joining another occupied space meant syncing into
   "Unrelated history" first. The card now stands whenever the remote has
   not been checked, a changed remote included (space-45).
+- Space's Explore tab read an empty `sessions/` or `intents/` as "Stays
+  here", the mark reserved for the families that never sync; a tracked
+  kind with nothing committed yet now reads "Not yet shared" (space-23).
 
 ### Security
 

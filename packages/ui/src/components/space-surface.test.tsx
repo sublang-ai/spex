@@ -210,6 +210,7 @@ const owner = (sessionId: string, title: string) => ({
 const TREE: Record<string, SpaceEntry[]> = {
   "": [
     { name: "sessions", path: "sessions", kind: "dir", family: "session bundles", sync: "shared", count: 4, preview: "none" },
+    { name: "intents", path: "intents", kind: "dir", family: "project queues", sync: "pending", count: 0, preview: "none" },
     { name: "local", path: "local", kind: "dir", family: "local project paths", sync: "local", count: 1, preview: "none" },
     { name: "prefs.json", path: "prefs.json", kind: "file", family: "preferences", sync: "local", size: 512, preview: "text" },
     { name: "projects.json", path: "projects.json", kind: "file", family: "project registry", sync: "shared", size: 4200, preview: "text" },
@@ -1160,6 +1161,13 @@ describe("SPACE: the explorer (space-23, space-24)", () => {
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not a Spex file");
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not yet shared");
     expect(screen.getByTestId("space-node-sessions").textContent).toContain("4 entries");
+    // An empty directory of a tracked kind reads not yet shared, never
+    // "Stays here" (space-23).
+    const queues = screen.getByTestId("space-node-intents");
+    expect(queues.textContent).toContain("project queues");
+    expect(queues.textContent).toContain("0 entries");
+    expect(queues.textContent).toContain("Not yet shared");
+    expect(queues.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("pending");
     const git = screen.getByTestId("space-node-.git");
     expect(git.textContent).toContain("Git data");
     expect(git.getAttribute("aria-expanded")).toBeNull();

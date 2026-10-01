@@ -1048,6 +1048,14 @@ test("space-39: local changes of every kind list in order, incoming units after 
   await home.client.expectOk("space.init", {});
   await home.client.expectOk("space.remote.set", { url: bare });
   assert.equal((await home.client.settle("space.sync", {})).sync.phase, "done");
+  // A directory of a tracked kind holding nothing yet — intents/ before the
+  // first queued intent — is not yet shared, never "Stays here" (space-23).
+  mkdirSync(join(home.dataDir, "intents"), { recursive: true });
+  const vacantQueues = (await home.client.expectOk("space.tree", {})).entries.find((e) => e.path === "intents");
+  assert.equal(vacantQueues?.kind, "dir");
+  assert.equal(vacantQueues?.family, "project queues");
+  assert.equal(vacantQueues?.count, 0);
+  assert.equal(vacantQueues?.sync, "pending");
   const name = basename(home.projectDir);
   // Local changes of every kind.
   const sessionId = await runTurn(home, project.id, "Fix the login redirect");
