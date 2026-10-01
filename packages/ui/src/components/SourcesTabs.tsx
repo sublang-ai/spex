@@ -111,8 +111,9 @@ export function SourcesBand({
   tree?: SpecTreeState;
   /** Open intents by `kind:ref` — the captured-artifact swap. */
   openSources: Map<string, DerivedIntent>;
-  /** When this client observed the served forge data — the line's
-   * data age (dashboard-14). */
+  /** When the served forge lists were fetched — the core's moment,
+   * the line's data age (dashboard-14); the client's read only where
+   * the core sends none. */
   fetchedAt?: number;
   now: number;
   onRefresh: () => void;

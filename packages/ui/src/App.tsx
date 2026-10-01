@@ -1089,6 +1089,9 @@ export function App() {
   const [landing, setLanding] = useState<{ on: "surface" | "rail" }>();
   useEffect(() => {
     if (!landing) return;
+    // The open palette is modal and keeps focus (run-view-42); the
+    // landing waits for it to close.
+    if (paletteOpen) return;
     setLanding(undefined);
     if (landing.on === "rail") {
       const toggle = document.querySelector<HTMLElement>(
@@ -1106,7 +1109,7 @@ export function App() {
     );
     composer?.focus();
     if (document.activeElement !== composer) main.focus();
-  }, [landing]);
+  }, [landing, paletteOpen]);
 
   // Application shortcuts (DR-010 §6, DR-011), renderer-side so the
   // UI runs unmodified in a browser (SHELL-10).

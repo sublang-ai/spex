@@ -1637,8 +1637,9 @@ function UpNextBand({
 export interface ProjectGroupProps {
   project: ProjectInfo;
   now: number;
-  /** When this client observed the served forge data — the Sources
-   * line's data age (dashboard-14). */
+  /** When the served forge lists were fetched — the core's moment,
+   * the Sources line's data age (dashboard-14); the client's read
+   * only where the core sends none. */
   fetchedAt?: number;
   /** The just-captured row to reveal (dashboard-31). */
   highlightId?: string;

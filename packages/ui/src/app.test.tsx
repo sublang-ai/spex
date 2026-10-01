@@ -547,6 +547,27 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
   });
 
+  test("a surface shortcut leaves focus in the open palette", () => {
+    render(<App />);
+    const main = screen.getByRole("main");
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    const palette = screen.getByRole("dialog", { name: "Choose a project" });
+    expect(palette.contains(document.activeElement)).toBe(true);
+    // The surface still switches, but the modal palette keeps focus
+    // (run-view-42).
+    fireEvent.keyDown(window, { key: "1", metaKey: true });
+    expect(main.getAttribute("aria-label")).toBe("Dashboard");
+    expect(screen.getByRole("dialog", { name: "Choose a project" })).toBe(
+      palette,
+    );
+    expect(palette.contains(document.activeElement)).toBe(true);
+    // Closing it lands focus in the surface the shortcut opened, never
+    // on the body (run-view-50).
+    fireEvent.keyDown(screen.getByTestId("palette-search"), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Choose a project" })).toBeNull();
+    expect(main.contains(document.activeElement)).toBe(true);
+  });
+
   test("a broken config keeps its red voice while collapsed", () => {
     useAppStore.setState({
       configState: { status: "invalid", errors: ["captain: missing"] } as never,
