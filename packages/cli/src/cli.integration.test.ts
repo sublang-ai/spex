@@ -1154,7 +1154,7 @@ describe("CLI integration", () => {
       run(["scaffold"], { cwd: dir });
       writeFileSync(
         join(dir, "CLAUDE.md"),
-        "# Project\n\n## Specs (Source of Truth)\n\nStale section.\n\n## Other\n\nKept.\n",
+        "# Project\n\n## Specs (Source of Truth)\n\nStale section.\n- Run `spex lint` after editing specs.\n\n## Other\n\nKept.\n",
       );
       rmSync(join(dir, "AGENTS.md"));
       rmSync(join(dir, "GEMINI.md"));
@@ -1165,6 +1165,9 @@ describe("CLI integration", () => {
       const claude = readFileSync(join(dir, "CLAUDE.md"), "utf-8");
       assert.ok(claude.includes("@specs/packages"));
       assert.ok(!claude.includes("Stale section."));
+      // scaffold-56/scaffold-57: the bare `spex lint` form gives way to npx.
+      assert.ok(claude.includes("`npx @sublang/spex lint`"));
+      assert.ok(!claude.includes("Run `spex lint` after editing specs."));
       assert.ok(claude.includes("## Other"));
       assert.equal(
         existsSync(join(dir, "AGENTS.md")),

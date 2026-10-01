@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The managed agent-instruction section told coding agents to run
+  `spex lint`, which fails wherever no `spex` command is on PATH — a
+  project created from the Spex app, for one. It now names
+  `npx @sublang/spex lint`, with `spex lint` as the alternative where
+  the CLI is installed; an existing project picks the sentence up on
+  `spex scaffold --update`.
 - `spex scaffold` pinned no copyright holder for the project: every
   seeded file carried SubLang's upstream SPDX line and nothing named
   the project's own, so an agent adding a file copied the template's.
