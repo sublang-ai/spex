@@ -70,14 +70,22 @@ test.describe("runtime binding options", () => {
     await effort.selectOption("high");
     await expect(editor.getByTestId("binding-save")).toBeDisabled();
     await editor.getByTestId("binding-fast-mode").selectOption("off");
-    // The role's own subagent model (DR-093): the player sets none, so
-    // inheriting it reads as the provider's words.
-    await expect(editor.getByTestId("binding-subagent-model-mode").locator("option").first()).toHaveText("inherit the player (Provider default)");
+    // The role's own subagent model and subagent effort (DR-093,
+    // DR-095): the player sets neither, so inheriting them reads as
+    // "Same as agent" and "Agent chooses", and the pinned effort is one
+    // of the adapter's without its orchestration value.
+    await expect(editor.getByTestId("binding-subagent-model-mode").locator("option").first()).toHaveText("inherit the player (Same as agent)");
     await editor.getByTestId("binding-subagent-model-mode").selectOption("pin");
     await editor.getByTestId("binding-subagent-model-value").fill("claude-haiku-5");
+    await expect(editor.getByTestId("binding-subagent-effort-mode").locator("option").first()).toHaveText("inherit the player (Agent chooses)");
+    await editor.getByTestId("binding-subagent-effort-mode").selectOption("pin");
+    const subagentEffort = editor.getByTestId("binding-subagent-effort-value");
+    await expect.poll(() => subagentEffort.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value)))
+      .toEqual(["", "minimal", "low", "medium", "high", "xhigh", "max"]);
+    await subagentEffort.selectOption("low");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "claude-fable-5-1", subagentModel: "claude-haiku-5", effort: "high", fastMode: false });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "claude-fable-5-1", subagentModel: "claude-haiku-5", subagentEffort: "low", effort: "high", fastMode: false });
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
@@ -87,13 +95,15 @@ test.describe("runtime binding options", () => {
     await effort.selectOption("ultracode");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
-    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", subagentModel: "claude-haiku-5", effort: "ultracode", fastMode: false });
+    await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", subagentModel: "claude-haiku-5", subagentEffort: "low", effort: "ultracode", fastMode: false });
 
     await edit.click();
     await expect(editor.getByTestId("binding-fast-mode")).toHaveValue("off");
     await editor.getByTestId("binding-fast-mode").selectOption("inherit");
     await expect(editor.getByTestId("binding-subagent-model-mode")).toHaveValue("pin");
     await editor.getByTestId("binding-subagent-model-mode").selectOption("inherit");
+    await expect(editor.getByTestId("binding-subagent-effort-mode")).toHaveValue("pin");
+    await editor.getByTestId("binding-subagent-effort-mode").selectOption("inherit");
     await editor.getByTestId("binding-save").click();
     await expect(editor).toBeHidden();
     await expect.poll(readRole).toEqual({ player: "dev.coder", model: "opus", effort: "ultracode" });

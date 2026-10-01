@@ -1129,6 +1129,14 @@ test.describe("chrome the sweep does not open", () => {
         }).toPass({ timeout: 2_000 }).catch((cause: unknown) => {
           defects.push(`${where}: ${cause instanceof Error ? cause.message : String(cause)}`);
         });
+        // The model beside its effort, stacked at the floor (run-view-138).
+        const model = (await panel.getByTestId("agent-dev.reviewer-model-mode").boundingBox())!;
+        const effort = (await panel.getByTestId("agent-dev.reviewer-effort-mode").boundingBox())!;
+        const sideBySide = Math.abs(model.y - effort.y) <= 1 && effort.x >= model.x + model.width - 1;
+        const stacked = effort.y >= model.y + model.height - 1;
+        if (width === 320 ? !stacked : !sideBySide) {
+          defects.push(`${where}: the model and its effort are not ${width === 320 ? "stacked" : "side by side"}`);
+        }
         await page.keyboard.press("Escape");
         await expect(panel).toHaveCount(0);
       }
