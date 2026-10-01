@@ -461,6 +461,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `playbook` CLI ran it at the player's. Such a role now takes its
   player's fast mode, as the CLI does ([DR-032](specs/decisions/032-session-players.md),
   core-service-16).
+- An item's Edit put the caret on the item's heading but scrolled the
+  editor by logical lines, so in a file whose long lines wrap the
+  heading landed below the visible box — `run-view.md` opened on
+  run-view-147 for run-view-4. The landing now measures the heading's
+  rendered position, wraps counted (spec-view-48).
 
 ### Security
 

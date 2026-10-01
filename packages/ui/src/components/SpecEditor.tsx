@@ -57,6 +57,28 @@ const TOGGLE_CLASS = (on: boolean) =>
       : "border-neutral-300 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
   }`;
 
+/** Where the character at `offset` renders, measured from the field's
+ * scroll origin with soft wraps counted: the field briefly holds only
+ * the text before it, with its box collapsed so the box's own height
+ * never floors the reading. Counting logical lines would land a
+ * wrapped file's item below the visible box. */
+function renderedTop(field: HTMLTextAreaElement, offset: number): number {
+  const { value, scrollTop, selectionStart, selectionEnd } = field;
+  const { height, overflow } = field.style;
+  const paddingBottom =
+    parseFloat(getComputedStyle(field).paddingBottom) || 0;
+  field.value = value.slice(0, Math.max(0, offset - 1));
+  field.style.height = "0";
+  field.style.overflow = "hidden";
+  const top = offset === 0 ? 0 : field.scrollHeight - paddingBottom;
+  field.style.height = height;
+  field.style.overflow = overflow;
+  field.value = value;
+  field.setSelectionRange(selectionStart, selectionEnd);
+  field.scrollTop = scrollTop;
+  return top;
+}
+
 export function SpecEditor({
   state,
   onState,
@@ -93,7 +115,7 @@ export function SpecEditor({
       .reduce((sum, text) => sum + text.length + 1, 0);
     field.setSelectionRange(offset, offset);
     const lineHeight = parseFloat(getComputedStyle(field).lineHeight) || 20;
-    field.scrollTop = Math.max(0, line - 2) * lineHeight;
+    field.scrollTop = Math.max(0, renderedTop(field, offset) - 2 * lineHeight);
     onState({ ...stateRef.current, caretLine: undefined });
     // The landing belongs to the field's mount, not to every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

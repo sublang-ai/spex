@@ -97,24 +97,50 @@ test("spec-view-54: a record edits through the page, and an item's Edit lands on
   );
 
   // From an expanded item: the package file opens with the caret on
-  // the item's heading line, and a clean Cancel closes at once.
-  await page.getByTestId(/^file-toggle-/).first().click();
-  await page.getByTestId(/^item-toggle-/).first().click();
-  const itemEdit = page.getByTestId(/^item-edit-/).first();
-  const itemId = (await itemEdit.getAttribute("data-testid"))?.replace(
-    "item-edit-",
-    "",
-  );
-  expect(itemId).toBeTruthy();
+  // the item's heading line, scrolled into view, and a clean Cancel
+  // closes at once. The last item of the demo's longest package sits
+  // below many soft-wrapped lines, so a landing that counted logical
+  // lines would leave it out of the box.
+  await page.getByTestId("file-toggle-platform-services").click();
+  await page.getByTestId("item-toggle-platform-services-9").click();
+  const itemId = "platform-services-9";
+  const itemEdit = page.getByTestId(`item-edit-${itemId}`);
   await itemEdit.click();
   const packageField = page.getByRole("textbox", { name: /^Edit packages\// });
   await expect(packageField).toBeFocused();
-  const caretLine = await packageField.evaluate((element) => {
+  const landing = await packageField.evaluate((element) => {
     const area = element as HTMLTextAreaElement;
-    return area.value.slice(0, area.selectionStart).split("\n").length - 1;
+    const { value, selectionStart, scrollTop, clientHeight } = area;
+    const style = getComputedStyle(area);
+    const lineHeight = parseFloat(style.lineHeight);
+    const paddingBottom = parseFloat(style.paddingBottom) || 0;
+    // The heading's rendered offset from the scroll origin, soft wraps
+    // counted: the field briefly holds only the text before it with
+    // its box collapsed.
+    const { height, overflow } = area.style;
+    area.value = value.slice(0, Math.max(0, selectionStart - 1));
+    area.style.height = "0";
+    area.style.overflow = "hidden";
+    const top = selectionStart === 0 ? 0 : area.scrollHeight - paddingBottom;
+    area.style.height = height;
+    area.style.overflow = overflow;
+    area.value = value;
+    area.setSelectionRange(selectionStart, selectionStart);
+    area.scrollTop = scrollTop;
+    return {
+      caretLine: value.slice(0, selectionStart).split("\n").length - 1,
+      top,
+      bottom: top + lineHeight,
+      scrollTop,
+      viewBottom: scrollTop + clientHeight,
+    };
   });
   const lines = (await packageField.inputValue()).split("\n");
-  expect(lines[caretLine]).toMatch(new RegExp(`^#{3,4}\\s+${itemId}\\s*$`, "i"));
+  expect(lines[landing.caretLine]).toMatch(
+    new RegExp(`^#{3,4}\\s+${itemId}\\s*$`, "i"),
+  );
+  expect(landing.top).toBeGreaterThanOrEqual(landing.scrollTop);
+  expect(landing.bottom).toBeLessThanOrEqual(landing.viewBottom);
   await page.getByTestId("editor-cancel").click();
   await expect(page.getByTestId("spec-editor")).toHaveCount(0);
   await expect(page.getByTestId(/^item-edit-/).first()).toBeVisible();
