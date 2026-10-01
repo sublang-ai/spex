@@ -83,7 +83,7 @@ Relationship-metadata lines like `Verifies:` are errors — the citations woven 
 Directories of previous spec generations (`specs/compositions/`, `specs/user/`, …) are errors pointing to `spex scaffold --update` for the migration prompt (see [Upgrading](#upgrading-from-an-earlier-release)).
 Errors exit non-zero; warnings do not.
 
-**Try it:** review the sample intent record `specs/intents/000-spdx-headers.md`, update the copyright text, then prompt your AI coding agent:
+**Try it:** review the sample intent record `specs/intents/000-spdx-headers.md` and the header format the scaffold pinned in `licensing-9` of `specs/packages/licensing.md`, replacing any `<license>` or `<holder>` placeholder it left, then prompt your AI coding agent:
 
 ```text
 Complete IR-000
@@ -118,7 +118,7 @@ spex scaffold --update
 It runs from within a git repository and requires a clean `specs/` working tree, so every edit stays reviewable.
 
 - Spex-authoritative *framework* files (`specs/meta.md` and the spec-format decision record) are refreshed unconditionally, including when they are absent. If you had modified one of these, `--update` warns and names it so you can reapply your changes from git history.
-- Starter *seed* files (`map.md`, the sample intent record, the starter packages) are refreshed when you have not customized them, and written from the bundled template when they are absent. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
+- Starter *seed* files (`map.md`, the sample intent record, the starter packages) are refreshed when you have not customized them, and written from the bundled template when they are absent. `licensing.md`, whose `licensing-9` the scaffold pins to your project, counts as customized and is kept. Customized starter files are kept as-is. Remove a starter file *after* `--update` if you do not want it.
 - Agent instruction files are reconciled with the confirmed or explicit
   selection; a non-interactive run infers existing managed targets and
   defaults to all targets when none exist.
