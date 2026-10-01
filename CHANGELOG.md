@@ -493,6 +493,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `spex lint`, a command the desktop install puts on no PATH, so a
   coder's lint check failed with "command not found". The scaffolded
   instruction now runs the linter through `npx @sublang/spex lint`.
+- A project created from the palette pinned no copyright holder of its
+  own: every scaffolded file carried SubLang's upstream SPDX line, so
+  an agent adding the project's first spec copied it. The scaffold now
+  writes `licensing-9` into the project's `specs/packages/licensing.md`
+  with the project's own header — the creator's `git config user.name`
+  and email as the holder, the current year, and `Apache-2.0` for the
+  LICENSE it emits — while the template files keep their upstream
+  lines. With no git identity it leaves a `<holder>` placeholder and
+  says so, never SubLang's name (projects-3, scaffold-58). The palette
+  picks this up with the next `@sublang/spex` release it runs.
 
 ### Security
 

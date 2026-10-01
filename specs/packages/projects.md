@@ -33,7 +33,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
-3. generate the spex specs scaffold in it when the scaffold option is on, and generate no scaffold when it is off,
+3. generate the spex specs scaffold in it when the scaffold option is on — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, and
 5. register the project and make it the workspace's current project.
 
@@ -189,7 +189,8 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 
 Where a temporary parent directory exists, when the create-project flow completes, the test suite shall assert the scaffold option's cases below:
 
-- Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
+- Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold whose `specs/packages/licensing.md` names the repository's configured git identity as the copyright holder in `licensing-9`, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
+- Scaffold option on without a git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder [[projects-3](#projects-3)].
 - Scaffold option off: the directory, git repository, initial commit, and project card still result while no specs scaffold is generated [[projects-3](#projects-3)].
 
 ### Forge Coverage

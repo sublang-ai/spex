@@ -41,6 +41,21 @@ Where the `scaffold` subcommand is invoked without `--update`, the CLI shall emi
 - while a `LICENSE` file already exists at the target root, it leaves the file unmodified and reports it with an `(already exists)` indicator, so an existing downstream license is never overwritten;
 - it writes no `NOTICE` file, per-file license headers, or README license section, since the downstream project is unknown.
 
+### Header Format
+
+#### scaffold-58
+
+Where the `scaffold` subcommand is invoked without `--update`, when it writes `specs/packages/licensing.md`, the CLI shall pin the project's own header format into that file's `licensing-9` item by resolving the seed's placeholders, so that a file the project adds carries the project's copyright rather than one copied from a template file:
+
+| Placeholder | Resolved to | When unresolved |
+| --- | --- | --- |
+| `<year>` | the current year | — |
+| `<holder>` | `git config user.name`, followed by ` <user.email>` when an email is configured | kept, with a stderr warning naming the placeholder, the file and the value to set |
+| `<license>` | `Apache-2.0` when the root `LICENSE` is the bundled text, written by this run or already there [[scaffold-36](#scaffold-36)] | kept, with the same warning |
+
+- A placeholder never resolves to the template's own holder, and the bundled files keep their upstream SPDX lines.
+- An existing `specs/packages/licensing.md` is left as it is [[scaffold-4](#scaffold-4)]; a pinned seed no longer matches a bundled version, so `--update` keeps it as user-modified [[scaffold-11](#scaffold-11)].
+
 ### Update
 
 #### scaffold-11
@@ -196,7 +211,16 @@ Where `copyRootLicense(basePath)` is called, it shall copy the bundled `scaffold
 - when no file exists at `<basePath>/LICENSE`, it writes the bundled `LICENSE` and reports the `LICENSE` path;
 - when a file exists at `<basePath>/LICENSE`, it leaves it unmodified and reports an `(already exists)` indicator;
 - the bundled `scaffold/LICENSE` holds the full, verbatim Apache License 2.0 text from its authoritative source [[1]];
-- `copyRootLicense()` is invoked only on the initial (non-`--update`) scaffold flow; it does not localize the file, and the bundled root `LICENSE` participates in neither `--update` refresh nor the file-history manifest ([[scaffold-21](#scaffold-21)]).
+- `copyRootLicense()` is invoked only on the initial (non-`--update`) scaffold flow; it does not localize the file, and the bundled root `LICENSE` participates in neither `--update` refresh nor the file-history manifest ([[scaffold-21](#scaffold-21)]);
+- it returns whether `<basePath>/LICENSE` now holds the bundled text, by the canonical content hash ([[scaffold-21](#scaffold-21)]), for the header format pinned by [[scaffold-59](#scaffold-59)].
+
+#### scaffold-59
+
+Where `pinHeaderFormat(basePath, { apacheLicense })` is called after the templates are copied, it shall rewrite `<basePath>/specs/packages/licensing.md` with every `<year>`, `<license>` and `<holder>` placeholder replaced as [[scaffold-58](#scaffold-58)] resolves them and return the placeholders left unresolved:
+
+- the holder reads `git config user.name` and `user.email` in `basePath`, so a repository-local identity wins over a global one, and a failing or absent `git` leaves the holder unresolved;
+- `apacheLicense` false leaves `<license>` unresolved;
+- the create flow calls it only when `specs/packages/licensing.md` did not exist before the run, and prints one stderr warning per unresolved placeholder.
 
 #### scaffold-13
 
@@ -368,6 +392,16 @@ Where `--update` replaces a framework file, the test suite shall run the real CL
 Where the `scaffold` subcommand creates a project, the test suite shall assert that a top-level `LICENSE` file is written whose bytes equal the bundled `scaffold/LICENSE` ([[scaffold-36](#scaffold-36)]), that its canonical content hash equals the authoritative Apache License 2.0 hash ([[scaffold-37](#scaffold-37)]), and that no `NOTICE` file is written:
 
 - Where a `LICENSE` file already exists at the target root, the suite asserts that `scaffold` leaves its bytes unchanged and reports it with an `(already exists)` indicator ([[scaffold-36](#scaffold-36)]).
+
+### Header Format Coverage
+
+#### scaffold-60
+
+Where the `scaffold` subcommand creates a project, the test suite shall run the real CLI and assert the pinned header format ([[scaffold-58](#scaffold-58)]) in the written `specs/packages/licensing.md`:
+
+- given a repository with `user.name` and `user.email` configured, `licensing-9` carries the current year, `<name> <<email>>` as the holder and `Apache-2.0` in both the Markdown and the `//` header, with no placeholder and no template holder, while every bundled file keeps its upstream SPDX line, and the tree lints clean;
+- given no repository and no global or system git identity, `licensing-9` keeps `<holder>`, the run exits zero and warns on stderr naming `user.name`, the placeholder and the file, and the tree lints clean;
+- given a root `LICENSE` that is not the bundled text, `licensing-9` keeps `<license>` and warns ([[scaffold-37](#scaffold-37)]) while the holder is still pinned.
 
 ### Localization Coverage
 

@@ -26,6 +26,11 @@ import {
   type ScaffoldLanguage,
 } from "./copy-templates.js";
 import { createSpecsStructure } from "./create-specs-structure.js";
+import {
+  LICENSING_SEED_PATH,
+  pinHeaderFormat,
+  warnUnresolvedHeaderFormat,
+} from "./pin-header-format.js";
 import { resolveBase } from "./resolve-base.js";
 
 type ScaffoldOptions =
@@ -425,9 +430,17 @@ export function scaffold(args: string[] = []): void {
 
     assertNoLegacyLayout(basePath);
     const agentTargets = resolveAgentTargets(basePath, options.agents);
+    // SCAF-56: only a licensing seed this run writes gets the project's
+    // header format pinned; an existing one is the project's own.
+    const licensingSeedExisted = existsSync(join(basePath, LICENSING_SEED_PATH));
     createSpecsStructure(basePath);
     copyTemplates(basePath, language);
-    copyRootLicense(basePath);
+    const apacheLicense = copyRootLicense(basePath);
+    if (!licensingSeedExisted) {
+      warnUnresolvedHeaderFormat(
+        pinHeaderFormat(basePath, { apacheLicense }).unresolved,
+      );
+    }
     reconcileAgentSpecs(basePath, agentTargets);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
