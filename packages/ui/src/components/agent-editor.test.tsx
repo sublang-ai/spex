@@ -600,6 +600,30 @@ describe("DR-095: Same as agent, Agent chooses, and Off only while it stands", (
     expect(pinned.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentEffort: null }));
   });
 
+  test("Same as Captain copying a false reads Off, saves false, and Same as agent clears it [settings-1]", () => {
+    const captain: ChipAgent = { adapter: "claude", subagentModel: false };
+    const copied = renderEditor({ adapter: "claude" }, { captain });
+    expect(subagent().placeholder).toBe("Same as agent");
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    // The copy holds the Captain's Off, and the field says so.
+    expect(subagent().value).toBe("");
+    expect(subagent().placeholder).toBe("Off");
+    fireEvent.click(copied.save());
+    expect(copied.onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ subagentModel: false }));
+    cleanup();
+
+    // A model typed over the copied Off replaces it, and blanking it
+    // again reads "Same as agent", the Off no longer standing.
+    const replaced = renderEditor({ adapter: "claude" }, { captain });
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    fireEvent.change(subagent(), { target: { value: "claude-haiku-5" } });
+    fireEvent.change(subagent(), { target: { value: "" } });
+    expect(subagent().placeholder).toBe("Same as agent");
+    fireEvent.change(replaced.model(), { target: { value: "claude-opus-5" } });
+    fireEvent.click(replaced.save());
+    expect(replaced.onSave.mock.calls[0][0]).not.toHaveProperty("subagentModel");
+  });
+
   test("a configured false reads Off while it stands and a model replaces it [settings-1]", () => {
     const editor = renderEditor({ adapter: "claude", subagentModel: false });
     expect(subagent().placeholder).toBe("Off");

@@ -314,7 +314,8 @@ export function AgentEditor(props: AgentEditorProps) {
                 <span id={subagentLabelId} className="text-xs text-neutral-500">{i18n._({ id: "Subagent model", comment: "the field choosing the model an agent's subagents run on" })}</span>
                 {/* The same list as the model, under "Same as agent" —
                     the agent's own model, so no default model beside it —
-                    and "Off" only while a configured `false` stands. */}
+                    and "Off" only while a `false` stands, in the block or
+                    in the draft, as a copied Captain's may. */}
                 <ModelField
                   key={adapter}
                   value={subagentModel === false ? "" : subagentModel}
@@ -323,7 +324,7 @@ export function AgentEditor(props: AgentEditorProps) {
                   labelId={subagentLabelId}
                   testId="agent-subagent-model"
                   subagent="empty"
-                  {...(initial?.subagentModel === false
+                  {...(initial?.subagentModel === false || subagentModel === false
                     ? { off: { selected: subagentModel === false, onSelect: () => setSubagentModel(false) } }
                     : {})}
                 />
