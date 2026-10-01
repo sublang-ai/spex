@@ -503,6 +503,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   lines. With no git identity it leaves a `<holder>` placeholder and
   says so, never SubLang's name (projects-3, scaffold-58). The palette
   picks this up with the next `@sublang/spex` release it runs.
+- A machine that once ran the SQLite-era app imported its former store
+  into every new Spex home — a second home, the smoke's scratch home, a
+  reinstall into a fresh one — since the import's only record was the
+  home's own. A store a home has imported is now marked beside itself
+  (`spex.db.imported`, `server.db.imported`), no later home reads a
+  marked store, and a home that took the store before this fix marks it
+  at its next start (core-service-64).
 
 ### Security
 

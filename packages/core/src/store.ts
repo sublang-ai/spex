@@ -92,7 +92,8 @@ export interface StoreOptions {
   dir?: string;
   /** Sessions directory; defaults to `<dir>/sessions`. */
   sessionsDir?: string;
-  /** A legacy SQLite store to import once (CORE-64). */
+  /** A legacy SQLite store to import once (CORE-64): skipped when the
+   * `<store>.imported` marker beside it says a root already did. */
   legacyDbPath?: string;
 }
 
@@ -279,6 +280,13 @@ function writeAtomic(file: string, text: string): void {
 function readJson<T>(file: string): T | undefined {
   if (!existsSync(file)) return undefined;
   return JSON.parse(readFileSync(file, "utf8")) as T;
+}
+
+/** The marker written beside a legacy store once a root imported it
+ * (CORE-64): the one record a brand-new root can read, since its own
+ * `meta.json` starts empty. */
+function legacyImportMarker(legacyDbPath: string): string {
+  return `${legacyDbPath}.imported`;
 }
 
 /**
@@ -923,13 +931,23 @@ export class Store {
 
   private importLegacy(legacyDbPath: string | undefined): void {
     if (!legacyDbPath || !existsSync(legacyDbPath)) return;
-    if (this.meta.importedLegacy?.includes(legacyDbPath)) return;
+    if (this.meta.importedLegacy?.includes(legacyDbPath)) {
+      // This root imported it before the file carried a mark: stamp
+      // it now, so a root created later on this machine skips it.
+      this.markLegacyImported(legacyDbPath);
+      return;
+    }
+    // The file's own mark is what a brand-new root reads: another root
+    // on this machine already took these rows, and the old app that
+    // wrote them never runs again.
+    if (existsSync(legacyImportMarker(legacyDbPath))) return;
     try {
       this.runLegacyImport(legacyDbPath);
       this.meta.importedLegacy = [
         ...(this.meta.importedLegacy ?? []),
         legacyDbPath,
       ];
+      this.markLegacyImported(legacyDbPath);
     } catch (error) {
       // An unreadable legacy store must not brick every startup: the
       // import stays unmarked (a repaired file imports on a later
@@ -940,6 +958,23 @@ export class Store {
       console.error(
         `spex: legacy store ${legacyDbPath} could not be imported (${message}); ` +
           "continuing without it",
+      );
+    }
+  }
+
+  /** Marks the legacy file imported beside itself. A mark that cannot
+   * be written (a read-only directory) is reported and leaves this
+   * root's own record standing, so this root never re-imports. */
+  private markLegacyImported(legacyDbPath: string): void {
+    const marker = legacyImportMarker(legacyDbPath);
+    if (existsSync(marker)) return;
+    try {
+      writeAtomic(marker, `${JSON.stringify({ v: 1, importedAt: Date.now(), root: this.dir })}\n`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `spex: legacy store ${legacyDbPath} was imported but could not be marked (${message}); ` +
+          "a state root created later will import it again",
       );
     }
   }
