@@ -311,7 +311,7 @@ The core package shall list `specs/decisions/*.md` as decision records and the u
 - a legacy file whose basename reappears under `intents/` is omitted, and both the shadowing and the directory coexistence are reported as tree notices;
 - differently named files sharing a leading number all list, with each duplicated record ID a tree notice;
 - each record carries an ID formed from the record kind and the filename's leading number [[meta-22](../meta.md#meta-22)] (e.g. `DR-011`), a title taken from the file's first `#` heading minus any leading `DR-nnn:`/`IR-nnn:` prefix, and a path relative to `specs/`;
-- each record additionally carries the first non-empty line of its `## Status` section, verbatim, as its status — absent when the file has no `## Status` section — together with the classification the core derives from the line's first word of letters, case-insensitively, and the file's last-change time ([DR-038](../decisions/038-history-is-done-work.md)):
+- each record additionally carries the first non-empty line of its `## Status` section, verbatim, as its status — absent when the file has no `## Status` section — together with the classification the core derives from the line's first word of letters, case-insensitively, and its last-change time — the last commit touching the file where Git tracks it, else the file's modification time ([DR-038](../decisions/038-history-is-done-work.md)):
 
 | Leading word | Classification |
 | --- | --- |
@@ -420,6 +420,15 @@ Where a file carries a multi-line first paragraph under `## Intent` followed by 
 #### spec-view-34
 
 Where fixture decision and intent files carry prefixed and unprefixed `#` headings, plus one `## Status` section whose first non-empty line starts with "done", one whose line does not, and one file with no Status section, the test suite shall assert record IDs formed from filename numbers, titles with any `DR-nnn:`/`IR-nnn:` prefix stripped, `specs/`-relative paths, and filename ordering [[spec-view-14](#spec-view-14)], and that each record's status is its Status section's first non-empty line verbatim — absent for the file without one — with only the "done"-led line marking its record finished [[spec-view-14](#spec-view-14)].
+
+#### spec-view-63
+
+Where a fixture project is a Git work tree holding a dated and an undated intent record committed more than a day ago, every file's modification time then set to the present, beside one untracked undated record, the test suite shall assert the last change of [[spec-view-14](#spec-view-14)] case by case:
+
+- each committed record reads its commit's time, the dated status line kept verbatim;
+- the untracked record reads its file's modification time;
+- outside any work tree every record reads its file's modification time;
+- `specs.get` serves a committed record's last change as its commit's time.
 
 ### Degradation Coverage
 

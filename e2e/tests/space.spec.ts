@@ -14,7 +14,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
@@ -80,6 +80,14 @@ async function watch(page: Page, selector: string): Promise<() => Promise<string
       (sel) => (window as unknown as { __seen: Record<string, string[]> }).__seen[sel],
       selector,
     );
+}
+
+/** Change the remote in the header's row and save it (space-5). */
+async function changeRemote(page: Page, url: string): Promise<void> {
+  await page.getByTestId("space-remote-edit").click();
+  await page.getByTestId("space-remote-input").fill(url);
+  await page.getByTestId("space-remote-editor").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("space-remote-editor")).toHaveCount(0);
 }
 
 /** Open the Space surface from the sidebar. */
@@ -171,12 +179,36 @@ test.describe("first-time setup", () => {
     await expect(header.getByTestId("space-last-sync")).toHaveAttribute("title", /\d/);
     expect(git(app.remotePath!, "rev-parse", "main")).toBe(git(app.dataDir, "rev-parse", "main"));
 
+    // The setup's sync checked the remote, so no Join card stands. A
+    // changed remote clears that check: the card is back — on this
+    // synced home as on a fresh one — until Check remote runs, and the
+    // remote restored brings it back until the next sync ends
+    // (space-45, space-5).
+    const meeting = page.getByTestId("space-first-meeting");
+    await expect(meeting).toHaveCount(0);
+    const other = join(dirname(app.remotePath!), "other.git");
+    git(dirname(app.remotePath!), "init", "-q", "--bare", "-b", "main", other);
+    await changeRemote(page, other);
+    await expect(header.getByTestId("space-remote-url")).toHaveText(other);
+    await expect(page.getByTestId("space-sync-tab")).toContainText("Not checked yet");
+    await expect(meeting).toContainText("This space has not met that remote yet.");
+    await expect(meeting.getByTestId("space-first-join")).toBeEnabled();
+    await expect(header.getByTestId("space-primary")).toHaveText("Sync");
+    await page.getByTestId("space-check").click();
+    await expect(page.getByTestId("space-sync-tab")).toContainText("The remote is empty; Sync will send this space");
+    await expect(meeting).toHaveCount(0);
+    await changeRemote(page, app.remotePath!);
+    await expect(header.getByTestId("space-remote-url")).toHaveText(app.remotePath!);
+    await expect(meeting).toBeVisible();
+
     // Nothing moved on the second sync: the line ends "Everything is
-    // in sync" with the sync time in the header (space-12).
+    // in sync" with the sync time in the header (space-12), and the
+    // sync's own check takes the Join card away (space-45).
     await header.getByTestId("space-primary").click();
     await expect(page.getByTestId("space-primary")).toHaveText("Syncing…");
     await expect(done).toHaveText("Everything is in sync");
     await expect(header.getByTestId("space-last-sync")).toHaveText(/^Synced just now$/);
+    await expect(meeting).toHaveCount(0);
 
     // A session run from the Captain home lists under local changes
     // by its title and project; Open session opens its tab; Sync
@@ -503,6 +535,8 @@ test.describe("exploring", () => {
     const session = await app.core.command("session.create", { projectId: app.projectId! });
     await runTurn(app, session.id, SESSION_TITLE);
     writeFileSync(join(app.dataDir, "sessions", `${session.id}.hints.json`), "{}\n");
+    // intents/ with nothing queued yet: a tracked kind, nothing committed.
+    mkdirSync(join(app.dataDir, "intents"), { recursive: true });
     await app.core.command("space.init", {});
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: app.origin });
 
@@ -535,6 +569,13 @@ test.describe("exploring", () => {
     await expect(hints.locator("[data-sync]")).toHaveAttribute("data-sync", "local");
     await expect(tree.getByTestId("space-node-.git")).toContainText("Git data");
     await expect(tree.getByTestId("space-node-.git")).not.toHaveAttribute("aria-expanded", /.*/);
+    // An empty directory of a tracked kind — intents/ before any queued
+    // intent — reads not yet shared, never "Stays here" (space-23).
+    const queues = tree.getByTestId("space-node-intents");
+    await expect(queues).toContainText("project queues");
+    await expect(queues).toContainText("0 entries");
+    await expect(queues).toContainText("Not yet shared");
+    await expect(queues.locator("[data-sync]")).toHaveAttribute("data-sync", "pending");
 
     // The manifest previews as pretty-printed JSON; the records offer
     // Open session; the hints read withheld (space-24).

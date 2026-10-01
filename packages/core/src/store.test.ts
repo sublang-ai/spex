@@ -427,6 +427,62 @@ test("core-service-64: a legacy SQLite store imports once, rows served from file
   assert.equal(third.getPref("viewed:71000000-0000-4000-8000-000000000001"), 4);
   assert.ok(existsSync(legacyDbPath));
   third.close();
+
+  // The file carries its mark, so a state root created later on this
+  // machine — a second home, a reinstall into a fresh one — imports
+  // nothing from it, and the file itself stays untouched.
+  const marker = `${legacyDbPath}.imported`;
+  assert.ok(existsSync(marker));
+  assert.equal(JSON.parse(readFileSync(marker, "utf8")).root, root);
+  const fresh = new Store({ dir: join(dir, "fresh-state"), legacyDbPath });
+  await fresh.initializeSessions();
+  assert.deepEqual(fresh.listSessions(), []);
+  assert.deepEqual(fresh.listProjects(), []);
+  assert.equal(fresh.getIntent("71000000-0000-4000-8000-000000000002"), undefined);
+  fresh.close();
+  assert.deepEqual(readFileSync(legacyDbPath), legacyBytes);
+  assert.ok(existsSync(marker));
+
+  // A root that took the store before the file carried a mark stamps
+  // it at its next start, importing nothing again.
+  rmSync(marker);
+  const stamping = new Store({ dir: root, legacyDbPath });
+  assert.equal(stamping.getPref("viewed:71000000-0000-4000-8000-000000000001"), 4);
+  stamping.close();
+  assert.ok(existsSync(marker));
+});
+
+test("a legacy store whose directory refuses the mark still imports once per root", () => {
+  // Root ignores directory modes, so the refusal cannot be staged.
+  if (process.getuid?.() === 0) return;
+  const dir = scratchDir("spex-nomark-");
+  const legacyDir = join(dir, "legacy");
+  mkdirSync(legacyDir, { recursive: true });
+  const legacyDbPath = join(legacyDir, "spex.db");
+  const db = new Database(legacyDbPath);
+  db.exec(`
+    CREATE TABLE projects (
+      id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      registered_at INTEGER NOT NULL
+    );
+    INSERT INTO projects VALUES ('71000000-0000-4000-8000-000000000007', '${join(tmpdir(), "spex-nomark-project").replaceAll("'", "''")}', 'p', 1);
+  `);
+  db.close();
+  chmodSync(legacyDir, 0o500);
+  try {
+    const store = new Store({ dir: join(dir, "state"), legacyDbPath });
+    assert.equal(store.listProjects().length, 1);
+    store.close();
+    // The mark could not be written; the root's own record stands.
+    assert.ok(!existsSync(`${legacyDbPath}.imported`));
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, "state", "meta.json"), "utf8")).importedLegacy, [legacyDbPath]);
+    const reopened = new Store({ dir: join(dir, "state"), legacyDbPath });
+    assert.equal(reopened.listProjects().length, 1);
+    reopened.close();
+    assert.ok(!existsSync(`${legacyDbPath}.imported`));
+  } finally {
+    chmodSync(legacyDir, 0o700);
+  }
 });
 
 test("a second shell's legacy import merges into the root, clobbering nothing", () => {
@@ -495,6 +551,39 @@ test("an unreadable legacy store skips its import and never blocks startup", () 
   const reopened = new Store({ dir: join(dir, "state"), legacyDbPath });
   assert.equal(reopened.listProjects().length, 1);
   reopened.close();
+});
+
+test("an unreadable legacy store stays unmarked until it is repaired", () => {
+  // Root reads a mode-000 file, so the refusal cannot be staged.
+  if (process.getuid?.() === 0) return;
+  const dir = scratchDir("spex-unreadable-");
+  const legacyDbPath = join(dir, "spex.db");
+  const db = new Database(legacyDbPath);
+  db.exec(`
+    CREATE TABLE projects (
+      id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      registered_at INTEGER NOT NULL
+    );
+    INSERT INTO projects VALUES ('71000000-0000-4000-8000-000000000008', '${join(tmpdir(), "spex-unreadable-project").replaceAll("'", "''")}', 'p', 1);
+  `);
+  db.close();
+  chmodSync(legacyDbPath, 0o000);
+  const marker = `${legacyDbPath}.imported`;
+  try {
+    // The import fails and is recorded nowhere — not in this root's
+    // meta, not beside the file — so a repaired file imports later.
+    const store = new Store({ dir: join(dir, "state"), legacyDbPath });
+    assert.deepEqual(store.listProjects(), []);
+    store.close();
+    assert.ok(!existsSync(marker));
+    assert.equal(JSON.parse(readFileSync(join(dir, "state", "meta.json"), "utf8")).importedLegacy, undefined);
+  } finally {
+    chmodSync(legacyDbPath, 0o600);
+  }
+  const repaired = new Store({ dir: join(dir, "state"), legacyDbPath });
+  assert.equal(repaired.listProjects().length, 1);
+  repaired.close();
+  assert.ok(existsSync(marker));
 });
 
 test("an unreadable root lock fails closed rather than letting a second core in", () => {

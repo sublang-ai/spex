@@ -48,6 +48,28 @@ describe("reconcileAgentSpecs", () => {
     }
   });
 
+  // scaffold-56/scaffold-57: the lint step runs where no spex is on PATH.
+  it("directs the agent to lint through npx", () => {
+    const dir = makeTmp();
+    try {
+      reconcileAgentSpecs(dir, ["CLAUDE.md"]);
+      const lintLine = readFileSync(join(dir, "CLAUDE.md"), "utf-8")
+        .split(/\r?\n/)
+        .find((line) => line.includes("lint"));
+      assert.ok(lintLine !== undefined, "the managed section names no lint step");
+      assert.ok(
+        lintLine.includes("`npx @sublang/spex lint`"),
+        `lint instruction needs an installed spex: ${lintLine}`,
+      );
+      assert.ok(
+        lintLine.includes("(or `spex lint` where the CLI is installed)"),
+        `lint instruction omits the installed-CLI alternative: ${lintLine}`,
+      );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   // SCAF-10: only CLAUDE.md exists → only it is updated
   it("updates only CLAUDE.md when only it exists", () => {
     const dir = makeTmp();

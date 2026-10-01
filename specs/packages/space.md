@@ -619,7 +619,7 @@ When an integration suite writes local changes of every unit kind into a reposit
 
 - the local list carries a titled session as new, "3 changes in <project>'s queue", a registration line, "Settings changed" with a diff, "Playbook <id>" and "Sync rules updated", in the kinds' order [[space-7](#space-7)] [[space-34](#space-34)];
 - after a peer pushes, `space.fetch` lists the incoming units the same way with conflicts marked and ahead and behind counted, an empty remote reads empty, and `space.diff` returns a patch for Settings on each side and refuses a session unit [[space-8](#space-8)] [[space-10](#space-10)];
-- `space.tree` maps every catalog path to its family and sharing mark with session and project owners, reports `.git` closed and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file and a migration input, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
+- `space.tree` maps every catalog path to its family and sharing mark with session and project owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file and a migration input, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
 
 #### space-51
 
@@ -665,6 +665,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - Space reads "Not a repository yet" with one setup control over a remote field, and activating it empty marks the field required rather than making a repository [[space-3](#space-3)];
 - the bare path then sets the space up in one motion — the control reading "Setting up…" from its click to the last frame and never its own name in between — the header ending at `main`, the remote and a sync time, with the setup's own sync naming each step it passes and counting what the empty remote took [[space-4](#space-4)] [[space-6](#space-6)] [[space-12](#space-12)];
+- with the remote then changed to a second bare repository, the Join card stands on this synced home until Check remote runs, and the remote restored stands it again until the next sync ends [[space-45](#space-45)] [[space-5](#space-5)];
 - a session then run from the Captain home appears under local changes by its title and project, its Open session control opens its tab, and Sync sends it, the bare `main` holding its bundle [[space-7](#space-7)] [[space-12](#space-12)];
 - an intent queued while Space is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].
 
@@ -684,6 +685,7 @@ Where the harness boots the served shell on a home whose remote a peer home has 
 Where the harness boots the served shell with the demo project registered and a finished session, the test suite shall assert the exploring journey through the page:
 
 - the Explore tab lists the session's node titled by its first turn with its manifest "Shared", its hints file "Stays here" and its records offering Open session; selecting the manifest previews pretty-printed JSON and selecting the hints file reads withheld [[space-23](#space-23)] [[space-24](#space-24)];
+- an empty directory of a tracked kind — `intents/` before any queued intent — reads "Not yet shared", never "Stays here" [[space-23](#space-23)];
 - "Stays on this device" names the seven families with their reasons [[space-25](#space-25)];
 - the served page offers Copy path and no reveal control, and acknowledges the copy [[space-26](#space-26)].
 

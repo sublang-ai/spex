@@ -41,6 +41,23 @@ Where the file has comment syntax, is not excluded by the licensing scope [[lice
 
 Where a file's first comment block already contains `SPDX-FileCopyrightText` or `SPDX-License-Identifier` from an upstream source (e.g., a template or vendored file copied from another project), when preparing the file for inclusion in the repo, those existing SPDX lines shall be preserved unmodified, even when the project root carries a different license — each preserved upstream line satisfying its respective copyright-header requirement [[licensing-1](#licensing-1)] or license-header requirement [[licensing-2](#licensing-2)], with any missing required line supplied from upstream, not the project license.
 
+### licensing-9
+
+Where a file carries no upstream SPDX lines [[licensing-5](#licensing-5)], when its SPDX lines are written for the copyright-header requirement [[licensing-1](#licensing-1)] and the license-header requirement [[licensing-2](#licensing-2)], they shall name the project's own license and copyright holder in the file's native comment syntax:
+
+```markdown
+<!-- SPDX-License-Identifier: <license> -->
+<!-- SPDX-FileCopyrightText: <year> <holder> -->
+```
+
+```typescript
+// SPDX-License-Identifier: <license>
+// SPDX-FileCopyrightText: <year> <holder>
+```
+
+- The copyright holder is `<holder>` and the license `<license>`; the year is that of the file's first inclusion.
+- A value still reading as a `<...>` placeholder is unresolved: it is replaced with the project's own, never with a holder copied from a template file.
+
 ## Verification
 
 ### licensing-3
