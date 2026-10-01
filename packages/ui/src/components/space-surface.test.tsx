@@ -272,7 +272,7 @@ beforeEach(() => {
           repository: { ...REPO, remote: (fields.remote as string | undefined) ?? null, checkedAt: null, ahead: null, behind: null },
         };
       case "space.remote.set":
-        return { ...current, repository: { ...current.repository!, remote: fields.url as string | null, checkedAt: null } };
+        return { ...current, lastSync: null, repository: { ...current.repository!, remote: fields.url as string | null, checkedAt: null } };
       case "space.fetch":
       case "space.sync":
         return { accepted: true };
@@ -956,10 +956,11 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
     await waitFor(() => expect(calls("space.sync")).toEqual([{ join: true }]));
   });
 
-  test("the Join card stands until the remote is checked, on a synced home too, and goes after the check (space-45)", async () => {
+  test("the Join card stands until the remote is checked or synced, and goes after the check (space-45)", async () => {
     // A home that synced before, its remote changed since: the change
-    // cleared the last check, so the card is back above the lists.
-    await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null } }));
+    // cleared the last check and the last sync, so the card is back
+    // above the lists.
+    await renderSpace(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null }, lastSync: null }));
     const card = screen.getByTestId("space-first-meeting");
     expect(card.textContent).toContain("This space has not met that remote yet.");
     expect(within(card).getByTestId("space-first-join").title).toBe(
@@ -968,6 +969,10 @@ describe("SPACE: syncing (space-11, space-12, space-15, space-16)", () => {
     expect(screen.getByTestId("space-primary").textContent).toContain("Sync");
     // The check records its time: the card goes.
     deliver(repoState());
+    expect(screen.queryByTestId("space-first-meeting")).toBeNull();
+    // A restarted core holds no check, but the last sync with this
+    // remote still stands: the remote is met, so no card.
+    deliver(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null } }));
     expect(screen.queryByTestId("space-first-meeting")).toBeNull();
     // Unrelated histories offer Join in the header instead (space-13).
     deliver(repoState({ repository: { ...REPO, checkedAt: null, ahead: null, behind: null, unrelated: true }, sync: { phase: "unrelated" } }));

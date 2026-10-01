@@ -459,6 +459,20 @@ test("space-37: the first sync pushes main to the empty remote, sets the upstrea
   assert.deepEqual(done.local, []);
   const again = await home.client.settle("space.sync", {});
   assert.ok(again.sync.phase === "done" && !again.sync.pushed && again.sync.sent === 0 && again.sync.received === 0, JSON.stringify(again.sync));
+  // A restarted core holds no check but still reports the last sync,
+  // so this remote reads as met (space-45); a changed remote clears
+  // both (space-5).
+  await home.stop();
+  const restarted = await startHome("first-push-restart", { dataDir: home.dataDir, project: false });
+  t.after(() => restarted.stop());
+  const reread = await restarted.client.expectOk("space.get", {});
+  assert.equal(reread.repository?.checkedAt, null);
+  assert.deepEqual(reread.lastSync, again.lastSync);
+  const moved = await restarted.client.expectOk("space.remote.set", { url: bareRepo() });
+  assert.equal(moved.repository?.checkedAt, null);
+  assert.equal(moved.lastSync, null);
+  const kept = JSON.parse(readFileSync(join(home.dataDir, "prefs.json"), "utf8")) as { prefs: Record<string, unknown> };
+  assert.equal(kept.prefs["space:lastSync"], undefined);
   // A fresh home's Join against an empty remote — init with the remote,
   // then a joining sync — completes as a first push (space-6).
   const joiner = await startHome("joiner");
