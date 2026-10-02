@@ -445,6 +445,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - New conversation content reliably shows Latest for readers scrolled up,
   regardless of scroll and resize event ordering.
+- Long drafts yield to the Captain column’s available height so Send stays
+  reachable above stacked player panes while the text scrolls inside its field.
 - Open agent editors stay within their pane when its player grid scrolls,
   including scrolling caused by keyboard focus.
 

@@ -813,10 +813,10 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
     rerender(run(7));
     expect(queue.scrollTop).toBe(480);
 
-    // The composer yields around the frame: its box keeps its place
-    // whatever the queue holds.
+    // The composer yields around the frame, including a constrained
+    // Captain column: its field can shrink while controls keep their place.
     const box = screen.getByTestId("composer-box").parentElement!;
-    expect(box.className).toContain("shrink-0");
+    expect(box.className).toContain("min-h-0");
     expect(box.parentElement!.className).toContain("min-h-0");
   });
 });

@@ -240,7 +240,7 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 
 | Part | Form |
 | --- | --- |
-| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
+| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport, shrinking toward that one-row floor when the Captain column has less room so its caption and actions remain inside the column, and scrolling excess text, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
 | Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Captain is working…" while a turn runs, "Connecting…" without the core |
@@ -1325,6 +1325,10 @@ Where the harness boots with the demo project registered and the scripted Captai
 - showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end after its live machine and reply render [[run-view-162](#run-view-162)] [[run-view-120](#run-view-120)];
 - content growth without a transcript-counter change keeps a following thread at its end [[run-view-120](#run-view-120)];
 - upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth and sidebar reflow, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
+
+#### run-view-166
+
+Where a served Chinese session holds a player question and both players' delivered transcripts, when a long Chinese draft fills its composer at a 630 by 665 pixel viewport, the browser journey shall assert the draft scrolls above its one-row floor, the Send control stays wholly inside the Captain column with its center hit belonging to that control rather than a player pane, and one ordinary click submits exactly one durable Boss turn with the draft cleared [[run-view-106](#run-view-106)] [[run-view-8](#run-view-8)].
 
 #### run-view-122
 
