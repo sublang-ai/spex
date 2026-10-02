@@ -497,7 +497,7 @@ While a Captain or player pane is following its end, when its box or rendered co
 
 #### run-view-162
 
-While the Captain pane is following its end, when the record stream appends a reply [[run-view-1](#run-view-1)], the pane shall keep the reply in view at its end, including when that reply and turn settlement are rendered together.
+While the Captain pane is following its end, when its rendered conversation changes through the record stream or a loaded machine definition, the pane shall stay at its end, including a reply arriving with turn settlement [[run-view-1](#run-view-1)] and a live machine mounting or changing its drawing [[run-view-60](#run-view-60)] [[run-view-64](#run-view-64)].
 
 ### Machine Cards
 
@@ -1184,7 +1184,12 @@ Where the run view's production modules are inspected, the test suite shall asse
 
 #### run-view-163
 
-When the integration suite folds a Captain reply and turn settlement together into a rendered conversation, it shall verify that a pane following its end advances to the reply [[run-view-162](#run-view-162)], while a pane the reader scrolled up preserves its position and offers the jump-to-latest control [[run-view-46](#run-view-46)].
+When the integration suite changes a rendered Captain conversation, it shall verify its following choice through this case matrix:
+
+- a reply and turn settlement folded together advance a following pane to the reply [[run-view-162](#run-view-162)];
+- a live frame mounting before a queued programmatic scroll is delivered, and a machine definition changing with no transcript change, leave a following pane at its end [[run-view-162](#run-view-162)];
+- a coalesced failure changing its count without adding a line, and replacement content at an existing delivery-card anchor, update the following pane [[run-view-162](#run-view-162)];
+- the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)].
 
 ### Browser Journeys
 
@@ -1296,9 +1301,9 @@ Where the harness boots with the demo project registered and a scripted workflow
 
 Where the harness boots with the demo project registered and the scripted Captain, when served-page journeys exercise sidebar changes and controlled rendered-content growth in a window too short for the thread, the test suite shall assert:
 
-- showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end [[run-view-120](#run-view-120)];
+- showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end after its live machine and reply render [[run-view-162](#run-view-162)] [[run-view-120](#run-view-120)];
 - content growth without a transcript-counter change keeps a following thread at its end [[run-view-120](#run-view-120)];
-- upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
+- upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth and sidebar reflow, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
 
 #### run-view-122
 

@@ -3,7 +3,7 @@
 
 // Follow rendered geometry, including cards and media that resize without
 // changing a transcript counter. Only actual reader movement detaches a pane.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface Geometry {
   width: number;
@@ -64,7 +64,9 @@ export function useStickToBottom(contentKey: unknown) {
     }
   }
 
-  useEffect(() => {
+  // Follow committed content before paint, retaining the geometry guard for
+  // reader movement whose native scroll event has not arrived yet.
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) resized(el, true);
     // contentKey reports new text; geometry observation handles the rest.

@@ -6,7 +6,7 @@
 // counterpart bubbles, player questions as first-class incoming
 // messages, shell status lines as compact system lines between them.
 
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
@@ -377,11 +377,14 @@ export function CaptainPane({
    * (run-view-147). */
   failure?: (line: CaptainLine) => FailureContext | undefined;
 }) {
-  // Keep the inputs distinct: a reply arriving as its turn ends must
-  // not cancel out the content change that advances the thread.
-  const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(
-    `${view.captain.length}:${view.captainDraft.length}:${view.turnActive}:${extras?.length ?? 0}`,
+  // Live machine records change the thread without adding chat text.
+  // Keep all content inputs distinct, with stable identity across
+  // clock/header-only renders; a loaded graph can change its drawing.
+  const contentKey = useMemo(
+    () => [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
+    [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
   );
+  const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(contentKey);
   const [highlightKey, setHighlightKey] = useState<string>();
 
   // Attention focus (run-view-91): land at the intent's place and
