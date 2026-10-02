@@ -43,7 +43,9 @@ test("approvals-8: fresh served UI reviews actual pending scope, denies safely, 
   for (const width of [320, 900]) {
     await page.setViewportSize({width, height: 900});
     record(`Tool approval ${width}px`, await measure(page), defects);
-    if (width === 900) await page.screenshot({path: "/private/tmp/spex-approval-inbox.png"});
+    if (width === 900) await test.info().attach("Tool approval 900px", {
+      body: await page.screenshot(), contentType: "image/png",
+    });
   }
   expect(defects).toEqual([]);
   await inbox.getByRole("button", {name: "Approve once", exact: true}).click();

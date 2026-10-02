@@ -1653,7 +1653,7 @@ function UpNextBand({
           aria-label={i18n._("Add an intent to {project}", {
             project: project.name,
           })}
-          className="min-h-6 min-w-0 flex-1 resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
+          className="min-h-6 w-full min-w-0 resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
         />}
           actions={<button
           type="button"
