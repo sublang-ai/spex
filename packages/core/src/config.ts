@@ -43,6 +43,7 @@ import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
 import { i18n } from "./i18n.js";
+import { canonicalWritablePath } from "./permission-paths.js";
 
 import type {
   AdapterName,
@@ -800,6 +801,17 @@ function toResolvedAgent(
   }
   const { reasoningEffort, ...rest } = block;
   if (reasoningEffort !== undefined) rest.effort = reasoningEffort;
+  const permissions = rest.permissions as PermissionPolicyLike | undefined;
+  if (permissions?.writablePaths !== undefined) {
+    // Normalize the runtime projection only. The source mapping is also the
+    // comment-preserving edit candidate, whose spelling must stay untouched.
+    rest.permissions = {
+      ...permissions,
+      writablePaths: permissions.writablePaths.map((value, index) =>
+        canonicalWritablePath(value, `${path}.permissions.writablePaths[${index}]`),
+      ),
+    };
+  }
   if (rest.effort !== undefined) {
     // Adapter-scoped vocabularies (DR-019): Claude adds ultracode,
     // Codex adds ultra, Kimi accepts only off/on. cligent owns the
