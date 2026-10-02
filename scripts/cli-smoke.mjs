@@ -321,6 +321,13 @@ try {
   assert(gitStatus(fresh) === "", "breakage restore left the tree dirty");
 
   begin("fresh-update-clean");
+  // scaffold-58 pins the project identity, so this seed is deliberately
+  // customized even before the user edits it. Update must preserve it.
+  const pinnedLicensing = read(join(fresh, "specs/packages/licensing.md"));
+  assert(
+    pinnedLicensing.includes("spex-smoke <smoke@sublang.ai>"),
+    "fresh licensing seed did not pin the fixture project identity",
+  );
   const updateClean = spex(["scaffold", "--update"], { cwd: fresh });
   assert(
     updateClean.status === 0,
@@ -332,7 +339,7 @@ try {
     "specs/map.md (unchanged)",
     "specs/intents/000-spdx-headers.md (unchanged)",
     "specs/packages/git.md (unchanged)",
-    "specs/packages/licensing.md (unchanged)",
+    "specs/packages/licensing.md (kept — user-modified)",
     "spex scaffold --update completed.",
     "git diff -- specs",
     "spex lint",
@@ -342,6 +349,10 @@ try {
   ]) {
     assert(updateClean.stdout.includes(line), `--update output missing "${line}"`);
   }
+  assert(
+    read(join(fresh, "specs/packages/licensing.md")) === pinnedLicensing,
+    "clean --update changed the pinned licensing seed",
+  );
   assert(gitStatus(fresh) === "", "clean --update changed the tree");
 
   begin("update-seed-kept");

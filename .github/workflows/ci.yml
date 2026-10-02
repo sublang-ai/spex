@@ -67,8 +67,6 @@ jobs:
   # the desktop's platform — the fit journeys measure real fonts, which
   # differ between the two (DR-086).
   journeys:
-    env:
-      SPEX_E2E_BROWSER_CACHE: ${{ runner.temp }}/spex served managed browser cache
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +75,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select the owned served browser cache
+        shell: bash
+        run: printf '%s\n' "SPEX_E2E_BROWSER_CACHE=$RUNNER_TEMP/spex served managed browser cache" >> "$GITHUB_ENV"
 
       # The authoring journeys compile with a stub slc under this Node,
       # which stands in for the system Node the compile floor checks
@@ -129,9 +131,6 @@ jobs:
           retention-days: 7
 
   desktop-browser:
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/spex managed browser cache
-      SPEX_PACKAGED_BROWSER_CACHE: ${{ runner.temp }}/spex packaged managed browser cache
     strategy:
       fail-fast: false
       matrix:
@@ -139,6 +138,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select separate owned source and packaged browser caches
+        shell: bash
+        run: |
+          printf '%s\n' "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/spex managed browser cache" >> "$GITHUB_ENV"
+          printf '%s\n' "SPEX_PACKAGED_BROWSER_CACHE=$RUNNER_TEMP/spex packaged managed browser cache" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
