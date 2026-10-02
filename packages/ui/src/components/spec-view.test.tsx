@@ -222,6 +222,30 @@ const AUTH = "identity/auth";
 const CAT = "catalog/courses";
 const GUARD = "guard";
 
+const COMMENT_SPEC = `<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- spex-i18n-source: meta-1 sha256-hidden-source-pin -->
+
+# Readable specification
+
+Visible before <!-- hidden-inline-comment --> and after.
+
+<!--
+hidden-multiline-comment
+-->
+
+<!-- hidden-leading-comment --> Visible trailing text.
+
+<div>Visible wrapped text <!-- hidden-wrapped-comment --></div>
+
+Inline example: \`<!-- visible-inline-example -->\`.
+
+\`\`\`markdown
+<!-- visible-block-example -->
+\`\`\`
+
+<span data-raw-comment-test="unsafe">Raw HTML stays text.</span>
+`;
+
 function Harness({
   tree = TREE,
   loading,
@@ -1018,6 +1042,25 @@ describe("DR-010 §7: accessible names and affordances", () => {
 });
 
 describe("SPECV-6/7: meta.md routing", () => {
+  test("spec-view-64: expanded items hide source comments and retain code examples", () => {
+    const tree = structuredClone(TREE);
+    tree.files[0]!.items[0]!.text = COMMENT_SPEC;
+    render(<Harness tree={tree} />);
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-2"));
+    expect(screen.getByText("Readable specification")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("hidden-source-pin");
+    expect(document.body.textContent).not.toContain("hidden-inline-comment");
+    expect(document.body.textContent).not.toContain("hidden-multiline-comment");
+    expect(document.body.textContent).not.toContain("hidden-leading-comment");
+    expect(document.body.textContent).not.toContain("hidden-wrapped-comment");
+    expect(document.body.textContent).toContain("Visible trailing text.");
+    expect(document.body.textContent).toContain("Visible wrapped text");
+    expect(document.body.textContent).toContain("<!-- visible-inline-example -->");
+    expect(document.body.textContent).toContain("<!-- visible-block-example -->");
+    expect(document.querySelector("[data-raw-comment-test]")).toBeNull();
+  });
+
   test("the footer offers meta and map directly", async () => {
     const onReadRecord = vi.fn().mockResolvedValue("# meta\n\nGlossary.");
     render(<Harness onReadRecord={onReadRecord} />);
@@ -2026,6 +2069,38 @@ describe("spec-view-53: the editor", () => {
     fireEvent.click(screen.getByTestId("reader-edit"));
     return screen.getByTestId("spec-editor");
   }
+
+  test("spec-view-64: record and preview hide comments while editing and saving preserve them", async () => {
+    const onReadRecord = vi.fn(async () => ({ markdown: COMMENT_SPEC, version: "v-comments" }));
+    const onWriteSpec = vi.fn(async () => ({ version: "v-edited" }));
+    render(<Harness onReadRecord={onReadRecord} onWriteSpec={onWriteSpec} />);
+    fireEvent.click(screen.getByTestId("records-meta"));
+    await screen.findByText("Readable specification");
+    const checkRendering = (pane: HTMLElement) => {
+      expect(pane.textContent).not.toContain("SPDX-License-Identifier");
+      expect(pane.textContent).not.toContain("hidden-source-pin");
+      expect(pane.textContent).not.toContain("hidden-inline-comment");
+      expect(pane.textContent).not.toContain("hidden-multiline-comment");
+      expect(pane.textContent).not.toContain("hidden-leading-comment");
+      expect(pane.textContent).not.toContain("hidden-wrapped-comment");
+      expect(pane.textContent).toContain("Visible trailing text.");
+      expect(pane.textContent).toContain("Visible wrapped text");
+      expect(pane.textContent).toContain("<!-- visible-inline-example -->");
+      expect(pane.textContent).toContain("<!-- visible-block-example -->");
+      expect(pane.textContent).toContain('<span data-raw-comment-test="unsafe">');
+      expect(pane.querySelector("[data-raw-comment-test]")).toBeNull();
+    };
+    checkRendering(screen.getByTestId("record-reader"));
+    fireEvent.click(screen.getByTestId("reader-edit"));
+    expect(field().value).toBe(COMMENT_SPEC);
+    const edited = COMMENT_SPEC.replace("Visible before", "Revised before");
+    fireEvent.change(field(), { target: { value: edited } });
+    fireEvent.click(screen.getByTestId("editor-preview"));
+    checkRendering(screen.getByTestId("editor-preview-pane"));
+    fireEvent.click(screen.getByTestId("editor-save"));
+    expect(onWriteSpec).toHaveBeenCalledWith("meta.md", edited, "v-comments");
+    checkRendering(await screen.findByTestId("record-reader"));
+  });
 
   test("no Edit control shows where the host wires no write", async () => {
     render(<Harness onReadRecord={reads()} />);

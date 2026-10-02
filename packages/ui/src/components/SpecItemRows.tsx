@@ -406,7 +406,7 @@ function ItemRow({
             }
             onBlur={onBodyLinkPreview && preview?.close}
           >
-            <Markdown text={item.text} />
+            <Markdown text={item.text} hideComments />
           </div>
           {notFoundKey?.startsWith(`body:${item.id}:`) ? (
             <div className="flex items-center gap-1 text-xs">

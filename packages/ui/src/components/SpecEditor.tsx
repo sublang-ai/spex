@@ -346,7 +346,7 @@ export function SpecEditor({
           onClick={inert}
           className="relative min-h-0 flex-1 overflow-auto rounded border border-neutral-200 p-4 dark:border-neutral-800"
         >
-          <Markdown text={state.draft} />
+          <Markdown text={state.draft} hideComments />
         </div>
       ) : (
         <textarea

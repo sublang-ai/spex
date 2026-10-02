@@ -44,7 +44,7 @@ While a file node is displayed, the spec view shall present the package's header
 While an item row is displayed, the spec view shall render the row by its expansion state:
 
 - collapsed, the row shows the item's ID chip in its group color — bounded at 10rem and truncating there, since a long ID would otherwise widen the row past the outline pane ([DR-041](../decisions/041-chrome-that-fits.md)), with the whole ID in the chip's title and accessible name — its group tag, its first line, and a muted hint counting its outbound citations and inbound backlinks;
-- expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link;
+- expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and grouped inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link; Markdown HTML comments are omitted from the rendering, while comment syntax inside code remains visible;
 - when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3);
 - the row's header ends with an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)], shown by the row's hover or a focus within it and always reachable by keyboard ([DR-010](../decisions/010-interface-craft.md) §6).
 
@@ -222,6 +222,7 @@ While the spec tree renders, the spec view shall serve the tree's records in the
 - intent records do not appear anywhere in the view — they are work items, carried by the Dashboard's next-work lists [[dashboard-24](dashboard.md#dashboard-24)];
 - when a record is picked in the view, the view replaces itself with that record's rendered markdown behind a Back control reading "← Back", and Back restores focus to the invoking row and the outline's scroll position — a record requested from another surface leads Back there instead [[spec-view-57](#spec-view-57)];
 - the reader carries an Edit control opening the record in the editor [[spec-view-48](#spec-view-48)];
+- rendered Markdown omits HTML comments such as SPDX headers and source pins, while comment syntax inside code remains visible and raw source remains unchanged for editing [[spec-view-48](#spec-view-48)];
 - links inside the reader keep the view's semantics [[spec-view-6](#spec-view-6)]: a path resolving to a record, `meta.md`, or `map.md` opens in the reader, an item citation leaves the reader and jumps to the item, and any other local link stays inert;
 - the record fetch shows in progress, and any fetch failure shows with a retry.
 
@@ -487,6 +488,10 @@ Where a fixture tree renders with the graph on, the test suite shall assert the 
 Where a fixture tree carries decision records — once alongside package files and once with none — the test suite shall assert the records access of [[spec-view-7](#spec-view-7)]: the decisions branch renders in both fixtures with its count and stands last in the outline [[spec-view-1](#spec-view-1)], no intent record appears anywhere in the view [[spec-view-7](#spec-view-7)], a record row — the identifier chip, the title, named as an opener under a pointer — opens the reader and Back restores focus to that row [[spec-view-7](#spec-view-7)], a record requested with a Dashboard origin opens behind "← Back to Dashboard" whose activation closes the reader and hands that origin to the host [[spec-view-57](#spec-view-57)], a search matching a decision's ID narrows the branch to it [[spec-view-5](#spec-view-5)], the footer's `meta` and `map` links open the reader [[spec-view-7](#spec-view-7)], and a record-internal item citation leaves the reader and lands on the item [[spec-view-7](#spec-view-7)].
 
 ### Editor Coverage
+
+#### spec-view-64
+
+Where a fixture spec contains block and inline HTML comments, literal comment examples in code, and escaped HTML, when the view renders its item or opens its record and editor preview, the test suite shall assert that comments are absent, code examples remain visible, and HTML is not executed [[spec-view-3](#spec-view-3)] [[spec-view-7](#spec-view-7)], while editing and saving a prose change preserves the complete source comments [[spec-view-48](#spec-view-48)] [[spec-view-50](#spec-view-50)].
 
 #### spec-view-53
 

@@ -851,7 +851,7 @@ export function SpecView(props: SpecViewProps) {
           </div>
         ) : (
           <div className="relative overflow-x-auto">
-            <Markdown text={reader.markdown ?? ""} />
+            <Markdown text={reader.markdown ?? ""} hideComments />
           </div>
         )}
       </div>
