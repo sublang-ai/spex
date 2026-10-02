@@ -450,6 +450,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Conversation panes keep following when live cards or delayed media grow.
   Queued automatic scroll events no longer detach the thread, while scrolling
   upward still preserves the reader's position through later content changes.
+- First-use browser setup permits a fifteen-minute download and launch budget,
+  with progress and cancellation, instead of ending after three minutes on a
+  slow connection. Setup still requires a separate choice to enable Browser.
 - Spec readers and editor previews hide HTML source comments, keeping SPDX
   headers and translation hashes out of the reading flow. Code examples and
   the editable source retain their exact content.

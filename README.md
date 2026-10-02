@@ -160,6 +160,8 @@ For browser work, open the working agent in Settings → Agents, choose
 **Set up browser**, and then enable **Browser** and save. Setup checks the
 execution host, downloads missing managed Chromium components, and proves
 that an isolated headless browser can launch and take a screenshot.
+The first download can take several minutes; setup allows up to fifteen
+minutes and can be cancelled while it runs.
 Checking readiness does not enable access. Conversation agent settings can
 override the choice for the next turn or return to the saved setting.
 Authoring uses the selected agent's saved setting and offers the same setup

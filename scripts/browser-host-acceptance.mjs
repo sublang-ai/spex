@@ -47,7 +47,7 @@ try {
   const browser = captain.getByRole("checkbox", { name: "Browser", exact: true });
   assert.equal(await browser.isChecked(), false);
   await captain.getByRole("button", { name: "Set up browser" }).click({ timeout: 60_000 });
-  await captain.getByText("Browser ready", { exact: true }).waitFor({ timeout: 210_000 });
+  await captain.getByText("Browser ready", { exact: true }).waitFor({ timeout: 930_000 });
   assert.equal(await browser.isChecked(), false);
   assert.equal(readFileSync(configPath, "utf8"), before, "setup must not save a choice");
   if (process.env.SPEX_BROWSER_SCREENSHOT) await page.screenshot({ path: process.env.SPEX_BROWSER_SCREENSHOT });

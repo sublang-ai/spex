@@ -72,7 +72,7 @@ When a client requests agent capabilities, the core shall return Cligent's conte
 
 ### media-8
 
-When a client requests browser preparation, the core shall run Cligent's bounded cancellable preparation for the same settings and context, relay checking/installing/launching progress and the typed final result to that client, and abort the owned preparation when the client cancels or disconnects, without enabling browser access or changing configuration.
+When a client requests browser preparation, the core shall run Cligent's cancellable preparation with a fifteen-minute overall budget for the same settings and context, relay checking/installing/launching progress and the typed final result to that client, and abort the owned preparation when the client cancels or disconnects, without enabling browser access or changing configuration.
 
 ### media-9
 

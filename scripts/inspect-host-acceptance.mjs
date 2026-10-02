@@ -313,7 +313,7 @@ try {
   await editor.getByTestId(`agent-adapter-${adapter}`).click();
   const beforeSetup = readFileSync(configPath, "utf8");
   await editor.getByRole("button", { name: "Set up browser", exact: true }).click();
-  await editor.getByText("Browser ready", { exact: true }).waitFor({ timeout: 240_000 });
+  await editor.getByText("Browser ready", { exact: true }).waitFor({ timeout: 930_000 });
   assert.equal(await editor.getByRole("checkbox", { name: "Browser", exact: true }).isChecked(), false);
   assert.equal(readFileSync(configPath, "utf8"), beforeSetup);
   await editor.getByRole("checkbox", { name: "Browser", exact: true }).check();
@@ -473,6 +473,18 @@ try {
   await showTogether(page, inputFigure, inputPane.getByText(token, { exact: false }).first());
   await page.screenshot({ path: attachmentScreenshot });
   const nativeApprovals = await nativeApprovalStage({page, client, inspector, scratch, profile, evidenceDir, initializeRepository, waitFor, run, at});
+  at("restarted core retains approval history without live authority");
+  await closeApp();
+  page = await launch();
+  assert.deepEqual((await client.command("approval.list")).pending, []);
+  for (const approval of nativeApprovals) {
+    const reopened = (await client.command("history.get", { sessionId: approval.sessionId })).records;
+    const responses = reopened.filter(({ record }) => record.type === "player_event" &&
+      record.event.type === "approval_response" && record.event.payload.requestId === approval.requestId &&
+      record.event.payload.decision === approval.decision && record.event.payload.source === "host");
+    assert.equal(responses.length, 1);
+    approval.historyOnlyAfterCoreRestart = true;
+  }
   const report = { ...runtime, adapter, inspector, nativeApprovals, sessionId: browserSessionId, nativeTools,
     nativeReportedModels: browserReportedModels, freshProfile: true, freshBrowserCache: true, explicitBrowserSave: true,
     nativeScreenshot: { assetId: evidence.asset.assetId, byteLength: image.length, sha256: digest, origin: evidence.origin, callId: evidence.callId,
