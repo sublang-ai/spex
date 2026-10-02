@@ -123,6 +123,11 @@ meta.md       The spec of specs
 | [DR-095](decisions/095-a-subagents-effort-and-the-agents-own-model.md) | 095-a-subagents-effort-and-the-agents-own-model.md | A subagent's effort, and the agent's own model by default: "Same as agent" first in the subagent-model field, a fifth tuning field "Subagent effort" whose empty choice reads "Agent chooses", each model paired with its effort on one row; Cligent `^0.30.0` / Playbook `^17.3.0` / slc `^0.15.0`; amends DR-019, DR-093, DR-094, DR-067 and DR-032 |
 | [DR-096](decisions/096-the-app-supplies-the-scaffold.md) | 096-the-app-supplies-the-scaffold.md | The app supplies the scaffold: both shells name the checkout's own `@sublang/spex` entry on their own executable as the scaffold command, the registry's `npx` only where none is built and then named in the failure; extends DR-081 and DR-024, amends DR-006 |
 
+## Drafts
+
+- [Codex DR draft: Spaces, Projects, and Portable Storage](../codex-dr-spaces-projects-and-storage.md) — Proposed concepts, file schemas, backend operations, GitLab mappings, and lifecycle scenarios; not accepted.
+- [Codex DR draft: Unified Packages and Environments](../codex-dr-package-format-and-environments.md) — Proposed artifact layout, manifest and environment schemas, local snapshots, selection, composition, and registry boundary; not accepted.
+
 ## Packages
 
 | File | Summary |
