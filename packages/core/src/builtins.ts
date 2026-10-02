@@ -20,6 +20,7 @@ const BUILTIN_FROMS: Record<string, string> = {
   dev: "@sublang/playbook/dev/registry",
   branch: "@sublang/playbook/branch/registry",
   pr: "@sublang/playbook/pr/registry",
+  inspect: "@sublang/playbook/inspect/registry",
 };
 
 /** The built-ins' ids: a draft never takes one (playbook-library-70). */

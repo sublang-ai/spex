@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  # CI builds every workspace but never launches Electron.
+  # Most jobs build without downloading Electron; desktop-browser installs it explicitly.
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
 jobs:
@@ -76,6 +76,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select the owned served browser cache
+        shell: bash
+        run: printf '%s\n' "SPEX_E2E_BROWSER_CACHE=$RUNNER_TEMP/spex served managed browser cache" >> "$GITHUB_ENV"
+
       # The authoring journeys compile with a stub slc under this Node,
       # which stands in for the system Node the compile floor checks
       # (DR-005: >= 23.6); an older Node fails every compile "at
@@ -98,6 +102,22 @@ jobs:
         if: runner.os != 'Linux'
         run: npx playwright install chromium
 
+      - name: Managed Chromium sandbox prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # Resolve the exact Playwright copy that Cligent's pinned MCP uses.
+          managed_chromium=$(PLAYWRIGHT_BROWSERS_PATH="$SPEX_E2E_BROWSER_CACHE" node --input-type=module -e "import {createRequire} from 'node:module'; const c=createRequire(import.meta.resolve('@sublang/cligent')); const m=createRequire(c.resolve('@playwright/mcp/package.json')); console.log(m('playwright').chromium.executablePath())")
+          cat > "$RUNNER_TEMP/spex-browser-apparmor" <<EOF
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile spex-ci-managed-chromium "$managed_chromium" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
+          sudo apparmor_parser -r "$RUNNER_TEMP/spex-browser-apparmor"
+
       - name: Browser journeys
         run: npm run e2e
 
@@ -109,3 +129,74 @@ jobs:
             e2e/playwright-report/
             e2e/test-results/
           retention-days: 7
+
+  desktop-browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select separate owned source and packaged browser caches
+        shell: bash
+        run: |
+          printf '%s\n' "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/spex managed browser cache" >> "$GITHUB_ENV"
+          printf '%s\n' "SPEX_PACKAGED_BROWSER_CACHE=$RUNNER_TEMP/spex packaged managed browser cache" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Electron and native browser libraries
+        shell: bash
+        run: |
+          env -u ELECTRON_SKIP_BINARY_DOWNLOAD node node_modules/electron/install.js
+          if [ "$RUNNER_OS" = Linux ]; then
+            managed_cli=$(node --input-type=module -e "import {createRequire} from 'node:module'; import {join,dirname} from 'node:path'; const c=createRequire(import.meta.resolve('@sublang/cligent')); const m=createRequire(c.resolve('@playwright/mcp/package.json')); console.log(join(dirname(m.resolve('playwright/package.json')), 'cli.js'))")
+            node "$managed_cli" install-deps chromium
+          fi
+      - run: npm run rebuild:electron -w apps/desktop
+      - name: Build local packaged app with a physical child dependency tree
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then target=mac; else target=linux; fi
+          node_modules/.bin/electron-builder --projectDir apps/desktop --dir "--$target" --config.executableName=spex-browser-acceptance --config.directories.output="$RUNNER_TEMP/spex browser packaged"
+      - name: Permit only the native CI executables to use sandbox namespaces
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          managed_chromium=$(node --input-type=module -e "import {createRequire} from 'node:module'; const c=createRequire(import.meta.resolve('@sublang/cligent')); const m=createRequire(c.resolve('@playwright/mcp/package.json')); console.log(m('playwright').chromium.executablePath())")
+          packaged_chromium=$(PLAYWRIGHT_BROWSERS_PATH="$SPEX_PACKAGED_BROWSER_CACHE" node --input-type=module -e "import {createRequire} from 'node:module'; const c=createRequire(import.meta.resolve('@sublang/cligent')); const m=createRequire(c.resolve('@playwright/mcp/package.json')); console.log(m('playwright').chromium.executablePath())")
+          source_electron=$(node -p "require('electron')")
+          packaged_app="$RUNNER_TEMP/spex browser packaged/linux-unpacked/spex-browser-acceptance"
+          cat > "$RUNNER_TEMP/spex-desktop-apparmor" <<EOF
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile spex-ci-desktop-chromium "$managed_chromium" flags=(unconfined) {
+            userns,
+          }
+          profile spex-ci-packaged-chromium "$packaged_chromium" flags=(unconfined) {
+            userns,
+          }
+          profile spex-ci-source-electron "$source_electron" flags=(unconfined) {
+            userns,
+          }
+          profile spex-ci-packaged-electron "$packaged_app" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r "$RUNNER_TEMP/spex-desktop-apparmor"
+      - name: Verify native source and packaged UI browser setup without credentials
+        shell: bash
+        run: |
+          packaged_app=$(find "$RUNNER_TEMP/spex browser packaged" -type f -name spex-browser-acceptance)
+          test -n "$packaged_app"
+          if [ "$RUNNER_OS" = Linux ]; then
+            SPEX_BROWSER_REQUIRE_EMPTY_CACHE=1 xvfb-run -a npm run test:browser-host
+            PLAYWRIGHT_BROWSERS_PATH="$SPEX_PACKAGED_BROWSER_CACHE" SPEX_BROWSER_REQUIRE_EMPTY_CACHE=1 SPEX_BROWSER_APP_EXECUTABLE="$packaged_app" xvfb-run -a npm run test:browser-host
+          else
+            SPEX_BROWSER_REQUIRE_EMPTY_CACHE=1 npm run test:browser-host
+            PLAYWRIGHT_BROWSERS_PATH="$SPEX_PACKAGED_BROWSER_CACHE" SPEX_BROWSER_REQUIRE_EMPTY_CACHE=1 SPEX_BROWSER_APP_EXECUTABLE="$packaged_app" npm run test:browser-host
+          fi

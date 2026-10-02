@@ -23,6 +23,9 @@ import type {
   IntentInfo,
   IntentSource,
   LedgerState,
+  ApprovalState,
+  MediaAsset,
+  MessageContent,
   PlaybookArtifacts,
   ProjectInfo,
   ReadinessEntry,
@@ -52,6 +55,9 @@ import {
   initialSessionView,
   type SessionView,
 } from "./reducer.js";
+import { contentTitle } from "../lib/message-content.js";
+import { createAttachmentState, type AttachmentState } from "./attachments.js";
+import { deliverBrowserProgress } from "../lib/browser-progress.js";
 
 /** A draft's transcript (DR-058, playbook-library-53): the stored
  * records folded by the run view's own reducer over a session-shaped
@@ -104,7 +110,7 @@ export interface ComposerState {
   /** Submissions waiting for the turn to end (RUN-8). A staged
    * intent's id rides its entry, so the chip follows the pending
    * bubble and the dispatch stamps when the turn starts (DR-035). */
-  queued: { text: string; intentId?: string }[];
+  queued: (MessageContent & { intentId?: string })[];
   /** Unsent composer text — survives tab and surface switches. */
   draft?: string;
 }
@@ -139,8 +145,14 @@ export interface StagedIntent {
   title: string;
 }
 
-export interface AppState {
+export interface AppState extends AttachmentState {
   connection: ConnectionStatus;
+  approvals?: ApprovalState;
+  approvalInboxOpen: boolean;
+  approvalError?: string;
+  approvalFocusId?: string;
+  showApprovals(requestId?: string): void;
+  hideApprovals(): void;
   /** True once a connection has ever opened (first-paint banner). */
   everConnected: boolean;
   /** The core endpoint the client dials, named when it cannot be
@@ -318,7 +330,7 @@ export interface AppState {
   /** Show the list again; the draft stays open in the core. */
   closeDraft(): void;
   /** Send a Boss message; the core dispatches or queues it. */
-  sendDraft(draftId: string, text: string): Promise<{ queued: boolean }>;
+  sendDraft(draftId: string, text: string, attachments?: readonly MediaAsset[]): Promise<{ queued: boolean }>;
   abortDraft(draftId: string): Promise<void>;
   writeDraftSource(
     draftId: string,
@@ -358,7 +370,7 @@ export interface AppState {
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
   /** One agent's settings for one conversation (DR-067, DR-068). It
    * writes no configuration: the defaults in Settings are untouched. */
-  setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null}): Promise<void>;
+  setAgentSettings(sessionId: string, agentId: string, change: {model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; browser?: boolean | null}): Promise<void>;
   connect(url?: string): void;
   refresh(): Promise<void>;
   /** Re-read the core's prose after the home's choice of language
@@ -432,7 +444,7 @@ export interface AppState {
    * transcript, composer, and staged chip. The removal broadcast and
    * the delete reply both land here, idempotently. */
   forgetSession(sessionId: string, projectId: string): void;
-  submitBossText(sessionId: string, text: string): Promise<void>;
+  submitBossText(sessionId: string, text: string, attachments?: readonly MediaAsset[]): Promise<void>;
   /** run-view-129 / run-view-112: run one control the session already
    * advertises as its next turn. */
   /** One advertised control run as the session's next turn
@@ -453,12 +465,13 @@ export interface AppState {
   queueIntent(input: {
     projectId: string;
     text: string;
+    attachments?: readonly MediaAsset[];
     source?: IntentSource;
     at?: "head" | "tail";
   }): Promise<IntentInfo>;
   moveIntent(intentId: string, afterIntentId: string | null): Promise<void>;
   /** Edit a queued intent's text (DR-035: from dispatch on, history). */
-  editIntent(intentId: string, text: string): Promise<void>;
+  editIntent(intentId: string, text: string, attachments?: readonly MediaAsset[]): Promise<void>;
   closeIntent(intentId: string, as: "done" | "dropped"): Promise<void>;
   /** Mark a session's unread finished turn read, without opening it
    * (dashboard-55): the act reports its own refusal, so the caller
@@ -562,12 +575,8 @@ function emptyDraftView(): DraftView {
 
 type FoldedRecord = Parameters<typeof applyRecord>[2];
 
-/** A permission request nothing in the product answers (run-view-136,
- * playbook-library-64): the pane shows it as a line naming the tool,
- * since the agent's own headless default decided it. No control
- * answers one and no summons names it (DR-066), so the line is where
- * the request is true — a draft's runner and a session's players
- * alike. */
+/** Legacy native telemetry is history, never authority for a live answer.
+ * Only the ephemeral core snapshot can create approval controls. */
 function permissionAsFailure(record: FoldedRecord): FoldedRecord {
   if (record.type !== "player_event") return record;
   const event = (record as { event?: { type?: string; payload?: { toolName?: string; reason?: string } } }).event;
@@ -584,11 +593,11 @@ function permissionAsFailure(record: FoldedRecord): FoldedRecord {
         // runtime's reason glued on (localization-4).
         message: reason
           ? i18n._(
-              "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided",
+              "Asked permission to use {tool} — {reason}; historical permission event; no live answer is available",
               { tool, reason },
             )
           : i18n._(
-              "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided",
+              "Asked permission to use {tool}; historical permission event; no live answer is available",
               { tool },
             ),
         recoverable: true,
@@ -844,6 +853,7 @@ export const useAppStore = create<AppState>((set, get) => {
       .command("turn.submit", {
         sessionId,
         text: next.text,
+        ...(next.attachments ? { attachments: [...next.attachments] } : {}),
         ...(next.intentId !== undefined ? { intentId: next.intentId } : {}),
       })
       .catch((cause: Error) => {
@@ -1075,6 +1085,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
   /** Forget a draft everywhere once the core has retired or deleted it. */
   function forgetDraft(draftId: string): void {
+    get().removeAttachmentFiles(`draft:${draftId}`);
     draftBackfilling.delete(draftId);
     const state = get();
     const drop = <T,>(record: Record<string, T>): Record<string, T> => {
@@ -1099,6 +1110,21 @@ export const useAppStore = create<AppState>((set, get) => {
 
   function handleMessage(message: ServerMessage): void {
     switch (message.type) {
+      case "hello":
+        // A new authenticated connection establishes which core generation
+        // may publish authority; history and old sockets establish none.
+        set({approvals: undefined});
+        break;
+      case "approval.state": {
+        const previous = get().approvals;
+        if (!previous || (previous.generation === message.state.generation && message.state.revision >= previous.revision)) {
+          set({approvals: message.state});
+        }
+        break;
+      }
+      case "browser.progress":
+        deliverBrowserProgress(message);
+        break;
       case "space.state":
         // The core's state replaces the last one wholesale (space-29),
         // and a read still in flight is older than this broadcast.
@@ -1279,7 +1305,11 @@ export const useAppStore = create<AppState>((set, get) => {
   deliver = handleMessage;
 
   return {
+    ...createAttachmentState(set, get, getClient),
     connection: "closed",
+    approvalInboxOpen: false,
+    showApprovals: (approvalFocusId) => set({approvalInboxOpen: true, approvalFocusId}),
+    hideApprovals: () => set({approvalInboxOpen: false, approvalFocusId: undefined}),
     everConnected: false,
     readiness: [],
     projects: [],
@@ -1906,6 +1936,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     forgetSession(sessionId: string, projectId: string): void {
+      get().removeAttachmentFiles(`session:${sessionId}`);
       // The tab first: closing lands the reader on a neighbour, never
       // on nothing (run-view-47).
       get().closeTab(projectId, sessionId);
@@ -1964,7 +1995,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    async submitBossText(sessionId: string, text: string): Promise<void> {
+    async submitBossText(sessionId: string, text: string, attachments?: readonly MediaAsset[]): Promise<void> {
       const state = get();
       const session = state.sessions.find((s) => s.id === sessionId);
       if (session?.externalWriter) {
@@ -1998,6 +2029,7 @@ export const useAppStore = create<AppState>((set, get) => {
         await getClient().command("turn.submit", {
           sessionId,
           text,
+          ...(attachments ? { attachments: [...attachments] } : {}),
           ...(intentId !== undefined ? { intentId } : {}),
         });
         consumeStaged();
@@ -2073,7 +2105,8 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async queueIntent(input): Promise<IntentInfo> {
-      const intent = await getClient().command("intent.queue", input);
+      const { attachments, ...rest } = input;
+      const intent = await getClient().command("intent.queue", { ...rest, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
       await get().loadLedger();
       return intent;
     },
@@ -2083,8 +2116,8 @@ export const useAppStore = create<AppState>((set, get) => {
       await get().loadLedger();
     },
 
-    async editIntent(intentId, text): Promise<void> {
-      await getClient().command("intent.edit", { intentId, text });
+    async editIntent(intentId, text, attachments): Promise<void> {
+      await getClient().command("intent.edit", { intentId, text, ...(attachments ? { attachments: [...attachments] } : {}) });
       await get().loadLedger();
     },
 
@@ -2117,13 +2150,14 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async stageDispatch(intent: IntentInfo): Promise<string> {
-      const title = intent.text.split(/\r?\n/, 1)[0] ?? intent.text;
+      const title = contentTitle(intent);
       // The project's current conversation is the lane Start reuses
       // (run-view-86, DR-051): its context is the point of a session.
       const current = currentSessionOf(get().sessions, intent.projectId);
       if (current) {
         await get().focusSession(current.id);
         get().setDraft(current.id, intent.text);
+        get().stageAttachmentAssets(`session:${current.id}`, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
         set({
           stagedIntents: {
             ...get().stagedIntents,
@@ -2137,6 +2171,7 @@ export const useAppStore = create<AppState>((set, get) => {
       get().setCurrentProject(intent.projectId);
       get().setWorkspaceTab(intent.projectId, "start");
       get().setHomeDraft(intent.text);
+      get().stageAttachmentAssets(`home:${intent.projectId}`, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
       set({
         stagedIntents: {
           ...get().stagedIntents,
@@ -2278,9 +2313,9 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ openDraftId: undefined });
     },
 
-    async sendDraft(draftId: string, text: string): Promise<{ queued: boolean }> {
+    async sendDraft(draftId: string, text: string, attachments?: readonly MediaAsset[]): Promise<{ queued: boolean }> {
       try {
-        const reply = await getClient().command("draft.send", { draftId, text });
+        const reply = await getClient().command("draft.send", { draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
         get().clearDraftError(draftId);
         return { queued: reply.queued };
       } catch (cause) {

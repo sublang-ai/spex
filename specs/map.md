@@ -122,6 +122,8 @@ meta.md       The spec of specs
 | [DR-094](decisions/094-the-compiler-adopts-the-apps-cligent.md) | 094-the-compiler-adopts-the-apps-cligent.md | The compiler adopts the app's Cligent: both shells on slc `^0.14.0`, the root override retired, one Cligent by the dependencies alone; amends DR-093 and DR-092; floors by DR-095 |
 | [DR-095](decisions/095-a-subagents-effort-and-the-agents-own-model.md) | 095-a-subagents-effort-and-the-agents-own-model.md | A subagent's effort, and the agent's own model by default: "Same as agent" first in the subagent-model field, a fifth tuning field "Subagent effort" whose empty choice reads "Agent chooses", each model paired with its effort on one row; Cligent `^0.30.0` / Playbook `^17.3.0` / slc `^0.15.0`; amends DR-019, DR-093, DR-094, DR-067 and DR-032 |
 | [DR-096](decisions/096-the-app-supplies-the-scaffold.md) | 096-the-app-supplies-the-scaffold.md | The app supplies the scaffold: both shells name the checkout's own `@sublang/spex` entry on their own executable as the scaffold command, the registry's `npx` only where none is built and then named in the failure; extends DR-081 and DR-024, amends DR-006 |
+| [DR-097](decisions/097-media-and-browser-tools-across-hosts.md) | 097-media-and-browser-tools-across-hosts.md | Cross-layer ownership of attachments, durable assets, browser preparation, tool-free control, inspection work and media presentation |
+| [DR-098](decisions/098-live-tool-approvals.md) | 098-live-tool-approvals.md | Ephemeral native tool approval ownership, answer controls, and reconnect recovery |
 
 ## Drafts
 
@@ -149,6 +151,8 @@ meta.md       The spec of specs
 | [run-view.md](packages/run-view.md) | Run view: Captain pane, read-only player transcripts, Boss composer, paused sessions a message continues, protocol-only rendering, fixture-stream and browser-journey coverage |
 | [scaffold.md](packages/scaffold.md) | Scaffold CLI: target resolution, idempotent seeding, LICENSE emission, a pinned copyright holder, language selection, agent instructions, and --update prompts for reconciliation or legacy migration |
 | [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection; supplied compiler, scaffold CLI and agent SDKs |
+| [approvals.md](packages/approvals.md) | Live native tool approval broker, protocol, and accessible controls |
+| [media.md](packages/media.md) | Authenticated content transfer, owned assets, and host browser preparation |
 | [storage.md](packages/storage.md) | Spex home catalog, file encodings, local project bindings, migration and Git selection |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, runtime model options named by one display rule in a listbox model field, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |

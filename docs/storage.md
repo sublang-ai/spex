@@ -10,8 +10,8 @@ All paths below are relative to Spex home; files stored elsewhere are outside it
 
 ## File catalog
 
-A **session bundle** is one session's manifest and matching replay stream.
-Synchronization selects both files from the same revision or deletes both; it never merges them independently.
+A **session bundle** is one session's manifest, matching replay stream, and referenced immutable assets.
+Synchronization selects that complete bundle from the same revision or deletes it; it never merges its parts independently.
 Git does not enforce this relationship.
 
 Ignored files can contain durable local state.
@@ -20,13 +20,16 @@ Ignored files can contain durable local state.
 | --- | --- | --- |
 | `config/playbook.config.yaml` | Shared Captain, player, playbook and presentation settings; session directory. | Tracked |
 | `projects.json` | Project IDs, names and registration times. | Tracked |
-| `intents/<projectId>.jsonl` | Ordered intent changes. | Tracked |
+| `intents/<projectId>.jsonl` | Ordered intent changes with attachment references. | Tracked |
+| `intents/<projectId>.assets/` | Immutable uploaded files retained by project intent history. | Tracked with its intent log |
 | `sessions/<id>.json` | Schema-7 manifest: identity, `cwd`, checkpoint and recovery evidence. | Tracked |
-| `sessions/<id>.records.jsonl` | Captain/player records, historical settings, role bindings and graphs. | Tracked |
+| `sessions/<id>.records.jsonl` | Captain/player records, historical settings, role bindings, graphs and media references. | Tracked |
+| `sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
 | `playbooks/<id>/` | Library sources and generated modules/artifacts. | Sources tracked; outputs omitted only if rebuildable locally |
 | `local/project-paths.json` | Project IDs mapped to local paths and recorded `cwd` aliases. | Ignored |
 | `prefs.json` | Core preferences, including the last viewed turn per session. | Ignored |
-| `local/drafts/<id>/draft.json`, `local/drafts/<id>/records.jsonl` | Playbook draft state, queue, and authoring transcript. | Ignored |
+| `local/drafts/<id>/draft.json`, `local/drafts/<id>/records.jsonl`, `local/drafts/<id>/assets/` | Playbook draft state, structured queue, authoring transcript and owned files. | Ignored |
+| `local/uploads/` | Private incomplete upload staging; completed bytes move into their owner before acknowledgement. | Ignored |
 | `forge-cache.json` | Rebuildable issue and pull-request cache. | Ignored |
 | `meta.json`, `local/migrations/<id>/` | Migration receipts and original inputs. | Ignored |
 | Config backups | Original configuration files. | Ignored |
@@ -67,11 +70,25 @@ Missing hints start fresh conversations from the Captain's journal or the player
 Definite rejection before execution permits one fresh attempt; ambiguous failures never retry automatically.
 Provider-only knowledge is unavailable, while pending operations retain their player identity and effect evidence.
 
+## Attachments and figures
+
+Before upgrading a shared home to asset-bearing sessions, stop older desktop, server, and Playbook CLI writers and update them to compatible releases.
+Legacy history remains readable, but an older writer is not authorized to rewrite the new asset-bearing format.
+
+Input records preserve exact user text beside ordered content references.
+The session receives its own verified copy before a submission is accepted;
+deleting it does not delete the project intent's independent copy.
+References identify bytes by SHA-256, with display names and MIME types
+retained per use. Native media and large tool details are stored before
+records refer to them. Missing or changed content is reported as unavailable
+and cannot be silently replaced by a changed source file.
+Agent-written Markdown paths and remote URLs are not imported as assets.
+
 ## Git synchronization
 
 Track portable files only after migration removes provider tokens from recovery fields.
 Original migration inputs and unsupported files remain ignored.
-Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files.
+Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files and asset directories.
 
 The app's Space surface syncs one shared branch, `main`, without stopping the core and never text-merges a file.
 The command-line path below may use one branch per device merged to or from `main`; stop local writers during its commit, checkout and merge.
@@ -87,7 +104,7 @@ Compare each session bundle in both pre-merge revisions with the common ancestor
 | Both changed differently | Explicit whole-session choice from either branch |
 
 The bundle rule applies even after a clean text merge.
-Apply the same selection rule to each configuration file, project registry and intent log as an individual file.
+Apply the same selection rule to each configuration file and project registry as an individual file, and to each intent log with its complete asset directory as one unit.
 Unselected changes leave active state but remain recoverable from Git history.
 Git's text merge alone does not enforce these rules.
 
@@ -115,7 +132,7 @@ Matching paths still require compatible runtimes and repository/effect reconcili
 
 ## Deletion
 
-With the session lease held, delete replay, hints, any active legacy sidecar and derived session state, then the manifest last.
+With the session lease held, delete replay, hints, assets, any active legacy sidecar and derived session state, then the manifest last.
 Interrupted cleanup is retryable; incomplete bundles cannot continue.
 Deletion fails if another writer is active or exclusive ownership cannot be proven.
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.

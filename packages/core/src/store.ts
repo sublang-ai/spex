@@ -123,6 +123,7 @@ interface SessionMeta {
 }
 
 interface TurnRow {
+  attachmentTitle?: string;
   turnId: number;
   prompt: string;
   startedAt: number;
@@ -267,6 +268,7 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
     if (held === false || (typeof held === "string" && held.length > 0)) entry[field] = held;
   }
   if (typeof source.fastMode === "boolean") entry.fastMode = source.fastMode;
+  if (typeof source.browser === "boolean") entry.browser = source.browser;
   return Object.keys(entry).length > 0 ? entry : undefined;
 }
 
@@ -919,7 +921,7 @@ export class Store {
   private applyRecordFold(sessionId: string, turnEvent: TurnEvent | undefined, usage: UsageEntry | undefined): void {
     if (turnEvent) {
       if (turnEvent.kind === "start") {
-        this.startTurnInMemory(sessionId, turnEvent.turnId, turnEvent.prompt, turnEvent.at);
+        this.startTurnInMemory(sessionId, turnEvent.turnId, turnEvent.prompt, turnEvent.at, turnEvent.attachmentTitle);
       } else {
         this.endTurnInMemory(sessionId, turnEvent.turnId, turnEvent.status, turnEvent.at);
       }
@@ -1329,7 +1331,7 @@ export class Store {
     return sessionInfo(
       meta,
       path,
-      turns[0]?.prompt,
+      turns[0]?.prompt.trim() ? turns[0].prompt : turns[0]?.attachmentTitle,
       turns.length,
       failed,
       cost,
@@ -1370,10 +1372,12 @@ export class Store {
     turnId: number,
     prompt: string,
     at: number,
+    attachmentTitle?: string,
   ): void {
     this.turnsOf(sessionId).set(turnId, {
       turnId,
       prompt,
+      ...(attachmentTitle ? {attachmentTitle} : {}),
       startedAt: at,
       endedAt: null,
       status: null,
@@ -1662,10 +1666,10 @@ export class Store {
       }));
   }
 
-  setIntentText(id: string, text: string): void {
+  setIntentText(id: string, text: string, attachments?: IntentInfo["attachments"]): void {
     const intent = this.intents.get(id);
     if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "edit", id, text });
+    this.commitIntentAct(intent.projectId, { act: "edit", id, text, ...(attachments !== undefined ? {attachments} : {}) });
   }
 
   setIntentRank(id: string, rank: string): void {

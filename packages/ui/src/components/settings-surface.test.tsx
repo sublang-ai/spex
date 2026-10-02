@@ -138,7 +138,7 @@ describe("SET: the Captain's row and its agent editor", () => {
     });
     fireEvent.click(within(section).getByTestId("agent-save"));
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalled());
-    const [type, payload] = commandMock.mock.calls[0];
+    const [type, payload] = commandMock.mock.calls.find(([type]) => type === "config.edit")!;
     expect(type).toBe("config.edit");
     expect(payload.op.kind).toBe("captain.set");
     expect(payload.op.patch.model).toBe("claude-opus-4-8[1m]");
@@ -156,7 +156,7 @@ describe("SET: the Captain's row and its agent editor", () => {
     );
   });
 
-  test("Cancel and Escape close the Captain's editor without a command", () => {
+  test("Cancel and Escape close the Captain's editor without a write", () => {
     renderSettings();
     const section = screen.getByTestId("captain-section");
     fireEvent.click(within(section).getByTestId("captain-edit"));
@@ -165,7 +165,7 @@ describe("SET: the Captain's row and its agent editor", () => {
     });
     fireEvent.click(within(section).getByTestId("agent-cancel"));
     expect(within(section).queryByTestId("agent-editor")).toBeNull();
-    expect(commandMock).not.toHaveBeenCalled();
+    expect(commandMock.mock.calls.filter(([type]) => type !== "agent.capabilities")).toEqual([]);
     expect(document.activeElement).toBe(
       within(section).getByTestId("captain-edit"),
     );
@@ -178,7 +178,7 @@ describe("SET: the Captain's row and its agent editor", () => {
       key: "Escape",
     });
     expect(within(section).queryByTestId("agent-editor")).toBeNull();
-    expect(commandMock).not.toHaveBeenCalled();
+    expect(commandMock.mock.calls.filter(([type]) => type !== "agent.capabilities")).toEqual([]);
   });
 
   test("one row's editor stands open at a time, the Captain's and the players' alike", () => {

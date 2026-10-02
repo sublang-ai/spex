@@ -259,6 +259,11 @@ msgstr "{path}.{key} 不是角色绑定的键：adapter、permissions、instruct
 msgid "{path}.{key} must be a string or false (the provider default)"
 msgstr "{path}.{key} 必须是字符串或 false（服务商默认值）"
 
+#. Config error; browser is the config field name
+#: src/config.ts
+msgid "{path}.browser must be a boolean"
+msgstr "{path}.browser 必须是布尔值"
+
 #. Config error; the effort, the adapter's name and the valid values are the runtime's own words
 #: src/config.ts
 msgid "{path}.effort \"{effort}\" is not supported by the \"{adapter}\" adapter (valid: {values})"
@@ -425,6 +430,11 @@ msgstr "{playbookId} 已有编译在运行"
 msgid "a compile is running for {id}; cancel it first"
 msgstr "{id} 正在编译；请先取消"
 
+#. Refusal during attachment admission
+#: src/service.ts
+msgid "A dispatched intent's content is history."
+msgstr "已派发的意图内容属于历史记录。"
+
 #. Refusal: work already sent cannot be reworded
 #: src/service.ts
 msgid "a dispatched intent's text is history"
@@ -439,6 +449,11 @@ msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同�
 #: src/service.ts
 msgid "a new session"
 msgstr "一个新会话"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "A retried upload chunk contains different bytes."
+msgstr "重试上传的数据块与已接收的内容不同。"
 
 #. Stands in for the title of a session that has none
 #. Stands in for the title of a session that has none
@@ -462,6 +477,11 @@ msgstr "会话和队列不提供文本差异"
 #: src/session.ts
 msgid "a turn is already running in this session"
 msgstr "此会话中已有轮次在运行"
+
+#. Refusal during attachment admission
+#: src/session.ts
+msgid "A turn is already running in this session."
+msgstr "此会话已有一轮正在运行。"
 
 #. Refusal: another send is already being admitted here
 #: src/service.ts
@@ -532,6 +552,11 @@ msgstr "请先绑定该已有项目，再更改其会话的智能体"
 #: src/service.ts
 msgid "bind the existing project before restoring"
 msgstr "请先绑定该已有项目，然后恢复"
+
+#. Refusal: this client already owns browser preparation
+#: src/service.ts
+msgid "Browser preparation is already running."
+msgstr "浏览器准备已在进行中。"
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -672,6 +697,11 @@ msgstr "草稿 {id} 已存在；请直接打开"
 #: src/drafts.ts
 msgid "draft id disagrees with its directory"
 msgstr "草稿 id 与其所在目录不一致"
+
+#. Refusal: the selected authoring draft does not exist
+#: src/service.ts
+msgid "Draft is unavailable."
+msgstr "草稿不可用。"
 
 #. Storage diagnostic: one project is bound twice
 #: src/app-storage.ts
@@ -852,6 +882,12 @@ msgstr "请先初始化仓库"
 msgid "Install Node >= 23.6 first; slc runs on it."
 msgstr "请先安装 Node >= 23.6；slc 依赖它运行。"
 
+#. Attachment transfer or storage diagnostic
+#. Attachment transfer or storage diagnostic
+#: src/app-storage.ts
+msgid "invalid attachment references"
+msgstr "附件引用无效"
+
 #. Diagnostic for a damaged draft file: a recorded question's answer choices will not read
 #: src/drafts.ts
 msgid "invalid clarification choices"
@@ -927,6 +963,11 @@ msgstr "JSON 无效"
 msgid "invalid legacy project path"
 msgstr "旧版项目路径无效"
 
+#. Media storage failure
+#: src/media.ts
+msgid "Invalid media read range."
+msgstr "媒体读取范围无效。"
+
 #. Migration diagnostic: the kept original no longer matches its receipt
 #: src/app-storage.ts
 msgid "invalid migration receipt or input"
@@ -997,6 +1038,17 @@ msgstr "时间戳无效"
 msgid "invalid timestamps"
 msgstr "记录的时间戳无效"
 
+#. Media transfer refusal
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Invalid upload bytes."
+msgstr "上传数据无效。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Invalid upload ID or file length."
+msgstr "上传 ID 或文件长度无效。"
+
 #. Storage diagnostic: a read marker's value is no turn number; the key stays as it is
 #: src/app-storage.ts
 msgid "invalid viewed marker {key}"
@@ -1056,6 +1108,18 @@ msgstr "确保当前用户有权读取该文件夹"
 #: src/space.ts
 msgid "May hold provider tokens — not shown"
 msgstr "可能包含服务商令牌 — 不予显示"
+
+#. Media storage failure
+#: src/media.ts
+msgid "Media read begins beyond the file length."
+msgstr "媒体读取的起始位置超出文件长度。"
+
+#. Media storage failure
+#. Media storage failure
+#. Media storage failure
+#: src/media.ts
+msgid "Media storage has stopped."
+msgstr "媒体存储服务已停止。"
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
@@ -1404,6 +1468,11 @@ msgstr "项目 {projectId} 不存在；请选择其注册表的修订版本以�
 msgid "project directory is missing"
 msgstr "项目目录不存在"
 
+#. Refusal: the selected project is unavailable on this host
+#: src/service.ts
+msgid "Project is unavailable."
+msgstr "项目不可用。"
+
 #. Refusal: the revision chosen to restore a project is not in this history
 #: src/store.ts
 msgid "project restoration requires an ancestor of the current branch"
@@ -1413,6 +1482,11 @@ msgstr "恢复项目需要选择当前分支的祖先提交"
 #: src/space.ts
 msgid "Projects changed"
 msgstr "项目有更改"
+
+#. Media storage failure
+#: src/media-transfers.ts
+msgid "Published upload has a different byte length."
+msgstr "已保存文件的长度与上传声明不符。"
 
 #. A queue unit's detail: this side rewrote the queue instead of appending
 #: src/space.ts
@@ -1623,6 +1697,11 @@ msgstr "请再次同步，以合并远程仓库这期间收到的内容。"
 msgid "Sync rules updated"
 msgstr "同步规则已更新"
 
+#. Attachment transfer or storage diagnostic
+#: src/service.ts
+msgid "Text or an attachment is required."
+msgstr "请输入文字或添加附件。"
+
 #. Refusal: the queue's waiting chain would loop
 #: src/service.ts
 msgid "that link would close a waiting cycle"
@@ -1673,6 +1752,11 @@ msgstr "应用自带的编译器面向 Playbook 引擎 {compiler}，而应用运
 msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
 msgstr "应用自带的 @sublang/slc 副本缺失；请在 Spex 源码目录中运行 npm ci 以恢复。"
 
+#. Attachment transfer or storage diagnostic
+#: src/session.ts
+msgid "The attachment changed before it could be submitted. Retry the upload."
+msgstr "附件在提交前发生了变化，请重新上传。"
+
 #. The session's Captain, named inside a settings-drift line
 #: src/session.ts
 msgid "the Captain"
@@ -1688,10 +1772,20 @@ msgstr "编译所用的智能体运行在 {adapter} 上，而编译器无法驱�
 msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
+#. Refusal during attachment admission
+#: src/service.ts
+msgid "The core is stopping."
+msgstr "核心服务正在停止。"
+
 #. Refusal: this core keeps no state on disk, so it has no Space
 #: src/service.ts
 msgid "the core runs without a state root; Space needs one"
 msgstr "该核心未使用状态根目录；空间需要一个"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The file has not finished uploading."
+msgstr "文件尚未上传完成。"
 
 #. Refusal: Initialize was asked of a home Git already holds
 #: src/space.ts
@@ -1727,6 +1821,11 @@ msgstr "该意图在等待“{title}”"
 #: src/space.ts
 msgid "the migration is incomplete; finish or remove it before initializing"
 msgstr "迁移尚未完成；请先完成或移除它，再进行初始化"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The native tool approval is invalid or expired."
+msgstr "原生工具审批请求无效或已过期。"
 
 #. Refusal: the explorer was given a path leading outside the home
 #: src/space.ts
@@ -1810,6 +1909,52 @@ msgstr "源文为空；未写入任何内容"
 msgid "The space changed twice while syncing"
 msgstr "同步期间空间被改动了两次"
 
+#. Live tool approval refusal
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval expired."
+msgstr "工具审批请求已过期。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval is no longer pending."
+msgstr "此工具审批请求已不再等待答复。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval is too large to present safely."
+msgstr "工具审批请求过大，无法安全展示。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload chunk does not match the received offset."
+msgstr "上传数据块的位置与已接收的数据不符。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload chunk exceeds the declared file length."
+msgstr "上传数据块超出声明的文件长度。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload service has stopped."
+msgstr "上传服务已停止。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This approval belongs to a previous core connection."
+msgstr "此审批请求属于之前的核心服务连接。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This approval has already received a different answer."
+msgstr "此审批请求已收到不同的答复。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This decision was not offered by the agent."
+msgstr "智能体未提供此答复选项。"
+
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts
 msgid "This run no longer offers “{actionId}”."
@@ -1839,6 +1984,36 @@ msgstr "此会话不再提供“{actionId}”来结束其运行。"
 #: src/session.ts
 msgid "This session offers no way to end its run."
 msgstr "此会话没有可用来结束其运行的方式。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This tool approval has expired."
+msgstr "此工具审批请求已过期。"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This tool approval is no longer pending for this conversation."
+msgstr "此工具审批请求已不再等待本对话的答复。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload has already completed."
+msgstr "此文件已上传完成。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload is unavailable. Retry the file upload."
+msgstr "此次上传不可用，请重新上传文件。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload was canceled or expired. Retry the file upload."
+msgstr "此次上传已取消或过期，请重新上传文件。"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Too many files are uploading. Finish or cancel an upload, then retry."
+msgstr "正在上传的文件过多，请先完成或取消部分上传，再重试。"
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own
@@ -1918,10 +2093,30 @@ msgstr "不支持的注册表版本；已原样保留"
 msgid "untitled session"
 msgstr "未命名会话"
 
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Upload ID already identifies a different file."
+msgstr "此上传 ID 已用于另一个文件。"
+
+#. Startup refusal: a media staging path cannot be safely cleaned
+#: src/media.ts
+msgid "Upload staging path is unsafe: {path}"
+msgstr "上传暂存路径不安全：{path}"
+
+#. Media storage failure
+#: src/media-transfers.ts
+msgid "Upload write made no progress."
+msgstr "无法继续写入上传文件。"
+
 #. What blocks a Space operation: a session of this project is working
 #: src/service.ts
 msgid "Wait for {name} in {project}"
 msgstr "请等待 {project} 中的 {name}"
+
+#. Attachment transfer or storage diagnostic
+#: src/service.ts
+msgid "Wait for the media upload to finish."
+msgstr "请等待媒体文件上传完成。"
 
 #. Refusal: a turn is running in the project being rebound
 #: src/service.ts

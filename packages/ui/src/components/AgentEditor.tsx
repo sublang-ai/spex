@@ -15,6 +15,7 @@ import {
   type AdapterName,
   type AgentBlockInput,
   type ReadinessEntry,
+  type MediaUploadOwner,
 } from "@sublang/spex-core/protocol";
 
 import { agentChoosesLabel, useAgentOptions, modelTuning } from "../lib/agent-options.js";
@@ -29,6 +30,8 @@ import {
   readinessWord,
   type ChipAgent,
 } from "./AgentChip.js";
+import { useBrowserTools } from "../lib/useBrowserTools.js";
+import { BrowserControl } from "./BrowserControl.js";
 import { Rich } from "./Rich.js";
 
 export const ADAPTERS = adapterNameSchema.options;
@@ -85,6 +88,7 @@ export interface AgentEditorProps {
   /** The block the draft seeds from; a fresh assignment passes its
    * default block. */
   initial?: ChipAgent;
+  context?: MediaUploadOwner;
   /** Adapter-keyed readiness entries; dots render when passed, and
    * the fast-mode switch shows for adapters declaring it (DR-038). */
   readiness?: ReadinessEntry[];
@@ -110,6 +114,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const [subagentEffort, setSubagentEffort] = useState(initial?.subagentEffort ?? "");
   const [effort, setEffort] = useState(initial?.effort ?? "");
   const [fastMode, setFastMode] = useState(initial?.fastMode ?? false);
+  const [browser, setBrowser] = useState(initial?.browser ?? false);
   const [mode, setMode] = useState<Mode>(initialMode(initial));
   const [writablePaths, setWritablePaths] = useState(
     (initial?.permissions?.writablePaths ?? []).join(", "),
@@ -122,6 +127,20 @@ export function AgentEditor(props: AgentEditorProps) {
   );
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+
+  const paths = writablePaths.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const permissions = {
+    ...carried,
+    ...(mode !== "none" ? { mode } : {}),
+    ...(paths.length ? { writablePaths: paths } : {}),
+  };
+  const browserTools = useBrowserTools({ adapter,
+    ...(model.trim() ? { model: model.trim() } : {}),
+    ...(subagentModel !== "" ? { subagentModel } : {}),
+    ...(subagentEffort ? { subagentEffort } : {}),
+    ...(effort ? { effort } : {}), ...(fastMode ? { fastMode } : {}),
+    ...(Object.keys(permissions).length > 0 || initial?.permissions ? { permissions } : {}),
+  }, props.context);
 
   const readinessByAdapter = new Map(
     (props.readiness ?? []).map((entry) => [entry.adapter, entry]),
@@ -160,6 +179,7 @@ export function AgentEditor(props: AgentEditorProps) {
     subagentEffort !== (initial?.subagentEffort ?? "") ||
     effort !== (initial?.effort ?? "") ||
     fastMode !== (initial?.fastMode ?? false) ||
+    browser !== (initial?.browser ?? false) ||
     mode !== initialMode(initial) ||
     writablePaths !== (initial?.permissions?.writablePaths ?? []).join(", ");
 
@@ -191,6 +211,7 @@ export function AgentEditor(props: AgentEditorProps) {
     else if (initial?.effort) patch.effort = null;
     // Fast mode is off by default, so the switch writes true or unsets
     // the key (DR-038) — the same shape effort takes.
+    if (browser !== (initial?.browser ?? false)) patch.browser = browser;
     if (fastMode) patch.fastMode = true;
     else if (initial?.fastMode) patch.fastMode = null;
     const permissions: NonNullable<AgentPatch["permissions"]> = {
@@ -415,6 +436,10 @@ export function AgentEditor(props: AgentEditorProps) {
           </span>
         </label>
       </div>
+      <BrowserControl enabled={browser} supported={browserTools.supported}
+        unsupportedReason={browserTools.unsupportedReason} outputNote={browserTools.outputNote} approvalNote={browserTools.approvalNote} preparation={browserTools.preparation}
+        disabled={busy} onChange={setBrowser} onPrepare={browserTools.prepare} onCancel={browserTools.cancel} />
+      {browserTools.capabilityError && <button type="button" onClick={browserTools.refresh} className="self-start text-xs underline">{i18n._("Retry browser support check")}</button>}
       <ModelDiscoveryStatus state={discovery} />
       {!tuning.effortKnown && <p className="text-xs text-neutral-500">{i18n._("Effort options apply to the adapter; support for this model is unverified.")}</p>}
       {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort or the provider default.")}</p>}
@@ -429,7 +454,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
+          disabled={busy || (browser && !browserTools.supported) || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -449,7 +474,7 @@ export function AgentEditor(props: AgentEditorProps) {
           <button
             type="button"
             data-testid="agent-same-as-captain"
-            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions")}
+            title={i18n._("Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions")}
             onClick={() => {
               const captain = props.captain!;
               const nextAdapter = knownAdapter(captain.adapter);
@@ -459,6 +484,7 @@ export function AgentEditor(props: AgentEditorProps) {
               setSubagentEffort(captain.subagentEffort ?? "");
               setEffort(captain.effort ?? "");
               setFastMode(Boolean(captain.fastMode));
+              setBrowser(Boolean(captain.browser));
               setMode(initialMode(captain));
               setWritablePaths(
                 (captain.permissions?.writablePaths ?? []).join(", "),

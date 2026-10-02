@@ -62,6 +62,7 @@ export class SpexClient {
     const socket = factory(this.options.url);
     this.socket = socket;
     socket.addEventListener("message", (event) => {
+      if (this.socket !== socket) return;
       const message = JSON.parse(String(event.data)) as ServerMessage;
       if (message.type === "hello") {
         if (message.protocolVersion !== PROTOCOL_VERSION) {
@@ -93,6 +94,7 @@ export class SpexClient {
       this.options.onMessage(message);
     });
     socket.addEventListener("close", () => {
+      if (this.socket !== socket) return;
       for (const [, pending] of this.pending) {
         // The code is the machine's; the words reach the reader
         // wherever a surface prints the refusal (localization-4).

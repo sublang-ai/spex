@@ -39,6 +39,9 @@ const loader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/pr/registry") {
     return { default: entry("pr", ["coder"]) };
   }
+  if (specifier === "@sublang/playbook/inspect/registry") {
+    return { default: entry("inspect", ["inspector"]) };
+  }
   throw new Error(`no module ${specifier}`);
 };
 
@@ -58,6 +61,7 @@ test("catalog serves every built-in with sources from the installed package", as
       ["dev", false],
       ["branch", false],
       ["pr", false],
+      ["inspect", false],
     ],
   );
   const code = builtins.find((b) => b.id === "code");
@@ -82,4 +86,16 @@ test("a built-in whose registry fails to load is omitted", async () => {
     builtins.map((b) => b.id),
     ["code"],
   );
+});
+
+// The installed dependency must supply the real registry and source, not only
+// a catalog label: existing homes learn about Inspect without config reseeding.
+test("playbook-library-34: installed Inspect is offered to an existing config", async () => {
+  const builtins = await loadBuiltinCatalog(new Set(["code", "review"]));
+  const inspect = builtins.find((entry) => entry.id === "inspect");
+  assert.ok(inspect);
+  assert.equal(inspect.configured, false);
+  assert.deepEqual(inspect.roles, ["inspector"]);
+  assert.equal(inspect.from, "@sublang/playbook/inspect/registry");
+  assert.match(inspect.source ?? "", /^# Inspect/);
 });

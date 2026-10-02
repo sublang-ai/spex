@@ -15,6 +15,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
@@ -65,6 +66,7 @@ export interface CaptainHomeProps {
    * remedy is adding one, not picking one (run-view-25). */
   hasProjects?: boolean;
   projectName?: string;
+  projectId?: string;
   playbooks: PlaybookSummary[];
   /** The Captain's inline agent block (DR-019); absent while the
    * config is broken. */
@@ -98,6 +100,7 @@ export interface CaptainHomeProps {
   /** Queue the typed text as an intent instead of starting a session
    * (DR-035); absent while no project is current — the control hides. */
   onQueueInstead?: (text: string) => Promise<void>;
+  attachments?: ComposerAttachmentControls;
   /** Storage for the quick-start dismissal (tests inject a stub). */
   storage?: Pick<Storage, "getItem" | "setItem">;
 }
@@ -206,8 +209,7 @@ export function CaptainHome(props: CaptainHomeProps) {
     props.configStatus === "invalid" || props.configStatus === "missing";
 
   async function start(): Promise<void> {
-    const trimmed = text.trim();
-    if (!trimmed || busy || !connected) return;
+    if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) return;
     if (!props.hasProject) {
       // The palette owns project choice (DR-011); the draft stays.
       props.onOpenPalette();
@@ -216,7 +218,7 @@ export function CaptainHome(props: CaptainHomeProps) {
     setError(undefined);
     setBusy(true);
     try {
-      await props.onStart(trimmed);
+      await props.onStart(text);
       setText("");
     } catch (cause) {
       setError((cause as Error).message);
@@ -533,6 +535,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 anchorRef={gearRef}
                 direction={captainPopover.direction}
                 initial={captain}
+                context={props.projectId ? { kind: "project", id: props.projectId } : undefined}
                 readiness={readiness}
                 onSave={(patch) =>
                   Promise.resolve(props.onSaveCaptain(patch)).then(
@@ -565,6 +568,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               the caption line the note and the staged chip share, and
               the wrapping action row beneath. */}
           <ComposerBox
+            attachments={props.attachments ? { ...props.attachments, disabled: props.attachments.disabled || busy || queueing || !connected } : undefined}
             field={
               <ComposerField
                 fieldRef={composerRef}
@@ -578,7 +582,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                   setQueueNote(undefined);
                   // Emptying the composer detaches the staged intent
                   // (run-view-86): sending something else stamps nothing.
-                  if (props.staged && event.target.value.trim().length === 0) {
+                  if (props.staged && event.target.value.trim().length === 0 && !props.attachments?.files.length) {
                     props.onDetachStaged?.();
                   }
                 }}
@@ -635,14 +639,13 @@ export function CaptainHome(props: CaptainHomeProps) {
                   data-testid="queue-intent-button"
                   title={i18n._("Add this to the project's Up next without sending it")}
                   disabled={
-                    text.trim().length === 0 || busy || queueing || !connected
+                    !canSubmitContent(text, props.attachments?.files) || busy || queueing || !connected
                   }
                   onClick={() => {
-                    const trimmed = text.trim();
-                    if (!trimmed || queueing) return;
+                    if (!canSubmitContent(text, props.attachments?.files) || queueing) return;
                     setQueueing(true);
                     props
-                      .onQueueInstead!(trimmed)
+                      .onQueueInstead!(text)
                       .then(() => {
                         setText("");
                         setQueueNote(
@@ -665,7 +668,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="start-send"
-                disabled={busy || !connected || text.trim().length === 0}
+                disabled={busy || !connected || !canSubmitContent(text, props.attachments?.files)}
                 onClick={() => void start()}
                 title={
                   props.hasProject

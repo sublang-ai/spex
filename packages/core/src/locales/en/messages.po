@@ -259,6 +259,11 @@ msgstr "{path}.{key} is not a role binding key: adapter, permissions, instructio
 msgid "{path}.{key} must be a string or false (the provider default)"
 msgstr "{path}.{key} must be a string or false (the provider default)"
 
+#. Config error; browser is the config field name
+#: src/config.ts
+msgid "{path}.browser must be a boolean"
+msgstr "{path}.browser must be a boolean"
+
 #. Config error; the effort, the adapter's name and the valid values are the runtime's own words
 #: src/config.ts
 msgid "{path}.effort \"{effort}\" is not supported by the \"{adapter}\" adapter (valid: {values})"
@@ -425,6 +430,11 @@ msgstr "a compile is already running for {playbookId}"
 msgid "a compile is running for {id}; cancel it first"
 msgstr "a compile is running for {id}; cancel it first"
 
+#. Refusal during attachment admission
+#: src/service.ts
+msgid "A dispatched intent's content is history."
+msgstr "A dispatched intent's content is history."
+
 #. Refusal: work already sent cannot be reworded
 #: src/service.ts
 msgid "a dispatched intent's text is history"
@@ -439,6 +449,11 @@ msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 #: src/service.ts
 msgid "a new session"
 msgstr "a new session"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "A retried upload chunk contains different bytes."
+msgstr "A retried upload chunk contains different bytes."
 
 #. Stands in for the title of a session that has none
 #. Stands in for the title of a session that has none
@@ -462,6 +477,11 @@ msgstr "a session or queue offers no text diff"
 #: src/session.ts
 msgid "a turn is already running in this session"
 msgstr "a turn is already running in this session"
+
+#. Refusal during attachment admission
+#: src/session.ts
+msgid "A turn is already running in this session."
+msgstr "A turn is already running in this session."
 
 #. Refusal: another send is already being admitted here
 #: src/service.ts
@@ -532,6 +552,11 @@ msgstr "bind the existing project before changing its session's agents"
 #: src/service.ts
 msgid "bind the existing project before restoring"
 msgstr "bind the existing project before restoring"
+
+#. Refusal: this client already owns browser preparation
+#: src/service.ts
+msgid "Browser preparation is already running."
+msgstr "Browser preparation is already running."
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -672,6 +697,11 @@ msgstr "draft {id} already exists; open it"
 #: src/drafts.ts
 msgid "draft id disagrees with its directory"
 msgstr "draft id disagrees with its directory"
+
+#. Refusal: the selected authoring draft does not exist
+#: src/service.ts
+msgid "Draft is unavailable."
+msgstr "Draft is unavailable."
 
 #. Storage diagnostic: one project is bound twice
 #: src/app-storage.ts
@@ -852,6 +882,12 @@ msgstr "Initialize the repository first"
 msgid "Install Node >= 23.6 first; slc runs on it."
 msgstr "Install Node >= 23.6 first; slc runs on it."
 
+#. Attachment transfer or storage diagnostic
+#. Attachment transfer or storage diagnostic
+#: src/app-storage.ts
+msgid "invalid attachment references"
+msgstr "invalid attachment references"
+
 #. Diagnostic for a damaged draft file: a recorded question's answer choices will not read
 #: src/drafts.ts
 msgid "invalid clarification choices"
@@ -927,6 +963,11 @@ msgstr "invalid JSON"
 msgid "invalid legacy project path"
 msgstr "invalid legacy project path"
 
+#. Media storage failure
+#: src/media.ts
+msgid "Invalid media read range."
+msgstr "Invalid media read range."
+
 #. Migration diagnostic: the kept original no longer matches its receipt
 #: src/app-storage.ts
 msgid "invalid migration receipt or input"
@@ -997,6 +1038,17 @@ msgstr "invalid timestamp"
 msgid "invalid timestamps"
 msgstr "invalid timestamps"
 
+#. Media transfer refusal
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Invalid upload bytes."
+msgstr "Invalid upload bytes."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Invalid upload ID or file length."
+msgstr "Invalid upload ID or file length."
+
 #. Storage diagnostic: a read marker's value is no turn number; the key stays as it is
 #: src/app-storage.ts
 msgid "invalid viewed marker {key}"
@@ -1056,6 +1108,18 @@ msgstr "Make sure this user can read the folder"
 #: src/space.ts
 msgid "May hold provider tokens — not shown"
 msgstr "May hold provider tokens — not shown"
+
+#. Media storage failure
+#: src/media.ts
+msgid "Media read begins beyond the file length."
+msgstr "Media read begins beyond the file length."
+
+#. Media storage failure
+#. Media storage failure
+#. Media storage failure
+#: src/media.ts
+msgid "Media storage has stopped."
+msgstr "Media storage has stopped."
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
@@ -1404,6 +1468,11 @@ msgstr "project {projectId} is absent; select its registry revision to restore i
 msgid "project directory is missing"
 msgstr "project directory is missing"
 
+#. Refusal: the selected project is unavailable on this host
+#: src/service.ts
+msgid "Project is unavailable."
+msgstr "Project is unavailable."
+
 #. Refusal: the revision chosen to restore a project is not in this history
 #: src/store.ts
 msgid "project restoration requires an ancestor of the current branch"
@@ -1413,6 +1482,11 @@ msgstr "project restoration requires an ancestor of the current branch"
 #: src/space.ts
 msgid "Projects changed"
 msgstr "Projects changed"
+
+#. Media storage failure
+#: src/media-transfers.ts
+msgid "Published upload has a different byte length."
+msgstr "Published upload has a different byte length."
 
 #. A queue unit's detail: this side rewrote the queue instead of appending
 #: src/space.ts
@@ -1623,6 +1697,11 @@ msgstr "Sync again to merge what the remote received meanwhile."
 msgid "Sync rules updated"
 msgstr "Sync rules updated"
 
+#. Attachment transfer or storage diagnostic
+#: src/service.ts
+msgid "Text or an attachment is required."
+msgstr "Text or an attachment is required."
+
 #. Refusal: the queue's waiting chain would loop
 #: src/service.ts
 msgid "that link would close a waiting cycle"
@@ -1673,6 +1752,11 @@ msgstr "The app's compiler targets playbook engine {compiler} while the app runs
 msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
 msgstr "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
 
+#. Attachment transfer or storage diagnostic
+#: src/session.ts
+msgid "The attachment changed before it could be submitted. Retry the upload."
+msgstr "The attachment changed before it could be submitted. Retry the upload."
+
 #. The session's Captain, named inside a settings-drift line
 #: src/session.ts
 msgid "the Captain"
@@ -1688,10 +1772,20 @@ msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; 
 msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
+#. Refusal during attachment admission
+#: src/service.ts
+msgid "The core is stopping."
+msgstr "The core is stopping."
+
 #. Refusal: this core keeps no state on disk, so it has no Space
 #: src/service.ts
 msgid "the core runs without a state root; Space needs one"
 msgstr "the core runs without a state root; Space needs one"
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The file has not finished uploading."
+msgstr "The file has not finished uploading."
 
 #. Refusal: Initialize was asked of a home Git already holds
 #: src/space.ts
@@ -1727,6 +1821,11 @@ msgstr "the intent waits on \"{title}\""
 #: src/space.ts
 msgid "the migration is incomplete; finish or remove it before initializing"
 msgstr "the migration is incomplete; finish or remove it before initializing"
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The native tool approval is invalid or expired."
+msgstr "The native tool approval is invalid or expired."
 
 #. Refusal: the explorer was given a path leading outside the home
 #: src/space.ts
@@ -1810,6 +1909,52 @@ msgstr "the source is empty; nothing was written"
 msgid "The space changed twice while syncing"
 msgstr "The space changed twice while syncing"
 
+#. Live tool approval refusal
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval expired."
+msgstr "The tool approval expired."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval is no longer pending."
+msgstr "The tool approval is no longer pending."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "The tool approval is too large to present safely."
+msgstr "The tool approval is too large to present safely."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload chunk does not match the received offset."
+msgstr "The upload chunk does not match the received offset."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload chunk exceeds the declared file length."
+msgstr "The upload chunk exceeds the declared file length."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "The upload service has stopped."
+msgstr "The upload service has stopped."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This approval belongs to a previous core connection."
+msgstr "This approval belongs to a previous core connection."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This approval has already received a different answer."
+msgstr "This approval has already received a different answer."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This decision was not offered by the agent."
+msgstr "This decision was not offered by the agent."
+
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts
 msgid "This run no longer offers “{actionId}”."
@@ -1839,6 +1984,36 @@ msgstr "This session no longer offers “{actionId}” to end its run."
 #: src/session.ts
 msgid "This session offers no way to end its run."
 msgstr "This session offers no way to end its run."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This tool approval has expired."
+msgstr "This tool approval has expired."
+
+#. Live tool approval refusal
+#: src/approvals.ts
+msgid "This tool approval is no longer pending for this conversation."
+msgstr "This tool approval is no longer pending for this conversation."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload has already completed."
+msgstr "This upload has already completed."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload is unavailable. Retry the file upload."
+msgstr "This upload is unavailable. Retry the file upload."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "This upload was canceled or expired. Retry the file upload."
+msgstr "This upload was canceled or expired. Retry the file upload."
+
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Too many files are uploading. Finish or cancel an upload, then retry."
+msgstr "Too many files are uploading. Finish or cancel an upload, then retry."
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own
@@ -1918,10 +2093,30 @@ msgstr "unsupported registry version; preserved unchanged"
 msgid "untitled session"
 msgstr "untitled session"
 
+#. Media transfer refusal
+#: src/media-transfers.ts
+msgid "Upload ID already identifies a different file."
+msgstr "Upload ID already identifies a different file."
+
+#. Startup refusal: a media staging path cannot be safely cleaned
+#: src/media.ts
+msgid "Upload staging path is unsafe: {path}"
+msgstr "Upload staging path is unsafe: {path}"
+
+#. Media storage failure
+#: src/media-transfers.ts
+msgid "Upload write made no progress."
+msgstr "Upload write made no progress."
+
 #. What blocks a Space operation: a session of this project is working
 #: src/service.ts
 msgid "Wait for {name} in {project}"
 msgstr "Wait for {name} in {project}"
+
+#. Attachment transfer or storage diagnostic
+#: src/service.ts
+msgid "Wait for the media upload to finish."
+msgstr "Wait for the media upload to finish."
 
 #. Refusal: a turn is running in the project being rebound
 #: src/service.ts

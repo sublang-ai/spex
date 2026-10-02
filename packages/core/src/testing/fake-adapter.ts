@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import type { Attachment, MediaPayload, ApprovalHandler, ApprovalDecision, ApprovalRequest } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
 export interface FakeUsage {
@@ -32,6 +33,8 @@ export interface FakeToolCall {
 }
 
 export interface FakeResponse {
+  /** A controllable native-style suspension, before any scripted effect. */
+  approval?: {id?: string; toolName: string; input: Record<string, unknown>; reason?: string; details?: Record<string, unknown>; expiresInMs?: number; choices?: readonly ApprovalDecision[]};
   /** Streamed as text_delta events before the terminal done. */
   deltas?: string[];
   /** Files written relative to the run's `cwd` before the tool events
@@ -44,6 +47,7 @@ export interface FakeResponse {
   effect?: (cwd: string) => void;
   /** Emitted after the deltas, in order. */
   tools?: FakeToolCall[];
+  media?: MediaPayload[];
   thinking?: string;
   /** done.result — also the finalText the runtime reports. */
   result: string;
@@ -113,7 +117,10 @@ export interface FakeRunOptions {
   permissions?: Record<string, unknown>;
   allowedTools?: string[];
   disallowedTools?: string[];
+  attachments?: readonly Attachment[];
+  browser?: boolean;
   abortSignal?: AbortSignal;
+  approvalHandler?: ApprovalHandler;
 }
 
 export interface FakeAdapterStats {
@@ -130,6 +137,8 @@ export interface FakeAdapterStats {
     permissions?: Record<string, unknown>;
     allowedTools?: string[];
     disallowedTools?: string[];
+    attachments?: readonly Attachment[];
+    browser?: boolean;
   }[];
 }
 
@@ -175,6 +184,8 @@ export function fakeAdapterImports(
         ...(options?.permissions ? { permissions: options.permissions } : {}),
         ...(options?.allowedTools ? { allowedTools: options.allowedTools } : {}),
         ...(options?.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
+        ...(options?.attachments ? { attachments: options.attachments } : {}),
+        ...(options?.browser !== undefined ? {browser: options.browser} : {}),
       });
       const sessionId = randomUUID();
       // `<id>` names the cwd's basename — the draft id — in paths,
@@ -226,6 +237,23 @@ export function fakeAdapterImports(
         };
         return;
       }
+      if (response.approval) {
+        const source = response.approval;
+        const request: ApprovalRequest = {id: source.id ?? "reusable-native-id", kind: "tool", agent: this.agent,
+          sessionId, toolUseId: "approval-tool", toolName: source.toolName, input: namedInput(source.input),
+          ...(source.reason ? {reason: source.reason} : {}), ...(source.details ? {details: source.details} : {}), choices: source.choices ?? ["allow_once", "deny"],
+          createdAt: Date.now(), expiresAt: Date.now() + (source.expiresInMs ?? 600_000)};
+        yield {...base, type: "approval_request", timestamp: Date.now(), payload: request};
+        let decision: ApprovalDecision = "deny";
+        let outcome = "host";
+        try { decision = await options?.approvalHandler?.(request, {signal: options.abortSignal ?? new AbortController().signal}) ?? "deny"; }
+        catch { outcome = options?.abortSignal?.aborted ? "cancelled" : Date.now() >= request.expiresAt ? "timeout" : "error"; }
+        yield {...base, type: "approval_response", timestamp: Date.now(), payload: {requestId: request.id, decision, source: outcome}};
+        if (decision !== "allow_once") {
+          yield {...base, type: "done", timestamp: Date.now(), payload: {status: options?.abortSignal?.aborted ? "interrupted" : "success", result: "The requested action was not performed.", usage: {toolUses: 0}, durationMs: 1}};
+          return;
+        }
+      }
       for (const delta of response.deltas ?? []) {
         yield { ...base, type: "text_delta", timestamp: Date.now(), payload: { delta } };
       }
@@ -260,6 +288,7 @@ export function fakeAdapterImports(
           },
         };
       }
+      for (const payload of response.media ?? []) yield {...base, type: "media", timestamp: Date.now(), payload};
       if (response.thinking !== undefined) {
         yield {
           ...base,

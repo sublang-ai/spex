@@ -110,6 +110,14 @@ const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/decide/registry") {
     return { default: decideEntry() };
   }
+  if (specifier === "@sublang/playbook/inspect/registry") {
+    return { default: registryEntry({
+      id: "inspect",
+      command: "inspect",
+      intent: "inspect an app or supplied evidence without repository changes",
+      requiredRoleIds: ["inspector"],
+    }) };
+  }
   if (specifier === "@sublang/playbook/dev/registry") {
     return {
       default: registryEntry({

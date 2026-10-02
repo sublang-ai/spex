@@ -18,13 +18,16 @@
 // — the preamble, the relay, the reseed digest — is the agent's
 // prompt and stays as it is.
 
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cligent, type AgentAdapter, type AgentEvent, type CligentOptions } from "@sublang/cligent";
-import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
+import { createAssetStore, externalizeAgentEvent } from "@sublang/playbook/session-assets";
+import type { PlayerAdapterImports, TmuxPlayApprovalHandler } from "@sublang/cligent/tmux-play";
 
+import { loadAgentAdapter } from "./agent-runtime.js";
 import { stripLeadingComments } from "./artifacts.js";
 import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
@@ -41,6 +44,8 @@ import type {
   DraftSource,
   DraftSourceMessage,
   DraftState,
+  MediaAsset,
+  MessageContent,
   TmuxPlayRecord,
 } from "./protocol.js";
 import { CoreError } from "./session.js";
@@ -88,6 +93,9 @@ function stageName(id: string): string {
 }
 
 export interface AuthorManagerOptions {
+  approvalHandler?: (draftId: string) => TmuxPlayApprovalHandler;
+  cancelApprovals?: (draftId: string, invocationId?: string) => void;
+  retireMedia?: (draftId: string, remove: () => void) => Promise<void>;
   store: Store;
   drafts: DraftStore;
   configPath: string;
@@ -113,7 +121,7 @@ export interface AuthorManagerEvents {
 }
 
 type TurnOrigin =
-  | { kind: "boss"; text: string; preface?: string }
+  | ({ kind: "boss"; preface?: string } & MessageContent)
   | { kind: "system"; label: string; text: string };
 
 interface LiveDraft {
@@ -148,15 +156,6 @@ interface ResolvedAuthorAgent {
   key: string;
 }
 
-/** cligent's own default adapter table, by the adapters' public
- * subpaths: the classes every session player loads through. */
-const DEFAULT_ADAPTER_IMPORTS = {
-  claude: async () => (await import("@sublang/cligent/adapters/claude-code")).ClaudeCodeAdapter,
-  codex: async () => (await import("@sublang/cligent/adapters/codex")).CodexAdapter,
-  gemini: async () => (await import("@sublang/cligent/adapters/gemini")).GeminiAdapter,
-  kimi: async () => (await import("@sublang/cligent/adapters/kimi")).KimiAdapter,
-  opencode: async () => (await import("@sublang/cligent/adapters/opencode")).OpenCodeAdapter,
-} as unknown as PlayerAdapterImports;
 
 /** The installed @sublang/playbook package root, resolved from a file
  * the package exports. */
@@ -690,20 +689,24 @@ export class AuthorManager {
 
   /** A Boss message: dispatched at once while the draft is idle, else
    * queued and dispatched in order when it is (core-service-96). */
-  send(id: string, text: string): { accepted: true; queued: boolean } {
+  send(id: string, input: string | MessageContent): { accepted: true; queued: boolean } {
+    const content: MessageContent = typeof input === "string" ? {text: input} : {
+      text: input.text,
+      ...(input.attachments?.length ? {attachments: input.attachments.map((asset) => ({...asset}))} : {}),
+    };
     const draft = this.read(id);
     this.assertReadable(id);
     const live = this.liveOf(id);
     // The Boss spoke: the relay count starts over (playbook-library-68).
     draft.failures = 0;
     if (this.activity(id) !== "idle") {
-      draft.queued.push(text);
+      draft.queued.push(content);
       this.save(draft);
       this.publish(id);
       return { accepted: true, queued: true };
     }
     this.save(draft);
-    this.startTurn(id, live, { kind: "boss", text });
+    this.startTurn(id, live, { kind: "boss", ...content });
     return { accepted: true, queued: false };
   }
 
@@ -839,7 +842,7 @@ export class AuthorManager {
         throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
       }
       const state = await commit(result);
-      this.retire(id);
+      await this.retire(id);
       return state;
     } finally {
       this.options.activeCompiles.delete(id);
@@ -848,12 +851,16 @@ export class AuthorManager {
 
   /** The draft is registered: its record and preference go, the
    * directory stays with the playbook (playbook-library-70). */
-  private retire(id: string): void {
-    this.drafts.retire(id);
-    this.options.store.deletePref(`draft:${id}:player`);
-    this.live.delete(id);
-    this.problems.delete(id);
-    this.events.onRemoved(id);
+  private async retire(id: string): Promise<void> {
+    const remove = () => {
+      this.drafts.retire(id);
+      this.options.store.deletePref(`draft:${id}:player`);
+      this.live.delete(id);
+      this.problems.delete(id);
+      this.events.onRemoved(id);
+    };
+    if (this.options.retireMedia) await this.options.retireMedia(id, remove);
+    else remove();
   }
 
   setPlayer(id: string, playerId: string | null): DraftInfo {
@@ -908,10 +915,14 @@ export class AuthorManager {
     return info;
   }
 
-  delete(id: string): void {
+  assertDeletable(id: string): void {
     // A damaged draft is still deleted: its record need not read.
     if (!this.drafts.exists(id)) throw new CoreError("not_found", noDraft(id));
     this.assertIdle(id);
+  }
+
+  delete(id: string): void {
+    this.assertDeletable(id);
     this.drafts.delete(id);
     this.options.store.deletePref(`draft:${id}:player`);
     this.live.delete(id);
@@ -960,10 +971,7 @@ export class AuthorManager {
   }
 
   private async loadAdapter(adapter: AdapterName): Promise<new () => AgentAdapter<string, boolean, string>> {
-    const table = this.options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS;
-    const load = (table as unknown as Record<string, (() => Promise<unknown>) | undefined>)[adapter];
-    if (!load) throw new Error(`no adapter runtime for ${adapter}`);
-    return (await load()) as new () => AgentAdapter<string, boolean, string>;
+    return loadAgentAdapter(adapter, this.options.adapterImports);
   }
 
   // -- turns ----------------------------------------------------------------
@@ -982,7 +990,7 @@ export class AuthorManager {
     const turnId = this.nextTurnId(id, live);
     const at = this.now();
     const shown = origin.kind === "boss" ? origin.text : origin.label;
-    this.append(id, live, { type: "turn_started", turnId, timestamp: at, turn: { id: turnId, prompt: shown, timestamp: at } } as TmuxPlayRecord);
+    this.append(id, live, { type: "turn_started", turnId, timestamp: at, turn: { id: turnId, prompt: shown, timestamp: at, ...(origin.kind === "boss" && origin.attachments?.length ? {attachments: origin.attachments} : {}) } } as TmuxPlayRecord);
     let aborted = false;
     let reply: string | undefined;
     try {
@@ -1013,7 +1021,7 @@ export class AuthorManager {
       live.malformed = [];
       for (;;) {
         const prompt = this.composePrompt(id, live, draft, resolved, origin, mode, pending);
-        const run = await this.runAgent(id, live, turnId, Adapter, resolved.agent, prompt, controller, resume);
+        const run = await this.runAgent(id, live, turnId, Adapter, resolved.agent, prompt, controller, resume, origin.kind === "boss" ? origin.attachments : undefined);
         if (run.status === "interrupted") {
           aborted = true;
           break;
@@ -1072,6 +1080,7 @@ export class AuthorManager {
     prompt: string,
     controller: AbortController,
     resume: string | undefined,
+    attachments?: readonly MediaAsset[],
   ): Promise<{ status: string; result?: string; text: string; resumeToken?: string; resumeRejected: boolean; error?: string }> {
     this.append(id, live, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
     // The block's model, effort and fast mode, and its subagent model
@@ -1087,8 +1096,11 @@ export class AuthorManager {
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
       ...subagentTuningOf(agent),
       permissions: { mode: "auto" },
+      ...(agent.browser !== undefined ? {browser: agent.browser} : {}),
     };
     const cligent = new Cligent<string, boolean, string>(new Adapter(), options);
+    const invocationId = randomUUID();
+    const approvalHandler = this.options.approvalHandler?.(id);
     const text: string[] = [];
     let status = "error";
     let result: string | undefined;
@@ -1097,7 +1109,10 @@ export class AuthorManager {
     let error: string | undefined;
     let errorCode: string | undefined;
     try {
-      for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false })) {
+      const assets = createAssetStore({directory: join(this.drafts.recordDir(id), "assets")});
+      const nativeAttachments = attachments?.length ? await Promise.all(attachments.map((asset) => assets.resolveAttachment(asset, {signal: controller.signal}))) : undefined;
+      for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false,
+        ...(approvalHandler ? {approvalHandler: (request, context) => approvalHandler({request, turnId, actorId: AUTHOR_PLAYER, invocationId}, context)} : {}), ...(nativeAttachments ? {attachments: nativeAttachments} : {}) })) {
         const typed = event as AgentEvent;
         if (typed.type === "text_delta") text.push(typed.payload.delta);
         else if (typed.type === "text") text.push(typed.payload.content);
@@ -1112,7 +1127,8 @@ export class AuthorManager {
           result = typed.payload.result;
           resumeToken = typed.payload.resumeToken;
         }
-        this.append(id, live, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event } as TmuxPlayRecord);
+        const stored = await externalizeAgentEvent(assets, typed);
+        this.append(id, live, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event: stored.event } as TmuxPlayRecord);
         if (typed.type === "tool_result") this.refreshSource(id, live);
       }
     } catch (cause) {
@@ -1129,6 +1145,8 @@ export class AuthorManager {
         // The same failure again; the runtime_error line reports it.
       }
       throw cause;
+    } finally {
+      this.options.cancelApprovals?.(id, invocationId);
     }
     const finalText = result ?? text.join("");
     this.append(id, live, {
@@ -1194,11 +1212,11 @@ export class AuthorManager {
     } catch {
       return;
     }
-    const text = draft.queued.shift();
-    if (text === undefined) return;
+    const content = draft.queued.shift();
+    if (content === undefined) return;
     draft.failures = 0;
     this.save(draft);
-    this.startTurn(id, live, { kind: "boss", text, ...(preface ? { preface } : {}) });
+    this.startTurn(id, live, { kind: "boss", ...content, ...(preface ? { preface } : {}) });
   }
 
   // -- prompts --------------------------------------------------------------
@@ -1292,7 +1310,10 @@ export class AuthorManager {
     const entries: string[] = [];
     for (const { record } of this.recordsOf(id, live)) {
       if (record.type === "turn_started") {
-        const prompt = (record as { turn: { prompt: string } }).turn.prompt;
+        const prompt = record.turn.prompt;
+        if (record.turn.attachments?.length) {
+          entries.push(`Previously attached (metadata only; reattach to inspect again): ${record.turn.attachments.map((asset) => `${asset.name ?? asset.mimeType} [${asset.assetId}]`).join(", ")}`);
+        }
         entries.push(prompt.startsWith("Spex:") ? `System: ${prompt.slice("Spex:".length).trim()}` : `Boss: ${prompt}`);
       } else if (record.type === "captain_status") {
         entries.push(`System: ${(record as { message: string }).message}`);

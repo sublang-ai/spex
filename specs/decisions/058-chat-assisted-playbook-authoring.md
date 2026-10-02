@@ -10,6 +10,8 @@ Amends [DR-005](005-compilation-integration.md): compile inputs may come from a 
 Amends [DR-015](015-reference-content.md): the slc example's prefill opens a draft workspace in paste mode instead of filling a form.
 Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md) in the workspace's empty conversation alone: the phrase chips become two acts and the prompt teaches the agent what a SKILL.md is.
 
+Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for structured content queues, owned media, and explicit browser access.
+
 ## Context
 
 - The Playbooks surface compiles from pasted markdown or a picked file plus typed role names; users do not know what a source should say, compiles take 30–120 minutes, and a failed phase's output lands in a log the user must read and act on alone.

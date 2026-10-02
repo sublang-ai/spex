@@ -227,6 +227,7 @@ When the user activates Sync, the core shall admit it only while every condition
 | no session of any project has a turn in flight [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title> in <project>" |
 | no session is held, or unprovably held, by another host [[core-service-32](core-service.md#core-service-32)] | "<session title> is in use elsewhere" |
 | no compile is running | "<playbook> is compiling" |
+| no media upload operation or attachment validation for content admission is in flight [[media-2](media.md#media-2)] [[media-5](media.md#media-5)] | "Wait for the media upload to finish." |
 | no Space operation is running | "Space is busy" |
 | no blocking storage diagnostic stands [[core-service-86](core-service.md#core-service-86)] | the file and reason |
 | `git` runs | the install guidance |
@@ -596,6 +597,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a join against the empty bare repository — `space.init` with the remote, then a joining `space.sync` — completes as a first push [[space-6](#space-6)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `SpaceState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile each make `space.sync` and `space.init` refuse `busy` by name [[space-11](#space-11)] [[space-4](#space-4)];
+- attachment validation held at a real asset reader's close makes `space.sync` refuse `busy` before Git changes for both intent queue and edit admission, then permits a complete sync after the validated content is admitted [[space-11](#space-11)];
 - while a check runs against a remote whose `GIT_SSH_COMMAND` sleeps, `turn.submit`, `intent.queue`, `config.edit`, `project.register` and `compile.run` are refused `busy` naming the sync, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
 - a `MERGE_HEAD` planted before start reads as a pending merge and refuses the sync [[space-1](#space-1)] [[space-11](#space-11)].
 

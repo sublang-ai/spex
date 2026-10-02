@@ -108,6 +108,10 @@ msgstr "（默认）"
 msgid "[external image blocked: {alt}]"
 msgstr "[外部图片已拦截：{alt}]"
 
+#: src/components/ApprovalInbox.tsx
+msgid "{actor} · Turn {turn}"
+msgstr "{actor} · 第 {turn} 轮"
+
 #: src/components/DraftConversation.tsx
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} 未就绪 — 请查看设置"
@@ -451,6 +455,10 @@ msgstr "{seconds} 秒"
 msgid "{size} B"
 msgstr "{size} B"
 
+#: src/components/ComposerAttachments.tsx
+msgid "{size} bytes"
+msgstr "{size} 字节"
+
 #. a file size in gigabytes
 #: src/lib/space.ts
 msgid "{size} GB"
@@ -691,6 +699,7 @@ msgstr "有会话在等待你的回复"
 msgid "A session is waiting for your verdict"
 msgstr "有会话在等待你的裁定"
 
+#: src/state/reducer.ts
 #: src/state/store.ts
 msgid "a tool"
 msgstr "某个工具"
@@ -873,6 +882,10 @@ msgstr "由代理选择"
 msgid "agent error"
 msgstr "智能体错误"
 
+#: src/lib/media.ts
+msgid "Agent session {session}"
+msgstr "智能体会话 {session}"
+
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "智能体"
@@ -918,6 +931,10 @@ msgstr "所有项目"
 #: src/components/SpaceSync.tsx
 msgid "All remote"
 msgstr "全用远程"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Allow this tool operation?"
+msgstr "允许此工具操作？"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "also {position}"
@@ -990,6 +1007,14 @@ msgstr "应用"
 msgid "Applying…"
 msgstr "应用中…"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Approve once"
+msgstr "仅允许此次"
+
+#: src/state/reducer.ts
+msgid "Approved once; native execution is reported separately."
+msgstr "已允许此次操作；原生执行结果将单独报告。"
+
 #. graph legend: an arrow points from the citing package to the cited one
 #: src/components/SpecGraph.tsx
 msgid "arrow — cites"
@@ -1004,12 +1029,12 @@ msgid "asked by you"
 msgstr "由你发起"
 
 #: src/state/store.ts
-msgid "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
-msgstr "请求使用 {tool} 的权限 — {reason}；Spex 不回应任何权限请求，因此由智能体自身的默认设置决定"
+msgid "Asked permission to use {tool} — {reason}; historical permission event; no live answer is available"
+msgstr "曾请求使用 {tool} — {reason}；这是历史权限事件，当前无法答复"
 
 #: src/state/store.ts
-msgid "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
-msgstr "请求使用 {tool} 的权限；Spex 不回应任何权限请求，因此由智能体自身的默认设置决定"
+msgid "Asked permission to use {tool}; historical permission event; no live answer is available"
+msgstr "曾请求使用 {tool}；这是历史权限事件，当前无法答复"
 
 #: src/components/DraftConversation.tsx
 msgid "Asked to compile"
@@ -1028,6 +1053,22 @@ msgstr "位于 {state} — 正在调用 /{playbookId}"
 #: src/components/MachineCard.tsx
 msgid "at {state} → calling /{playbookId}"
 msgstr "位于 {state} → 正在调用 /{playbookId}"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Attach files"
+msgstr "添加文件"
+
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/StoredMedia.tsx
+#: src/lib/message-content.ts
+#: src/state/attachments.ts
+msgid "Attachment"
+msgstr "附件"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Attachments"
+msgstr "附件"
 
 #: src/components/AgentEditor.tsx
 msgid "auto (protected)"
@@ -1094,6 +1135,43 @@ msgstr "把文件引入为源文，再请求改编它"
 msgid "Brings both spaces into one and asks about anything that differs"
 msgstr "把两个空间合为一个，并就有差异之处询问你"
 
+#: src/components/BrowserControl.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser"
+msgstr "浏览器"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser access follows the selected agent in Settings"
+msgstr "浏览器访问权限遵循“设置”中所选代理的配置"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser not prepared"
+msgstr "浏览器尚未准备好"
+
+#: src/lib/media.ts
+msgid "Browser preparation · {actor}"
+msgstr "浏览器准备 · {actor}"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser ready"
+msgstr "浏览器已就绪"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser setup"
+msgstr "浏览器设置"
+
+#: src/lib/useBrowserTools.ts
+msgid "Browser setup cancelled"
+msgstr "浏览器设置已取消"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser setup failed"
+msgstr "浏览器设置失败"
+
+#: src/lib/useBrowserTools.ts
+msgid "Browser support is unverified"
+msgstr "尚未验证浏览器支持"
+
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
 msgid "bug"
@@ -1144,11 +1222,16 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/CompileBand.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
 msgstr "取消"
+
+#: src/components/BrowserControl.tsx
+msgid "Cancel browser setup"
+msgstr "取消浏览器设置"
 
 #: src/state/store.ts
 msgid "cancel failed: {reason}"
@@ -1157,6 +1240,10 @@ msgstr "取消失败：{reason}"
 #: src/lib/drafts.ts
 msgid "Canceled {age}"
 msgstr "{age}取消"
+
+#: src/lib/useBrowserTools.ts
+msgid "Cancelling browser setup…"
+msgstr "正在取消浏览器设置…"
 
 #. the agent that routes the Boss's message to a playbook
 #. the agent that routes the Boss's message to a playbook
@@ -1208,6 +1295,10 @@ msgstr "已更改"
 msgid "changed for this conversation"
 msgstr "本次对话已更改"
 
+#: src/components/BrowserControl.tsx
+msgid "Changed for this conversation"
+msgstr "已为此会话更改"
+
 #: src/components/SpaceSync.tsx
 msgid "Changed on both sides — choose which version to keep"
 msgstr "两端都有更改 — 请选择保留哪个版本"
@@ -1234,9 +1325,25 @@ msgstr "检查"
 msgid "Check agent readiness"
 msgstr "检查智能体就绪状态"
 
+#: src/components/BrowserControl.tsx
+msgid "Check browser"
+msgstr "检查浏览器"
+
 #: src/components/SpaceSync.tsx
 msgid "Check remote"
 msgstr "检查远程仓库"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser launch and screenshot…"
+msgstr "正在检查浏览器启动和截图…"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser runtime…"
+msgstr "正在检查浏览器运行环境…"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser support…"
+msgstr "正在检查浏览器支持…"
 
 #: src/lib/space.ts
 msgid "Checking remote…"
@@ -1395,6 +1502,14 @@ msgstr "全部折叠"
 #: src/components/SpecView.tsx
 msgid "Collapse all items in {name}"
 msgstr "折叠 {name} 中的全部条目"
+
+#: src/components/TrustedMedia.tsx
+msgid "Collapse image"
+msgstr "收起图片"
+
+#: src/components/TrustedMedia.tsx
+msgid "Collapse image {name}"
+msgstr "收起图片 {name}"
 
 #: src/lib/shortcuts.ts
 msgid "Collapse or show the sidebar"
@@ -1590,6 +1705,10 @@ msgstr "连接已恢复。"
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Conversation: {name}"
+msgstr "对话：{name}"
+
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
 msgid "copied"
@@ -1618,8 +1737,8 @@ msgid "copies made while writing"
 msgstr "写入过程中产生的副本"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
-msgstr "沿用 Captain 的适配器、模型、推理强度、子代理模型、子代理推理强度、快速模式与权限"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
+msgstr "复制 Captain 的适配器、模型、思考强度、子代理模型、子代理思考强度、快速模式、浏览器和权限"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -1656,6 +1775,10 @@ msgstr "此处无法复制，路径已显示，可手动选中。"
 #: src/components/SpaceSurface.tsx
 msgid "Copy path"
 msgstr "复制路径"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Could not answer {tool} for {actor}: {reason}"
+msgstr "无法答复 {actor} 的 {tool} 请求：{reason}"
 
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
@@ -1841,6 +1964,10 @@ msgstr "删除中…"
 msgid "denied"
 msgstr "已拒绝"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Deny"
+msgstr "拒绝"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "描述这个规程…"
@@ -1874,6 +2001,7 @@ msgstr "丢弃中…"
 #. close the error strip above the composer
 #. put this outcome card away
 #. put this outcome card away
+#: src/components/ApprovalInbox.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SpaceSync.tsx
@@ -1905,6 +2033,10 @@ msgstr "不添加"
 msgid "done"
 msgstr "完成"
 
+#: src/components/TrustedMedia.tsx
+msgid "Download {name}"
+msgstr "下载 {name}"
+
 #. draft state chip, at most 14 characters: a source stands, never compiled
 #: src/lib/drafts.ts
 msgid "Draft"
@@ -1913,6 +2045,10 @@ msgstr "草稿"
 #: src/components/AuthoringWorkspace.tsx
 msgid "Draft artifacts"
 msgstr "草稿产物"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Draft: {name}"
+msgstr "草稿：{name}"
 
 #. section heading: playbooks being written
 #: src/components/LibrarySurface.tsx
@@ -2007,7 +2143,9 @@ msgstr "例如 triage"
 #. open this file in the editor
 #. open this file in the editor
 #. open this file in the editor
+#. row menu item: edit this intent's text and files
 #: src/components/DraftSourceTab.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecItemRows.tsx
 #: src/components/SpecView.tsx
@@ -2033,11 +2171,6 @@ msgstr "编辑 {path}"
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "编辑意图文本"
-
-#. row menu item: rewrite this intent's words
-#: src/components/ProjectGroup.tsx
-msgid "Edit text"
-msgstr "编辑文本"
 
 #: src/components/SettingsSurface.tsx
 msgid "Edit the Captain"
@@ -2159,6 +2292,14 @@ msgstr "全部展开"
 msgid "Expand all items in {name}"
 msgstr "展开 {name} 中的全部条目"
 
+#: src/components/TrustedMedia.tsx
+msgid "Expand image"
+msgstr "展开图片"
+
+#: src/components/TrustedMedia.tsx
+msgid "Expand image {name}"
+msgstr "展开图片 {name}"
+
 #. tab: browse the files in the space
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
@@ -2175,6 +2316,10 @@ msgstr "外部"
 #: src/components/SpecView.tsx
 msgid "External"
 msgstr "外部"
+
+#: src/components/TrustedMedia.tsx
+msgid "External reference"
+msgstr "外部引用"
 
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
@@ -2244,6 +2389,10 @@ msgstr "快速模式 <0/>（不支持）"
 #: src/components/SpaceExplorer.tsx
 msgid "Files in the space"
 msgstr "空间中的文件"
+
+#: src/lib/media-client.ts
+msgid "Files must be 100 MiB or smaller."
+msgstr "每个文件不得超过 100 MiB。"
 
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project"
@@ -2315,6 +2464,10 @@ msgstr "GitHub 缓存"
 msgid "from"
 msgstr "来自"
 
+#: src/lib/media.ts
+msgid "From {actor}"
+msgstr "来自 {actor}"
+
 #: src/components/LibrarySurface.tsx
 msgid "from {credit}"
 msgstr "来自 {credit}"
@@ -2328,6 +2481,10 @@ msgstr "来自 {state}"
 #: src/components/AgentSettings.tsx
 msgid "from Settings"
 msgstr "取自设置"
+
+#: src/components/BrowserControl.tsx
+msgid "From Settings"
+msgstr "来自设置"
 
 #: src/components/AgentSettings.tsx
 msgid "from Settings (off)"
@@ -2522,6 +2679,10 @@ msgstr "安装 {command}"
 msgid "Install the missing command"
 msgstr "安装缺失的命令"
 
+#: src/lib/useBrowserTools.ts
+msgid "Installing browser…"
+msgstr "正在安装浏览器…"
+
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
 msgid "intent"
@@ -2559,6 +2720,14 @@ msgstr "{age}中断 — 编译期间 Spex 被关闭"
 #: src/components/SessionRecovery.tsx
 msgid "Interrupted turn"
 msgstr "中断的轮次"
+
+#: src/lib/media.ts
+msgid "Invocation {call}"
+msgstr "调用 {call}"
+
+#: src/components/BrowserControl.tsx
+msgid "Isolated browser on the computer running this session"
+msgstr "在运行此会话的电脑上使用独立浏览器"
 
 #: src/components/ProjectGroup.tsx
 msgid "Issue #{ref} ↗"
@@ -2722,6 +2891,10 @@ msgstr "加载差异中…"
 msgid "Loading GitHub state…"
 msgstr "加载 GitHub 状态中…"
 
+#: src/components/TrustedMedia.tsx
+msgid "Loading media…"
+msgstr "正在加载媒体…"
+
 #: src/components/AgentSettings.tsx
 #: src/components/ModelDiscoveryStatus.tsx
 msgid "Loading model options…"
@@ -2730,6 +2903,10 @@ msgstr "加载模型选项中…"
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
 msgstr "加载对话中…"
+
+#: src/components/StoredMedia.tsx
+msgid "Loading tool details…"
+msgstr "正在加载工具详情…"
 
 #: src/App.tsx
 msgid "Loading transcript…"
@@ -2805,6 +2982,10 @@ msgstr "标记中…"
 msgid "May hold provider tokens — not shown"
 msgstr "可能包含服务商令牌 — 不予显示"
 
+#: src/components/TrustedMedia.tsx
+msgid "Media unavailable"
+msgstr "媒体不可用"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
@@ -2855,6 +3036,10 @@ msgstr "模型列表不可用：{reason}"
 #: src/components/ModelDiscoveryStatus.tsx
 msgid "Models reported by the installed runtime."
 msgstr "由已安装的运行时报告的模型。"
+
+#: src/components/ApprovalInbox.tsx
+msgid "More details"
+msgstr "更多详情"
 
 #. row menu item: one step later in the queue
 #: src/components/ProjectGroup.tsx
@@ -3302,6 +3487,10 @@ msgstr "在规约中打开 {id}"
 msgid "Open {id}: {title}"
 msgstr "打开 {id}：{title}"
 
+#: src/components/TrustedMedia.tsx
+msgid "Open {name}"
+msgstr "打开 {name}"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — {reason}"
 msgstr "打开 {title} — {reason}"
@@ -3490,6 +3679,10 @@ msgstr "规程库"
 msgid "playbook output"
 msgstr "规程输出"
 
+#: src/lib/media.ts
+msgid "Playbook runtime {session}"
+msgstr "Playbook 运行实例 {session}"
+
 #. catalog family: a playbook's source files
 #: src/lib/space.ts
 msgid "playbook sources"
@@ -3557,10 +3750,18 @@ msgstr "已按源文与编译出的角色预填 — 可随意修改"
 msgid "Prefix"
 msgstr "前缀"
 
+#: src/components/BrowserControl.tsx
+msgid "Preparing browser…"
+msgstr "正在准备浏览器…"
+
 #. editor mode: the rendered draft
 #: src/components/SpecEditor.tsx
 msgid "Preview"
 msgstr "预览"
+
+#: src/components/TrustedMedia.tsx
+msgid "Preview unavailable; the file can still be downloaded"
+msgstr "无法预览，仍可下载文件"
 
 #: src/components/SourcesTabs.tsx
 msgid "Previous page"
@@ -3768,9 +3969,17 @@ msgstr "读取中…"
 msgid "ready"
 msgstr "就绪"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Ready"
+msgstr "就绪"
+
 #: src/components/AgentEditor.tsx
 msgid "Reasoning effort"
 msgstr "推理强度"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Reconnect to answer these requests."
+msgstr "重新连接后可答复这些请求。"
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
@@ -3899,6 +4108,10 @@ msgstr "移除 {id}"
 msgid "Remove {id}?"
 msgstr "移除 {id}？"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Remove {name}"
+msgstr "移除 {name}"
+
 #: src/components/NextCard.tsx
 msgid "Remove {title}"
 msgstr "移除 {title}"
@@ -3994,6 +4207,14 @@ msgstr "自动模式下智能体可在常规范围之外写入的仓库相对路
 msgid "Report it"
 msgstr "上报这个问题"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Requested action"
+msgstr "请求的操作"
+
+#: src/state/reducer.ts
+msgid "Requested tool approval: {tool}"
+msgstr "请求工具审批：{tool}"
+
 #. the field must be filled before the act runs
 #: src/components/SpaceSurface.tsx
 msgid "Required"
@@ -4066,14 +4287,32 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #. try creating the config file again
 #. try the failed save again
 #: src/App.tsx
+#: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
+#: src/components/StoredMedia.tsx
+#: src/components/TrustedMedia.tsx
 msgid "Retry"
 msgstr "重试"
+
+#: src/components/ComposerAttachments.tsx
+#: src/components/TrustedMedia.tsx
+msgid "Retry {name}"
+msgstr "重试 {name}"
+
+#: src/components/BrowserControl.tsx
+msgid "Retry browser setup"
+msgstr "重试浏览器设置"
+
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Retry browser support check"
+msgstr "重试浏览器支持检查"
 
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
@@ -4143,6 +4382,7 @@ msgstr "与 Captain 相同"
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -4208,6 +4448,10 @@ msgstr "生成带规约的示例项目，可直接运行"
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview it."
 msgstr "选择一个条目以预览。"
+
+#: src/state/attachments.ts
+msgid "Select up to 16 files and 256 MiB per message."
+msgstr "每条消息最多选择 16 个文件，总大小不得超过 256 MiB。"
 
 #. act: send the typed message
 #. act: send the typed message
@@ -4345,6 +4589,10 @@ msgstr "请先初始化此空间"
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
 msgstr "设为 {set}，运行时报告 {model}"
+
+#: src/components/BrowserControl.tsx
+msgid "Set up browser"
+msgstr "设置浏览器"
 
 #: src/components/SpaceSurface.tsx
 msgid "Set up space"
@@ -4945,6 +5193,14 @@ msgstr "草稿在磁盘上的 markdown 原文"
 msgid "The file is copied in as the draft's source"
 msgstr "该文件会被复制为草稿的源文"
 
+#: src/lib/media-client.ts
+msgid "The file returned inconsistent content."
+msgstr "返回的文件内容不一致。"
+
+#: src/components/StoredMedia.tsx
+msgid "The file's conversation is unavailable."
+msgstr "文件所属的对话不可用。"
+
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
 msgstr "上一轮失败。发送消息即可接续。"
@@ -5006,6 +5262,14 @@ msgstr "该步骤没有留下任何更改记录"
 msgid "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
 msgstr "从 playbook CLI 运行的会话所用的 tmux 窗格主题 — 例如某种 catppuccin 风格，或 auto"
 
+#: src/state/attachments.ts
+msgid "The upload failed. Try again."
+msgstr "上传失败，请重试。"
+
+#: src/lib/media-client.ts
+msgid "The upload returned an invalid offset."
+msgstr "上传返回了无效的字节偏移量。"
+
 #: src/components/FailureCard.tsx
 msgid "The workflow failed"
 msgstr "工作流失败"
@@ -5032,6 +5296,18 @@ msgstr "这些会话"
 msgid "Thinking"
 msgstr "思考过程"
 
+#: src/lib/useBrowserTools.ts
+msgid "This agent cannot ask for tool approval in this conversation."
+msgstr "此智能体无法在本对话中请求工具审批。"
+
+#: src/lib/useBrowserTools.ts
+msgid "This agent cannot return screenshot files to this conversation."
+msgstr "此智能体无法将截图文件返回到此对话。"
+
+#: src/components/BrowserControl.tsx
+msgid "This agent does not support browser tools"
+msgstr "此智能体不支持浏览器工具"
+
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "此命令会刷新规约规则并打印迁移提示词，由 AI 智能体执行迁移："
@@ -5051,6 +5327,10 @@ msgstr "本设备相对共同祖先的差异"
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "打开之后，此文件在磁盘上已更改。"
+
+#: src/lib/media-client.ts
+msgid "This file is too large to preview."
+msgstr "文件过大，无法预览。"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -5101,6 +5381,54 @@ msgstr "连续三次 — 请告诉智能体如何继续"
 msgid "Toggle {name}"
 msgstr "展开或折叠 {name}"
 
+#: src/lib/media.ts
+msgid "Tool {tool}"
+msgstr "工具 {tool}"
+
+#: src/state/reducer.ts
+msgid "Tool approval cancelled."
+msgstr "工具审批请求已取消。"
+
+#: src/state/reducer.ts
+msgid "Tool approval expired."
+msgstr "工具审批请求已过期。"
+
+#: src/state/reducer.ts
+msgid "Tool approval failed; the request was not approved."
+msgstr "工具审批失败；未允许此请求。"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approval needed ({count})"
+msgstr "需要工具审批（{count}）"
+
+#: src/lib/useBrowserTools.ts
+msgid "Tool approval support is unverified."
+msgstr "尚未验证工具审批支持。"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approvals"
+msgstr "工具审批"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approvals ({count})"
+msgstr "工具审批（{count}）"
+
+#: src/components/StoredMedia.tsx
+msgid "Tool details unavailable: {reason}"
+msgstr "工具详情不可用：{reason}"
+
+#: src/state/reducer.ts
+msgid "Tool request denied."
+msgstr "工具请求已拒绝。"
+
+#: src/lib/useBrowserTools.ts
+msgid "Tool requests can ask for approval; existing agent policies still apply."
+msgstr "工具请求可发起审批；现有智能体策略仍然适用。"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool: {tool}"
+msgstr "工具：{tool}"
+
 #: src/state/store.ts
 msgid "transcript could not be loaded: {reason}"
 msgstr "无法加载对话记录：{reason}"
@@ -5120,6 +5448,10 @@ msgstr "试试 Academy 示例"
 #: src/components/DraftConversation.tsx
 msgid "Try the example"
 msgstr "试试示例"
+
+#: src/lib/media.ts
+msgid "Turn {turn}"
+msgstr "第 {turn} 轮"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -5229,6 +5561,22 @@ msgstr "{age}由智能体更新"
 msgid "Updated {age} by you"
 msgstr "{age}由你更新"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Upload failed"
+msgstr "上传失败"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading {name}"
+msgstr "正在上传 {name}"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading {progress}%"
+msgstr "上传中 {progress}%"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading…"
+msgstr "上传中…"
+
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
 msgid "Use a SKILL.md…"
@@ -5237,6 +5585,10 @@ msgstr "使用 SKILL.md…"
 #: src/components/DraftSourceTab.tsx
 msgid "Use as source"
 msgstr "用作源文"
+
+#: src/components/BrowserControl.tsx
+msgid "Use browser setting from Settings"
+msgstr "使用设置中的浏览器选项"
 
 #. drop this conversation's own settings and take the configured ones
 #: src/components/AgentSettings.tsx

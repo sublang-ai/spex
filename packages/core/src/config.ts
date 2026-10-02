@@ -84,6 +84,7 @@ const AGENT_FIELDS = new Set([
   // so a config the launcher accepts is never rejected here
   // (shared-config-roundtrip-1); cligent owns which adapters allow it.
   "fastMode",
+  "browser",
   // The model the agent's subagents run on (cligent 0.29, DR-093) — a
   // model, `inherit` for the agent's own, or `false` to send none
   // (cligent 0.30, DR-095); cligent owns which adapters serve it.
@@ -121,6 +122,8 @@ export interface ResolvedAgent {
   effort?: string;
   /** Adapter-scoped fast mode; `false` is a literal request, not omission. */
   fastMode?: boolean;
+  /** Managed browser tools; omission remains off. */
+  browser?: boolean;
   /** Adapter-scoped subagent model (DR-093) as the file says it: a
    * model, `inherit` for the agent's own, or `false` — Off; absent, the
    * delegation default, which composition resolves to `inherit` where
@@ -154,6 +157,8 @@ export interface SessionAgentBlock {
   /** Adapter-scoped fast mode, forwarded so the setting takes effect
    * (playbook 11: `false` is a literal disabled request). */
   fastMode?: boolean;
+  /** Managed browser tools; omission remains off. */
+  browser?: boolean;
   /** The model every subagent runs on, `inherit` for the agent's own,
    * or `false` — Off — carried through composition and the session's
    * tuning so an effort set beside it is refused, and dropped only as
@@ -814,6 +819,13 @@ function toResolvedAgent(
       );
     }
   }
+  if (rest.browser !== undefined && typeof rest.browser !== "boolean") {
+    throw new Error(i18n._({
+      id: "{path}.browser must be a boolean",
+      comment: "Config error; browser is the config field name",
+      values: { path },
+    }));
+  }
   if (rest.fastMode !== undefined && typeof rest.fastMode !== "boolean") {
     throw new Error(
       i18n._({
@@ -1117,6 +1129,7 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
     model: tuningOf(agent.model),
     effort: tuningOf(agent.effort),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(agent.subagentEffort !== undefined
       ? { subagentEffort: agent.subagentEffort }
@@ -1662,6 +1675,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     ...(agent.model !== undefined ? { model: agent.model } : {}),
     ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
     ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
+    ...(agent.browser !== undefined ? { browser: agent.browser } : {}),
     ...(agent.subagentModel !== undefined
       ? { subagentModel: agent.subagentModel }
       : {}),

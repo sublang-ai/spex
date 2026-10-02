@@ -28,6 +28,7 @@ import type {
   QueueSchedule,
   ReadinessEntry,
 } from "@sublang/spex-core/protocol";
+import type { ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import {
@@ -81,6 +82,7 @@ function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
 }
 
 function renderHome({
+  attachments = undefined as ComposerAttachmentControls | undefined,
   onStart = vi.fn(async () => {}),
   onSaveCaptain = vi.fn(async (_patch: AgentPatch) => {}),
   onNavigate = vi.fn(),
@@ -121,6 +123,7 @@ function renderHome({
       onNavigate={onNavigate}
       onSaveCaptain={onSaveCaptain}
       onStart={onStart}
+      attachments={attachments}
       storage={storage}
       next={next}
       onStartIntent={onStartIntent}
@@ -821,4 +824,15 @@ describe("run-view-32: the popover opens where the window can show it", () => {
       "592px",
     );
   });
+});
+
+
+test("run-view-159: Captain home sends selected files with empty text and keeps failed content visible", async () => {
+  const onStart = vi.fn(async () => { throw new Error("Start unavailable"); });
+  renderHome({ onStart, attachments: { files: [{ id: "one", name: "screen.png", mimeType: "image/png", size: 4, state: "ready" }], onFiles() {}, onRemove() {} } });
+  const send = screen.getByTestId("start-send") as HTMLButtonElement;
+  expect(send.disabled).toBe(false);
+  fireEvent.click(send);
+  await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith(""));
+  expect(screen.getByText("screen.png")).toBeTruthy();
 });

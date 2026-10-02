@@ -108,6 +108,10 @@ msgstr "(default)"
 msgid "[external image blocked: {alt}]"
 msgstr "[external image blocked: {alt}]"
 
+#: src/components/ApprovalInbox.tsx
+msgid "{actor} · Turn {turn}"
+msgstr "{actor} · Turn {turn}"
+
 #: src/components/DraftConversation.tsx
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
@@ -451,6 +455,10 @@ msgstr "{seconds}s"
 msgid "{size} B"
 msgstr "{size} B"
 
+#: src/components/ComposerAttachments.tsx
+msgid "{size} bytes"
+msgstr "{size} bytes"
+
 #. a file size in gigabytes
 #: src/lib/space.ts
 msgid "{size} GB"
@@ -691,6 +699,7 @@ msgstr "A session is waiting for your reply"
 msgid "A session is waiting for your verdict"
 msgstr "A session is waiting for your verdict"
 
+#: src/state/reducer.ts
 #: src/state/store.ts
 msgid "a tool"
 msgstr "a tool"
@@ -873,6 +882,10 @@ msgstr "Agent chooses"
 msgid "agent error"
 msgstr "agent error"
 
+#: src/lib/media.ts
+msgid "Agent session {session}"
+msgstr "Agent session {session}"
+
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "Agents"
@@ -918,6 +931,10 @@ msgstr "All projects"
 #: src/components/SpaceSync.tsx
 msgid "All remote"
 msgstr "All remote"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Allow this tool operation?"
+msgstr "Allow this tool operation?"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "also {position}"
@@ -990,6 +1007,14 @@ msgstr "Apply"
 msgid "Applying…"
 msgstr "Applying…"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Approve once"
+msgstr "Approve once"
+
+#: src/state/reducer.ts
+msgid "Approved once; native execution is reported separately."
+msgstr "Approved once; native execution is reported separately."
+
 #. graph legend: an arrow points from the citing package to the cited one
 #: src/components/SpecGraph.tsx
 msgid "arrow — cites"
@@ -1004,12 +1029,12 @@ msgid "asked by you"
 msgstr "asked by you"
 
 #: src/state/store.ts
-msgid "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
-msgstr "Asked permission to use {tool} — {reason}; Spex answers no permission request, so the agent's own default decided"
+msgid "Asked permission to use {tool} — {reason}; historical permission event; no live answer is available"
+msgstr "Asked permission to use {tool} — {reason}; historical permission event; no live answer is available"
 
 #: src/state/store.ts
-msgid "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
-msgstr "Asked permission to use {tool}; Spex answers no permission request, so the agent's own default decided"
+msgid "Asked permission to use {tool}; historical permission event; no live answer is available"
+msgstr "Asked permission to use {tool}; historical permission event; no live answer is available"
 
 #: src/components/DraftConversation.tsx
 msgid "Asked to compile"
@@ -1028,6 +1053,22 @@ msgstr "at {state} — calling /{playbookId}"
 #: src/components/MachineCard.tsx
 msgid "at {state} → calling /{playbookId}"
 msgstr "at {state} → calling /{playbookId}"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Attach files"
+msgstr "Attach files"
+
+#: src/components/Composer.tsx
+#: src/components/DraftConversation.tsx
+#: src/components/StoredMedia.tsx
+#: src/lib/message-content.ts
+#: src/state/attachments.ts
+msgid "Attachment"
+msgstr "Attachment"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Attachments"
+msgstr "Attachments"
 
 #: src/components/AgentEditor.tsx
 msgid "auto (protected)"
@@ -1094,6 +1135,43 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 msgid "Brings both spaces into one and asks about anything that differs"
 msgstr "Brings both spaces into one and asks about anything that differs"
 
+#: src/components/BrowserControl.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser"
+msgstr "Browser"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser access follows the selected agent in Settings"
+msgstr "Browser access follows the selected agent in Settings"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser not prepared"
+msgstr "Browser not prepared"
+
+#: src/lib/media.ts
+msgid "Browser preparation · {actor}"
+msgstr "Browser preparation · {actor}"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser ready"
+msgstr "Browser ready"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Browser setup"
+msgstr "Browser setup"
+
+#: src/lib/useBrowserTools.ts
+msgid "Browser setup cancelled"
+msgstr "Browser setup cancelled"
+
+#: src/components/BrowserControl.tsx
+msgid "Browser setup failed"
+msgstr "Browser setup failed"
+
+#: src/lib/useBrowserTools.ts
+msgid "Browser support is unverified"
+msgstr "Browser support is unverified"
+
 #. history row tag: a fixed bug
 #: src/components/ProjectGroup.tsx
 msgid "bug"
@@ -1144,11 +1222,16 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/CompileBand.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
 msgstr "Cancel"
+
+#: src/components/BrowserControl.tsx
+msgid "Cancel browser setup"
+msgstr "Cancel browser setup"
 
 #: src/state/store.ts
 msgid "cancel failed: {reason}"
@@ -1157,6 +1240,10 @@ msgstr "cancel failed: {reason}"
 #: src/lib/drafts.ts
 msgid "Canceled {age}"
 msgstr "Canceled {age}"
+
+#: src/lib/useBrowserTools.ts
+msgid "Cancelling browser setup…"
+msgstr "Cancelling browser setup…"
 
 #. the agent that routes the Boss's message to a playbook
 #. the agent that routes the Boss's message to a playbook
@@ -1208,6 +1295,10 @@ msgstr "Changed"
 msgid "changed for this conversation"
 msgstr "changed for this conversation"
 
+#: src/components/BrowserControl.tsx
+msgid "Changed for this conversation"
+msgstr "Changed for this conversation"
+
 #: src/components/SpaceSync.tsx
 msgid "Changed on both sides — choose which version to keep"
 msgstr "Changed on both sides — choose which version to keep"
@@ -1234,9 +1325,25 @@ msgstr "Check"
 msgid "Check agent readiness"
 msgstr "Check agent readiness"
 
+#: src/components/BrowserControl.tsx
+msgid "Check browser"
+msgstr "Check browser"
+
 #: src/components/SpaceSync.tsx
 msgid "Check remote"
 msgstr "Check remote"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser launch and screenshot…"
+msgstr "Checking browser launch and screenshot…"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser runtime…"
+msgstr "Checking browser runtime…"
+
+#: src/lib/useBrowserTools.ts
+msgid "Checking browser support…"
+msgstr "Checking browser support…"
 
 #: src/lib/space.ts
 msgid "Checking remote…"
@@ -1395,6 +1502,14 @@ msgstr "Collapse all"
 #: src/components/SpecView.tsx
 msgid "Collapse all items in {name}"
 msgstr "Collapse all items in {name}"
+
+#: src/components/TrustedMedia.tsx
+msgid "Collapse image"
+msgstr "Collapse image"
+
+#: src/components/TrustedMedia.tsx
+msgid "Collapse image {name}"
+msgstr "Collapse image {name}"
 
 #: src/lib/shortcuts.ts
 msgid "Collapse or show the sidebar"
@@ -1590,6 +1705,10 @@ msgstr "Connection restored."
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
+#: src/components/ApprovalInbox.tsx
+msgid "Conversation: {name}"
+msgstr "Conversation: {name}"
+
 #. the item's ID went to the clipboard
 #: src/components/SpecItemRows.tsx
 msgid "copied"
@@ -1618,8 +1737,8 @@ msgid "copies made while writing"
 msgstr "copies made while writing"
 
 #: src/components/AgentEditor.tsx
-msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
-msgstr "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, and permissions"
+msgid "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
+msgstr "Copies the Captain's adapter, model, effort, subagent model, subagent effort, fast mode, browser, and permissions"
 
 #. copy the command to the clipboard
 #: src/components/SpecView.tsx
@@ -1656,6 +1775,10 @@ msgstr "Copy is not available here; the path is shown to select."
 #: src/components/SpaceSurface.tsx
 msgid "Copy path"
 msgstr "Copy path"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Could not answer {tool} for {actor}: {reason}"
+msgstr "Could not answer {tool} for {actor}: {reason}"
 
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
@@ -1841,6 +1964,10 @@ msgstr "Deleting…"
 msgid "denied"
 msgstr "denied"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Deny"
+msgstr "Deny"
+
 #: src/components/DraftConversation.tsx
 msgid "Describe the playbook…"
 msgstr "Describe the playbook…"
@@ -1874,6 +2001,7 @@ msgstr "Discarding…"
 #. close the error strip above the composer
 #. put this outcome card away
 #. put this outcome card away
+#: src/components/ApprovalInbox.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SpaceSync.tsx
@@ -1905,6 +2033,10 @@ msgstr "Don't add"
 msgid "done"
 msgstr "done"
 
+#: src/components/TrustedMedia.tsx
+msgid "Download {name}"
+msgstr "Download {name}"
+
 #. draft state chip, at most 14 characters: a source stands, never compiled
 #: src/lib/drafts.ts
 msgid "Draft"
@@ -1913,6 +2045,10 @@ msgstr "Draft"
 #: src/components/AuthoringWorkspace.tsx
 msgid "Draft artifacts"
 msgstr "Draft artifacts"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Draft: {name}"
+msgstr "Draft: {name}"
 
 #. section heading: playbooks being written
 #: src/components/LibrarySurface.tsx
@@ -2007,7 +2143,9 @@ msgstr "e.g. triage"
 #. open this file in the editor
 #. open this file in the editor
 #. open this file in the editor
+#. row menu item: edit this intent's text and files
 #: src/components/DraftSourceTab.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecItemRows.tsx
 #: src/components/SpecView.tsx
@@ -2033,11 +2171,6 @@ msgstr "Edit {path}"
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "Edit intent text"
-
-#. row menu item: rewrite this intent's words
-#: src/components/ProjectGroup.tsx
-msgid "Edit text"
-msgstr "Edit text"
 
 #: src/components/SettingsSurface.tsx
 msgid "Edit the Captain"
@@ -2159,6 +2292,14 @@ msgstr "Expand all"
 msgid "Expand all items in {name}"
 msgstr "Expand all items in {name}"
 
+#: src/components/TrustedMedia.tsx
+msgid "Expand image"
+msgstr "Expand image"
+
+#: src/components/TrustedMedia.tsx
+msgid "Expand image {name}"
+msgstr "Expand image {name}"
+
 #. tab: browse the files in the space
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
@@ -2175,6 +2316,10 @@ msgstr "external"
 #: src/components/SpecView.tsx
 msgid "External"
 msgstr "External"
+
+#: src/components/TrustedMedia.tsx
+msgid "External reference"
+msgstr "External reference"
 
 #. a piece of work's state: it failed
 #. a piece of work's state: it failed
@@ -2244,6 +2389,10 @@ msgstr "Fast mode <0/> (unsupported)"
 #: src/components/SpaceExplorer.tsx
 msgid "Files in the space"
 msgstr "Files in the space"
+
+#: src/lib/media-client.ts
+msgid "Files must be 100 MiB or smaller."
+msgstr "Files must be 100 MiB or smaller."
 
 #: src/components/DashboardSurface.tsx
 msgid "Filter by project"
@@ -2315,6 +2464,10 @@ msgstr "forge cache"
 msgid "from"
 msgstr "from"
 
+#: src/lib/media.ts
+msgid "From {actor}"
+msgstr "From {actor}"
+
 #: src/components/LibrarySurface.tsx
 msgid "from {credit}"
 msgstr "from {credit}"
@@ -2328,6 +2481,10 @@ msgstr "from {state}"
 #: src/components/AgentSettings.tsx
 msgid "from Settings"
 msgstr "from Settings"
+
+#: src/components/BrowserControl.tsx
+msgid "From Settings"
+msgstr "From Settings"
 
 #: src/components/AgentSettings.tsx
 msgid "from Settings (off)"
@@ -2522,6 +2679,10 @@ msgstr "Install {command}"
 msgid "Install the missing command"
 msgstr "Install the missing command"
 
+#: src/lib/useBrowserTools.ts
+msgid "Installing browser…"
+msgstr "Installing browser…"
+
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
 msgid "intent"
@@ -2559,6 +2720,14 @@ msgstr "Interrupted {age} — Spex closed while it compiled"
 #: src/components/SessionRecovery.tsx
 msgid "Interrupted turn"
 msgstr "Interrupted turn"
+
+#: src/lib/media.ts
+msgid "Invocation {call}"
+msgstr "Invocation {call}"
+
+#: src/components/BrowserControl.tsx
+msgid "Isolated browser on the computer running this session"
+msgstr "Isolated browser on the computer running this session"
 
 #: src/components/ProjectGroup.tsx
 msgid "Issue #{ref} ↗"
@@ -2722,6 +2891,10 @@ msgstr "Loading diff…"
 msgid "Loading GitHub state…"
 msgstr "Loading GitHub state…"
 
+#: src/components/TrustedMedia.tsx
+msgid "Loading media…"
+msgstr "Loading media…"
+
 #: src/components/AgentSettings.tsx
 #: src/components/ModelDiscoveryStatus.tsx
 msgid "Loading model options…"
@@ -2730,6 +2903,10 @@ msgstr "Loading model options…"
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
 msgstr "Loading the conversation…"
+
+#: src/components/StoredMedia.tsx
+msgid "Loading tool details…"
+msgstr "Loading tool details…"
 
 #: src/App.tsx
 msgid "Loading transcript…"
@@ -2805,6 +2982,10 @@ msgstr "Marking…"
 msgid "May hold provider tokens — not shown"
 msgstr "May hold provider tokens — not shown"
 
+#: src/components/TrustedMedia.tsx
+msgid "Media unavailable"
+msgstr "Media unavailable"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
@@ -2855,6 +3036,10 @@ msgstr "Model list unavailable: {reason}"
 #: src/components/ModelDiscoveryStatus.tsx
 msgid "Models reported by the installed runtime."
 msgstr "Models reported by the installed runtime."
+
+#: src/components/ApprovalInbox.tsx
+msgid "More details"
+msgstr "More details"
 
 #. row menu item: one step later in the queue
 #: src/components/ProjectGroup.tsx
@@ -3302,6 +3487,10 @@ msgstr "Open {id} in Specs"
 msgid "Open {id}: {title}"
 msgstr "Open {id}: {title}"
 
+#: src/components/TrustedMedia.tsx
+msgid "Open {name}"
+msgstr "Open {name}"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — {reason}"
 msgstr "Open {title} — {reason}"
@@ -3490,6 +3679,10 @@ msgstr "playbook library"
 msgid "playbook output"
 msgstr "playbook output"
 
+#: src/lib/media.ts
+msgid "Playbook runtime {session}"
+msgstr "Playbook runtime {session}"
+
 #. catalog family: a playbook's source files
 #: src/lib/space.ts
 msgid "playbook sources"
@@ -3557,10 +3750,18 @@ msgstr "Prefilled from the source and the compiled roles — edit anything"
 msgid "Prefix"
 msgstr "Prefix"
 
+#: src/components/BrowserControl.tsx
+msgid "Preparing browser…"
+msgstr "Preparing browser…"
+
 #. editor mode: the rendered draft
 #: src/components/SpecEditor.tsx
 msgid "Preview"
 msgstr "Preview"
+
+#: src/components/TrustedMedia.tsx
+msgid "Preview unavailable; the file can still be downloaded"
+msgstr "Preview unavailable; the file can still be downloaded"
 
 #: src/components/SourcesTabs.tsx
 msgid "Previous page"
@@ -3768,9 +3969,17 @@ msgstr "Reading…"
 msgid "ready"
 msgstr "ready"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Ready"
+msgstr "Ready"
+
 #: src/components/AgentEditor.tsx
 msgid "Reasoning effort"
 msgstr "Reasoning effort"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Reconnect to answer these requests."
+msgstr "Reconnect to answer these requests."
 
 #: src/App.tsx
 msgid "Reconnecting to the Spex core… actions are paused until the connection returns."
@@ -3899,6 +4108,10 @@ msgstr "Remove {id}"
 msgid "Remove {id}?"
 msgstr "Remove {id}?"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Remove {name}"
+msgstr "Remove {name}"
+
 #: src/components/NextCard.tsx
 msgid "Remove {title}"
 msgstr "Remove {title}"
@@ -3994,6 +4207,14 @@ msgstr "Repo-relative paths the agent may write under auto mode beyond its usual
 msgid "Report it"
 msgstr "Report it"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Requested action"
+msgstr "Requested action"
+
+#: src/state/reducer.ts
+msgid "Requested tool approval: {tool}"
+msgstr "Requested tool approval: {tool}"
+
 #. the field must be filled before the act runs
 #: src/components/SpaceSurface.tsx
 msgid "Required"
@@ -4066,14 +4287,32 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #. try creating the config file again
 #. try the failed save again
 #: src/App.tsx
+#: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
+#: src/components/StoredMedia.tsx
+#: src/components/TrustedMedia.tsx
 msgid "Retry"
 msgstr "Retry"
+
+#: src/components/ComposerAttachments.tsx
+#: src/components/TrustedMedia.tsx
+msgid "Retry {name}"
+msgstr "Retry {name}"
+
+#: src/components/BrowserControl.tsx
+msgid "Retry browser setup"
+msgstr "Retry browser setup"
+
+#: src/components/AgentEditor.tsx
+#: src/components/AgentSettings.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Retry browser support check"
+msgstr "Retry browser support check"
 
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
@@ -4143,6 +4382,7 @@ msgstr "Same as Captain"
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/ProjectGroup.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
@@ -4208,6 +4448,10 @@ msgstr "Seeds a sample project with specs, ready to run"
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview it."
 msgstr "Select an entry to preview it."
+
+#: src/state/attachments.ts
+msgid "Select up to 16 files and 256 MiB per message."
+msgstr "Select up to 16 files and 256 MiB per message."
 
 #. act: send the typed message
 #. act: send the typed message
@@ -4345,6 +4589,10 @@ msgstr "Set this space up first"
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
 msgstr "set to {set}, runtime reports {model}"
+
+#: src/components/BrowserControl.tsx
+msgid "Set up browser"
+msgstr "Set up browser"
 
 #: src/components/SpaceSurface.tsx
 msgid "Set up space"
@@ -4945,6 +5193,14 @@ msgstr "The draft's markdown as it stands on disk"
 msgid "The file is copied in as the draft's source"
 msgstr "The file is copied in as the draft's source"
 
+#: src/lib/media-client.ts
+msgid "The file returned inconsistent content."
+msgstr "The file returned inconsistent content."
+
+#: src/components/StoredMedia.tsx
+msgid "The file's conversation is unavailable."
+msgstr "The file's conversation is unavailable."
+
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
 msgstr "The last turn failed. Send a message to pick it up."
@@ -5006,6 +5262,14 @@ msgstr "The step left no record of what it changed"
 msgid "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
 msgstr "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
 
+#: src/state/attachments.ts
+msgid "The upload failed. Try again."
+msgstr "The upload failed. Try again."
+
+#: src/lib/media-client.ts
+msgid "The upload returned an invalid offset."
+msgstr "The upload returned an invalid offset."
+
 #: src/components/FailureCard.tsx
 msgid "The workflow failed"
 msgstr "The workflow failed"
@@ -5032,6 +5296,18 @@ msgstr "these sessions"
 msgid "Thinking"
 msgstr "Thinking"
 
+#: src/lib/useBrowserTools.ts
+msgid "This agent cannot ask for tool approval in this conversation."
+msgstr "This agent cannot ask for tool approval in this conversation."
+
+#: src/lib/useBrowserTools.ts
+msgid "This agent cannot return screenshot files to this conversation."
+msgstr "This agent cannot return screenshot files to this conversation."
+
+#: src/components/BrowserControl.tsx
+msgid "This agent does not support browser tools"
+msgstr "This agent does not support browser tools"
+
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
@@ -5051,6 +5327,10 @@ msgstr "This device against the common ancestor"
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "This file changed on disk since you opened it."
+
+#: src/lib/media-client.ts
+msgid "This file is too large to preview."
+msgstr "This file is too large to preview."
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -5101,6 +5381,54 @@ msgstr "three in a row — tell the agent how to proceed"
 msgid "Toggle {name}"
 msgstr "Toggle {name}"
 
+#: src/lib/media.ts
+msgid "Tool {tool}"
+msgstr "Tool {tool}"
+
+#: src/state/reducer.ts
+msgid "Tool approval cancelled."
+msgstr "Tool approval cancelled."
+
+#: src/state/reducer.ts
+msgid "Tool approval expired."
+msgstr "Tool approval expired."
+
+#: src/state/reducer.ts
+msgid "Tool approval failed; the request was not approved."
+msgstr "Tool approval failed; the request was not approved."
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approval needed ({count})"
+msgstr "Tool approval needed ({count})"
+
+#: src/lib/useBrowserTools.ts
+msgid "Tool approval support is unverified."
+msgstr "Tool approval support is unverified."
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approvals"
+msgstr "Tool approvals"
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool approvals ({count})"
+msgstr "Tool approvals ({count})"
+
+#: src/components/StoredMedia.tsx
+msgid "Tool details unavailable: {reason}"
+msgstr "Tool details unavailable: {reason}"
+
+#: src/state/reducer.ts
+msgid "Tool request denied."
+msgstr "Tool request denied."
+
+#: src/lib/useBrowserTools.ts
+msgid "Tool requests can ask for approval; existing agent policies still apply."
+msgstr "Tool requests can ask for approval; existing agent policies still apply."
+
+#: src/components/ApprovalInbox.tsx
+msgid "Tool: {tool}"
+msgstr "Tool: {tool}"
+
 #: src/state/store.ts
 msgid "transcript could not be loaded: {reason}"
 msgstr "transcript could not be loaded: {reason}"
@@ -5120,6 +5448,10 @@ msgstr "Try the Academy example"
 #: src/components/DraftConversation.tsx
 msgid "Try the example"
 msgstr "Try the example"
+
+#: src/lib/media.ts
+msgid "Turn {turn}"
+msgstr "Turn {turn}"
 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -5229,6 +5561,22 @@ msgstr "Updated {age} by the agent"
 msgid "Updated {age} by you"
 msgstr "Updated {age} by you"
 
+#: src/components/ComposerAttachments.tsx
+msgid "Upload failed"
+msgstr "Upload failed"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading {name}"
+msgstr "Uploading {name}"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading {progress}%"
+msgstr "Uploading {progress}%"
+
+#: src/components/ComposerAttachments.tsx
+msgid "Uploading…"
+msgstr "Uploading…"
+
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
 msgid "Use a SKILL.md…"
@@ -5237,6 +5585,10 @@ msgstr "Use a SKILL.md…"
 #: src/components/DraftSourceTab.tsx
 msgid "Use as source"
 msgstr "Use as source"
+
+#: src/components/BrowserControl.tsx
+msgid "Use browser setting from Settings"
+msgstr "Use browser setting from Settings"
 
 #. drop this conversation's own settings and take the configured ones
 #: src/components/AgentSettings.tsx

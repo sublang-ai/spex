@@ -4,12 +4,14 @@
 // The project session run view (RUN-1..12): Captain column with the
 // Boss composer docked below, player panes for the visible roster.
 
+import { ApprovalNotice } from "./ApprovalInbox.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CAPTAIN_AGENT_ID,
   type DerivedIntent,
   type FailureCause,
   type IntentSource,
+  type MediaAsset,
   type PlaybookSummary,
   type SessionInfo,
 } from "@sublang/spex-core/protocol";
@@ -31,8 +33,10 @@ import { SessionRecovery } from "./SessionRecovery.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { ParkedRun } from "./ParkedRun.js";
 import { Composer } from "./Composer.js";
+import { sessionAttachmentKey, useComposerAttachments } from "../lib/useComposerAttachments.js";
 import { DeliveryCard } from "./DeliveryCard.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { MediaOwnerProvider } from "./StoredMedia.js";
 import { PlayerPane } from "./PlayerPane.js";
 import { AgentSettingsPopover } from "./AgentSettings.js";
 import { sessionAgents } from "../lib/session-agents.js";
@@ -272,7 +276,7 @@ export function RunView({
   onRetryLoad?: () => void;
   onRecover?: (action: "restore" | "discard") => Promise<void>;
   onDraftChange?: (draft: string) => void;
-  onSubmit: (text: string) => Promise<void>;
+  onSubmit: (text: string, attachments?: readonly MediaAsset[]) => Promise<void>;
   onAbort: () => void;
   onRemoveQueued: (index: number) => void;
   onDismissError: () => void;
@@ -282,6 +286,7 @@ export function RunView({
   onFocusHandled?: () => void;
 }) {
   const externalWriter = session.externalWriter;
+  const media = useComposerAttachments(sessionAttachmentKey(session.id), { kind: "project", id: session.projectId });
   readOnly ||= !!externalWriter;
   // Stop animation without closing the record fold's open text segment:
   // another host can append its next delta while ownership is unknown.
@@ -573,6 +578,7 @@ export function RunView({
             settingsPopover: (
               <AgentSettingsPopover
                 agent={agent}
+                context={{ kind: "project", id: session.projectId }}
                 readOnly={settingsReadOnly}
                 anchorRef={settingsAnchorRef}
                 onSave={(change) => setAgentSettings(session.id, agentId, change)}
@@ -627,6 +633,7 @@ export function RunView({
   const failureCause = latestFailureCause(activityView.captain);
 
   return (
+    <MediaOwnerProvider owner={{ kind: "session", id: session.id }}>
     <div className="flex min-h-0 flex-1 flex-col">
       {/* The conversation names itself (run-view-69). */}
       <div className="@container flex items-center gap-2 border-b border-neutral-200 px-4 py-1.5 text-sm dark:border-neutral-800">
@@ -809,6 +816,7 @@ export function RunView({
               </div>
             </>
           ) : null}
+          <ApprovalNotice owner={{kind: "session", id: session.id}} />
           {readOnly && !uncertain ? null : (
             <Composer
               view={view}
@@ -824,7 +832,12 @@ export function RunView({
               staged={staged}
               onCompileNew={onCompileNew}
               onDraftChange={onDraftChange}
-              onSubmit={onSubmit}
+              attachments={media.controls}
+              onSubmit={async (text) => {
+                if (media.assets.length || staged) await onSubmit(text, media.assets);
+                else await onSubmit(text);
+                media.consume();
+              }}
               onAbort={onAbort}
               onRemoveQueued={onRemoveQueued}
               onDismissError={onDismissError}
@@ -835,8 +848,10 @@ export function RunView({
                 await queueIntent({
                   projectId: session.projectId,
                   text,
+                  attachments: media.assets,
                   source: { kind: "chat", ref: session.id },
                 });
+                media.consume();
               }}
             />
           )}
@@ -881,5 +896,6 @@ export function RunView({
       </div>
       </div>
     </div>
+    </MediaOwnerProvider>
   );
 }

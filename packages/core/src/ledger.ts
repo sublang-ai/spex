@@ -34,7 +34,7 @@ export interface LiveLane {
 /** The intent's display title: the first line of its text. */
 export function intentTitle(intent: IntentInfo): string {
   const line = intent.text.split(/\r?\n/, 1)[0]?.trim();
-  return line && line.length > 0 ? line : intent.text.trim();
+  return line && line.length > 0 ? line : intent.text.trim() || (intent.attachments ?? []).map((asset) => asset.name ?? asset.mimeType).join(", ");
 }
 
 interface Turn {

@@ -100,6 +100,7 @@ export function NextCard({
       const restored = await queueIntent({
         projectId: intent.projectId,
         text: intent.text,
+        ...(intent.attachments ? { attachments: intent.attachments } : {}),
         source: intent.source,
         at: "head",
       });

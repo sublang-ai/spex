@@ -6,6 +6,7 @@
 // the sessions the reader opened. Keyboard shortcuts live
 // renderer-side so the UI runs unmodified in a browser (SHELL-10).
 
+import { ApprovalInbox, ApprovalFeedback } from "./components/ApprovalInbox.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntentInfo, SessionInfo } from "@sublang/spex-core/protocol";
 
@@ -48,6 +49,7 @@ type PendingRecord = { projectId: string; path: string; origin: RecordOrigin };
 import { editorDirty } from "./lib/spec-view-model.js";
 import { isHistory } from "./lib/sessions.js";
 import { Icon } from "./components/Icon.js";
+import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from "./lib/useComposerAttachments.js";
 
 export type { Surface };
 
@@ -374,6 +376,7 @@ function WorkspaceSurface({
   const projects = useAppStore((state) => state.projects);
   const openSession = useAppStore((state) => state.openSession);
   const currentProjectId = useAppStore((state) => state.currentProjectId);
+  const homeMedia = useComposerAttachments(currentProjectId ? homeAttachmentKey(currentProjectId) : undefined, currentProjectId ? { kind: "project", id: currentProjectId } : undefined);
   const setCurrentProject = useAppStore((state) => state.setCurrentProject);
   const workspaceTabs = useAppStore((state) => state.workspaceTabs);
   const setWorkspaceTab = useAppStore((state) => state.setWorkspaceTab);
@@ -492,6 +495,7 @@ function WorkspaceSurface({
       hasProject={Boolean(project)}
       hasProjects={projects.length > 0}
       projectName={project?.name}
+      projectId={project?.id}
       playbooks={summary?.playbooks ?? []}
       captain={summary?.captain}
       readiness={readiness}
@@ -503,6 +507,7 @@ function WorkspaceSurface({
           : undefined
       }
       draft={homeDraft}
+      attachments={homeMedia.controls}
       onDraftChange={setHomeDraft}
       onRecheckReadiness={refreshReadiness}
       onOpenPalette={onOpenPalette}
@@ -525,13 +530,17 @@ function WorkspaceSurface({
       onQueueInstead={
         currentProjectId
           ? async (text) => {
-              await queueIntent({ projectId: currentProjectId, text });
+              await queueIntent({ projectId: currentProjectId, text, attachments: homeMedia.assets });
+              homeMedia.consume();
             }
           : undefined
       }
       onStart={async (text) => {
         if (!currentProjectId) return;
         const session = await openSession(currentProjectId);
+        useAppStore.getState().setDraft(session.id, text);
+        useAppStore.getState().stageAttachmentAssets(sessionAttachmentKey(session.id), { kind: "project", id: currentProjectId }, homeMedia.assets);
+        const transferredIds = useAppStore.getState().attachmentDrafts[sessionAttachmentKey(session.id)].map((file) => file.id);
         // A dispatch staged on the home follows the text into the new
         // session, so the send stamps the intent (run-view-86/88).
         const state = useAppStore.getState();
@@ -542,7 +551,11 @@ function WorkspaceSurface({
             stagedIntents: { ...rest, [session.id]: homeStaged },
           });
         }
-        await submitBossText(session.id, text);
+        await submitBossText(session.id, text, homeMedia.assets);
+        homeMedia.consume();
+        useAppStore.getState().removeAttachmentFiles(sessionAttachmentKey(session.id), transferredIds);
+        if (useAppStore.getState().composers[session.id]?.draft === text)
+          useAppStore.getState().setDraft(session.id, "");
       }}
     />
   );
@@ -888,7 +901,7 @@ function WorkspaceSurface({
               setWorkspaceTab(activeSession.projectId, "start");
             }}
             onDraftChange={(draft) => setDraft(activeSession.id, draft)}
-            onSubmit={(text) => submitBossText(activeSession.id, text)}
+            onSubmit={(text, attachments) => submitBossText(activeSession.id, text, attachments)}
             onAbort={() => void abortTurn(activeSession.id)}
             attention={attentionBySession.get(activeSession.id)?.kind}
             onRemoveQueued={(index) => removeQueued(activeSession.id, index)}
@@ -1279,6 +1292,8 @@ export function App() {
   return (
     <div className="flex h-full flex-col">
       <ConnectionBanner />
+      <ApprovalInbox />
+      <ApprovalFeedback />
       <RefreshErrorBanner />
       <Announcer />
       {paletteOpen ? (

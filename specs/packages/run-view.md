@@ -168,6 +168,51 @@ While a session tab is shown, the run view shall present each agent's core-folde
 - the visible phrase yields first as a pane narrows, before agent identity, controls or a live elapsed reading, while its full reading remains in the pane's accessible description ([DR-041](../decisions/041-chrome-that-fits.md));
 - a folded player's rail [[run-view-116](#run-view-116)] does not print the phrase and includes the same full reading in the rail label's tooltip and accessible description where that player has a measured figure.
 
+### Attachments and Media
+
+#### run-view-153
+
+Where a composer offers file attachments, it shall acquire browser `File` objects through one multiple-file picker, file drop, or file paste and present each selected file with its name and current upload state ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)):
+
+- ordinary text paste and text dragging retain their native behavior;
+- an uploading file shows progress when reported, a failed file keeps its reason and Retry, and every file has a Remove control;
+- removing a file returns focus to Attach files, and a disabled attachment control accepts no files;
+- local image previews use owned object URLs released when their bytes leave the view, never an agent-supplied URL.
+
+#### run-view-154
+
+Where a composer holds attachments, it shall consider its content ready to send only when text or at least one file is present and every selected file has completed upload, preserving empty user text for an attachment-only submission ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)).
+
+#### run-view-158
+
+When a first-message, session, queued-intent, or authoring composer acquires files, the UI shall preserve their content through this submission flow:
+
+- upload browser bytes through the authenticated bounded transfer protocol [[media-1](media.md#media-1)] [[media-2](media.md#media-2)], using the selected project for first-message, session, and intent files and the selected draft for authoring files;
+- retain the original browser file and transfer identity after failure, so Retry resumes the same upload or restarts it after a core restart, with removal canceling an incomplete transfer;
+- retain unsent files across tab and surface changes and failed submissions, and clear only the files acknowledged by a successful submission;
+- send exact user text and ordered completed references alongside it [[media-5](media.md#media-5)], including attachment-only turns and queued authoring messages;
+- preserve an intent's selected files through editing, staging, and dispatch, deriving an empty-text display title from their names without changing user text.
+
+#### run-view-155
+
+Where a conversation presents structured media, it shall render the supplied trusted bytes as a bounded raster image, controlled audio or video, or a named download, with any reported origin alongside it ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)):
+
+- previews and downloads use owned object URLs released when their bytes leave the view;
+- audio and video never autoplay, and an image can expand in place through a named keyboard control;
+- loading and unavailable content retain the name and state, with Retry where supplied;
+- an external reference renders only an explicit HTTP(S) link or its literal reference text, without fetching it or passing it to a media element;
+- a preview decoding failure leaves the download available and names the unavailable preview.
+
+#### run-view-160
+
+When durable input or working-call media records reach a conversation, the UI shall render their content in record order through the trusted media presentation [[run-view-155](#run-view-155)] and bounded owner-scoped reads [[media-3](media.md#media-3)] [[media-6](media.md#media-6)]:
+
+- Boss bubbles retain their ordered attachment descriptors, including attachment-only turns;
+- Captain figures come only from visible evidence records and retain their originating actor and turn, their Playbook or host invocation identity, and any reported Playbook runtime and native tool identity, without revealing hidden controller events or duplicating the worker's native event in that pane;
+- worker and authoring transcripts render their native media events with the recorded actor, turn, and reported native session/tool identity alongside each figure, without inventing a missing playbook call identifier or fetching external references;
+- large tool-result asset references load their original JSON only when the tool card is expanded, preserving unavailable details as a retryable failure;
+- navigation, history reopen, and replay use the record's asset owner and digest, never the original local file path or model-generated Markdown.
+
 ### Boss Composer
 
 #### run-view-8
@@ -286,7 +331,7 @@ When the user opens the captain identity's editor control (or another agent's ed
 
 #### run-view-138
 
-When the reader opens an agent's settings control — the chip in the Captain pane's header, or the chip in a player pane's header [[run-view-139](#run-view-139)] — the run view shall show an anchored popover editing that agent's own model, subagent model, effort, subagent effort, and fast mode for this conversation [[core-service-100](core-service.md#core-service-100)], without leaving the surface and without editing the shared configuration ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-009](../decisions/009-at-hand-interaction.md)):
+When the reader opens an agent's settings control — the chip in the Captain pane's header, or the chip in a player pane's header [[run-view-139](#run-view-139)] — the run view shall show an anchored popover editing that agent's own model, subagent model, effort, subagent effort, fast mode, and browser choice [[settings-44](settings.md#settings-44)] for this conversation [[core-service-100](core-service.md#core-service-100)], without leaving the surface and without editing the shared configuration ([DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md), [DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-009](../decisions/009-at-hand-interaction.md)):
 
 - it edits the agent whose chip was opened and no other, anchored at that chip and taking the side and the bound of the agent editor's popover [[run-view-32](#run-view-32)], under the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6): focus enters on open and returns to the chip on close, and Escape, an outside click, and Cancel close it;
 - each field offers the configured value, the provider's current default, and a value pinned from the runtime's own choices [[settings-34](settings.md#settings-34)] in the model field [[settings-39](settings.md#settings-39)], the subagent effort's provider default reading "Agent chooses" and the subagent model offering "Off" in its place only while that choice stands [[settings-34](settings.md#settings-34)] ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md));
@@ -386,10 +431,10 @@ While the shown session carries a failure entry [[dashboard-1](dashboard.md#dash
 
 #### run-view-136
 
-When a player's records carry a permission request, that player's pane shall render it as the run's own line saying which tool was asked for and that Spex answers no permission request, so the agent's own default decided ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+When a player's records carry historical permission telemetry, that player's pane shall render the tool and native reason as history without presenting it as an answerable request ([DR-066](../decisions/066-every-summons-has-a-door.md), [DR-098](../decisions/098-live-tool-approvals.md)):
 
-- the request raises no attention entry [[dashboard-1](dashboard.md#dashboard-1)] and no mark anywhere, because no control in the product answers one;
-- the line stands in the transcript as history, settling nothing and asking nothing.
+- only the live core approval inbox supplies actionable controls [[approvals-5](approvals.md#approvals-5)];
+- stored telemetry raises no attention entry and proves neither a host answer nor successful native execution.
 
 #### run-view-34
 
@@ -831,6 +876,24 @@ The pane manager shall key each pane by its player id [[run-view-7](#run-view-7)
 The start view shall obtain projects, playbooks, captain identity, and readiness exclusively through existing protocol commands and broadcasts, detecting the native picker by feature-testing the shell bridge ([DR-008](../decisions/008-native-shell-bridge.md)) and falling back to manual path entry when the bridge is absent so the identical build serves browser deployments.
 
 ## Verification
+
+### Attachment and Media Controls
+
+#### run-view-156
+
+Where a rendered composer holds a controlled upload lifecycle, when the integration suite picks, drops, and pastes real browser files and settles or rejects their uploads, it shall verify acquisition, named states, progress, removal focus, retry, disabled behavior, and unaffected ordinary text input [[run-view-153](#run-view-153)], with attachment-only sending enabled only after every selected upload succeeds and the submitted user text remaining empty [[run-view-154](#run-view-154)].
+
+#### run-view-157
+
+Where a rendered conversation receives trusted image, audio, video and document bytes alongside unavailable content and external references, the integration suite shall verify bounded previews, explicit image expansion, native non-autoplay media controls, named downloads, loading and failure states, object URL cleanup and no external media fetch [[run-view-155](#run-view-155)].
+
+#### run-view-161
+
+When persisted fixture records are replayed into session and authoring conversations, integration verification shall assert ordered attachment-only Boss messages, actor-attributed Captain figures, native worker and authoring media captioned with their recorded turn, native session and tool identity, Captain figures distinguishing their Playbook runtime and invocation identity, and no invented identifiers, hidden-controller exclusion, deferred original tool detail, unavailable-content retry, external-link non-fetching, and owner-scoped reads after remount [[run-view-160](#run-view-160)].
+
+#### run-view-159
+
+When rendered first-message, session, authoring and queued-intent flows use the protocol client, the integration suite shall verify byte upload and retry, removal cancellation, drafts retained after failed sends and navigation, attachment-only admission, and ordered references retained through queued-intent editing, staging and dispatch [[run-view-158](#run-view-158)].
 
 ### run-view-111
 

@@ -123,6 +123,7 @@ When a draft is opened, the Library shall replace the playbook list with the aut
 
 While a draft's workspace is open, the conversation pane shall render the draft's transcript in record order — the Boss's messages as Boss bubbles, the system's lines as ◇ system lines [[run-view-1](run-view.md#run-view-1)], the agent's text as streaming Markdown [[run-view-3](run-view.md#run-view-3)], its tool calls as collapsed cards labeled with the tool and its subject [[run-view-4](run-view.md#run-view-4)], its thinking collapsed, and its failures as failure lines — and shall render a directive block in the agent's reply as a card, never as fence text:
 
+- input attachments and native output media use the trusted record-driven conversation presentation [[run-view-160](run-view.md#run-view-160)];
 - the cards read "Asked to compile" and "Proposed registration", the latter listing command, intent, and role → player with "Open Register";
 - a malformed directive stays visible as code with a "Spex could not read this block" caption;
 - while a turn runs the pane's header shows the running mark and "working · ⟨elapsed⟩" ticking each second ([DR-010](../decisions/010-interface-craft.md) §5);
@@ -277,6 +278,7 @@ While a configured playbook is listed, the Library shall label the playbook's re
 
 When the Library surface is opened, the Library shall list each known built-in playbook absent from the shared config ([DR-015](../decisions/015-reference-content.md)) with its command, intent, required roles, and browsable source markdown, and shall offer an enable flow — one "Enable" action per built-in, acknowledging while it writes — that gives each role a player and registers the playbook through the shared-config write path [[playbook-library-16](#playbook-library-16)]:
 
+- The known catalog includes `code`, `review`, `decide`, `dev`, `branch`, `pr`, and `inspect`, omitting an entry only when the installed package cannot load its registry.
 - Browsing a built-in's source requires no config change.
 - With no playbook configured, the configured list says so and points at enabling a built-in below or compiling one.
 - A role's proposed player id is `dev.<role>`, editable before it is written, because the id is the sharing decision ([DR-032](../decisions/032-session-players.md)).
@@ -403,6 +405,8 @@ When a draft turn starts, the conversation runner shall run the draft's agent bl
 | Option | Value |
 | --- | --- |
 | model, subagentModel, effort, subagentEffort, fastMode | the block's, an unset subagentModel taken as `inherit` on an adapter Cligent serves one for and a `false` one as absent, as Playbook's launcher resolves them ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
+| attachments | the current Boss turn's ordered verified draft assets, supplied again on its resume-rejection retry [[media-5](media.md#media-5)] |
+| browser | the block's off-by-default setting [[media-9](media.md#media-9)] |
 | cwd | the draft directory `<library-root>/<id>/` [[playbook-library-12](#playbook-library-12)] |
 | permissions | `{ mode: "auto" }` — the block's own policy and `writablePaths` dropped |
 | allowedTools, disallowedTools, maxTurns | absent |
@@ -411,6 +415,7 @@ When a draft turn starts, the conversation runner shall run the draft's agent bl
 
 - the block's `instruction` is not carried; the prompt composition carries everything [[playbook-library-65](#playbook-library-65)];
 - no instance outlives the turn ([DR-051](../decisions/051-runtime-held-for-a-turn.md)); the token is held in memory for the app's run and never written;
+- native media and large tool results are externalized through the shared owned-asset ingestion before recording [[media-6](media.md#media-6)]; earlier input files stay in the visible transcript and are not automatically resent on later turns;
 - a run ending in an error coded `SESSION_RESUME_REJECTED` is re-run once as a reseed;
 - a `permission_request` event is recorded and shown as a failure line; the runner answers nothing, so the adapter's own headless default applies;
 - the turn is recorded and streamed as `turn_started` carrying the Boss or system text, `player_prompt` with the exact prompt, one `player_event` per event, `player_finished`, and `turn_finished` or `turn_aborted`, every player record naming the player `author`, so the run view's transcript folds read them unchanged [[playbook-library-70](#playbook-library-70)].
