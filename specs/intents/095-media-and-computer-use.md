@@ -34,6 +34,7 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 7. Add shared attachment composers and trusted media presentation across initial, session, and authoring views.
 8. Exercise fresh-user scenarios, complete reviews and CI, and merge fine-grained milestones; publish only where needed for downstream adoption.
 9. Keep browser setup failures concise and fully inspectable, and stop acceptance promptly on a reported failure or cancellation.
+10. Allow explicitly attributed reuse of matching installed browser revisions for native media acceptance, preserving separate empty-cache host coverage and the default cold path.
 
 ## Verification
 
@@ -45,6 +46,6 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 - Verify durable workflow questions separately from tool callbacks, and explain that Codex app-access and operating-system grants retain their external owners.
 - Verify task-scoped attachment relay through a working player and nested execution, without granting tools to controller or judge calls.
 - Verify asset integrity, owner deletion, portability, whole-unit selection, damaged references, and shared CLI/session recovery.
-- Run fresh installed macOS Desktop and headless Linux server acceptance with empty browser caches; verify the remote browser client never relies on a server-local copy of its selected file.
+- Run fresh installed macOS Desktop and headless Linux server browser-preparation acceptance with empty browser caches; an explicitly recorded warm-cache native media check remains distinct, and the remote browser client never relies on a server-local copy of its selected file.
 - Inspect narrow layouts, keyboard paths, English and Chinese wording, and untrusted remote-media behavior through the rendered UI.
 - Keep the goal active until the actual public runtime dependencies and installed application state prove each requested outcome.

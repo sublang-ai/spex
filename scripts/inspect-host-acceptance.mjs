@@ -8,6 +8,8 @@
 // Requires a signed-in Claude Captain and Claude (default) or Codex worker.
 // Credentials stay in the user's normal provider home; all Spex state,
 // governed files and browser cache are owned temporary directories.
+// SPEX_INSPECT_BROWSER_CACHE_SOURCE optionally copies matching installed
+// revisions; this is reported as warm-cache evidence, never a cold install.
 // Source mode builds and flips/restores Electron's SQLite ABI unless the
 // isolated checkout has SPEX_SMOKE_BUILD_READY=1 / SPEX_SMOKE_ABI_READY=1.
 // SPEX_INSPECT_APP_EXECUTABLE selects an already prepared packaged app.
@@ -15,6 +17,7 @@
 import assert from "node:assert/strict";
 import { nativeApprovalStage } from "./native-approval-stage.mjs";
 import { waitForBrowserPreparation } from "./browser-preparation.ts";
+import { prepareInspectionBrowserCache } from "./inspection-browser-cache.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -35,6 +38,8 @@ assert.ok(["claude", "codex"].includes(adapter), "Inspect acceptance requires a 
 // Refuse the old closure before launching an app or using a provider.
 import.meta.resolve("@sublang/playbook/inspect/registry");
 const executablePath = process.env.SPEX_INSPECT_APP_EXECUTABLE;
+const browserCacheSource = process.env.SPEX_INSPECT_BROWSER_CACHE_SOURCE;
+assert.ok(!executablePath || browserCacheSource === undefined, "Explicit cache copying requires the installed source checkout's managed runtime");
 const flip = !executablePath && process.env.SPEX_SMOKE_ABI_READY !== "1";
 const scratch = mkdtempSync(join(process.env.SPEX_SMOKE_SCRATCH_DIR ?? tmpdir(), "spex inspect host "));
 const evidenceDir = process.env.SPEX_INSPECT_EVIDENCE_DIR
@@ -58,6 +63,7 @@ let succeeded = false;
 let flipped = false;
 let sessionId;
 let history = [];
+let browserCache;
 const at = (value) => { stage = value; console.log(`inspect-host: ${value}`); };
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 const run = (command, args, cwd = root) => {
@@ -294,6 +300,8 @@ async function showEvidence(page, evidence, reply, expectedBytes) {
 }
 
 try {
+  browserCache = await prepareInspectionBrowserCache(browserCacheSource, env.PLAYWRIGHT_BROWSERS_PATH);
+  writeFileSync(join(evidenceDir, "browser-cache.json"), `${JSON.stringify(browserCache, null, 2)}\n`);
   if (flip) { at("Electron ABI"); flipped = true; run("npm", ["run", "rebuild:electron", "-w", "apps/desktop"]); }
   if (!executablePath && process.env.SPEX_SMOKE_BUILD_READY !== "1") { at("build"); run("npm", ["run", "build"]); }
   const beforeHead = initializeRepository(projectPath);
@@ -487,7 +495,8 @@ try {
     approval.historyOnlyAfterCoreRestart = true;
   }
   const report = { ...runtime, adapter, inspector, nativeApprovals, sessionId: browserSessionId, nativeTools,
-    nativeReportedModels: browserReportedModels, freshProfile: true, freshBrowserCache: true, explicitBrowserSave: true,
+    nativeReportedModels: browserReportedModels, freshProfile: true, freshBrowserCache: browserCache.freshBrowserCache,
+    browserCache, explicitBrowserSave: true,
     nativeScreenshot: { assetId: evidence.asset.assetId, byteLength: image.length, sha256: digest, origin: evidence.origin, callId: evidence.callId,
       turnId, toolUseId: screenshotToolId, fixtureNavigation: preview },
     receipt: "unchanged", repositoryUnchanged: true, reopened: true, screenshot, evidenceDir,
