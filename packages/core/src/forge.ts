@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 import type { ToolchainRuntime } from "./compile.js";
 import { i18n } from "./i18n.js";
+import type { Language } from "./language.js";
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
 
 export type { ForgeItem, ForgeState };
@@ -164,6 +165,7 @@ export function suppliedScaffold(
 export interface CreateProjectOptions {
   path: string;
   scaffold?: boolean;
+  scaffoldLanguage?: Language;
   /** The scaffold command a shell supplied (projects-31); the
    * registry's `npx --yes @sublang/spex` when none. */
   scaffoldCommand?: string[];
@@ -191,7 +193,7 @@ export async function createProjectRepo(
     const [command, ...args] = options.scaffoldCommand ?? REGISTRY_SCAFFOLD;
     const scaffoldRun = await run(
       command,
-      [...args, "scaffold", options.path],
+      [...args, "scaffold", ...(options.scaffoldLanguage ? ["--lang", options.scaffoldLanguage] : []), options.path],
       options.path,
       options.scaffoldCommand ? options.scaffoldEnv : undefined,
     );

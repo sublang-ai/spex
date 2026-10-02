@@ -10,7 +10,7 @@
 // `msgid` carries in packages/ui/locales/zh/messages.po — except the
 // core's own, which comes from packages/core/src/locales/zh/messages.po.
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 
@@ -84,7 +84,23 @@ async function shoot(page: Page, name: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe("a browser that asks for Chinese", () => {
-  test.use({ locale: "zh-CN" });
+  test.use({ locale: "zh-CN", appOptions: { systemLanguages: ["en"] } });
+
+  test("projects-28: a Chinese page creates Chinese specs on an English host", async ({
+    page,
+    app,
+  }) => {
+    await openTranslated(page, app);
+    await page.getByRole("button", { name: "切换或添加项目", exact: true }).click();
+    await page.getByTestId("palette-path").fill(app.projectDir);
+    await page.getByTestId("palette-create").click();
+    await expect(page.getByTestId("palette-path")).toBeHidden();
+    const meta = readFileSync(join(app.projectDir, "specs", "meta.md"), "utf8");
+    expect(meta).toContain("Authoring language: zh");
+    await page.getByRole("tab", { name: "规约", exact: true }).click();
+    await page.getByRole("button", { name: "meta", exact: true }).click();
+    await expect(page.getByText("Authoring language: zh", { exact: true })).toBeVisible();
+  });
 
   test("localization-10: with no stored choice the page speaks Chinese and declares zh", async ({
     page,

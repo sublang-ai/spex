@@ -73,6 +73,8 @@ const uiDist = join(repoRoot, "apps", "server", "ui-dist");
 export interface AppOptions {
   /** Additional native-style provider rules for approval journeys. */
   approvalRules?: FakeScript["rules"];
+  /** The core host's preferred languages, independent of the browser. */
+  systemLanguages?: readonly string[];
   /**
    * `demo` writes the two-player demo config before boot; `none`
    * leaves the path empty so the core seeds its installed template —
@@ -686,6 +688,7 @@ async function arrangeApp(
           ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
+          ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
           ...(options.forge
             ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
             : {}),

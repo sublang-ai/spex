@@ -793,6 +793,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     path: z.string().min(1),
     scaffold: z.boolean().optional(),
+    /** The creating page's resolved language; otherwise the core's. */
+    scaffoldLanguage: z.enum(LANGUAGES).optional(),
     /** Seed the Academy example corpus (DR-015); excludes scaffold. */
     example: z.boolean().optional(),
   }),

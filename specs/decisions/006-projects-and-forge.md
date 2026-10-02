@@ -7,6 +7,7 @@
 
 Accepted; amended by [DR-036](036-file-state-store.md): the project registry lives in the state root's registry file, not the app-local SQLite store.
 Amended by [DR-096](096-the-app-supplies-the-scaffold.md) in the create flow's scaffold step: the scaffold CLI is the checkout's own copy, the registry's only where none is built.
+Amended by [DR-100](100-new-project-specs-follow-the-readers-language.md) in new project scaffolding: the creating page supplies its resolved interface language.
 
 ## Context
 

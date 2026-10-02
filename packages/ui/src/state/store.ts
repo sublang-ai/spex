@@ -1824,6 +1824,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const project = await getClient().command("project.create", {
         path,
         scaffold,
+        ...(scaffold ? { scaffoldLanguage: get().language.resolved } : {}),
       });
       set({ projects: await getClient().command("project.list", {}) });
       void get().loadProjectMeta(project.id);

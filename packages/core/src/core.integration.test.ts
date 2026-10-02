@@ -193,6 +193,7 @@ async function startHarness(
      * commit, so a scripted player can really commit in it. */
     seedCommit?: boolean;
     env?: NodeJS.ProcessEnv;
+    systemLanguages?: readonly string[];
     runCommand?: import("./forge.js").RunCommand;
     /** The scaffold generator project.create runs (the built CLI). */
     scaffoldCommand?: string[];
@@ -244,6 +245,7 @@ async function startHarness(
     discoverAgentModels: options.discoverAgentModels,
     ...(options.realShell ? {} : {captainFactory: async () => captain}),
     env: options.env ?? {},
+    ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
     home: join(dir, "home"),
     watchConfig: false,
     ...(options.scaffoldCommand
@@ -1105,6 +1107,7 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
     return { code: exitCode, stdout: "", stderr: exitCode ? `${command} refused` : "" };
   };
   const supplied = await startHarness(VALID_CONFIG, {
+    systemLanguages: ["en"],
     runCommand: recorder,
     scaffoldCommand: ["/opt/app/electron", "/opt/app/packages/cli/dist/cli.js"],
     scaffoldEnv: { ELECTRON_RUN_AS_NODE: "1" },
@@ -1113,14 +1116,14 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
   await client.open();
 
   // The supplied command runs on its variables, in the project, with
-  // `scaffold <path>` appended, and the project registers.
+  // `scaffold --lang <language> <path>` appended, and the project registers.
   const made = join(supplied.dir, "made");
   const created = await client.expectOk("project.create", { path: made, scaffold: true });
   assert.equal(created.path, made);
   assert.deepEqual(calls, [
     {
       command: "/opt/app/electron",
-      args: ["/opt/app/packages/cli/dist/cli.js", "scaffold", made],
+      args: ["/opt/app/packages/cli/dist/cli.js", "scaffold", "--lang", "en", made],
       cwd: made,
       env: { ELECTRON_RUN_AS_NODE: "1" },
     },
@@ -1164,6 +1167,32 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
   );
   bareClient.close();
   await bare.service.stop();
+});
+
+test("projects-18: real scaffolding uses the requested language or the core's language", async () => {
+  const scaffoldCli = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
+  const harness = await startHarness(VALID_CONFIG, {
+    systemLanguages: ["zh-CN"],
+    scaffoldCommand: [process.execPath, scaffoldCli],
+  });
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    for (const requested of [undefined, "en"] as const) {
+      const path = join(harness.dir, requested ?? "host-language");
+      await client.expectOk("project.create", {
+        path,
+        scaffold: true,
+        ...(requested ? { scaffoldLanguage: requested } : {}),
+      });
+      assert.match(readFileSync(join(path, "specs", "meta.md"), "utf8"),
+        new RegExp(`Authoring language: ${requested ?? "zh"}`));
+      assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: path, encoding: "utf8" }).trim(), "");
+    }
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
 });
 
 test("PROJ: work-tree validation, create flow, forge states, removal", async () => {
