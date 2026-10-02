@@ -396,7 +396,7 @@ When a registration writes the `playbooks.<id>` entry after a compile, the compi
 
 #### playbook-library-33
 
-When playbook loading imports a config `from` module that is a file path, and the module carries no registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook and recompilation as the remedy ([DR-014](../decisions/014-released-toolchain.md)):
+When playbook loading imports a config `from` module that is a file path, and the module does not carry the current registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook, describing incompatibility with this version of Spex and directing source compilation in Playbooks as the remedy, without claiming when or by which toolchain the module was generated ([DR-014](../decisions/014-released-toolchain.md)):
 
 - A package specifier `from` does not require the marker.
 
@@ -563,6 +563,10 @@ When each installed built-in playbook's artifacts are requested, the test suite 
 #### playbook-library-37
 
 When each installed built-in playbook's artifacts are requested, the test suite shall assert the served graph is whole [[playbook-library-36](#playbook-library-36)]: every edge's ends name served nodes, the edge set is non-empty for every built-in, declared-id targets resolve — the review machine's opening transition and a boss-reply resume transition among the resolved — and a compound state's done transition appears as an edge.
+
+#### playbook-library-91
+
+Where fresh file registries use the current artifact schema with absent or noncurrent markers, a file registry has the current marker and a packaged registry has none, when real config composition loads each entry in English and Chinese, the integration suite shall assert incompatible files are refused with the existing typed registry fault and truthful source-compilation guidance, while the current-marker and packaged entries remain accepted [[playbook-library-33](#playbook-library-33)].
 
 ### Binding Coverage
 

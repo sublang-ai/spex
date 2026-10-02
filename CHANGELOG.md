@@ -448,6 +448,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   canonical form without rewriting their spelling in the shared YAML file.
 - Packaged CODE and DECIDE cards name their missing REVIEW prerequisite
   before work starts, without invalidating the shared config or enabling players.
+- File registry compatibility errors describe the missing current host contract
+  and source-compilation remedy without claiming a freshly generated artifact
+  came from an older toolchain.
 
 - Conversation panes keep following when live cards or delayed media grow.
   Queued automatic scroll events no longer detach the thread, while scrolling
