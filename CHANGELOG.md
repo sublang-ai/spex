@@ -447,6 +447,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the complete diagnostic in expandable details without terminal formatting.
   Native acceptance stops on a reported setup failure or cancellation instead
   of waiting out the full readiness deadline.
+- Late question, turn, and submission updates preserve the control the reader
+  selected instead of moving focus back to the conversation composer.
 - Settings and configuration loading reject invalid writable paths before a
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.

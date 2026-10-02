@@ -704,6 +704,7 @@ export function RunView({
             // protocol while the turn keeps running.
             <WorkingLine
               intent={workingIntent?.intent}
+              inputAvailable={connected && !view.turnActive}
               onDrop={(intent) => closeIntent(intent.id, "dropped")}
             />
           ) : null}

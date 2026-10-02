@@ -224,6 +224,7 @@ The Boss composer shall accept free text and `/`-prefixed command text, be the o
 - when the active turn settles with no pending question, an already saved queued submission dispatches; a refused submission preserves its queued text and draft with the error shown, and uncertainty holds the queue until explicit recovery [[run-view-110](#run-view-110)];
 - a reply or replayed turn-start record does not establish settlement or current activity; a non-live session has no active turn, including after recovery, and its already saved queued submissions dispatch once its turn has settled without a pending question — the runtime is held only for a turn [[core-service-91](core-service.md#core-service-91)];
 - while a submission is being sent — the runtime opening on the current settings [[core-service-92](core-service.md#core-service-92)], then the turn starting — the primary control reads "Sending…" and stays disabled ([DR-010](../decisions/010-interface-craft.md) §3), and a refusal lands in the composer's frame with the draft kept;
+- asynchronous question, turn-state, and submission-completion updates restore focus to the available composer only when its field still holds focus or focus is otherwise unclaimed, preserving any other control or region the reader selected;
 - the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line — and, while a turn is active, says Captain is working.
 
 #### run-view-106
@@ -822,7 +823,7 @@ When the workspace opens a session from an attention entry [[dashboard-1](dashbo
 While the working line names an open intent [[run-view-90](#run-view-90)], the run view shall offer Drop on the line, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped over the protocol while the turn keeps running ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the outcome — the drop, or the refusal with its reason — announces in a status line where the working line stood, lasting six seconds;
-- Keep returns focus to the control; a drop hands it to the enabled composer, or to its outcome notice while input is disabled, once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6).
+- Keep returns focus to the control; a drop hands it to the enabled composer, or temporarily to its outcome notice while input is disabled, once the line has left with its control; when input becomes available, that notice hands focus to the composer only if it has continuously retained focus, with a reader-selected place preserved ([DR-010](../decisions/010-interface-craft.md) §6).
 
 #### run-view-114
 
@@ -984,7 +985,11 @@ While a replayed fixture stream holds a turn active, when the abort control is a
 
 #### run-view-24
 
-While a replayed fixture stream holds a turn active, the test suite shall assert disabled input, preserved drafts, refusal without queueing on a stale busy view, and re-enabled input after settlement, including a question that arrives before settlement [[run-view-8](#run-view-8)].
+When fixture turn and question states and deferred submission outcomes reach the rendered run view, integration verification shall assert the composer behavior through these cases:
+
+- an active turn disables input and preserves its draft, a stale busy submission is refused without queueing, and settlement re-enables input even when a question arrived first [[run-view-8](#run-view-8)];
+- question arrival, settlement, and a pending submission's success or refusal preserve another control's focus selected by the reader [[run-view-8](#run-view-8)];
+- settlement and submission completion return unclaimed focus to the available composer [[run-view-8](#run-view-8)].
 
 #### run-view-29
 
@@ -1115,7 +1120,7 @@ Where a replayed fixture stream dispatches a queued intent whose turn then ends 
 
 - the bound turn's bubble wears the intent's source chip, and a trailing line repeating the source's URL leaves the bubble [[run-view-89](#run-view-89)];
 - while the intent is open, the working line above the composer names it [[run-view-90](#run-view-90)];
-- Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the enabled composer or the outcome notice while busy; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
+- Drop on the working line asks the inline confirm — Keep leaves the intent open with focus back on the control; Drop sends the close command as dropped, the line leaves with the outcome announced where it stood and focus in the enabled composer or the outcome notice while busy, then in the composer when input becomes available only if the notice retained focus; choosing a lane control before that handoff preserves it; a refused drop keeps the line and names the refusal [[run-view-113](#run-view-113)];
 - the delivery card at the final turn's end carries the intent's title, its provenance chip, its review rounds, turn count, and elapsed time, a primary Confirm with Drop beside, and the visible follow-up note [[run-view-87](#run-view-87)];
 - while a clean-settlement successor runs, the earlier card retains Confirm and Drop, loses its follow-up note, and confirming it neither starts another turn nor changes the successor's attribution [[run-view-87](#run-view-87)];
 - giving a verdict sends a close command over the protocol and resolves the card in place into the project's next queued intent carrying `Queued` and its published scheduling phrase, with Start only in a manual-ready fixture and its accessible name identifying that intent [[run-view-87](#run-view-87)];
@@ -1237,7 +1242,7 @@ Where the harness boots with the demo project registered, when the journey break
 
 #### run-view-115
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)].
+Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or temporarily in the outcome notice while busy, then in the composer when input becomes available if the reader has not moved focus [[run-view-113](#run-view-113)].
 
 #### run-view-118
 
