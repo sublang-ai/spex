@@ -215,6 +215,14 @@ When durable input or working-call media records reach a conversation, the UI sh
 
 ### Boss Composer
 
+#### run-view-164
+
+When Boss input becomes available in a shown conversation, the composer shall make its field ready without taking focus from another surviving control:
+
+- focus on the document body returns to the field, and focus already on that field remains there with its draft and selection preserved;
+- focus on another control remains on that control, including a player lane's collapse or expand control [[run-view-116](#run-view-116)] and an open agent editor [[run-view-138](#run-view-138)];
+- showing a new conversation or explicitly navigating to one retains the arrival focus of that navigation [[run-view-49](#run-view-49)].
+
 #### run-view-8
 
 The Boss composer shall accept free text and `/`-prefixed command text, be the only input control in the run view, and dispatch each Boss submission by the core's published turn state [[core-service-32](core-service.md#core-service-32)]:
@@ -1181,6 +1189,14 @@ Where the run view's production modules are inspected, the test suite shall asse
 - every write to the rendered record state originates from the protocol client's message handling [[run-view-13](#run-view-13)].
 
 ### Conversation Following
+
+#### run-view-165
+
+When the integration suite exercises rendered Boss-input readiness over real record-folded turns, it shall verify focus through this case matrix:
+
+- a question arriving before settlement, followed by the reader collapsing a lane, leaves focus on its expand control after settlement [[run-view-164](#run-view-164)] [[run-view-116](#run-view-116)];
+- ordinary settlement with focus on the body readies and focuses the composer, while an existing composer draft and selection survive [[run-view-164](#run-view-164)];
+- a surviving agent-editor control keeps focus through settlement, and explicit new-conversation arrival still focuses the composer [[run-view-164](#run-view-164)].
 
 #### run-view-163
 

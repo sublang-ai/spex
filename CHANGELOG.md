@@ -447,6 +447,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   before refusing admission. Discard success and refusal publish released
   ownership before another recovery, preserving the original refusal and
   leaving foreign replay delivery intact.
+- Turn settlement keeps focus on a player lane control or open agent editor
+  the reader chose while work ran; ordinary ready input still receives focus.
 - Captain conversations keep following when live machine content mounts or
   changes before a queued scroll event. Readers who scroll up stay detached
   through later records and sidebar reflow until they choose Latest.

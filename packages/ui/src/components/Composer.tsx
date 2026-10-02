@@ -256,10 +256,15 @@ export function Composer({
 
   const awaiting = view.pendingQuestion !== undefined;
 
-  // Keep the composer ready to type: focus on mount and the moment a
-  // player question arrives.
+  // Ready input can take the body's focus, but settlement must not
+  // steal a control the reader chose while its reply was arriving.
+  // Explicit conversation arrival still uses the field's autoFocus.
   useEffect(() => {
-    textareaRef.current?.focus();
+    const field = textareaRef.current;
+    if (!field) return;
+    const active = field.ownerDocument.activeElement;
+    if (active && active !== field.ownerDocument.body && active !== field) return;
+    field.focus();
   }, [awaiting, view.turnActive]);
 
   // The newest queued message is the one the Boss just wrote, so the
