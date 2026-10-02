@@ -238,6 +238,46 @@ msgstr "{path} 必须是 Player id 或绑定块"
 msgid "{path} must be an adapter shorthand or an agent block"
 msgstr "{path} 必须是适配器简写或智能体块"
 
+#. Config error; writable paths stay within the workspace
+#: src/permission-paths.ts
+msgid "{path} must be workspace-relative"
+msgstr "{path} 必须为工作区内的相对路径"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not be empty"
+msgstr "{path} 不得为空"
+
+#. Config error; '..' is the literal parent-directory component
+#: src/permission-paths.ts
+msgid "{path} must not contain '..' path segments"
+msgstr "{path} 不得包含 '..' 路径分段"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain control characters"
+msgstr "{path} 不得包含控制字符"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain empty path segments"
+msgstr "{path} 不得包含空路径分段"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain glob metacharacters"
+msgstr "{path} 不得包含通配符元字符"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain shell expansion or control characters"
+msgstr "{path} 不得包含 Shell 展开或控制字符"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not resolve to the workspace root"
+msgstr "{path} 不得指向工作区根目录"
+
 #. Config error; `effort` and `reasoningEffort` are the config file's own field names
 #: src/config.ts
 msgid "{path} must not set both effort and its legacy alias reasoningEffort"

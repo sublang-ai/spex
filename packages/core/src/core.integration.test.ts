@@ -18,6 +18,7 @@ import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
 import { WebSocket } from "ws";
+import { loadTmuxPlayConfig } from "@sublang/cligent/tmux-play";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
 
@@ -4638,4 +4639,139 @@ test("core-service-112: a start speaks the stored language before its store load
   assert.equal(cache.blocking, false);
   assert.ok(cache.reason.startsWith(CACHE_ZH), cache.reason);
   assert.ok(!cache.reason.includes(CACHE_EN), cache.reason);
+});
+
+
+// Each row is a public permission contract case, compared with the installed
+// Cligent loader rather than a substitute or a copied expected error string.
+const WRITABLE_PATH_CASES = [
+  { paths: ["./.git/", "generated\\cache/./", "space folder"], accepted: true },
+  { paths: [], accepted: true },
+  { paths: [""], accepted: false },
+  { paths: ["."], accepted: false },
+  { paths: ["./"], accepted: false },
+  { paths: ["/tmp/cache"], accepted: false },
+  { paths: ["C:\\cache"], accepted: false },
+  { paths: ["\\\\host\\cache"], accepted: false },
+  { paths: ["../cache"], accepted: false },
+  { paths: ["safe/../cache"], accepted: false },
+  { paths: ["safe//cache"], accepted: false },
+  { paths: ["safe/*.txt"], accepted: false },
+  { paths: ["safe/[cache]"], accepted: false },
+  { paths: ["~/.git"], accepted: false },
+  { paths: ["safe/$cache"], accepted: false },
+  { paths: ["safe;cache"], accepted: false },
+  { paths: ["safe/line\nfeed"], accepted: false },
+  { paths: ["safe/\u007f"], accepted: false },
+];
+
+test("writable paths: Settings and file loading agree with real Cligent before any agent runs", async (t) => {
+  for (const scope of ["captain", "player"] as const) {
+    const harness = await startHarness();
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const configPath = join(harness.dir, "playbook.config.yaml");
+    const tmuxPath = join(harness.dir, "tmux.yaml");
+    const location = scope === "captain" ? "captain" : "players.dev.coder";
+    for (const row of WRITABLE_PATH_CASES) {
+      const permissions = { mode: "auto" as const, writablePaths: row.paths };
+      const tmuxAgent = { adapter: "claude", permissions };
+      writeFileSync(tmuxPath, stringifyYaml({
+        captain: { from: "@sublang/playbook/playbook-captain", ...(scope === "captain" ? tmuxAgent : { adapter: "claude" }) },
+        players: [{ id: "dev.coder", ...(scope === "player" ? tmuxAgent : { adapter: "claude" }) }],
+      }));
+      let nativePaths: string[] | undefined;
+      let nativeError: Error | undefined;
+      try {
+        const native = await loadTmuxPlayConfig({ configPath: tmuxPath });
+        nativePaths = scope === "captain" ? native.config.captain.permissions?.writablePaths : native.config.players[0]?.permissions?.writablePaths;
+      } catch (error) { nativeError = error as Error; }
+      assert.equal(nativeError === undefined, row.accepted, JSON.stringify(row));
+
+      const before = readFileSync(configPath, "utf8");
+      const op = scope === "captain"
+        ? { kind: "captain.set" as const, patch: { permissions } }
+        : { kind: "player.set" as const, playerId: "dev.coder", patch: { permissions } };
+      const reply = await client.command("config.edit", { op });
+      assert.equal(reply.ok, row.accepted, `${location} ${JSON.stringify(row.paths)}`);
+      if (reply.ok) {
+        assert.equal(reply.result.status, "valid");
+        if (reply.result.status !== "valid") throw new Error("unreachable");
+        const summary = scope === "captain" ? reply.result.summary.captain : reply.result.summary.players.find(p => p.id === "dev.coder")?.agent;
+        assert.deepEqual(summary?.permissions?.writablePaths, nativePaths);
+        const raw = parseYaml(readFileSync(configPath, "utf8"));
+        assert.deepEqual((scope === "captain" ? raw.captain : raw.players["dev.coder"]).permissions.writablePaths, row.paths, "canonical projection never rewrites the persisted spelling");
+        const reloaded = await client.expectOk("config.get", {});
+        assert.deepEqual(reloaded, reply.result, "read and save share the same normalized result");
+      } else {
+        assert.equal(reply.error.code, "invalid_config");
+        assert.ok(reply.error.message.includes(`${location}.permissions.writablePaths[0]`), reply.error.message);
+        assert.equal(readFileSync(configPath, "utf8"), before, "rejected Settings write preserves bytes");
+        const nativeReason = nativeError!.message.replace(/^.*?writablePaths\[0\] /, "");
+        assert.ok(reply.error.message.endsWith(nativeReason), `same runtime rule: ${reply.error.message}`);
+      }
+      assert.equal(harness.stats.runs.length, 0, "path validation performs no inference");
+    }
+    client.close();
+    await harness.service.stop();
+  }
+
+  for (const scope of ["captain", "player"] as const) {
+    for (const row of WRITABLE_PATH_CASES.filter(row => !row.accepted)) {
+      const config = parseYaml(VALID_CONFIG);
+      const agent = scope === "captain" ? config.captain : config.players["dev.coder"];
+      agent.permissions = { mode: "auto", writablePaths: row.paths };
+      const harness = await startHarness(stringifyYaml(config));
+      const client = new Client(harness.service.port());
+      try {
+        await client.open();
+        const state = await client.expectOk("config.get", {});
+        assert.equal(state.status, "invalid", JSON.stringify(row.paths));
+        const project = await client.expectOk("project.register", { path: harness.projectDir });
+        const refused = await client.command("session.create", { projectId: project.id });
+        assert.ok(!refused.ok && refused.error.code === "invalid_config");
+        assert.equal(harness.stats.runs.length, 0);
+      } finally { client.close(); await harness.service.stop(); }
+    }
+  }
+});
+
+test("writable paths: canonical accepted grants reach real runtime call settings without rewriting YAML", async (t) => {
+  const config = parseYaml(VALID_CONFIG);
+  const paths = ["./.git/", "generated\\cache/./"];
+  config.captain.permissions = { mode: "auto", writablePaths: paths };
+  config.players["dev.coder"].permissions = { mode: "auto", writablePaths: paths };
+  const source = stringifyYaml(config);
+  const harness = await startHarness(source);
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+  await client.expectOk("turn.submit", { sessionId: session.id, text: "canonical permission fixture" });
+  await client.waitFor(message => message.type === "record" && message.record.type === "turn_finished");
+  const calls = harness.stats.runs.filter(run => run.prompt === "canonical permission fixture" || run.prompt === "route: canonical permission fixture");
+  assert.equal(calls.length, 2, "real Captain and player call boundary");
+  for (const run of calls) assert.deepEqual(run.permissions, { mode: "auto", writablePaths: [".git", "generated/cache"] });
+  assert.equal(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), source);
+});
+
+test("writable paths: Chinese Settings refusal names the field and preserves prior bytes", async (t) => {
+  const harness = await startHarness(VALID_CONFIG, { systemLanguages: ["zh-CN"] });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); speak("en"); });
+  await client.open();
+  const configPath = join(harness.dir, "playbook.config.yaml");
+  const before = readFileSync(configPath, "utf8");
+  const refused = await client.command("config.edit", { op: {
+    kind: "player.set", playerId: "dev.coder",
+    patch: { permissions: { mode: "auto", writablePaths: ["/tmp/cache"] } },
+  } });
+  assert.ok(!refused.ok && refused.error.code === "invalid_config");
+  if (refused.ok) throw new Error("unreachable");
+  assert.equal(refused.error.message, "players.dev.coder.permissions.writablePaths[0] 必须为工作区内的相对路径");
+  assert.equal(readFileSync(configPath, "utf8"), before);
+  assert.equal(harness.stats.runs.length, 0);
 });

@@ -238,6 +238,46 @@ msgstr "{path} must be a player id or a binding block"
 msgid "{path} must be an adapter shorthand or an agent block"
 msgstr "{path} must be an adapter shorthand or an agent block"
 
+#. Config error; writable paths stay within the workspace
+#: src/permission-paths.ts
+msgid "{path} must be workspace-relative"
+msgstr "{path} must be workspace-relative"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not be empty"
+msgstr "{path} must not be empty"
+
+#. Config error; '..' is the literal parent-directory component
+#: src/permission-paths.ts
+msgid "{path} must not contain '..' path segments"
+msgstr "{path} must not contain '..' path segments"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain control characters"
+msgstr "{path} must not contain control characters"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain empty path segments"
+msgstr "{path} must not contain empty path segments"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain glob metacharacters"
+msgstr "{path} must not contain glob metacharacters"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not contain shell expansion or control characters"
+msgstr "{path} must not contain shell expansion or control characters"
+
+#. Config error; path is the config field location
+#: src/permission-paths.ts
+msgid "{path} must not resolve to the workspace root"
+msgstr "{path} must not resolve to the workspace root"
+
 #. Config error; `effort` and `reasoningEffort` are the config file's own field names
 #: src/config.ts
 msgid "{path} must not set both effort and its legacy alias reasoningEffort"

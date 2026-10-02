@@ -443,6 +443,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Settings and configuration loading reject invalid writable paths before a
+  session starts, naming the offending entry. Valid paths reach the runtime in
+  canonical form without rewriting their spelling in the shared YAML file.
+
 - Spec readers and editor previews hide HTML source comments, keeping SPDX
   headers and translation hashes out of the reading flow. Code examples and
   the editable source retain their exact content.

@@ -30,4 +30,6 @@ Where a commented fixture config is edited through the Settings protocol command
 
 ### shared-config-roundtrip-4
 
-Where a client submits a config edit that violates a shared-config rule, the integration suite shall assert the receiving surface rejects it naming the rule while the config file remains unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface.
+Where a client submits a config edit that violates a shared-config rule, the integration suite shall assert the receiving surface rejects it naming the rule while the config file remains unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface:
+
+- Captain and player writable-path edits cover every refusal class, retain prior bytes on rejection, and reload accepted paths with the same canonical runtime value [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], [[shared-config-roundtrip-5](#shared-config-roundtrip-5)].
