@@ -351,3 +351,38 @@ describe("run-view-163: content changes without a new line", () => {
     expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
   });
 });
+
+describe("run-view-163: detached growth retains its Latest notice", () => {
+  test.each(["scroll-first", "resize-first"])("offers Latest when growth is reported %s", (ordering) => {
+    const observers = observeResizes();
+    const view = applyRecords(initialSessionView([]), MACHINE_RUN.slice(0, 2));
+    render(<CaptainPane view={view} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 400, top: 0 };
+    measured(pane, { clientWidth: () => 336, clientHeight: () => 118, scrollHeight: () => box.height });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true, get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 118)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(282);
+    box.top = 150;
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+
+    // Late content can grow without a React transcript/key update. The
+    // browser may report its queued scroll before the resize notification.
+    pane.firstElementChild!.append(document.createElement("div"));
+    box.height = 500;
+    act(() => {
+      if (ordering === "resize-first") observers.fire(pane);
+      pane.dispatchEvent(new Event("scroll"));
+      if (ordering === "scroll-first") observers.fire(pane);
+    });
+    expect(box.top).toBe(150);
+    const latest = screen.getByRole("button", { name: "↓ Latest" });
+    act(() => { latest.click(); });
+    expect(box.top).toBe(382);
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+  });
+});

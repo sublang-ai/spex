@@ -1206,6 +1206,7 @@ When the integration suite changes a rendered Captain conversation, it shall ver
 - a reply and turn settlement folded together advance a following pane to the reply [[run-view-162](#run-view-162)];
 - a live frame mounting before a queued programmatic scroll is delivered, and a machine definition changing with no transcript change, leave a following pane at its end [[run-view-162](#run-view-162)];
 - a coalesced failure changing its count without adding a line, and replacement content at an existing delivery-card anchor, update the following pane [[run-view-162](#run-view-162)];
+- content growth reported by a native scroll event before its resize notification still offers Latest to a scrolled-up reader without moving that reader [[run-view-46](#run-view-46)];
 - the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)].
 
 ### Browser Journeys

@@ -104,6 +104,7 @@ export function useStickToBottom(contentKey: unknown) {
     stuckRef.current = following;
     boxRef.current = box;
     setDetached(!following);
+    if (!following && box.content > before.content) setNewBelow(true);
     if (following) setNewBelow(false);
   }
 

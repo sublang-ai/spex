@@ -443,6 +443,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- New conversation content reliably shows Latest for readers scrolled up,
+  regardless of scroll and resize event ordering.
 - Open agent editors stay within their pane when its player grid scrolls,
   including scrolling caused by keyboard focus.
 
