@@ -125,6 +125,8 @@ meta.md       The spec of specs
 
 ## Drafts
 
+- [Claude DR draft: The Home and Its Spaces on a Host](../claude-home-and-spaces.md) — Proposed hosted spaces, storage, access, and lifecycle; not accepted.
+- [Claude DR draft: Spec Package Format and Client Environments](../claude-spec-package-format-and-environments.md) — Proposed package layout, selection, composition, and registry boundary; not accepted.
 - [Codex DR draft: Spaces, Projects, and Portable Storage](../codex-dr-spaces-projects-and-storage.md) — Proposed concepts, file schemas, backend operations, GitLab mappings, and lifecycle scenarios; not accepted.
 - [Codex DR draft: Unified Packages and Environments](../codex-dr-package-format-and-environments.md) — Proposed artifact layout, manifest and environment schemas, local snapshots, selection, composition, and registry boundary; not accepted.
 

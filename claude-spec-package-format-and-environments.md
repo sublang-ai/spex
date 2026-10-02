@@ -5,10 +5,10 @@
 
 ## Status
 
-Draft (2026-10-02), unnumbered until accepted; on acceptance it takes the next number under [[meta-22](../meta.md#meta-22)].
+Draft (2026-10-02), unnumbered until accepted; on acceptance it takes the next number under [[meta-22](specs/meta.md#meta-22)].
 Carries into Spex the client side of three spex.pub records, which keep the registry side: the package format of [spex.pub DR-014](https://github.com/sublang-ai/spex-pub/blob/main/specs/decisions/014-unified-package-format.md), the dependency grammar and resolution of [spex.pub DR-013](https://github.com/sublang-ai/spex-pub/blob/main/specs/decisions/013-package-dependencies-compose-include.md), and the environments and store of [spex.pub DR-015](https://github.com/sublang-ai/spex-pub/blob/main/specs/decisions/015-client-environments-and-store.md).
 Revises them in three places for the home design of [the companion draft](claude-home-and-spaces.md): a space is a declared environment, a package may be sourced from a project directory, and the user environment is composed from the spaces a device mounts.
-Would supersede, on acceptance: the playbook library directory `playbooks/<id>/` of [DR-036](036-file-state-store.md) and [DR-045](045-unified-session-storage.md), and the registration of a compiled playbook by writing its locator into the launcher config under [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md); a playbook is an applet of a package, and a registration is a request in an environment.
+Would supersede, on acceptance: the playbook library directory `playbooks/<id>/` of [DR-036](specs/decisions/036-file-state-store.md) and [DR-045](specs/decisions/045-unified-session-storage.md), and the registration of a compiled playbook by writing its locator into the launcher config under [DR-005](specs/decisions/005-compilation-integration.md) and [DR-058](specs/decisions/058-chat-assisted-playbook-authoring.md); a playbook is an applet of a package, and a registration is a request in an environment.
 
 ## Context
 
