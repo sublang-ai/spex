@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { parse } from "yaml";
 import { test, expect, open, nav } from "../src/harness";
 import { measure, record, setRail } from "../src/fit";
@@ -58,7 +58,10 @@ test.describe("native browser preparation", () => {
       const browser = editor.getByRole("checkbox", { name: "Browser", exact: true });
       await expect(browser).not.toBeChecked();
       await editor.getByRole("button", { name: "Set up browser" }).click();
-      await expect(editor.getByText("Browser ready", { exact: true })).toBeVisible({ timeout: 930_000 });
+      const outcome = editor.getByText(/^(Browser ready|Browser setup failed)$/);
+      await expect(outcome).toBeVisible({ timeout: 930_000 });
+      const detail = await editor.getByRole("status").filter({ hasText: /Browser ready|Browser setup failed/ }).innerText();
+      expect(await outcome.innerText(), detail).toBe("Browser ready");
       await expect(browser).not.toBeChecked();
       expect(app.readConfig()).toBe(before);
       await browser.check();
@@ -67,8 +70,15 @@ test.describe("native browser preparation", () => {
       await captain.getByTestId("captain-edit").click();
       await expect(browser).toBeChecked();
     } finally {
-      if (priorCache === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
-      else process.env.PLAYWRIGHT_BROWSERS_PATH = priorCache;
+      try {
+        // Stop and await host preparation before removing the cache that
+        // this attempt alone populated. A retry must also start cold.
+        await app.stop();
+        if (managedCache) rmSync(managedCache, { recursive: true, force: true });
+      } finally {
+        if (priorCache === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+        else process.env.PLAYWRIGHT_BROWSERS_PATH = priorCache;
+      }
     }
   });
 });
