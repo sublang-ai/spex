@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Chinese scaffolds now translate the complete bundled spec tree, including
+  the authoring rules, structure decision, Git and licensing contracts, and
+  starter intent. Source pins and drift checks preserve canonical meanings,
+  identifiers, and links as the English templates change.
 - The managed agent-instruction section told coding agents to run
   `spex lint`, which fails wherever no `spex` command is on PATH — a
   project created from the Spex app, for one. It now names

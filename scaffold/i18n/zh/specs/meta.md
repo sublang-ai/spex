@@ -5,66 +5,73 @@
 
 # meta: 规约定义
 
-## Intent
+## 意图
 
-This file defines the structure and organization of specifications (specs), per [DR-000](decisions/000-spec-structure-format.md).
+本文件依据 [DR-000](decisions/000-spec-structure-format.md) 定义规约（specs）的结构与组织方式。
 
-## Overall
+## 总体
 
+<!-- spex-i18n-source: meta-1 sha256-98f39e3ec8fdc7f1625f5114a862eaee529e56d9a2dfe2d8d5b90c7509d81461 -->
 ### meta-1
 
-The `specs/` directory shall contain the following subdirectories and files:
+`specs/` 目录应包含以下子目录和文件：
 
-| Path | Content | File Naming |
+| 路径 | 内容 | 文件命名 |
 | --------- | ------- | ------ |
-| `decisions/` | decision records (DRs) | \<NNN\>-\<kebab-case\>.md |
-| `intents/` | intent records (IRs) | \<NNN\>-\<kebab-case\>.md |
-| `packages/` | spec packages | \<kebab-case\>.md |
-| `map.md` | spec index — start here for context search | - |
-| `meta.md` | the spec of specs | - |
+| `decisions/` | 决策记录（DRs） | \<NNN\>-\<kebab-case\>.md |
+| `intents/` | 意图记录（IRs） | \<NNN\>-\<kebab-case\>.md |
+| `packages/` | 规约包 | \<kebab-case\>.md |
+| `map.md` | 规约索引——从此处开始查找上下文 | - |
+| `meta.md` | 规约的规约 | - |
 
+<!-- spex-i18n-source: meta-23 sha256-81630fea3117f135538a1f733caed7dab1dc908b08b7550039db26a87d74161c -->
 ### meta-23
 
-A spec in any form shall contain the minimal information, concisely expressed, to act on it or audit it, preferring bullets, tables, or (renderable) diagrams to prose:
+任何形式的规约应以简洁的表达包含执行或审计该规约所需的最少信息，并优先使用项目符号列表、表格或（可渲染的）图示，而非段落式文字：
 
-- For example, `map.md` limits its indexes to those an AI agent needs to find the right files.
+- 例如，`map.md` 的索引仅包含 AI 代理查找正确文件所需的内容。
 
+<!-- spex-i18n-source: meta-25 sha256-5cc61079544bb13f32034b8d47ecf64ae4a34503d30156d735a91331fc536ce7 -->
 ### meta-25
 
-A spec file shall keep one sentence per line — with lists, tables, and diagrams exempt.
+规约文件应每行只写一句话——列表、表格和图示除外。
 
-## Record format
+## 记录格式
 
 <!-- spex-i18n-source: meta-4 sha256-9094707b5ede14d4e0c104c0ae6aaf0ce2ca1129723a472b329d68e3142e1c48 -->
 ### meta-4
 
-Each DR shall follow the ADR format [[2]], with sections `状态`, `背景`, `决策`, and `影响`, plus `参考资料` where it cites an external source [[meta-19](#meta-19)].
+每份 DR 应遵循 ADR 格式 [[2]]，包含`状态`、`背景`、`决策`和`影响`章节，并在引用外部来源时包含`参考资料`章节 [[meta-19](#meta-19)]。
 
 <!-- spex-i18n-source: meta-5 sha256-6847734892ace98018676f3430e0a848b0a83541b23f1b4f69aa9b12a1c0aeda -->
 ### meta-5
 
-Each IR shall contain sections `状态`, `意图`, `交付项` (with checkboxes), `任务` (numbered, each sized to one commit), and `验证`.
+每份 IR 应包含`状态`、`意图`、`交付项`（带复选框）、`任务`（编号，每项工作量对应一次提交）和`验证`章节。
 
+<!-- spex-i18n-source: meta-22 sha256-58c862ce93e422901613bdcbdb9a24c55af1b7eebe6155db95e872c85860a1ee -->
 ### meta-22
 
-A record's ID shall join its kind prefix to its filename's leading number — `DR-<NNN>` under `decisions/`, `IR-<NNN>` under `intents/` — with the leading number unique within each record kind.
+记录的 ID 应由其类型前缀与文件名开头的编号组成——`decisions/` 下为 `DR-<NNN>`，`intents/` 下为 `IR-<NNN>`——且该编号在每种记录类型内唯一。
 
+<!-- spex-i18n-source: meta-24 sha256-48a3ecf9a8bcb8c1d4455aff9a912fd484e529ec15f88e156b2a5d471eebb11f -->
 ### meta-24
 
-A DR shall record design decisions and constraints, not implementation details, sufficient to provide context for or to audit the corresponding spec items.
+DR 应记录设计决策与约束，而非实现细节，且内容足以为相应规约条目提供上下文或用于审计这些条目。
 
+<!-- spex-i18n-source: meta-35 sha256-306af9215c5a666cd2d28be58c00d92d7c62a2e556d06259902b4f014b17b345 -->
 ### meta-35
 
-When a substantive change to an accepted decision is accepted, the specs shall record it in a new DR, preserving the earlier decision and rationale and linking both records' status sections with the affected scope [[meta-4](#meta-4)] [[meta-16](#meta-16)]:
+当针对已接受决策的实质性变更被接受，规约应在新的 DR 中记录该变更，保留先前的决策及其理由，并在两份记录的状态章节中相互链接，注明受影响的范围 [[meta-4](#meta-4)] [[meta-16](#meta-16)]：
 
-- Whole replacement: the earlier DR is superseded.
-- Partial replacement: the earlier DR remains accepted with a scoped amendment.
+- 完全替换：先前的 DR 被取代。
+- 部分替换：先前的 DR 仍保持已接受状态，并附有注明范围的修订。
 
+<!-- spex-i18n-source: meta-28 sha256-138df4b1fcfeb110a252ca26b5174f91513b1167603a322a13682cd4fa9b8a33 -->
 ### meta-28
 
-An IR shall be disposable: it contains nothing a DR or a spec item should cover, and its deletion loses no design or behavior record.
+IR 应可删除：它不包含任何应由 DR 或规约条目涵盖的内容，删除它不会丢失任何设计或行为记录。
 
-## Item syntax
+## 条目语法
 
 <!-- spex-i18n-source: meta-6 sha256-c6c53324be46702a10d6ca65a71842222518a1a2e32b8ccd334e361b70fbab75 -->
 ### meta-6
@@ -93,136 +100,154 @@ An IR shall be disposable: it contains nothing a DR or a spec item should cover,
 | When | 当 |
 | Then | 应 |
 
+<!-- spex-i18n-source: meta-8 sha256-724b84c437f45fec7b3158b15b3656268bd0f5599af2f481ad1fc47eb527c873 -->
 ### meta-8
 
-Each spec item shall be self-contained: every reliance on another item is an explicit citation [[meta-16](#meta-16)].
+每个规约条目应自成一体：对其他条目的每一处依赖均以明确的引用表示 [[meta-16](#meta-16)]。
 
+<!-- spex-i18n-source: meta-29 sha256-6b1b4e271a3a21ed2b817b6a133e1bec6827618259ea2d137960a3a69afb4de8 -->
 ### meta-29
 
-Each spec item shall state one requirement in one GEARS statement [[meta-6](#meta-6)], with attachments introduced by a colon at the statement's end and elaborating only that requirement:
+每个规约条目应在一条 GEARS 语句 [[meta-6](#meta-6)] 中陈述一项要求，附加内容由该语句末尾的冒号引出，且只详述该项要求：
 
-| Item kind | Example attachment |
+| 条目类型 | 附加内容示例 |
 | --- | --- |
-| Behavior | ordered steps or the cases and outcomes of one operation or decision |
-| Test | the assertions of one execution flow or one explicit case matrix |
+| 行为 | 一次操作或决策的有序步骤，或其各个情形与结果 |
+| 测试 | 一个执行流程或一个明确的用例矩阵中的断言 |
 
-- An attachment may take a form such as a note, list, table, (renderable) diagram, or example.
-- A condition inside an attachment is a case label.
-- Differing stateful preconditions or triggers are evidence of additional spec items.
+- 附加内容可采用注释、列表、表格、（可渲染的）图示或示例等形式。
+- 附加内容中的条件是情形标签。
+- 不同的状态前置条件或触发条件表明需要额外的规约条目。
 
-## Spec packages
+## 规约包
 
+<!-- spex-i18n-source: meta-13 sha256-d9121e55ea381bd732db89dfbbc5b6ec903b5e2d58ab1be94ef91719c5003c92 -->
 ### meta-13
 
-A spec package shall define a closed set of subjects and their behavioral requirements for a shared intent.
+规约包应为一个共同的意图定义一个封闭的主体集合及这些主体的行为要求。
 
+<!-- spex-i18n-source: meta-34 sha256-7b950bb56666ce51d75d1adee22102da76fb240cf9fc10f1720a3b2d71e948fc -->
 ### meta-34
 
-A spec package shall be complete and exact for its intent: sufficient to reimplement its behavior, stating no requirement beyond that intent, leaving no gap within it, and stating no requirement another spec already states.
+规约包应完整且准确地涵盖其意图：内容足以重新实现其行为，不陈述超出该意图的要求，不在该意图范围内留下缺口，也不陈述其他规约已经陈述的任何要求。
 
+<!-- spex-i18n-source: meta-9 sha256-7332a5da5509864275026467cdd42fdae994e872904b6a3047d0b7c66056792d -->
 ### meta-9
 
-A spec package shall be one file containing spec items under `specs/packages/` or its subdirectory.
+规约包应是位于 `specs/packages/` 或其子目录下、包含规约条目的单个文件。
 
 <!-- spex-i18n-source: meta-30 sha256-0157482272767b0d31d355728e8b2df551310d4248d380ab886f71e6d0bfe93b -->
 ### meta-30
 
-Each package file shall contain only the following sections, in this order:
+每个规约包文件应仅包含以下章节，并按此顺序排列：
 
-| Section | Presence | Content |
+| 章节 | 是否必需 | 内容 |
 | ------- | -------- | ------- |
-| `意图` | required | the package's purpose |
-| `外部行为` | required | outcomes and guarantees the package's users may rely on |
-| `内部行为` | optional | behavior hidden from the package's users |
-| `验证` | required | test items verifying this package's behavior |
-| `参考资料` | optional | external sources [[meta-19](#meta-19)] |
+| `意图` | 必需 | 规约包的目的 |
+| `外部行为` | 必需 | 规约包使用者可依赖的结果与保证 |
+| `内部行为` | 可选 | 对规约包使用者隐藏的行为 |
+| `验证` | 必需 | 验证本规约包行为的测试条目 |
+| `参考资料` | 可选 | 外部来源 [[meta-19](#meta-19)] |
 
-- A package's user is any human or system component using its contract; External and Internal are relative to the package.
-- Topic subsections and item headings live inside the Behavior and Verification sections.
+- 规约包的使用者是使用其契约的任何人或系统组件；外部与内部均相对于该规约包而言。
+- 主题子章节和条目标题位于行为章节与验证章节内部。
 
+<!-- spex-i18n-source: meta-10 sha256-037882d4330f27da723e4bc9745111b6695408851582918ea2acf136bbf2cbea -->
 ### meta-10
 
-A file containing spec items shall use a lowercase kebab-case basename \<pack\>.md unique across the specs tree, with \<pack\> serving as its identifier.
+包含规约条目的文件应使用在整个规约树中唯一的小写 kebab-case 基名 \<pack\>.md，并以 \<pack\> 作为其标识符。
 
+<!-- spex-i18n-source: meta-11 sha256-7f570fb5a98c01c4ccb7b3cd48f8c370fe660d0ffaebc73333010f45e215ae8f -->
 ### meta-11
 
-Each spec item shall use \<pack\>-\<N\> as its lowercase heading, anchor, and citation text:
+每个规约条目应使用 \<pack\>-\<N\> 作为其小写标题、锚点和引用文本：
 
-- \<pack\> is its containing file's identifier [[meta-10](#meta-10)];
-- \<N\> is a positive integer unique within that file;
-- a new item takes the lowest positive \<N\> neither assigned nor reserved by a public release [[meta-12](#meta-12)].
+- \<pack\> 是其所在文件的标识符 [[meta-10](#meta-10)]；
+- \<N\> 是该文件内唯一的正整数；
+- 新条目采用既未被分配、也未被公开发布保留的最小正整数 \<N\> [[meta-12](#meta-12)]。
 
+<!-- spex-i18n-source: meta-12 sha256-ed082a7a193eefe08f9fa15669f23d2b5d4fd5cac90c2dc7e83f6903f52bb2ba -->
 ### meta-12
 
-A publicly released item ID shall remain permanently bound to the concern its item names:
+已公开发布的条目 ID 应永久绑定到其条目所指明的事项：
 
-- the ID is never renumbered or reassigned;
-- the item's content may evolve only with that concern preserved;
-- an unreleased ID can be reassigned.
+- 该 ID 永不重新编号或重新分配；
+- 条目内容仅可在保留该事项的前提下演变；
+- 尚未发布的 ID 可重新分配。
 
+<!-- spex-i18n-source: meta-14 sha256-bec76a978583747ecf96f671a77e9e3a795ff4bdd69dfd72d51c98779d5d82a8 -->
 ### meta-14
 
-A behavior item shall express every peer package relationship as a binding citation — an inline citation of that package's External Behavior at the exact phrase the cited behavior makes specific [[meta-16](#meta-16)]:
+行为条目应将每个同级规约包关系表达为绑定引用——在被引行为使之具体化的确切短语处，以行内方式引用该规约包的外部行为 [[meta-16](#meta-16)]：
 
-- a binding citation binds behavior, never package subjects or states alone;
-- one phrase may carry several binding citations when several behaviors make its different parts specific, respectively;
-- there is no uncited peer package dependency.
+- 绑定引用绑定的是行为，绝不只绑定规约包的主体或状态；
+- 当多个行为分别使同一短语的不同部分具体化时，该短语可带有多个绑定引用；
+- 不存在未被引用的同级规约包依赖。
 
+<!-- spex-i18n-source: meta-15 sha256-2bf03e350e6014f7fe1d8623953c0e9923be83deb692411c2304c80cce52b70a -->
 ### meta-15
 
-A spec package shall stand alone: readable in full without following any link — a citation never carries its meaning.
+规约包应独立成立：无需打开任何链接即可完整理解——引用绝不承载规约包自身的含义。
 
+<!-- spex-i18n-source: meta-31 sha256-22ec564553bdada3a94a3c2273dcc59b7946bf8c4311c5c245003adb17ea9fc8 -->
 ### meta-31
 
-A lowercase kebab-case subdirectory under `specs/packages/` shall be an organizational collection only: a file's identity is its basename [[meta-10](#meta-10)]; moving a file between collections changes relative citation paths but no item ID or anchor.
+`specs/packages/` 下的小写 kebab-case 子目录应仅用于组织集合：文件的身份由其基名确定 [[meta-10](#meta-10)]；在集合之间移动文件会改变相对引用路径，但不会改变任何条目 ID 或锚点。
 
-## Testing
+## 测试
 
+<!-- spex-i18n-source: meta-21 sha256-3fd36fda3683299fdba6129318987bc429027cde6bbae08485085fd596f9275e -->
 ### meta-21
 
-Spec test items shall specify integration and system tests only: unit tests belong to the implementation, and no spec item specifies one.
+规约测试条目应仅规定集成测试和系统测试：单元测试属于实现，任何规约条目都不规定单元测试。
 
+<!-- spex-i18n-source: meta-32 sha256-28f1ce30821d263ee507cf71be045ab431a9d5fe449ea7ea194c2c8f15a683b9 -->
 ### meta-32
 
-A test shall prefer executing the real behaviors bound by the behaviors it verifies [[meta-14](#meta-14)] to supplying substitutes for them.
+测试应优先执行其所验证行为绑定的真实行为 [[meta-14](#meta-14)]，而非提供这些行为的替代物。
 
+<!-- spex-i18n-source: meta-33 sha256-65a82bd4cca5750e8e7b8743c636b2fbd6dff7fe3447b0d04c30cbb70666069a -->
 ### meta-33
 
-Each package's `Verification` section shall verify every behavior in that package, white-box or black-box.
+每个规约包的`验证`章节应以白盒或黑盒方式验证该规约包的每个行为。
 
-## Citation
+## 引用
 
+<!-- spex-i18n-source: meta-16 sha256-c3a9c2d5a690ea7408db2fbd0a9d1cfdbe7b14ee162cd8d414f3f734f3a86279 -->
 ### meta-16
 
-A citation of a spec item or DR shall be an inline relative link with the cited ID as its link text:
+对规约条目或 DR 的引用应是行内相对链接，并以被引 ID 作为链接文本：
 
-| Cited | Form |
+| 引用对象 | 形式 |
 | --- | --- |
-| Spec item | its heading anchor, in an outer pair of square brackets (e.g., `[[meta-1](meta.md#meta-1)]`) |
-| DR | its file, with no outer brackets (e.g., `[DR-000](decisions/000-spec-structure-format.md)`) |
+| 规约条目 | 链接至其标题锚点，外加一对方括号（例如 `[[meta-1](meta.md#meta-1)]`） |
+| DR | 链接至其文件，不加外层方括号（例如 `[DR-000](decisions/000-spec-structure-format.md)`） |
 
+<!-- spex-i18n-source: meta-18 sha256-c861847d755a25b07322a9a05bf66295d0477ff89fae684fe1a53d18a7774cdc -->
 ### meta-18
 
-No spec shall cite an IR or name it in prose, except that IR itself.
+除某份 IR 本身外，任何规约均不得引用该 IR 或在正文中提及其名称。
 
+<!-- spex-i18n-source: meta-19 sha256-b48c49bc3cdefa532ee254bd7af670a3762fd436aaf0ca9d49560f2f9159f664 -->
 ### meta-19
 
-An external reference shall cite an authoritative source (e.g., official docs) by a numbered marker (e.g., `[[1]]`) linked to a specific URL in the file's references section, which holds no uncited entry.
+外部引用应通过编号标记（例如 `[[1]]`）引用权威来源（例如官方文档），该标记链接至文件参考资料章节中的具体 URL，且该章节不包含任何未被引用的条目。
 
+<!-- spex-i18n-source: meta-20 sha256-e00eba313900b6fad6a87274765cad11a900465997e0f2cacfa9c904ca4587fe -->
 ### meta-20
 
-A test item shall identify every behavior it verifies by an inline citation at the verifying assertion, with behavior citations confined to its own package.
+测试条目应在用于验证的断言处，以行内引用标识它所验证的每个行为，且行为引用仅限于其自身规约包。
 
-## Authoring language
+## 编写语言
 
 <!-- spex-i18n-source: meta-27 sha256-b19f392d742d307fb0f811892dbb65509b36dc3a9636512604c636b7b0aa5c29 -->
 ### meta-27
 
-Where a specs tree declares an authoring language — by this item's machine-readable marker line, in the exact format `Authoring language: <code>` with `<code>` of only ASCII letters, digits, and hyphens — spec content added for that project shall be authored in that language:
+给定规约树通过本条目的机器可读标记行声明编写语言——该行采用精确格式 `Authoring language: <code>`，其中 `<code>` 仅由 ASCII 字母、数字和连字符组成——为该项目新增的规约内容应使用该语言编写：
 
 Authoring language: zh
 
-## References
+## 参考资料
 
 [1]: https://sublang.ai/zh/ref/gears-ai-ready-spec-syntax "GEARS：面向 AI 的规约语法（中文）"
-[2]: https://github.com/npryce/adr-tools "ADR Tools"
+[2]: https://github.com/npryce/adr-tools "ADR 工具"

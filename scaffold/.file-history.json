@@ -12,7 +12,7 @@
     "sha256-3c75823810863849ae302255d477749fc57e8e367a499240cde0dd47c479219a",
     "sha256-b4feb754ffd405050d50efe9da527c9a81e7dec48f58a7ed29db3bd28617bbbb",
     "sha256-78e528aee1d8f5b4946c53e119a81c7548df53bd09f8458152c2c2aaa386cd82",
-    "sha256-d9a8020f647edd860b3002fa1971690f8b6ab10d9f2bb96fef30341ba5a29484"
+    "sha256-174cb27f6637f1b6ea9b163bd5d9a7f4dfe8b4aa52e4bca889c2da8bdb6862f1"
   ],
   "specs/decisions/000-spec-structure-format.md": [
     "sha256-28d0705311a8ede97c487a944efe99bed20863e246da0aa1a33286dd4f8864ca",
@@ -57,5 +57,17 @@
     "sha256-4fac8c7fee1fec71297c50ee605f0417c3ae2b27e8aa37b03e409f08db976516",
     "sha256-0bf92bee3c73d1f34da7039480d56b290e6e5a40a1314bc23a4be81507c80d3e",
     "sha256-d2246bb72b8a1be75cf8dd293e80c51e5f5de6f810a8d1fbc71982a52d3fecc3"
+  ],
+  "i18n/zh/specs/decisions/000-spec-structure-format.md": [
+    "sha256-061769e9a2a55ec6d1bcddd47c9aaacb0881a011106a34cb13fa78dc0bd099bf"
+  ],
+  "i18n/zh/specs/intents/000-spdx-headers.md": [
+    "sha256-f661027e2af391b88458088534a57108ceaa8458bce7eb342702149c5b43c3a8"
+  ],
+  "i18n/zh/specs/packages/git.md": [
+    "sha256-a22cc1cc543e0fa56cc42be4a96383b7866235d7b9bd1c27e2d4bb95e67b5667"
+  ],
+  "i18n/zh/specs/packages/licensing.md": [
+    "sha256-b8219306bb5f6e33a548430c96301f0fa6b14bad36f3cb5ef72dc5338ea81aba"
   ]
 }

@@ -472,6 +472,7 @@ describe("CLI integration", () => {
   it("scaffold --lang zh applies localized overlays and English fallbacks", () => {
     const dir = makeTmp();
     try {
+      initGit(dir);
       const result = run(["scaffold", "--lang", "zh", dir]);
       assert.equal(result.exitCode, 0, `should exit 0: ${result.stderr}`);
       assert.deepEqual(
@@ -484,8 +485,24 @@ describe("CLI integration", () => {
       );
       assert.deepEqual(
         readFileSync(join(dir, "specs", "packages", "git.md")),
-        readFileSync(bundledPath("specs/packages/git.md")),
+        readFileSync(overlayPath("zh", "specs/packages/git.md")),
       );
+      for (const relPath of [
+        "specs/decisions/000-spec-structure-format.md",
+        "specs/intents/000-spdx-headers.md",
+      ]) {
+        assert.deepEqual(readFileSync(join(dir, relPath)), readFileSync(overlayPath("zh", relPath)));
+      }
+      const licensing = readFileSync(join(dir, "specs/packages/licensing.md"), "utf-8");
+      assert.equal(
+        licensing,
+        readFileSync(overlayPath("zh", "specs/packages/licensing.md"), "utf-8")
+          .replaceAll("<holder>", "Test <test@example.com>")
+          .replaceAll("<license>", "Apache-2.0")
+          .replaceAll("<year>", String(new Date().getFullYear())),
+      );
+      assert.doesNotMatch(licensing.slice(licensing.indexOf("### licensing-9")), /<holder>|<license>|<year>/);
+      assert.deepEqual(readFileSync(join(dir, "LICENSE")), readFileSync(bundledPath("LICENSE")));
       assert.ok(
         readFileSync(join(dir, "specs", "meta.md"), "utf-8").includes(
           "Authoring language: zh",

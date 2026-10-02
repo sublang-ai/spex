@@ -257,4 +257,34 @@ describe("localized spec overlays", () => {
       );
     }
   });
+
+  it("keeps Chinese authoring seed overlays source-pinned and contract-equivalent", () => {
+    for (const relPath of [
+      "decisions/000-spec-structure-format.md",
+      "packages/git.md",
+      "packages/licensing.md",
+      "intents/000-spdx-headers.md",
+    ]) {
+      const baseText = readFileSync(join(SCAFFOLD_ROOT, "specs", relPath), "utf-8");
+      const overlayText = readFileSync(
+        join(I18N_ROOT, "zh", "specs", relPath),
+        "utf-8",
+      );
+      const markers = [...overlayText.matchAll(/^<!-- spex-i18n-source: (\S+) (sha256-[a-f0-9]{64}) -->$/gm)];
+      assert.deepEqual(
+        markers.map((match) => [match[1], match[2]]),
+        [[`specs/${relPath}`, canonicalContentHash(Buffer.from(baseText))]],
+        `${relPath} must name its current canonical source`,
+      );
+      assert.deepEqual(
+        markdownLinkTargets(overlayText),
+        markdownLinkTargets(baseText),
+        `${relPath} must preserve every citation target`,
+      );
+      const itemIds = (text: string): string[] => [...text.matchAll(/^### ([a-z][a-z0-9-]*-\d+)$/gm)].map((match) => match[1]);
+      assert.deepEqual(itemIds(overlayText), itemIds(baseText), `${relPath} must preserve every item ID in order`);
+      const codeBlocks = (text: string): string[] => [...text.matchAll(/^```[^\n]*\n[\s\S]*?^```$/gm)].map((match) => match[0]);
+      assert.deepEqual(codeBlocks(overlayText), codeBlocks(baseText), `${relPath} must preserve literal code examples`);
+    }
+  });
 });
