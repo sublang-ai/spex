@@ -14,13 +14,6 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
-### Fixed
-
-- Restore revalidates a cached external session holder against the shared lease
-  before refusing admission. Discard success and refusal publish released
-  ownership before another recovery, preserving the original refusal and
-  leaving foreign replay delivery intact.
-
 ### Added
 
 - Live tool approval controls for supported agents show the conversation or
@@ -450,6 +443,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Restore revalidates a cached external session holder against the shared lease
+  before refusing admission. Discard success and refusal publish released
+  ownership before another recovery, preserving the original refusal and
+  leaving foreign replay delivery intact.
 - Settings and configuration loading reject invalid writable paths before a
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.
