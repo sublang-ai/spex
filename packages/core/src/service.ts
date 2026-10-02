@@ -1354,6 +1354,7 @@ export class CoreService {
         const done = (async () => {
           const agent = await this.contextualBrowserAgent(command);
           return agent.prepareBrowser({
+            timeoutMs: 900_000,
             abortSignal: controller.signal,
             onProgress: (progress) => this.send(client.socket, {type: "browser.progress", operationId: command.operationId, progress}),
           });

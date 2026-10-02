@@ -36,7 +36,7 @@ test.describe("honest browser capability facts", () => {
 test.describe("native browser preparation", () => {
   test.use({ appOptions: { project: true, nativeBrowser: true } });
   test("settings-45: real host launch and screenshot precede an explicit browser save", async ({ page, app }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(960_000);
     // The test browser is already running. Only the host-side managed
     // browser bootstrap receives this separate, initially empty cache.
     const managedCache = process.env.SPEX_E2E_BROWSER_CACHE;
@@ -58,7 +58,7 @@ test.describe("native browser preparation", () => {
       const browser = editor.getByRole("checkbox", { name: "Browser", exact: true });
       await expect(browser).not.toBeChecked();
       await editor.getByRole("button", { name: "Set up browser" }).click();
-      await expect(editor.getByText("Browser ready", { exact: true })).toBeVisible({ timeout: 210_000 });
+      await expect(editor.getByText("Browser ready", { exact: true })).toBeVisible({ timeout: 930_000 });
       await expect(browser).not.toBeChecked();
       expect(app.readConfig()).toBe(before);
       await browser.check();

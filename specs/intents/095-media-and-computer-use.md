@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress: shared runtime releases verified; final application verification underway.
+In progress: shared runtime releases verified and the application feature merged; a browser setup budget follow-up and final native acceptance remain.
 
 ## Intent
 
@@ -18,9 +18,9 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 - [x] Cligent capability discovery, bounded host browser preparation and live tool approvals; 0.33.1 published and checked from fresh consumers.
 - [x] Shared Playbook input content, asset lifecycle, worker relay, isolated control calls, and an ordinary inspection workflow; 17.4.0 published and checked from a fresh consumer.
 - [x] Compatible published dependency closure, with no media-specific compiler semantics.
-- [ ] Spex uploads, complete draft/queue handoff, browser controls, durable media rendering, and localized guidance.
-- [ ] Generic live tool approval controls and guidance for workflow questions and external consent.
-- [ ] PR review, required CI, merge and release at each affected layer.
+- [x] Spex uploads, complete draft/queue handoff, browser controls, durable media rendering, and localized guidance.
+- [x] Generic live tool approval controls and guidance for workflow questions and external consent.
+- [ ] PR review, required CI and merge at each affected layer, with releases where needed for downstream adoption.
 - [ ] Fresh-user acceptance and release smoke against the installed result.
 
 ## Tasks
@@ -32,7 +32,7 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 5. Adopt the compatible runtime packages in SLC without changing compilation semantics; release as required by the dependency closure.
 6. Add core upload/read commands, application asset ownership, session/draft/intent handoff, and browser preparation state.
 7. Add shared attachment composers and trusted media presentation across initial, session, and authoring views.
-8. Exercise fresh-user scenarios, complete reviews and CI, then release the verified app candidate under its release policy.
+8. Exercise fresh-user scenarios, complete reviews and CI, and merge fine-grained milestones; publish only where needed for downstream adoption.
 
 ## Verification
 
@@ -46,4 +46,4 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 - Verify asset integrity, owner deletion, portability, whole-unit selection, damaged references, and shared CLI/session recovery.
 - Run fresh installed macOS Desktop and headless Linux server acceptance with empty browser caches; verify the remote browser client never relies on a server-local copy of its selected file.
 - Inspect narrow layouts, keyboard paths, English and Chinese wording, and untrusted remote-media behavior through the rendered UI.
-- Keep the goal active until the actual released and installed state proves each requested outcome.
+- Keep the goal active until the actual public runtime dependencies and installed application state prove each requested outcome.
