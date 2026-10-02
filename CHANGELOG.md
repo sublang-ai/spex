@@ -443,8 +443,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Spec readers and editor previews hide HTML source comments, keeping SPDX
+  headers and translation hashes out of the reading flow. Code examples and
+  the editable source retain their exact content.
 - Creating a project now scaffolds specs in the creating page's language,
-  including a Chinese browser connected to an English host ([DR-097](specs/decisions/097-new-project-specs-follow-the-readers-language.md)).
+  including a Chinese browser connected to an English host ([DR-100](specs/decisions/100-new-project-specs-follow-the-readers-language.md)).
 - Project creation requires a successful initial Git commit, including an
   empty baseline without scaffolding. Staging or commit failures retain
   files and report the refusal. Existing repositories are preserved and

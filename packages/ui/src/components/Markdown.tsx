@@ -8,6 +8,25 @@ import { i18n } from "../i18n.js";
 
 const WEB_URL = /^https?:\/\//i;
 
+type MarkdownNode = {
+  type: string;
+  value?: string;
+  children?: MarkdownNode[];
+};
+
+/** Drop comment nodes after parsing, so literal examples in code survive. */
+function omitComments() {
+  return function visit(node: MarkdownNode): void {
+    if (!node.children) return;
+    node.children = node.children.filter((child) => {
+      if (child.type !== "html") return true;
+      child.value = child.value?.replace(/<!--[\s\S]*?-->/g, "");
+      return Boolean(child.value?.trim());
+    });
+    node.children.forEach(visit);
+  };
+}
+
 /** A web link leaves the page rather than replacing it: a new tab when
  * the UI is served, the system browser on the desktop, and never a
  * referrer. A link within the app stays a plain anchor for the surface
@@ -65,8 +84,11 @@ const transcriptComponents: Components = {
 export function Markdown({
   text,
   links = "routed",
+  hideComments = false,
 }: {
   text: string;
+  /** Authored spec views hide source metadata; their editor keeps the bytes. */
+  hideComments?: boolean;
   /** "routed" — the surface handles every link it renders; "web-only"
    * — agent text, where only an openable target is a link. */
   links?: "routed" | "web-only";
@@ -77,7 +99,7 @@ export function Markdown({
   return (
     <div className="markdown min-w-0 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={hideComments ? [remarkGfm, omitComments] : [remarkGfm]}
         components={links === "web-only" ? transcriptComponents : components}
       >
         {text}
