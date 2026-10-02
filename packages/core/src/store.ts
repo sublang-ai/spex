@@ -845,6 +845,17 @@ export class Store {
     return { id, appended: prefix ? stored.slice(previous.length) : [], ...(!prefix && prior ? {replaced:true} : {}) };
   }
 
+  /** Admission revalidates ownership without consuming foreign replay that
+   * the service's scanner still owes its subscribers (core-service-73). */
+  async refreshSessionOwnership(id: string): Promise<void> {
+    if (this.localSessions.has(id) || this.managedSessions.has(id)) return;
+    const writer = await this.sessionStore().readLeaseState(id);
+    const current = this.sessions.get(id);
+    if (!current || current.live || this.localSessions.has(id) || this.managedSessions.has(id)) return;
+    const { externalWriter: _priorWriter, ...unchanged } = current;
+    this.sessions.set(id, { ...unchanged, ...(writer === "idle" ? {} : { externalWriter: writer }) });
+  }
+
   sessionDiagnostics(): { file: string; reason: string; blocking: boolean }[] {
     return [...this.sessionProblems.values()];
   }

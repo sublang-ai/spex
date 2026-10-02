@@ -14,6 +14,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore revalidates a cached external session holder against the shared lease
+  before refusing admission. Discard success and refusal publish released
+  ownership before another recovery, preserving the original refusal and
+  leaving foreign replay delivery intact.
+
 ### Added
 
 - Live tool approval controls for supported agents show the conversation or

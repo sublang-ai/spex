@@ -347,7 +347,7 @@ export class SessionManager {
   // released checkpoint's refreshed metadata and publication.
   private readonly settling = new Map<string, {projectId: string; done: Promise<void>}>();
   private readonly opening = new Set<string>();
-  private readonly recovering = new Set<string>();
+  private readonly recovering = new Map<string, string>();
   /** Sessions whose active turn is being stopped intentionally. */
   private readonly intentionalStops = new Set<string>();
   private readonly now: () => number;
@@ -443,15 +443,35 @@ export class SessionManager {
       comment: "Refusal: no session of this id is known",
       values: { sessionId },
     }));
-    this.recovering.add(sessionId);
+    if (this.opening.has(info.projectId) || [...this.recovering.values()].includes(info.projectId)) throw new CoreError("busy", i18n._({
+      id: "the session is active",
+      comment: "Refusal: the session is held, so it cannot be discarded now",
+    }));
+    this.recovering.set(sessionId, info.projectId);
+    let removed = false;
+    let refused = false;
     try {
       const restored = await discardSessionUncertain(this.store.sessionStore(), sessionId);
+      removed = !restored;
       if (!restored) this.store.forgetSession(sessionId);
-      else { await this.store.refreshSession(sessionId, false); this.publish(sessionId); }
-      this.onLedgerChange(info.projectId);
+      else await this.store.refreshSession(sessionId, false);
       return {removed: !restored};
-    } catch (error) { throw this.failure(error); }
-    finally { this.recovering.delete(sessionId); }
+    } catch (error) { refused = true; throw this.failure(error); }
+    finally {
+      try {
+        if (!removed) await this.refreshOwnership(sessionId);
+        this.onLedgerChange(info.projectId);
+      } catch (error) {
+        if (!refused) throw this.failure(error);
+        console.error(`spex: session ownership refresh failed: ${String(error)}`);
+      } finally { this.recovering.delete(sessionId); }
+    }
+  }
+
+  private async refreshOwnership(sessionId: string): Promise<void> {
+    await this.store.refreshSessionOwnership(sessionId);
+    const info = this.store.describeSession(sessionId);
+    if (info) this.onSessionState(info);
   }
 
   private async open(project: ProjectInfo, composed: ComposedConfig | undefined, sessionId: string, mode: "new" | "continue" | "recover"): Promise<SessionInfo> {
@@ -460,44 +480,49 @@ export class SessionManager {
     // one another host holds stands in the way, and it is named. A
     // sibling mid-release is waited out first.
     await this.projectSettled(project.id);
-    const holder = this.store.listSessions().find((session) => session.projectId === project.id && (session.live || session.externalWriter));
     if (this.opening.has(project.id)) throw new CoreError("busy", i18n._({
       id: "a session is starting in {project} — wait a moment",
       comment: "Refusal: another session of this project is opening",
       values: { project: project.name },
     }));
-    if (holder) {
-      const name = holder.title
-        ? i18n._({
-            id: "“{title}”",
-            comment: "A session's own title, quoted",
-            values: { title: holder.title },
-          })
-        : i18n._({
-            id: "a session",
-            comment: "Stands in for the title of a session that has none",
-          });
-      throw new CoreError("busy", holder.externalWriter
-        ? i18n._({
-            id: "{name} is in use elsewhere in {project}",
-            comment: "Refusal: another host holds this project's conversation",
-            values: { name, project: project.name },
-          })
-        : i18n._({
-            id: "{name} is still working in {project} — wait for it to finish, or abort it",
-            comment: "Refusal: one working turn per project",
-            values: { name, project: project.name },
-          }));
-    }
-    if (this.recovering.has(sessionId)) throw new CoreError("busy", i18n._({
+    if ([...this.recovering.values()].includes(project.id)) throw new CoreError("busy", i18n._({
       id: "the session is recovering",
       comment: "Refusal: a Restore or Discard of this session is still running",
     }));
     this.opening.add(project.id);
-    this.store.setLocalSession(sessionId, true);
+    let ownsLocalReservation = false;
     let entry: LiveSession | undefined;
     let controller: SessionHostController | undefined;
     try {
+      for (const session of this.store.listSessions()) {
+        if (session.projectId === project.id && session.externalWriter) await this.refreshOwnership(session.id);
+      }
+      const holder = this.store.listSessions().find((session) => session.projectId === project.id && (session.live || session.externalWriter));
+      if (holder) {
+        const name = holder.title
+          ? i18n._({
+              id: "“{title}”",
+              comment: "A session's own title, quoted",
+              values: { title: holder.title },
+            })
+          : i18n._({
+              id: "a session",
+              comment: "Stands in for the title of a session that has none",
+            });
+        throw new CoreError("busy", holder.externalWriter
+          ? i18n._({
+              id: "{name} is in use elsewhere in {project}",
+              comment: "Refusal: another host holds this project's conversation",
+              values: { name, project: project.name },
+            })
+          : i18n._({
+              id: "{name} is still working in {project} — wait for it to finish, or abort it",
+              comment: "Refusal: one working turn per project",
+              values: { name, project: project.name },
+            }));
+      }
+      this.store.setLocalSession(sessionId, true);
+      ownsLocalReservation = true;
       // A continued session takes the current config projected onto its
       // stored members, and drift is named before the runtime opens —
       // never after the provider hints are consumed (core-service-92).
@@ -572,7 +597,7 @@ export class SessionManager {
       return {...info, live:true, turnActive:false};
     } catch (error) {
       if (controller) await controller.dispose();
-      this.store.setLocalSession(sessionId, false);
+      if (ownsLocalReservation) this.store.setLocalSession(sessionId, false);
       if (error instanceof SettingsDriftError) throw new CoreError("invalid_config", error.message);
       throw this.failure(error, mode === "new" ? "invalid_config" : "invalid_request");
     } finally { this.opening.delete(project.id); }

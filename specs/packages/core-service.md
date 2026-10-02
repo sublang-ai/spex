@@ -74,6 +74,7 @@ Where the shared config path is the default one and holds nothing, when the core
 Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md)) and the active config is valid, when a client requests a session for that project, the core service shall create a live session whose embedded runtime is initialized with the project directory as its working directory, and shall report the new session to subscribed clients:
 
 - After waiting for any settlement in progress [[core-service-91](#core-service-91)], while a session of the project remains live or another host holds one, a further session request for the same project is rejected `busy` naming that session, and creates no session ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+- Local admission and recovery reservations keep the project exclusive while ownership is revalidated [[core-service-73](#core-service-73)] or a recovery's released ownership is published [[core-service-83](#core-service-83)]; a refused request releases only its own reservation.
 - While a Space operation runs, the request is rejected `busy` naming that operation [[space-21](space.md#space-21)].
 - Live sessions for distinct projects run concurrently.
 - While a session is live, a client's disposal request aborts its turn, persists the session's Captain snapshot [[core-service-72](#core-service-72)], disposes the session's runtime, and reports the session as no longer live; a Boss message continues it [[core-service-73](#core-service-73)].
@@ -233,6 +234,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
 
 - desktop and CLI checkpoints use the same cases; missing provider hints and recorded repository effects alone do not refuse continuation ([DR-074](../decisions/074-a-parked-run-survives.md));
+- a cached external holder is revalidated through the shared lease API before admission: only idle ownership clears it, active or unprovable ownership remains `busy`, and local opening, runtime and recovery reservations stand across that revalidation;
 - parked questions resume in their retained frames; a refusal starts no turn and stamps no intent [[core-service-47](#core-service-47)];
 - a submission refused after opening, including a failed attachment handoff [[media-4](media.md#media-4)], releases the runtime it opened before replying.
 
@@ -274,7 +276,8 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 - refuse live or unprovably owned sessions, and any attempt Playbook's shared discard predicate [[2]] refuses — a recorded step, an abandonment, or changed repository evidence — with Playbook's cause;
 - restore the exact preceding settled checkpoint, or remove a never-settled fresh session when Playbook authorizes removal;
-- publish the restored summary or session removal and refreshed intent state; a refusal preserves evidence and reports its cause.
+- publish the restored summary or session removal and refreshed intent state; a refusal preserves evidence and reports its cause;
+- after success or refusal, refresh and publish the shared ownership reading before releasing the local recovery reservation, without consuming unannounced foreign replay records; a refresh failure preserves the original refusal and its evidence.
 
 ### Playbook Drafts
 
@@ -967,7 +970,10 @@ When an integration suite interrupts CLI-created and desktop-created sessions an
 
 - listing and broadcasts expose the saved input with a reason naming Restore, and disable ordinary continuation [[core-service-32](#core-service-32)] [[core-service-34](#core-service-34)];
 - an active external writer withholds recovery, and releasing its lease reveals uncertainty without another replay write [[core-service-32](#core-service-32)];
+- an idle shared lease clears a cached external holder at admission without consuming unread foreign records, while active and unprovable ownership each refuse without agent calls or checkpoint writes [[core-service-73](#core-service-73)];
 - an attempt with nothing recorded lists as discardable, and one with a recorded step lists as not discardable and refuses Discard with Playbook's cause, without evidence loss [[core-service-32](#core-service-32)] [[core-service-83](#core-service-83)];
+- a refused Discard releases and republishes ownership before Restore is admitted, preserves its original refusal when ownership refresh fails, and leaves foreign replay records for their normal publication [[core-service-83](#core-service-83)];
+- concurrent admission and recovery keep distinct sessions of one project exclusive through ownership publication, and a same-session live refusal preserves the runtime's local reservation through a scanner refresh [[core-service-4](#core-service-4)];
 - Restore reuses the saved configuration, reports the unprocessed message or the lost position through the Captain without calling an agent or re-running the input, settles, and preserves logical identities [[core-service-82](#core-service-82)];
 - a CLI writer killed mid-step, its phase committed, lists that step as recorded work, and Restore brings its run back in its failure state: the restored position with the checkpoint's cause stands in the stream, the summary carries the parked run's controls and the shell's ending, and the failure summons with that cause [[core-service-82](#core-service-82)] [[core-service-91](#core-service-91)] [[core-service-49](#core-service-49)];
 - a run the Boss stopped mid-step, whose next message a CLI writer lost in the Captain's call, comes back from Restore still parked with the stop's cause and its controls, and raises no failure summons [[core-service-82](#core-service-82)] [[core-service-49](#core-service-49)];
