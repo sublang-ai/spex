@@ -22,6 +22,7 @@ import { openSessionStore, createSessionStore, validateSessionManifest } from "@
 import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@sublang/playbook/session-host";
 
 import { CoreService } from "./service.js";
+import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { speak } from "./i18n.js";
 import { templatePath, resolveModulePath, resolveSessionsDir, REGISTRY_CONTRACT } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -160,12 +161,24 @@ function sleep(ms: number): Promise<void> {
 /** A repository a scripted player can really commit in: an identity,
  * no signing — the host's global git config must not decide it — and a
  * baseline commit for a later one to descend from. */
-function seedRepository(projectDir: string): void {
+function configureRepositoryIdentity(projectDir: string): void {
   for (const [key, value] of [
     ["user.name", "Spex Test"],
     ["user.email", "spex@example.test"],
     ["commit.gpgsign", "false"],
   ]) execFileSync("git", ["-C", projectDir, "config", key, value]);
+}
+
+const creationTestRun: RunCommand = async (command, args, cwd, env) => {
+  const result = await defaultRunCommand(command, args, cwd, env);
+  if (command === "git" && args[0] === "init" && result.code === 0) {
+    configureRepositoryIdentity(args[1]);
+  }
+  return result;
+};
+
+function seedRepository(projectDir: string): void {
+  configureRepositoryIdentity(projectDir);
   writeFileSync(join(projectDir, "work.txt"), "baseline\n");
   execFileSync("git", ["-C", projectDir, "add", "-A"]);
   execFileSync("git", ["-C", projectDir, "commit", "-q", "-m", "baseline"]);
@@ -251,7 +264,7 @@ async function startHarness(
     ...(options.scaffoldCommand
       ? { scaffoldCommand: options.scaffoldCommand }
       : {}),
-    ...(options.runCommand ? { runCommand: options.runCommand } : {}),
+    runCommand: options.runCommand ?? creationTestRun,
     ...(options.scaffoldEnv ? { scaffoldEnv: options.scaffoldEnv } : {}),
     ...(options.compileSpawner
       ? { compileSpawner: options.compileSpawner }
@@ -1098,11 +1111,12 @@ test("PROJ: the create flow scaffolds with the supplied command, else the regist
   const calls: Call[] = [];
   let exitCode = 0;
   const recorder: import("./forge.js").RunCommand = async (command, args, cwd, env) => {
-    if (command === "git") return defaultRunCommand(command, args, cwd, env);
+    if (command === "git") return creationTestRun(command, args, cwd, env);
     calls.push({ command, args, cwd, env });
     if (exitCode === 0) {
       mkdirSync(join(args[args.length - 1], "specs"), { recursive: true });
       writeFileSync(join(args[args.length - 1], "specs", "map.md"), "# map\n");
+      writeFileSync(join(args[args.length - 1], "LICENSE"), "test license\n");
     }
     return { code: exitCode, stdout: "", stderr: exitCode ? `${command} refused` : "" };
   };
@@ -1195,6 +1209,90 @@ test("projects-18: real scaffolding uses the requested language or the core's la
   }
 });
 
+test("projects-18: creation requires its initial commit", async () => {
+  const { defaultRunCommand } = await import("./forge.js");
+  const scaffoldCli = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
+  for (const failure of [undefined, "staging", "commit"] as const) {
+    const run: import("./forge.js").RunCommand = async (command, args, cwd, env) => {
+      const result = await defaultRunCommand(command, args, cwd, env);
+      if (command === "git" && args[0] === "init" && result.code === 0) {
+        const path = args[1];
+        for (const [key, value] of [
+          ["user.name", "Spex Test"],
+          ["user.email", "spex@example.test"],
+          ["commit.gpgsign", "false"],
+        ]) execFileSync("git", ["-C", path, "config", key, value]);
+        if (failure === "commit") {
+          writeFileSync(join(path, ".git", "hooks", "pre-commit"),
+            "#!/bin/sh\necho 'creation commit refused' >&2\nexit 1\n", { mode: 0o755 });
+        }
+      }
+      if (failure === "staging" && command === process.execPath && result.code === 0) {
+        writeFileSync(join(cwd!, ".git", "index.lock"), "held by test\n");
+      }
+      return result;
+    };
+    const harness = await startHarness(VALID_CONFIG, {
+      runCommand: run,
+      scaffoldCommand: [process.execPath, scaffoldCli],
+    });
+    const client = new Client(harness.service.port());
+    const path = join(harness.dir, failure ?? "without-scaffold");
+    try {
+      await client.open();
+      const result = await client.command("project.create", { path, scaffold: failure !== undefined });
+      const projects = await client.expectOk("project.list", {});
+      const head = await defaultRunCommand("git", ["rev-parse", "--verify", "HEAD"], path);
+      if (failure) {
+        assert.ok(!result.ok, `${failure} must refuse creation`);
+        assert.match(result.error.message, failure === "staging" ? /git add.*index\.lock/s : /git commit.*creation commit refused/s);
+        assert.equal(projects.length, 0);
+        assert.notEqual(head.code, 0);
+        assert.ok(existsSync(join(path, "specs", "meta.md")), "generated files remain");
+      } else {
+        assert.ok(result.ok);
+        assert.equal(projects.length, 1);
+        assert.equal(head.code, 0, "creation without scaffolding still creates a baseline");
+        assert.equal(execFileSync("git", ["ls-tree", "--name-only", "HEAD"], { cwd: path, encoding: "utf8" }), "");
+        assert.equal(existsSync(join(path, "specs")), false);
+      }
+    } finally {
+      client.close();
+      await harness.service.stop();
+    }
+  }
+});
+
+test("projects-18: Create preserves an existing repository and its staged files", async () => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    for (const hasCommit of [false, true]) {
+      if (hasCommit) seedRepository(harness.projectDir);
+      const userContent = `work owned by the user: ${hasCommit ? "changed" : "first"}\n`;
+      writeFileSync(join(harness.projectDir, "existing.txt"), userContent);
+      execFileSync("git", ["add", "existing.txt"], { cwd: harness.projectDir });
+      const gitOutput = (args: string[]) => execFileSync("git", args, {
+        cwd: harness.projectDir, encoding: "utf8",
+      });
+      const indexBefore = gitOutput(["ls-files", "--stage"]);
+      const headBefore = hasCommit ? gitOutput(["rev-parse", "HEAD"]) : undefined;
+      const result = await client.command("project.create", { path: harness.projectDir, scaffold: false });
+      assert.ok(!result.ok);
+      assert.match(result.error.message, hasCommit ? /Use Add/ : /Finish the initial commit.*use Add/);
+      assert.equal((await client.expectOk("project.list", {})).length, 0);
+      assert.equal(gitOutput(["ls-files", "--stage"]), indexBefore);
+      assert.equal(readFileSync(join(harness.projectDir, "existing.txt"), "utf8"), userContent);
+      if (hasCommit) assert.equal(gitOutput(["rev-parse", "HEAD"]), headBefore);
+      else assert.notEqual((await defaultRunCommand("git", ["rev-parse", "--verify", "HEAD"], harness.projectDir)).code, 0);
+    }
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
 test("PROJ: work-tree validation, create flow, forge states, removal", async () => {
   const { defaultRunCommand } = await import("./forge.js");
   // The real scaffold generator, as the palette's Create runs it
@@ -1230,6 +1328,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
     }
     if (command === "git" && args[0] === "init") {
       const result = await defaultRunCommand(command, args, cwd);
+      execFileSync("git", ["-C", args[1], "config", "user.useConfigOnly", "true"]);
       // Only the first created project carries an identity, as a
       // repository the creator configured would.
       if (identified.has(args[1])) {
@@ -1241,7 +1340,8 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
       }
       return result;
     }
-    if (command !== "gh") return defaultRunCommand(command, args, cwd);
+    if (command !== "gh") return defaultRunCommand(command, args, cwd,
+      { GIT_CONFIG_GLOBAL: noIdentity, GIT_CONFIG_NOSYSTEM: "1" });
     if (args[0] === "auth") return { code: 0, stdout: "ok", stderr: "" };
     return {
       code: 0,
@@ -1298,18 +1398,21 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
 
   // Without a git identity the scaffold leaves the placeholder, never
   // the template's holder (projects-18).
-  const anonymous = await client.expectOk("project.create", {
-    path: join(harness.dir, "anonymous"),
+  const anonymousPath = join(harness.dir, "anonymous");
+  const anonymous = await client.command("project.create", {
+    path: anonymousPath,
     scaffold: true,
   });
+  assert.ok(!anonymous.ok);
+  assert.match(anonymous.error.message, /git commit failed/);
   const unpinned = readFileSync(
-    join(anonymous.path, "specs", "packages", "licensing.md"),
+    join(anonymousPath, "specs", "packages", "licensing.md"),
     "utf-8",
   );
   const left = unpinned.slice(unpinned.indexOf("### licensing-9"));
   assert.ok(left.includes("SPDX-FileCopyrightText: " + new Date().getFullYear() + " <holder>"));
   assert.doesNotMatch(left, /SubLang/);
-  await client.expectOk("project.remove", { projectId: anonymous.id });
+  assert.ok(!(await client.expectOk("project.list", {})).some((project) => project.path === anonymousPath));
 
   // Creating on a registered folder is a conflict carrying the
   // registered path as a fact, apart from its words (core-service-111).

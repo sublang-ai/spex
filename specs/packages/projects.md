@@ -34,10 +34,11 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
 3. generate the spex specs scaffold in it with the scaffold command [[projects-31](#projects-31)] when the scaffold option is on, in the creating page's resolved interface language [[localization-2](localization.md#localization-2)] using the scaffold's localized templates [[scaffold-28](scaffold.md#scaffold-28)] — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
-4. create an initial commit containing the generated files, and
+4. create an initial commit containing the generated files, or an empty initial commit when scaffolding is off, and
 5. register the project and make it the workspace's current project.
 
-- Any step failing: the palette reports the failure — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
+- Any step failing: the palette reports the failed operation and its output — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
+- A target already containing its own Git repository: the palette changes nothing and directs the user to Add; where that repository has no initial commit, the guidance first directs the user to finish that commit in a terminal ([DR-099](../decisions/099-project-creation-preserves-existing-repositories.md)).
 
 #### projects-31
 
@@ -197,9 +198,11 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 Where a temporary parent directory exists, when the create-project flow completes, the test suite shall assert the scaffold option's cases below:
 
 - Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold whose `specs/packages/licensing.md` names the repository's configured git identity as the copyright holder in `licensing-9`, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
-- Scaffold option on without a git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder [[projects-3](#projects-3)].
+- Scaffold option on without a configured git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder; with Git requiring a configured identity, the initial commit fails, the failure is reported, and no project is registered [[projects-3](#projects-3)].
 - Scaffold language: the real CLI produces the language named by the request, or the core's resolved language when none is named, with its authoring-language declaration and generated files committed [[projects-31](#projects-31)].
 - Scaffold option off: the directory, git repository, initial commit, and project card still result while no specs scaffold is generated [[projects-3](#projects-3)].
+- Git staging or commit failure: the real Git refusal reaches the caller, no project is registered, and the generated files remain available for inspection [[projects-3](#projects-3)].
+- An existing repository, with or without an initial commit: Create refuses before mutation and names the applicable recovery, preserving the repository's files, index, and HEAD [[projects-3](#projects-3)].
 
 #### projects-32
 

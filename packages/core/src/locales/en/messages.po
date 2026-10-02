@@ -84,6 +84,11 @@ msgstr "{act}; on a first connection, accept the host key in a terminal. Then Re
 msgid "{act}. Then Retry."
 msgstr "{act}. Then Retry."
 
+#. Project creation refusal; command and its output are verbatim
+#: src/forge.ts
+msgid "{command} failed: {output}"
+msgstr "{command} failed: {output}"
+
 #. A queue unit's detail: how many acts this side adds to the end
 #: src/space.ts
 msgid "{count, plural, one {# act appended} other {# acts appended}}"
@@ -1954,6 +1959,16 @@ msgstr "This approval has already received a different answer."
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "This decision was not offered by the agent."
+
+#. Create recovery for an existing unborn repository; Add is the palette action
+#: src/forge.ts
+msgid "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."
+msgstr "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."
+
+#. Create refuses to change an existing repository; Add is the palette action
+#: src/forge.ts
+msgid "This folder already contains a Git repository. Use Add to register it."
+msgstr "This folder already contains a Git repository. Use Add to register it."
 
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts

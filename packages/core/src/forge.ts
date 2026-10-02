@@ -178,11 +178,33 @@ export async function createProjectRepo(
   options: CreateProjectOptions,
 ): Promise<{ scaffolded: boolean }> {
   const run = options.run ?? defaultRunCommand;
-  const agentInstructionFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
-  const init = await run("git", ["init", options.path]);
-  if (init.code !== 0) {
-    throw new Error(`git init failed: ${init.stderr.trim() || init.stdout.trim()}`);
+  if (existsSync(resolvePath(options.path, ".git"))) {
+    const head = await run("git", ["rev-parse", "--verify", "HEAD"], options.path);
+    throw new Error(head.code === 0
+      ? i18n._({
+          id: "This folder already contains a Git repository. Use Add to register it.",
+          comment: "Create refuses to change an existing repository; Add is the palette action",
+        })
+      : i18n._({
+          id: "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add.",
+          comment: "Create recovery for an existing unborn repository; Add is the palette action",
+        }));
   }
+  const checkedGit = async (args: string[], cwd?: string): Promise<void> => {
+    const result = await run("git", args, cwd);
+    if (result.code !== 0) {
+      throw new Error(i18n._({
+        id: "{command} failed: {output}",
+        values: {
+          command: `git ${args[0]}`,
+          output: result.stderr.trim() || result.stdout.trim() || String(result.code),
+        },
+        comment: "Project creation refusal; command and its output are verbatim",
+      }));
+    }
+  };
+  const agentInstructionFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
+  await checkedGit(["init", options.path]);
   let scaffolded = false;
   if (options.scaffold) {
     const preexistingAgentFiles = new Set(
@@ -225,11 +247,15 @@ export async function createProjectRepo(
         existsSync(resolvePath(options.path, path)),
     );
     for (const path of ["specs", ...createdAgentFiles, "LICENSE"]) {
-      await run("git", ["add", "--", path], options.path);
+      await checkedGit(["add", "--", path], options.path);
     }
-    await run(
-      "git",
+    await checkedGit(
       ["commit", "-m", "chore: scaffold specs"],
+      options.path,
+    );
+  } else {
+    await checkedGit(
+      ["commit", "--allow-empty", "-m", "chore: initialize project"],
       options.path,
     );
   }

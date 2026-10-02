@@ -35,6 +35,7 @@ import type {
   SpaceState,
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
+import { defaultRunCommand } from "../../packages/core/dist/forge.js";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -688,6 +689,15 @@ async function arrangeApp(
           ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
+          // New projects must have a real baseline, independent of the
+          // test host's identity and signing policy.
+          runCommand: async (command, args, cwd, commandEnv) => {
+            const result = await defaultRunCommand(command, args, cwd, commandEnv);
+            if (command === "git" && args[0] === "init" && result.code === 0) {
+              commitIdentity(args[1]);
+            }
+            return result;
+          },
           ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
           ...(options.forge
             ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
