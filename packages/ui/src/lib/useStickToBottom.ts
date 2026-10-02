@@ -1,88 +1,120 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Shared IM scroll behavior (DR-010 §1): stick to bottom while the
-// user is there, stop when they scroll up, and surface a jump pill
-// when new content lands below the fold.
-//
-// Only the reader detaches a pane from its end (run-view-120). A pane
-// that changes size — the sidebar folding, a divider dragged, a lane
-// opening — is chrome moving, not reading; its reflow both moves the
-// scroll position and fires a scroll event, and the page fires that
-// event before it delivers the size change, so the box as last seen is
-// what tells the two apart.
-
+// Follow rendered geometry, including cards and media that resize without
+// changing a transcript counter. Only actual reader movement detaches a pane.
 import { useEffect, useRef, useState } from "react";
+
+interface Geometry {
+  width: number;
+  height: number;
+  content: number;
+  top: number;
+}
+
+function measure(el: HTMLDivElement): Geometry {
+  return {
+    width: el.clientWidth,
+    height: el.clientHeight,
+    content: el.scrollHeight,
+    top: el.scrollTop,
+  };
+}
+
+function atBottom(box: Geometry): boolean {
+  return box.content - box.top - box.height < 40;
+}
+
+function movedUp(before: Geometry, next: Geometry): boolean {
+  // Shrinking content/viewport reflow can clamp the native position; that
+  // clamp alone is not reader movement. Read the actual position, not the
+  // requested scrollHeight used to pin (which is beyond the native maximum).
+  const clamped = Math.min(before.top, Math.max(0, next.content - next.height));
+  return next.top < clamped - 1 && !atBottom(next);
+}
 
 export function useStickToBottom(contentKey: unknown) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // A callback ref also reconnects the observer when a folded player remounts.
+  const [content, contentRef] = useState<HTMLDivElement | null>(null);
   const stuckRef = useRef(true);
-  /** The pane's own box as last seen. A resize's reflow fires a scroll
-   * event of its own, and the page fires it before it delivers the
-   * size change, so the box is what tells the two apart. */
-  const boxRef = useRef({ width: 0, height: 0 });
+  const boxRef = useRef<Geometry>({ width: 0, height: 0, content: 0, top: 0 });
   const [detached, setDetached] = useState(false);
   const [newBelow, setNewBelow] = useState(false);
 
-  // Runs on every content change: follow the bottom while stuck,
-  // otherwise flag that something new arrived below.
+  function pin(el: HTMLDivElement): void {
+    el.scrollTop = el.scrollHeight;
+    boxRef.current = measure(el);
+  }
+
+  function resized(el: HTMLDivElement, newContent: boolean): void {
+    const box = measure(el);
+    const before = boxRef.current;
+    // A real scroll may already have moved the element while its scroll
+    // event is still queued behind this ResizeObserver/content callback.
+    if (stuckRef.current && movedUp(before, box)) {
+      stuckRef.current = false;
+      setDetached(true);
+    }
+    if (stuckRef.current) {
+      pin(el);
+    } else {
+      boxRef.current = box;
+      if (newContent || box.content > before.content) setNewBelow(true);
+    }
+  }
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    if (stuckRef.current) {
-      el.scrollTop = el.scrollHeight;
-    } else {
-      setNewBelow(true);
-    }
-    // contentKey is the effect's real dependency.
+    if (el) resized(el, true);
+    // contentKey reports new text; geometry observation handles the rest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentKey]);
 
-  // The box's own size changing is chrome, never the reader: re-pin
-  // to the end the resize moved.
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    boxRef.current = { width: el.clientWidth, height: el.clientHeight };
+    if (!el || !content) return;
+    resized(el, false);
     if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      boxRef.current = { width: el.clientWidth, height: el.clientHeight };
-      if (stuckRef.current) el.scrollTop = el.scrollHeight;
-    });
+    const observer = new ResizeObserver(() => resized(el, false));
     observer.observe(el);
+    observer.observe(content);
     return () => observer.disconnect();
-  }, []);
+    // The mounted content owns both observed elements and their cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
   function onScroll(event: React.UIEvent<HTMLDivElement>): void {
     const el = event.currentTarget;
-    if (
-      el.clientWidth !== boxRef.current.width ||
-      el.clientHeight !== boxRef.current.height
-    ) {
-      // The box moved under the reader, and the page delivers this
-      // scroll before the size change: a pane at its end stays there.
-      boxRef.current = { width: el.clientWidth, height: el.clientHeight };
-      if (stuckRef.current) {
-        el.scrollTop = el.scrollHeight;
-        return;
-      }
+    const box = measure(el);
+    const before = boxRef.current;
+    const geometryChanged =
+      box.width !== before.width ||
+      box.height !== before.height ||
+      box.content !== before.content;
+    if (stuckRef.current && geometryChanged && !movedUp(before, box)) {
+      // A queued event from our earlier pin may arrive after content grows.
+      // Its unchanged position does not mean the reader scrolled away.
+      pin(el);
+      return;
     }
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    stuckRef.current = atBottom;
-    setDetached(!atBottom);
-    if (atBottom) setNewBelow(false);
+    const following = atBottom(box);
+    stuckRef.current = following;
+    boxRef.current = box;
+    setDetached(!following);
+    if (following) setNewBelow(false);
   }
 
   function jump(): void {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    pin(el);
     stuckRef.current = true;
     setDetached(false);
     setNewBelow(false);
   }
 
-  return { scrollRef, onScroll, detached, newBelow, jump, stuckRef };
+  return { scrollRef, contentRef, onScroll, detached, newBelow, jump, stuckRef };
 }
 
 /** Floating "new content below" pill; render inside a relative parent

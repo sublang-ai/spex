@@ -377,7 +377,7 @@ export function CaptainPane({
    * (run-view-147). */
   failure?: FailureContext;
 }) {
-  const { scrollRef, onScroll, newBelow, jump } = useStickToBottom(
+  const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(
     view.captain.length +
       view.captainDraft.length +
       (view.turnActive ? 1 : 0) +
@@ -530,131 +530,133 @@ export function CaptainPane({
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2"
         >
-          {view.captain.map((line, index) => {
-            const separator = timeSeparator(
-              index > 0 ? view.captain[index - 1].at : undefined,
-              line.at,
-            );
-            const lineFocus = focusProps(`line-${index}`);
-            return (
-              <div key={index} className="flex flex-col gap-2">
-                {separator ? (
+          <div ref={contentRef} className="flex min-h-full min-w-0 shrink-0 flex-col gap-2">
+            {view.captain.map((line, index) => {
+              const separator = timeSeparator(
+                index > 0 ? view.captain[index - 1].at : undefined,
+                line.at,
+              );
+              const lineFocus = focusProps(`line-${index}`);
+              return (
+                <div key={index} className="flex flex-col gap-2">
+                  {separator ? (
+                    <div
+                      data-testid="time-separator"
+                      className="pl-4 text-xs leading-5 text-neutral-500 dark:text-neutral-500"
+                    >
+                      {separator}
+                    </div>
+                  ) : null}
                   <div
-                    data-testid="time-separator"
-                    className="pl-4 text-xs leading-5 text-neutral-500 dark:text-neutral-500"
+                    data-focus-key={lineFocus["data-focus-key"]}
+                    data-focused={lineFocus["data-focused"]}
+                    className={lineFocus.className}
                   >
-                    {separator}
+                    <ThreadLine
+                      line={line}
+                      graphs={machineGraphs}
+                      source={
+                        line.kind === "boss" && line.turnId !== null
+                          ? bossSources?.get(line.turnId)
+                          : undefined
+                      }
+                      readiness={readiness}
+                      failure={failure}
+                    />
                   </div>
-                ) : null}
-                <div
-                  data-focus-key={lineFocus["data-focus-key"]}
-                  data-focused={lineFocus["data-focused"]}
-                  className={lineFocus.className}
-                >
-                  <ThreadLine
-                    line={line}
-                    graphs={machineGraphs}
-                    source={
-                      line.kind === "boss" && line.turnId !== null
-                        ? bossSources?.get(line.turnId)
-                        : undefined
-                    }
-                    readiness={readiness}
-                    failure={failure}
-                  />
+                  {extras
+                    ?.filter((extra) => extra.afterIndex === index)
+                    .map((extra) => {
+                      const extraFocus = focusProps(extra.focusKey);
+                      return (
+                        <div
+                          key={extra.key}
+                          data-focus-key={extraFocus["data-focus-key"]}
+                          data-focused={extraFocus["data-focused"]}
+                          className={extraFocus.className}
+                        >
+                          {extra.node}
+                        </div>
+                      );
+                    })}
                 </div>
-                {extras
-                  ?.filter((extra) => extra.afterIndex === index)
-                  .map((extra) => {
-                    const extraFocus = focusProps(extra.focusKey);
-                    return (
-                      <div
-                        key={extra.key}
-                        data-focus-key={extraFocus["data-focus-key"]}
-                        data-focused={extraFocus["data-focused"]}
-                        className={extraFocus.className}
-                      >
-                        {extra.node}
-                      </div>
-                    );
-                  })}
+              );
+            })}
+            {view.frames.length > 0 ? (
+              // The live call tree: roots here, each card owning its own
+              // children — including a child whose caller the pane never
+              // saw, which renders at the top level rather than vanishing
+              // (run-view-63/78).
+              <div data-testid="live-machines" className="flex flex-col gap-2">
+                {roots.map((frame) => (
+                  <MachineCard
+                    key={frame.traceSessionId}
+                    frame={frame}
+                    graph={machineGraphs?.[frame.playbookId]}
+                    graphs={machineGraphs}
+                    openFrames={view.frames}
+                    openChildren={view.frames.filter(
+                      (other) =>
+                        other.parentSessionId === frame.traceSessionId,
+                    )}
+                    onlyRoot={roots.length === 1}
+                  />
+                ))}
               </div>
-            );
-          })}
-          {view.frames.length > 0 ? (
-            // The live call tree: roots here, each card owning its own
-            // children — including a child whose caller the pane never
-            // saw, which renders at the top level rather than vanishing
-            // (run-view-63/78).
-            <div data-testid="live-machines" className="flex flex-col gap-2">
-              {roots.map((frame) => (
-                <MachineCard
-                  key={frame.traceSessionId}
-                  frame={frame}
-                  graph={machineGraphs?.[frame.playbookId]}
-                  graphs={machineGraphs}
-                  openFrames={view.frames}
-                  openChildren={view.frames.filter(
-                    (other) =>
-                      other.parentSessionId === frame.traceSessionId,
-                  )}
-                  onlyRoot={roots.length === 1}
-                />
-              ))}
-            </div>
-          ) : null}
-          {view.captainDraft ? (
-            <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800">
-                <Markdown text={view.captainDraft} links="web-only" />
+            ) : null}
+            {view.captainDraft ? (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800">
+                  <Markdown text={view.captainDraft} links="web-only" />
+                </div>
               </div>
-            </div>
-          ) : view.turnActive ? (
-            // Life sign while agents work and the Captain is silent
-            // (DR-010 §3): the thread is never inert mid-turn.
-            <div
-              className="flex justify-start"
-              data-testid="working-indicator"
-            >
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-2 dark:bg-neutral-800">
-                <span className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:0ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:150ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:300ms]" />
-                </span>
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                  {anyPlayerRunning
-                    ? since !== undefined
-                      ? i18n._({
-                          id: "{who} working · {span}",
-                          values: {
-                            who: working.map((entry) => entry.who).join(", "),
-                            span: duration(now - since),
-                          },
-                          comment:
-                            "who is at work and how long the open call has run",
-                        })
-                      : i18n._({
-                          id: "{who} working…",
-                          values: {
-                            who: working.map((entry) => entry.who).join(", "),
-                          },
-                          comment: "who is at work, with no span to report yet",
-                        })
-                    : i18n._("Captain is thinking…")}
-                </span>
+            ) : view.turnActive ? (
+              // Life sign while agents work and the Captain is silent
+              // (DR-010 §3): the thread is never inert mid-turn.
+              <div
+                className="flex justify-start"
+                data-testid="working-indicator"
+              >
+                <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-neutral-100 px-3 py-2 dark:bg-neutral-800">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400 [animation-delay:300ms]" />
+                  </span>
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {anyPlayerRunning
+                      ? since !== undefined
+                        ? i18n._({
+                            id: "{who} working · {span}",
+                            values: {
+                              who: working.map((entry) => entry.who).join(", "),
+                              span: duration(now - since),
+                            },
+                            comment:
+                              "who is at work and how long the open call has run",
+                          })
+                        : i18n._({
+                            id: "{who} working…",
+                            values: {
+                              who: working.map((entry) => entry.who).join(", "),
+                            },
+                            comment: "who is at work, with no span to report yet",
+                          })
+                      : i18n._("Captain is thinking…")}
+                  </span>
+                </div>
               </div>
-            </div>
-          ) : null}
-          {view.captain.length === 0 &&
-          !view.captainDraft &&
-          !view.turnActive ? (
-            <div className="m-auto text-xs text-neutral-500">
-              {i18n._("The Captain will report here.")}
-            </div>
-          ) : null}
+            ) : null}
+            {view.captain.length === 0 &&
+            !view.captainDraft &&
+            !view.turnActive ? (
+              <div className="m-auto text-xs text-neutral-500">
+                {i18n._("The Captain will report here.")}
+              </div>
+            ) : null}
+          </div>
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>

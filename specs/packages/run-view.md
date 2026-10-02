@@ -490,7 +490,10 @@ When new content arrives below the fold of a scrolled-up Captain or player pane,
 
 #### run-view-120
 
-While a Captain or player pane is following its end, when the pane's own box changes size, the pane shall stay at its end: chrome moving — the sidebar folding, the divider dragged [[run-view-81](#run-view-81)], panes stacking [[run-view-107](#run-view-107)], a lane unfolding [[run-view-117](#run-view-117)] — is never the reader scrolling away, so the run keeps following itself and no pill is owed ([DR-041](../decisions/041-chrome-that-fits.md)).
+While a Captain or player pane is following its end, when its box or rendered content changes size, the pane shall keep following ([DR-010](../decisions/010-interface-craft.md), [DR-041](../decisions/041-chrome-that-fits.md)):
+
+- chrome moving — the sidebar folding, the divider dragged [[run-view-81](#run-view-81)], panes stacking [[run-view-107](#run-view-107)], a lane unfolding [[run-view-117](#run-view-117)] — and content growing through live cards or delayed media are not reader scrolling and owe no jump pill;
+- actual upward reader movement detaches even when content grows before its scroll event is delivered, and subsequent size changes leave that reader detached until they return to the end or activate Latest [[run-view-46](#run-view-46)].
 
 ### Machine Cards
 
@@ -1280,7 +1283,11 @@ Where the harness boots with the demo project registered and a scripted workflow
 
 #### run-view-121
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey types a draft and shows the sidebar in a window too short for the thread — chrome moving with no window resize behind it — the test suite shall assert through the page that the narrowed field still stands as tall as the rewrapped draft needs [[run-view-106](#run-view-106)] and that the Captain thread is still at its end [[run-view-120](#run-view-120)].
+Where the harness boots with the demo project registered and the scripted Captain, when served-page journeys exercise sidebar changes and controlled rendered-content growth in a window too short for the thread, the test suite shall assert:
+
+- showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end [[run-view-120](#run-view-120)];
+- content growth without a transcript-counter change keeps a following thread at its end [[run-view-120](#run-view-120)];
+- upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
 
 #### run-view-122
 

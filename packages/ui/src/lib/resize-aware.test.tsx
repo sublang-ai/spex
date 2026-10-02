@@ -109,14 +109,16 @@ describe("run-view-106: the field refits when its own box resizes", () => {
 
 describe("run-view-120: a pane at its end keeps following through a resize", () => {
   function Pane({ contentKey }: { contentKey: number }) {
-    const { scrollRef, onScroll, detached } = useStickToBottom(contentKey);
+    const { scrollRef, contentRef, onScroll, detached } = useStickToBottom(contentKey);
     return (
       <div
         data-testid="pane"
         ref={scrollRef}
         onScroll={onScroll}
         data-detached={detached ? "1" : "0"}
-      />
+      >
+        <div ref={contentRef} />
+      </div>
     );
   }
 
@@ -131,20 +133,20 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
       configurable: true,
       get: () => box.top,
       set: (next: number) => {
-        box.top = next;
+        box.top = Math.max(0, Math.min(next, box.height - 240));
       },
     });
     measured(pane, { scrollHeight: () => box.height, clientHeight: () => 240 });
 
     // The reader is at the end.
     act(() => observers.fire(pane));
-    expect(box.top).toBe(440);
+    expect(box.top).toBe(200);
 
     // The pane narrows: the same transcript now needs 712px, and
     // scroll anchoring would leave the reader 170px above the end.
     box.height = 712;
     act(() => observers.fire(pane));
-    expect(box.top).toBe(712);
+    expect(box.top).toBe(472);
     expect(pane.getAttribute("data-detached")).toBe("0");
   });
 
@@ -157,7 +159,7 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
       configurable: true,
       get: () => box.top,
       set: (next: number) => {
-        box.top = next;
+        box.top = Math.max(0, Math.min(next, box.height - box.client));
       },
     });
     measured(pane, {
@@ -166,7 +168,7 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
       clientWidth: () => 600,
     });
     act(() => observers.fire(pane));
-    expect(box.top).toBe(440);
+    expect(box.top).toBe(200);
 
     // The pane narrows: the reflow moves the position and fires its
     // own scroll event, which arrives before the size change does.
@@ -176,7 +178,7 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
     act(() => {
       pane.dispatchEvent(new Event("scroll"));
     });
-    expect(box.top).toBe(712);
+    expect(box.top).toBe(532);
     expect(pane.getAttribute("data-detached")).toBe("0");
   });
 
@@ -189,7 +191,7 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
       configurable: true,
       get: () => box.top,
       set: (next: number) => {
-        box.top = next;
+        box.top = Math.max(0, Math.min(next, box.height - 240));
       },
     });
     measured(pane, { scrollHeight: () => box.height, clientHeight: () => 240 });

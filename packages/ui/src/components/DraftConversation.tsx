@@ -379,7 +379,7 @@ export function DraftConversation({
   const turnRunning = draft.activity === "turn";
   const compiling = draft.activity === "compiling";
   const lastSeq = draftView?.view.lastSeq ?? 0;
-  const { scrollRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
+  const { scrollRef, contentRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
     `${entries.length}:${lastSeq}:${turnRunning ? 1 : 0}`,
   );
   // The turn's clock (DR-010 §5): since the Boss's or the system's
@@ -485,58 +485,60 @@ export function DraftConversation({
             ref={scrollRef}
             onScroll={onScroll}
             data-testid="draft-thread"
-            className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2"
           >
-            {diagnostic ? (
-              <div
-                role="alert"
-                data-testid="draft-load-error"
-                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-              >
-                {diagnostic}
-              </div>
-            ) : null}
-            {draftView?.loading && entries.length === 0 ? (
-              <div className="m-auto text-xs text-neutral-500">{i18n._("Loading the conversation…")}</div>
-            ) : null}
-            {entries.length > windowSize ? (
-              <button
-                type="button"
-                onClick={() => {
-                  stuckRef.current = false;
-                  setWindowSize((size) => size + RENDER_WINDOW);
-                }}
-                className="text-center text-xs text-neutral-500 hover:text-brand-500"
-              >
-                {i18n._("Show {shown} of {total} earlier entries", {
-                  shown: Math.min(RENDER_WINDOW, entries.length - windowSize),
-                  total: entries.length - windowSize,
-                })}
-              </button>
-            ) : null}
-            {shown.map((entry) =>
-              entry.kind === "line" ? (
-                entry.line.kind === "boss" && /^Spex:/u.test(entry.line.text) ? (
-                  <SystemTurn key={`l${entry.seq}`} text={entry.line.text} at={entry.line.at} />
+            <div ref={contentRef} className="flex min-h-full min-w-0 shrink-0 flex-col gap-2">
+              {diagnostic ? (
+                <div
+                  role="alert"
+                  data-testid="draft-load-error"
+                  className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                >
+                  {diagnostic}
+                </div>
+              ) : null}
+              {draftView?.loading && entries.length === 0 ? (
+                <div className="m-auto text-xs text-neutral-500">{i18n._("Loading the conversation…")}</div>
+              ) : null}
+              {entries.length > windowSize ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stuckRef.current = false;
+                    setWindowSize((size) => size + RENDER_WINDOW);
+                  }}
+                  className="text-center text-xs text-neutral-500 hover:text-brand-500"
+                >
+                  {i18n._("Show {shown} of {total} earlier entries", {
+                    shown: Math.min(RENDER_WINDOW, entries.length - windowSize),
+                    total: entries.length - windowSize,
+                  })}
+                </button>
+              ) : null}
+              {shown.map((entry) =>
+                entry.kind === "line" ? (
+                  entry.line.kind === "boss" && /^Spex:/u.test(entry.line.text) ? (
+                    <SystemTurn key={`l${entry.seq}`} text={entry.line.text} at={entry.line.at} />
+                  ) : (
+                    <ThreadLine key={`l${entry.seq}`} line={entry.line} />
+                  )
+                ) : entry.segment.kind === "text" ? (
+                  <DirectiveText
+                    key={`s${entry.seq}`}
+                    text={entry.segment.text}
+                    streaming={entry.segment.streaming}
+                    onOpenRegister={onOpenRegister}
+                  />
                 ) : (
-                  <ThreadLine key={`l${entry.seq}`} line={entry.line} />
-                )
-              ) : entry.segment.kind === "text" ? (
-                <DirectiveText
-                  key={`s${entry.seq}`}
-                  text={entry.segment.text}
-                  streaming={entry.segment.streaming}
-                  onOpenRegister={onOpenRegister}
-                />
-              ) : (
-                <Segment key={`s${entry.seq}`} segment={entry.segment} />
-              ),
-            )}
-            {empty ? (
-              <div className="m-auto text-xs text-neutral-500">
-                {i18n._("The agent's replies land here.")}
-              </div>
-            ) : null}
+                  <Segment key={`s${entry.seq}`} segment={entry.segment} />
+                ),
+              )}
+              {empty ? (
+                <div className="m-auto text-xs text-neutral-500">
+                  {i18n._("The agent's replies land here.")}
+                </div>
+              ) : null}
+            </div>
           </div>
           {newBelow ? (
             <button type="button" onClick={jump} className={jumpPillClasses()}>
