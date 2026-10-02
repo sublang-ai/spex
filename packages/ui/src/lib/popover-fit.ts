@@ -101,9 +101,18 @@ export function useFitInBox<T extends HTMLElement>(ref: RefObject<T | null>): vo
       ? undefined
       : new ResizeObserver(fit);
     observer?.observe(el);
+    // Scrolling an ancestor moves the anchor without resizing either box.
+    // This includes the browser scrolling a newly focused control into view.
+    // An editor's own scrolling must keep its reader's position.
+    const onScroll = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof Node && target !== el && target.contains(el)) fit();
+    };
+    view?.addEventListener("scroll", onScroll, true);
     view?.addEventListener("resize", fit);
     return () => {
       observer?.disconnect();
+      view?.removeEventListener("scroll", onScroll, true);
       view?.removeEventListener("resize", fit);
     };
   }, [ref]);

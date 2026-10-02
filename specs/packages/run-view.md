@@ -335,7 +335,7 @@ The run view shall present conversations in instant-messaging form:
 When the user opens the captain identity's editor control (or another agent's editor control elsewhere in the run view), the run view shall show an anchored popover in place — offering the embedded runtime's adapters with their readiness, and editing the agent's model, its adapter's effort vocabulary, and permissions ([DR-019](../decisions/019-inline-agent-configuration.md)) — writing changes as a merge patch through the shared configuration's validated edit path per [DR-009](../decisions/009-at-hand-interaction.md), without leaving the current surface:
 
 - the popover opens on the side of its anchor with the more room and takes at most what the window can show there, scrolling inside that bound, so it never lies past an edge the reader cannot scroll to and never grows the page ([DR-041](../decisions/041-chrome-that-fits.md)) — the Captain home's control sits at the foot of the surface, where the room above and below changes with the window's height;
-- the open popover refits whenever the window or its own box resizes; a window resize also re-decides its side and its room.
+- the open popover refits whenever the window or its own box resizes, or a scrolling ancestor moves its anchor; a window resize also re-decides its side and its room.
 
 #### run-view-138
 
@@ -1303,7 +1303,7 @@ Where the harness boots with the demo project registered and carrying closed wor
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
 - a disabled composer during a long turn keeps its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
-- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)].
+- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it both on opening and after the grid scrolls with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)].
 
 #### run-view-146
 
