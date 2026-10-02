@@ -375,7 +375,7 @@ export function CaptainPane({
   /** What a failure card says beyond the record's own data: the run's
    * command and step, and the controls the session summary publishes
    * (run-view-147). */
-  failure?: FailureContext;
+  failure?: (line: CaptainLine) => FailureContext | undefined;
 }) {
   // Keep the inputs distinct: a reply arriving as its turn ends must
   // not cancel out the content change that advances the thread.
@@ -562,7 +562,7 @@ export function CaptainPane({
                           : undefined
                       }
                       readiness={readiness}
-                      failure={failure}
+                      failure={failure?.(line)}
                     />
                   </div>
                   {extras

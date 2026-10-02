@@ -19,6 +19,7 @@ import {
 import { contextGraphs } from "../lib/session-context.js";
 import { i18n } from "../i18n.js";
 import { plainFailure } from "../lib/labels.js";
+import { readRecordFailure } from "../lib/failure-catalogue.js";
 import { storedAsset, type MediaOrigin } from "../lib/media.js";
 
 /** What one call reported spending, in tokens and tool uses. Every
@@ -128,6 +129,7 @@ import {
   FAILURE_STATE_ID,
   foldRestored,
   foldTrace,
+  parkedFailure,
   type MachineFrame,
 } from "../lib/machine-frames.js";
 
@@ -142,6 +144,15 @@ export interface CaptainLine {
   evidence?: Extract<TmuxPlayRecord, { type: "playbook_evidence" }>;
   /** The settled frame a "machine" line carries (run-view-62). */
   frame?: MachineFrame;
+  /** The run position when this failure arrived, never a later run's
+   * current position. The edge and count distinguish repeated parks. */
+  failure?: {
+    traceSessionId: string;
+    playbookId: string;
+    step?: string;
+    transitionAt: number;
+    transitionCount: number;
+  };
   text: string;
   turnId: number | null;
   at: number;
@@ -220,7 +231,24 @@ function player(view: SessionView, playerId: string): PlayerView {
   return created;
 }
 
+function failurePosition(frame: MachineFrame | undefined): CaptainLine["failure"] {
+  if (!frame) return undefined;
+  const step = frame.active === FAILURE_STATE_ID
+    ? frame.lastFired?.from
+    : frame.active ?? undefined;
+  return {
+    traceSessionId: frame.traceSessionId,
+    playbookId: frame.playbookId,
+    ...(step ? { step } : {}),
+    transitionAt: frame.lastFired?.at ?? frame.openedAt,
+    transitionCount: frame.transitions.length,
+  };
+}
+
 function pushCaptain(view: SessionView, line: CaptainLine): void {
+  if ((line.kind === "status" || line.kind === "error") && readRecordFailure(line.data)) {
+    line.failure ??= failurePosition(parkedFailure(view.frames) ?? view.frames.at(-1));
+  }
   // A failure identical to the line just before it, in the same turn,
   // is the same failure again: it counts rather than repeats, and no
   // delivered failure goes unshown (run-view-2).
@@ -229,7 +257,10 @@ function pushCaptain(view: SessionView, line: CaptainLine): void {
     line.kind === "error" &&
     last?.kind === "error" &&
     last.text === line.text &&
-    last.turnId === line.turnId
+    last.turnId === line.turnId &&
+    last.failure?.traceSessionId === line.failure?.traceSessionId &&
+    last.failure?.transitionAt === line.failure?.transitionAt &&
+    last.failure?.transitionCount === line.failure?.transitionCount
   ) {
     last.count = (last.count ?? 1) + 1;
     return;
@@ -720,6 +751,7 @@ export function applyRecord(
             turnId: r.turnId,
             at: r.timestamp,
             data: { cause },
+            failure: failurePosition(view.frames.find((frame) => frame.traceSessionId === run.sessionId)),
           });
         }
         // The questions the position holds are the ones standing

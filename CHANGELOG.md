@@ -461,6 +461,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - First-use browser setup permits a fifteen-minute download and launch budget,
   with progress and cancellation, instead of ending after three minutes on a
   slow connection. Setup still requires a separate choice to enable Browser.
+- Historical failure cards keep the workflow and step recorded at that failure,
+  even after later workflows succeed. Current recovery guidance appears only
+  on cards for the current failure park.
 - Spec readers and editor previews hide HTML source comments, keeping SPDX
   headers and translation hashes out of the reading flow. Code examples and
   the editable source retain their exact content.
