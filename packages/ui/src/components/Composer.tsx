@@ -256,10 +256,19 @@ export function Composer({
 
   const awaiting = view.pendingQuestion !== undefined;
 
-  // Keep the composer ready to type: focus on mount and the moment a
-  // player question arrives.
+  // A delayed reply or settlement must not take focus from a control
+  // the reader selected while the update was in flight (run-view-8).
+  function restoreUnclaimedFocus() {
+    const field = textareaRef.current;
+    if (!field || field.disabled) return;
+    const document = field.ownerDocument;
+    const active = document.activeElement;
+    if (active && active !== field && active !== document.body && active !== document.documentElement) return;
+    field.focus();
+  }
+
   useEffect(() => {
-    textareaRef.current?.focus();
+    restoreUnclaimedFocus();
   }, [awaiting, view.turnActive]);
 
   // The newest queued message is the one the Boss just wrote, so the
@@ -288,7 +297,7 @@ export function Composer({
       })
       .finally(() => {
         setSending(false);
-        textareaRef.current?.focus();
+        restoreUnclaimedFocus();
       });
   }
 
