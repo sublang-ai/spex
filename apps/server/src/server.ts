@@ -69,6 +69,7 @@ export interface ServerShellOptions {
     | "runCommand"
     | "forgeAdapter"
     | "scaffoldCommand"
+    | "systemLanguages"
     | "watchConfig"
   >;
 }

@@ -35,6 +35,7 @@ import type {
   SpaceState,
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
+import { defaultRunCommand } from "../../packages/core/dist/forge.js";
 import {
   DEMO_CONFIG,
   authoringScript,
@@ -73,6 +74,8 @@ const uiDist = join(repoRoot, "apps", "server", "ui-dist");
 export interface AppOptions {
   /** Additional native-style provider rules for approval journeys. */
   approvalRules?: FakeScript["rules"];
+  /** The core host's preferred languages, independent of the browser. */
+  systemLanguages?: readonly string[];
   /**
    * `demo` writes the two-player demo config before boot; `none`
    * leaves the path empty so the core seeds its installed template —
@@ -686,6 +689,16 @@ async function arrangeApp(
           ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
+          // New projects must have a real baseline, independent of the
+          // test host's identity and signing policy.
+          runCommand: async (command, args, cwd, commandEnv) => {
+            const result = await defaultRunCommand(command, args, cwd, commandEnv);
+            if (command === "git" && args[0] === "init" && result.code === 0) {
+              commitIdentity(args[1]);
+            }
+            return result;
+          },
+          ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
           ...(options.forge
             ? { forgeAdapter: { state: async () => FORGE_FIXTURE } }
             : {}),

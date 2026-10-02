@@ -123,6 +123,7 @@ test("the server scaffolds with the checkout's own CLI on its own Node (SERVER-S
   const running = await startServer(
     tempOptions({
       core: {
+        systemLanguages: ["en"],
         runCommand: async (command, args, cwd, env) => {
           if (command === "git") return { code: 0, stdout: "", stderr: "" };
           calls.push({ command, args, cwd, env });
@@ -154,7 +155,7 @@ test("the server scaffolds with the checkout's own CLI on its own Node (SERVER-S
     assert.deepEqual(calls, [
       {
         command: process.execPath,
-        args: [resolve(here, "..", "..", "..", "packages", "cli", "dist", "cli.js"), "scaffold", project],
+        args: [resolve(here, "..", "..", "..", "packages", "cli", "dist", "cli.js"), "scaffold", "--lang", "en", project],
         cwd: project,
         env: undefined,
       },

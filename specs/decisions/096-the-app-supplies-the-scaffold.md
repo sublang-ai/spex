@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-10-01).
+Extended by [DR-100](100-new-project-specs-follow-the-readers-language.md) in the scaffold's language argument.
 Extends [DR-081](081-the-app-supplies-the-compiler.md) and [DR-024](024-app-supplied-agent-runtimes.md): the scaffold CLI joins the compiler and the agent SDKs the app supplies, for the reason the compiler did.
 Amends [DR-006](006-projects-and-forge.md) in the create flow's scaffold step alone: the `@sublang/spex` scaffold CLI it names is the checkout's own copy, the registry's only where none is built.
 

@@ -443,6 +443,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Creating a project now scaffolds specs in the creating page's language,
+  including a Chinese browser connected to an English host ([DR-097](specs/decisions/097-new-project-specs-follow-the-readers-language.md)).
+- Project creation requires a successful initial Git commit, including an
+  empty baseline without scaffolding. Staging or commit failures retain
+  files and report the refusal. Existing repositories are preserved and
+  directed to Add ([DR-099](specs/decisions/099-project-creation-preserves-existing-repositories.md)).
 - The Chinese catalogs' terms, after a native-speaker audit: setting a
   space up reads 初始化 on every surface and in the core's refusals,
   keeping 设置 for Settings; a model's provider reads 服务商 everywhere;

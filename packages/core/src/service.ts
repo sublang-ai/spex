@@ -1453,6 +1453,7 @@ export class CoreService {
             await createProjectRepo({
               path,
               scaffold: command.scaffold,
+              scaffoldLanguage: command.scaffoldLanguage ?? this.spoken,
               run: this.runCommand,
               ...(this.options.scaffoldCommand
                 ? {

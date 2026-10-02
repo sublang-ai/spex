@@ -15,6 +15,7 @@ import {
   GitHubForgeAdapter,
   academyCorpusDir,
   createProjectRepo,
+  defaultRunCommand,
   isWorkTreeRoot,
   parseGitHubRepo,
   repoStatus,
@@ -73,8 +74,18 @@ test("repoStatus names the real branch on a fresh repo with no commits", async (
 
 test("createProjectRepo initializes a commit-ready repo", async () => {
   const dir = join(scratchDir("spex-create-"), "newproj");
-  await createProjectRepo({ path: dir });
+  const run: RunCommand = async (command, args, cwd, env) => {
+    const result = await defaultRunCommand(command, args, cwd, env);
+    if (command === "git" && args[0] === "init" && result.code === 0) {
+      git(["config", "user.name", "Spex Test"], dir);
+      git(["config", "user.email", "spex@example.test"], dir);
+      git(["config", "commit.gpgsign", "false"], dir);
+    }
+    return result;
+  };
+  await createProjectRepo({ path: dir, run });
   assert.equal(await isWorkTreeRoot(dir), true);
+  git(["rev-parse", "--verify", "HEAD"], dir);
 });
 
 test("createProjectRepo surfaces scaffold failures", async () => {

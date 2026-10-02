@@ -124,6 +124,8 @@ meta.md       The spec of specs
 | [DR-096](decisions/096-the-app-supplies-the-scaffold.md) | 096-the-app-supplies-the-scaffold.md | The app supplies the scaffold: both shells name the checkout's own `@sublang/spex` entry on their own executable as the scaffold command, the registry's `npx` only where none is built and then named in the failure; extends DR-081 and DR-024, amends DR-006 |
 | [DR-097](decisions/097-media-and-browser-tools-across-hosts.md) | 097-media-and-browser-tools-across-hosts.md | Cross-layer ownership of attachments, durable assets, browser preparation, tool-free control, inspection work and media presentation |
 | [DR-098](decisions/098-live-tool-approvals.md) | 098-live-tool-approvals.md | Ephemeral native tool approval ownership, answer controls, and reconnect recovery |
+| [DR-099](decisions/099-project-creation-preserves-existing-repositories.md) | 099-project-creation-preserves-existing-repositories.md | Create requires its initial commit, preserves existing repositories, and guides failed creation through terminal repair and Add |
+| [DR-100](decisions/100-new-project-specs-follow-the-readers-language.md) | 100-new-project-specs-follow-the-readers-language.md | New project specs follow the creating page's language; protocol callers can name it, with the core's language as fallback |
 
 ## Drafts
 

@@ -84,6 +84,11 @@ msgstr "{act}；首次连接时，请在终端中接受主机密钥。然后重�
 msgid "{act}. Then Retry."
 msgstr "{act}。然后重试。"
 
+#. Project creation refusal; command and its output are verbatim
+#: src/forge.ts
+msgid "{command} failed: {output}"
+msgstr "{command} 失败：{output}"
+
 #. A queue unit's detail: how many acts this side adds to the end
 #: src/space.ts
 msgid "{count, plural, one {# act appended} other {# acts appended}}"
@@ -1954,6 +1959,16 @@ msgstr "此审批请求已收到不同的答复。"
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."
 msgstr "智能体未提供此答复选项。"
+
+#. Create recovery for an existing unborn repository; Add is the palette action
+#: src/forge.ts
+msgid "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."
+msgstr "此文件夹已包含 Git 仓库，但尚无初始提交。请在终端中完成初始提交，然后使用“添加”。"
+
+#. Create refuses to change an existing repository; Add is the palette action
+#: src/forge.ts
+msgid "This folder already contains a Git repository. Use Add to register it."
+msgstr "此文件夹已包含 Git 仓库。请使用“添加”注册该仓库。"
 
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts

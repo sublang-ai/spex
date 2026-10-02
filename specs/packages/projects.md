@@ -33,17 +33,19 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 
 1. create the project directory under the parent directory,
 2. initialize a git repository in it,
-3. generate the spex specs scaffold in it with the scaffold command [[projects-31](#projects-31)] when the scaffold option is on — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
-4. create an initial commit containing the generated files, and
+3. generate the spex specs scaffold in it with the scaffold command [[projects-31](#projects-31)] when the scaffold option is on, in the creating page's resolved interface language [[localization-2](localization.md#localization-2)] using the scaffold's localized templates [[scaffold-28](scaffold.md#scaffold-28)] — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
+4. create an initial commit containing the generated files, or an empty initial commit when scaffolding is off, and
 5. register the project and make it the workspace's current project.
 
-- Any step failing: the palette reports the failure — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
+- Any step failing: the palette reports the failed operation and its output — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
+- A target already containing its own Git repository: the palette changes nothing and directs the user to Add; where that repository has no initial commit, the guidance first directs the user to finish that commit in a terminal ([DR-099](../decisions/099-project-creation-preserves-existing-repositories.md)).
 
 #### projects-31
 
-When the create flow scaffolds a project [[projects-3](#projects-3)], the core shall run the scaffold command the shell named when starting it — the app's own copy of the scaffold CLI on the shell's own executable, under the variables that executable runs as Node with — or, with none named, the registry's `npx --yes @sublang/spex`, with `scaffold` and the project path appended, in the project directory ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)):
+When the create flow scaffolds a project [[projects-3](#projects-3)], the core shall run the scaffold command the shell named when starting it — the app's own copy of the scaffold CLI on the shell's own executable, under the variables that executable runs as Node with — or, with none named, the registry's `npx --yes @sublang/spex`, with `scaffold`, its language arguments, and the project path appended, in the project directory ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)):
 
 - Scaffold exiting non-zero: the failure names the command that ran and its output, and, for the registry's, that the app's own CLI was not supplied.
+- Language: `project.create` accepts an optional `scaffoldLanguage` of `en` or `zh`, passed as `--lang` to the scaffold; with none named, the core uses its own resolved interface language [[localization-2](localization.md#localization-2)] ([DR-100](../decisions/100-new-project-specs-follow-the-readers-language.md)).
 
 #### projects-27
 
@@ -196,14 +198,17 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 Where a temporary parent directory exists, when the create-project flow completes, the test suite shall assert the scaffold option's cases below:
 
 - Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold whose `specs/packages/licensing.md` names the repository's configured git identity as the copyright holder in `licensing-9`, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
-- Scaffold option on without a git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder [[projects-3](#projects-3)].
+- Scaffold option on without a configured git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder; with Git requiring a configured identity, the initial commit fails, the failure is reported, and no project is registered [[projects-3](#projects-3)].
+- Scaffold language: the real CLI produces the language named by the request, or the core's resolved language when none is named, with its authoring-language declaration and generated files committed [[projects-31](#projects-31)].
 - Scaffold option off: the directory, git repository, initial commit, and project card still result while no specs scaffold is generated [[projects-3](#projects-3)].
+- Git staging or commit failure: the real Git refusal reaches the caller, no project is registered, and the generated files remain available for inspection [[projects-3](#projects-3)].
+- An existing repository, with or without an initial commit: Create refuses before mutation and names the applicable recovery, preserving the repository's files, index, and HEAD [[projects-3](#projects-3)].
 
 #### projects-32
 
 Where the core starts with a scaffold command and its variables under a command runner that records what it is asked to run, when the test suite creates a project with the scaffold option on, the test suite shall assert the scaffold command's cases below:
 
-- Command exiting zero: the runner ran that command with `scaffold` and the project path appended, in the project directory, under those variables, and the project is registered [[projects-31](#projects-31)].
+- Command exiting zero: the runner ran that command with `scaffold`, `--lang` and the resolved language, and the project path appended, in the project directory, under those variables, and the project is registered [[projects-31](#projects-31)].
 - Command exiting non-zero: the refusal names that command and its output, and the project is not registered [[projects-31](#projects-31)].
 - No command named: the runner ran `npx --yes @sublang/spex`, and its failure names that command and that the app's own CLI was not supplied [[projects-31](#projects-31)].
 
@@ -240,6 +245,7 @@ Where the project palette renders with one project holding a live session and on
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with no project, the test suite shall assert the project journey through the page:
 
 - the palette's Academy action seeds the example, which becomes the current project [[projects-27](#projects-27)];
+- creating with scaffolding from a Chinese browser against an English core produces a Chinese spec tree and authoring-language declaration through the real bundled scaffold [[projects-3](#projects-3)] [[projects-31](#projects-31)];
 - confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
 - confirming an existing repository's path adds it and makes it current, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
 - the Overview tab shows the repository's branch and, for a project with no GitHub origin, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
