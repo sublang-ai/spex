@@ -14,6 +14,7 @@
 // SPEX_INSPECT_EVIDENCE_DIR retains safe screenshot/report artifacts.
 import assert from "node:assert/strict";
 import { nativeApprovalStage } from "./native-approval-stage.mjs";
+import { waitForBrowserPreparation } from "./browser-preparation.ts";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -313,7 +314,7 @@ try {
   await editor.getByTestId(`agent-adapter-${adapter}`).click();
   const beforeSetup = readFileSync(configPath, "utf8");
   await editor.getByRole("button", { name: "Set up browser", exact: true }).click();
-  await editor.getByText("Browser ready", { exact: true }).waitFor({ timeout: 930_000 });
+  await waitForBrowserPreparation(editor);
   assert.equal(await editor.getByRole("checkbox", { name: "Browser", exact: true }).isChecked(), false);
   assert.equal(readFileSync(configPath, "utf8"), beforeSetup);
   await editor.getByRole("checkbox", { name: "Browser", exact: true }).check();
@@ -497,6 +498,7 @@ try {
   succeeded = true;
 } catch (error) {
   console.error(`inspect-host FAILED at ${stage}: ${error.message}`);
+  writeFileSync(join(evidenceDir, "failure.json"), `${JSON.stringify({ stage, message: error.message }, null, 2)}\n`);
   if (history.length) writeFileSync(join(evidenceDir, "record-types.json"), JSON.stringify(history.map(({ record }) => record.type)));
   if (app) await app.firstWindow().then((page) => page.screenshot({ path: join(evidenceDir, "failure.png"), timeout: 5000 })).catch(() => {});
   process.exitCode = 1;

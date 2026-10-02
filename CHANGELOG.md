@@ -443,6 +443,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Browser setup failures keep Retry reachable beside a compact summary, with
+  the complete diagnostic in expandable details without terminal formatting.
+  Native acceptance stops on a reported setup failure or cancellation instead
+  of waiting out the full readiness deadline.
 - Settings and configuration loading reject invalid writable paths before a
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.

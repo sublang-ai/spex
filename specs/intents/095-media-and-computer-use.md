@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress: shared runtime releases verified and the application feature merged; a browser setup budget follow-up and final native acceptance remain.
+In progress: shared runtime releases and application milestones are merged; compact browser setup failure reporting and final native acceptance remain.
 
 ## Intent
 
@@ -33,6 +33,7 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 6. Add core upload/read commands, application asset ownership, session/draft/intent handoff, and browser preparation state.
 7. Add shared attachment composers and trusted media presentation across initial, session, and authoring views.
 8. Exercise fresh-user scenarios, complete reviews and CI, and merge fine-grained milestones; publish only where needed for downstream adoption.
+9. Keep browser setup failures concise and fully inspectable, and stop acceptance promptly on a reported failure or cancellation.
 
 ## Verification
 

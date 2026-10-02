@@ -68,6 +68,7 @@ Where an agent editor offers Browser, its control shall distinguish the agent's 
 - the control identifies an isolated browser on the computer running the session, never native desktop control;
 - enabling changes only the choice, while Set up, Check, Retry and Cancel invoke their separately supplied preparation actions;
 - preparing, ready and failed states display the host's supplied detail without inferring readiness from the choice or credentials;
+- a failed state's summary stays compact, with the complete diagnostic available through a keyboard-accessible disclosure that preserves lines and strips terminal formatting; long diagnostics scroll within their own box and leave Retry reachable;
 - an unsupported agent cannot be enabled, while a stale enabled choice can be cleared;
 - a conversation's inherited or changed choice is identified, with a supplied reset action returning to Settings;
 - disabled controls dispatch no change or preparation action.
@@ -293,7 +294,10 @@ When an in-place editor saves an agent-block tweak — the captain's or a player
 
 #### settings-43
 
-Where a rendered browser control receives capability and preparation updates from its host-facing owner, the integration suite shall verify independent choice and preparation actions, retained off state after successful preparation, reported progress and failure detail, cancellation, unsupported stale-choice clearing, conversation reset, disabled behavior and localized labels [[settings-42](#settings-42)].
+Where a rendered browser control receives capability and preparation updates from its host-facing owner, the integration suite shall verify independent choice and preparation actions, retained off state after successful preparation, reported progress and failure detail, cancellation, unsupported stale-choice clearing, conversation reset, disabled behavior and localized labels [[settings-42](#settings-42)]:
+
+- multiline terminal diagnostics remain completely readable through the disclosure, without terminal formatting, while a long first line cannot displace the summary or Retry;
+- the rendered failure control and expanded diagnostics fit at 320 pixels, with Retry still reachable.
 
 ### Model Options Coverage
 
@@ -337,6 +341,7 @@ When rendered editors exchange capability and browser preparation messages with 
 - known empty media output shows its limitation without blocking supported browser access, unknown output shows no unsupported claim, and stale capability replies cannot replace either state;
 - a served-browser journey shall verify unknown support and stale-choice clearing through the real core, including the editor at 320-pixel and 1280-pixel widths;
 - served-browser and Electron host acceptance shall perform native credential-free browser preparation from the UI and save an explicit choice, keeping successful setup separate from that choice; source and packaged Electron hosts shall each start with an independently empty managed browser cache and no external Node on PATH.
+- acceptance waits observe the current control's terminal outcome: ready continues, failure or explicit cancellation stops promptly with the complete displayed diagnostic, and an absent terminal outcome remains bounded; initial idle state never passes or fails preparation.
 
 ### Roster Coverage
 

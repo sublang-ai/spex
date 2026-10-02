@@ -33,6 +33,13 @@ export interface BrowserControlProps {
 const ACTION_CLASS =
   "min-h-6 rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800";
 
+// Terminal decoration has no meaning in browser text. Preserve the diagnostic
+// itself, including line breaks, without interpreting it as HTML or Markdown.
+function plainDiagnostic(text: string): string {
+  return text.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g, "");
+}
+
 export function BrowserControl({
   enabled,
   supported,
@@ -50,6 +57,10 @@ export function BrowserControl({
 }: BrowserControlProps) {
   const descriptionId = useId();
   const detailId = useId();
+  const detail = preparation.detail ? plainDiagnostic(preparation.detail) : undefined;
+  const firstLine = detail?.split(/\r?\n/).find((line) => line.trim().length) ?? "";
+  const expandedDetail = preparation.status === "failed" && !!detail && (detail.includes("\n") || detail.length > 240);
+  const summary = expandedDetail ? `${firstLine.slice(0, 240)}${firstLine.length > 240 ? "…" : ""}` : detail;
   const status = preparation.status === "preparing"
     ? i18n._("Preparing browser…")
     : preparation.status === "ready"
@@ -58,7 +69,7 @@ export function BrowserControl({
         ? i18n._("Browser setup failed")
         : i18n._("Browser not prepared");
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-700">
+    <div data-testid="browser-control" className="flex min-w-0 flex-col gap-1.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-700">
       <div className="flex flex-wrap items-center justify-between gap-1.5">
         <label className="inline-flex min-h-6 items-center gap-2 text-sm">
           <input
@@ -87,12 +98,16 @@ export function BrowserControl({
         {supported ? (
           <>
             <p className={preparation.status === "failed" ? "text-red-600 dark:text-red-400" : "text-neutral-500 dark:text-neutral-400"}>{status}</p>
-            {preparation.detail ? <p className="mt-0.5 text-neutral-600 dark:text-neutral-300">{preparation.detail}</p> : null}
+            {summary ? <p data-testid={!expandedDetail ? "browser-diagnostic" : undefined} className="mt-0.5 text-neutral-600 dark:text-neutral-300">{summary}</p> : null}
           </>
         ) : (
           <p className="text-neutral-500 dark:text-neutral-400">{unsupportedReason ?? i18n._("This agent does not support browser tools")}</p>
         )}
       </div>
+      {supported && expandedDetail ? <details className="min-w-0 text-xs">
+        <summary className="cursor-pointer py-1">{i18n._("More details")}</summary>
+        <pre data-testid="browser-diagnostic" className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-neutral-100 p-2 [overflow-wrap:anywhere] dark:bg-neutral-900">{detail}</pre>
+      </details> : null}
       <div className="flex flex-wrap gap-1.5">
         {supported && preparation.status !== "preparing" ? (
           <button type="button" disabled={disabled} onClick={onPrepare} className={ACTION_CLASS}>
