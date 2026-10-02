@@ -9,10 +9,11 @@
 // pure-data module that imports nothing of its own.
 
 import { z } from "zod";
-import type { TmuxPlayRecord as RuntimeRecord } from "@sublang/cligent/tmux-play";
+import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetupProgress, BrowserSetupResult } from "@sublang/cligent";
+import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 21;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -21,7 +22,7 @@ export { PIPELINE_PHASES, phaseLabel } from "./phases.js";
 /** An offered interface language (localization-1, DR-078). The
  * resolution both shells share lives in the `language` entry point,
  * which the UI imports as it imports this one. */
-export type { Language };
+export type { Language, ApprovalDecision, ApprovalRequest, AgentCapabilities, BrowserSetupProgress, BrowserSetupResult };
 
 export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 
@@ -30,6 +31,55 @@ export type TmuxPlayRecord = RuntimeRecord & {contextSeq?: number};
 export function hasPresentationHeader(record: TmuxPlayRecord): boolean {
   return typeof record.type === "string" && Number.isFinite(record.timestamp);
 }
+
+/** App transfer limits; selected providers may impose lower limits. */
+export const MEDIA_MAX_FILE_BYTES = 100 * 1024 * 1024;
+export const MEDIA_CHUNK_BYTES = 64 * 1024;
+export const MEDIA_MAX_TURN_FILES = 16;
+export const MEDIA_MAX_TURN_BYTES = 256 * 1024 * 1024;
+export const mediaAssetSchema = z.object({
+  assetId: z.string().regex(/^sha256:[0-9a-f]{64}$/).transform((value) => value as `sha256:${string}`),
+  byteLength: z.number().int().nonnegative().max(MEDIA_MAX_FILE_BYTES),
+  mimeType: z.string().max(127).regex(/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/),
+  name: z.string().min(1).max(1024).refine((value) => value.trim().length > 0 && !/[\x00-\x1f\x7f]/.test(value)).optional(),
+}).strict();
+/** Wire-validated form of Playbook's SessionAssetRef. */
+export type MediaAsset = z.infer<typeof mediaAssetSchema>;
+export const mediaOwnerSchema = z.discriminatedUnion("kind", [
+  z.object({kind: z.literal("project"), id: z.string().uuid()}).strict(),
+  z.object({kind: z.literal("draft"), id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
+  z.object({kind: z.literal("session"), id: z.string().min(1)}).strict(),
+]);
+export type MediaOwner = z.infer<typeof mediaOwnerSchema>;
+export type MediaUploadOwner = Exclude<MediaOwner, {kind: "session"}>;
+export const mediaAttachmentsSchema = z.array(mediaAssetSchema).max(MEDIA_MAX_TURN_FILES)
+  .refine((files) => files.reduce((total, file) => total + file.byteLength, 0) <= MEDIA_MAX_TURN_BYTES);
+export interface MessageContent { text: string; attachments?: readonly MediaAsset[] }
+export interface MediaUploadState { uploadId: string; offset: number; asset?: MediaAsset }
+
+/** Live native authority, never reconstructed from the record stream. */
+export const approvalOwnerSchema = z.discriminatedUnion("kind", [
+  z.object({kind: z.literal("session"), id: z.string().min(1)}).strict(),
+  z.object({kind: z.literal("draft"), id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
+]);
+export type ApprovalOwner = z.infer<typeof approvalOwnerSchema>;
+export interface PendingApproval {
+  id: string;
+  owner: ApprovalOwner;
+  ownerLabel: string;
+  projectName?: string;
+  turnId: number;
+  actorId: string;
+  invocationId: string;
+  request: ApprovalRequest;
+}
+export interface ApprovalState {
+  generation: string;
+  revision: number;
+  pending: readonly PendingApproval[];
+}
+export interface ApprovalAcknowledgement {decision: ApprovalDecision}
+export interface ApprovalStateMessage {type: "approval.state"; state: ApprovalState}
 
 // ---------------------------------------------------------------------------
 // Shared shapes
@@ -71,6 +121,8 @@ export interface AgentSummary {
   subagentEffort?: string;
   instruction?: string;
   permissions?: AgentPermissionsSummary;
+  /** Isolated browser on the execution host; omission is off. */
+  browser?: boolean;
 }
 
 /** A session player: an identity-bearing lane, with the roles that
@@ -112,6 +164,8 @@ export interface SessionAgentSettings {
    * (DR-095). */
   subagentEffort?: string | false;
   fastMode?: boolean;
+  /** Explicit browser capability for the next turn; omission inherits configuration. */
+  browser?: boolean;
 }
 
 /** A session's own agent settings, keyed by agent id — the reserved
@@ -467,6 +521,7 @@ export interface IntentInfo {
   projectId: string;
   /** The future Boss turn; its first line is the display title. */
   text: string;
+  attachments?: readonly MediaAsset[];
   source?: IntentSource;
   /** Lexicographic order key; position is priority. */
   rank: string;
@@ -589,6 +644,8 @@ export const agentBlockSchema = z.object({
   subagentEffort: z.string().optional(),
   effort: z.string().optional(),
   instruction: z.string().optional(),
+  browser: z.boolean().optional(),
+  fastMode: z.boolean().optional(),
   permissions: z
     .object({
       mode: z.string().optional(),
@@ -613,6 +670,7 @@ export const agentPatchSchema = z.object({
   effort: z.string().nullable().optional(),
   fastMode: z.boolean().nullable().optional(),
   instruction: z.string().nullable().optional(),
+  browser: z.boolean().nullable().optional(),
   permissions: z
     .object({
       mode: z.string().nullable().optional(),
@@ -700,7 +758,30 @@ export type SpaceChoice = z.infer<typeof spaceChoiceSchema>;
  * so no client can store a language the interface cannot speak. */
 const languageChoiceSchema = z.enum(LANGUAGES).nullable();
 
+const capabilityAgentSchema = agentBlockSchema.extend({adapter: adapterNameSchema});
+const capabilityContextSchema = mediaOwnerSchema.refine((owner) => owner.kind !== "session");
+
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({type: z.literal("approval.list"), id}).strict(),
+  z.object({type: z.literal("approval.respond"), id, generation: z.string().uuid(),
+    requestId: z.string().uuid(), owner: approvalOwnerSchema,
+    decision: z.enum(["allow_once", "deny"])}).strict(),
+  z.object({ type: z.literal("agent.capabilities"), id, agent: capabilityAgentSchema,
+    context: capabilityContextSchema.optional() }).strict(),
+  z.object({ type: z.literal("browser.prepare"), id, operationId: z.string().uuid(), agent: capabilityAgentSchema,
+    context: capabilityContextSchema.optional() }).strict(),
+  z.object({ type: z.literal("browser.cancel"), id, operationId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("media.begin"), id, uploadId: z.string().uuid(),
+    owner: mediaOwnerSchema.refine((owner) => owner.kind !== "session"),
+    name: mediaAssetSchema.shape.name.unwrap(), mimeType: mediaAssetSchema.shape.mimeType,
+    byteLength: mediaAssetSchema.shape.byteLength }).strict(),
+  z.object({ type: z.literal("media.chunk"), id, uploadId: z.string().uuid(),
+    offset: z.number().int().nonnegative(), data: z.string().max(Math.ceil(MEDIA_CHUNK_BYTES / 3) * 4) }).strict(),
+  z.object({ type: z.literal("media.finish"), id, uploadId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("media.cancel"), id, uploadId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("media.read"), id, owner: mediaOwnerSchema,
+    assetId: mediaAssetSchema.shape.assetId, offset: z.number().int().nonnegative(),
+    length: z.number().int().positive().max(MEDIA_CHUNK_BYTES) }).strict(),
   z.object({ type: z.literal("config.get"), id }),
   z.object({ type: z.literal("readiness.get"), id }),
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
@@ -733,7 +814,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("turn.submit"),
     id,
     sessionId: z.string().min(1),
-    text: z.string().min(1),
+    text: z.string(),
+    attachments: mediaAttachmentsSchema.optional(),
     /** The staged intent this turn dispatches (DR-035): validated,
      * then stamped when the turn starts — never on a submission that
      * starts no turn. */
@@ -765,6 +847,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
     fastMode: z.boolean().nullable().optional(),
+    browser: z.boolean().nullable().optional(),
   }).strict(),
   z.object({ type: z.literal("turn.abort"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("subscribe"), id, channel: channelSchema }),
@@ -830,7 +913,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("intent.queue"),
     id,
     projectId: z.string().min(1),
-    text: z.string().min(1),
+    text: z.string(),
+    attachments: mediaAttachmentsSchema.optional(),
     source: z
       .object({
         kind: z.enum(["issue", "pr", "record", "chat"]),
@@ -846,7 +930,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("intent.edit"),
     id,
     intentId: z.string().min(1),
-    text: z.string().min(1),
+    text: z.string(),
+    attachments: mediaAttachmentsSchema.optional(),
   }),
   z.object({
     type: z.literal("intent.move"),
@@ -940,7 +1025,8 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("draft.send"),
     id,
     draftId: draftIdSchema,
-    text: z.string().min(1),
+    text: z.string(),
+    attachments: mediaAttachmentsSchema.optional(),
   }),
   z.object({ type: z.literal("draft.abort"), id, draftId: draftIdSchema }),
   z.object({
@@ -982,6 +1068,16 @@ export type CommandType = Command["type"];
 
 /** Reply result payload per command type. */
 export interface CommandResults {
+  "agent.capabilities": AgentCapabilities;
+  "approval.list": ApprovalState;
+  "approval.respond": ApprovalAcknowledgement;
+  "browser.prepare": BrowserSetupResult;
+  "browser.cancel": { canceled: boolean };
+  "media.begin": MediaUploadState;
+  "media.chunk": MediaUploadState;
+  "media.finish": MediaUploadState & {asset: MediaAsset};
+  "media.cancel": {canceled: boolean};
+  "media.read": {asset: MediaAsset; offset: number; data: string; eof: boolean};
   "config.get": ConfigState;
   "readiness.get": ReadinessEntry[];
   "agent.options": AgentOptions;
@@ -1138,7 +1234,7 @@ export interface DraftInfo {
   activity: DraftActivity;
   state: DraftState;
   /** Boss messages waiting for the draft to go idle, in order. */
-  queued: string[];
+  queued: MessageContent[];
   /** The roster player answering; null = the Captain's block. */
   player: string | null;
   /** What effectively answers. */
@@ -1575,7 +1671,11 @@ export interface DraftRemovedMessage {
   draftId: string;
 }
 
+export interface BrowserProgressMessage { type: "browser.progress"; operationId: string; progress: BrowserSetupProgress }
+
 export type ServerMessage =
+  | ApprovalStateMessage
+  | BrowserProgressMessage
   | HelloMessage
   | ReplyMessage
   | RecordMessage
@@ -1612,7 +1712,14 @@ export function parseCommand(raw: unknown): ParseCommandResult {
     }
   }
   const result = commandSchema.safeParse(value);
-  if (result.success) return { ok: true, command: result.data };
+  if (result.success) {
+    const command = result.data;
+    if ((command.type === "turn.submit" || command.type === "intent.queue" || command.type === "draft.send") &&
+      command.text.length === 0 && !command.attachments?.length) {
+      return { ok: false, error: "text or an attachment is required", id: command.id };
+    }
+    return { ok: true, command };
+  }
   const maybeId =
     typeof value === "object" &&
     value !== null &&

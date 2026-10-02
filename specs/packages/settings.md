@@ -59,6 +59,31 @@ Where the Settings surface is open, the Settings surface shall offer adding a se
 
 - The seeded block is a complete, deliberate choice, so an untouched draft is savable.
 
+### Browser Capability
+
+#### settings-42
+
+Where an agent editor offers Browser, its control shall distinguish the agent's explicit tool-enabled choice from the execution host's reported preparation state ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)):
+
+- the control identifies an isolated browser on the computer running the session, never native desktop control;
+- enabling changes only the choice, while Set up, Check, Retry and Cancel invoke their separately supplied preparation actions;
+- preparing, ready and failed states display the host's supplied detail without inferring readiness from the choice or credentials;
+- an unsupported agent cannot be enabled, while a stale enabled choice can be cleared;
+- a conversation's inherited or changed choice is identified, with a supplied reset action returning to Settings;
+- disabled controls dispatch no change or preparation action.
+
+#### settings-44
+
+When an agent editor or conversation settings opens, the UI shall bind its browser control to the core's contextual capability and preparation protocol [[media-7](media.md#media-7)] [[media-8](media.md#media-8)] through these rules:
+
+- query the proposed agent settings and selected project or draft context, rechecking after relevant edits and discarding stale replies;
+- report known tool-approval transport support separately from browser admission and preserve unknown facts [[approvals-6](approvals.md#approvals-6)];
+- show a known empty media-output source set as a screenshot-return limitation alongside the control without disabling supported browser tools, while absent output facts remain unknown;
+- persist Browser only through the editor's ordinary explicit save, preserving false and conversation reset-to-configuration semantics [[media-9](media.md#media-9)];
+- keep preparation separate from enabling, relay progress and diagnostic detail, allow retry and cancellation, and cancel owned work on close or context change;
+- offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice;
+- leave unknown or unsupported capabilities disabled for new admission, allow a stale enabled choice to be cleared, and preserve other editor values after failure.
+
 ### Model and Tuning Options
 
 #### settings-34
@@ -264,6 +289,12 @@ When an in-place editor saves an agent-block tweak — the captain's or a player
 
 ## Verification
 
+### Browser Control Coverage
+
+#### settings-43
+
+Where a rendered browser control receives capability and preparation updates from its host-facing owner, the integration suite shall verify independent choice and preparation actions, retained off state after successful preparation, reported progress and failure detail, cancellation, unsupported stale-choice clearing, conversation reset, disabled behavior and localized labels [[settings-42](#settings-42)].
+
 ### Model Options Coverage
 
 #### settings-36
@@ -298,6 +329,14 @@ Where validation is exercised, given fixture edits the playbook launcher rejects
 #### settings-19
 
 Where adapter readiness is exercised, given fixture environments and home directories covering each launcher rule (credential environment variable set, credential directory present, both absent) and a config referencing one adapter from several positions, the test suite shall assert that the readiness results delivered over the protocol match the expected state per adapter as one deduplicated entry naming its positions [[settings-14](#settings-14)], that an adapter with no preflight rule reports null readiness with verify-yourself guidance [[settings-14](#settings-14)], and that each not-ready result includes fix instructions naming the environment variable or login step [[settings-5](#settings-5)].
+
+#### settings-45
+
+When rendered editors exchange capability and browser preparation messages with a fixture core client, integration verification shall assert contextual requests, stale-result suppression, scoped progress, cancellation and retry, unchanged choices after setup, explicit shared saves and conversation false/null overrides, and authoring preparation without configuration writes [[settings-44](#settings-44)]:
+
+- known empty media output shows its limitation without blocking supported browser access, unknown output shows no unsupported claim, and stale capability replies cannot replace either state;
+- a served-browser journey shall verify unknown support and stale-choice clearing through the real core, including the editor at 320-pixel and 1280-pixel widths;
+- served-browser and Electron host acceptance shall perform native credential-free browser preparation from the UI and save an explicit choice, keeping successful setup separate from that choice; source and packaged Electron hosts shall each start with an independently empty managed browser cache and no external Node on PATH.
 
 ### Roster Coverage
 

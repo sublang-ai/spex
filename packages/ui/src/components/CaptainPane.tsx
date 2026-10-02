@@ -15,9 +15,11 @@ import { FailureCard, type FailureContext } from "./FailureCard.js";
 import { parkedFailure } from "../lib/machine-frames.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
 import { currentLocale, i18n } from "../i18n.js";
+import { mediaOrigin } from "../lib/media.js";
 import { useClock } from "../lib/useClock.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { latestCall } from "./PlayerPane.js";
+import { StoredMedia } from "./StoredMedia.js";
 import { Markdown } from "./Markdown.js";
 import { MachineCard } from "./MachineCard.js";
 import { AgentChipButton } from "./AgentSettings.js";
@@ -123,6 +125,10 @@ export function ThreadLine({
       ) : (
         <SystemLine text={line.text} title={time} />
       );
+    case "media":
+      return line.evidence ? <StoredMedia asset={line.evidence.asset} origin={mediaOrigin({
+        ...line.evidence.origin, turnId: line.evidence.turnId, callId: line.evidence.callId,
+      }, "playbook")} /> : null;
     case "boss":
       return (
         <div className="flex items-end justify-end gap-2" title={time}>
@@ -143,6 +149,7 @@ export function ThreadLine({
             <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
               {withoutTrailingUrl(line.text, source?.url)}
             </span>
+            {line.attachments?.map((asset, index) => <StoredMedia key={`${asset.assetId}:${index}`} asset={asset} />)}
           </div>
         </div>
       );

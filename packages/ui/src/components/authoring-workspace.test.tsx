@@ -537,7 +537,7 @@ describe("playbook-library-52: the workspace replaces the list", () => {
   test("every control in the header, tab strip, band, and action row holds the 14-character budget", async () => {
     const states: [DraftInfo, string[] | undefined][] = [
       [draftInfo({ state: "no-source", firstLine: null }), undefined],
-      [draftInfo({ activity: "turn", queued: ["later"] }), undefined],
+      [draftInfo({ activity: "turn", queued: [{ text: "later" }] }), undefined],
       [
         draftInfo({ activity: "compiling", state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }),
         ["→ normalize (writing a)"],
@@ -859,7 +859,7 @@ describe("playbook-library-53: the conversation pane", () => {
     });
     const failure = within(screen.getByTestId("draft-thread")).getByTestId("player-failure");
     expect(failure.textContent).toContain("Asked permission to use Bash — runs outside the sandbox");
-    expect(failure.textContent).toContain("Spex answers no permission request");
+    expect(failure.textContent).toContain("historical permission event; no live answer is available");
   });
 });
 
@@ -899,7 +899,7 @@ describe("playbook-library-54: the composer", () => {
   });
 
   test("a turn: Send next, its placeholder, Abort, and the queue frame", async () => {
-    renderWorkspace(draftInfo({ activity: "turn", queued: ["Also cite the label definitions"] }), { view: foldView(THREAD.slice(0, 5)) });
+    renderWorkspace(draftInfo({ activity: "turn", queued: [{ text: "Also cite the label definitions" }] }), { view: foldView(THREAD.slice(0, 5)) });
     const field = screen.getByTestId("draft-composer") as HTMLTextAreaElement;
     expect(field.placeholder).toBe("Sends after the reply…");
     expect(screen.getByTestId("draft-send").textContent).toBe("Send next");
@@ -915,7 +915,7 @@ describe("playbook-library-54: the composer", () => {
 
   test("a compile: the placeholder names it and the queue says so", () => {
     renderWorkspace(
-      draftInfo({ activity: "compiling", state: "compiling", queued: ["one more thing"], compile: { at: now, by: "boss", outcome: "running" } }),
+      draftInfo({ activity: "compiling", state: "compiling", queued: [{ text: "one more thing" }], compile: { at: now, by: "boss", outcome: "running" } }),
       { view: foldView(THREAD) },
     );
     expect((screen.getByTestId("draft-composer") as HTMLTextAreaElement).placeholder).toBe("Sends after the compile…");
@@ -1373,4 +1373,15 @@ describe("playbook-library-62: restore on open", () => {
     expect(screen.getByTestId("compile-caption").textContent).toBe("sent to the agent");
     expect(screen.getByTestId("source-markdown").textContent).toContain("Fixed.");
   });
+});
+
+
+test("run-view-159: authoring queues an attachment-only message and clears only acknowledged files", async () => {
+  const asset = { assetId: `sha256:${"c".repeat(64)}` as const, name: "flow.png", mimeType: "image/png", byteLength: 4 };
+  renderWorkspace(draftInfo({ activity: "turn", queued: [{ text: "", attachments: [asset] }] }), { view: foldView(THREAD.slice(0, 5)) });
+  expect(screen.getByTestId("draft-queue").textContent).toContain("flow.png");
+  act(() => useAppStore.getState().stageAttachmentAssets("draft:triage", { kind: "draft", id: "triage" }, [asset]));
+  fireEvent.click(screen.getByTestId("draft-send"));
+  await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.send", { draftId: "triage", text: "", attachments: [asset] }));
+  await vi.waitFor(() => expect(useAppStore.getState().attachmentDrafts["draft:triage"]).toEqual([]));
 });

@@ -7,7 +7,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
-import { UUID, parsePrefs, readJsonFile, StorageFormatError, validateApplicationTree, validateIntentDispatches, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
+import { UUID, parseIntentLog, parsePrefs, readJsonFile, StorageFormatError, validateApplicationTree, validateIntentDispatches, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
 
 export type StorageChoice = "ours" | "theirs";
 /** One whole-unit selection subject (storage-11): a session bundle, a
@@ -30,8 +30,10 @@ const revision = (home: string, ref: string): string => git(home, ["rev-parse", 
 export const portable = (file: string): boolean => !/^(local\/|\.lock|prefs\.json$|meta\.json$|forge-cache\.json$)/.test(file) && !/\.(hints|spex)\.json$|\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 /** The unit a tracked path belongs to (storage-11, space-33). */
 export function storageUnitName(file: string): string {
-  const session = /^sessions\/([^/]+?)(?:\.records\.jsonl|\.json)$/.exec(file);
+  const session = /^sessions\/([^/]+?)(?:\.records\.jsonl$|\.json$|\.assets\/)/.exec(file);
   if (session && UUID.test(session[1])) return `sessions/${session[1]}`;
+  const intent = /^intents\/([^/]+?)(?:\.jsonl$|\.assets\/)/.exec(file);
+  if (intent && UUID.test(intent[1])) return `intents/${intent[1]}.jsonl`;
   const playbook = /^playbooks\/([^/]+)\/./.exec(file);
   return playbook ? `playbooks/${playbook[1]}` : file;
 }
@@ -55,6 +57,7 @@ export function planStorageUnits(trees: StorageTrees): StorageMergeUnit[] {
     const name = storageUnitName(file);
     const files = groups.get(name) ?? new Set<string>(); files.add(file);
     if (name.startsWith("sessions/") && name !== file) { files.add(`${name}.json`); files.add(`${name}.records.jsonl`); }
+    if (/^intents\/[0-9a-f-]{36}\.jsonl$/.test(name)) files.add(name);
     groups.set(name, files);
   }
   return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, group]) => {
@@ -116,6 +119,25 @@ function copySafe(source: string, target: string): void {
 /** Public Playbook validation is the only authority for session bytes. */
 export async function validateStorageTree(home: string, selectedSessionIds?: ReadonlySet<string>): Promise<StorageDiagnostic[]> {
   const app = validateApplicationTree(home); const diagnostics = [...app.diagnostics];
+  const { createAssetStore } = await import("@sublang/playbook/session-assets");
+  const intentsDir = join(home, "intents");
+  const intentOwners = new Set((existsSync(intentsDir) ? readdirSync(intentsDir) : [])
+    .filter((file) => /^[0-9a-f-]{36}\.(?:jsonl|assets)$/.test(file))
+    .map((file) => file.replace(/\.(?:jsonl|assets)$/, "")));
+  for (const projectId of intentOwners) {
+    const file = `${projectId}.jsonl`;
+    const assetStore = createAssetStore({directory: join(intentsDir, `${projectId}.assets`)});
+    try {
+      await assetStore.prepare();
+      await assetStore.listAssets();
+      for (const act of existsSync(join(intentsDir, file)) ? parseIntentLog(readFileSync(join(intentsDir, file), "utf8"), projectId, file) : []) {
+        const refs = act.act === "queue" ? act.intent.attachments : act.act === "edit" ? act.attachments : undefined;
+        for (const ref of refs ?? []) { const reader = await assetStore.openAsset(ref); await reader.close(); }
+      }
+    } catch (cause) {
+      throw new StorageFormatError(`intents/${file}`, cause instanceof Error ? cause.message : String(cause));
+    }
+  }
   const config = join(home, "config", "playbook.config.yaml");
   if (existsSync(config)) {
     const document = parseDocument(readFileSync(config, "utf8"));
@@ -143,6 +165,7 @@ export async function validateStorageTree(home: string, selectedSessionIds?: Rea
     }
     const manifest = validateSessionManifest(result.manifest);
     if (!result.integrityValid) throw new StorageFormatError(file, result.history.damage?.reason ?? "session replay is missing, damaged or disagrees with its checkpoint");
+    await store.exportBundle(id);
     const bindings = app.bindings.filter((b) => b.path === manifest.cwd || b.aliases.includes(manifest.cwd));
     const bound = bindings.length === 1 && app.projects.some((p) => p.id === bindings[0].id) ? bindings[0].id : undefined;
     if (!bound) diagnostics.push({ file: `sessions/${file}`, reason: `unresolved project working directory ${manifest.cwd}`, blocking: false });
@@ -195,7 +218,12 @@ export async function applyStorageSelection(home_: string, plan: StorageMergePla
     for (const unit of plan.units) {
       const files = trees[selected.get(unit.name) as StorageChoice];
       if (unit.name.startsWith("sessions/") && !equal(priorFiles, files, unit.paths)) changedSessions.add(unit.name);
-      if (unit.name.startsWith("sessions/") && unit.paths.length === 2 && unit.paths.filter((p) => files.has(p)).length === 1) throw new StorageFormatError(unit.name, "selected session requires both manifest and replay from one revision");
+      if (/^sessions\/[0-9a-f-]{36}$/.test(unit.name)) {
+        const manifest = files.has(`${unit.name}.json`);
+        const replay = files.has(`${unit.name}.records.jsonl`);
+        const assets = unit.paths.some((path) => path.startsWith(`${unit.name}.assets/`) && files.has(path));
+        if (manifest !== replay || (assets && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete manifest, replay and asset bundle");
+      }
       for (const file of unit.paths) {
         const target = join(stage, file); const oid = files.get(file);
         if (oid === undefined) rmSync(target, { force: true });
@@ -216,8 +244,14 @@ export async function applyStorageSelection(home_: string, plan: StorageMergePla
       if (existsSync(target) && (!lstatSync(target).isFile() || lstatSync(target).isSymbolicLink() || lstatSync(target).nlink !== 1)) throw new StorageFormatError(file, "unsafe destination");
     }
     options.beforeWrite?.();
+    const {createAssetStore} = await import("@sublang/playbook/session-assets");
+    const assetDirectories = new Set(plan.units.flatMap((unit) => unit.paths)
+      .filter((path) => path.includes(".assets/"))
+      .map((path) => path.slice(0, path.indexOf(".assets/") + ".assets".length)));
+    for (const directory of assetDirectories) await createAssetStore({directory: join(home, directory)}).prepare();
     for (const unit of plan.units) {
-      const ordered = [...unit.paths].sort((a, b) => Number(a.endsWith(".records.jsonl")) === Number(b.endsWith(".records.jsonl")) ? a.localeCompare(b) : a.endsWith(".records.jsonl") ? -1 : 1);
+      const publicationOrder = (path: string) => path.includes(".assets/") ? 0 : path.endsWith(".records.jsonl") ? 1 : 2;
+      const ordered = [...unit.paths].sort((a, b) => publicationOrder(a) - publicationOrder(b) || a.localeCompare(b));
       for (const file of ordered) {
         const target = join(home, file); const prepared = join(stage, file);
         if (existsSync(target) && (!lstatSync(target).isFile() || lstatSync(target).isSymbolicLink() || lstatSync(target).nlink !== 1)) throw new StorageFormatError(file, "unsafe destination");
@@ -269,7 +303,7 @@ export function prepareStorageGitFiles(home: string, unsupportedPaths: string[] 
     if (file.startsWith("/") || file.split("/").includes("..") || /[\r\n\0*?\[\]\\]/.test(file)) throw new Error(`unsafe ignore path ${file}`);
     return `/${file}`;
   });
-  const attributes = ["*.json -text", "*.jsonl -text"];
+  const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/*.assets/** -text"];
   const begin = "# BEGIN Spex managed storage rules";
   const end = "# END Spex managed storage rules";
   for (const [name, generated] of [[".gitignore", ignores], [".gitattributes", attributes]] as const) {

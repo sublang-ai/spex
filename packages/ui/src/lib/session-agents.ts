@@ -8,6 +8,7 @@
 import {
   CAPTAIN_AGENT_ID,
   type AdapterName,
+  type AgentSummary,
   type AgentReportedModel,
   type ConfigSummary,
   type SessionAgentSettings,
@@ -33,7 +34,7 @@ export interface SessionAgent {
   /** What the reader calls it: "Captain", or the player's own id. */
   name: string;
   adapter: AdapterName;
-  configured: { model?: string; subagentModel?: string | false; effort?: string; subagentEffort?: string; fastMode?: boolean };
+  configured: Omit<AgentSummary, "adapter">;
   settings?: SessionAgentSettings;
   /** `<playbook>.<role>` for every binding that tunes this player of
    * its own accord — one session tuning runs them all alike. */
@@ -54,6 +55,7 @@ export function effectiveSettings(agent: SessionAgent): {
   effort?: string;
   subagentEffort?: string;
   fastMode?: boolean;
+  browser?: boolean;
 } {
   const pick = (chosen: string | false | undefined, configured: string | undefined): string | undefined =>
     chosen === false ? providerDefaultReading() : chosen ?? configured;
@@ -62,6 +64,7 @@ export function effectiveSettings(agent: SessionAgent): {
   const subagentModel = agent.settings?.subagentModel !== undefined ? agent.settings.subagentModel : agent.configured.subagentModel;
   const subagentEffort = agent.settings?.subagentEffort === false ? undefined : agent.settings?.subagentEffort ?? agent.configured.subagentEffort;
   return {
+    browser: agent.settings?.browser ?? agent.configured.browser ?? false,
     ...(pick(agent.settings?.model, agent.configured.model) !== undefined ? { model: pick(agent.settings?.model, agent.configured.model) } : {}),
     ...(subagentModel !== undefined ? { subagentModel } : {}),
     ...(subagentEffort !== undefined ? { subagentEffort } : {}),
@@ -107,6 +110,7 @@ export function changedFields(settings: SessionAgentSettings | undefined): strin
   if (settings.effort !== undefined) named.push("effort");
   if (settings.subagentEffort !== undefined) named.push("subagent effort");
   if (settings.fastMode !== undefined) named.push("fast mode");
+  if (settings.browser !== undefined) named.push("browser");
   return named;
 }
 
@@ -129,6 +133,8 @@ export function sessionAgents(
     name,
     adapter,
     configured: {
+      ...(block?.browser !== undefined ? { browser: block.browser } : {}),
+      ...(block?.permissions !== undefined ? { permissions: block.permissions } : {}),
       ...(block?.model !== undefined ? { model: block.model } : {}),
       ...(block?.subagentModel !== undefined ? { subagentModel: block.subagentModel } : {}),
       ...(block?.subagentEffort !== undefined ? { subagentEffort: block.subagentEffort } : {}),

@@ -18,6 +18,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { duration } from "../lib/time.js";
+import { contentTitle } from "../lib/message-content.js";
 import { i18n } from "../i18n.js";
 import { Rich } from "./Rich.js";
 import {
@@ -28,7 +29,7 @@ import {
 
 /** The first line of the intent's text is its display title (DR-035). */
 export function intentTitle(intent: IntentInfo): string {
-  return intent.text.split(/\r?\n/, 1)[0] ?? intent.text;
+  return contentTitle(intent);
 }
 
 const SOURCE_LABEL: Record<IntentSource["kind"], (ref: string) => string> = {

@@ -23,6 +23,7 @@ export interface AgentBlock {
   subagentEffort?: string;
   effort?: string;
   fastMode?: boolean;
+  browser?: boolean;
   instruction?: string;
   permissions?: {
     mode?: string;
@@ -44,6 +45,7 @@ export type AgentPatch = {
   effort?: string | null;
   /** `true`/`false` write the key; null removes it (DR-038). */
   fastMode?: boolean | null;
+  browser?: boolean | null;
   instruction?: string | null;
   permissions?: AgentBlock["permissions"] | null;
 };

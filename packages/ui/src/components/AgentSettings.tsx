@@ -13,7 +13,7 @@
 // kept by there being no path that could.
 
 import { useState, type RefObject } from "react";
-import type { SessionAgentSettings } from "@sublang/spex-core/protocol";
+import type { MediaUploadOwner, SessionAgentSettings } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
 import { i18n } from "../i18n.js";
@@ -27,6 +27,8 @@ import {
   type SessionAgent,
 } from "../lib/session-agents.js";
 import { FAST_MODE_MARK, fastModeWord } from "./AgentChip.js";
+import { useBrowserTools } from "../lib/useBrowserTools.js";
+import { BrowserControl } from "./BrowserControl.js";
 import { TuningField } from "./TuningField.js";
 
 /** What this conversation's own choice departs from, named where the
@@ -55,6 +57,7 @@ export interface AgentSettingsChange {
   effort?: string | false | null;
   subagentEffort?: string | false | null;
   fastMode?: boolean | null;
+  browser?: boolean | null;
 }
 
 /** What an agent runs, as a chip reads it: the model its runtime
@@ -140,6 +143,7 @@ export function AgentChipButton({
  * scope — the role-binding editor's shape, one scope over. */
 export function AgentSettingsPopover({
   agent,
+  context,
   side = "left",
   readOnly,
   anchorRef,
@@ -147,6 +151,7 @@ export function AgentSettingsPopover({
   onClose,
 }: {
   agent: SessionAgent;
+  context?: MediaUploadOwner;
   /** Which edge of its anchor the editor hangs from. */
   side?: "left" | "right";
   /** A conversation another host owns, or history the core cannot
@@ -162,6 +167,15 @@ export function AgentSettingsPopover({
   const boxRef = usePopover<HTMLDivElement>(true, { anchorRef, onClose });
   useFitInBox(boxRef);
 
+  const browserTools = useBrowserTools({
+    ...agent.configured,
+    adapter: agent.adapter,
+    model: draft.model === false ? undefined : draft.model ?? agent.configured.model,
+    subagentModel: draft.subagentModel ?? agent.configured.subagentModel,
+    effort: draft.effort === false ? undefined : draft.effort ?? agent.configured.effort,
+    subagentEffort: draft.subagentEffort === false ? undefined : draft.subagentEffort ?? agent.configured.subagentEffort,
+    fastMode: draft.fastMode ?? agent.configured.fastMode,
+  }, context);
   const discovery = useAgentOptions(agent.adapter);
   const pinnedModel = draft.model === false ? "" : draft.model ?? agent.configured.model ?? "";
   const tuning = modelTuning(discovery.options, pinnedModel);
@@ -281,6 +295,14 @@ export function AgentSettingsPopover({
         </label>
       )}
 
+      <BrowserControl enabled={draft.browser ?? agent.configured.browser ?? false}
+        supported={browserTools.supported} unsupportedReason={browserTools.unsupportedReason} outputNote={browserTools.outputNote} approvalNote={browserTools.approvalNote}
+        preparation={browserTools.preparation} inherited={draft.browser === undefined} disabled={readOnly || busy}
+        onChange={(browser) => setDraft((current) => ({ ...current, browser }))}
+        onReset={() => setDraft((current) => ({ ...current, browser: undefined }))}
+        onPrepare={browserTools.prepare} onCancel={browserTools.cancel} />
+      {browserTools.capabilityError && <button type="button" disabled={readOnly || busy} onClick={browserTools.refresh} className="self-start text-xs underline">{i18n._("Retry browser support check")}</button>}
+
       {agent.divergentRoles.length > 0 ? (
         <p data-testid={`agent-roles-${agent.id}`} className="text-xs text-brand-700 dark:text-brand-300">
           {i18n._("Also sets {positions}", { positions: agent.divergentRoles.join(", ") })}
@@ -327,7 +349,7 @@ export function AgentSettingsPopover({
           <button
             type="button"
             data-testid={`agent-save-${agent.id}`}
-            disabled={busy || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
+            disabled={busy || ((draft.browser ?? agent.configured.browser ?? false) && !browserTools.supported) || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
             onClick={() => {
               setBusy(true);
               setError(undefined);
@@ -337,6 +359,7 @@ export function AgentSettingsPopover({
                 effort: draft.effort ?? null,
                 subagentEffort: draft.subagentEffort ?? null,
                 fastMode: draft.fastMode ?? null,
+                browser: draft.browser ?? null,
               }))
                 .then(() => onClose())
                 .catch((cause: Error) => { setError(cause.message); setBusy(false); });

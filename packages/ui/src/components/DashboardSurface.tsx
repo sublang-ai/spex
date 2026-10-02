@@ -25,13 +25,13 @@ import { useAppStore } from "../state/store.js";
 import { causePhrase } from "../lib/failure-catalogue.js";
 import { absoluteTitle, duration, relativeAge } from "../lib/time.js";
 import { i18n } from "../i18n.js";
+import { intentTitle } from "./DeliveryCard.js";
 import { Rich } from "./Rich.js";
 import { RunningMark } from "./RunningMark.js";
 import { QueueStandingPhrase } from "./QueuedIntentPresentation.js";
 import {
   ProjectGroup,
   TONE_CHIP,
-  firstLine,
   queueOf,
   runningPlayer,
   sessionStatus,
@@ -702,14 +702,14 @@ export function DashboardSurface({
                           ? i18n._(
                               "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>",
                               {
-                                title: firstLine(nextHead.intent.text),
+                                title: intentTitle(nextHead.intent),
                                 project: projectName(nextHead.intent.projectId),
                               },
                             )
                           : i18n._(
                               "All clear. Next up: <0>{title}</0> <1>({project})</1>",
                               {
-                                title: firstLine(nextHead.intent.text),
+                                title: intentTitle(nextHead.intent),
                                 project: projectName(nextHead.intent.projectId),
                               },
                             )
@@ -738,7 +738,7 @@ export function DashboardSurface({
                       type="button"
                       data-testid="all-clear-start"
                       aria-label={i18n._("Start {title} in {project}", {
-                        title: firstLine(nextHead.intent.text),
+                        title: intentTitle(nextHead.intent),
                         project: projectName(nextHead.intent.projectId),
                       })}
                       onClick={() => void onStartIntent(nextHead.intent)}

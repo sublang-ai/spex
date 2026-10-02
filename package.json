@@ -24,7 +24,9 @@
     "regression": "npm run journeys:live -w e2e",
     "smoke": "node scripts/smoke.mjs",
     "smoke:desktop": "node scripts/desktop-smoke.mjs",
-    "smoke:migration": "node scripts/migration-smoke.mjs"
+    "smoke:migration": "node scripts/migration-smoke.mjs",
+    "test:browser-host": "node scripts/browser-host-acceptance.mjs",
+    "test:inspect-host": "node scripts/inspect-host-acceptance.mjs"
   },
   "engines": {
     "node": ">=22.19"

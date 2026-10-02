@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import type { TmuxPlayApprovalHandler } from "@sublang/cligent/tmux-play";
 import { randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { createTmuxPlayRuntime, type Captain, type PlayerAdapterImports } from "@sublang/cligent/tmux-play";
+import type { OwnerAssetStore, SessionTurnInput } from "@sublang/playbook/session-assets";
 import { openSessionHost, discardSessionUncertain, type SessionHostController } from "@sublang/playbook/session-host";
 import {
   assertCaptainSessionExecutionCompatible,
@@ -20,7 +22,7 @@ import { i18n } from "./i18n.js";
 import { assertSubagentEffort, assertSubagentModel, type ComposedConfig, type LoadModule } from "./config.js";
 import { BOSS_ABORT_REASON, CORE_STOP_REASON, controlRecord, pendingRestore, restoredRecord, restoredRuns, restoreReports, restoringRecord, type TurnControlKind } from "./control-record.js";
 import { foldConditions } from "./ledger.js";
-import { CAPTAIN_AGENT_ID, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
+import { CAPTAIN_AGENT_ID, type MediaAsset, type ParkedRunAction, type ProjectInfo, type SessionAgentSettings, type SessionInfo, type SessionAgentSettingsMap, type TmuxPlayRecord } from "./protocol.js";
 import { Store } from "./store.js";
 
 export class CoreError extends Error {
@@ -71,6 +73,8 @@ function controlSurfaces(shell: unknown): Record<string, unknown> {
  * releases the turn-held lifecycle makes (core-service-91). */
 export type CaptainFactory = (composed: ComposedConfig, sessionId: string) => Promise<Captain>;
 export interface SessionManagerOptions {
+  approvalHandler?: (sessionId: string) => TmuxPlayApprovalHandler;
+  cancelApprovals?: (sessionId: string) => void;
   store: Store;
   loadModule?: LoadModule;
   adapterImports?: PlayerAdapterImports;
@@ -198,8 +202,8 @@ export function executionConfig(composed: ComposedConfig, cwd: string, members?:
   }
   return validateCaptainSessionExecutionProjection({
     schemaVersion: 2,
-    captain: tuned(composed.captainOptions.sessionAgents.captain, tuning?.[CAPTAIN_AGENT_ID], {adapter: composed.captainOptions.sessionAgents.captain.adapter, path: CAPTAIN_AGENT_ID}),
-    players: playerIds.map((id) => ({ id, ...tuned(composed.captainOptions.sessionAgents.players[id], tuning?.[id], {adapter: composed.captainOptions.sessionAgents.players[id].adapter, path: `players.${id}`}) })),
+    captain: {...tuned(composed.captainOptions.sessionAgents.captain, tuning?.[CAPTAIN_AGENT_ID], {adapter: composed.captainOptions.sessionAgents.captain.adapter, path: CAPTAIN_AGENT_ID}), ...(tuning?.[CAPTAIN_AGENT_ID]?.browser !== undefined ? {browser: tuning[CAPTAIN_AGENT_ID].browser} : {})},
+    players: playerIds.map((id) => ({ id, ...tuned(composed.captainOptions.sessionAgents.players[id], tuning?.[id], {adapter: composed.captainOptions.sessionAgents.players[id].adapter, path: `players.${id}`}), ...(tuning?.[id]?.browser !== undefined ? {browser: tuning[id].browser} : {}) })),
     catalog: Object.fromEntries((playbooks as ComposedConfig["playbooks"]).map((playbook) => {
       const block = composed.captainOptions.playbooks[playbook.id];
       return [playbook.id, {
@@ -512,6 +516,7 @@ export class SessionManager {
       const fixture = composed && this.options.captainFactory ? await this.options.captainFactory(composed, sessionId) : undefined;
       controller = await openSessionHost({
         store: this.store.sessionStore(), sessionId, mode, cwd: project.path,
+        ...(this.options.approvalHandler ? {approvalHandler: this.options.approvalHandler(sessionId)} : {}),
         ...(config ? {config} : {}), loadModule: this.loadModule,
         ...(graphs ? {graphs} : {}),
         ...(initialVisible ? {initialVisible} : {}),
@@ -830,7 +835,23 @@ export class SessionManager {
     await this.settled(sessionId);
   }
 
-  submitTurn(sessionId: string, text: string, intentId?: string): void {
+  /** Publish independent session-owned copies before the core acknowledges a
+   * content-bearing turn. The lifecycle's existing lease guards every write. */
+  async importAttachments(sessionId: string, source: OwnerAssetStore, references: readonly MediaAsset[]): Promise<readonly MediaAsset[]> {
+    await source.prepare();
+    const entry = this.requireLive(sessionId);
+    if (entry.turnActive) throw new CoreError("busy", i18n._({id: "A turn is already running in this session.", comment: "Refusal during attachment admission"}));
+    const copied: MediaAsset[] = [];
+    for (const reference of references) {
+      const input = await source.resolveAttachment(reference);
+      const stored = await entry.controller.lease.importAsset({ path: input.path, mimeType: reference.mimeType, ...(reference.name ? {name: reference.name} : {}) });
+      if (stored.assetId !== reference.assetId || stored.byteLength !== reference.byteLength) throw new CoreError("invalid_request", i18n._({id: "The attachment changed before it could be submitted. Retry the upload.", comment: "Attachment transfer or storage diagnostic"}));
+      copied.push(stored);
+    }
+    return Object.freeze(copied);
+  }
+
+  submitTurn(sessionId: string, text: string, intentId?: string, attachments?: readonly MediaAsset[]): void {
     const entry = this.requireLive(sessionId);
     if (entry.turnActive) throw new CoreError("busy", i18n._({
       id: "a turn is already running in this session",
@@ -841,10 +862,10 @@ export class SessionManager {
       comment: "Refusal; Restore is the control the interface offers for interrupted work",
     }));
     entry.pendingIntentId = intentId;
-    this.startTurn(entry, text, false);
+    this.startTurn(entry, attachments?.length ? {text, attachments} : text, false);
   }
 
-  private startTurn(entry: LiveSession, text: string | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
+  private startTurn(entry: LiveSession, text: string | SessionTurnInput | undefined, restore: { input: string } | false, control?: { kind: "recovery" | "ending"; controlId: string }): void {
     entry.turnIntentId = undefined;
     entry.turnActive = true;
     this.publish(entry.info.id);
@@ -878,6 +899,7 @@ export class SessionManager {
           catch { /* The lifecycle retains incomplete evidence and ownership. */ }
         }
       } finally {
+        this.options.cancelApprovals?.(entry.info.id);
         entry.turnActive = false;
         entry.pendingIntentId = undefined;
         const turnId = this.store.listTurns(entry.info.id).at(-1)?.turnId;
@@ -934,6 +956,7 @@ export class SessionManager {
     this.intentionalStops.add(entry.info.id);
     try {
       (entry.runtime.abortActiveTurn as (reason?: string) => void)(reason);
+      this.options.cancelApprovals?.(entry.info.id);
     } catch (error) {
       this.intentionalStops.delete(entry.info.id);
       throw error;
@@ -949,6 +972,7 @@ export class SessionManager {
     if (entry.turnActive) {
       this.stopActiveTurn(entry, CORE_STOP_REASON);
     }
+    this.options.cancelApprovals?.(sessionId);
     await entry.operation;
     // The turn's own settlement may have released the runtime already.
     if (!this.live.has(sessionId)) return;

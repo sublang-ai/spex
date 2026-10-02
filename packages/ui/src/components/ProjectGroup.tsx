@@ -21,6 +21,7 @@ import type {
   DerivedIntent,
   IntentInfo,
   IntentSource,
+  MediaAsset,
   ProjectInfo,
   SessionInfo,
   SpecRecordInfo,
@@ -43,6 +44,11 @@ import { useAutoGrow } from "../lib/useAutoGrow.js";
 import { usePopover } from "../lib/usePopover.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
 import { currentSessionOf } from "../lib/sessions.js";
+import { contentTitle } from "../lib/message-content.js";
+import { useComposerAttachments } from "../lib/useComposerAttachments.js";
+import { ComposerBox } from "./Composer.js";
+import { canSubmitContent } from "./ComposerAttachments.js";
+import { intentTitle } from "./DeliveryCard.js";
 import { RunningMark } from "./RunningMark.js";
 import { SourcesBand } from "./SourcesTabs.js";
 import { openSourceIntents } from "./ForgeItemRow.js";
@@ -138,6 +144,7 @@ const NOTE_MS = 6_000;
 export interface CaptureInput {
   projectId: string;
   text: string;
+  attachments?: readonly MediaAsset[];
   source?: IntentSource;
 }
 
@@ -368,7 +375,7 @@ function IntentHistoryRow({
       : isBugFix(intent)
         ? "bug"
         : "done";
-  const title = firstLine(intent.text);
+  const title = intentTitle(intent);
   return (
     <li
       data-testid={`history-row-${intent.id}`}
@@ -755,18 +762,16 @@ function NowBand({
         (b.intent.dispatched?.at ?? 0) - (a.intent.dispatched?.at ?? 0),
     )[0];
   const bossTurns = view?.captain.filter((line) => line.kind === "boss") ?? [];
-  const title = firstLine(
-    served?.intent.text ??
-      bossTurns[bossTurns.length - 1]?.text ??
-      session.title ??
-      i18n._("no messages yet"),
-  );
+  const latestBoss = bossTurns[bossTurns.length - 1];
+  const title = served ? contentTitle(served.intent) : latestBoss
+    ? contentTitle(latestBoss)
+    : firstLine(session.title ?? i18n._("no messages yet"));
   const playbook = view?.frames[0]?.playbookId;
 
   const drop = async () => {
     if (!served) return;
     const dropped = served.intent;
-    const droppedTitle = firstLine(dropped.text);
+    const droppedTitle = intentTitle(dropped);
     setConfirmDrop(false);
     setDropping(true);
     try {
@@ -1076,7 +1081,7 @@ function QueueRow({
   onMenuToggle: (open: boolean) => void;
   onStart: () => void;
   onMove: (afterIntentId: string | null) => void;
-  onEdit: (text: string) => Promise<void>;
+  onEdit: (text: string, attachments: readonly MediaAsset[]) => Promise<void>;
   /** Remove acts on the click; a keyboard-driven one hands focus to
    * the Undo line (dashboard-29). */
   onRemove: (byKeyboard: boolean) => Promise<void>;
@@ -1086,6 +1091,10 @@ function QueueRow({
   onDropOn: () => void;
 }) {
   const [editing, setEditing] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string>();
+  const mediaKey = `intent:${derived.intent.id}`;
+  const media = useComposerAttachments(mediaKey, { kind: "project", id: derived.intent.projectId });
   const rowRef = useRef<HTMLLIElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const returnToRow = useRef(false);
@@ -1095,7 +1104,7 @@ function QueueRow({
     menu: true,
   });
   const intent = derived.intent;
-  const title = firstLine(intent.text);
+  const title = intentTitle(intent);
   const ownerName =
     projects.find((project) => project.id === intent.projectId)?.name ??
     intent.projectId;
@@ -1128,6 +1137,9 @@ function QueueRow({
   // Leaving the edit — saved or cancelled — puts focus back on the
   // row it replaced, never on the page body (DR-010 §6).
   const leaveEdit = () => {
+    media.consume();
+    useAppStore.getState().setAttachmentDraftText(mediaKey, undefined);
+    setEditError(undefined);
     returnToRow.current = true;
     setEditing(undefined);
   };
@@ -1139,24 +1151,38 @@ function QueueRow({
   }, [editing]);
 
   if (editing !== undefined) {
+    const save = async () => {
+      if (saving || !canSubmitContent(editing, media.controls.files)) return;
+      setSaving(true);
+      setEditError(undefined);
+      try { await onEdit(editing, media.assets); leaveEdit(); }
+      catch (error) { setEditError((error as Error).message); }
+      finally { setSaving(false); }
+    };
     return (
-      <li className="flex items-center gap-2">
-        <input
-          // The edit replaces the row the user just acted on, so the
-          // caret follows the action (same rationale as InlineConfirm).
-          autoFocus
-          data-testid={`upnext-edit-${intent.id}`}
-          value={editing}
-          onChange={(event) => setEditing(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && editing.trim()) {
-              void onEdit(editing).then(leaveEdit);
-            } else if (event.key === "Escape") {
-              leaveEdit();
-            }
-          }}
-          aria-label={i18n._("Edit intent text")}
-          className="min-h-6 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+      <li className="min-w-0">
+        <ComposerBox
+          attachments={{ ...media.controls, disabled: saving }}
+          field={<input
+            autoFocus
+            data-testid={`upnext-edit-${intent.id}`}
+            value={editing}
+            disabled={saving}
+            onChange={(event) => {
+              setEditing(event.target.value);
+              useAppStore.getState().setAttachmentDraftText(mediaKey, event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+              if (event.key === "Enter") { event.preventDefault(); void save(); }
+              else if (event.key === "Escape" && !saving) leaveEdit();
+            }}
+            aria-label={i18n._("Edit intent text")}
+            className="min-h-6 w-full bg-transparent px-1 py-1 text-sm outline-none"
+          />}
+          caption={editError ? <span role="alert" className="text-red-600 dark:text-red-400">{editError}</span> : null}
+          secondary={<button type="button" disabled={saving} onClick={leaveEdit} className={TEXT_LINK}>{i18n._("Cancel")}</button>}
+          actions={<button type="button" disabled={saving || !canSubmitContent(editing, media.controls.files)} onClick={() => void save()} className={TEXT_LINK}>{i18n._("Save")}</button>}
         />
       </li>
     );
@@ -1299,12 +1325,18 @@ function QueueRow({
             data-testid={`upnext-edit-action-${intent.id}`}
             onClick={() => {
               onMenuToggle(false);
-              setEditing(intent.text);
+              const state = useAppStore.getState();
+              const retained = state.attachmentDraftTexts[mediaKey];
+              if (retained === undefined) {
+                state.stageAttachmentAssets(mediaKey, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
+                state.setAttachmentDraftText(mediaKey, intent.text);
+              }
+              setEditing(retained ?? intent.text);
             }}
           >
             {i18n._({
-              id: "Edit text",
-              comment: "row menu item: rewrite this intent's words",
+              id: "Edit",
+              comment: "row menu item: edit this intent's text and files",
             })}
           </MenuItem>
           <MenuItem
@@ -1374,7 +1406,12 @@ function UpNextBand({
   const editIntent = useAppStore((state) => state.editIntent);
   const closeIntent = useAppStore((state) => state.closeIntent);
   const loadLedger = useAppStore((state) => state.loadLedger);
-  const [draft, setDraft] = useState("");
+  const draftKey = `queue:${project.id}`;
+  const draft = useAppStore((state) => state.attachmentDraftTexts[draftKey] ?? "");
+  const setDraft = (text: string) => useAppStore.getState().setAttachmentDraftText(draftKey, text);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string>();
+  const media = useComposerAttachments(`queue:${project.id}`, { kind: "project", id: project.id });
   const addRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(addRef, draft);
   // One row menu open at a time (dashboard-29): the band holds whose.
@@ -1387,9 +1424,13 @@ function UpNextBand({
   const { removed, undoRef, show, dismiss } = useUndoLine<Removal>();
 
   const add = () => {
-    const text = draft.trim();
-    if (!text) return;
-    void onCapture({ projectId: project.id, text }).then(() => setDraft(""));
+    if (adding || !canSubmitContent(draft, media.controls.files)) return;
+    setAdding(true);
+    setAddError(undefined);
+    void onCapture({ projectId: project.id, text: draft, ...(media.assets.length ? { attachments: media.assets } : {}) })
+      .then(() => { setDraft(""); media.consume(); })
+      .catch((error: Error) => setAddError(error.message))
+      .finally(() => setAdding(false));
   };
 
   // A restored row gets focus once the ledger serves it again.
@@ -1418,7 +1459,7 @@ function UpNextBand({
           intent,
           afterId,
           error: i18n._("Couldn't remove “{title}”: {reason}", {
-            title: firstLine(intent.text),
+            title: intentTitle(intent),
             reason: (cause as Error).message,
           }),
         },
@@ -1435,6 +1476,7 @@ function UpNextBand({
       const restored = await onCapture({
         projectId: project.id,
         text: intent.text,
+        ...(intent.attachments ? { attachments: intent.attachments } : {}),
         source: intent.source,
       });
       if (queue.length > 0) {
@@ -1531,7 +1573,7 @@ function UpNextBand({
               onMove={(afterIntentId) =>
                 void moveIntent(derived.intent.id, afterIntentId)
               }
-              onEdit={(text) => editIntent(derived.intent.id, text)}
+              onEdit={(text, attachments) => editIntent(derived.intent.id, text, attachments)}
               onRemove={(byKeyboard) => remove(index, byKeyboard)}
               onOpenIntent={onOpenIntent}
               onOpenSession={onOpenSession}
@@ -1568,7 +1610,7 @@ function UpNextBand({
             <>
               <span className="min-w-0 truncate">
                 {i18n._("Removed “{title}”", {
-                  title: firstLine(removed.intent.text),
+                  title: intentTitle(removed.intent),
                 })}
               </span>
               <span aria-hidden="true">—</span>
@@ -1589,9 +1631,12 @@ function UpNextBand({
       ) : null}
       <div
         data-testid={`add-intent-row-${project.id}`}
-        className="flex min-w-0 items-start gap-2"
+        className="min-w-0"
       >
-        <textarea
+        <ComposerBox
+          attachments={{ ...media.controls, disabled: adding }}
+          caption={addError ? <span role="alert" className="text-red-600 dark:text-red-400">{addError}</span> : null}
+          field={<textarea
           ref={addRef}
           rows={1}
           value={draft}
@@ -1609,14 +1654,14 @@ function UpNextBand({
             project: project.name,
           })}
           className="min-h-6 min-w-0 flex-1 resize-none rounded border border-dashed border-neutral-300 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:border-solid focus:border-brand-400 focus:outline-none [field-sizing:content] max-h-[max(40vh,1.75rem)] dark:border-neutral-700"
-        />
-        <button
+        />}
+          actions={<button
           type="button"
           data-testid={`queue-intent-${project.id}`}
           aria-label={i18n._("Queue an intent in {project}", {
             project: project.name,
           })}
-          disabled={!draft.trim()}
+          disabled={adding || !canSubmitContent(draft, media.controls.files)}
           onClick={add}
           className="min-h-6 shrink-0 rounded bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700 disabled:bg-neutral-200 disabled:text-neutral-500 dark:bg-brand-500 dark:hover:bg-brand-400 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
         >
@@ -1624,7 +1669,8 @@ function UpNextBand({
             id: "Queue",
             comment: "capture control: put this artifact in the queue",
           })}
-        </button>
+        </button>}
+        />
       </div>
     </div>
   );

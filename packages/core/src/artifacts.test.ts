@@ -273,6 +273,7 @@ test("playbook-library-37: every built-in serves a whole machine graph", async (
     code: "@sublang/playbook/code/registry",
     review: "@sublang/playbook/review/registry",
     decide: "@sublang/playbook/decide/registry",
+    inspect: "@sublang/playbook/inspect/registry",
   };
 
   for (const [id, from] of Object.entries(builtins)) {
@@ -323,6 +324,7 @@ test("playbook-library-44: every built-in serves its gears as items", async () =
     code: "@sublang/playbook/code/registry",
     review: "@sublang/playbook/review/registry",
     decide: "@sublang/playbook/decide/registry",
+    inspect: "@sublang/playbook/inspect/registry",
   };
 
   for (const [id, from] of Object.entries(builtins)) {

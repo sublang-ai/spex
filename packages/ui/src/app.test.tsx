@@ -1283,7 +1283,7 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
     // and summons nobody (DR-066).
     const pane = screen.getByTestId("player-pane-dev.coder");
     expect(pane.textContent).toContain("Asked permission to use Bash");
-    expect(pane.textContent).toContain("the agent's own default decided");
+    expect(pane.textContent).toContain("historical permission event; no live answer is available");
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
   });
 

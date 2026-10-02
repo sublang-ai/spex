@@ -16,6 +16,28 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Live tool approval controls for supported agents show the conversation or
+  authoring draft, actor, operation, and complete requested action. Approve once
+  or Deny works while a turn is running; pending requests survive client
+  reconnects but expire on cancellation, completion, or core restart. Historical
+  permission records never become actionable, and native policy and external
+  app-access grants remain separate
+  ([DR-098](specs/decisions/098-live-tool-approvals.md)).
+- Attach files by picking, pasting, or dropping them into a new conversation,
+  follow-up, queued intent, or playbook authoring draft. File-only messages,
+  interrupted-upload retry, intent editing and Undo preserve exact content.
+  Accepted sessions own verified copies, and figures and deferred tool details
+  remain readable after reopening and whole-bundle Space selection
+  ([DR-097](specs/decisions/097-media-and-browser-tools-across-hosts.md)).
+- Browser setup and explicit agent controls prepare an isolated headless browser
+  on the execution host, with progress, cancellation and actionable failures.
+  Setup proves launch and screenshot without enabling access or invoking a
+  provider. Conversation overrides apply to the next turn and can return to
+  Settings; authoring follows its selected agent's saved choice.
+- `/inspect` provides a tool-using inspection workflow that leaves the repository
+  unchanged. Native working-agent figures appear with their originating actor,
+  turn and call beside the conversation; control calls remain tool-free.
+  Desktop and remote server clients share the same upload and rendering path.
 - The interface speaks your language ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md)).
   Settings offers System, English and 简体中文, one choice per Spex home
   that reaches every page of it on both shells and the desktop's own
@@ -159,14 +181,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.3, slc 0.15 and Cligent 0.30 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.4, slc 0.15.1 and Cligent 0.33.1 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
-  [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md)),
-  and locks the agent SDKs at the releases Cligent 0.30 tests: Claude
+  [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md),
+  [DR-097](specs/decisions/097-media-and-browser-tools-across-hosts.md),
+  [DR-098](specs/decisions/098-live-tool-approvals.md)),
+  and locks the agent SDKs at the releases Cligent 0.33.1 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
-  compiler runs on the app's own Playbook and Cligent, which slc 0.15
+  compiler runs on the app's own Playbook and Cligent, which slc 0.15.1
   declares. Cligent refuses an agent runtime older than the
   oldest release that serves its provider's latest models, so an older
   runtime on your `PATH`, such as an OpenCode CLI before 1.18.29, reads
@@ -179,7 +203,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   sessions. Playbook 17.1 or earlier cannot open a session whose record
   carries a subagent model, as every Claude agent's now does by
   default, and Playbook 17.2 or earlier cannot open one whose record
-  carries a subagent effort.
+  carries a subagent effort. Stop older writers and update every host to
+  compatible Playbook 17.4-based releases before saving attachment-bearing
+  history; older writers do not preserve the new asset-bearing records.
 - A session parked on a question inside a built-in state that Playbook 16
   renamed — `/code` waiting in its former `runFirstPhase`, for example —
   no longer resumes from your answer. Drop it, or send a new request.
@@ -324,9 +350,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the composer. The tab, the sidebar row, the project's mark, the
   palette and the badge name each kind in the same words, the most
   severe first.
-- A player's permission request no longer asks for you on the
-  Dashboard, since nothing in the app answers one; its pane shows it as
-  a line saying the agent's own default decided ([DR-066](specs/decisions/066-every-summons-has-a-door.md)).
+- Historical player permission records remain non-actionable and raise no
+  Dashboard summons ([DR-066](specs/decisions/066-every-summons-has-a-door.md)).
+  Actual pending native tool requests have their own live approval inbox
+  ([DR-098](specs/decisions/098-live-tool-approvals.md)).
 - Dropping interrupted work ends the run it left waiting ([DR-073](specs/decisions/073-letting-go-ends-the-parked-run.md)).
   Drop on an intent whose run stands parked — on a failure or on a
   question — ends that run first, spending no model call, and records
@@ -388,7 +415,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - A new Spex home's starter configuration, a new player lane and a new
   role assignment start on `claude-opus-5-5`, the latest Claude model,
   where they started on `claude-opus-5`.
-- Protocol version 19 (from 11), in full in `packages/core/src/protocol.ts`:
+- Protocol version 21 (from 11), in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action
@@ -401,12 +428,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `subagentEffortValues` too; each model `agent.options` lists may
   carry its `description`, and an available catalog its `defaultModel`; an open
   intent gains its queue standing, `next`, and loses the `permission`
-  reason; attention entries are questions, failures, finishes and
+  reason; durable ledger attention entries are questions, failures, finishes and
   reviews only, a failure carrying `parked` and its `cause`; a draft's
   failed compile names its `relay`; a storage diagnostic may carry a
   structured repair, and the Space state its `issues` count, its
   Settings unit named `config/playbook.config.yaml`; and an error reply
-  may carry `details`.
+  may carry `details`. Structured attachments accompany conversation,
+  intent and authoring submissions; `media.begin`, `media.chunk`,
+  `media.finish`, `media.cancel` and `media.read` transfer their bytes.
+  Agent settings admit `browser`; `agent.capabilities`, `browser.prepare`
+  and `browser.cancel` expose host readiness with `browser.progress`.
+  `approval.list` and `approval.respond` operate on live requests from
+  `approval.state`, independently of durable ledger attention.
 
 ### Fixed
 
@@ -484,7 +517,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   left keyboard focus on the page body, and so did ⌘B. Focus now lands
   inside the surface the shortcut opened, on its composer where it has
   one, and ⌘B lands on the sidebar's own collapse control, so the next
-  Tab continues from where the reader went (run-view-50, run-view-71).
+  Tab continues from where the reader went. An open project palette keeps
+  focus until it closes, then lands it in the chosen surface
+  (run-view-42, run-view-50, run-view-71).
 - At a phone's width the Settings keyboard-shortcut sheet scrolled
   sideways with no keyboard stop, which axe reports as serious. The
   sheet is now a named stop, "Keyboard shortcuts", so the keyboard
@@ -520,8 +555,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Space's Join card never came back on a home that had synced once:
   changing the remote cleared the last check, but the card was gated on
   the last sync, so joining another occupied space meant syncing into
-  "Unrelated history" first. The card now stands whenever the remote has
-  not been checked, a changed remote included (space-45).
+  "Unrelated history" first. The card now stands when the home has neither
+  checked nor synced with that remote; changing the remote clears both,
+  while restarting after a successful sync does not show it again
+  (space-45).
 - Space's Explore tab read an empty `sessions/` or `intents/` as "Stays
   here", the mark reserved for the families that never sync; a tracked
   kind with nothing committed yet now reads "Not yet shared" (space-23).
