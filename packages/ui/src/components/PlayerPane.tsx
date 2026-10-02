@@ -404,7 +404,7 @@ export function PlayerPane({
   onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
-  const { scrollRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
+  const { scrollRef, contentRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
     view.segments.length,
   );
   // The pane names the role its latest call served, and while that
@@ -618,36 +618,38 @@ export function PlayerPane({
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2"
         >
-          {view.segments.length > windowSize ? (
-            <button
-              type="button"
-              onClick={() => {
-                stuckRef.current = false;
-                setWindowSize((size) => size + RENDER_WINDOW);
-              }}
-              className="text-center text-xs text-neutral-500 hover:text-brand-500"
-            >
-              {i18n._("Show {count} of {rest} earlier entries", {
-                count: Math.min(
-                  RENDER_WINDOW,
-                  view.segments.length - windowSize,
-                ),
-                rest: view.segments.length - windowSize,
-              })}
-            </button>
-          ) : null}
-          {segments.map((segment) => (
-            <Segment key={segment.seq} segment={segment} />
-          ))}
-          {view.segments.length === 0 ? (
-            <div className="m-auto text-xs text-neutral-500">
-              {i18n._("Idle until the playbook calls {player}", {
-                player: view.id,
-              })}
-            </div>
-          ) : null}
+          <div ref={contentRef} className="flex min-h-full min-w-0 shrink-0 flex-col gap-2">
+            {view.segments.length > windowSize ? (
+              <button
+                type="button"
+                onClick={() => {
+                  stuckRef.current = false;
+                  setWindowSize((size) => size + RENDER_WINDOW);
+                }}
+                className="text-center text-xs text-neutral-500 hover:text-brand-500"
+              >
+                {i18n._("Show {count} of {rest} earlier entries", {
+                  count: Math.min(
+                    RENDER_WINDOW,
+                    view.segments.length - windowSize,
+                  ),
+                  rest: view.segments.length - windowSize,
+                })}
+              </button>
+            ) : null}
+            {segments.map((segment) => (
+              <Segment key={segment.seq} segment={segment} />
+            ))}
+            {view.segments.length === 0 ? (
+              <div className="m-auto text-xs text-neutral-500">
+                {i18n._("Idle until the playbook calls {player}", {
+                  player: view.id,
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
         {newBelow ? (
           <button type="button" onClick={jump} className={jumpPillClasses()}>

@@ -447,6 +447,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.
 
+- Conversation panes keep following when live cards or delayed media grow.
+  Queued automatic scroll events no longer detach the thread, while scrolling
+  upward still preserves the reader's position through later content changes.
 - Spec readers and editor previews hide HTML source comments, keeping SPDX
   headers and translation hashes out of the reading flow. Code examples and
   the editable source retain their exact content.
