@@ -377,11 +377,10 @@ export function CaptainPane({
    * (run-view-147). */
   failure?: FailureContext;
 }) {
+  // Keep the inputs distinct: a reply arriving as its turn ends must
+  // not cancel out the content change that advances the thread.
   const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(
-    view.captain.length +
-      view.captainDraft.length +
-      (view.turnActive ? 1 : 0) +
-      (extras?.length ?? 0),
+    `${view.captain.length}:${view.captainDraft.length}:${view.turnActive}:${extras?.length ?? 0}`,
   );
   const [highlightKey, setHighlightKey] = useState<string>();
 

@@ -451,6 +451,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - File registry compatibility errors describe the missing current host contract
   and source-compilation remedy without claiming a freshly generated artifact
   came from an older toolchain.
+- The Captain thread follows a final reply when that reply and turn settlement
+  arrive together; readers who scrolled up keep their position and get the
+  jump-to-latest control.
 
 - Conversation panes keep following when live cards or delayed media grow.
   Queued automatic scroll events no longer detach the thread, while scrolling

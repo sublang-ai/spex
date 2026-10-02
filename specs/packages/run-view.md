@@ -495,6 +495,10 @@ While a Captain or player pane is following its end, when its box or rendered co
 - chrome moving — the sidebar folding, the divider dragged [[run-view-81](#run-view-81)], panes stacking [[run-view-107](#run-view-107)], a lane unfolding [[run-view-117](#run-view-117)] — and content growing through live cards or delayed media are not reader scrolling and owe no jump pill;
 - actual upward reader movement detaches even when content grows before its scroll event is delivered, and subsequent size changes leave that reader detached until they return to the end or activate Latest [[run-view-46](#run-view-46)].
 
+#### run-view-162
+
+While the Captain pane is following its end, when the record stream appends a reply [[run-view-1](#run-view-1)], the pane shall keep the reply in view at its end, including when that reply and turn settlement are rendered together.
+
 ### Machine Cards
 
 #### run-view-60
@@ -1174,6 +1178,12 @@ Where the run view's production modules are inspected, the test suite shall asse
 
 - the modules import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs [[run-view-13](#run-view-13)];
 - every write to the rendered record state originates from the protocol client's message handling [[run-view-13](#run-view-13)].
+
+### Conversation Following
+
+#### run-view-163
+
+When the integration suite folds a Captain reply and turn settlement together into a rendered conversation, it shall verify that a pane following its end advances to the reply [[run-view-162](#run-view-162)], while a pane the reader scrolled up preserves its position and offers the jump-to-latest control [[run-view-46](#run-view-46)].
 
 ### Browser Journeys
 

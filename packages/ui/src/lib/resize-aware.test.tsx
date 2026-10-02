@@ -14,6 +14,9 @@ afterEach(cleanup);
 
 import { useAutoGrow } from "./useAutoGrow.js";
 import { useStickToBottom } from "./useStickToBottom.js";
+import { CaptainPane } from "../components/CaptainPane.js";
+import { applyRecords, initialSessionView } from "../state/reducer.js";
+import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
 
 const restore: (() => void)[] = [];
 afterEach(() => {
@@ -207,5 +210,49 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
     box.height = 712;
     act(() => observers.fire(pane));
     expect(box.top).toBe(40);
+  });
+});
+
+describe("run-view-163: a final reply and settlement render together", () => {
+  test.each([false, true])("preserves the reader's following choice (scrolled up: %s)", (scrolledUp) => {
+    const observers = observeResizes();
+    const record = (seq: number, fields: Record<string, unknown>) => ({
+      seq,
+      record: { timestamp: 1_700_000_000_000 + seq, turnId: 1, ...fields } as unknown as TmuxPlayRecord,
+    });
+    const view = applyRecords(initialSessionView([]), [record(1, {
+      type: "turn_started", turn: { id: 1, prompt: "Complete the change" },
+    })]);
+    const { rerender } = render(<CaptainPane view={view} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 800, top: 0 };
+    measured(pane, {
+      clientWidth: () => 600,
+      clientHeight: () => 240,
+      scrollHeight: () => box.height,
+    });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true,
+      get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 240)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(560);
+    if (scrolledUp) {
+      box.top = 40;
+      act(() => { pane.dispatchEvent(new Event("scroll")); });
+    }
+
+    // The last reply adds one line while settlement removes the active
+    // turn. Summing these independent inputs would hide the new content.
+    box.height = 920;
+    applyRecords(view, [
+      record(2, { type: "captain_reply", text: "The requested change is ready." }),
+      record(3, { type: "turn_finished" }),
+    ]);
+    rerender(<CaptainPane view={view} />);
+    expect(screen.getByText("The requested change is ready.")).toBeTruthy();
+    expect(box.top).toBe(scrolledUp ? 40 : 680);
+    expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
   });
 });
