@@ -291,6 +291,14 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 - the mark reads as a hint beside the card's roles, not as an invalid entry [[playbook-library-2](#playbook-library-2)], because a plain `/dev` request still runs;
 - the mark disappears once both are listed as configured.
 
+#### playbook-library-89
+
+While the validated configured playbook catalog [[core-service-2](core-service.md#core-service-2)] lists `code` from `@sublang/playbook/code/registry` or `decide` from `@sublang/playbook/decide/registry`, and lists no enabled `review`, the Library shall place an unavailable hint beside that packaged entry's roles, naming its effective command and directing the user to enable `/review` below before running it:
+
+- The hint leaves the shared config valid and enables no playbook or player.
+- The hint disappears when the validated catalog includes `review`.
+- A different source module with the same `code` or `decide` id receives no hint; this rule covers the known packaged entries, not dependency analysis of custom modules or aliases.
+
 #### playbook-library-35
 
 When the Library surface is opened, the Library shall present a two-agent workflow adapted from slc's demo as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
@@ -569,6 +577,10 @@ When a built-in whose roles the roster does not cover is added, the test suite s
 #### playbook-library-49
 
 Where the shared config lists `dev` without `branch` or `pr`, the test suite shall assert that the `dev` card carries the pull-request delivery hint naming each missing built-in, and that a config listing all three renders no hint [[playbook-library-48](#playbook-library-48)].
+
+#### playbook-library-90
+
+Where the validated config summary lists the packaged `code` and `decide` entries without `review`, when the Library renders and then receives a summary enabling `review`, the integration suite shall assert both hints name their effective commands, direct enabling `/review`, cause no configuration write and disappear on the update [[playbook-library-89](#playbook-library-89)]; it shall also render custom modules with those same ids and unrelated packaged entries, asserting no hint for them, in English and Chinese.
 
 ### Cancellation and Gate Coverage
 

@@ -446,6 +446,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Settings and configuration loading reject invalid writable paths before a
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.
+- Packaged CODE and DECIDE cards name their missing REVIEW prerequisite
+  before work starts, without invalidating the shared config or enabling players.
 
 - Conversation panes keep following when live cards or delayed media grow.
   Queued automatic scroll events no longer detach the thread, while scrolling
