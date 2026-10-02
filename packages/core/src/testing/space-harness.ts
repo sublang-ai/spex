@@ -1,0 +1,328 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+
+// Real Space integration fixtures; each file owns its scratch and cores.
+
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import { WebSocket } from "ws";
+import { CoreService, type CoreServiceOptions } from "../service.js";
+import { fakeAdapterImports } from "./fake-adapter.js";
+import { createScriptedCaptain } from "./scripted-captain.js";
+import type { LineSpawner } from "../compile.js";
+import type { Command, CommandResults, ServerMessage, SpaceState, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+
+class Client {
+  private readonly socket: WebSocket;
+  readonly messages: ServerMessage[] = [];
+  private nextId = 0;
+  constructor(port: number) {
+    this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
+    this.socket.on("message", (data) => { this.messages.push(JSON.parse(String(data)) as ServerMessage); });
+  }
+  async open(): Promise<void> {
+    await new Promise<void>((resolveOpen, reject) => {
+      if (this.socket.readyState === WebSocket.OPEN) { resolveOpen(); return; }
+      this.socket.once("open", resolveOpen);
+      this.socket.once("error", reject);
+    });
+    await this.waitFor((m) => m.type === "hello");
+  }
+  close(): void { this.socket.close(); }
+  async command<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<{ ok: true; result: CommandResults[T] } | { ok: false; error: { code: string; message: string } }> {
+    const id = `c${(this.nextId += 1)}`;
+    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    const reply = await this.waitFor((m) => m.type === "reply" && m.id === id, 30_000);
+    if (reply.type !== "reply") throw new Error("unreachable");
+    return reply.ok ? { ok: true, result: reply.result as CommandResults[T] } : { ok: false, error: reply.error };
+  }
+  async expectOk<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<CommandResults[T]> {
+    const reply = await this.command(type, fields);
+    if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
+    // The state-shaped replies carry the SpaceState shape (space-30).
+    if (type === "space.get" || type === "space.init" || type === "space.remote.set") assertSpaceState(reply.result as SpaceState);
+    return reply.result;
+  }
+  async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
+    const reply = await this.command(type, fields);
+    assert.ok(!reply.ok, `${type} must fail ${code}`);
+    assert.equal(reply.error.code, code, `${type}: ${reply.error.message}`);
+    if (pattern) assert.match(reply.error.message, pattern);
+    return reply.error.message;
+  }
+  async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 10_000): Promise<ServerMessage> {
+    const start = Date.now();
+    for (;;) {
+      const found = this.messages.find(check);
+      if (found) return found;
+      if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting; got ${JSON.stringify(this.messages.slice(-12).map((m) => m.type === "space.state" ? `space.state:${JSON.stringify(m.state.sync)}` : m.type))}`);
+      await sleep(10);
+    }
+  }
+  /** The first space.state message at or after `from` matching `check`. */
+  async waitSpace(from: number, check: (state: SpaceState) => boolean, timeoutMs = 20_000): Promise<SpaceState> {
+    const start = Date.now();
+    for (;;) {
+      for (let i = from; i < this.messages.length; i += 1) {
+        const message = this.messages[i];
+        if (message.type !== "space.state") continue;
+        assertSpaceState(message.state);
+        if (check(message.state)) return message.state;
+      }
+      if (Date.now() - start > timeoutMs) {
+        const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => JSON.stringify(m.state.sync));
+        throw new Error(`timeout waiting for space state; saw ${seen.join(" | ")}`);
+      }
+      await sleep(10);
+    }
+  }
+  /** Run a long Space command — it replies accepted at once (space-29) —
+   * and wait until the machine leaves running. */
+  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<SpaceState> {
+    const from = this.messages.length;
+    assert.deepEqual(await this.expectOk(type, fields), { accepted: true });
+    return this.waitSpace(from, (state) => state.sync.phase !== "running");
+  }
+  mark(): number { return this.messages.length; }
+}
+
+function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
+
+const SPACE_KEYS = ["conflicts", "diagnostics", "git", "home", "incoming", "issues", "lastSync", "local", "outside", "repository", "sync"];
+
+const REPOSITORY_KEYS = ["ahead", "behind", "branch", "checkedAt", "identityFallback", "mergePending", "remote", "remoteEmpty", "unrelated", "upstream"];
+
+const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
+
+const CHANGES = new Set(["new", "updated", "deleted"]);
+
+/** Every reply and broadcast carries the SpaceState shape (space-30). */
+function assertSpaceState(state: SpaceState): void {
+  assert.deepEqual(Object.keys(state).sort(), SPACE_KEYS);
+  assert.ok(PHASES.has(state.sync.phase), `phase ${JSON.stringify(state.sync)}`);
+  assert.ok(typeof state.home === "string" && Array.isArray(state.outside) && Array.isArray(state.diagnostics));
+  if (state.repository !== null) assert.deepEqual(Object.keys(state.repository).sort(), REPOSITORY_KEYS);
+  for (const unit of [...state.local, ...state.incoming, ...state.conflicts.map((c) => c.unit)]) {
+    assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
+  }
+  for (const conflict of state.conflicts) {
+    assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
+  }
+  if (state.lastSync !== null) assert.deepEqual(Object.keys(state.lastSync).sort(), ["at", "received", "sent"]);
+}
+
+interface Home {
+  service: CoreService;
+  client: Client;
+  dataDir: string;
+  projectDir: string;
+  configPath: string;
+  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep }) => void | Promise<void> };
+  stop(): Promise<void>;
+}
+
+export function createSpaceHarness() {
+  const scratch = mkdtempSync(join(tmpdir(), "spex-space-"));
+  const userHome = join(scratch, "home");
+  mkdirSync(userHome, { recursive: true });
+
+  const config = (model: string): string => `captain:
+  adapter: claude
+  model: ${model}
+players:
+  dev.coder:
+    adapter: claude
+    model: ${model}
+playbooks:
+  code:
+    from: "@sublang/playbook/code/registry"
+    roles:
+      coder: dev.coder
+`;
+
+  /** The test's own Git: isolated config and a fixed identity. */
+  const peerEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Peer", GIT_AUTHOR_EMAIL: "peer@example.test", GIT_COMMITTER_NAME: "Peer", GIT_COMMITTER_EMAIL: "peer@example.test", LC_ALL: "C" };
+  const git = (cwd: string, ...args: string[]): string => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: peerEnv, stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+  /** The core's environment: PATH, a scratch HOME, and Git configured only
+   * through it — no identity by default, so the fallback engages (space-4). */
+  function coreEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+    return {
+      PATH: process.env.PATH ?? "",
+      HOME: userHome,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "user.useConfigOnly",
+      GIT_CONFIG_VALUE_0: "true",
+      ...extra,
+    };
+  }
+
+  function bareRepo(): string {
+    const dir = mkdtempSync(join(scratch, "bare-"));
+    git(dir, "init", "-q", "--bare", "-b", "main");
+    return dir;
+  }
+
+  function sleepingSsh(): { script: string; pidFile: string } {
+    const script = join(scratch, `sleep-ssh-${randomUUID().slice(0, 8)}.sh`);
+    const pidFile = `${script}.pid`;
+    writeFileSync(script, `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 300\n`);
+    chmodSync(script, 0o755);
+    return { script, pidFile };
+  }
+
+  /** The pid the sleeping GIT_SSH_COMMAND wrote once Git spawned it. */
+  async function sleeperPid(pidFile: string): Promise<number> {
+    for (let i = 0; i < 400; i += 1) {
+      if (existsSync(pidFile)) {
+        const pid = Number.parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+        if (pid > 0) return pid;
+      }
+      await sleep(25);
+    }
+    throw new Error(`the sleeping transport never started (${pidFile})`);
+  }
+
+  /** Join a freshly initialized home to the remote: the first sync ends
+   * unrelated, the join asks for any conflict, "mine" answers each. */
+  async function joinRemote(home: Home): Promise<SpaceState> {
+    const unrelated = await home.client.settle("space.sync", {});
+    assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
+    let joined = await home.client.settle("space.sync", { join: true });
+    if (joined.sync.phase === "choices") {
+      joined = await home.client.settle("space.sync", { join: true, choices: Object.fromEntries(joined.conflicts.map((c) => [c.unit.unit, "mine" as const])) });
+    }
+    assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
+    return joined;
+  }
+
+  /** Compile spawner whose slc run hangs until its signal aborts. */
+  function hangingCompileSpawner(): LineSpawner {
+    return (_command, args, _cwd, onLine, signal) => {
+      if (args[0] === "--version") { onLine("v24.0.0"); return Promise.resolve(0); }
+      onLine("slc: working");
+      return new Promise((_resolveRun, reject) => {
+        const abort = (): void => reject(new Error("The operation was aborted"));
+        if (signal?.aborted) { abort(); return; }
+        signal?.addEventListener("abort", abort, { once: true });
+      });
+    };
+  }
+
+  const COMPILE_INPUT = {
+    playbookId: "demo",
+    sourceText: "# Demo\n\nA one-player demo workflow.\n",
+    roles: ["helper"],
+    command: "demo",
+    intent: "demo workflow for tests",
+    bindings: { helper: "dev.helper" },
+    newPlayers: { "dev.helper": { adapter: "claude" as const } },
+  };
+
+  /** A real core on a scratch home whose configuration lies inside it. */
+  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
+    const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
+    const configPath = join(dataDir, "config", "playbook.config.yaml");
+    if (!existsSync(configPath)) { mkdirSync(join(dataDir, "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
+    const projectDir = join(scratch, `${name}-project-${randomUUID().slice(0, 8)}`);
+    if (options.project !== false) { mkdirSync(projectDir); git(projectDir, "init", "-q"); }
+    const { imports } = fakeAdapterImports({
+      rules: [
+        { match: "route:", response: { result: '{"decision":"dispatch"}' } },
+        { match: "slow:", response: { deltas: ["working"], result: "slow done", delayMs: 1_500 } },
+      ],
+      fallback: { deltas: ["hello ", "world"], result: "hello world" },
+    });
+    const captain = createScriptedCaptain(async (turn, context, session) => {
+      await session.emitStatus(`◇ turn ${turn.id}`);
+      await context.callCaptain(`route: ${turn.prompt}`, { visibility: "hidden" });
+      await context.callPlayer("dev.coder", `${turn.prompt}`);
+      await context.emitReply("Finished the scripted turn.");
+    });
+    const hooks: Home["hooks"] = {};
+    const service = await CoreService.start({
+      token: "test",
+      configPath,
+      dataDir,
+      adapterImports: imports,
+      adapterRuntime: () => ({ usable: true }),
+      captainFactory: async () => captain,
+      env: coreEnv(options.env),
+      home: userHome,
+      watchConfig: false,
+      // Real Git operations here run against local bare repositories, so
+      // they must never race the transport watchdog: a loaded CI runner
+      // pushed to a local path in more than half a second and the sync
+      // stopped as "timeout", exactly as specified. Tests that assert the
+      // watchdog itself shorten this through `extra`.
+      spaceTransportTimeoutMs: 20_000,
+      spaceBeforeStep: (event) => hooks.beforeStep?.(event),
+      ...(options.extra ?? {}),
+    });
+    const client = new Client(service.port());
+    await client.open();
+    let stopped = false;
+    return {
+      service, client, dataDir, projectDir, configPath, hooks,
+      async stop() {
+        if (stopped) return;
+        stopped = true;
+        client.close();
+        await service.stop();
+      },
+    };
+  }
+
+  /** Run one scripted turn in a session and wait for the runtime's release. */
+  async function runTurn(home: Home, projectId: string, text: string, sessionId?: string): Promise<string> {
+    const id = sessionId ?? (await home.client.expectOk("session.create", { projectId })).id;
+    const before = (await home.client.expectOk("session.list", {})).find((s) => s.id === id)?.turns ?? 0;
+    await home.client.expectOk("turn.submit", { sessionId: id, text });
+    await home.client.waitFor((m) => m.type === "session.state" && m.session.id === id && !m.session.live && (m.session.turns ?? 0) > before, 20_000);
+    return id;
+  }
+
+  /** Every home file except Git data and lease coordination, as path → bytes. */
+  function snapshot(dir: string): Map<string, Buffer> {
+    const out = new Map<string, Buffer>();
+    const walk = (current: string): void => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if (entry.name === ".git" || /^\.lock|\.lock(?:\.|$)/.test(entry.name)) continue;
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.isFile()) out.set(relative(dir, full), readFileSync(full));
+      }
+    };
+    walk(dir);
+    return out;
+  }
+
+  /** A peer working copy of the bare remote, committing as plain Git. */
+  function peerClone(bare: string): string {
+    const dir = mkdtempSync(join(scratch, "peer-"));
+    git(dir, "clone", "-q", bare, ".");
+    return dir;
+  }
+  async function peerPush(dir: string, mutate: (dir: string) => void | Promise<void>): Promise<string> {
+    git(dir, "fetch", "-q", "origin");
+    git(dir, "reset", "-q", "--hard", "origin/main");
+    await mutate(dir);
+    git(dir, "add", "-A", "--", ".");
+    git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer change");
+    git(dir, "push", "-q", "origin", "HEAD:main");
+    return git(dir, "rev-parse", "HEAD");
+  }
+
+  const turnRecords = (prompt: string, turnId: number, at = Date.now()): Record<string, unknown>[] => [
+    { type: "turn_started", turnId, turn: { id: turnId, prompt }, timestamp: at },
+    { type: "turn_finished", turnId, timestamp: at + 1 },
+  ];
+
+  return { scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords, dispose: () => rmSync(scratch, { recursive: true, force: true }) };
+}
