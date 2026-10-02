@@ -126,6 +126,7 @@ meta.md       The spec of specs
 | [DR-098](decisions/098-live-tool-approvals.md) | 098-live-tool-approvals.md | Ephemeral native tool approval ownership, answer controls, and reconnect recovery |
 | [DR-099](decisions/099-project-creation-preserves-existing-repositories.md) | 099-project-creation-preserves-existing-repositories.md | Create requires its initial commit, preserves existing repositories, and guides failed creation through terminal repair and Add |
 | [DR-100](decisions/100-new-project-specs-follow-the-readers-language.md) | 100-new-project-specs-follow-the-readers-language.md | New project specs follow the creating page's language; protocol callers can name it, with the core's language as fallback |
+| [DR-101](decisions/101-chinese-scaffolds-for-chinese-only-teams.md) | 101-chinese-scaffolds-for-chinese-only-teams.md | Complete Chinese bundled spec translations with canonical meanings and source-pinned seed overlays |
 
 ## Drafts
 

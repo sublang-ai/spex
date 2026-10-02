@@ -177,7 +177,7 @@ describe("copyTemplates", () => {
     }
   });
 
-  it("copies localized overlay files and falls back to English templates", () => {
+  it("copies localized authoring seed overlays", () => {
     const dir = makeTmp();
     try {
       createSpecsStructure(dir);
@@ -199,7 +199,7 @@ describe("copyTemplates", () => {
       );
       assert.equal(
         readFileSync(join(dir, "specs", "packages", "git.md"), "utf-8"),
-        readFileSync(join(getScaffoldDir(), "specs", "packages", "git.md"), "utf-8"),
+        readFileSync(join(getScaffoldDir(), "i18n", "zh", "specs", "packages", "git.md"), "utf-8"),
       );
     } finally {
       rmSync(dir, { recursive: true });

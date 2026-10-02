@@ -116,6 +116,7 @@ Where plain `scaffold` targets a tree whose `specs/` contains a legacy directory
 Where the `scaffold` subcommand is invoked without `--update`, when `--lang <code>` is provided, the CLI shall generate localized bundled specs for that language:
 
 - supported language codes are `en` and `zh`, with `zh` meaning Simplified Chinese;
+- the Chinese overlay translates the complete bundled spec tree's human-readable content while preserving requirement meanings, identifiers, machine-readable markers, code syntax, and citation targets ([DR-101](../decisions/101-chinese-scaffolds-for-chinese-only-teams.md));
 - when `--lang` is omitted and no existing `specs/meta.md` declares an authoring language, the CLI uses `en`;
 - when an unsupported language code is provided, the CLI exits non-zero and lists the supported language codes.
 
@@ -323,13 +324,14 @@ Where bundled scaffold content is resolved for a language, the resolver shall re
 
 #### scaffold-32
 
-Where a localized `meta.md` or `map.md` overlay exists, every difference from its English source except the file title shall carry a current source pin:
+Where a localized bundled spec overlay exists, every difference from its English source except the file title shall carry a current source pin:
 
 - a localized `meta.md` includes every English `meta-*` item;
 - translated non-item content in `meta.md` carries `<!-- spex-i18n-source: meta.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file;
 - an unchanged item body remains byte-identical and carries no source marker;
 - a changed item is preceded by `<!-- spex-i18n-source: <item-id> sha256-<digest> -->`, carrying the canonical SHA-256 hash of its English source item;
 - a translated `map.md` body carries `<!-- spex-i18n-source: map.md sha256-<digest> -->`, with the canonical SHA-256 hash of the English file, and preserves its Markdown link targets.
+- any other translated bundled spec file carries one `<!-- spex-i18n-source: <relative-path> sha256-<digest> -->`, naming the English file relative to `scaffold/` and its canonical SHA-256 hash, and preserves its item IDs and Markdown link targets;
 - these markers travel into generated trees as provenance of the English source a translation was made from, and no generated tree consults them.
 
 ### Agent Instruction Reconciliation
@@ -409,13 +411,14 @@ Where the `scaffold` subcommand creates a project, the test suite shall run the 
 Where the `scaffold` subcommand is exercised with language selection, the test suite shall cover a Chinese fresh scaffold ([[scaffold-28](#scaffold-28)]), a localized update refresh on a Chinese specs tree, an unsupported language code ([[scaffold-28](#scaffold-28)]), a mismatched language on an existing scaffold ([[scaffold-29](#scaffold-29)]), and `--update` with `--lang` ([[scaffold-30](#scaffold-30)]):
 
 - the Chinese fresh scaffold case asserts that localized overlay files are written for paths that have overlays and that fallback files remain byte-identical to their English bundled templates ([[scaffold-31](#scaffold-31)]);
+- the Chinese fresh scaffold includes the translated meta rules, structure decision, index, Git and licensing packages, and starter intent with the Chinese authoring declaration and localized record/package headings [[scaffold-28](#scaffold-28)];
 - the localized update case asserts that `--update` on a Chinese specs tree ([[scaffold-30](#scaffold-30)]) refreshes a pristine framework ([[scaffold-14](#scaffold-14)]) or seed ([[scaffold-23](#scaffold-23)]) file from the active Chinese overlay ([[scaffold-18](#scaffold-18)]) rather than the English base template.
 - the language-switch cases assert that `--update --lang` converts the overlay-bearing bundled files in both directions with no user-modified warning and prints the translation prompt, and that a code matching the declared language is an ordinary update ([[scaffold-39](#scaffold-39)]);
 - the undeterminable-language cases assert that a Chinese tree whose marker line was damaged stops the update with nothing written, that a tree with no `specs/meta.md` proceeds as `en` with a warning, and that each diagnostic states the marker, commit, and rerun steps its recovery needs before the test performs exactly those steps and reaches the Chinese overlay ([[scaffold-53](#scaffold-53)]).
 
 #### scaffold-34
 
-Where localized `meta.md` or `map.md` overlays ship, the test suite shall enforce `meta.md` completeness and item/file source pins, plus the `map.md` file pin and link-target parity ([[scaffold-32](#scaffold-32)]).
+Where localized bundled spec overlays ship, the test suite shall enforce `meta.md` completeness and item/file source pins, the `map.md` file pin and link-target parity, and each other translated spec file's whole-file pin, item-ID parity, and link-target parity ([[scaffold-32](#scaffold-32)]).
 
 ### Agent Instruction Coverage
 
