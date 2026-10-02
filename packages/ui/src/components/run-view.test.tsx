@@ -1573,15 +1573,15 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
         as: "dropped",
       }),
     );
-    // The line leaves with its control, the outcome announces where it
-    // stood, and focus lands in the composer — never on the body.
+    // The line leaves with its control. While the composer is disabled,
+    // the outcome receives focus after React runs its handoff effect.
     await vi.waitFor(() =>
       expect(screen.queryByTestId("working-line")).toBeNull(),
     );
     const note = screen.getByTestId("working-note");
     expect(note.getAttribute("role")).toBe("status");
     expect(note.textContent).toContain("Dropped “Address #7: fix the login bug”");
-    expect(document.activeElement).toBe(note);
+    await vi.waitFor(() => expect(document.activeElement).toBe(note));
     setClientForTests(undefined);
   });
 
