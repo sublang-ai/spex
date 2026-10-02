@@ -44,6 +44,11 @@ test.use({
     project: true,
     history: 25,
     agentDelayMs: 4000,
+    // The elapsed-time sweep owns its call lifetime instead of racing a timer.
+    approvalRules: [{
+      match: "Implement: Measure the live elapsed yield point",
+      response: { result: "", untilAborted: true },
+    }],
     // A draft compiled by the passing stub, measured idle at its
     // proposal (DR-058).
     authoring: { slc: "ok" },
@@ -792,6 +797,9 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
   await expect(activeDescription).toContainText("parallel calls overlap");
   await expect(coderName).toBeVisible();
   await expect(coderCollapse).toBeVisible();
+
+  await abort.click();
+  await expect(abort).toHaveCount(0);
 
   // The collapsed rail's badge caps at "9+", the count in the name
   // (run-view-108).
