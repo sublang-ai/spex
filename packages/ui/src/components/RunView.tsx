@@ -678,6 +678,7 @@ export function RunView({
             <WorkingLine
               intent={workingIntent?.intent}
               onDrop={(intent) => closeIntent(intent.id, "dropped")}
+              inputReady={connected && !view.turnActive}
             />
           ) : null}
           {uncertain ? (

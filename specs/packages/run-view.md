@@ -220,7 +220,7 @@ When durable input or working-call media records reach a conversation, the UI sh
 When Boss input becomes available in a shown conversation, the composer shall make its field ready without taking focus from another surviving control:
 
 - focus on the document body returns to the field, and focus already on that field remains there with its draft and selection preserved;
-- focus on another control remains on that control, including a player lane's collapse or expand control [[run-view-116](#run-view-116)] and an open agent editor [[run-view-138](#run-view-138)];
+- focus on another control remains on that control, including a player lane's collapse or expand control [[run-view-116](#run-view-116)] and an open agent editor [[run-view-138](#run-view-138)], except the working line's pending Drop handoff [[run-view-113](#run-view-113)];
 - showing a new conversation or explicitly navigating to one retains the arrival focus of that navigation [[run-view-49](#run-view-49)].
 
 #### run-view-8
@@ -834,7 +834,8 @@ When the workspace opens a session from an attention entry [[dashboard-1](dashbo
 While the working line names an open intent [[run-view-90](#run-view-90)], the run view shall offer Drop on the line, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped over the protocol while the turn keeps running ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the outcome — the drop, or the refusal with its reason — announces in a status line where the working line stood, lasting six seconds;
-- Keep returns focus to the control; a drop hands it to the enabled composer, or to its outcome notice while input is disabled, once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6).
+- Keep returns focus to the control; a drop hands it to the enabled composer, or to its outcome notice while input is disabled, once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6);
+- while its outcome still owns focus, the handoff reaches the composer when input becomes enabled, or before the notice expires if input is already enabled; if the notice expires while input is disabled, ordinary readiness hands body focus to the composer [[run-view-164](#run-view-164)]; a control the reader chose meanwhile retains focus through readiness and expiry.
 
 #### run-view-114
 
@@ -1269,7 +1270,10 @@ Where the harness boots with the demo project registered, when the journey break
 
 #### run-view-115
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)].
+Where the harness renders a session with a dispatched queued intent through the served page or the real run view and intent store, when the reader drops it from the working line, the test suite shall verify the handoff:
+
+- the served-page journey with the demo project and scripted Captain asserts that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)];
+- the record-folded busy-turn cases assert that settlement hands notice focus to the enabled composer, expiry before settlement allows ordinary readiness to focus it, and another control the reader chose keeps focus through both settlement and expiry [[run-view-113](#run-view-113)] [[run-view-164](#run-view-164)].
 
 #### run-view-118
 

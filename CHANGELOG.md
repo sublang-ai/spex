@@ -446,6 +446,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Open agent editors stay within their pane when its player grid scrolls,
   including scrolling caused by keyboard focus.
 
+- Dropping a busy intent hands its temporary outcome's focus to the composer
+  when input becomes ready, preserving any control the reader chose meanwhile.
 - Restore revalidates a cached external session holder against the shared lease
   before refusing admission. Discard success and refusal publish released
   ownership before another recovery, preserving the original refusal and
