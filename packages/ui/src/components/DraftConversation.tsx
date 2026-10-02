@@ -8,6 +8,7 @@
 // names who answers and opens the picker; and beneath it the house
 // composer, dispatching or queueing by the draft's published state.
 
+import { ApprovalNotice } from "./ApprovalInbox.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentSummary,
@@ -20,11 +21,13 @@ import type { CaptainLine, TranscriptSegment } from "../state/reducer.js";
 import { AUTHOR_PLAYER, type DraftView } from "../state/store.js";
 import { splitDirectives, type TextPart } from "../lib/directives.js";
 import { i18n } from "../i18n.js";
+import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import { absoluteTitle, duration } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { usePopover } from "../lib/usePopover.js";
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
+import { ConfiguredBrowserTools } from "./ConfiguredBrowserTools.js";
 import { AgentChip } from "./AgentChip.js";
 import { SystemLine, ThreadLine } from "./CaptainPane.js";
 import {
@@ -35,6 +38,7 @@ import {
 } from "./Composer.js";
 import { Icon } from "./Icon.js";
 import { Markdown } from "./Markdown.js";
+import { MediaOwnerProvider } from "./StoredMedia.js";
 import { Segment, latestCall } from "./PlayerPane.js";
 import { RunningMark } from "./RunningMark.js";
 
@@ -346,6 +350,7 @@ export function DraftConversation({
   onDismissError,
   onOpenRegister,
   onUseSkill,
+  attachments,
 }: {
   draft: DraftInfo;
   draftView?: DraftView;
@@ -359,6 +364,7 @@ export function DraftConversation({
   error?: string;
   onComposerChange: (text: string) => void;
   onSend: (text: string) => Promise<void>;
+  attachments?: ComposerAttachmentControls;
   onAbort: () => void;
   onPickAgent: (playerId: string | null) => Promise<void>;
   onDismissError: () => void;
@@ -420,10 +426,9 @@ export function DraftConversation({
         : i18n._("Describe the playbook…");
 
   function submit(): void {
-    const trimmed = composerText.trim();
-    if (!trimmed || sending || !connected || requirement) return;
+    if (!canSubmitContent(composerText, attachments?.files) || sending || !connected || requirement) return;
     setSending(true);
-    onSend(trimmed)
+    onSend(composerText)
       .then(() => onComposerChange(""))
       .catch(() => {
         // The text stays; the strip above says why (playbook-library-54).
@@ -443,6 +448,7 @@ export function DraftConversation({
     entries.length === 0 && !draftView?.loading && !diagnostic && !turnRunning;
 
   return (
+    <MediaOwnerProvider owner={{ kind: "draft", id: draft.id }}>
     <section
       data-testid="draft-conversation"
       className="@container flex min-h-0 flex-1 flex-col gap-2"
@@ -456,6 +462,7 @@ export function DraftConversation({
             readiness={readiness}
             onPick={onPickAgent}
           />
+          <ConfiguredBrowserTools agent={draft.agent} context={{ kind: "draft", id: draft.id }} disabled={turnRunning} />
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {turnRunning ? (
               <>
@@ -608,12 +615,12 @@ export function DraftConversation({
             data-testid="draft-queue"
             className="relative flex max-h-40 min-h-0 flex-col items-end gap-1 overflow-y-auto"
           >
-            {draft.queued.map((text, index) => (
+            {draft.queued.map((entry, index) => (
               <div
                 key={index}
                 className="flex max-w-[85%] shrink-0 flex-col rounded-2xl rounded-br-md border border-brand-300 px-3 py-1.5 text-sm text-brand-700 dark:border-brand-700 dark:text-brand-300"
               >
-                <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
+                <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.text || entry.attachments?.map((file) => file.name ?? i18n._("Attachment")).join(", ")}</span>
                 <span className="mt-0.5 text-xs text-neutral-500">
                   {busyKind === "compile" ? i18n._("sends after the compile") : i18n._("sends after the reply")}
                 </span>
@@ -621,7 +628,9 @@ export function DraftConversation({
             ))}
           </div>
         ) : null}
+        <ApprovalNotice owner={{kind: "draft", id: draft.id}} />
         <ComposerBox
+          attachments={attachments ? { ...attachments, disabled: attachments.disabled || sending || !connected || !!requirement } : undefined}
           field={
             <ComposerField
               fieldRef={fieldRef}
@@ -663,7 +672,7 @@ export function DraftConversation({
                 data-testid="draft-send"
                 onClick={submit}
                 disabled={
-                  composerText.trim().length === 0 ||
+                  !canSubmitContent(composerText, attachments?.files) ||
                   sending ||
                   !connected ||
                   requirement !== undefined
@@ -687,5 +696,6 @@ export function DraftConversation({
         />
       </div>
     </section>
+    </MediaOwnerProvider>
   );
 }

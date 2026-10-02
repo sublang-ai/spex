@@ -13,11 +13,13 @@ import {
   type RestoredPosition,
   type TmuxPlayRecord,
   type MachineGraph,
+  type MediaAsset,
 } from "@sublang/spex-core/protocol";
 
 import { contextGraphs } from "../lib/session-context.js";
 import { i18n } from "../i18n.js";
 import { plainFailure } from "../lib/labels.js";
+import { storedAsset, type MediaOrigin } from "../lib/media.js";
 
 /** What one call reported spending, in tokens and tool uses. Every
  * figure is optional because cligent 0.22 reports each independently,
@@ -66,6 +68,7 @@ export type TranscriptSegment = SegmentMeta &
     | { kind: "prompt"; text: string; role?: string }
     | { kind: "text"; text: string; streaming: boolean }
     | { kind: "thinking"; summary: string }
+    | { kind: "media"; media: { mimeType: string; uri?: string; name?: string }; origin: MediaOrigin }
     | {
         kind: "tool";
         toolName: string;
@@ -134,7 +137,9 @@ export interface CaptainLine {
   /** boss: the user's own message, echoed into the thread (RUN-30).
    * question: a player asking the Boss — a first-class incoming
    * message, not a log line (RUN-9, DR-010 §1). */
-  kind: "status" | "speech" | "error" | "boss" | "question" | "machine";
+  kind: "status" | "speech" | "error" | "boss" | "question" | "machine" | "media";
+  attachments?: readonly MediaAsset[];
+  evidence?: Extract<TmuxPlayRecord, { type: "playbook_evidence" }>;
   /** The settled frame a "machine" line carries (run-view-62). */
   frame?: MachineFrame;
   text: string;
@@ -279,15 +284,49 @@ function closeStreamingText(segments: TranscriptSegment[]): void {
 interface AgentEventLike {
   type: string;
   payload?: unknown;
+  sessionId?: unknown;
 }
 
 function applyAgentEvent(
   target: PlayerView,
   event: AgentEventLike,
   meta: SegmentMeta,
+  origin: {actorId?: unknown; turnId?: unknown},
 ): UsageView | undefined {
   const segments = target.segments;
   switch (event.type) {
+    case "approval_request": {
+      closeStreamingText(segments);
+      const payload = event.payload as {toolName?: string};
+      segments.push({...meta, kind: "text", streaming: false, text: i18n._("Requested tool approval: {tool}", {tool: payload?.toolName ?? i18n._("a tool")})});
+      return undefined;
+    }
+    case "approval_response": {
+      closeStreamingText(segments);
+      const payload = event.payload as {decision?: string; source?: string};
+      const text = payload?.source === "host"
+        ? payload.decision === "allow_once" ? i18n._("Approved once; native execution is reported separately.") : i18n._("Tool request denied.")
+        : payload?.source === "timeout" ? i18n._("Tool approval expired.")
+          : payload?.source === "cancelled" ? i18n._("Tool approval cancelled.") : i18n._("Tool approval failed; the request was not approved.");
+      segments.push({...meta, kind: "text", streaming: false, text});
+      return undefined;
+    }
+    case "media": {
+      closeStreamingText(segments);
+      const payload = event.payload as { mimeType?: unknown; name?: unknown; toolUseId?: unknown; source?: { type?: string; uri?: unknown } } | undefined;
+      if (typeof payload?.mimeType !== "string") return undefined;
+      segments.push({ ...meta, kind: "media", origin: {
+        ...(typeof origin.actorId === "string" && origin.actorId ? {actorId: origin.actorId} : {}),
+        ...(typeof origin.turnId === "number" && Number.isSafeInteger(origin.turnId) && origin.turnId > 0 ? {turnId: origin.turnId} : {}),
+        ...(typeof event.sessionId === "string" && event.sessionId ? {runtimeSessionId: event.sessionId} : {}),
+        ...(typeof payload.toolUseId === "string" && payload.toolUseId ? {toolUseId: payload.toolUseId} : {}),
+      }, media: {
+        mimeType: payload.mimeType,
+        ...(typeof payload.name === "string" ? { name: payload.name } : {}),
+        ...(payload.source?.type === "uri" && typeof payload.source.uri === "string" ? { uri: payload.source.uri } : {}),
+      } });
+      return undefined;
+    }
     case "text_delta": {
       const delta = (event.payload as { delta?: string })?.delta ?? "";
       const last = segments[segments.length - 1];
@@ -411,7 +450,7 @@ export function applyRecord(
     }
     case "turn_started": {
       view.turnActive = true;
-      const turn = r.turn as { id: number; prompt: string };
+      const turn = r.turn as { id: number; prompt: string; attachments?: readonly MediaAsset[] };
       view.currentTurnId = turn.id;
       // A restore's report starts the interrupted turn again under its
       // own id and message (run-view-110): the message was sent once,
@@ -423,6 +462,7 @@ export function applyRecord(
       pushCaptain(view, {
         kind: "boss",
         text: turn.prompt,
+        ...(Array.isArray(turn.attachments) ? { attachments: turn.attachments.filter((asset) => storedAsset(asset)) } : {}),
         turnId: turn.id,
         at: r.timestamp,
       });
@@ -447,6 +487,18 @@ export function applyRecord(
       });
       break;
     }
+    case "playbook_evidence": {
+      const evidence = r as unknown as Extract<TmuxPlayRecord, { type: "playbook_evidence" }>;
+      if (!storedAsset(evidence.asset) || typeof evidence.callId !== "string" || !evidence.callId
+        || !Number.isSafeInteger(evidence.turnId) || evidence.turnId < 1
+        || !evidence.origin || typeof evidence.origin.actorId !== "string" || !evidence.origin.actorId
+        || !["player", "preparation"].includes(evidence.origin.kind)
+        || (evidence.origin.runtimeSessionId !== undefined && typeof evidence.origin.runtimeSessionId !== "string")
+        || (evidence.origin.toolUseId !== undefined && typeof evidence.origin.toolUseId !== "string")) break;
+      pushCaptain(view, { kind: "media", text: "", at: r.timestamp, turnId: r.turnId,
+        evidence });
+      break;
+    }
     case "player_prompt": {
       const target = player(view, String(r.playerId));
       target.running = true;
@@ -461,7 +513,7 @@ export function applyRecord(
     }
     case "player_event": {
       const target = player(view, String(r.playerId));
-      const usage = applyAgentEvent(target, r.event as AgentEventLike, meta);
+      const usage = applyAgentEvent(target, r.event as AgentEventLike, meta, {actorId: r.playerId, turnId: r.turnId});
       if (usage) target.turnUsage = usage;
       break;
     }

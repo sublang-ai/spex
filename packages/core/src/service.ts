@@ -8,6 +8,7 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
+import { ApprovalBroker } from "./approvals.js";
 import {
   cpSync,
   existsSync,
@@ -95,6 +96,9 @@ import {
   writeSpecFile,
 } from "./specs.js";
 import { checkToolchain, compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { browserAgent } from "./browser.js";
+import { ApplicationMedia } from "./media.js";
+import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager } from "./space.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
@@ -189,7 +193,7 @@ const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
   "turn.submit", "session.control", "session.create", "session.restore", "session.discard", "session.delete", "session.viewed",
   "project.register", "project.create", "project.rebind", "project.remove",
   "intent.queue", "intent.edit", "intent.move", "intent.link", "intent.close", "intent.remove",
-  "config.edit", "compile.run",
+  "config.edit", "compile.run", "media.begin", "media.chunk", "media.finish", "media.cancel",
 ]);
 
 // The Sources cache ages out at ten minutes (dashboard-14).
@@ -349,6 +353,7 @@ export class CoreService {
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
   private readonly store: Store;
+  private readonly approvals = new ApprovalBroker((state) => this.broadcast({type: "approval.state", state}));
   private readonly sessions: SessionManager;
   /** Playbook drafts and their authoring conversations (DR-058). */
   private readonly authors: AuthorManager;
@@ -390,6 +395,12 @@ export class CoreService {
   /** The scratch root a memory-only core keeps its drafts in, removed
    * at stop; absent with a state root. */
   private readonly memoryDraftsRoot?: string;
+  private readonly media: ApplicationMedia;
+  private readonly browserPreparations = new Map<string, {
+    client: ClientState;
+    controller: AbortController;
+    done: Promise<unknown>;
+  }>();
   /** A sync's Apply through Refresh pauses the watchers (space-31). */
   private watchersPaused = false;
   /** The language the core is composing in (core-service-111): the
@@ -421,6 +432,12 @@ export class CoreService {
     });
     this.configState = { status: "missing", path: this.configPath };
     this.sessions = new SessionManager({
+      approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
+        const session = this.store.describeSession(sessionId);
+        const project = session ? this.store.getProject(session.projectId) : undefined;
+        return {ownerLabel: session?.title ?? sessionId, ...(project ? {projectName: project.name} : {})};
+      }),
+      cancelApprovals: (sessionId) => this.approvals.cancel({kind: "session", id: sessionId}),
       store: this.store,
       loadModule: this.options.loadModule,
       adapterImports: options.adapterImports,
@@ -478,7 +495,7 @@ export class CoreService {
         },
         resumeWatchers: () => { this.watchersPaused = false; },
         reloadConfig: () => this.reloadConfig(),
-        rescanSessions: () => this.syncForeignSessions(),
+        rescanSessions: async () => { await this.media.reset(); await this.syncForeignSessions(); },
         ledgerChanged: (projectIds) => this.queueLedgerChange(projectIds),
         ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
         ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
@@ -490,6 +507,9 @@ export class CoreService {
     if (!options.dataDir) this.memoryDraftsRoot = draftsHome;
     const draftsRoot = join(draftsHome, "local", "drafts");
     this.authors = new AuthorManager({
+      approvalHandler: (draftId) => this.approvals.handler({kind: "draft", id: draftId}, () => ({ownerLabel: draftId})),
+      cancelApprovals: (draftId, invocationId) => this.approvals.cancel({kind: "draft", id: draftId}, invocationId),
+      retireMedia: (draftId, remove) => this.media.retireOwner({kind: "draft", id: draftId}, remove),
       store: this.store,
       drafts: new DraftStore(draftsRoot, this.libraryDir()),
       configPath: this.configPath,
@@ -514,6 +534,20 @@ export class CoreService {
     this.authors.events.onSource = (message) => this.broadcast(message);
     this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
     this.authors.events.onRemoved = (draftId) => this.broadcast({ type: "draft.removed", draftId });
+    this.media = new ApplicationMedia({
+      home: draftsHome,
+      assertOwner: (owner, write) => {
+        if (this.stopping) throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during attachment admission"}));
+        if (write && this.space?.busy()) throw new CoreError("busy", this.space.busy()!);
+        if (owner.kind === "project") {
+          if (!this.store.getProject(owner.id)) throw noProject(owner.id);
+          if (write) this.store.assertWritable({ projectId: owner.id });
+        } else if (owner.kind === "draft") {
+          if (!this.authors.has(owner.id)) throw noDraft(owner.id);
+        } else if (!this.store.describeSession(owner.id)) throw noSession(owner.id);
+      },
+      openSessionAsset: (sessionId, assetId) => this.store.sessionStore().openAsset(sessionId, assetId),
+    });
     // The core speaks before it composes its first text (core-service-111):
     // the config error a start may raise, and the readiness requirement
     // that follows it, already read in the home's language.
@@ -544,6 +578,7 @@ export class CoreService {
    * host, observed live through the shared store, or a running compile.
    */
   private async spaceBlocker(): Promise<string | undefined> {
+    if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
     const sessions = this.sessions.listSessions();
     for (const session of sessions) {
       const project = this.store.getProject(session.projectId)?.name ?? i18n._({
@@ -640,8 +675,12 @@ export class CoreService {
         comment: "Startup refusal shown in the shell's dialog on an unsupported host",
       }));
     }
+    if (options.dataDir) ApplicationMedia.assertStagingParents(options.dataDir);
     const service = new CoreService(options);
     try {
+    // Store construction already holds the exclusive home lease. Never
+    // reclaim another live core's incomplete uploads before that boundary.
+    await service.media.prepare();
     service.store.markAllSessionsNotLive();
     // A config still at a former location relocates once, nearest
     // first, before seeding could shadow it and before the library
@@ -891,6 +930,9 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    this.approvals.stop();
+    for (const entry of this.browserPreparations.values()) entry.controller.abort();
+    await Promise.allSettled([...this.browserPreparations.values()].map(({done}) => done));
     this.watcher?.close();
     this.sessionsWatcher?.close();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
@@ -915,6 +957,7 @@ export class CoreService {
       failure = { error };
     }
     await this.authors.stopAll();
+    await this.media.close();
     for (const client of this.clients) client.socket.close();
     await new Promise<void>((resolveClose) =>
       this.wss ? this.wss.close(() => resolveClose()) : resolveClose(),
@@ -943,7 +986,7 @@ export class CoreService {
    * the projection the session's next message would open on validates
    * with it applied, then persist it and republish the session
    * (DR-067, DR-068). */
-  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null}): Promise<SessionInfo> {
+  private async setSessionAgent(command: {sessionId: string; agentId: string; model?: string | false | null; subagentModel?: string | false | null; effort?: string | false | null; subagentEffort?: string | false | null; fastMode?: boolean | null; browser?: boolean | null}): Promise<SessionInfo> {
     const session = this.store.describeSession(command.sessionId);
     if (!session) throw noSession(command.sessionId);
     const project = this.store.getProject(session.projectId);
@@ -978,6 +1021,9 @@ export class CoreService {
     }
     if (command.fastMode === null) delete entry.fastMode;
     else if (command.fastMode !== undefined) entry.fastMode = command.fastMode;
+
+    if (command.browser === null) delete entry.browser;
+    else if (command.browser !== undefined) entry.browser = command.browser;
 
     const next: SessionAgentSettingsMap = {...current};
     if (Object.keys(entry).length > 0) next[command.agentId] = entry;
@@ -1152,7 +1198,12 @@ export class CoreService {
     this.wss.on("connection", (socket) => {
       const client: ClientState = { socket, channels: new Set() };
       this.clients.add(client);
-      socket.on("close", () => this.clients.delete(client));
+      socket.on("close", () => {
+        this.clients.delete(client);
+        for (const entry of this.browserPreparations.values()) {
+          if (entry.client === client) entry.controller.abort();
+        }
+      });
       socket.on("message", (data) => {
         void this.handleMessage(client, String(data));
       });
@@ -1161,6 +1212,7 @@ export class CoreService {
         protocolVersion: PROTOCOL_VERSION,
         coreVersion: CORE_VERSION,
       });
+      this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
     });
     if (this.options.httpServer) return; // the shell listens
     await new Promise<void>((resolveListen, rejectListen) => {
@@ -1228,7 +1280,7 @@ export class CoreService {
       });
     } catch (error) {
       const code: ErrorCode =
-        error instanceof CoreError ? error.code : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
+        error instanceof CoreError ? error.code : error instanceof MediaTransferError ? "invalid_request" : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
       const message = error instanceof Error ? error.message : String(error);
       this.send(client.socket, {
         type: "reply",
@@ -1240,6 +1292,23 @@ export class CoreService {
           ...(error instanceof CoreError && error.details ? { details: error.details } : {}),
         },
       });
+    }
+  }
+
+  private async contextualBrowserAgent(command: Extract<Command, {type: "agent.capabilities" | "browser.prepare"}>) {
+    let cwd = process.cwd();
+    if (command.context?.kind === "project") {
+      const project = this.store.getProject(command.context.id);
+      if (!project) throw new CoreError("invalid_request", i18n._({id: "Project is unavailable.", comment: "Refusal: the selected project is unavailable on this host"}));
+      cwd = project.path;
+    } else if (command.context?.kind === "draft") {
+      if (!this.authors.has(command.context.id)) throw new CoreError("invalid_request", i18n._({id: "Draft is unavailable.", comment: "Refusal: the selected authoring draft does not exist"}));
+      cwd = join(this.libraryDir(), command.context.id);
+    }
+    try {
+      return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.options.adapterImports);
+    } catch (cause) {
+      throw new CoreError("invalid_config", cause instanceof Error ? cause.message : String(cause));
     }
   }
 
@@ -1255,6 +1324,50 @@ export class CoreService {
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
     if (command.type === "session.restore" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
     switch (command.type) {
+      case "approval.list": return this.approvals.snapshot();
+      case "approval.respond": return this.approvals.respond(command.generation, command.requestId, command.owner, command.decision);
+      case "media.begin": {
+        this.media.ownerStore(command.owner, true);
+        return this.media.writing(() => this.media.uploads.begin(command));
+      }
+      case "media.chunk":
+        return this.media.writing(() => this.media.uploads.chunk(command.uploadId, command.offset, command.data));
+      case "media.finish":
+        return this.media.writing(() => this.media.uploads.finish(command.uploadId));
+      case "media.cancel":
+        return this.media.writing(() => this.media.uploads.cancel(command.uploadId));
+      case "media.read":
+        return this.media.read(command.owner, command.assetId, command.offset, command.length);
+      case "agent.capabilities": {
+        const agent = await this.contextualBrowserAgent(command);
+        return agent.getCapabilities();
+      }
+      case "browser.prepare": {
+        if (this.stopping || client.socket.readyState !== WebSocket.OPEN) {
+          return {status: "cancelled"};
+        }
+        if (this.browserPreparations.has(command.operationId) ||
+            [...this.browserPreparations.values()].some((entry) => entry.client === client)) {
+          throw new CoreError("busy", i18n._({id: "Browser preparation is already running.", comment: "Refusal: this client already owns browser preparation"}));
+        }
+        const controller = new AbortController();
+        const done = (async () => {
+          const agent = await this.contextualBrowserAgent(command);
+          return agent.prepareBrowser({
+            abortSignal: controller.signal,
+            onProgress: (progress) => this.send(client.socket, {type: "browser.progress", operationId: command.operationId, progress}),
+          });
+        })();
+        this.browserPreparations.set(command.operationId, {client, controller, done});
+        try { return await done; }
+        finally { this.browserPreparations.delete(command.operationId); }
+      }
+      case "browser.cancel": {
+        const entry = this.browserPreparations.get(command.operationId);
+        const canceled = entry?.client === client;
+        if (canceled) entry.controller.abort();
+        return {canceled};
+      }
       case "config.get":
         return this.configState;
       case "readiness.get":
@@ -1391,9 +1504,9 @@ export class CoreService {
         return state;
       }
       case "project.remove": {
-        if (!this.store.removeProject(command.projectId)) {
-          throw noProject(command.projectId);
-        }
+        await this.media.retireOwner({kind: "project", id: command.projectId}, () => {
+          if (!this.store.removeProject(command.projectId)) throw noProject(command.projectId);
+        });
         return null;
       }
       case "session.list":
@@ -1432,7 +1545,7 @@ export class CoreService {
       case "session.discard": {
         const session = this.store.describeSession(command.sessionId);
         if (!session) throw noSession(command.sessionId);
-        const result = await this.sessions.discardSession(session.id);
+        const result = await this.media.retireOwner({kind: "session", id: session.id}, () => this.sessions.discardSession(session.id));
         if (result.removed) this.broadcast({type:"session.removed", sessionId:session.id, projectId:session.projectId});
         return result;
       }
@@ -1443,13 +1556,19 @@ export class CoreService {
         }
         // A turn in flight finishes or aborts first (core-service-70):
         // deleting under a running runtime would orphan its agents.
-        if (this.sessions.getLive(session.id)) {
-          throw new CoreError("busy", i18n._({
-            id: "wait for the running turn to finish, or abort it, before deleting",
-            comment: "Refusal: the session being deleted has a turn in flight",
-          }));
-        }
-        await this.store.deleteSession(session.id);
+        const assertIdle = () => {
+          if (this.sessions.getLive(session.id)) {
+            throw new CoreError("busy", i18n._({
+              id: "wait for the running turn to finish, or abort it, before deleting",
+              comment: "Refusal: the session being deleted has a turn in flight",
+            }));
+          }
+        };
+        assertIdle();
+        await this.media.retireOwner({kind: "session", id: session.id}, () => {
+          assertIdle();
+          return this.store.deleteSession(session.id);
+        });
         this.broadcast({
           type: "session.removed",
           sessionId: session.id,
@@ -1461,6 +1580,8 @@ export class CoreService {
       }
       case "turn.submit": {
         const release = this.admitSubmission(command.sessionId);
+        let opened = false;
+        let submitted = false;
         try {
           await this.sessions.settled(command.sessionId);
           if (command.intentId !== undefined) {
@@ -1473,17 +1594,34 @@ export class CoreService {
           if (!this.sessions.getLive(command.sessionId)) {
             await this.settledConfig();
             await this.continueSession(command.sessionId);
+            opened = true;
           }
           if (command.intentId !== undefined) {
             this.validateIntentDispatch(command.sessionId, command.intentId);
           }
+          const session = this.store.describeSession(command.sessionId);
+          if (!session) throw noSession(command.sessionId);
+          const assets = command.attachments ?? (command.intentId ? this.store.getIntent(command.intentId)?.attachments : undefined) ?? [];
+          const attachments = assets.length ? await this.sessions.importAttachments(command.sessionId,
+            this.media.ownerStore({kind: "project", id: session.projectId}), assets) : [];
+          if (command.intentId !== undefined) this.validateIntentDispatch(command.sessionId, command.intentId);
           this.sessions.submitTurn(
             command.sessionId,
             command.text,
             command.intentId,
+            attachments,
           );
+          submitted = true;
           return { accepted: true };
-        } finally { release(); }
+        } finally {
+          // Admission may fail after opening, including while importing
+          // attachments. Release only the idle runtime this request opened.
+          try {
+            if (opened && !submitted && this.sessions.getLive(command.sessionId)) {
+              await this.sessions.disposeSession(command.sessionId);
+            }
+          } finally { release(); }
+        }
       }
       // core-service-98: a control the session already advertises, run as
       // its next turn. It shares turn.submit's admission and continuation
@@ -1725,6 +1863,8 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
+        await this.media.validate({kind: "project", id: project.id}, command.attachments ?? []);
+        this.media.ownerStore({kind: "project", id: project.id}, true);
         if (command.source && command.source.kind !== "chat") {
           const holder = this.store.openIntentBySource(
             project.id,
@@ -1755,6 +1895,7 @@ export class CoreService {
           id: randomUUID(),
           projectId: project.id,
           text: command.text,
+          ...(command.attachments?.length ? {attachments: command.attachments} : {}),
           ...(command.source ? { source: command.source } : {}),
           rank,
           ...(command.afterIntentId !== undefined
@@ -1777,7 +1918,13 @@ export class CoreService {
             }),
           );
         }
-        this.store.setIntentText(intent.id, command.text);
+        const attachments = command.attachments ?? intent.attachments ?? [];
+        if (!command.text.length && !attachments.length) throw new CoreError("invalid_request", i18n._({id: "Text or an attachment is required.", comment: "Attachment transfer or storage diagnostic"}));
+        await this.media.validate({kind: "project", id: intent.projectId}, attachments);
+        this.media.ownerStore({kind: "project", id: intent.projectId}, true);
+        this.requireOpenIntent(intent.id);
+        if (this.deriveIntentState(intent.id) !== "queued") throw new CoreError("conflict", i18n._({id: "A dispatched intent's content is history.", comment: "Refusal during attachment admission"}));
+        this.store.setIntentText(intent.id, command.text, command.attachments);
         this.queueLedgerChange([intent.projectId]);
         return this.store.getIntent(intent.id);
       }
@@ -2024,8 +2171,12 @@ export class CoreService {
         return this.authors.create(command.draftId);
       case "draft.open":
         return this.authors.open(command.draftId, command.afterSeq);
-      case "draft.send":
-        return this.authors.send(command.draftId, command.text);
+      case "draft.send": {
+        const owner = {kind: "draft" as const, id: command.draftId};
+        await this.media.validate(owner, command.attachments ?? []);
+        this.media.ownerStore(owner, true);
+        return this.authors.send(command.draftId, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})});
+      }
       case "draft.abort":
         return this.authors.abort(command.draftId);
       case "draft.source.write":
@@ -2059,7 +2210,8 @@ export class CoreService {
       case "draft.player.set":
         return this.authors.setPlayer(command.draftId, command.playerId);
       case "draft.delete":
-        this.authors.delete(command.draftId);
+        this.authors.assertDeletable(command.draftId);
+        await this.media.retireOwner({kind: "draft", id: command.draftId}, () => this.authors.delete(command.draftId));
         return null;
       case "draft.artifacts": {
         if (!this.authors.has(command.draftId)) {
@@ -2287,7 +2439,14 @@ export class CoreService {
       const intent = boundary(true) ? authorized() : undefined;
       if (intent) {
         this.validateIntentDispatch(sessionId, intent.id);
-        this.sessions.submitTurn(sessionId, intent.text, intent.id);
+        const attachments = intent.attachments?.length ? await this.sessions.importAttachments(sessionId,
+          this.media.ownerStore({kind: "project", id: projectId}), intent.attachments) : [];
+        // Asset import yields to other commands; do not dispatch an edited or
+        // removed queue entry from an earlier snapshot.
+        const latest = boundary(true) ? authorized() : undefined;
+        if (!latest || JSON.stringify(latest) !== JSON.stringify(intent)) return;
+        this.validateIntentDispatch(sessionId, intent.id);
+        this.sessions.submitTurn(sessionId, intent.text, intent.id, attachments);
         submitted = true;
       }
     } finally {

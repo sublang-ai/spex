@@ -71,12 +71,17 @@ const repoRoot = join(here, "..", "..");
 const uiDist = join(repoRoot, "apps", "server", "ui-dist");
 
 export interface AppOptions {
+  /** Additional native-style provider rules for approval journeys. */
+  approvalRules?: FakeScript["rules"];
   /**
    * `demo` writes the two-player demo config before boot; `none`
    * leaves the path empty so the core seeds its installed template —
    * the true first run.
    */
   config?: "demo" | "none";
+  /** Real adapter constructors for credential-free capability/setup journeys.
+   * These journeys never submit a provider prompt. */
+  nativeBrowser?: boolean;
   /** Seed and register the demo project before the browser opens. */
   project?: boolean;
   /** With `project`: this many intents already worked and closed
@@ -269,6 +274,7 @@ export function slowAuthoringScript(delayMs = 2500): FakeScript {
  * authoring prompt — and the demo's rules and fallback behind them. */
 function adapterScript(options: AppOptions): FakeScript {
   const demo = demoScript({ delayMs: options.agentDelayMs ?? 400 });
+  if (options.approvalRules) demo.rules = [...options.approvalRules, ...(demo.rules ?? [])];
   if (!options.authoring) return demo;
   const author = options.authoring.script ?? authoringScript();
   return {
@@ -666,7 +672,7 @@ async function arrangeApp(
           env: { ...process.env, SPEX_HOME: dataDir },
         }
       : {
-          adapterImports: options.park
+          adapterImports: options.nativeBrowser ? undefined : options.park
             ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.compiled
             ? fakeAdapterImports(compiledScript(options)).imports

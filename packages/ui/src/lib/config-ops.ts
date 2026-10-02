@@ -25,6 +25,7 @@ export type AgentPatch = {
   effort?: string | null;
   /** Adapter-scoped fast mode (DR-038); null returns to the default. */
   fastMode?: boolean | null;
+  browser?: boolean | null;
   permissions?: AgentBlockInput["permissions"] | null;
 };
 

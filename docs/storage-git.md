@@ -18,7 +18,7 @@ node /path/to/spex/scripts/storage-git.mjs --home . plan HEAD origin/main
 git merge --no-commit --no-ff origin/main
 ```
 
-The plan compares both revisions with their common ancestor. Each `sessions/<id>` entry is one manifest/replay pair; a configuration file, project registry or intent log is one separate entry. A `conflict` requires an explicit choice even if Git reports a clean text merge.
+The plan compares both revisions with their common ancestor. Each `sessions/<id>` entry is one manifest/replay/assets bundle; each intent log and its asset directory form another bundle. A configuration file or project registry is one separate entry. A `conflict` requires an explicit choice even if Git reports a clean text merge.
 
 While the merge is pending, choose each conflicting entry and apply the validated selection:
 
@@ -31,7 +31,7 @@ git diff --cached
 git commit
 ```
 
-Omit choices for entries that changed on only one side or agree. `select` applies those entries automatically, validates the complete candidate, takes the home and session leases, then stages each selected file. A session is selected or deleted as a pair. Replaced sessions lose local hints and viewed markers. No history is combined or discarded outside Git; the unselected revision remains available there.
+Omit choices for entries that changed on only one side or agree. `select` applies those entries automatically, validates the complete candidate, takes the home and session leases, then stages each selected file. A session or intent bundle is selected or deleted whole, including its owned assets. Replaced sessions lose local hints and viewed markers. No history is combined or discarded outside Git; the unselected revision remains available there.
 
 Validation failure leaves the selected files unapplied. Resolve the reported issue or use `git merge --abort`. A filesystem failure during application may leave an incomplete merge; run `select` again before reopening. Never bypass a held or unverifiable lease.
 
@@ -41,7 +41,7 @@ After an ordinary checkout or fast-forward, validate before reopening:
 node /path/to/spex/scripts/storage-git.mjs --home . validate
 ```
 
-Validation tightens safe session permissions, rejects malformed data or mismatched replay bytes, and reports missing project bindings. With the core stopped, bind an existing project ID to its local repository root:
+Validation tightens safe session and asset permissions, rejects malformed data, mismatched replay bytes, missing referenced assets or corrupt content, and reports missing project bindings. With the core stopped, bind an existing project ID to its local repository root:
 
 ```sh
 node /path/to/spex/scripts/storage-git.mjs --home . rebind <project-id> /local/repository \

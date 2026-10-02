@@ -42,6 +42,9 @@ const stubLoader: LoadModule = async (specifier) => {
   if (specifier === "@sublang/playbook/decide/registry") {
     return { default: stubEntry("decide", ["coder", "reviewer"]) };
   }
+  if (specifier === "@sublang/playbook/inspect/registry") {
+    return { default: stubEntry("inspect", ["inspector"]) };
+  }
   if (specifier === "@sublang/playbook/dev/registry") {
     return { default: stubEntry("dev", ["analyst"]) };
   }

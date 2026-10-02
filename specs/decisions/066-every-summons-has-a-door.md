@@ -9,6 +9,8 @@ SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 Accepted.
 
+Amended by [DR-098](098-live-tool-approvals.md) only for actual live native requests: an ephemeral approval inbox now supplies explicit answer controls; historical permission telemetry remains unraised.
+
 Amends [DR-035](035-intent-ledger.md), which remains accepted: `permission` leaves the attention fold and the interrupted-intent states, the last-viewed marker's meaning is fixed with the act that produces it named, and a project whose stored state refuses writes raises no entry.
 The two bands, the fold's determinism, and every other contract of that record stand.
 DR-035 already decided that a glance clears the finished-turn summons — "cleared as today — viewing for the finished chat turn" — so marking on showing restores that decision rather than taking a liberty against it.

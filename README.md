@@ -115,9 +115,9 @@ register an existing repository, create a new one at a path, or "Try the
 Academy example", which seeds a sample project with a complete `specs/`
 tree built from [`demo/`](demo). Then write to the Captain — a request,
 or `/code …`; `/` in the composer lists the playbooks the starter config
-enables, the six built-ins `/code`, `/review`, `/decide`, `/dev`,
-`/branch` and `/pr`, and the quick-start card shows the first of them.
-Runs commit in your repository, so Git needs `user.name` and
+enables, including `/code`, `/review`, `/decide`, `/dev`, `/branch`,
+`/pr` and `/inspect`, and the quick-start card shows the first of them.
+Coding and design workflows commit in your repository, so Git needs `user.name` and
 `user.email`; the issue and PR panels, the Dashboard's Sources and Space
 on a GitHub remote need `gh auth login`. Config and sessions live in the
 Spex home — `~/.spex`, or `SPEX_HOME` — with the config at
@@ -142,6 +142,48 @@ Options take the `--name=value` form after `--` — `--host=`, `--port=`
 (default 8137), `--token=` or `SPEX_TOKEN`, `--data-dir=` or `SPEX_HOME`,
 `--tls-cert=`/`--tls-key=`, and `--insecure` — e.g.
 `npm run start:server -- --port=0`.
+
+## Files and browser tools
+
+Attach files with the composer's file button, paste an image, or drop files
+onto the composer. The same controls work for a new conversation, a
+follow-up, queued work, and playbook authoring. Files finish uploading
+before submission; failed uploads can be retried, and a refused submission
+keeps its text and files. A file-only message is accepted and the Captain
+can ask what you want done with it. Each file may be up to 100 MiB; one
+message may contain up to 16 files and 256 MiB total. The selected agent
+and model determine which formats they can interpret. When upgrading a shared
+Spex home, stop older desktop, server and Playbook CLI writers first and update
+them together before saving sessions with attachments.
+
+For browser work, open the working agent in Settings → Agents, choose
+**Set up browser**, and then enable **Browser** and save. Setup checks the
+execution host, downloads missing managed Chromium components, and proves
+that an isolated headless browser can launch and take a screenshot.
+Checking readiness does not enable access. Conversation agent settings can
+override the choice for the next turn or return to the saved setting.
+Authoring uses the selected agent's saved setting and offers the same setup
+check beside its selector. No MCP package or command needs to be chosen.
+
+Use `/inspect` for a task such as “Open my local app and explain its UX with
+screenshots.” An existing home can add it in **Playbooks → Available built-ins**:
+choose the Inspector's agent and select **Enable**. Enable Browser for the worker
+assigned to Inspect; the Captain's routing calls stay tool-free.
+Start the app first and include its
+URL. Native figures returned by a supported agent appear in the conversation
+and remain available when it reopens. Browser readiness is separate from
+agent sign-in, model vision support, and the target app's availability.
+
+On a remote server, the browser runs on that server: `localhost` refers to
+the server, while files selected in your browser are uploaded as bytes.
+A graphical desktop is unnecessary. Missing Linux libraries or a host
+policy that prevents Chromium's sandbox produces a setup diagnostic;
+setup installs no operating-system packages and does not weaken the sandbox.
+An administrator must resolve those host prerequisites before retrying.
+This Browser control does not grant control of arbitrary desktop apps.
+
+See [Approvals and human decisions](docs/approvals.md) for one-time tool
+permissions, workflow questions, Codex's access-to-Spex prompt, and OS grants.
 
 ## Repository
 

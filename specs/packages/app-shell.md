@@ -141,7 +141,7 @@ The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs 
 
 #### app-shell-13
 
-Where the app is packaged, the packaged app shall ship agent-SDK native binaries — and any executable the runtime spawns as a child process — outside the asar archive as asar-unpacked files [[2]], so that spawning them from the installed app succeeds without a repo checkout or external `node_modules`.
+Where the app is packaged, the packaged app shall ship its complete `node_modules` dependency tree outside the asar archive as asar-unpacked files [[2]], keeping spawned native binaries and Cligent-owned Node child modules in one physically resolvable dependency tree, while app code and UI remain archived ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)).
 
 ### Release
 
@@ -171,7 +171,7 @@ The desktop package shall expose the native bridge of [DR-008](../decisions/008-
 
 #### app-shell-22
 
-The renderer shall enforce a content security policy that denies remote script, connection, and image loading (data: images excepted):
+The renderer shall enforce a content security policy that denies remote script, connection, image, and media loading (data: images and local blob: image/media URLs excepted):
 
 - Transcript markdown does not fetch remote images, so untrusted agent output cannot beacon out of the app.
 

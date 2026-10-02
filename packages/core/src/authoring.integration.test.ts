@@ -6,6 +6,7 @@
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
 
+import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -346,6 +347,9 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
 
   // playbook-library-69/70: registration writes the new player, then
   // the entry keyed by the derived roles; the draft retires.
+  const uploadId = randomUUID();
+  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", id: "triage"}, name: "registration.txt", mimeType: "text/plain", byteLength: 0});
+  await client.expectOk("media.finish", {uploadId});
   const state = await client.expectOk("draft.register", {
     draftId: "triage",
     command: "triage",
@@ -354,6 +358,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     newPlayers: { "dev.triager": { adapter: "claude" } },
   });
   assert.equal(state.status, "valid");
+  await client.expectError("media.finish", {uploadId}, "invalid_request");
   const registered = state.status === "valid" ? state.summary.playbooks.find((p) => p.id === "triage") : undefined;
   assert.ok(registered, "the playbook is configured");
   assert.deepEqual(Object.keys(registered.roles), ["Triager", "Verifier"]);
@@ -452,7 +457,7 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   await until(() => client.statusLines("triage").filter((l) => l.startsWith("◇ Compiling")).length >= 5, 120_000, "the fifth compile");
   const queued = await client.expectOk("draft.send", { draftId: "triage", text: "Also cite the label definitions." });
   assert.equal(queued.queued, true);
-  assert.deepEqual(client.latest("triage")?.queued, ["Also cite the label definitions."]);
+  assert.deepEqual(client.latest("triage")?.queued, [{text: "Also cite the label definitions."}]);
   await until(() => {
     const draft = client.latest("triage");
     return draft?.activity === "idle" && draft.state === "compiled" && draft.proposal !== undefined;
@@ -502,10 +507,14 @@ test("playbook-library-74: one activity per draft — messages queue, the rest i
   // During a turn.
   assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "start" }), { accepted: true, queued: false });
   await until(() => client.latest("matrix")?.activity === "turn", 10_000, "the turn");
+  const uploadId = randomUUID();
+  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", id: "matrix"}, name: "retained.txt", mimeType: "text/plain", byteLength: 0});
+  const completedUpload = await client.expectOk("media.finish", {uploadId});
   assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "second" }), { accepted: true, queued: true });
-  assert.deepEqual(client.latest("matrix")?.queued, ["second"]);
+  assert.deepEqual(client.latest("matrix")?.queued, [{text: "second"}]);
   await client.expectError("draft.compile", { draftId: "matrix" }, "busy");
   await client.expectError("draft.delete", { draftId: "matrix" }, "busy");
+  assert.deepEqual(await client.expectOk("media.finish", {uploadId}), completedUpload, "refused deletion preserves the valid completed retry");
   await client.expectError("draft.register", { draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
   await client.expectError("draft.source.write", { draftId: "matrix", content: "# Matrix\n" }, "busy");
   await client.expectError("draft.player.set", { draftId: "matrix", playerId: "dev.coder" }, "busy");
@@ -885,4 +894,57 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   a.close();
   b.close();
   await harness.service.stop();
+});
+
+
+test("draft media preserves file-only input, native bytes, owned output and text-only later turns", {timeout: 30_000}, async () => {
+  const image = Buffer.from("real owned fixture image bytes");
+  const output = Buffer.from("native screenshot bytes");
+  const largeTool = {observations: "seen ".repeat(1600)};
+  const harness = await startHarness({script: {fallback: {
+    result: "Observed the attached interface.",
+    media: [{mimeType: "image/png", source: {type: "base64", data: output.toString("base64")}, name: "screen.png", toolUseId: "screenshot-1"}],
+    tools: [{toolName: "inspect", input: {}, output: largeTool}],
+  }}, slc: stubSlcSource("['Inspector']")});
+  let client = new Client(harness.service.port());
+  try {
+    await client.open();
+    await client.expectOk("draft.create", {draftId: "visual"});
+    await client.expectOk("subscribe", {channel: {kind: "draft", draftId: "visual"}});
+    const owner = {kind: "draft" as const, id: "visual"};
+    const uploadId = randomUUID();
+    await client.expectOk("media.begin", {owner, uploadId, name: "selected.png", mimeType: "image/png", byteLength: image.length});
+    await client.expectOk("media.chunk", {uploadId, offset: 0, data: image.toString("base64")});
+    const {asset} = await client.expectOk("media.finish", {uploadId});
+    await client.expectOk("draft.send", {draftId: "visual", text: "", attachments: [asset]});
+    await until(() => client.records("visual").some(({record}) => record.type === "turn_finished"), 10_000);
+    const native = harness.stats.runs[0].attachments;
+    assert.equal(native?.length, 1);
+    assert.deepEqual(readFileSync(native![0].path), image);
+    assert.equal(native![0].mimeType, "image/png");
+    const start = client.records("visual").find(({record}) => record.type === "turn_started")!.record;
+    assert.equal(start.type, "turn_started");
+    if (start.type === "turn_started") { assert.equal(start.turn.prompt, ""); assert.deepEqual(start.turn.attachments, [asset]); }
+    const transcript = readFileSync(join(harness.dataDir, "local", "drafts", "visual", "records.jsonl"), "utf8");
+    assert.ok(!transcript.includes(output.toString("base64")));
+    assert.ok(!transcript.includes(largeTool.observations));
+    const media = client.records("visual").find(({record}) => record.type === "player_event" && record.event.type === "media")!.record;
+    if (media.type !== "player_event" || media.event.type !== "media" || media.event.payload.source.type !== "uri") throw new Error("missing owned media");
+    const mediaId = media.event.payload.source.uri.slice("playbook-asset:".length) as typeof asset.assetId;
+    const captured = await client.expectOk("media.read", {owner, assetId: mediaId, offset: 0, length: 65536});
+    assert.deepEqual(Buffer.from(captured.data, "base64"), output);
+    await client.expectOk("draft.send", {draftId: "visual", text: "Thanks"});
+    await until(() => harness.stats.runs.length === 2 && client.latest("visual")?.activity === "idle", 10_000);
+    assert.equal(harness.stats.runs[1].attachments, undefined);
+    client.close();
+    await harness.service.stop();
+    const next = await startHarness({dir: harness.dir, script: {fallback: {result: "Reopened"}}, slc: stubSlcSource("['Inspector']")});
+    harness.service = next.service;
+    client = new Client(next.service.port());
+    await client.open();
+    const reopened = await client.expectOk("draft.open", {draftId: "visual"});
+    assert.ok(JSON.stringify(reopened).includes(asset.assetId));
+    const retained = await client.expectOk("media.read", {owner, assetId: asset.assetId, offset: 0, length: 65536});
+    assert.deepEqual(Buffer.from(retained.data, "base64"), image);
+  } finally { client.close(); await harness.service.stop(); }
 });

@@ -37,12 +37,13 @@
   },
   "dependencies": {
     "@lingui/core": "^6.7.0",
-    "@sublang/cligent": "^0.30.0",
-    "@sublang/playbook": "^17.3.0",
+    "@sublang/cligent": "^0.33.1",
+    "@sublang/playbook": "^17.4.0",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "esbuild": "^0.28.2"
   },
   "devDependencies": {
     "@lingui/cli": "^6.7.0",
@@ -50,7 +51,6 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.4.0",
     "@types/ws": "^8.18.0",
-    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

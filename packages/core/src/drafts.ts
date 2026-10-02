@@ -24,6 +24,7 @@ import { createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
 import { StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
+import { mediaAttachmentsSchema, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
 import { sanitizeRecord } from "./stream-fold.js";
 import type {
@@ -54,11 +55,11 @@ export interface StoredDraftCompile {
 
 /** `local/drafts/<id>/draft.json`, exactly (storage-23). */
 export interface StoredDraft {
-  v: 1;
+  v: 2;
   id: string;
   createdAt: number;
   touchedAt: number;
-  queued: string[];
+  queued: MessageContent[];
   failures: number;
   compile?: StoredDraftCompile;
   proposal?: DraftProposal;
@@ -142,7 +143,7 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
   );
   closedKeys(value, ["v", "id", "createdAt", "touchedAt", "queued", "failures"], ["compile", "proposal"], file);
   need(
-    value.v === 1,
+    value.v === 1 || value.v === 2,
     file,
     i18n._({ id: "unsupported draft version", comment: "Diagnostic for a draft file this Spex cannot read" }),
   );
@@ -160,7 +161,12 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     i18n._({ id: "invalid timestamps", comment: "Diagnostic for a damaged draft file: its recorded times will not read" }),
   );
   need(
-    isStringArray(value.queued),
+    Array.isArray(value.queued) && value.queued.every((entry) => value.v === 1
+      ? isText(entry)
+      : isObject(entry) && isText(entry.text) &&
+        Object.keys(entry).every((key) => key === "text" || key === "attachments") &&
+        (entry.attachments === undefined || mediaAttachmentsSchema.safeParse(entry.attachments).success) &&
+        (entry.text.length > 0 || (Array.isArray(entry.attachments) && entry.attachments.length > 0))),
     file,
     i18n._({ id: "invalid queue", comment: "Diagnostic for a damaged draft file: its queued messages will not read" }),
   );
@@ -228,7 +234,9 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     closedKeys(proposal, ["command", "intent", "players"], [], file);
     need(isText(proposal.command) && isText(proposal.intent) && isObject(proposal.players) && Object.values(proposal.players).every(isText), file, invalidProposal());
   }
-  return value as unknown as StoredDraft;
+  return {...value, v: 2, queued: value.v === 1
+    ? (value.queued as string[]).map((text) => ({text}))
+    : value.queued} as unknown as StoredDraft;
 }
 
 /** The version token of a source's bytes: a digest prefix, as the
@@ -315,7 +323,7 @@ export class DraftStore {
     // A transcript left behind without its record would put the new
     // draft's first records after a stranger's; it goes first.
     rmSync(this.recordsFile(id), { force: true });
-    const draft: StoredDraft = { v: 1, id, createdAt: now, touchedAt: now, queued: [], failures: 0 };
+    const draft: StoredDraft = { v: 2, id, createdAt: now, touchedAt: now, queued: [], failures: 0 };
     this.write(draft);
     return draft;
   }

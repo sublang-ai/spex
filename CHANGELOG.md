@@ -16,6 +16,28 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Live tool approval controls for supported agents show the conversation or
+  authoring draft, actor, operation, and complete requested action. Approve once
+  or Deny works while a turn is running; pending requests survive client
+  reconnects but expire on cancellation, completion, or core restart. Historical
+  permission records never become actionable, and native policy and external
+  app-access grants remain separate
+  ([DR-098](specs/decisions/098-live-tool-approvals.md)).
+- Attach files by picking, pasting, or dropping them into a new conversation,
+  follow-up, queued intent, or playbook authoring draft. File-only messages,
+  interrupted-upload retry, intent editing and Undo preserve exact content.
+  Accepted sessions own verified copies, and figures and deferred tool details
+  remain readable after reopening and whole-bundle Space selection
+  ([DR-097](specs/decisions/097-media-and-browser-tools-across-hosts.md)).
+- Browser setup and explicit agent controls prepare an isolated headless browser
+  on the execution host, with progress, cancellation and actionable failures.
+  Setup proves launch and screenshot without enabling access or invoking a
+  provider. Conversation overrides apply to the next turn and can return to
+  Settings; authoring follows its selected agent's saved choice.
+- `/inspect` provides a tool-using inspection workflow that leaves the repository
+  unchanged. Native working-agent figures appear with their originating actor,
+  turn and call beside the conversation; control calls remain tool-free.
+  Desktop and remote server clients share the same upload and rendering path.
 - The interface speaks your language ([DR-078](specs/decisions/078-the-interface-speaks-the-readers-language.md)).
   Settings offers System, English and 简体中文, one choice per Spex home
   that reaches every page of it on both shells and the desktop's own

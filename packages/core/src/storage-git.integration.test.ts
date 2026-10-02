@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { createAssetStore } from "@sublang/playbook/session-assets";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -290,4 +291,50 @@ test("a config naming a missing registry stays a nonblocking diagnostic whatever
       assert.match(chinese.reason, /导入失败/);
     } finally { speak("en"); }
   } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+
+test("Git selects intent and session media as complete independently owned bundles", async () => {
+  const {home, project, sessionId, bundle, commit} = setup();
+  const log = join(home, "intents", `${project.id}.jsonl`);
+  const intentId = randomUUID();
+  const sessionAssets = createAssetStore({directory: join(home, "sessions", `${sessionId}.assets`)});
+  const intentAssets = createAssetStore({directory: join(home, "intents", `${project.id}.assets`)});
+  const write = async (label: string) => {
+    bundle(label);
+    await sessionAssets.prepare(); await intentAssets.prepare();
+    const bytes = Buffer.from(`${label}: selected binary content\r\n`);
+    const sessionAsset = await sessionAssets.importAsset({bytes, mimeType: "image/png", name: `${label}.png`});
+    const intentAsset = await intentAssets.importAsset({bytes, mimeType: "image/png", name: `${label}.png`});
+    const manifestPath = join(home, "sessions", `${sessionId}.json`);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.assets = {version: 1, entries: [sessionAsset]};
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(log, JSON.stringify({v: 1, act: "queue", intent: {id: intentId, projectId: project.id, text: "", attachments: [intentAsset], rank: "a", createdAt: 1}}) + "\n");
+    return intentAsset;
+  };
+  try {
+    git(home, "branch", "other");
+    const ours = await write("ours"); commit("ours media");
+    git(home, "checkout", "other");
+    const theirs = await write("theirs"); commit("theirs media");
+    git(home, "checkout", "main");
+    const plan = planStorageMerge(home, "HEAD", "other");
+    const session = plan.units.find((unit) => unit.name === `sessions/${sessionId}`)!;
+    const intent = plan.units.find((unit) => unit.name === `intents/${project.id}.jsonl`)!;
+    assert.equal(session.paths.length, 6);
+    assert.equal(intent.paths.length, 5);
+    assert.equal(plan.units.filter((unit) => unit.name.includes(".assets/")).length, 0);
+    merge(home);
+    await selectStorageMerge(home, {[session.name]: "theirs", [intent.name]: "ours"});
+    assert.deepEqual(await sessionAssets.readAsset(theirs), Buffer.from("theirs: selected binary content\r\n"));
+    assert.deepEqual(await intentAssets.readAsset(ours), Buffer.from("ours: selected binary content\r\n"));
+    assert.equal(existsSync(join(sessionAssets.directory, ours.assetId.slice(7))), false);
+    assert.equal(existsSync(join(intentAssets.directory, theirs.assetId.slice(7))), false);
+    const check = await validateStorageTree(home); assert.deepEqual(check, []);
+    // Clearing a queued selection retains the original append-only history.
+    writeFileSync(log, readFileSync(log, "utf8") + JSON.stringify({v: 1, act: "edit", id: intentId, text: "cleared", attachments: []}) + "\n");
+    rmSync(join(intentAssets.directory, ours.assetId.slice(7)));
+    await assert.rejects(validateStorageTree(home), /content|ENOENT|asset/i);
+  } finally { rmSync(home, {recursive: true, force: true}); }
 });

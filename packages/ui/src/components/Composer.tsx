@@ -34,6 +34,14 @@ import type { SessionView } from "../state/reducer.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { Rich } from "./Rich.js";
 import { Icon } from "./Icon.js";
+import {
+  AttachmentChips,
+  AttachmentPicker,
+  composerFileDrop,
+  composerFilePaste,
+  canSubmitContent,
+  type ComposerAttachmentControls,
+} from "./ComposerAttachments.js";
 
 /** The caption every composer carries when nothing else needs the
  * line (run-view-106). Read where it is shown, never at module load
@@ -65,6 +73,7 @@ export function ComposerBox({
   caption,
   secondary,
   actions,
+  attachments,
 }: {
   field: ReactNode;
   caption: ReactNode;
@@ -72,15 +81,28 @@ export function ComposerBox({
   secondary?: ReactNode;
   /** The right-hand group: Abort while a turn runs, then the primary. */
   actions: ReactNode;
+  /** Shared file controls; transfer and durable ownership belong to the caller. */
+  attachments?: ComposerAttachmentControls;
 }) {
+  const pickerRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   return (
     <div
       data-testid="composer-box"
       className="flex flex-col gap-1 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400"
+      onDragOver={attachments ? (event) => {
+        if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = attachments.disabled ? "none" : "copy";
+      } : undefined}
+      onDrop={attachments ? (event) => composerFileDrop(event, attachments) : undefined}
+      onPaste={attachments ? (event) => composerFilePaste(event, attachments) : undefined}
     >
+      {attachments ? <AttachmentChips controls={attachments} pickerRef={pickerRef} /> : null}
       {field}
       {caption}
       <div className="flex flex-wrap items-center gap-1.5">
+        {attachments ? <AttachmentPicker controls={attachments} buttonRef={pickerRef} inputRef={fileInputRef} /> : null}
         {secondary}
         <span className="ml-auto flex items-center gap-1.5">{actions}</span>
       </div>
@@ -187,6 +209,7 @@ export function Composer({
   onDismissError,
   onDetachStaged,
   onQueueInstead,
+  attachments,
 }: {
   view: SessionView;
   composer: ComposerState;
@@ -208,6 +231,7 @@ export function Composer({
   /** Queue instead of send (DR-035): the typed text becomes a queued
    * intent for this project; nothing is sent. */
   onQueueInstead?: (text: string) => Promise<void>;
+  attachments?: ComposerAttachmentControls;
 }) {
   const [localText, setLocalText] = useState("");
   const text = onDraftChange ? (composer.draft ?? "") : localText;
@@ -255,10 +279,9 @@ export function Composer({
   }, [error]);
 
   function submit() {
-    const trimmed = text.trim();
-    if (!trimmed || sending || !connected || blockedReason || view.turnActive) return;
+    if (!canSubmitContent(text, attachments?.files) || sending || !connected || blockedReason || view.turnActive) return;
     setSending(true);
-    onSubmit(trimmed)
+    onSubmit(text)
       .then(() => setText(""))
       .catch(() => {
         // Draft is kept; the error strip explains what happened.
@@ -339,7 +362,7 @@ export function Composer({
               {/* An unbroken token breaks anywhere rather than
                   widening the frame (run-view-3). */}
               <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
-                {entry.text}
+                {entry.text || entry.attachments?.map((file) => file.name ?? i18n._("Attachment")).join(", ")}
               </span>
               <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
                 {entry.intentId !== undefined ? (
@@ -378,6 +401,7 @@ export function Composer({
           />
         ) : null}
         <ComposerBox
+          attachments={attachments ? { ...attachments, disabled: attachments.disabled || sending || !connected || view.turnActive } : undefined}
           field={
             <ComposerField
               fieldRef={textareaRef}
@@ -397,7 +421,7 @@ export function Composer({
                 setQueuedNote(undefined);
                 // Emptying the composer detaches the staged intent
                 // (DR-035): sending something else stamps nothing.
-                if (staged && event.target.value.trim().length === 0) {
+                if (staged && event.target.value.trim().length === 0 && !attachments?.files.length) {
                   onDetachStaged?.();
                 }
               }}
@@ -457,10 +481,9 @@ export function Composer({
                 data-testid="queue-intent-button"
                 title={i18n._("Add this to the project's Up next without sending it")}
                 onClick={() => {
-                  const trimmed = text.trim();
-                  if (!trimmed || sending) return;
+                  if (!canSubmitContent(text, attachments?.files) || sending) return;
                   setSending(true);
-                  onQueueInstead(trimmed)
+                  onQueueInstead(text)
                     .then(() => {
                       setText("");
                       setQueuedNote(
@@ -475,7 +498,7 @@ export function Composer({
                       textareaRef.current?.focus();
                     });
                 }}
-                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason || view.turnActive}
+                disabled={!canSubmitContent(text, attachments?.files) || sending || !connected || !!blockedReason || view.turnActive}
                 className={SECONDARY_CLASS}
               >
                 {i18n._("Add to Up next")}
@@ -511,7 +534,7 @@ export function Composer({
                 data-testid="send-button"
                 onClick={submit}
                 className={PRIMARY_CLASS}
-                disabled={text.trim().length === 0 || sending || !connected || !!blockedReason || view.turnActive}
+                disabled={!canSubmitContent(text, attachments?.files) || sending || !connected || !!blockedReason || view.turnActive}
                 title={
                   !connected
                     ? i18n._("Not connected")

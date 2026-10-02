@@ -5,7 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, resolve, win32 } from "node:path";
 import { i18n } from "./i18n.js";
-import type { DiagnosticRepair, IntentInfo, ProjectInfo, RepairChecked } from "./protocol.js";
+import { mediaAttachmentsSchema, type DiagnosticRepair, type IntentInfo, type MediaAsset, type ProjectInfo, type RepairChecked } from "./protocol.js";
 
 export type { DiagnosticRepair, RepairChecked };
 
@@ -105,7 +105,7 @@ export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagno
 export interface RebindProjectOptions { id: string; path: string; aliases?: string[]; revision?: string }
 export type IntentAct =
   | { act: "queue"; intent: IntentInfo }
-  | { act: "edit"; id: string; text: string }
+  | { act: "edit"; id: string; text: string; attachments?: readonly MediaAsset[] }
   | { act: "move"; id: string; rank: string }
   | { act: "link"; id: string; afterId: string | null }
   | { act: "dispatch"; id: string; sessionId: string; turnId: number; at: number }
@@ -194,9 +194,10 @@ export function parsePrefs(value: unknown, file = "prefs.json"): Record<string, 
   return value.prefs;
 }
 function validateIntent(value: unknown, projectId: string, file: string): asserts value is IntentInfo {
-  closed(value, ["id", "projectId", "text", "rank", "createdAt"], ["source", "afterId", "dispatched", "closedAt", "closedAs"], file);
+  closed(value, ["id", "projectId", "text", "rank", "createdAt"], ["source", "afterId", "dispatched", "closedAt", "closedAs", "attachments"], file);
   need(uuid(value.id) && value.projectId === projectId && typeof value.text === "string" && text(value.rank) && timestamp(value.createdAt), file,
     i18n._({ id: "invalid queued intent", comment: "Storage diagnostic: a queued intent's own fields are malformed" }));
+  if (value.attachments !== undefined) need(mediaAttachmentsSchema.safeParse(value.attachments).success, file, i18n._({id: "invalid attachment references", comment: "Attachment transfer or storage diagnostic"}));
   if (value.afterId !== undefined) need(uuid(value.afterId), file, invalidPredecessor());
   if (value.source !== undefined) {
     closed(value.source, ["kind", "ref"], ["url", "labels"], file);
@@ -224,12 +225,13 @@ export function parseIntentLog(contents: string, projectId: string, file = `inte
       comment: "Storage diagnostic: one line of an act log is not readable JSON" })); }
     need(object(value) && value.v === 1 && typeof value.act === "string" && Object.hasOwn(fields, value.act), location, i18n._({ id: "unsupported act/version",
       comment: "Storage diagnostic: an act's kind or version is not one this Spex reads" }));
-    closed(value, ["v", "act", ...fields[value.act]], [], location);
+    closed(value, ["v", "act", ...fields[value.act]], value.act === "edit" ? ["attachments"] : [], location);
     if (value.act === "queue") validateIntent(value.intent, projectId, location);
     else {
       need(uuid(value.id), location, i18n._({ id: "invalid intent ID", comment: "Storage diagnostic: an act names no valid intent id" }));
       if (value.act === "edit") need(typeof value.text === "string", location, i18n._({ id: "invalid text",
         comment: "Storage diagnostic: an edit act carries no text" }));
+      if (value.act === "edit" && value.attachments !== undefined) need(mediaAttachmentsSchema.safeParse(value.attachments).success, location, i18n._({id: "invalid attachment references", comment: "Attachment transfer or storage diagnostic"}));
       if (value.act === "move") need(text(value.rank), location, i18n._({ id: "invalid rank",
         comment: "Storage diagnostic: a move act carries no queue position" }));
       if (value.act === "link") need(value.afterId === null || uuid(value.afterId), location, invalidPredecessor());
@@ -254,7 +256,10 @@ export function foldIntentActs(acts: IntentAct[], file: string, intents = new Ma
     need(!removed.has(act.id), file, i18n._({ id: "act targets removed intent {intentId}",
       comment: "Storage diagnostic: an act follows the intent's removal", values: { intentId: act.id } }));
     switch (act.act) {
-      case "edit": intent.text = act.text; break;
+      case "edit":
+        intent.text = act.text;
+        if (act.attachments !== undefined) intent.attachments = structuredClone(act.attachments);
+        break;
       case "move": intent.rank = act.rank; break;
       case "link": if (act.afterId === null) delete intent.afterId; else intent.afterId = act.afterId; break;
       case "dispatch": intent.dispatched = { sessionId: act.sessionId, turnId: act.turnId, at: act.at }; break;

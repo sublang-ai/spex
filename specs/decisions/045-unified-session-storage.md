@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for session bundles and whole-unit selection to include owned media assets.
+
 Accepted (2026-09-05).
 Amended by [DR-047](047-explicit-session-recovery.md) for desktop uncertain-turn recovery.
 Amended by [DR-050](050-shared-storage-cutover.md) for default-store discovery and damage isolation.

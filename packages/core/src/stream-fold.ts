@@ -236,7 +236,7 @@ function sanitizeValue(value: unknown): unknown {
 }
 
 export type TurnEvent =
-  | { kind: "start"; turnId: number; prompt: string; at: number }
+  | { kind: "start"; turnId: number; prompt: string; at: number; attachmentTitle?: string }
   | { kind: "end"; turnId: number; status: "finished" | "aborted"; at: number };
 
 /** The turn transition a record carries, if any. */
@@ -244,8 +244,9 @@ export function foldTurnEvent(record: TmuxPlayRecord): TurnEvent | undefined {
   if (!hasPresentationHeader(record)) return undefined;
   switch (record.type) {
     case "turn_started": {
-      const turn = (record as { turn: { id: number; prompt: string } }).turn;
-      return { kind: "start", turnId: turn.id, prompt: turn.prompt, at: record.timestamp };
+      const turn = record.turn;
+      const attachmentTitle = turn.attachments?.map((asset) => asset.name ?? asset.mimeType).join(", ");
+      return { kind: "start", turnId: turn.id, prompt: turn.prompt, at: record.timestamp, ...(attachmentTitle ? {attachmentTitle} : {}) };
     }
     case "turn_finished":
       return record.turnId !== null

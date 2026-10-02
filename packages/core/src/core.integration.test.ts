@@ -3542,6 +3542,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     }
     if (action !== "discard") {
       await client.expectOk("subscribe", {channel:{kind:"session",sessionId}});
+      const restoreMessages = client.messages.length;
       await client.expectOk("session.restore", {sessionId});
       await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.turnActive && m.session.turns > 0 && !m.session.recovery);
       const manifest = validateSessionManifest(await shared.readManifest(sessionId));
@@ -3553,7 +3554,9 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
       assert.ok(!JSON.stringify(manifest).includes("fake-resume-"));
       // Settlement released the runtime (core-service-91); the same CLI
       // facade can reopen the desktop settlement at once.
-      await client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && m.session.live === false);
+      await client.waitFor((m) => client.messages.indexOf(m) >= restoreMessages
+        && m.type === "session.state" && m.session.id === sessionId
+        && !m.session.turnActive && m.session.turns > 0 && !m.session.recovery && m.session.live === false);
       const reopened = await openSessionHost({store:shared,sessionId,mode:"continue",cwd:projectPath,config,adapterImports:imports});
       await reopened.handleBossTurn("continued in CLI");
       assert.equal((await reopened.read())?.state, "settled");

@@ -105,12 +105,13 @@ When a session's runtime is opened for a message [[core-service-73](#core-servic
 
 #### core-service-100
 
-When a client sends `session.agent.set` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, subagent model, effort, subagent effort, or fast mode, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's own agent settings [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md): the same act as the configuration's own agent edits, at a different scope):
+When a client sends `session.agent.set` naming a session, one of its agents — the reserved `captain`, or a player of its bound roster — and a change to that agent's model, subagent model, effort, subagent effort, fast mode, or browser access, the core service shall accept the change only if the projection the session's next message would open on validates with it applied, then persist the session's own agent settings [[storage-5](storage.md#storage-5)] and republish the session's summary [[core-service-32](#core-service-32)] ([DR-067](../decisions/067-tuning-for-one-conversation.md), [DR-068](../decisions/068-an-agents-settings-where-the-agent-is.md): the same act as the configuration's own agent edits, at a different scope):
 
 | The field's value is | The agent runs |
 | --- | --- |
 | a string | that value, above the config's role binding and player alike |
-| `false` | the provider's current default |
+| `false` | the provider's current default for tuning; off for browser access |
+| `true` for browser | managed browser tools on the next accepted turn [[media-9](media.md#media-9)] |
 | `null` | the configured value — the session's tuning of that field is cleared |
 | absent | what the session's tuning already held for it |
 
@@ -215,6 +216,7 @@ While a session is live and no boss turn is active on it, when a client submits 
 
 - While a boss turn is active on a session, a further Boss submission for that session is rejected with a busy error and starts no turn, so boss turns on one session run strictly one at a time.
 - A submission for a session that is not live opens its runtime first [[core-service-73](#core-service-73)], then starts the turn as above.
+- A refused attachment handoff [[media-4](media.md#media-4)] starts no turn and leaves the already-live runtime owned as before.
 
 #### core-service-73
 
@@ -231,7 +233,8 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
 
 - desktop and CLI checkpoints use the same cases; missing provider hints and recorded repository effects alone do not refuse continuation ([DR-074](../decisions/074-a-parked-run-survives.md));
-- parked questions resume in their retained frames; a refusal starts no turn and stamps no intent [[core-service-47](#core-service-47)].
+- parked questions resume in their retained frames; a refusal starts no turn and stamps no intent [[core-service-47](#core-service-47)];
+- a submission refused after opening, including a failed attachment handoff [[media-4](media.md#media-4)], releases the runtime it opened before replying.
 
 #### core-service-6
 
@@ -295,7 +298,7 @@ The core service shall accept the draft command family — `draft.list`, `draft.
 
 #### core-service-42
 
-When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's text, its optional source (kind, reference, URL, and labels), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the request places the intent at the head or the tail of the project's queue as it asks, tail when it says nothing;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
@@ -303,7 +306,7 @@ When a client sends `intent.queue` for a registered project ([DR-006](../decisio
 
 #### core-service-43
 
-While an intent is queued [[core-service-47](#core-service-47)], when a client sends `intent.edit` for it, the core service shall replace the intent's text and announce the write [[core-service-51](#core-service-51)]:
+While an intent is queued [[core-service-47](#core-service-47)], when a client sends `intent.edit` for it, the core service shall replace the intent's text and any supplied attachment list, preserving omitted attachments [[media-5](media.md#media-5)], and announce the write [[core-service-51](#core-service-51)]:
 
 - an edit of a dispatched or closed intent is rejected: from its dispatch binding on, the text is history ([DR-035](../decisions/035-intent-ledger.md)).
 
@@ -423,7 +426,8 @@ The core package shall hold intents in one per-project append-only act log of ac
 | --- | --- |
 | `id` | the intent's identifier |
 | `projectId` | the owning project |
-| `text` | the staged Boss turn text; its first line is the display title |
+| `text` | the exact staged Boss turn text; the display title uses its trimmed first line when nonblank, otherwise the trimmed text, falling back to attachment names when the text is blank [[media-5](media.md#media-5)] |
+| `attachments` | optional ordered project-owned immutable file references [[media-4](media.md#media-4)] |
 | `source` (`kind`, `ref`, `url`) | provenance — issue, PR, record, or chat, with reference and URL — absent when unsourced |
 | `rank` | the per-project lexicographic order key |
 | `afterId` | the single optional predecessor intent, of any project |
@@ -793,6 +797,7 @@ When an integration suite changes stored history and project bindings through a 
 When the integration suite settles and restarts a shared-store session, it shall verify that either a desktop- or CLI-created supported checkpoint lists continuable [[core-service-32](#core-service-32)], that its runtime was released at settlement with the provider hints kept [[core-service-91](#core-service-91)], continues with the same identities and stream [[core-service-74](#core-service-74)], and persists recovery without provider tokens [[core-service-72](#core-service-72)]; that a message opens it on the current tuning while an added playbook changes nothing and a structural change is refused naming the field [[core-service-92](#core-service-92)]; and that active leases and turns in flight, history-only recovery, damaged digests, uncertain work, missing bindings and path/config drift shall refuse before a turn or intent stamp [[core-service-73](#core-service-73)]:
 
 - a session parked on a question keeps its summons across the release and answers where it waited [[core-service-93](#core-service-93)];
+- a rejected attachment handoff starts no turn or provider call, releases the runtime opened for the submission before its reply, and permits session deletion and another session for the project [[core-service-73](#core-service-73)]; the same refusal preserves a runtime that was already live [[core-service-5](#core-service-5)];
 - with release-time summary refresh held after runtime disposal, a next-message or new-session request waits for publication before admission [[core-service-91](#core-service-91)], and shutdown keeps the store open until refresh completes [[core-service-39](#core-service-39)]; a finished turn and an aborted turn the shared lifecycle settled at its saved progress both permit continuation [[core-service-6](#core-service-6)], and no waiting message stamps an intent [[core-service-47](#core-service-47)].
 
 #### core-service-63

@@ -7,7 +7,7 @@
 
 This package defines Spex's data files, project path mappings, migration and offline Git merge rules under [DR-045](../decisions/045-unified-session-storage.md).
 **Spex home** is the application data directory; paths below are relative to it.
-Playbook owns session files and recovery [[1]]; a **session bundle** consists of a manifest and its matching replay stream, selected from one revision or deleted as a unit during Git synchronization.
+Playbook owns session files and recovery [[1]]; a **session bundle** consists of a manifest, its matching replay stream, and its owned asset directory, selected from one revision or deleted as a unit during Git synchronization.
 Intent **acts** record changes in file order; **closed** JSON objects permit only the declared fields.
 
 ## External Behavior
@@ -23,8 +23,8 @@ The store shall persist core-owned data in Spex home using these locations:
 | --- | --- | --- |
 | `config/playbook.config.yaml` | Shared launcher configuration | Tracked |
 | `projects.json` | Project identities [[storage-2](#storage-2)] | Tracked |
-| `intents/<projectId>.jsonl` | Ordered intent changes [[storage-4](#storage-4)] | Tracked |
-| `sessions/<id>.json`, `sessions/<id>.records.jsonl` | Playbook session bundle [[1]] | Tracked |
+| `intents/<projectId>.jsonl`, optional `intents/<projectId>.assets/` | Ordered intent changes [[storage-4](#storage-4)] and retained media ownership [[media-4](media.md#media-4)] | Tracked |
+| `sessions/<id>.json`, `sessions/<id>.records.jsonl`, optional `sessions/<id>.assets/` | Playbook session bundle [[1]] | Tracked |
 | `playbooks/<id>/` | Library sources and outputs [[storage-8](#storage-8)] | Track sources; omit outputs only if rebuildable |
 | `local/project-paths.json` | Local bindings [[storage-3](#storage-3)] | Ignored |
 | `prefs.json` | Core preferences and viewed markers [[storage-5](#storage-5)] | Ignored |
@@ -55,7 +55,7 @@ The intent store shall encode each newline-terminated act as a closed JSON objec
 | `act` | Other fields |
 | --- | --- |
 | `queue` | `intent`: the complete intent fields defined by the lifecycle, with UUID `id` and `projectId` matching the filename |
-| `edit` | `id`, string `text` |
+| `edit` | `id`, string `text`, optional ordered `attachments` references [[media-5](media.md#media-5)]; omission preserves the existing attachments and an empty array clears them |
 | `move` | `id`, string `rank` |
 | `link` | `id`, UUID or null `afterId`; null clears the link |
 | `dispatch` | `id`, UUID `sessionId`, positive integer `turnId`, timestamp `at` |
@@ -74,7 +74,7 @@ The preference store shall encode `prefs.json` as exactly `{v:1,prefs:{...}}`, w
 - `space:lastSync` stores the last completed in-app sync as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the project and recorded directories it names, so the repair stands in the list and counts as no issue here alone;
 - `draft:<id>:player` stores the roster player id answering that draft's authoring conversation; absent means the Captain's block; removed with the draft.
-- `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, a subagent model, an effort, a subagent effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; absent means the session runs what the config resolves; removed with the session.
+- `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, a subagent model, an effort, a subagent effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; browser access is a boolean override with omission inheriting the configured off-by-default setting [[media-9](media.md#media-9)]; absent means the session runs what the config resolves; removed with the session.
 - `session:<id>:parked` stores what a run of that session standing parked on the Boss advertised at its last settlement — the park's reason, its actions and the shell's ending, each an id with its label and any standing the runtime reported [[core-service-32](core-service.md#core-service-32)]; absent means that settlement found no parked run advertising anything; the next settlement writes it again [[core-service-91](core-service.md#core-service-91)], and it is removed with the session.
 - `language` stores the home's interface language as an offered language code [[core-service-108](core-service.md#core-service-108)]; absent means the reader's system ([DR-078](../decisions/078-the-interface-speaks-the-readers-language.md)).
 
@@ -165,7 +165,7 @@ When invoked as `rebind <project-id> <path> [--alias path ...] [--revision ances
 When selecting stored data during a Git merge, the validator shall compare both pre-merge revisions with their common ancestor:
 
 - compare complete file bytes and existence;
-- treat the manifest and matching replay stream as one session bundle [[1]], each `playbooks/<id>/` directory as one unit, and each other tracked file as a separate unit.
+- treat the manifest, matching replay stream, and owned assets as one session bundle [[1]], each project intent log and its retained asset directory [[media-4](media.md#media-4)] as one unit, each `playbooks/<id>/` directory as one unit, and each other tracked file as a separate unit.
 
 | Comparison | Selection |
 | --- | --- |
@@ -173,7 +173,7 @@ When selecting stored data during a Git merge, the validator shall compare both 
 | Exactly one side changed | That side's entire unit or deletion |
 | Both changed differently | Explicit choice of the entire unit from either branch, even after a clean text merge |
 
-- absence means deletion; a present session bundle requires both files from the same selected revision, never a manifest from one branch and replay from another;
+- absence means deletion; a present session bundle requires every owned bundle file from the same selected revision, never mixed manifest, replay, or asset generations;
 - an unresolved choice refuses selection; revisions with no common ancestor refuse selection unless the caller explicitly joins them, whereupon the empty tree is the ancestor and every unit present on both sides differently is an explicit choice;
 - unselected history remains recoverable from Git, but its intent changes and project registrations leave current state;
 - hunk-level preferences, record concatenation and automatic intent-log unions do not satisfy this contract.
@@ -201,9 +201,9 @@ The core shall remain the sole writer of Spex-owned files, using atomic same-dir
 
 ### storage-23
 
-The draft store shall encode `local/drafts/<id>/draft.json` as exactly `{v:1,id,createdAt,touchedAt,queued,failures,compile?,proposal?}` and `records.jsonl` as newline-terminated `{seq,record}` objects in sequence order:
+The draft store shall encode `local/drafts/<id>/draft.json` as exactly `{v:2,id,createdAt,touchedAt,queued,failures,compile?,proposal?}` and `records.jsonl` as newline-terminated `{seq,record}` objects in sequence order:
 
-- `queued` is an array of strings; `failures` a nonnegative integer; `compile` is `{at,by:'boss'|'agent',outcome:'running'|'ok'|'failed'|'canceled'|'interrupted',phase?,output?,questions?,relay?:'sent'|'stopped'|'queued',roles?,sourceSha256?}`; `proposal` is `{command,intent,players}`;
+- `queued` is an array of `{text,attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; version 1 string queues read losslessly as text entries and are written in version 2 on the next normal save; `failures` a nonnegative integer; `compile` is `{at,by:'boss'|'agent',outcome:'running'|'ok'|'failed'|'canceled'|'interrupted',phase?,output?,questions?,relay?:'sent'|'stopped'|'queued',roles?,sourceSha256?}`; `proposal` is `{command,intent,players}`;
 - timestamps use the registry's millisecond encoding [[storage-2](#storage-2)]; no provider token enters either file; an incomplete final record line is not a record;
 - the `local/` family is already excluded by the managed ignore block [[storage-17](#storage-17)].
 

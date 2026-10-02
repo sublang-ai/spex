@@ -11,6 +11,7 @@ import type { PlayerView, TranscriptSegment, UsageView } from "../state/reducer.
 import { useStickToBottom, jumpPillClasses } from "../lib/useStickToBottom.js";
 import { absoluteTitle, clockTime, duration } from "../lib/time.js";
 import { currentLocale, i18n } from "../i18n.js";
+import { mediaOrigin } from "../lib/media.js";
 import { inputBlocks, outputBlock } from "../lib/tool-body.js";
 import { useClock } from "../lib/useClock.js";
 import { FAST_MODE_MARK } from "./AgentChip.js";
@@ -21,6 +22,7 @@ import {
   activeTimeDescriptionId,
 } from "./AgentActiveTime.js";
 import type { SessionAgent } from "../lib/session-agents.js";
+import { StoredMedia, assetReference, DeferredToolOutput } from "./StoredMedia.js";
 import { Markdown } from "./Markdown.js";
 import { RunningMark } from "./RunningMark.js";
 
@@ -121,6 +123,7 @@ export function toolLabel(name: string): string {
  * exported so the authoring thread renders the agent's segments with
  * the same cards (playbook-library-53). */
 export function Segment({ segment }: { segment: TranscriptSegment }) {
+  const [expanded, setExpanded] = useState(false);
   switch (segment.kind) {
     case "prompt":
       return (
@@ -166,6 +169,8 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
           ) : null}
         </div>
       );
+    case "media":
+      return <StoredMedia media={segment.media} origin={mediaOrigin(segment.origin)} />;
     case "thinking":
       return (
         <details className="rounded border border-dashed border-neutral-300 px-2 py-1 text-xs italic text-neutral-500 dark:border-neutral-700">
@@ -180,6 +185,7 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
       );
     case "tool": {
       const subject = toolSubject(segment.input);
+      const deferred = assetReference(segment.output);
       // The glyph's hue says how the call ended; the word and the
       // mark say it too, so color is never the only channel
       // (run-view-50).
@@ -213,18 +219,18 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
                 }
               : undefined;
       return (
-        <details className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
-          <summary className="cursor-pointer select-none font-mono">
-            {/* The row stays one line: the subject takes the rest of it
-                and elides, so a long command never widens the pane. */}
-            <span className="inline-flex w-[calc(100%-1.25rem)] items-baseline gap-1.5 align-middle">
+        <details onToggle={(event) => setExpanded(event.currentTarget.open)} className="rounded border border-neutral-200 bg-white px-2 py-1 text-xs dark:border-neutral-800 dark:bg-neutral-900">
+          <summary className="min-w-0 cursor-pointer select-none font-mono">
+            {/* Long tool names wrap in narrow lanes; the subject takes
+                remaining room and elides without widening the pane. */}
+            <span className="inline-flex w-[calc(100%-1.25rem)] min-w-0 flex-wrap items-baseline gap-1.5 align-middle">
               <span
                 aria-hidden="true"
                 className={outcome?.tone ?? "text-neutral-500"}
               >
                 ⚒
               </span>
-              <span className="shrink-0" title={segment.toolName}>
+              <span className="min-w-0 max-w-full [overflow-wrap:anywhere]" title={segment.toolName}>
                 {toolLabel(segment.toolName)}
               </span>
               {outcome ? (
@@ -261,7 +267,7 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
             data-testid={`tool-body-${segment.seq}`}
             className="relative mt-1 flex max-h-64 flex-col gap-1.5 overflow-y-auto"
           >
-            {[...inputBlocks(segment.input), outputBlock(segment.output)]
+            {[...inputBlocks(segment.input), outputBlock(deferred ? undefined : segment.output)]
               .filter((block) => block !== undefined)
               .map((block, index) => (
                 <div key={index} className="min-w-0">
@@ -278,6 +284,7 @@ export function Segment({ segment }: { segment: TranscriptSegment }) {
                   </pre>
                 </div>
               ))}
+            {deferred ? <DeferredToolOutput asset={deferred} visible={expanded} /> : null}
           </div>
         </details>
       );

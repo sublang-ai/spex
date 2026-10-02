@@ -39,6 +39,7 @@ import { Icon, type IconName } from "./Icon.js";
 import { GearsItems, StageBox, StateList } from "./PlaybookStages.js";
 import { RunningMark } from "./RunningMark.js";
 import { SplitDivider } from "./RunView.js";
+import { draftAttachmentKey, useComposerAttachments } from "../lib/useComposerAttachments.js";
 
 type Toolchain = CommandResults["compile.check"];
 type Tab = "source" | "gears" | "machine" | "register";
@@ -129,6 +130,7 @@ export function AuthoringWorkspace({
   onBack: () => void;
 }) {
   const draft = useAppStore((state) => state.drafts[draftId]);
+  const media = useComposerAttachments(draftAttachmentKey(draftId), { kind: "draft", id: draftId });
   const draftView = useAppStore((state) => state.draftViews[draftId]);
   const source = useAppStore((state) => state.draftSources[draftId]);
   const artifacts = useAppStore((state) => state.draftArtifacts[draftId]);
@@ -333,10 +335,12 @@ export function AuthoringWorkspace({
               readiness={readiness}
               connected={connected}
               composerText={composer?.draft ?? ""}
+              attachments={media.controls}
               error={error}
               onComposerChange={(text) => setDraftComposer(draftId, text)}
               onSend={async (text) => {
-                await sendDraft(draftId, text);
+                await sendDraft(draftId, text, media.assets);
+                media.consume();
               }}
               onAbort={() => void abortDraft(draftId)}
               onPickAgent={(playerId) => setDraftPlayer(draftId, playerId)}

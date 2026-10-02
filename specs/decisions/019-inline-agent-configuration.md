@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for mutable browser execution settings and host preparation.
+
 Accepted; the seeded lineup is amended by [DR-025](025-playbook-7-adoption.md) — single-role CODE plus the review and decide blocks.
 
 Amended by [DR-052](052-runtime-model-options.md): model and tuning choices come from runtime discovery.

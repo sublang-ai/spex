@@ -90,6 +90,8 @@ function q(
 /** Seed the real store; the client is faked via setClientForTests. */
 function seed(over: Record<string, unknown> = {}) {
   useAppStore.setState({
+    attachmentDraftTexts: {},
+    attachmentDrafts: {},
     connection: "open",
     projects: PROJECTS,
     projectMeta: { p1: {}, p2: {} },
@@ -1094,7 +1096,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
       fireEvent.keyDown(input, { key: "Enter" });
     });
     expect(callsOf("intent.edit")).toEqual([
-      { intentId: "q1", text: "First thing, sharper" },
+      { intentId: "q1", text: "First thing, sharper", attachments: [] },
     ]);
 
     // Remove acts on the click (dashboard-29, DR-038): no confirm, and
@@ -1167,7 +1169,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
     );
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(
-      within(menu).getByRole("menuitem", { name: "Edit text" }),
+      within(menu).getByRole("menuitem", { name: "Edit" }),
     );
     // Escape closes and returns focus to the trigger.
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -1457,7 +1459,7 @@ describe("dashboard-26/29: groups and the queue band", () => {
     });
     // Captured with no source (dashboard-29's inline add).
     expect(callsOf("intent.queue")).toEqual([
-      { projectId: "p1", text: "New idea\nwith details" },
+      { projectId: "p1", text: "  New idea\nwith details  " },
     ]);
     const row = await screen.findByTestId("upnext-row-i-new");
     expect(row.getAttribute("data-highlight")).toBe("true");
@@ -3242,4 +3244,23 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     expect(within(overview).queryByTestId("overview-github")).toBeNull();
     expect(within(overview).getByTestId("sources-guidance-p1").textContent).toContain(guidance);
   });
+});
+
+
+test("dashboard-36: file-only queue titles, editing and Undo retain selected assets", async () => {
+  const asset = { assetId: `sha256:${"d".repeat(64)}` as const, name: "chart.png", mimeType: "image/png", byteLength: 4 };
+  const intent = info({ id: "files", projectId: "p1", text: "", attachments: [asset] });
+  seed({ attachmentDrafts: {}, ledger: { intents: [{ intent, state: "queued", next: MANUAL_READY }], attention: [], badge: 0 } });
+  renderSurface();
+  expect(screen.getByTestId("upnext-row-files").textContent).toContain("chart.png");
+  expect(screen.getByTestId("attention-all-clear").textContent).toContain("chart.png");
+  fireEvent.click(screen.getByTestId("upnext-menu-files"));
+  fireEvent.click(screen.getByTestId("upnext-edit-action-files"));
+  expect(screen.getByRole("button", { name: "Remove chart.png" })).toBeTruthy();
+  await act(async () => fireEvent.keyDown(screen.getByTestId("upnext-edit-files"), { key: "Enter" }));
+  expect(callsOf("intent.edit")).toEqual([{ intentId: "files", text: "", attachments: [asset] }]);
+  fireEvent.click(screen.getByTestId("upnext-menu-files"));
+  await act(async () => fireEvent.click(screen.getByTestId("upnext-remove-action-files")));
+  await act(async () => fireEvent.click(within(screen.getByTestId("upnext-removed-p1")).getByRole("button", { name: "Undo" })));
+  expect(callsOf("intent.queue")).toEqual([{ projectId: "p1", text: "", attachments: [asset] }]);
 });
