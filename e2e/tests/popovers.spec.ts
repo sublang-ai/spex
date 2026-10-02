@@ -67,9 +67,17 @@ function expectInside(inner: Box, outer: Box, what: string): void {
 
 /** How two paired fields stand (settings-1, playbook-library-4,
  * DR-095): beside each other on one row, or the second under the first. */
-async function pairing(first: Locator, second: Locator): Promise<"side by side" | "stacked"> {
-  const a = await boxOf(first);
-  const b = await boxOf(second);
+async function pairing(container: Locator, first: string, second: string): Promise<"side by side" | "stacked"> {
+  // Discovery can grow and refit the entire popover between browser
+  // round trips. Compare both fields in the same layout snapshot.
+  const [a, b] = await container.evaluate((element, ids) => ids.map((id) => {
+    const matches = element.querySelectorAll(`[data-testid=${CSS.escape(id)}]`);
+    if (matches.length !== 1) throw new Error(`expected one field: ${id}`);
+    const field = matches[0]!;
+    if (field.getClientRects().length === 0) throw new Error(`the field has no box: ${id}`);
+    const { x, y, width, height } = field.getBoundingClientRect();
+    return { x, y, width, height };
+  }), [first, second] as const);
   if (Math.abs(a.y - b.y) <= TOLERANCE && b.x >= a.x + a.width - TOLERANCE) return "side by side";
   if (b.y >= a.y + a.height - TOLERANCE) return "stacked";
   throw new Error(`the pair overlaps: ${JSON.stringify({ a, b })}`);
@@ -145,8 +153,8 @@ test.describe("the role editors on the Playbooks surface", () => {
       );
       // Each model beside its effort, stacked at the floor (settings-1).
       const paired = width === FLOOR ? "stacked" : "side by side";
-      expect(await pairing(popover.getByTestId("agent-model-cell"), popover.getByTestId("agent-effort-cell")), `the agent editor's model and effort at ${width}px`).toBe(paired);
-      expect(await pairing(popover.getByTestId("agent-subagent-model-cell"), popover.getByTestId("agent-subagent-effort-cell")), `the agent editor's subagent pair at ${width}px`).toBe(paired);
+      expect(await pairing(popover, "agent-model-cell", "agent-effort-cell"), `the agent editor's model and effort at ${width}px`).toBe(paired);
+      expect(await pairing(popover, "agent-subagent-model-cell", "agent-subagent-effort-cell"), `the agent editor's subagent pair at ${width}px`).toBe(paired);
       await pageDoesNotScroll(page);
       await page.keyboard.press("Escape");
       await expect(popover).toHaveCount(0);
@@ -166,7 +174,7 @@ test.describe("the role editors on the Playbooks surface", () => {
       await finishDiscovery(editor);
       // Each model beside its effort, stacked at the floor
       // (playbook-library-4).
-      expect(await pairing(editor.getByTestId("binding-model-mode"), editor.getByTestId("binding-effort-mode")), `the binding editor's model and effort at ${width}px`).toBe(width === FLOOR ? "stacked" : "side by side");
+      expect(await pairing(editor, "binding-model-mode", "binding-effort-mode"), `the binding editor's model and effort at ${width}px`).toBe(width === FLOOR ? "stacked" : "side by side");
       await editor.getByTestId("binding-model-mode").selectOption("pin");
       await expect(editor.getByTestId("binding-model-value")).toBeVisible();
       await expect(async () => expectInside(
