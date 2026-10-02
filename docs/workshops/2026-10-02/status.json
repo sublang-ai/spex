@@ -1,0 +1,191 @@
+{
+  "started_at": "2026-10-02T15:37:28Z",
+  "deadline": "2026-10-03T13:37:28Z",
+  "integration_cutoff": "2026-10-03T11:37:28Z",
+  "phase": "live_team_delivery_and_patch_releases",
+  "automation_id": "spex-workshop-readiness",
+  "scratch_root": ".workshop-20261002/",
+  "allowed_models": {
+    "claude": {
+      "model": "claude-opus-5-5",
+      "maximum_effort": "max"
+    },
+    "codex": {
+      "model": "gpt-6.1-sol",
+      "maximum_effort": "xhigh"
+    }
+  },
+  "access": {
+    "github": "verified",
+    "codex": "live pilot passed",
+    "claude": "OAuth restored; published Cligent0.33.2 fresh consumer verified Opus5.5/max tools0 with only Opus usage; simulations still Sol until stack adoption"
+  },
+  "teams": [
+    {
+      "id": "T01",
+      "name": "Seed SaaS",
+      "language": "en",
+      "status": "Real CLI planning passed; fresh served-UI design starting; raw SLC entry needs an app registry wrapper. Product delivery pending."
+    },
+    {
+      "id": "T02",
+      "name": "华东软件",
+      "language": "zh",
+      "status": "Cold compile and real Chinese CLI planning passed; served-UI design starting. Product delivery pending."
+    },
+    {
+      "id": "T03",
+      "name": "Meridian Bank",
+      "language": "en",
+      "status": "CODE and independent REVIEW passed after a correction; 441 real Java processes passed. Recovered custom procedure linked; UI approval journey pending."
+    },
+    {
+      "id": "T04",
+      "name": "精工制造",
+      "language": "zh",
+      "status": "Chinese UI design and independent REVIEW passed; real CODE implementation and T07 package adaptation running."
+    },
+    {
+      "id": "T05",
+      "name": "Harbor Health",
+      "language": "en",
+      "status": "English UI design committed; independent REVIEW running; proposed boundary contract 1.0.0 exported for T10."
+    },
+    {
+      "id": "T06",
+      "name": "星河电商",
+      "language": "zh",
+      "status": "Chinese UI project created with committed specs; real DECIDE running."
+    },
+    {
+      "id": "T07",
+      "name": "Northstar Agency",
+      "language": "en",
+      "status": "Isolated PHP CLI built; real CODE and REVIEW running with T02 provenance retained. Versioned reuse package delivered to T04."
+    },
+    {
+      "id": "T08",
+      "name": "城市服务",
+      "language": "zh",
+      "status": "Chinese UI project created; T03 approval package received with all six hashes verified; real DECIDE running."
+    },
+    {
+      "id": "T09",
+      "name": "Atlas Platform",
+      "language": "en",
+      "status": "Real core design turn encountered a permissions validation mismatch; explicit relative .git correction prepared. Original compiler failure retained pending published fix."
+    },
+    {
+      "id": "T10",
+      "name": "数澜数据",
+      "language": "zh",
+      "status": "Real core design turn encountered the same permissions validation mismatch; correction prepared. T05 proposed boundary package available."
+    }
+  ],
+  "findings": [
+    {
+      "id": "ENV-01",
+      "kind": "environment",
+      "summary": "Stale installed dependencies and compiled outputs across the four checkouts",
+      "status": "Resolved for current runs: fresh locked Spex install and all-workspace build passed; published patch adoption awaits safe boundaries between live turns."
+    },
+    {
+      "id": "ENV-02",
+      "kind": "environment",
+      "summary": "Global slc/playbook and shared model settings are old",
+      "status": "use current bundled tools and isolated explicit configs"
+    },
+    {
+      "id": "ENV-03",
+      "kind": "access",
+      "summary": "Claude OAuth expired",
+      "status": "resolved by user sign-in; live readiness verified"
+    },
+    {
+      "id": "SLC-01",
+      "kind": "product",
+      "summary": "README and EN/ZH demo use obsolete file-based playbook run syntax",
+      "status": "Resolved: PR36 merged; obsolete command forms replaced; fresh installed consumer and CI verified"
+    },
+    {
+      "id": "SPEX-01",
+      "kind": "product",
+      "summary": "Chinese UI creates English-authoring spec tree",
+      "status": "Resolved in merged Spex PR66 (0d431d8); all9CI gates green, integrated local1393tests passed; actual Chinese UI create verified"
+    },
+    {
+      "id": "SPEX-02",
+      "kind": "baseline",
+      "summary": "Draft decisions break canonical spec lint",
+      "status": "resolved concurrently by PR63; duplicate PR65 closed; adopted origin/main"
+    },
+    {
+      "id": "SPEX-03",
+      "kind": "ux",
+      "summary": "Chinese scaffold still contains substantial English-only rules",
+      "status": "Resolved: PR67 rebase-merged as a87a963 after all nine CI gates; 138 CLI tests and real Chinese UI creation verified."
+    },
+    {
+      "id": "SPEX-04",
+      "kind": "product",
+      "summary": "Project creation ignores failed Git staging/commit and skips initial commit without scaffold",
+      "status": "Resolved in merged Spex PR66 (0d431d8); all9CI gates green, integrated local1393tests passed; actual Chinese UI create verified"
+    },
+    {
+      "id": "SLC-02",
+      "kind": "ux",
+      "summary": "Planning procedure that writes an uncommitted intent fails only at link after 20m42",
+      "status": "Corrected T01 source contract and retained accepted upstream phases; generated registry and tests recovered using built internal emitters; real planning run committed exactly one proposed intent"
+    },
+    {
+      "id": "MODEL-01",
+      "kind": "runtime",
+      "summary": "Claude Opus readiness includes ancillary Haiku model usage despite no tools or delegation",
+      "status": "Resolved and released Cligent0.33.2; exact mainCI and publication green; fresh installed Opus-only consumer verified"
+    },
+    {
+      "id": "SLC-03",
+      "kind": "product",
+      "summary": "Compiler coverage probe omits valid unannotated output fields and cannot reach guarded downstream states",
+      "status": "Resolved on main: PR38 rebase-merged as b7e2ca0; targeted and full tests passed, two independent reviews closed the shadowed-interrupt case; 0.15.2 release gates pending."
+    },
+    {
+      "id": "SLC-04",
+      "kind": "ux",
+      "summary": "Named compiler phase recovery does not emit public registry entry and generated verification suites",
+      "status": "T01 recovered using built internal emitters, honestly recorded; public resume path remains under review"
+    },
+    {
+      "id": "PB-01",
+      "kind": "product",
+      "summary": "Compiler guidance permits keyed Boss-question storage for flat machines while host factory selects scalar storage",
+      "status": "Resolved on main: PR60 rebase-merged as c3e56e1; actual materialized-factory question/reply integration and official CI passed; 17.4.1 release gates pending."
+    },
+    {
+      "id": "SLC-05",
+      "kind": "product",
+      "summary": "Self-hosting intent derivation treats current Roles header as user prose",
+      "status": "Resolved in merged SLC PR37; current and legacy header fixtures and installed demo verified"
+    },
+    {
+      "id": "SPEX-05",
+      "kind": "ux",
+      "summary": "Spec reader exposes source-pin and SPDX comments in rendered prose",
+      "status": "Resolved: PR68 rebase-merged as b3b2614 after all nine CI gates; reader/preview hide comments, editor retains bytes; actual Chinese UI proof saved."
+    },
+    {
+      "id": "SPEX-06",
+      "kind": "ux",
+      "summary": "A fresh raw SLC entry is described as an older toolchain when it lacks the app-owned registry wrapper.",
+      "status": "Required wrapper is intentional; preserve evidence, use explicitly labeled internal packaging recovery, assess actionable diagnostic without claiming public import support."
+    },
+    {
+      "id": "SPEX-07",
+      "kind": "product",
+      "summary": "Config editing accepts an absolute writablePaths entry that the runtime later rejects.",
+      "status": "Observed in T09/T10 before any coder write; correcting to .git and tracing validation ownership/specs for a narrow fix."
+    }
+  ],
+  "updated_at": "2026-10-02T17:47:00Z",
+  "objective_source": "User-supplied 22-hour workshop readiness goal"
+}

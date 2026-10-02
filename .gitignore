@@ -13,3 +13,6 @@ demo*.mp4
 # Browser journey output (e2e/), and a run started from the root.
 test-results/
 playwright-report/
+
+# Isolated homes, repositories, and raw evidence for workshop simulations.
+.workshop-*/
