@@ -10,12 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-02
+
 ### Changed
 
 - **The CLI requires Node.js 22 or later.** Node 20 reached end of life
   in April 2026, and every Spex package now declares the same floor
-  (DR-079). Raising the supported runtime is a breaking change: the
-  next release is a major.
+  (DR-079). Raising the supported runtime makes this a major release.
 
 ### Fixed
 
@@ -351,7 +352,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...HEAD
+[4.0.0]: https://github.com/sublang-ai/spex/compare/v3.0.0...cli-v4.0.0
 [3.0.0]: https://github.com/sublang-ai/spex/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/sublang-ai/spex/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/sublang-ai/spex/compare/v2.0.0...v2.1.0
