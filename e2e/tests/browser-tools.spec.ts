@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { parse } from "yaml";
 import { test, expect, open, nav } from "../src/harness";
 import { measure, record, setRail } from "../src/fit";
@@ -68,8 +68,15 @@ test.describe("native browser preparation", () => {
       await captain.getByTestId("captain-edit").click();
       await expect(browser).toBeChecked();
     } finally {
-      if (priorCache === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
-      else process.env.PLAYWRIGHT_BROWSERS_PATH = priorCache;
+      try {
+        // Stop and await host preparation before removing the cache that
+        // this attempt alone populated. A retry must also start cold.
+        await app.stop();
+        if (managedCache) rmSync(managedCache, { recursive: true, force: true });
+      } finally {
+        if (priorCache === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+        else process.env.PLAYWRIGHT_BROWSERS_PATH = priorCache;
+      }
     }
   });
 });

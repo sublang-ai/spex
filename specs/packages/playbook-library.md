@@ -291,6 +291,14 @@ While `dev` is listed as configured and `branch` or `pr` is not, the Library sha
 - the mark reads as a hint beside the card's roles, not as an invalid entry [[playbook-library-2](#playbook-library-2)], because a plain `/dev` request still runs;
 - the mark disappears once both are listed as configured.
 
+#### playbook-library-89
+
+While the validated configured playbook catalog [[core-service-2](core-service.md#core-service-2)] lists `code` from `@sublang/playbook/code/registry` or `decide` from `@sublang/playbook/decide/registry`, and lists no enabled `review`, the Library shall place an unavailable hint beside that packaged entry's roles, naming its effective command and directing the user to enable `/review` below before running it:
+
+- The hint leaves the shared config valid and enables no playbook or player.
+- The hint disappears when the validated catalog includes `review`.
+- A different source module with the same `code` or `decide` id receives no hint; this rule covers the known packaged entries, not dependency analysis of custom modules or aliases.
+
 #### playbook-library-35
 
 When the Library surface is opened, the Library shall present a two-agent workflow adapted from slc's demo as a read-only example ([DR-015](../decisions/015-reference-content.md)) in the same permanent stage row a configured playbook wears [[playbook-library-22](#playbook-library-22)], over four stages held in memory rather than requested — source, normalized text, gears, and state machine — and shall offer a prefill action that opens a new draft workspace [[playbook-library-51](#playbook-library-51)] with the example's normalized text placed in the Source tab's paste mode [[playbook-library-56](#playbook-library-56)], without writing or compiling anything:
@@ -388,7 +396,7 @@ When a registration writes the `playbooks.<id>` entry after a compile, the compi
 
 #### playbook-library-33
 
-When playbook loading imports a config `from` module that is a file path, and the module carries no registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook and recompilation as the remedy ([DR-014](../decisions/014-released-toolchain.md)):
+When playbook loading imports a config `from` module that is a file path, and the module does not carry the current registry-contract marker [[playbook-library-14](#playbook-library-14)], the registry validator shall treat the config as invalid with guidance naming the playbook, describing incompatibility with this version of Spex and directing source compilation in Playbooks as the remedy, without claiming when or by which toolchain the module was generated ([DR-014](../decisions/014-released-toolchain.md)):
 
 - A package specifier `from` does not require the marker.
 
@@ -556,6 +564,10 @@ When each installed built-in playbook's artifacts are requested, the test suite 
 
 When each installed built-in playbook's artifacts are requested, the test suite shall assert the served graph is whole [[playbook-library-36](#playbook-library-36)]: every edge's ends name served nodes, the edge set is non-empty for every built-in, declared-id targets resolve — the review machine's opening transition and a boss-reply resume transition among the resolved — and a compound state's done transition appears as an edge.
 
+#### playbook-library-91
+
+Where fresh file registries use the current artifact schema with absent or noncurrent markers, a file registry has the current marker and a packaged registry has none, when real config composition loads each entry in English and Chinese, the integration suite shall assert incompatible files are refused with the existing typed registry fault and truthful source-compilation guidance, while the current-marker and packaged entries remain accepted [[playbook-library-33](#playbook-library-33)].
+
 ### Binding Coverage
 
 #### playbook-library-39
@@ -569,6 +581,10 @@ When a built-in whose roles the roster does not cover is added, the test suite s
 #### playbook-library-49
 
 Where the shared config lists `dev` without `branch` or `pr`, the test suite shall assert that the `dev` card carries the pull-request delivery hint naming each missing built-in, and that a config listing all three renders no hint [[playbook-library-48](#playbook-library-48)].
+
+#### playbook-library-90
+
+Where the validated config summary lists the packaged `code` and `decide` entries without `review`, when the Library renders and then receives a summary enabling `review`, the integration suite shall assert both hints name their effective commands, direct enabling `/review`, cause no configuration write and disappear on the update [[playbook-library-89](#playbook-library-89)]; it shall also render custom modules with those same ids and unrelated packaged entries, asserting no hint for them, in English and Chinese.
 
 ### Cancellation and Gate Coverage
 

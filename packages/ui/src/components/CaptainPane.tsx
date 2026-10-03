@@ -6,7 +6,7 @@
 // counterpart bubbles, player questions as first-class incoming
 // messages, shell status lines as compact system lines between them.
 
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
@@ -375,14 +375,16 @@ export function CaptainPane({
   /** What a failure card says beyond the record's own data: the run's
    * command and step, and the controls the session summary publishes
    * (run-view-147). */
-  failure?: FailureContext;
+  failure?: (line: CaptainLine) => FailureContext | undefined;
 }) {
-  const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(
-    view.captain.length +
-      view.captainDraft.length +
-      (view.turnActive ? 1 : 0) +
-      (extras?.length ?? 0),
+  // Live machine records change the thread without adding chat text.
+  // Keep all content inputs distinct, with stable identity across
+  // clock/header-only renders; a loaded graph can change its drawing.
+  const contentKey = useMemo(
+    () => [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
+    [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
   );
+  const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(contentKey);
   const [highlightKey, setHighlightKey] = useState<string>();
 
   // Attention focus (run-view-91): land at the intent's place and
@@ -469,7 +471,7 @@ export function CaptainPane({
     <section
       data-testid="captain-pane"
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      className="grid min-h-min flex-1 grid-rows-[auto_minmax(min-content,1fr)] rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
     >
       <header
         aria-describedby={activeMs === undefined ? undefined : activeTimeDescriptionId("captain")}
@@ -526,11 +528,11 @@ export function CaptainPane({
           </span>
         ) : null}
       </header>
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-min flex-1 flex-col overflow-hidden">
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 [contain:size]"
         >
           <div ref={contentRef} className="flex min-h-full min-w-0 shrink-0 flex-col gap-2">
             {view.captain.map((line, index) => {
@@ -563,7 +565,7 @@ export function CaptainPane({
                           : undefined
                       }
                       readiness={readiness}
-                      failure={failure}
+                      failure={failure?.(line)}
                     />
                   </div>
                   {extras

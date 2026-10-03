@@ -813,11 +813,11 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
     rerender(run(7));
     expect(queue.scrollTop).toBe(480);
 
-    // The composer yields around the frame: its box keeps its place
-    // whatever the queue holds.
+    // The composer keeps its intrinsic chrome floor around the frame;
+    // a constrained Captain column contains any excess in its own scroll box.
     const box = screen.getByTestId("composer-box").parentElement!;
-    expect(box.className).toContain("shrink-0");
-    expect(box.parentElement!.className).toContain("min-h-0");
+    expect(box.className).toContain("min-h-min");
+    expect(box.parentElement!.className).toContain("min-h-min");
   });
 });
 
@@ -1573,15 +1573,15 @@ describe("run-view-90/89: the working line and the bound turn's chip", () => {
         as: "dropped",
       }),
     );
-    // The line leaves with its control, the outcome announces where it
-    // stood, and focus lands in the composer — never on the body.
+    // The line leaves with its control. While the composer is disabled,
+    // the outcome receives focus after React runs its handoff effect.
     await vi.waitFor(() =>
       expect(screen.queryByTestId("working-line")).toBeNull(),
     );
     const note = screen.getByTestId("working-note");
     expect(note.getAttribute("role")).toBe("status");
     expect(note.textContent).toContain("Dropped “Address #7: fix the login bug”");
-    expect(document.activeElement).toBe(note);
+    await vi.waitFor(() => expect(document.activeElement).toBe(note));
     setClientForTests(undefined);
   });
 
@@ -3033,6 +3033,85 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
         .queryAllByTestId("system-line")
         .some((line) => line.textContent?.includes("workflow failed")),
     ).toBe(false);
+  });
+
+  function laterTrace(seq: number, sessionId: string, playbookId: string,
+    type: string, payload: Record<string, unknown>): FixtureEntry {
+    return {
+      seq,
+      record: {
+        type: "captain_telemetry", turnId: 30, timestamp: 30_000 + seq,
+        topic: "playbook.trace",
+        payload: { schemaVersion: 3, sessionId, playbookId, depth: 1,
+          sequence: seq, timestamp: 30_000 + seq, type, payload },
+      } as unknown as TmuxPlayRecord,
+    };
+  }
+
+  const DECIDE: PlaybookSummary = { ...CODE, id: "decide", command: "decide" };
+  const laterFailure = (seq: number): FixtureEntry => ({
+    seq,
+    record: { type: "runtime_error", turnId: 30, timestamp: 30_000 + seq,
+      message: "A later workflow failure", data: { cause: { code: "runtime-defect" } },
+    } as unknown as TmuxPlayRecord,
+  });
+  const disposed = laterTrace(801, "t-fail", "code", "session.disposed", {
+    state: { value: "failed", status: "stopped" },
+  });
+
+  test("a historical failure keeps its command and step after a different run succeeds", () => {
+    const view = failedView(MACHINE_RECOVERED, [disposed,
+      laterTrace(802, "t-next", "decide", "session.started", {}),
+      laterTrace(803, "t-next", "decide", "fsm.transition", {
+        from: "designing", to: "done", event: "APPROVED",
+        state: { value: "done", status: "done" },
+      }),
+    ]);
+    renderFailed({ view, session: SESSION, playbooks: [CODE, DECIDE] });
+    expect(screen.getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+    expect(screen.getByTestId("failure-card-next").textContent).toBe("Commit or discard what is left");
+    expect(screen.queryByTestId("failed-workflow")).toBeNull();
+  });
+
+  test.each(["same", "different"])("only the current failure in a %s run carries current control standings", (which) => {
+    const same = which === "same";
+    const view = failedView(MACHINE_RECOVERED, [
+      ...(same ? [] : [disposed, laterTrace(802, "t-next", "decide", "session.started", {})]),
+      laterTrace(803, same ? "t-fail" : "t-next", same ? "code" : "decide", "fsm.transition", {
+        from: same ? "firstPhase" : "designing", to: "failed", event: "FAIL",
+        state: { value: "failed", status: "active", tags: ["playbook.parked"] },
+      }),
+      laterFailure(804),
+    ]);
+    renderFailed({ view, playbooks: [CODE, DECIDE] });
+    const cards = screen.getAllByTestId("failure-card");
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]).getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+    expect(within(cards[0]).getByTestId("failure-card-next").textContent).toBe("Commit or discard what is left");
+    expect(within(cards[1]).getByTestId("failure-card-what").textContent).toBe(
+      same ? "/code failed at first phase" : "/decide failed at designing",
+    );
+    expect(within(cards[1]).getByTestId("failure-card-next").textContent).toContain(RECONCILE.label);
+  });
+
+  test("an unassigned failure never borrows a later run's identity or controls", () => {
+    const view = applyRecords(initialSessionView(PLAYERS), [
+      { seq: 1, record: { type: "runtime_error", turnId: 1, timestamp: 1000,
+        message: "No run opened", data: { cause: { code: "runtime-defect" } },
+      } as unknown as TmuxPlayRecord },
+      ...MACHINE_FAILED,
+    ]);
+    renderFailed({ view });
+    const cards = screen.getAllByTestId("failure-card");
+    expect(within(cards[0]).getByTestId("failure-card-what").textContent).toBe("The workflow failed");
+    expect(within(cards[0]).getByTestId("failure-card-next").textContent).not.toContain(RECONCILE.label);
+    expect(within(cards[1]).getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+  });
+
+  test("a question summary cannot lend its controls to a traced failure card", () => {
+    renderFailed({ session: { ...PARKED, parked: { ...PARKED_FAILURE, reason: "question" } } });
+    expect(screen.getByTestId("failure-card-what").textContent).toBe("/code failed at first phase");
+    expect(screen.getByTestId("failure-card-next").textContent).toBe("Commit or discard what is left");
   });
 
 

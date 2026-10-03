@@ -14,6 +14,11 @@ afterEach(cleanup);
 
 import { useAutoGrow } from "./useAutoGrow.js";
 import { useStickToBottom } from "./useStickToBottom.js";
+import { CaptainPane } from "../components/CaptainPane.js";
+import { applyRecords, initialSessionView } from "../state/reducer.js";
+import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
+import type { MachineGraph } from "@sublang/spex-core/protocol";
+import { MACHINE_RUN } from "../fixtures/sample-run.js";
 
 const restore: (() => void)[] = [];
 afterEach(() => {
@@ -96,7 +101,7 @@ describe("run-view-106: the field refits when its own box resizes", () => {
     box.wanted = 120;
     act(() => observers.fire(field));
     expect(field.style.height).toBe("120px");
-    // Under the maximum it never shows a scrollbar of its own.
+    // Without a containing chrome boundary, the preferred cap controls scrolling.
     expect(field.style.overflowY).toBe("hidden");
 
     // The height this very fit wrote is not a reason to fit again:
@@ -105,6 +110,7 @@ describe("run-view-106: the field refits when its own box resizes", () => {
     act(() => observers.fire(field));
     expect(field.style.height).toBe("120px");
   });
+
 });
 
 describe("run-view-120: a pane at its end keeps following through a resize", () => {
@@ -207,5 +213,177 @@ describe("run-view-120: a pane at its end keeps following through a resize", () 
     box.height = 712;
     act(() => observers.fire(pane));
     expect(box.top).toBe(40);
+  });
+});
+
+describe("run-view-163: a final reply and settlement render together", () => {
+  test.each([false, true])("preserves the reader's following choice (scrolled up: %s)", (scrolledUp) => {
+    const observers = observeResizes();
+    const record = (seq: number, fields: Record<string, unknown>) => ({
+      seq,
+      record: { timestamp: 1_700_000_000_000 + seq, turnId: 1, ...fields } as unknown as TmuxPlayRecord,
+    });
+    const view = applyRecords(initialSessionView([]), [record(1, {
+      type: "turn_started", turn: { id: 1, prompt: "Complete the change" },
+    })]);
+    const { rerender } = render(<CaptainPane view={view} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 800, top: 0 };
+    measured(pane, {
+      clientWidth: () => 600,
+      clientHeight: () => 240,
+      scrollHeight: () => box.height,
+    });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true,
+      get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 240)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(560);
+    if (scrolledUp) {
+      box.top = 40;
+      act(() => { pane.dispatchEvent(new Event("scroll")); });
+    }
+
+    // The last reply adds one line while settlement removes the active
+    // turn. Summing these independent inputs would hide the new content.
+    box.height = 920;
+    applyRecords(view, [
+      record(2, { type: "captain_reply", text: "The requested change is ready." }),
+      record(3, { type: "turn_finished" }),
+    ]);
+    rerender(<CaptainPane view={view} />);
+    expect(screen.getByText("The requested change is ready.")).toBeTruthy();
+    expect(box.top).toBe(scrolledUp ? 40 : 680);
+    expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
+  });
+});
+
+describe("run-view-163: live machine content follows before a queued scroll", () => {
+  test.each([false, true])("preserves the reader's choice across frame and graph changes (scrolled up: %s)", (scrolledUp) => {
+    const observers = observeResizes();
+    const view = applyRecords(initialSessionView([]), MACHINE_RUN.slice(0, 2));
+    const { rerender } = render(<CaptainPane view={view} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 400, top: 0 };
+    measured(pane, {
+      clientWidth: () => 336,
+      clientHeight: () => 118,
+      scrollHeight: () => box.height,
+    });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true,
+      get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 118)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(282);
+    if (scrolledUp) {
+      box.top = 40;
+      act(() => { pane.dispatchEvent(new Event("scroll")); });
+    }
+    const textCount = view.captain.length;
+    // A real trace opens the live machine without adding a chat line.
+    // The earlier programmatic scroll is still queued while this mounts.
+    box.height = 585;
+    applyRecords(view, MACHINE_RUN.slice(2, 3));
+    expect(view.captain).toHaveLength(textCount);
+    rerender(<CaptainPane view={view} />);
+    expect(screen.getByTestId("live-machines")).toBeTruthy();
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    expect(box.top).toBe(scrolledUp ? 40 : 467);
+    expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
+
+    // A frame supplied without a captured definition can acquire its
+    // current drawing independently of the text/trace. Captured graphs
+    // remain immutable; this exercises the component's supplied-graph path.
+    delete view.frames[0].historicalGraph;
+    const graph: MachineGraph = {
+      initial: "ready",
+      nodes: [{ id: "ready", kind: "state", tags: [] }, { id: "done", kind: "final", tags: [] }],
+      edges: [{ id: "ready::COMPLETE::done", from: "ready", to: "done", event: "COMPLETE" }],
+    };
+    box.height = 785;
+    rerender(<CaptainPane view={view} machineGraphs={{ code: graph }} />);
+    expect(screen.getByTestId("machine-state-t-code-done")).toBeTruthy();
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    expect(box.top).toBe(scrolledUp ? 40 : 667);
+    expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
+  });
+});
+
+describe("run-view-163: content changes without a new line", () => {
+  test.each([false, true])("follows coalesced records and same-count extras only while attached (scrolled up: %s)", (scrolledUp) => {
+    const observers = observeResizes();
+    const failure = (seq: number) => ({ seq, record: {
+      type: "runtime_error", timestamp: seq, turnId: 1, message: "The runtime refused the operation.",
+    } as unknown as TmuxPlayRecord });
+    const view = applyRecords(initialSessionView([]), [failure(1)]);
+    let extras = [{ key: "delivery", afterIndex: 0, node: <div>Awaiting verdict</div> }];
+    const { rerender } = render(<CaptainPane view={view} extras={extras} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 400, top: 0 };
+    measured(pane, { clientWidth: () => 336, clientHeight: () => 118, scrollHeight: () => box.height });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true, get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 118)); },
+    });
+    act(() => observers.fire(pane));
+    if (scrolledUp) {
+      box.top = 40;
+      act(() => { pane.dispatchEvent(new Event("scroll")); });
+    }
+    // The reducer coalesces the repeated failure, retaining one line.
+    applyRecords(view, [failure(2)]);
+    expect(view.captain).toHaveLength(1);
+    expect(view.captain[0].count).toBe(2);
+    box.height = 440;
+    rerender(<CaptainPane view={view} extras={extras} />);
+    expect(box.top).toBe(scrolledUp ? 40 : 322);
+    const seq = view.lastSeq;
+    extras = [{ key: "delivery", afterIndex: 0, node: <div>Confirmed with a detailed delivery summary</div> }];
+    box.height = 520;
+    rerender(<CaptainPane view={view} extras={extras} />);
+    expect(view.lastSeq).toBe(seq);
+    expect(extras).toHaveLength(1);
+    expect(screen.getByText("Confirmed with a detailed delivery summary")).toBeTruthy();
+    expect(box.top).toBe(scrolledUp ? 40 : 402);
+    expect(screen.queryByRole("button", { name: "↓ Latest" }) !== null).toBe(scrolledUp);
+  });
+});
+
+describe("run-view-163: detached growth retains its Latest notice", () => {
+  test.each(["scroll-first", "resize-first"])("offers Latest when growth is reported %s", (ordering) => {
+    const observers = observeResizes();
+    const view = applyRecords(initialSessionView([]), MACHINE_RUN.slice(0, 2));
+    render(<CaptainPane view={view} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 400, top: 0 };
+    measured(pane, { clientWidth: () => 336, clientHeight: () => 118, scrollHeight: () => box.height });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true, get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 118)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(282);
+    box.top = 150;
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+
+    // Late content can grow without a React transcript/key update. The
+    // browser may report its queued scroll before the resize notification.
+    pane.firstElementChild!.append(document.createElement("div"));
+    box.height = 500;
+    act(() => {
+      if (ordering === "resize-first") observers.fire(pane);
+      pane.dispatchEvent(new Event("scroll"));
+      if (ordering === "scroll-first") observers.fire(pane);
+    });
+    expect(box.top).toBe(150);
+    const latest = screen.getByRole("button", { name: "↓ Latest" });
+    act(() => { latest.click(); });
+    expect(box.top).toBe(382);
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
   });
 });

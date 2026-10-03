@@ -108,7 +108,17 @@ export function WorkingLine({
       setRefocus(true);
     }
     if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = setTimeout(() => setNote(undefined), NOTE_MS);
+    noteTimer.current = setTimeout(() => {
+      // The temporary outcome owns only its own handoff, never a
+      // control the reader picked while work was settling.
+      const outcome = noteRef.current;
+      if (pendingInputFocus.current && outcome && outcome.ownerDocument.activeElement === outcome) {
+        const field = outcome.closest('[data-testid="captain-column"]')?.querySelector("textarea");
+        if (field && !field.disabled) field.focus();
+      }
+      pendingInputFocus.current = false;
+      setNote(undefined);
+    }, NOTE_MS);
   };
 
   return (

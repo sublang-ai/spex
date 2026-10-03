@@ -11,6 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -18,7 +19,7 @@ import {
   within,
 } from "@testing-library/react";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); activateLanguage("en"); });
 
 const { commandMock } = vi.hoisted(() => ({
   commandMock: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 
 import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
 import { agentChipText } from "./AgentChip.js";
+import { activateLanguage } from "../i18n.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import { SpexCommandError } from "../lib/client.js";
 import type {
@@ -448,6 +450,50 @@ describe("DR-015: built-ins section from the catalog", () => {
       const card = screen.getByTestId("builtin-review");
       expect(card.textContent).toContain("config file is read-only");
     });
+  });
+});
+
+describe("playbook-library-89: packaged work names its required review", () => {
+  const configured = (id: string, from: string, command = id) => ({
+    id, from, command, intent: `${id} intent`,
+    roles: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
+  });
+
+  test.each(["en", "zh"] as const)("code and decide name their effective commands until validated review is enabled (%s)", (language) => {
+    activateLanguage(language);
+    const playbooks = [
+      configured("code", "@sublang/playbook/code/registry", "build"),
+      configured("decide", "@sublang/playbook/decide/registry", "design"),
+    ];
+    renderLibrary({ ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary, playbooks } });
+    expect(screen.getByTestId("review-required-hint-code").textContent).toBe(
+      language === "zh" ? "/build 暂不可运行；请先在下方启用 /review。" : "/build is unavailable until /review is enabled below.",
+    );
+    expect(screen.getByTestId("review-required-hint-decide").textContent).toBe(
+      language === "zh" ? "/design 暂不可运行；请先在下方启用 /review。" : "/design is unavailable until /review is enabled below.",
+    );
+    expect(commandMock.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
+
+    act(() => useAppStore.setState({
+      configState: { ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary,
+        playbooks: [...playbooks, configured("review", "@sublang/playbook/review/registry")],
+      } },
+    }));
+    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
+  });
+
+  test.each(["en", "zh"] as const)("custom same-id modules and unrelated packaged work receive no dependency hint (%s)", (language) => {
+    activateLanguage(language);
+    renderLibrary({ ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary, playbooks: [
+      configured("code", "/project/custom/code.registry.ts"),
+      configured("decide", "./custom-decide.registry.ts"),
+      configured("inspect", "@sublang/playbook/inspect/registry"),
+    ] } });
+    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-inspect")).toBeNull();
+    expect(commandMock.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
   });
 });
 

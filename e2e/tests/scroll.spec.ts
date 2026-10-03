@@ -12,6 +12,9 @@ test("run-view-121: rendered growth follows until the reader moves away", async 
   await settled(app);
   const captain = page.getByTestId("captain-pane");
   await expect(captain).toContainText("Done — the requested change is ready.");
+  // Core settlement and its final prose can precede the browser receiving
+  // turn_finished. Measure only after the busy chrome has left the view.
+  await expect(page.getByTestId("boss-composer")).toBeEnabled();
   const thread = captain.locator("div.overflow-y-auto").first();
   const gap = () => thread.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
   const top = () => thread.evaluate((el) => el.scrollTop);

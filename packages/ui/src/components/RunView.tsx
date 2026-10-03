@@ -41,41 +41,13 @@ import { PlayerPane } from "./PlayerPane.js";
 import { AgentSettingsPopover } from "./AgentSettings.js";
 import { sessionAgents } from "../lib/session-agents.js";
 import { WorkingLine } from "./WorkingLine.js";
-import {
-  FAILURE_STATE_ID,
-  parkedRun,
-  type MachineFrame,
-} from "../lib/machine-frames.js";
+import { parkedRun } from "../lib/machine-frames.js";
 import type { FailureContext } from "./FailureCard.js";
 import {
   causePhrase,
   causeStep,
   readRecordFailure,
 } from "../lib/failure-catalogue.js";
-
-/** The run a failure belongs to, as the thread can see it: the run
- * standing parked, else the deepest run still open, else the last run
- * that settled into the thread (run-view-147). */
-function failureFrame(
-  view: SessionView,
-  parked: MachineFrame | undefined,
-): MachineFrame | undefined {
-  if (parked) return parked;
-  if (view.frames.length > 0) return view.frames[view.frames.length - 1];
-  for (let index = view.captain.length - 1; index >= 0; index -= 1) {
-    const frame = view.captain[index].frame;
-    if (frame) return frame;
-  }
-  return undefined;
-}
-
-/** The step a run failed in: the state it left for its failure state,
- * or — where it is not parked there — the state it stands in. Raw; the
- * copy humanizes it and the tooltip keeps it (run-view-59). */
-function failureStep(frame: MachineFrame): string | undefined {
-  if (frame.active === FAILURE_STATE_ID) return frame.lastFired?.from;
-  return frame.active ?? undefined;
-}
 
 /** The cause the last failure the thread reported carried
  * (run-view-147): the notices say why from the same reading the card
@@ -615,20 +587,21 @@ export function RunView({
   const parkedCommand = parked
     ? playbooks?.find((entry) => entry.id === parked.frame.playbookId)?.command
     : undefined;
-  // The failure's own account (run-view-147, DR-075): the run the
-  // failure belongs to, the step it left, the cause the runtime
-  // attached, and the controls the summary publishes. The card, the
-  // parked notice and the unparked notice all phrase this one reading
-  // rather than each composing an account of its own.
-  const failureRun = failureFrame(activityView, parked?.frame);
-  const failureCommand = failureRun
-    ? playbooks?.find((entry) => entry.id === failureRun.playbookId)?.command
-    : undefined;
-  const failedStep = failureRun ? failureStep(failureRun) : undefined;
-  const failureContext: FailureContext = {
-    ...(failureCommand ? { command: failureCommand } : {}),
-    ...(failedStep ? { step: failedStep } : {}),
-    ...(session.parked?.actions ? { actions: session.parked.actions } : {}),
+  // Each card keeps the position recorded at its own failure. Only a
+  // card for the still-current failure park reads today's controls.
+  const failureContext = (line: CaptainLine): FailureContext | undefined => {
+    const failure = line.failure;
+    if (!failure) return undefined;
+    const command = playbooks?.find((entry) => entry.id === failure.playbookId)?.command;
+    const current = parked?.reason === "failure" && session.parked?.reason === "failure" &&
+      parked.frame.traceSessionId === failure.traceSessionId &&
+      parked.frame.transitions.length === failure.transitionCount &&
+      (parked.frame.lastFired?.at ?? parked.frame.openedAt) === failure.transitionAt;
+    return {
+      ...(command ? { command } : {}),
+      ...(failure.step ? { step: failure.step } : {}),
+      ...(current && session.parked?.actions ? { actions: session.parked.actions } : {}),
+    };
   };
   const failureCause = latestFailureCause(activityView.captain);
 
@@ -680,7 +653,7 @@ export function RunView({
         <div
           data-testid="captain-column"
           style={{ "--captain-split": `${captainSplit}%` } as React.CSSProperties}
-          className={`flex min-h-0 min-w-0 flex-1 flex-col gap-2 ${
+          className={`relative flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto ${
             soloCaptain
               ? "mx-auto w-full max-w-2xl"
               : "@2xl:w-(--captain-split) @2xl:min-w-[280px] @2xl:flex-none"
@@ -869,7 +842,7 @@ export function RunView({
             <div
               ref={gridRef}
               data-testid="player-grid"
-              className="relative flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto [mask-image:linear-gradient(to_right,transparent_0,#000_var(--fade-start,0px),#000_calc(100%_-_var(--fade-end,0px)),transparent_100%)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
+              className="relative flex min-h-min min-w-0 flex-1 gap-3 overflow-x-auto [mask-image:linear-gradient(to_right,transparent_0,#000_var(--fade-start,0px),#000_calc(100%_-_var(--fade-end,0px)),transparent_100%)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
               onScroll={(event) => markGridEdges(event.currentTarget)}
             >
               {lanes.map((playerId) => (

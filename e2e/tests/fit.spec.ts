@@ -44,6 +44,11 @@ test.use({
     project: true,
     history: 25,
     agentDelayMs: 4000,
+    // The elapsed-time sweep owns its call lifetime instead of racing a timer.
+    approvalRules: [{
+      match: "Implement: Measure the live elapsed yield point",
+      response: { result: "", untilAborted: true },
+    }],
     // A draft compiled by the passing stub, measured idle at its
     // proposal (DR-058).
     authoring: { slc: "ok" },
@@ -793,6 +798,9 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
   await expect(coderName).toBeVisible();
   await expect(coderCollapse).toBeVisible();
 
+  await abort.click();
+  await expect(abort).toHaveCount(0);
+
   // The collapsed rail's badge caps at "9+", the count in the name
   // (run-view-108).
   await setRail(page, false);
@@ -1129,6 +1137,16 @@ test.describe("chrome the sweep does not open", () => {
         }).toPass({ timeout: 2_000 }).catch((cause: unknown) => {
           defects.push(`${where}: ${cause instanceof Error ? cause.message : String(cause)}`);
         });
+        // A scroll can follow focus without resizing either box. Keep the
+        // open editor reachable when the user moves this narrow player grid.
+        if (width === 320) {
+          await grid.evaluate((el) => { el.scrollLeft = 0; });
+          await expect(async () => {
+            const box = (await panel.boundingBox())!;
+            expect(box.x).toBeGreaterThanOrEqual(-1);
+            expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+          }).toPass({ timeout: 2_000 });
+        }
         // The model beside its effort, stacked at the floor (run-view-138).
         const model = (await panel.getByTestId("agent-dev.reviewer-model-mode").boundingBox())!;
         const effort = (await panel.getByTestId("agent-dev.reviewer-effort-mode").boundingBox())!;

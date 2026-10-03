@@ -146,6 +146,10 @@ msgstr "{command} failed at {step}"
 msgid "{command} is not installed"
 msgstr "{command} is not installed"
 
+#: src/components/LibrarySurface.tsx
+msgid "{command} is unavailable until /review is enabled below."
+msgstr "{command} is unavailable until /review is enabled below."
+
 #: src/lib/client.ts
 msgid "{command} timed out"
 msgstr "{command} timed out"

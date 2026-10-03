@@ -885,6 +885,7 @@ export function LibrarySurface({
   // carries a hint, never an invalid mark (playbook-library-48).
   const configuredIds = new Set(summary.playbooks.map((playbook) => playbook.id));
   const missingDelivery = ["branch", "pr"].filter((id) => !configuredIds.has(id));
+  const reviewEnabled = configuredIds.has("review");
   const availableBuiltins = (builtins ?? []).filter(
     (entry) => !entry.configured,
   );
@@ -1067,6 +1068,18 @@ export function LibrarySurface({
                 </span>
               </span>
             </div>
+            {!reviewEnabled &&
+            ((playbook.id === "code" && playbook.from === "@sublang/playbook/code/registry") ||
+              (playbook.id === "decide" && playbook.from === "@sublang/playbook/decide/registry")) ? (
+              <p
+                data-testid={`review-required-hint-${playbook.id}`}
+                className="text-xs text-amber-700 dark:text-amber-300"
+              >
+                {i18n._("{command} is unavailable until /review is enabled below.", {
+                  command: `/${playbook.command}`,
+                })}
+              </p>
+            ) : null}
             {playbook.id === "dev" && missingDelivery.length > 0 ? (
               <p
                 data-testid="dev-delivery-hint"

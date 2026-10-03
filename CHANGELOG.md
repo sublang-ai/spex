@@ -443,6 +443,27 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Short Captain columns keep their headers and input controls from collapsing,
+  scrolling excess notices inside the column while the draft retains one row.
+
+- New conversation content reliably shows Latest for readers scrolled up,
+  regardless of scroll and resize event ordering.
+- Long drafts yield to the Captain column’s available height so Send stays
+  reachable above stacked player panes while the text scrolls inside its field.
+- Open agent editors stay within their pane when its player grid scrolls,
+  including scrolling caused by keyboard focus.
+
+- Dropping a busy intent hands its temporary outcome's focus to the composer
+  when input becomes ready, preserving any control the reader chose meanwhile.
+- Restore revalidates a cached external session holder against the shared lease
+  before refusing admission. Discard success and refusal publish released
+  ownership before another recovery, preserving the original refusal and
+  leaving foreign replay delivery intact.
+- Turn settlement keeps focus on a player lane control or open agent editor
+  the reader chose while work ran; ordinary ready input still receives focus.
+- Captain conversations keep following when live machine content mounts or
+  changes before a queued scroll event. Readers who scroll up stay detached
+  through later records and sidebar reflow until they choose Latest.
 - Browser setup failures keep Retry reachable beside a compact summary, with
   the complete diagnostic in expandable details without terminal formatting.
   Native acceptance stops on a reported setup failure or cancellation instead
@@ -452,6 +473,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Settings and configuration loading reject invalid writable paths before a
   session starts, naming the offending entry. Valid paths reach the runtime in
   canonical form without rewriting their spelling in the shared YAML file.
+- Packaged CODE and DECIDE cards name their missing REVIEW prerequisite
+  before work starts, without invalidating the shared config or enabling players.
+- File registry compatibility errors describe the missing current host contract
+  and source-compilation remedy without claiming a freshly generated artifact
+  came from an older toolchain.
+- The Captain thread follows a final reply when that reply and turn settlement
+  arrive together; readers who scrolled up keep their position and get the
+  jump-to-latest control.
 
 - Conversation panes keep following when live cards or delayed media grow.
   Queued automatic scroll events no longer detach the thread, while scrolling
@@ -459,6 +488,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - First-use browser setup permits a fifteen-minute download and launch budget,
   with progress and cancellation, instead of ending after three minutes on a
   slow connection. Setup still requires a separate choice to enable Browser.
+- Historical failure cards keep the workflow and step recorded at that failure,
+  even after later workflows succeed. Current recovery guidance appears only
+  on cards for the current failure park.
 - Spec readers and editor previews hide HTML source comments, keeping SPDX
   headers and translation hashes out of the reading flow. Code examples and
   the editable source retain their exact content.

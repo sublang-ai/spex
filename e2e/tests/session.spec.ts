@@ -242,6 +242,24 @@ test("run-view-121: showing the sidebar keeps the draft whole and the thread at 
   await settle();
   expect(await shortfall()).toBeLessThanOrEqual(1);
   expect(await bottomGap()).toBeLessThan(40);
+
+  // Reader input detaches the same pane: chrome reflow and another
+  // real turn must preserve that choice until Latest is activated.
+  const box = (await thread.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -500);
+  await expect.poll(bottomGap).toBeGreaterThan(40);
+  await page.getByRole("button", { name: "Collapse the sidebar" }).click();
+  await settle();
+  expect(await bottomGap()).toBeGreaterThan(40);
+  await field.fill("Also add a test for expiry skew");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(captain.getByTestId("boss-bubble")).toHaveCount(2);
+  await expect(field).toBeEnabled();
+  await expect(captain.getByRole("button", { name: "↓ Latest" })).toBeVisible();
+  expect(await bottomGap()).toBeGreaterThan(40);
+  await captain.getByRole("button", { name: "↓ Latest" }).click();
+  await expect.poll(bottomGap).toBeLessThan(40);
 });
 
 // A queue the Boss keeps filling while a turn runs (run-view-106): it

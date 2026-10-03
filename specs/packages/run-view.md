@@ -53,9 +53,9 @@ Where a failure the record stream delivers carries the runtime's own account of 
 
 | Line | What it says |
 | --- | --- |
-| what failed | the command a configured playbook gives the failing run, and the step it failed in — the state it left for its failure state — in the state vocabulary's human form [[run-view-59](#run-view-59)], neither named where the stream names neither |
+| what failed | the command a configured playbook gives the run recorded at this failure, and the step it failed in — the state it left for its failure state — in the state vocabulary's human form [[run-view-59](#run-view-59)]; later recovery or runs never replace that identity or step, and neither is named where the stream named neither |
 | why | the catalogue's phrase for the structured cause the runtime attached, falling back to the runtime's own message spoken plain [[run-view-2](#run-view-2)] where it attached none |
-| what now | the Boss step the catalogue gives that cause, where it gives one, and the standing of each control the session summary publishes for a run of this session standing parked [[core-service-32](core-service.md#core-service-32)]; absent where there is neither |
+| what now | the Boss step the catalogue gives that cause, where it gives one, and the standing of each control the session summary publishes [[core-service-32](core-service.md#core-service-32)] only while this failure's own run remains in that failure park; absent where there is neither |
 
 - the catalogue holds one row per failure code the runtime exports [[run-view-148](#run-view-148)], each row a phrase and an optional Boss step — what to do outside Spex — derived from that code's bounded evidence: its repository paths printed as a comma-separated list ending in "… and N more" for the count the evidence says was omitted, never their content, and a nested failure phrased by the child's own cause;
 - a standing the runtime reports for a control reads as that control's label and the phrased reason it carries, so a control that would do nothing says so before it is pressed;
@@ -224,7 +224,7 @@ The Boss composer shall accept free text and `/`-prefixed command text, be the o
 - when the active turn settles with no pending question, an already saved queued submission dispatches; a refused submission preserves its queued text and draft with the error shown, and uncertainty holds the queue until explicit recovery [[run-view-110](#run-view-110)];
 - a reply or replayed turn-start record does not establish settlement or current activity; a non-live session has no active turn, including after recovery, and its already saved queued submissions dispatch once its turn has settled without a pending question — the runtime is held only for a turn [[core-service-91](core-service.md#core-service-91)];
 - while a submission is being sent — the runtime opening on the current settings [[core-service-92](core-service.md#core-service-92)], then the turn starting — the primary control reads "Sending…" and stays disabled ([DR-010](../decisions/010-interface-craft.md) §3), and a refusal lands in the composer's frame with the draft kept;
-- asynchronous question, turn-state, and submission-completion updates restore focus to the available composer only when its field still holds focus or focus is otherwise unclaimed, preserving any other control or region the reader selected;
+- asynchronous question, turn-state, and submission-completion updates restore focus to the available composer only when its field still holds focus or focus is otherwise unclaimed, preserving its draft and selection and any other surviving control or region the reader selected, including a player lane control [[run-view-116](#run-view-116)] or open agent editor [[run-view-138](#run-view-138)], except the working line's pending Drop handoff [[run-view-113](#run-view-113)]; explicit conversation arrival retains its navigation focus [[run-view-49](#run-view-49)];
 - the primary control's tooltip names its keys — Enter sends, Shift+Enter adds a line — and, while a turn is active, says Captain is working.
 
 #### run-view-106
@@ -233,7 +233,7 @@ The Boss composer — on the Captain home and in a session alike — shall take 
 
 | Part | Form |
 | --- | --- |
-| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport and scrolling past that, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
+| Field | on top at full width, one row when empty and never shorter whatever height the viewport reports, growing with its text to eight lines or two fifths of the viewport, shrinking toward that one-row floor when the Captain column has less room so its caption and actions remain inside the column, and scrolling excess text, refitted whenever the viewport or the field's own box resizes — a divider dragged or a sidebar folded rewraps the draft with no window resize behind it — with no native resize grip |
 | Caption | one line under the field reading "/ for playbooks · Enter sends", which an acknowledgment or the staged intent chip occupies instead of stacking above the box |
 | Action row | beneath, wrapping: the secondary action at the left, then Abort while a turn runs, and the primary control last at the right |
 | Placeholder | at most 24 characters — "Message the Captain…", "Reply to ⟨player⟩…" for a waiting question, "Captain is working…" while a turn runs, "Connecting…" without the core |
@@ -285,6 +285,7 @@ The run view shall provide light and dark color themes and size the Captain and 
 The app shell shall fill the window at every size, giving the surface it shows a box of the window's height that the surface scrolls its own content inside, so the page itself never scrolls and a window resized shorter or taller re-fits with no reload ([DR-041](../decisions/041-chrome-that-fits.md)):
 
 - the Captain home [[run-view-25](#run-view-25)] and a session's panes [[run-view-107](#run-view-107)] fill that box and scroll inside it rather than growing it;
+- a session's Captain column whose notices and one-row composer [[run-view-106](#run-view-106)] exceed its allocated height scrolls that chrome vertically inside its own positioned box, preserving the header's intrinsic height and the composer's caption and action rows rather than collapsing their boxes;
 - every box that scrolls — a pane, the sidebar [[run-view-67](#run-view-67)], the tab strip [[run-view-48](#run-view-48)] — is a positioned box, so the screen-reader-only text and other positioned content it holds is contained by that box instead of being carried by the page.
 
 ### Session Start
@@ -328,7 +329,7 @@ The run view shall present conversations in instant-messaging form:
 When the user opens the captain identity's editor control (or another agent's editor control elsewhere in the run view), the run view shall show an anchored popover in place — offering the embedded runtime's adapters with their readiness, and editing the agent's model, its adapter's effort vocabulary, and permissions ([DR-019](../decisions/019-inline-agent-configuration.md)) — writing changes as a merge patch through the shared configuration's validated edit path per [DR-009](../decisions/009-at-hand-interaction.md), without leaving the current surface:
 
 - the popover opens on the side of its anchor with the more room and takes at most what the window can show there, scrolling inside that bound, so it never lies past an edge the reader cannot scroll to and never grows the page ([DR-041](../decisions/041-chrome-that-fits.md)) — the Captain home's control sits at the foot of the surface, where the room above and below changes with the window's height;
-- the open popover refits whenever the window or its own box resizes; a window resize also re-decides its side and its room.
+- the open popover refits whenever the window or its own box resizes, or a scrolling ancestor moves its anchor; a window resize also re-decides its side and its room.
 
 #### run-view-138
 
@@ -495,6 +496,10 @@ While a Captain or player pane is following its end, when its box or rendered co
 
 - chrome moving — the sidebar folding, the divider dragged [[run-view-81](#run-view-81)], panes stacking [[run-view-107](#run-view-107)], a lane unfolding [[run-view-117](#run-view-117)] — and content growing through live cards or delayed media are not reader scrolling and owe no jump pill;
 - actual upward reader movement detaches even when content grows before its scroll event is delivered, and subsequent size changes leave that reader detached until they return to the end or activate Latest [[run-view-46](#run-view-46)].
+
+#### run-view-162
+
+While the Captain pane is following its end, when its rendered conversation changes through the record stream or a loaded machine definition, the pane shall stay at its end, including a reply arriving with turn settlement [[run-view-1](#run-view-1)] and a live machine mounting or changing its drawing [[run-view-60](#run-view-60)] [[run-view-64](#run-view-64)].
 
 ### Machine Cards
 
@@ -823,7 +828,8 @@ When the workspace opens a session from an attention entry [[dashboard-1](dashbo
 While the working line names an open intent [[run-view-90](#run-view-90)], the run view shall offer Drop on the line, which — behind an inline confirm, Drop or Keep, since work is underway ([DR-010](../decisions/010-interface-craft.md) §4) — closes that intent dropped over the protocol while the turn keeps running ([DR-035](../decisions/035-intent-ledger.md)):
 
 - the outcome — the drop, or the refusal with its reason — announces in a status line where the working line stood, lasting six seconds;
-- Keep returns focus to the control; a drop hands it to the enabled composer, or temporarily to its outcome notice while input is disabled, once the line has left with its control; when input becomes available, that notice hands focus to the composer only if it has continuously retained focus, with a reader-selected place preserved ([DR-010](../decisions/010-interface-craft.md) §6).
+- Keep returns focus to the control; a drop hands it to the enabled composer, or to its outcome notice while input is disabled, once the line has left with its control ([DR-010](../decisions/010-interface-craft.md) §6);
+- while its outcome has continuously retained focus, the handoff reaches the composer when input becomes enabled, or before the notice expires if input is already enabled; if the notice expires while input is disabled, ordinary readiness hands body focus to the composer [[run-view-8](#run-view-8)]; a control the reader chose meanwhile retains focus through readiness and expiry.
 
 #### run-view-114
 
@@ -985,11 +991,12 @@ While a replayed fixture stream holds a turn active, when the abort control is a
 
 #### run-view-24
 
-When fixture turn and question states and deferred submission outcomes reach the rendered run view, integration verification shall assert the composer behavior through these cases:
+When fixture turn and question states, real record-folded turns and deferred submission outcomes reach the rendered run view, integration verification shall assert the composer behavior through these cases:
 
 - an active turn disables input and preserves its draft, a stale busy submission is refused without queueing, and settlement re-enables input even when a question arrived first [[run-view-8](#run-view-8)];
 - question arrival, settlement, and a pending submission's success or refusal preserve another control's focus selected by the reader [[run-view-8](#run-view-8)];
-- settlement and submission completion return unclaimed focus to the available composer [[run-view-8](#run-view-8)].
+- settlement and submission completion return unclaimed focus to the available composer, preserving its draft and selection [[run-view-8](#run-view-8)];
+- a surviving agent-editor control keeps focus through settlement, and explicit new-conversation arrival still focuses the composer [[run-view-8](#run-view-8)].
 
 #### run-view-29
 
@@ -1056,6 +1063,7 @@ The test suite shall assert first-hour failures surface at hand:
 Where a replayed fixture stream ends with a playbook run standing parked on the Boss [[run-view-14](#run-view-14)], the test suite shall assert the parked-run notice:
 
 - the thread draws that failure as a card in the bare status line's place, its what line naming the run's command and the step it left in human words, its why line the catalogue's phrase for the fixture's own cause with its paths, its what-now line the Boss step and the published no-op's standing, and the runtime's message with the raw state in its tooltip [[run-view-147](#run-view-147)] [[run-view-2](#run-view-2)];
+- later recovery, a successful different run, and another failure in the same or a different run preserve each historical card's original command and step, with current control standings confined to the current failure park; a failure recorded before any run remains unnamed after a run appears [[run-view-147](#run-view-147)];
 - the notice stands between the Captain pane and the composer, naming the parked workflow by its command in key phrases with the raw state in its title, saying why the run failed and what to do about it, while a run no configured playbook claims names no command and carries its playbook id in that title instead [[run-view-128](#run-view-128)];
 - the notice draws one control per action the fixture summary publishes, in the summary's order and each in the action's own label, with the no-op among them visible, disabled, and carrying its phrased reason in its tooltip and in the what-now line, and Drop's tooltip carrying the published ending's own label [[run-view-128](#run-view-128)];
 - a published action whose label runs long draws a control holding no width of its own open and a label set to ellipse at that control's width, the whole of the label in the control's tooltip, while Drop holds its own width beside it [[run-view-128](#run-view-128)];
@@ -1180,6 +1188,18 @@ Where the run view's production modules are inspected, the test suite shall asse
 - the modules import no Node-only modules and call no `@sublang/cligent` or `@sublang/playbook` APIs [[run-view-13](#run-view-13)];
 - every write to the rendered record state originates from the protocol client's message handling [[run-view-13](#run-view-13)].
 
+### Conversation Following
+
+#### run-view-163
+
+When the integration suite changes a rendered Captain conversation, it shall verify its following choice through this case matrix:
+
+- a reply and turn settlement folded together advance a following pane to the reply [[run-view-162](#run-view-162)];
+- a live frame mounting before a queued programmatic scroll is delivered, and a machine definition changing with no transcript change, leave a following pane at its end [[run-view-162](#run-view-162)];
+- a coalesced failure changing its count without adding a line, and replacement content at an existing delivery-card anchor, update the following pane [[run-view-162](#run-view-162)];
+- content growth reported by a native scroll event before its resize notification still offers Latest to a scrolled-up reader without moving that reader [[run-view-46](#run-view-46)];
+- the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)].
+
 ### Browser Journeys
 
 #### run-view-97
@@ -1242,7 +1262,10 @@ Where the harness boots with the demo project registered, when the journey break
 
 #### run-view-115
 
-Where the harness boots with the demo project registered and the scripted Captain, when the journey starts a queued intent and drops it from the session's working line, the test suite shall assert through the page that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or temporarily in the outcome notice while busy, then in the composer when input becomes available if the reader has not moved focus [[run-view-113](#run-view-113)].
+Where the harness renders a session with a dispatched queued intent through the served page or the real run view and intent store, when the reader drops it from the working line, the test suite shall verify the handoff:
+
+- the served-page journey with the demo project and scripted Captain asserts that the confirm names work underway and Keep returns focus to the control, and that Drop removes the line with the outcome announced in its place and focus in the enabled composer or the outcome notice while busy [[run-view-113](#run-view-113)];
+- the record-folded busy-turn cases assert that settlement hands notice focus to the enabled composer, expiry before settlement allows ordinary readiness to focus it, and another control the reader chose keeps focus through both settlement and expiry [[run-view-113](#run-view-113)] [[run-view-8](#run-view-8)].
 
 #### run-view-118
 
@@ -1276,7 +1299,7 @@ Where the harness boots with the demo project registered and carrying closed wor
 - the collapsed sidebar's Dashboard badge prints "9+" with the count in the entry's accessible name [[run-view-108](#run-view-108)];
 - the Captain home's agent popover, opened at each height, lies inside the window both on opening and after model discovery grows its content, with its adapter picker reachable and the page unmoved [[run-view-32](#run-view-32)];
 - a disabled composer during a long turn keeps its primary control inside the window at every width and height [[run-view-106](#run-view-106)];
-- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)].
+- an agent's settings editor, opened from the narrowest player pane and again from the last pane of a sideways-scrolled grid, lies inside the box that must show it both on opening and after the grid scrolls with its fields reachable and the page unmoved, its model and effort stacked at 320 pixels and side by side at 900 [[run-view-138](#run-view-138)].
 
 #### run-view-146
 
@@ -1290,9 +1313,22 @@ Where the harness boots with the demo project registered and a scripted workflow
 
 Where the harness boots with the demo project registered and the scripted Captain, when served-page journeys exercise sidebar changes and controlled rendered-content growth in a window too short for the thread, the test suite shall assert:
 
-- showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end [[run-view-120](#run-view-120)];
+- showing the sidebar leaves the narrowed field tall enough for the rewrapped draft [[run-view-106](#run-view-106)] and the following Captain thread at its end after its live machine and reply render [[run-view-162](#run-view-162)] [[run-view-120](#run-view-120)];
 - content growth without a transcript-counter change keeps a following thread at its end [[run-view-120](#run-view-120)];
-- upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
+- upward reader movement, including movement concurrent with growth before a queued scroll event, detaches the thread through later growth and sidebar reflow, and Latest resumes following [[run-view-120](#run-view-120)] [[run-view-46](#run-view-46)].
+
+#### run-view-166
+
+Where a served Chinese session holds a player question and both players' delivered transcripts, when a long Chinese draft fills its composer at a 630 by 665 pixel viewport, the browser journey shall assert the draft scrolls above its one-row floor, the Send control stays wholly inside the Captain column with its center hit belonging to that control rather than a player pane, and one ordinary click submits exactly one durable Boss turn with the draft cleared [[run-view-106](#run-view-106)] [[run-view-8](#run-view-8)].
+
+#### run-view-167
+
+Where a served Chinese session holds delivered player transcripts and a long draft, when a player question and parked-run notice arrive before its viewport changes among 320 by 400 pixels with the rail collapsed, 630 by 665 pixels and 1280 by 800 pixels, the browser journey shall assert the chrome-capacity flow:
+
+- the arriving notices preserve the draft and its focus, with the field refitted without a value or viewport change [[run-view-106](#run-view-106)];
+- the page never grows, pane headers remain inside their panes, and the Captain header does not overlap the notice [[run-view-119](#run-view-119)];
+- at the short viewport the field yields to its one-row floor with excess text scrollable before the column scrolls its chrome [[run-view-106](#run-view-106)] [[run-view-119](#run-view-119)];
+- the header, notice and composer controls remain reachable within the Captain column's own scrolling box, with one ordinary Send click submitting exactly one durable Boss turn [[run-view-119](#run-view-119)] [[run-view-8](#run-view-8)].
 
 #### run-view-122
 
