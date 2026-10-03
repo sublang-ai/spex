@@ -26,12 +26,12 @@ meta.md       The spec of specs
 | ID | File | Summary |
 | --- | --- | --- |
 | [DR-000](decisions/000-spec-structure-format.md) | 000-spec-structure-format.md | Spec structure, format, and naming conventions |
-| [DR-001](decisions/001-scaffold-localization.md) | 001-scaffold-localization.md | Scaffold localization via per-language overlays |
+| [DR-001](decisions/001-scaffold-localization.md) | 001-scaffold-localization.md | Scaffold localization via per-language overlays; translation coverage amended by DR-101 |
 | [DR-002](decisions/002-desktop-app-architecture.md) | 002-desktop-app-architecture.md | Spex desktop app: web-first three-layer architecture, monorepo, release preservation |
 | [DR-003](decisions/003-runtime-reuse.md) | 003-runtime-reuse.md | Embedded headless runtime + captain shell; record-driven read-only panes |
 | [DR-004](decisions/004-config-and-persistence.md) | 004-config-and-persistence.md | Shared playbook config ownership, app-local SQLite store (superseded by DR-036), readiness |
 | [DR-005](decisions/005-compilation-integration.md) | 005-compilation-integration.md | slc as external toolchain; in-app registry generation; draft inputs and two-step registration amended by DR-058 |
-| [DR-006](decisions/006-projects-and-forge.md) | 006-projects-and-forge.md | Projects as local git repos; gh-CLI GitHub forge adapter; scaffold step amended by DR-096 |
+| [DR-006](decisions/006-projects-and-forge.md) | 006-projects-and-forge.md | Projects as local git repos; gh-CLI GitHub forge adapter; scaffold step amended by DR-096; create flow amended by DR-099 and DR-100 |
 | [DR-007](decisions/007-conversational-session-start.md) | 007-conversational-session-start.md | Sessions lands on a Captain-first start view; one motion to the first turn |
 | [DR-008](decisions/008-native-shell-bridge.md) | 008-native-shell-bridge.md | Feature-detected `window.spexNative` bridge for OS pickers and path reveal only |
 | [DR-009](decisions/009-at-hand-interaction.md) | 009-at-hand-interaction.md | At-hand interaction: no forced surface switches; in-place popovers; global attention badge; browsable history |

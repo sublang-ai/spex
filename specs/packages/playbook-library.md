@@ -425,7 +425,7 @@ When a draft turn starts, the conversation runner shall run the draft's agent bl
 - no instance outlives the turn ([DR-051](../decisions/051-runtime-held-for-a-turn.md)); the token is held in memory for the app's run and never written;
 - native media and large tool results are externalized through the shared owned-asset ingestion before recording [[media-6](media.md#media-6)]; earlier input files stay in the visible transcript and are not automatically resent on later turns;
 - a run ending in an error coded `SESSION_RESUME_REJECTED` is re-run once as a reseed;
-- a `permission_request` event is recorded and shown as a failure line; the runner answers nothing, so the adapter's own headless default applies;
+- legacy `permission_request` telemetry is recorded as a failure line and never answered, while a live `approval_request` on a draft turn is answered only through the core's approval broker [[approvals-1](approvals.md#approvals-1)] and recorded as history;
 - the turn is recorded and streamed as `turn_started` carrying the Boss or system text, `player_prompt` with the exact prompt, one `player_event` per event, `player_finished`, and `turn_finished` or `turn_aborted`, every player record naming the player `author`, so the run view's transcript folds read them unchanged [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-65
