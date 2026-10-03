@@ -181,13 +181,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- The app requires Playbook 17.4, slc 0.15.1 and Cligent 0.33.1 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.4.1, slc 0.15.1 and Cligent 0.33.3 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
   [DR-095](specs/decisions/095-a-subagents-effort-and-the-agents-own-model.md),
   [DR-097](specs/decisions/097-media-and-browser-tools-across-hosts.md),
-  [DR-098](specs/decisions/098-live-tool-approvals.md)),
+  [DR-098](specs/decisions/098-live-tool-approvals.md),
+  [DR-102](specs/decisions/102-playbook-17-4-1-adoption.md)),
   and locks the agent SDKs at the releases Cligent 0.33.1 tests: Claude
   Agent SDK 0.3.284, Codex SDK 0.159.0 and OpenCode SDK 1.18.33. The
   compiler runs on the app's own Playbook and Cligent, which slc 0.15.1
@@ -206,6 +207,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
   carries a subagent effort. Stop older writers and update every host to
   compatible Playbook 17.4-based releases before saving attachment-bearing
   history; older writers do not preserve the new asset-bearing records.
+- Playbook 17.4.1 is the floor ([DR-102](specs/decisions/102-playbook-17-4-1-adoption.md)).
+  A packaged `/code` or `/decide` run with `/review` disabled now stops at
+  its start with an explanation instead of committing work its review
+  cannot check, as the Library's hint beside those entries says. Session
+  asset directories stay readable when another store sharing the home
+  prepares them again or a file manager leaves `.DS_Store` files in them,
+  and such a session still deletes. A nested call receives only its
+  parent's attachments, so files the Captain did not select never reach a
+  child worker.
 - A session parked on a question inside a built-in state that Playbook 16
   renamed — `/code` waiting in its former `runFirstPhase`, for example —
   no longer resumes from your answer. Drop it, or send a new request.
