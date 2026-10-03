@@ -176,6 +176,11 @@ export function AgentSettingsPopover({
     subagentEffort: draft.subagentEffort === false ? undefined : draft.subagentEffort ?? agent.configured.subagentEffort,
     fastMode: draft.fastMode ?? agent.configured.fastMode,
   }, context);
+  // Unknown or unsupported support blocks only a browser this edit newly
+  // turns on, never the conversation's standing choice kept while other
+  // values are saved (settings-44).
+  const browserBefore = agent.settings?.browser ?? agent.configured.browser ?? false;
+  const browserUnadmitted = (draft.browser ?? agent.configured.browser ?? false) && !browserBefore && !browserTools.supported;
   const discovery = useAgentOptions(agent.adapter);
   const pinnedModel = draft.model === false ? "" : draft.model ?? agent.configured.model ?? "";
   const tuning = modelTuning(discovery.options, pinnedModel);
@@ -349,7 +354,7 @@ export function AgentSettingsPopover({
           <button
             type="button"
             data-testid={`agent-save-${agent.id}`}
-            disabled={busy || ((draft.browser ?? agent.configured.browser ?? false) && !browserTools.supported) || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
+            disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
             onClick={() => {
               setBusy(true);
               setError(undefined);

@@ -73,6 +73,16 @@ export function useStickToBottom(contentKey: unknown) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentKey]);
 
+  // Earlier entries revealed above the reader are not news below: the
+  // pane rebases its measured box in the commit that renders them, so
+  // the resize and scroll notifications that follow see no growth to
+  // announce (run-view-46).
+  const [revealed, setRevealed] = useState(0);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (revealed > 0 && el) boxRef.current = measure(el);
+  }, [revealed]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !content) return;
@@ -108,6 +118,14 @@ export function useStickToBottom(contentKey: unknown) {
     if (following) setNewBelow(false);
   }
 
+  /** Announce entries about to render above the reader: the pane stays
+   * where the reader is instead of following, and raises no pill. */
+  function revealAbove(): void {
+    stuckRef.current = false;
+    setDetached(true);
+    setRevealed((count) => count + 1);
+  }
+
   function jump(): void {
     const el = scrollRef.current;
     if (!el) return;
@@ -117,7 +135,7 @@ export function useStickToBottom(contentKey: unknown) {
     setNewBelow(false);
   }
 
-  return { scrollRef, contentRef, onScroll, detached, newBelow, jump, stuckRef };
+  return { scrollRef, contentRef, onScroll, detached, newBelow, jump, revealAbove };
 }
 
 /** Floating "new content below" pill; render inside a relative parent

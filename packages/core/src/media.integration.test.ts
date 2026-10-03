@@ -395,6 +395,50 @@ test("media-13: file-only session copies before acknowledgement, reopens exact b
   }
 });
 
+test("media-19: an empty-text submission naming an attachment-only intent hands off that intent's own files", {timeout: 30_000}, async () => {
+  const fixture = await sessionFixture();
+  const client = new MediaClient(fixture.service.port());
+  try {
+    const project = await client.command("project.register", { path: fixture.project });
+    const bytes = randomBytes(64);
+    const uploadId = randomUUID();
+    await client.command("media.begin", { uploadId, owner: { kind: "project", id: project.id }, name: "queued screen.png", mimeType: "image/png", byteLength: bytes.length });
+    await client.command("media.chunk", { uploadId, offset: 0, data: bytes.toString("base64") });
+    const { asset } = await client.command("media.finish", { uploadId });
+    const queued = await client.command("intent.queue", { projectId: project.id, text: "", attachments: [asset], at: "tail" });
+    const session = await client.command("session.create", { projectId: project.id });
+    const sessionOwner = { kind: "session" as const, id: session.id };
+    await client.command("subscribe", { channel: { kind: "session", sessionId: session.id } });
+
+    // The dispatch names the intent alone; its files are not sent again.
+    assert.deepEqual(await client.command("turn.submit", { sessionId: session.id, text: "", intentId: queued.id }), { accepted: true });
+    assert.deepEqual(await readAll(client, sessionOwner, asset), bytes);
+    await client.waitFor((event) => event.type === "session.state" && event.session.id === session.id && event.session.turns === 1 && !event.session.live);
+    const history = await client.command("history.get", { sessionId: session.id });
+    const started = history.records.find(({ record }) => record.type === "turn_started")?.record;
+    assert.ok(started?.type === "turn_started");
+    assert.equal(started.turn.prompt, "");
+    assert.deepEqual(started.turn.attachments, [asset]);
+    const dispatched = (await client.command("ledger.get", {})).intents.find((entry) => entry.intent.id === queued.id)!;
+    assert.equal(dispatched.intent.dispatched?.sessionId, session.id);
+
+    // Text and resolved files both empty: refused once resolved, with no turn.
+    const plain = await client.command("intent.queue", { projectId: project.id, text: "Write the release notes", at: "tail" });
+    await assert.rejects(client.command("turn.submit", { sessionId: session.id, text: "", intentId: plain.id }), /invalid_request: Text or an attachment is required/);
+    const summary = (await client.command("session.list", {})).find((entry) => entry.id === session.id)!;
+    assert.equal(summary.turns, 1);
+    assert.equal(summary.live, false);
+    const ledger = await client.command("ledger.get", {});
+    const left = ledger.intents.find((entry) => entry.intent.id === plain.id)!;
+    assert.equal(left.state, "queued");
+    assert.equal(left.intent.dispatched, undefined);
+  } finally {
+    client.close();
+    await fixture.service.stop();
+    await rm(fixture.dir, { recursive: true, force: true });
+  }
+});
+
 test("core-service-77: rejected attachment admission releases only the runtime it opened", {timeout: 30_000}, async () => {
   const fixture = await sessionFixture();
   const client = new MediaClient(fixture.service.port());

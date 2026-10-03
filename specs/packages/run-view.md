@@ -488,7 +488,10 @@ The session state chip shall show a human-readable label (amber while waiting on
 
 #### run-view-46
 
-When new content arrives below the fold of a scrolled-up Captain or player pane, the pane shall show a jump-to-latest pill that scrolls to the bottom and resumes following.
+When new content arrives below the fold of a scrolled-up Captain or player pane, the pane shall show a jump-to-latest pill that scrolls to the bottom and resumes following:
+
+- a record that renders only in another pane is not new content in this one and raises no pill;
+- earlier entries the reader reveals above are not new content below and raise no pill.
 
 #### run-view-120
 
@@ -905,7 +908,9 @@ When persisted fixture records are replayed into session and authoring conversat
 
 When rendered first-message, session, authoring and queued-intent flows use the protocol client, the integration suite shall verify byte upload and retry, removal cancellation, drafts retained after failed sends and navigation, attachment-only admission, and ordered references retained through queued-intent editing, staging and dispatch [[run-view-158](#run-view-158)].
 
-### run-view-111
+### Recovery Journey
+
+#### run-view-111
 
 When a browser journey opens an interrupted CLI-created session, it shall verify the recovery controls [[run-view-110](#run-view-110)]:
 
@@ -1159,7 +1164,7 @@ Where a fixture holds a session whose last turn finished before the client learn
 - a session listed in the sidebar, subscribed, or held in a background tab is never marked, and neither is a pinned tab that is no conversation;
 - a fold naming no unread turn for the shown session sends nothing, so a turn in flight is never marked, and the marker is sent once per fold rather than on every render;
 - a session carrying a failure entry with no run parked stands the pick-it-up notice above its composer, carrying the catalogue's phrase for the cause its stream reported and that cause's Boss step [[run-view-135](#run-view-135)] [[run-view-147](#run-view-147)], which a parked run's own notice replaces [[run-view-135](#run-view-135)];
-- a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge [[run-view-136](#run-view-136)].
+- a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge, and a recorded approval request reads as history naming its tool with the native reason where one was given [[run-view-136](#run-view-136)].
 
 ### Protocol Boundary Coverage
 
@@ -1198,7 +1203,12 @@ When the integration suite changes a rendered Captain conversation, it shall ver
 - a live frame mounting before a queued programmatic scroll is delivered, and a machine definition changing with no transcript change, leave a following pane at its end [[run-view-162](#run-view-162)];
 - a coalesced failure changing its count without adding a line, and replacement content at an existing delivery-card anchor, update the following pane [[run-view-162](#run-view-162)];
 - content growth reported by a native scroll event before its resize notification still offers Latest to a scrolled-up reader without moving that reader [[run-view-46](#run-view-46)];
-- the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)].
+- the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)];
+- a player-only record leaves a scrolled-up Captain pane without the pill, and a Captain line arriving below then offers it [[run-view-46](#run-view-46)].
+
+#### run-view-164
+
+When the integration suite reveals earlier entries of a long player transcript to a reader scrolled to its top, it shall assert the reader keeps their place with no jump-to-latest control, and an entry appended afterwards offers it [[run-view-46](#run-view-46)].
 
 ### Browser Journeys
 

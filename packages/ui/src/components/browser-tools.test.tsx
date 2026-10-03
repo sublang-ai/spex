@@ -209,6 +209,40 @@ describe("contextual browser controls through the core client", () => {
     view.unmount();
   });
 
+  test("a configured browser keeps other edits saveable while support is unknown, but a new browser waits for support", async () => {
+    const command = fixture((type) => type === "agent.capabilities" ? Promise.reject(new Error("Core unavailable")) : undefined);
+    const view = render(<AgentEditor initial={{ ...agent, browser: true }} context={context} onSave={setCaptain} />);
+    await screen.findByText("Core unavailable");
+    fireEvent.change(screen.getByTestId("agent-effort"), { target: { value: "high" } });
+    const save = screen.getByTestId("agent-save") as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(command).toHaveBeenCalledWith("config.edit", { op: { kind: "captain.set", patch: { ...agent, effort: "high" } } }));
+    view.unmount();
+
+    // Copying a browser-enabled Captain newly admits Browser here.
+    render(<AgentEditor initial={agent} captain={{ ...agent, browser: true }} context={context} onSave={() => {}} />);
+    await screen.findByText("Core unavailable");
+    fireEvent.click(screen.getByTestId("agent-same-as-captain"));
+    expect(checkbox().checked).toBe(true);
+    expect((screen.getByTestId("agent-save") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("a conversation keeps its configured browser while saving an effort its support check could not confirm", async () => {
+    fixture((type) => type === "agent.capabilities" ? { browser: { status: "unknown" } } : undefined);
+    const summary = { path: "/tmp/spex.yaml", captain: { ...agent, browser: true }, players: [], playbooks: [] };
+    const [captain] = sessionAgents({ players: [], agentSettings: {} }, summary as Parameters<typeof sessionAgents>[1]);
+    const onSave = vi.fn(async () => {});
+    render(<AgentSettingsPopover agent={captain!} context={context} readOnly={false} anchorRef={createRef()} onSave={onSave} onClose={() => {}} />);
+    await screen.findByText("Browser support is unverified");
+    fireEvent.change(screen.getByTestId("agent-captain-effort-mode"), { target: { value: "pin" } });
+    fireEvent.change(screen.getByTestId("agent-captain-effort-value"), { target: { value: "high" } });
+    const save = screen.getByTestId("agent-save-captain") as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ effort: "high", browser: null })));
+  });
+
   test("a failed capability check can retry without losing an unsaved model", async () => {
     let failed = false;
     fixture((type) => { if (type === "agent.capabilities" && !failed) { failed = true; return Promise.reject(new Error("Core unavailable")); } });

@@ -43,6 +43,8 @@ test("run-view-166: a stacked Chinese long draft keeps Send above player panes",
         hitWithinButton: !!hit && button.contains(hit), hitText: hit?.textContent?.slice(0, 100),
         fieldHeight: field.getBoundingClientRect().height, scrollHeight: field.scrollHeight,
         clientHeight: field.clientHeight, lineHeight: parseFloat(getComputedStyle(field).lineHeight),
+        paddingTop: parseFloat(getComputedStyle(field).paddingTop),
+        paddingBottom: parseFloat(getComputedStyle(field).paddingBottom),
         pageHeight: document.documentElement.scrollHeight, viewportHeight: window.innerHeight };
     });
     const layoutPath = testInfo.outputPath(`layout-${size.width}x${size.height}.json`);
@@ -52,7 +54,8 @@ test("run-view-166: a stacked Chinese long draft keeps Send above player panes",
     expect(geometry.button.top).toBeGreaterThanOrEqual(geometry.column.top);
     expect(geometry.button.bottom).toBeLessThanOrEqual(geometry.column.bottom + 1);
     expect(geometry.hitWithinButton, JSON.stringify(geometry)).toBe(true);
-    expect(geometry.fieldHeight).toBeGreaterThanOrEqual(geometry.lineHeight);
+    // The draft scrolls in a field taller than its one-row floor.
+    expect(geometry.fieldHeight).toBeGreaterThan(geometry.lineHeight + geometry.paddingTop + geometry.paddingBottom);
     expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
     expect(geometry.pageHeight).toBeLessThanOrEqual(geometry.viewportHeight + 1);
   }

@@ -4219,6 +4219,10 @@ msgstr "Requested action"
 msgid "Requested tool approval: {tool}"
 msgstr "Requested tool approval: {tool}"
 
+#: src/state/reducer.ts
+msgid "Requested tool approval: {tool} — {reason}"
+msgstr "Requested tool approval: {tool} — {reason}"
+
 #. the field must be filled before the act runs
 #: src/components/SpaceSurface.tsx
 msgid "Required"

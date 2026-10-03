@@ -183,6 +183,13 @@ export function AgentEditor(props: AgentEditorProps) {
     mode !== initialMode(initial) ||
     writablePaths !== (initial?.permissions?.writablePaths ?? []).join(", ");
 
+  // Unknown or unsupported support blocks only a browser this edit
+  // newly admits — turned on, or carried to another adapter — never a
+  // configured choice the reader keeps while saving other values
+  // (settings-44).
+  const browserUnadmitted = browser && !browserTools.supported &&
+    (!(initial?.browser ?? false) || adapter !== knownAdapter(initial?.adapter));
+
   function save(): void {
     // The emitted patch is the surfaced set only (DR-019): adapter,
     // model, effort, permissions. `instruction` — and any other
@@ -454,7 +461,7 @@ export function AgentEditor(props: AgentEditorProps) {
         <button
           type="button"
           data-testid="agent-save"
-          disabled={busy || (browser && !browserTools.supported) || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
+          disabled={busy || browserUnadmitted || invalidEffort || invalidSubagentEffort || invalidFastMode || (!dirty && !props.allowUnchanged)}
           onClick={save}
           className="rounded-md bg-brand-600 px-3 py-1 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >

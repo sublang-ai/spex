@@ -6,7 +6,7 @@
 // counterpart bubbles, player questions as first-class incoming
 // messages, shell status lines as compact system lines between them.
 
-import { useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
+import { isValidElement, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
 
 import type { CaptainLine, SessionView } from "../state/reducer.js";
 import { stateLabel } from "../lib/labels.js";
@@ -39,6 +39,24 @@ export interface ThreadExtra {
   /** Focus/highlight identity for attention activation (run-view-91). */
   focusKey?: string;
   node: ReactNode;
+}
+
+/** What the thread's extras draw, by value rather than by element
+ * identity: each one's key and anchor, and its node's primitive props —
+ * a delivery card's live and closed flags, a plain node's text — so a
+ * parent re-creating the same elements is no news to the pane. */
+function extrasDigest(extras: readonly ThreadExtra[] | undefined): string {
+  return JSON.stringify(
+    (extras ?? []).map(({ key, afterIndex, node }) => [
+      key,
+      afterIndex,
+      isValidElement(node)
+        ? Object.entries(node.props as Record<string, unknown>).filter(
+            ([, value]) => value === null || ["string", "number", "boolean"].includes(typeof value),
+          )
+        : typeof node === "object" ? null : String(node),
+    ]),
+  );
 }
 
 /** The way to Settings a failure line offers while the Captain's
@@ -377,12 +395,18 @@ export function CaptainPane({
    * (run-view-147). */
   failure?: (line: CaptainLine) => FailureContext | undefined;
 }) {
-  // Live machine records change the thread without adding chat text.
-  // Keep all content inputs distinct, with stable identity across
-  // clock/header-only renders; a loaded graph can change its drawing.
+  // Follow what this pane draws, never the record cursor: every record
+  // advances it, and one that renders only in a player's pane is no
+  // news here (run-view-46). Keep the inputs distinct so a reply
+  // arriving as its turn ends cannot cancel the change that advances
+  // the thread; a coalesced failure counts on its own line, live
+  // frames and a loaded graph redraw machine cards, and an extra can
+  // change at its existing anchor (run-view-162).
+  const lastLine = view.captain[view.captain.length - 1];
+  const extrasKey = extrasDigest(extras);
   const contentKey = useMemo(
-    () => [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
-    [view.lastSeq, view.captain.length, view.captainDraft.length, view.turnActive, extras, view.frames, machineGraphs],
+    () => [view.captain.length, lastLine, lastLine?.text.length, lastLine?.count, view.captainDraft.length, view.turnActive, view.frames, machineGraphs, extrasKey],
+    [view.captain.length, lastLine, lastLine?.text.length, lastLine?.count, view.captainDraft.length, view.turnActive, view.frames, machineGraphs, extrasKey],
   );
   const { scrollRef, contentRef, onScroll, newBelow, jump } = useStickToBottom(contentKey);
   const [highlightKey, setHighlightKey] = useState<string>();
