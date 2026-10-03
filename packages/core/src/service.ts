@@ -1604,6 +1604,7 @@ export class CoreService {
           const session = this.store.describeSession(command.sessionId);
           if (!session) throw noSession(command.sessionId);
           const assets = command.attachments ?? (command.intentId ? this.store.getIntent(command.intentId)?.attachments : undefined) ?? [];
+          if (!command.text.length && !assets.length) throw new CoreError("invalid_request", i18n._({id: "Text or an attachment is required.", comment: "Attachment transfer or storage diagnostic"}));
           const attachments = assets.length ? await this.sessions.importAttachments(command.sessionId,
             this.media.ownerStore({kind: "project", id: session.projectId}), assets) : [];
           if (command.intentId !== undefined) this.validateIntentDispatch(command.sessionId, command.intentId);
