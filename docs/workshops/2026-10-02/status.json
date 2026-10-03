@@ -1,7 +1,5 @@
 {
   "started_at": "2026-10-02T15:37:28Z",
-  "deadline": "2026-10-03T13:37:28Z",
-  "integration_cutoff": "2026-10-03T11:37:28Z",
   "phase": "live_team_delivery_and_patch_releases",
   "automation_id": "spex-workshop-readiness",
   "scratch_root": ".workshop-20261002/",
@@ -16,70 +14,70 @@
     }
   },
   "access": {
-    "github": "verified",
+    "github": "Host HTTPS/API recovered23:54UTC; normal Spex push succeeded23:55. Cloud connector remained readable during outage. Exact Cligent PR73 merge was rejected by automatic approval review and awaits the already-requested specific user approval.",
     "codex": "live pilot passed",
-    "claude": "OAuth restored; published Cligent0.33.2 fresh consumer verified Opus5.5/max tools0 with only Opus usage; simulations still Sol until stack adoption"
+    "claude": "Restored; explicit Opus5.5/max/tools0 published0.33.2 consumer passed17:24UTC. Outside-sandbox auth status true20:15UTC; sandbox false20:16 is isolation artifact."
   },
   "teams": [
     {
       "id": "T01",
       "name": "Seed SaaS",
       "language": "en",
-      "status": "Real CLI planning passed; fresh served-UI design starting; raw SLC entry needs an app registry wrapper. Product delivery pending."
+      "status": "Actual T10 adaptation 8870b4/218 affected cases and separate scalar planning 1.0.1 ask/reply remain accepted. Full Source failed 39m05s, preserved. Reviewed local fixes and operator recovery reduce 50→24→20→3→0 deterministic findings; combined integration currently reports three canonical-question mismatches under diagnosis; originals unchanged. No full link/runtime yet."
     },
     {
       "id": "T02",
       "name": "华东软件",
       "language": "zh",
-      "status": "Cold compile and real Chinese CLI planning passed; served-UI design starting. Product delivery pending."
+      "status": "Actual productCODE/REVIEW4596ab9 and46CLIcases remain accepted; T08 Proposed receipt12hash/123links/8CLI and operator28file/12CLI evidence unchanged. Reviewed T08 adaptation+test-boundary task prepared with pinned6663candidate and157protected files. Automatic approval review denied OpenAI payload before process/session creation; specificapproval pending,0calls."
     },
     {
       "id": "T03",
       "name": "Meridian Bank",
       "language": "en",
-      "status": "CODE and independent REVIEW passed after a correction; 441 real Java processes passed. Recovered custom procedure linked; UI approval journey pending."
+      "status": "441 original real Java processes, CODE/REVIEW, actual custom UI approval/rejection and JAR upgrade/rollback passed. Atlas distribution1.0.1 recipient acceptance: six real JAR processes, exact11-file provenance and rejection preservation. Full-five-stage Source independently reviewed; compilation/runtime pending."
     },
     {
       "id": "T04",
       "name": "精工制造",
       "language": "zh",
-      "status": "Chinese UI design and independent REVIEW passed; real CODE implementation and T07 package adaptation running."
+      "status": "Local publication b869119 passed canonical bound REVIEW seq2481 and CODE seq2488 after separate owner acceptance of26-file439869e candidate. Published T06 rollback package transferred byte-exact; recipient adaptation pending. Original classification-failed CODE remains failed. Server/browser stopped with225 durable files preserved. Full procedure/retrospective pending."
     },
     {
       "id": "T05",
       "name": "Harbor Health",
       "language": "en",
-      "status": "English UI design committed; independent REVIEW running; proposed boundary contract 1.0.0 exported for T10."
+      "status": "Actual T06 adaptation ab357d1:82final real-process cases and one selected-release smoke. OriginalCODE task-finality failure retained; explicit Abandon followed by new independent REVIEW success seq1703/noUnsettledtrue at exactab357. Server/helper stopped and132durable files preserved. Full procedure/retrospective pending."
     },
     {
       "id": "T06",
       "name": "星河电商",
       "language": "zh",
-      "status": "Chinese UI project created with committed specs; real DECIDE running."
+      "status": "One complete canary matrix passed: 31,148 real traffic evaluations/31,215 total CLI calls; 967/10 rolled back to 1, 967/9 and 100/1 retained 2, empty sample correctly failed and restored 1. Independent raw-log audit passed without new calls. Clean task-6 commit 97057399 is under canonical bound REVIEW; T04 adaptation and full custom execution pending."
     },
     {
       "id": "T07",
       "name": "Northstar Agency",
       "language": "en",
-      "status": "Isolated PHP CLI built; real CODE and REVIEW running with T02 provenance retained. Versioned reuse package delivered to T04."
+      "status": "Actual PHP CODE/REVIEW passed9ed7988 and259process acceptance; isolation repaired. Original custom compiler checker defect fixed publicly inSLC0.16.0; retained bundle still has no linked module and requires supported link/completion. Operator12CLI release/rollback rehearsal separate; fullfive-stage Source remains uncompiled."
     },
     {
       "id": "T08",
       "name": "城市服务",
       "language": "zh",
-      "status": "Chinese UI project created; T03 approval package received with all six hashes verified; real DECIDE running."
+      "status": "Task7 closurecf9184ed passed exact independent REVIEWseq2038 and CODEsuccessseq2041/allReviewsPassedtrue, clean revision. Owner rejection,32evidence bindings, earlierfailed543232 and68published originals preserved; IR002Proposed/unimplemented. Server88094/tab stopped with319saved files byte-identical. Fullcustom five-stage compilation/runtime still pending."
     },
     {
       "id": "T09",
       "name": "Atlas Platform",
       "language": "en",
-      "status": "Real core design turn encountered a permissions validation mismatch; explicit relative .git correction prepared. Original compiler failure retained pending published fix."
+      "status": "Actual CODE complete at clean1281c111==finalEvaluatedRevision. Immutable distribution1.0.1 sealed and T03 recipient CLI acceptance passed. Full five-stage Source1.0.3 independently approved with22input hashes; compiled/runtime pending. Retained-bundle inventory separates later rewritten home Source from originally submitted GEARS/FSM inputs; linked module absent, so deterministic completion is unavailable."
     },
     {
       "id": "T10",
       "name": "数澜数据",
       "language": "zh",
-      "status": "Real core design turn encountered the same permissions validation mismatch; correction prepared. T05 proposed boundary package available."
+      "status": "Actual CODE complete at clean46b9fcbe==finalEvaluatedRevision; prior150+4+16 process checks separately attributed and local release/rollback5processes recorded. Quality-feedback1.0.0 accepted by T01 real CLI. Full Source1.0.2 reviewed,16hashes verified; compilation/runtime pending. Retained-bundle inventory separates later rewritten home Source from originally submitted GEARS/FSM inputs; linked module absent, so deterministic completion is unavailable."
     }
   ],
   "findings": [
@@ -93,7 +91,7 @@
       "id": "ENV-02",
       "kind": "environment",
       "summary": "Global slc/playbook and shared model settings are old",
-      "status": "use current bundled tools and isolated explicit configs"
+      "status": "Use current bundled tools and isolated explicit configs. Cligent broader tests exposed obsolete ambient Kimi0.27; repeated outside sandbox with genuine pinned Gemini0.61/Kimi2.1.1/OpenCode1.18.33 passes1772tests. Original sandbox/ambient-tool failures preserved."
     },
     {
       "id": "ENV-03",
@@ -147,13 +145,13 @@
       "id": "SLC-03",
       "kind": "product",
       "summary": "Compiler coverage probe omits valid unannotated output fields and cannot reach guarded downstream states",
-      "status": "Resolved on main: PR38 rebase-merged as b7e2ca0; targeted and full tests passed, two independent reviews closed the shadowed-interrupt case; 0.15.2 release gates pending."
+      "status": "Released in SLC0.16.0, verified public install and provenance. Original regression proof retained."
     },
     {
       "id": "SLC-04",
       "kind": "ux",
       "summary": "Named compiler phase recovery does not emit public registry entry and generated verification suites",
-      "status": "T01 recovered using built internal emitters, honestly recorded; public resume path remains under review"
+      "status": "Released SLC0.16.0 from6386150. Canonical1573pass/2existing skips; installed cold compile1204s, exact reuse, manual GEARS update/reuse and live host run all passed. Fresh npm consumer completed retained bundle using only four inputs and no model/config seeding; signatures/provenance verified."
     },
     {
       "id": "PB-01",
@@ -177,15 +175,262 @@
       "id": "SPEX-06",
       "kind": "ux",
       "summary": "A fresh raw SLC entry is described as an older toolchain when it lacks the app-owned registry wrapper.",
-      "status": "Required wrapper is intentional; preserve evidence, use explicitly labeled internal packaging recovery, assess actionable diagnostic without claiming public import support."
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Registry-contract wording preserves the distinction between fresh SLC artifacts and the app registry wrapper."
     },
     {
       "id": "SPEX-07",
       "kind": "product",
       "summary": "Config editing accepts an absolute writablePaths entry that the runtime later rejects.",
-      "status": "Observed in T09/T10 before any coder write; correcting to .git and tracing validation ownership/specs for a narrow fix."
+      "status": "Resolved: PR71 rebase-merged095be453 after all9CI checks passed."
+    },
+    {
+      "id": "SPEX-08",
+      "kind": "ux",
+      "summary": "CODE enabled without REVIEW fails only when nested review is invoked, after a real coding commit.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Desktop prerequisite hint shipped on main; underlying Playbook guard/prior-review relay is merged and consolidated17.4.1 pack6663 passed installed CODE/REVIEW. Public release/manual gate pending."
+    },
+    {
+      "id": "ENV-04",
+      "kind": "provider",
+      "summary": "Multiple native Codex calls fail with workspace routing discovery timeout.",
+      "status": "T05 saved-result assessment retry completed real review without coder repetition; T09 native retry eventually progressed. SDK forwards native error; exact network/upstream cause unproven."
+    },
+    {
+      "id": "OPS-01",
+      "kind": "simulation_setup",
+      "summary": "T07 copied sessions path pointed at T03 home.",
+      "status": "Operator error; settled T07 bundle moved under management lease with60files/29assets byte-identical, destination validated, oldnamespace retired through publicstore operation. Historical isolation limitation retained."
+    },
+    {
+      "id": "LEARN-01",
+      "kind": "procedure_authoring",
+      "summary": "T04/T06/T08 generated approval-before-commit requirements that conflict with CODE/DECIDE post-commit review.",
+      "status": "Actual T04/T06/T08 CODE corrections passed bound REVIEW. Reviewed custom Sources require reviewable commits before independent review. Separate built-in commit-order guidance remains an unapplied proposal; no authorization blocker."
+    },
+    {
+      "id": "CI-01",
+      "kind": "test_measurement",
+      "summary": "macOS role-editor test reads two field boxes across a popover refit, falsely reporting overlap.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Atomic paired-field measurements remove the popover-refit measurement race while retaining overlap assertions."
+    },
+    {
+      "id": "SLC-06",
+      "kind": "release_fixture",
+      "summary": "Installed demo completes without typed terminal result required by the live release gate.",
+      "status": "Released SLC0.16.0. Corrected canonical live release acceptance completed cold compile, reuse, update and real host execution; original failure retained."
+    },
+    {
+      "id": "ENV-05",
+      "kind": "network",
+      "summary": "github.com HTTPS connections time out while GitHub API had remained reachable.",
+      "status": "Host GitHub/provider endpoints timed out23:30–23:53UTC; recovered23:54, normalgitpush23:55. T04 completedaction/reporttimeout and T08 noaction/decisiontimeout remain distinct and were resumed only through supported controls."
+    },
+    {
+      "id": "SPEX-09",
+      "kind": "product",
+      "summary": "Batched Captain final reply and turn settlement cancel a summed scroll dependency, hiding new content.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Rendered-growth tracking preserves new-content notice even when native scroll precedes resize; original failure and deterministic scroll-first controls retained."
+    },
+    {
+      "id": "ENV-06",
+      "kind": "authorization",
+      "summary": "Automatic approval review rejects objective-file authorization for publishing and a new private-context model call.",
+      "status": "Automatic approval review holds exact Cligent PR73 merge, two optional T04 diagnostic model calls, SLC25dfffa publication, SLCbbdf21f+cd9ec081 publication, and one reviewed T02 OpenAI CODE/REVIEW task. Each exact payload/destination question is pending; T02 was rejected before process/session creation with157protected files unchanged. Normal Spex/Playbook operations continue when permitted; no bypass."
+    },
+    {
+      "id": "CI-02",
+      "kind": "test_budget",
+      "summary": "Space integration file can exhaust its180s aggregate test budget while every completed test passes.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Space integration split retains all15test bodies/26harness declarations and180second per-file limit."
+    },
+    {
+      "id": "CI-03",
+      "kind": "test_isolation",
+      "summary": "Cold browser setup retry reuses its first attempt cache and fails the empty-cache precondition.",
+      "status": "Test-only cleanup/immediate diagnostic assertion committed ad00272, independently reviewed. Two cold repeats: first failed10s proof, second passed; ownedcache absent. Instrumented cold proof passed8.987s after24.614s install, warm5.233s; failure root cause unproven. Timeout unchanged."
+    },
+    {
+      "id": "SLC-07",
+      "kind": "product",
+      "summary": "Transition coverage invents a response payload field from outcome prose despite an explicit closed output declaration.",
+      "status": "Released SLC0.16.0 with closed-output correction and --complete; complete live release proof and fresh public consumer passed. New mixed-Source finding is separate."
+    },
+    {
+      "id": "PB-02",
+      "kind": "workflow_context",
+      "summary": "Later CODE IR tasks omit canonical prior-phase passed-review evidence and can ask Boss to certify an already passed review.",
+      "status": "Merged ddf7cb5: 2800 canonical tests, three remaining source-hosted live cases and six exact packed installed cases passed. Old live hosts retain their original closure. Current-call/finality PR62 merged as ae7d7d72 with exact-main CI green. Final consolidated 17.4.1 pack6663 passed fresh installed CODE/REVIEW; only required manual presentation and public release remain pending."
+    },
+    {
+      "id": "PB-03",
+      "kind": "release_fixture",
+      "summary": "Live recovery fixture injects different bytes than the generated cache its Boss instruction authorizes deleting.",
+      "status": "Mergedddf7cb5 source-hosted recovery3cases and exactpacked6installedcases passed. Prior failed RPCfullrun retained; nativeTerminal release26 remains unverified."
+    },
+    {
+      "id": "SPEX-10",
+      "kind": "ux",
+      "summary": "Historical failure cards acquire a later workflow name/state and unrelated current recovery guidance.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Historical failure identity and recovery guidance stay attached to the recorded failed workflow."
+    },
+    {
+      "id": "CLIGENT-01",
+      "kind": "ux",
+      "summary": "Managed-browser proof timeout gives no failing phase, and an inner proof deadline can leave an owned descendant.",
+      "status": "0.33.4 preparation PR73/41480910:1779source checks, canonical smoke and7metadata checks passed; Windows failed download rerun passed, all7applicablePRchecks green. Automatic approval review rejected exact rebase merge twice; specific user approval pending. No tag/publication."
+    },
+    {
+      "id": "LEARN-02",
+      "kind": "procedure_authoring",
+      "summary": "A CODE task commits only an unavailable cross-team prerequisite note, leaving no valid task-completion outcome.",
+      "status": "T05 originally committed blocker-only5d536f1. After genuineT06package delivery, actualadaptationab357d1passed82finalcases+smoke and newindependentREVIEWseq1703; originalCODEfinalityfailure remains separate."
+    },
+    {
+      "id": "SPEX-11",
+      "kind": "recovery_race",
+      "summary": "Restore can refuse as externally owned immediately after a refused Discard releases its lease.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Ownership-only revalidation preserves the lease fence; real-lease regressions and cross-host cases pass."
+    },
+    {
+      "id": "SPEX-12",
+      "kind": "ux",
+      "summary": "Turn settlement steals focus from a lane control or agent editor selected while a reply arrives.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Settlement preserves focus chosen in lane controls/editors; explicit Drop retains its intended focus handoff."
+    },
+    {
+      "id": "SPEX-13",
+      "kind": "ux",
+      "summary": "Agent editor can remain clipped when its ancestor pane scrolls.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Ancestor-scroll capture refits the editor without changing overlap tolerance."
+    },
+    {
+      "id": "CI-04",
+      "kind": "test_fixture",
+      "summary": "Live elapsed layout fixture ends its fake agent call before all drag measurements finish.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Elapsed-layout fake call now stays active until explicit Abort; original measurements retained."
+    },
+    {
+      "id": "SPEX-14",
+      "kind": "ux",
+      "summary": "Long composer text in a narrow window overflows Captain and leaves Send covered by a player pane.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Long composer text keeps Send reachable in narrow Captain layouts; actual served send accepted once."
+    },
+    {
+      "id": "CI-05",
+      "kind": "test_portability",
+      "summary": "New prior-review evidence export assumes macOS /private/tmp and fails Linux CI.",
+      "status": "Optional PLAYBOOK_PRIOR_REVIEW_EVIDENCE_DIR now creates its requested directory and cleanup always disposes controller. Five real flows pass; exactd4164d5 allCI green, mergedddf7cb5. Original failedCI retained."
+    },
+    {
+      "id": "SLC-08",
+      "kind": "product",
+      "summary": "One literal acting prompt makes the Source-fidelity validator reject other narrative-derived prompts.",
+      "status": "Mixed-Source fix merged as ab8da9f with exact-main CI green; 1,579 tests and two existing skips, installed consumer, unchanged T01 Source/raw fidelity controls pass. Public optimize/prefix passed. Later FSM failure is a distinct generated whitespace defect (SLC-09), not a regression in this fix."
+    },
+    {
+      "id": "SPEX-15",
+      "kind": "ux",
+      "summary": "At320x400, parked/question banners plus the one-row composer exceed the stacked Captain allocation.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Intrinsic sizing handles320x400 banners and one-row composer. Original1445pass/1fail local run retained; boundary correction passed89existing assertions and3served journeys, then complete exactCIgreen."
+    },
+    {
+      "id": "PB-04",
+      "kind": "product",
+      "summary": "Judge can treat a resolved interim question as still blocking the completed current coding phase.",
+      "status": "Spec/prompt fix PR62 mergedae7d7d72; exactmainCI all4green,8current-call integration cases plus CODE40/GEARS8 pass. Full opaque output and effect fence preserved. Two optionalactualT04paired diagnostic calls remain0, blocked by automatic approval pending specific human approval."
+    },
+    {
+      "id": "PB-05",
+      "kind": "ux",
+      "summary": "CODE asks for semantic task finality without explicitly asking Coder to report that fact.",
+      "status": "MergedPR62/ae7d7d72 adds ordinary-prose finality instruction with Source/GEARS/FSM agreement; no fixedmarker or Git-derived semantic success. ExactmainCIgreen. T05 originalblockedCODE preserved; separateexactcandidateREVIEWpassed."
+    },
+    {
+      "id": "CI-06",
+      "kind": "test",
+      "summary": "Focus and scroll assertions can run before React focus handoff or turn-finished UI geometry settles.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Focus/settlement waits retain original assertions; separate320floor defect also fixed."
+    },
+    {
+      "id": "CI-07",
+      "kind": "environment",
+      "summary": "Full Playbook test run reports worker RPC timeouts under concurrent heavy local checks.",
+      "status": "Original2668assertionspass/3unhandledRPCerrors run failed. Unchanged nonoverlapped canonical rerun passed main2668+capabilities132 (2800 total), noassertion/timebudgetchanges. Resource contention plausible, not proven sole cause."
+    },
+    {
+      "id": "OPS-02",
+      "kind": "simulation_setup",
+      "summary": "Copying an incoming package into a paused deferred CODE repository changes its required checkpoint.",
+      "status": "T06 operator copied three incoming files into a paused deferred repository; the runtime correctly blocked continuation. Only those new files moved byte-exact outside the repository, restoring clean 97884cbb. Lost recovery position is a separately reproduced product bug, PB-06. Future handoffs remain outside the repository until an active player adopts them."
+    },
+    {
+      "id": "SLC-09",
+      "kind": "compiler_diagnostic",
+      "summary": "Empty-relay conformance failures give no exact whitespace difference, allowing repeated unsuccessful generation repairs.",
+      "status": "Exact whitespace diagnostic candidate25dfffa adds UTF-16 offset and escaped differing context while retaining strict equality. All198verification checks, build/lint/spec/release/pins pass. Automatic approval review rejected publication to sublang-ai/slc twice; exact payload/destination approval pending. T01 original39m05s failed generation retained; corrected helper is operator recovery, not successful compilation."
+    },
+    {
+      "id": "PB-06",
+      "kind": "recovery_persistence",
+      "summary": "A deferred checkpoint mismatch leaves the shell question cache stale, preventing a durable recoverable position.",
+      "status": "Merged PR64 as c7104a1 after four exact PR checks; exact-main CI also all four green. Real-host deferred mismatch/reopen/restore/question/reply regression and prior-review cases pass. Initial empty-question snapshot regression corrected without weakening its existing assertion. Checkpoint fence and exact snapshot validator remain strict; release/adoption pending."
+    },
+    {
+      "id": "PB-07",
+      "kind": "procedure_authoring",
+      "summary": "CODE does not explicitly tell a blocked Coder to defer its commit until the required Boss answer arrives.",
+      "status": "Mergedc2b0887 with exact-mainCIgreen and2808passes/23existing skips. Required Boss answer precedes completed-phase commit and bound review. Consolidated17.4.1 preparation merged20be09d, all4mainCIgreen; pack6663 passed fresh installed CODE/REVIEW. Manual gate/publication pending."
+    },
+    {
+      "id": "SLC-10",
+      "kind": "compiler_coverage",
+      "summary": "Coverage initializes no catalog entries for valid declared literal child workflows.",
+      "status": "Reviewed localbbdf21f: valid literal catalog plus existing dynamic sentinel,163coveragechecks pass. Corrected unchanged T01 findings50→24. Automatic approval review rejected publication of this andcd9ec081 before execution; exactapproval pending, no remote/PR."
+    },
+    {
+      "id": "SLC-11",
+      "kind": "compiler_coverage",
+      "summary": "Declared outputs cannot reproduce scalar values actually read from reached context.",
+      "status": "Reviewed localcd9ec081: observed primitive values vary only explicitly declared output fields;176coveragechecks incl13string/number/boolean/negativecontrols pass. T01findings24→20; separately reviewed ordering-only operator recovery preserves30real old/new flow outcomes and reduces20→3. Publication rejected with SLC10; pending exactapproval."
+    },
+    {
+      "id": "SLC-12",
+      "kind": "compiler_conformance",
+      "summary": "Flat-machine question artifacts pass deterministic checks despite storing only parallel keyed question state.",
+      "status": "Reviewed topology fix 870c20ff plus fixture correction d974839 passed canonical release:check: 1598 tests, 2 existing skips, all artifact/definition/pin/fixture/installed-package gates. Earlier red runs retained. Publication held: combined T01 run exposed malformed synthetic boolean questions wrongly treated as question waits after the workflow correctly rejects them; narrow correction under review. Separate scalar planning 1.0.1 actual ask/reply remains accepted at Proposed IR 6aeaab7."
+    },
+    {
+      "id": "CI-08",
+      "kind": "test_navigation",
+      "summary": "New capacity journey fills the home composer before asynchronous session navigation settles.",
+      "status": "Merged Spex PR73 as31579f1; exact final PR and merged-main CI37089165882 each passed all9jobs. Both failed traces showed start-composer selected during navigation. Session-only locator and pre-question draft assertion pass3local repetitions and all exactCIjobs."
+    },
+    {
+      "id": "SLC-13",
+      "kind": "compiler_coverage",
+      "summary": "Satisfiable public preemption keeps ordinary coverage on a shallow path that cannot reach predecessor-created question context.",
+      "status": "Reviewed local e289b3e passed all 184 coverage cases, including preserved strict failures and the original timeout bound. Exact corrected T01 recovery-03 now has zero deterministic findings in 60.397s, without provider calls. Initial timeout-estimate failure remains retained. Combined local integration 6f968bc includes topology and fixture corrections; joint T01 check exposed three canonical-question mismatches, under diagnosis; no check suppressed. No full compile/runtime or publication claim."
+    },
+    {
+      "id": "T06-01",
+      "kind": "acceptance_harness",
+      "summary": "A canary evidence-write failure can prevent the recovery query and rollback from running.",
+      "status": "Actual bound REVIEW of task-6 commit 97057399 found logging inside the catch path can throw before querying current state; final log close/result writes can also fail after leaving candidate 2. Root confirmed source and frozen-plan mismatch. Ordinary CODE review/fix is active; original four successful canary cases and 31,215 CLI logs remain unchanged."
     }
   ],
-  "updated_at": "2026-10-02T17:47:00Z",
-  "objective_source": "User-supplied 22-hour workshop readiness goal"
+  "updated_at": "2026-10-03T03:03:19.497360+00:00",
+  "releases": {
+    "cligent": "0.33.4 preparation PR73/41480910:1779source checks, canonical smoke and7metadata checks passed; Windows failed download rerun passed, all7applicablePRchecks green. Automatic approval review rejected exact rebase merge twice; specific user approval pending. No tag/publication.",
+    "slc": "0.16.0 publicly released/provenance verified; mixed-Source ab8da9f merged/green. Diagnostic 25dfffa and catalog/scalar bbdf21f+cd9ec081 remain publication-held. Topology 870c20ff+d974839 and fallback e289b3e are reviewed local fixes; combined 6f968bc is validating. Full custom runtime remains unverified.",
+    "playbook": "17.4.1 candidate consolidated and merged20be09d, exact-mainCI37089408330all4green. Pack6663c0b8 passed fresh installed CODE/REVIEW101.485s; installed prefix/socket cleaned. Mandatory human release26 remains unverified at manual-questions/launch.sh; no tag/publication.",
+    "spex_cli": "4.0.0 published from exact main 3b6fd7a through cli-v4.0.0 and OIDC run 37091082291 after all 9 exact-main CI jobs passed. Fresh public EN/ZH scaffold/lint/clean-update checks passed; 71 signatures and one SLSA attestation verified. Public/local gzip hashes differ, but the complete uncompressed tar and all 42 members/metadata are identical. Original strict-check failure retained.",
+    "spex_app": "Beta.8 unpublished. Workshop fixes merged31579 and all9exact-mainCI37089165882green. Fresh app live smoke and safe published dependency adoption remain pending."
+  },
+  "time_policy": "No fixed deadline: user removed 22-hour limit. Finish all required outcomes, prioritize critical issues and ROI, integrate promptly, clean owned leftover resources.",
+  "cleanup": {
+    "browser": "Current CUA inventory confirms one owned in-app tab: T06 tab5/port52257. MCP Apps has no tabs. Completed owned tabs/idle team servers were closed. Native browser windows cannot be inventoried while macOS is locked; no native-window closure claimed.",
+    "processes": "Stopped four idle T05/T06/T09/T10 servers, four owned esbuild helpers and one proven orphan fixture;358 durable files unchanged. T03/T07 idle servers/helpers stopped with229 files preserved; T01/T02 stopped after idle/hash proof. Active T04 and continuable T08 servers preserved. T06 andT05 saved servers restarted only after prerequisites arrived; their evidence remains intact. Later T04server72206/helper88707 stopped with225durablefiles unchanged; T05server47986/helper48076 stopped with132durablefiles unchanged. Expectedreleasedownerlocks excluded explicitly. T06server19783 andT08server88094 preserved. T08server88094 and owned helper exited after canonical task7 success;319saved session files including assets and retired-lock history remained byte-identical. T06server19783 remains active.",
+    "worktrees": "Five owned idle raw worktrees removed with references and ignored evidence preserved. Both managed Spex integration and CLI-release checkouts are clean and have no running cwd processes; app archive refused because a pinned task/workspace protects them. All 34 ignored browser evidence files and 68 CLI-release evidence files are preserved outside those checkouts. No alternate removal attempted. Compiler integration worktrees remain active."
+  },
+  "objective_sha256": "e1f80db0dc30c5ca45db115b556498050dd7a242338207771fa3996942deba2f"
 }
