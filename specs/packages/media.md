@@ -62,7 +62,8 @@ When application content becomes durable, the core shall use the shared owner-sc
 
 When a Boss submission, queued intent edit, or authoring queue entry contains attachments, the core shall preserve its exact text and ordered immutable references through admission, staging, dispatch, failure, retry, and recovery, accepting empty text only with at least one attachment and deriving a display title from attachment names without inventing prompt text:
 
-- an empty-text Boss submission naming a queued intent is admitted with that intent's own attachments, which the client need not send again, and is refused as an invalid request when the intent holds none.
+- an empty-text Boss submission naming a queued intent is admitted with that intent's own attachments, which the client need not send again, and is refused as an invalid request when the intent holds none;
+- admission accepts any valid media type without checking it against the acting adapter's attachment transport, so a turn carrying a type that adapter cannot take fails at that player's call with the adapter's attachment refusal reported through the ordinary failure path, while the contextual capability facts [[media-7](#media-7)] stay available to clients that warn earlier.
 
 ### media-6
 
