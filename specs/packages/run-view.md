@@ -1164,7 +1164,7 @@ Where a fixture holds a session whose last turn finished before the client learn
 - a session listed in the sidebar, subscribed, or held in a background tab is never marked, and neither is a pinned tab that is no conversation;
 - a fold naming no unread turn for the shown session sends nothing, so a turn in flight is never marked, and the marker is sent once per fold rather than on every render;
 - a session carrying a failure entry with no run parked stands the pick-it-up notice above its composer, carrying the catalogue's phrase for the cause its stream reported and that cause's Boss step [[run-view-135](#run-view-135)] [[run-view-147](#run-view-147)], which a parked run's own notice replaces [[run-view-135](#run-view-135)];
-- a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge [[run-view-136](#run-view-136)].
+- a player's permission request renders as its own line in that player's pane and raises no mark on the tab, the sidebar row, or the badge, and a recorded approval request reads as history naming its tool with the native reason where one was given [[run-view-136](#run-view-136)].
 
 ### Protocol Boundary Coverage
 

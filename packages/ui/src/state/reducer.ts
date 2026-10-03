@@ -328,8 +328,13 @@ function applyAgentEvent(
   switch (event.type) {
     case "approval_request": {
       closeStreamingText(segments);
-      const payload = event.payload as {toolName?: string};
-      segments.push({...meta, kind: "text", streaming: false, text: i18n._("Requested tool approval: {tool}", {tool: payload?.toolName ?? i18n._("a tool")})});
+      // The tool and the native reason stand as history (run-view-136).
+      const payload = event.payload as {toolName?: string; reason?: string};
+      const tool = payload?.toolName ?? i18n._("a tool");
+      const text = typeof payload?.reason === "string" && payload.reason.trim()
+        ? i18n._("Requested tool approval: {tool} — {reason}", {tool, reason: payload.reason})
+        : i18n._("Requested tool approval: {tool}", {tool});
+      segments.push({...meta, kind: "text", streaming: false, text});
       return undefined;
     }
     case "approval_response": {
