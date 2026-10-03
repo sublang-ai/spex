@@ -353,6 +353,58 @@ describe("run-view-163: content changes without a new line", () => {
   });
 });
 
+describe("run-view-163: a player-only record is no news to the Captain", () => {
+  test("a scrolled-up Captain pane offers Latest only for its own content", () => {
+    const observers = observeResizes();
+    const record = (seq: number, fields: Record<string, unknown>) => ({
+      seq,
+      record: { timestamp: 1_700_000_000_000 + seq, turnId: 1, ...fields } as unknown as TmuxPlayRecord,
+    });
+    const view = applyRecords(initialSessionView([{ id: "dev.coder" }]), [record(1, {
+      type: "turn_started", turn: { id: 1, prompt: "Complete the change" },
+    })]);
+    // The store hands the pane a new view object for every live record.
+    const { rerender } = render(<CaptainPane view={{ ...view }} />);
+    const pane = screen.getByTestId("captain-pane").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const box = { height: 800, top: 0 };
+    measured(pane, { clientWidth: () => 600, clientHeight: () => 240, scrollHeight: () => box.height });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true, get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, box.height - 240)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(560);
+    box.top = 40;
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+
+    // A player streams text: the record cursor advances while nothing
+    // the Captain pane draws changes.
+    const seq = view.lastSeq;
+    applyRecords(view, [record(2, {
+      type: "player_event",
+      playerId: "dev.coder",
+      event: {
+        type: "text_delta", agent: "fake", timestamp: 1_700_000_000_002,
+        sessionId: "a", payload: { delta: "Reading the spec" },
+      },
+    })]);
+    expect(view.lastSeq).toBeGreaterThan(seq);
+    expect(view.players["dev.coder"].segments).toHaveLength(1);
+    rerender(<CaptainPane view={{ ...view }} />);
+    expect(box.top).toBe(40);
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+
+    // A Captain line arriving below the fold is news.
+    box.height = 920;
+    applyRecords(view, [record(3, { type: "captain_reply", text: "The coder is reading the spec." })]);
+    rerender(<CaptainPane view={{ ...view }} />);
+    expect(screen.getByText("The coder is reading the spec.")).toBeTruthy();
+    expect(box.top).toBe(40);
+    expect(screen.getByRole("button", { name: "↓ Latest" })).toBeTruthy();
+  });
+});
+
 describe("run-view-163: detached growth retains its Latest notice", () => {
   test.each(["scroll-first", "resize-first"])("offers Latest when growth is reported %s", (ordering) => {
     const observers = observeResizes();
