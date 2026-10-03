@@ -379,7 +379,7 @@ export function DraftConversation({
   const turnRunning = draft.activity === "turn";
   const compiling = draft.activity === "compiling";
   const lastSeq = draftView?.view.lastSeq ?? 0;
-  const { scrollRef, contentRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
+  const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
     `${entries.length}:${lastSeq}:${turnRunning ? 1 : 0}`,
   );
   // The turn's clock (DR-010 §5): since the Boss's or the system's
@@ -504,7 +504,7 @@ export function DraftConversation({
                 <button
                   type="button"
                   onClick={() => {
-                    stuckRef.current = false;
+                    revealAbove();
                     setWindowSize((size) => size + RENDER_WINDOW);
                   }}
                   className="text-center text-xs text-neutral-500 hover:text-brand-500"

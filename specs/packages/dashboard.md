@@ -110,7 +110,7 @@ While a project's live session holds a turn in flight and no attention entry for
 | Doing | its human-readable engagement state label in the Now band's vocabulary [[dashboard-28](#dashboard-28)] — "deciding" or "working" while a turn is active with no leaf state — with the running player named beside it and the turn's elapsed span |
 
 - activating a row opens that session;
-- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)] — a session whose runtime waits on a permission request raises none [[dashboard-54](#dashboard-54)] and so keeps its row, and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
+- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)] — a session whose runtime waits on a live tool approval raises no ledger entry, that request standing only in the approval inbox [[approvals-5](approvals.md#approvals-5)], nor does historical permission telemetry raise one [[dashboard-54](#dashboard-54)], so it keeps its row, and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
 - the project filter hides the other projects' rows, changing nothing derived [[dashboard-32](#dashboard-32)];
 - the band keeps its place while empty, carrying its note there [[dashboard-8](#dashboard-8)].
 

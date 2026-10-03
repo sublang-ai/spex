@@ -135,7 +135,7 @@ export function useStickToBottom(contentKey: unknown) {
     setNewBelow(false);
   }
 
-  return { scrollRef, contentRef, onScroll, detached, newBelow, jump, revealAbove, stuckRef };
+  return { scrollRef, contentRef, onScroll, detached, newBelow, jump, revealAbove };
 }
 
 /** Floating "new content below" pill; render inside a relative parent
