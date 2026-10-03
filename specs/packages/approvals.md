@@ -60,7 +60,7 @@ When the interface presents approval capability or a permission-related setup fa
 
 ### approvals-7
 
-When real authenticated WebSocket clients drive controllable working agents through temporary sessions and authoring drafts, integration verification shall assert exact request ownership and parallel isolation [[approvals-1](#approvals-1)], no tool side effect while pending, allow-once and deny with at-most-once delivery and conflicting or stale response refusal [[approvals-2](#approvals-2)], cancellation, completion, expiry, disposal, and shutdown invalidation [[approvals-3](#approvals-3)], and reconnect, multiple-client, and core-restart snapshots [[approvals-4](#approvals-4)].
+When real authenticated WebSocket clients drive controllable working agents through temporary sessions and authoring drafts, integration verification shall assert exact request ownership and parallel isolation [[approvals-1](#approvals-1)], no tool side effect while pending, allow-once and deny with at-most-once delivery and conflicting or stale response refusal [[approvals-2](#approvals-2)], cancellation, completion, expiry, the owning session's disposal, and shutdown invalidation [[approvals-3](#approvals-3)], and reconnect, multiple-client, and core-restart snapshots [[approvals-4](#approvals-4)].
 
 ### approvals-8
 

@@ -1716,7 +1716,10 @@ export function parseCommand(raw: unknown): ParseCommandResult {
   const result = commandSchema.safeParse(value);
   if (result.success) {
     const command = result.data;
-    if ((command.type === "turn.submit" || command.type === "intent.queue" || command.type === "draft.send") &&
+    // A submission naming a queued intent may rely on that intent's own
+    // attachments; the service checks it once they are resolved.
+    if ((command.type === "intent.queue" || command.type === "draft.send" ||
+      (command.type === "turn.submit" && command.intentId === undefined)) &&
       command.text.length === 0 && !command.attachments?.length) {
       return { ok: false, error: "text or an attachment is required", id: command.id };
     }

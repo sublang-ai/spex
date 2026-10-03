@@ -140,6 +140,22 @@ test("approvals-7: deny, abort, and timeout never execute the pending action", {
   }
 });
 
+test("approvals-7: disposing the owning session invalidates its pending request", {timeout: 30_000}, async () => {
+  const f = await fixture();
+  try {
+    await f.first.command("turn.submit", {sessionId: f.session.id, text: "Inspect, then let the session go"});
+    const pending = await f.first.pending();
+    const request = pending.pending[0];
+    assert.deepEqual(request.owner, {kind: "session", id: f.session.id});
+    await f.first.command("session.dispose", {sessionId: f.session.id});
+    assert.deepEqual((await f.first.pending(0)).pending, []);
+    const summary = (await f.first.command("session.list", {})).find((session) => session.id === f.session.id)!;
+    assert.equal(summary.live, false);
+    await assert.rejects(f.first.answer(pending, request, "allow_once"), /not_found/);
+    assert.equal(existsSync(join(f.project, "approved-effect.txt")), false);
+  } finally { await f.stop(); }
+});
+
 test("approvals-7: concurrent session and drafts keep reused native identities isolated", {timeout: 30_000}, async () => {
   const f = await fixture();
   try {

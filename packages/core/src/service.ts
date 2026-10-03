@@ -1508,6 +1508,9 @@ export class CoreService {
       case "project.remove": {
         await this.media.retireOwner({kind: "project", id: command.projectId}, () => {
           if (!this.store.removeProject(command.projectId)) throw noProject(command.projectId);
+        }, () => {
+          if (!this.store.getProject(command.projectId)) throw noProject(command.projectId);
+          this.store.assertProjectsWritable();
         });
         return null;
       }
@@ -1604,6 +1607,7 @@ export class CoreService {
           const session = this.store.describeSession(command.sessionId);
           if (!session) throw noSession(command.sessionId);
           const assets = command.attachments ?? (command.intentId ? this.store.getIntent(command.intentId)?.attachments : undefined) ?? [];
+          if (!command.text.length && !assets.length) throw new CoreError("invalid_request", i18n._({id: "Text or an attachment is required.", comment: "Attachment transfer or storage diagnostic"}));
           const attachments = assets.length ? await this.sessions.importAttachments(command.sessionId,
             this.media.ownerStore({kind: "project", id: session.projectId}), assets) : [];
           if (command.intentId !== undefined) this.validateIntentDispatch(command.sessionId, command.intentId);
@@ -2213,7 +2217,8 @@ export class CoreService {
         return this.authors.setPlayer(command.draftId, command.playerId);
       case "draft.delete":
         this.authors.assertDeletable(command.draftId);
-        await this.media.retireOwner({kind: "draft", id: command.draftId}, () => this.authors.delete(command.draftId));
+        await this.media.retireOwner({kind: "draft", id: command.draftId}, () => this.authors.delete(command.draftId),
+          () => this.authors.assertDeletable(command.draftId));
         return null;
       case "draft.artifacts": {
         if (!this.authors.has(command.draftId)) {

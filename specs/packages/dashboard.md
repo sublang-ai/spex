@@ -110,7 +110,7 @@ While a project's live session holds a turn in flight and no attention entry for
 | Doing | its human-readable engagement state label in the Now band's vocabulary [[dashboard-28](#dashboard-28)] — "deciding" or "working" while a turn is active with no leaf state — with the running player named beside it and the turn's elapsed span |
 
 - activating a row opens that session;
-- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)] — a session whose runtime waits on a permission request raises none [[dashboard-54](#dashboard-54)] and so keeps its row, and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
+- an attention entry for the current work takes its row out of the band, the summons standing in the queue instead [[dashboard-1](#dashboard-1)] — a session whose runtime waits on a live tool approval raises no ledger entry, that request standing only in the approval inbox [[approvals-5](approvals.md#approvals-5)], nor does historical permission telemetry raise one [[dashboard-54](#dashboard-54)], so it keeps its row, and the turn ending takes it out too [[dashboard-4](#dashboard-4)]; an older intent awaiting its verdict keeps its attention entry without hiding the newer running intent ([DR-055](../decisions/055-queue-advancement.md));
 - the project filter hides the other projects' rows, changing nothing derived [[dashboard-32](#dashboard-32)];
 - the band keeps its place while empty, carrying its note there [[dashboard-8](#dashboard-8)].
 
@@ -335,14 +335,14 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 
 #### dashboard-54
 
-Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it shall derive exactly the kinds below and no other, and shall derive none from a project whose stored state refuses a verdict or a preference write [[core-service-86](core-service.md#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it shall derive exactly the kinds below and no other, and shall derive none from a project whose stored state refuses a verdict or a preference write [[core-service-86](core-service.md#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md), [DR-098](../decisions/098-live-tool-approvals.md)):
 
 | Band | Kinds |
 | --- | --- |
 | Interrupted | question, failure |
 | Finished | finish, review |
 
-- a permission request raises no entry — nothing in the product answers one — and stands in the asking player's pane instead [[run-view-136](run-view.md#run-view-136)];
+- historical permission telemetry raises no ledger entry and stands in the player's pane [[run-view-136](run-view.md#run-view-136)], while live requests appear only in the approval inbox [[approvals-5](approvals.md#approvals-5)] and never as a ledger entry;
 - a project whose acts are refused raises nothing: its conditions stand as storage diagnostics, where the repair is, exactly as a session whose project holds no local binding already does.
 
 #### dashboard-33
