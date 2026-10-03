@@ -443,6 +443,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Register derives valid, distinct default new player lanes for Chinese and
+  digit-leading roles and colliding role names, preserving explicit sharing
+  choices and existing roster players.
 - Short Captain columns keep their headers and input controls from collapsing,
   scrolling excess notices inside the column while the draft retains one row.
 

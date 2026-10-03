@@ -174,9 +174,23 @@ export function agentBlockOf(agent: AgentSummary): AgentBlockInput {
   return block;
 }
 
-/** The lane a derived role would mint: `dev.<role>` (DR-032). */
+function normalizedRole(role: string): string {
+  return role.toLowerCase().replace(/[^a-z0-9_-]+/gu, "-");
+}
+
+/** A named role lane may already belong to the roster. A generic
+ * fallback does not establish that ownership (playbook-library-61). */
+export function existingRolePlayerId(role: string): string | undefined {
+  const normalized = normalizedRole(role);
+  return /^[a-z]/u.test(normalized) ? `dev.${normalized}` : undefined;
+}
+
+/** The valid base a role's new lane would mint (DR-032). */
 export function newPlayerId(role: string): string {
-  return `dev.${role.toLowerCase().replace(/[^a-z0-9_-]+/gu, "-")}`;
+  const normalized = normalizedRole(role);
+  if (/^[a-z]/u.test(normalized)) return `dev.${normalized}`;
+  const suffix = normalized.replace(/^[-_]+|[-_]+$/gu, "");
+  return suffix ? `dev.role-${suffix}` : "dev.role";
 }
 
 /** The intent's derived default (playbook-library-61): the source's
