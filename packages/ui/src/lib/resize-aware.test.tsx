@@ -101,8 +101,8 @@ describe("run-view-106: the field refits when its own box resizes", () => {
     box.wanted = 120;
     act(() => observers.fire(field));
     expect(field.style.height).toBe("120px");
-    // The browser owns whether its actual field box needs a scrollbar.
-    expect(field.style.overflowY).toBe("auto");
+    // Without a containing chrome boundary, the preferred cap controls scrolling.
+    expect(field.style.overflowY).toBe("hidden");
 
     // The height this very fit wrote is not a reason to fit again:
     // only a width change refits, so the observer cannot feed itself.

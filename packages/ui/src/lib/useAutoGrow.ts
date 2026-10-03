@@ -61,7 +61,7 @@ export function fitTextArea(
   }
   // CSS may shrink a field below its preferred size. Let the browser
   // show scrolling by its actual box, including below the growth cap.
-  el.style.overflowY = "auto";
+  el.style.overflowY = boundary || wanted > max ? "auto" : "hidden";
 }
 
 export function useAutoGrow(
