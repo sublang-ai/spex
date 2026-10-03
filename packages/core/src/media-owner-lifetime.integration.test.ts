@@ -79,6 +79,59 @@ test("media-18: owner retirement drains real publication without blocking anothe
   } finally { release(); await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
+test("media-18: a removal its owner refuses after the drain leaves in-flight uploads resumable", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-refused-"));
+  const owner = {kind: "draft" as const, id: "kept"};
+  let entered!: () => void, release!: () => void;
+  const publishing = new Promise<void>((resolve) => { entered = resolve; });
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  let pause = true;
+  // Delay only the publication boundary, so retirement must drain it.
+  class DelayedMedia extends ApplicationMedia {
+    override ownerStore(value: MediaUploadOwner, write = false) {
+      const store = super.ownerStore(value, write);
+      return write && pause ? {...store, importAsset: async (input: Parameters<typeof store.importAsset>[0]) => {
+        entered(); await barrier; return store.importAsset(input);
+      }} : store;
+    }
+  }
+  const media = new DelayedMedia({home, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  // The draft's own deletion rule: refused while a compile runs.
+  let compiling = false;
+  const assertDeletable = () => { if (compiling) throw new Error("busy: a compile is running for kept; cancel it first"); };
+  const request = (byteLength: number) => ({owner, uploadId: randomUUID(), name: "evidence.txt", mimeType: "text/plain", byteLength});
+  const published = request(4), inFlight = request(8);
+  let retiring: Promise<void> | undefined;
+  try {
+    await media.prepare();
+    media.ownerStore(owner, true);
+    await media.uploads.begin(published);
+    await media.uploads.chunk(published.uploadId, 0, Buffer.from("kept").toString("base64"));
+    await media.uploads.begin(inFlight);
+    await media.uploads.chunk(inFlight.uploadId, 0, Buffer.from("half").toString("base64"));
+    const finished = media.uploads.finish(published.uploadId);
+    await publishing;
+    let removed = false;
+    retiring = media.retireOwner(owner, async () => {
+      assertDeletable();
+      await rm(join(home, "local", "drafts", owner.id), {recursive: true, force: true});
+      removed = true;
+    }, assertDeletable);
+    // A compile is admitted while retirement drains the publication.
+    compiling = true;
+    pause = false; release();
+    await finished;
+    await assert.rejects(retiring, /a compile is running/);
+    assert.equal(removed, false);
+
+    // The surviving draft's upload resumes from its received offset.
+    assert.equal((await media.uploads.begin(inFlight)).offset, 4);
+    await media.uploads.chunk(inFlight.uploadId, 4, Buffer.from("more").toString("base64"));
+    const done = await media.uploads.finish(inFlight.uploadId);
+    assert.equal((await media.read(owner, done.asset.assetId, 0, 8)).data, Buffer.from("halfmore").toString("base64"));
+  } finally { release(); await retiring?.catch(() => {}); await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
 test("media-18: retirement drains admitted validation before deleting its prepared owner", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-validation-"));
   const owner = {kind: "draft" as const, id: "validating"};

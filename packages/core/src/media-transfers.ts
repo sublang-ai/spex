@@ -164,8 +164,18 @@ export class MediaTransfers {
     });
   }
 
-  /** Called under the application's owner-retirement gate. Invalidate before
-   * awaiting a running publish, then drain it before that owner is removed. */
+  /** Called under the application's owner-retirement gate, once the owner
+   * admits no new publication: wait for this owner's running transfers
+   * without invalidating them, so a refused removal leaves them resumable. */
+  async settleOwner(owner: MediaUploadOwner): Promise<void> {
+    await Promise.all([...this.uploads.values()]
+      .filter(({request}) => request.owner.kind === owner.kind && request.owner.id === owner.id)
+      .map((upload) => upload.tail));
+  }
+
+  /** Called under the application's owner-retirement gate as its removal
+   * starts. Invalidation is synchronous; the returned promise drains any
+   * transfer still queued and removes its staging. */
   async retireOwner(owner: MediaUploadOwner): Promise<void> {
     const retiring = [...this.uploads.values()].filter(({request}) => request.owner.kind === owner.kind && request.owner.id === owner.id);
     for (const upload of retiring) {

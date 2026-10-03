@@ -130,20 +130,27 @@ export class ApplicationMedia {
   }
 
   /** Retirement shares the owner's upload lifetime, not a global lock.
-   * Native session writes remain protected by Playbook's existing lease. */
-  async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>): Promise<T> {
+   * Native session writes remain protected by Playbook's existing lease.
+   * The owner admits no new media work while its admitted work drains;
+   * `assert` then repeats the removal's own refusals, and nothing awaits
+   * between that check, invalidating the owner's upload identities, and
+   * starting the removal, so a removal refused by work its owner admitted
+   * during the drain leaves the surviving owner's uploads resumable. */
+  async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
     this.assertAvailable(owner);
     const key = `${owner.kind}:${owner.id}`;
     this.retiring.add(key);
     try {
       return await this.writing(async () => {
-        if (owner.kind !== "session") await this.uploads.retireOwner(owner);
+        if (owner.kind !== "session") await this.uploads.settleOwner(owner);
         await this.drainOwner(key);
         await Promise.all([...this.readers].filter(([name]) => name.startsWith(`${key}:`)).map(([name, entry]) => this.release(name, entry)));
         await this.drainOwner(key);
+        assert?.();
+        const cleanup = owner.kind !== "session" ? this.uploads.retireOwner(owner) : undefined;
         if (owner.kind !== "session") this.prepared.delete(this.ownerDirectory(owner));
-        return await remove();
+        try { return await remove(); } finally { await cleanup; }
       });
     } finally { this.retiring.delete(key); }
   }
