@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { nativeApprovalStage } from "./native-approval-stage.mjs";
 import { waitForBrowserPreparation } from "./browser-preparation.ts";
 import { prepareInspectionBrowserCache } from "./inspection-browser-cache.mjs";
+import { successfulInspectionText } from "./inspection-evidence.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -418,7 +419,7 @@ try {
   assert.equal(parse(readFileSync(configPath, "utf8")).players[inspector].browser, false);
   // Render a new visual fact only after the first conversation ended. It is
   // never written into a prompt, filename, governed file or previous session.
-  const token = `ORCHID-${randomBytes(4).toString("hex").toUpperCase()}`;
+  const token = `ORCHID${randomBytes(4).toString("hex").toUpperCase()}`;
   const inputImage = Buffer.from(await page.evaluate((reference) => {
     const canvas = document.createElement("canvas");
     canvas.width = 1000; canvas.height = 520;
@@ -458,8 +459,7 @@ try {
   const workerPrompts = inputRecords.filter((entry) => entry.type === "player_prompt" && entry.playerId === inspector);
   assert.ok(workerPrompts.length > 0, "the attachment must reach a working Inspector");
   assert.ok(workerPrompts.every((entry) => !entry.prompt.includes(token)), "no controller may leak the visual answer into the worker text prompt");
-  assert.ok(inputRecords.some((entry) => entry.type === "player_event" && entry.playerId === inspector && entry.event.type === "done" &&
-    entry.event.payload.status === "success" && entry.event.payload.result?.includes(token)), "the successful native worker must perceive the attached image's new token");
+  assert.ok(successfulInspectionText(inputRecords, inspector, accepted.turnId).includes(token), "the successful native worker must perceive the attached image's new token");
   assert.ok(!inputRecords.some((entry) => entry.type === "player_event" && entry.playerId === inspector && entry.event.type === "tool_use" && entry.event.payload.toolName.includes("browser_")), "Browser remains off for the attachment turn");
   const inputReply = inputRecords.findLast((entry) => entry.type === "captain_reply" && entry.text.includes(token));
   assert.ok(inputReply, "Captain must relay the worker's visual observation");

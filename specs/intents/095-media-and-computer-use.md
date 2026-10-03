@@ -5,7 +5,8 @@
 
 ## Status
 
-In progress: shared runtime releases and application milestones are merged; compact browser setup failure reporting and final native acceptance remain.
+Completed: the public runtime releases and application features are merged and verified, including installed native media, live approvals and history after core restart.
+The final verification record follows normal PR and merge checks; no application release is claimed, as recorded in the [preparation record](../../docs/releases/0.9.0-beta.8-preparation.md).
 
 ## Intent
 
@@ -15,13 +16,13 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 ## Deliverables
 
 - [x] Accepted, mutually coherent runtime, storage, protocol, and UI contracts.
-- [x] Cligent capability discovery, bounded host browser preparation and live tool approvals; 0.33.1 published and checked from fresh consumers.
+- [x] Cligent capability discovery, bounded host browser preparation and live tool approvals; 0.33.3 published and checked from fresh consumers.
 - [x] Shared Playbook input content, asset lifecycle, worker relay, isolated control calls, and an ordinary inspection workflow; 17.4.0 published and checked from a fresh consumer.
 - [x] Compatible published dependency closure, with no media-specific compiler semantics.
 - [x] Spex uploads, complete draft/queue handoff, browser controls, durable media rendering, and localized guidance.
 - [x] Generic live tool approval controls and guidance for workflow questions and external consent.
-- [ ] PR review, required CI and merge at each affected layer, with releases where needed for downstream adoption.
-- [ ] Fresh-user acceptance and release smoke against the installed result.
+- [x] PR review, required CI and merge at each affected layer, with releases where needed for downstream adoption.
+- [x] Fresh-user acceptance and release smoke against the installed result.
 
 ## Tasks
 
@@ -35,6 +36,7 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 8. Exercise fresh-user scenarios, complete reviews and CI, and merge fine-grained milestones; publish only where needed for downstream adoption.
 9. Keep browser setup failures concise and fully inspectable, and stop acceptance promptly on a reported failure or cancellation.
 10. Allow explicitly attributed reuse of matching installed browser revisions for native media acceptance, preserving separate empty-cache host coverage and the default cold path.
+11. Verify image perception through portable native visible text and successful invocation evidence without repeating completed provider work after a harness failure.
 
 ## Verification
 
@@ -46,6 +48,6 @@ The released Cligent 0.31 milestone is a dependency baseline, not proof of the c
 - Verify durable workflow questions separately from tool callbacks, and explain that Codex app-access and operating-system grants retain their external owners.
 - Verify task-scoped attachment relay through a working player and nested execution, without granting tools to controller or judge calls.
 - Verify asset integrity, owner deletion, portability, whole-unit selection, damaged references, and shared CLI/session recovery.
-- Run fresh installed macOS Desktop and headless Linux server browser-preparation acceptance with empty browser caches; an explicitly recorded warm-cache native media check remains distinct, and the remote browser client never relies on a server-local copy of its selected file.
+- Verify fresh installed application profiles, independent cold-cache source and packaged browser preparation on Linux and macOS CI, and the explicitly recorded copied-cache local provider check as distinct evidence; the remote browser client never relies on a server-local copy of its selected file.
 - Inspect narrow layouts, keyboard paths, English and Chinese wording, and untrusted remote-media behavior through the rendered UI.
 - Keep the goal active until the actual public runtime dependencies and installed application state prove each requested outcome.

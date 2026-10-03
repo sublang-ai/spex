@@ -17,7 +17,7 @@ export async function nativeApprovalStage({page, client, inspector, scratch, pro
   // request is a failing proof, never an inferred or simulated approval.
   await client.command("config.edit", {op: {kind: "player.set", playerId: inspector, patch: {
     adapter: "claude", model: null, effort: null, fastMode: false, browser: false,
-    permissions: {mode: null, shellExecute: "ask", fileWrite: "deny", networkAccess: "deny"},
+    permissions: {shellExecute: "ask", fileWrite: "deny", networkAccess: "deny"},
   }}});
   const capability = await client.command("agent.capabilities", {agent: {adapter: "claude", browser: false,
     permissions: {shellExecute: "ask", fileWrite: "deny", networkAccess: "deny"}}});
