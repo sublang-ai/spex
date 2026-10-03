@@ -4219,6 +4219,10 @@ msgstr "请求的操作"
 msgid "Requested tool approval: {tool}"
 msgstr "请求工具审批：{tool}"
 
+#: src/state/reducer.ts
+msgid "Requested tool approval: {tool} — {reason}"
+msgstr "请求工具审批：{tool} — {reason}"
+
 #. the field must be filled before the act runs
 #: src/components/SpaceSurface.tsx
 msgid "Required"

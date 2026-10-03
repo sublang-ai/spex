@@ -1279,11 +1279,36 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
       } as never);
     });
 
+    // A recorded approval request is history too: its tool and the
+    // native reason where one was given (run-view-136).
+    for (const [seq, payload] of [
+      [901, { toolName: "Bash", reason: "Run the test suite" }],
+      [902, { toolName: "Edit" }],
+    ] as const) {
+      act(() => {
+        deliverServerMessageForTests({
+          type: "record",
+          sessionId: "a-live",
+          seq,
+          record: {
+            type: "player_event",
+            playerId: "dev.coder",
+            turnId: 1,
+            timestamp: NOW,
+            event: { type: "approval_request", payload },
+          },
+        } as never);
+      });
+    }
+
     // No control answers one, so the request stands where it is true
     // and summons nobody (DR-066).
     const pane = screen.getByTestId("player-pane-dev.coder");
     expect(pane.textContent).toContain("Asked permission to use Bash");
     expect(pane.textContent).toContain("historical permission event; no live answer is available");
+    expect(pane.textContent).toContain("Requested tool approval: Bash — Run the test suite");
+    expect(pane.textContent).toContain("Requested tool approval: Edit");
+    expect(pane.textContent).not.toContain("Requested tool approval: Edit —");
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
   });
 
