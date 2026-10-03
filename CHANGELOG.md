@@ -443,6 +443,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Short Captain columns keep their headers and input controls from collapsing,
+  scrolling excess notices inside the column while the draft retains one row.
+
 - New conversation content reliably shows Latest for readers scrolled up,
   regardless of scroll and resize event ordering.
 - Long drafts yield to the Captain column’s available height so Send stays

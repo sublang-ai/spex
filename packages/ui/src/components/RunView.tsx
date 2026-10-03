@@ -653,7 +653,7 @@ export function RunView({
         <div
           data-testid="captain-column"
           style={{ "--captain-split": `${captainSplit}%` } as React.CSSProperties}
-          className={`flex min-h-0 min-w-0 flex-1 flex-col gap-2 ${
+          className={`relative flex min-h-0 min-w-0 flex-auto flex-col gap-2 overflow-y-auto ${
             soloCaptain
               ? "mx-auto w-full max-w-2xl"
               : "@2xl:w-(--captain-split) @2xl:min-w-[280px] @2xl:flex-none"
@@ -842,7 +842,7 @@ export function RunView({
             <div
               ref={gridRef}
               data-testid="player-grid"
-              className="relative flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto [mask-image:linear-gradient(to_right,transparent_0,#000_var(--fade-start,0px),#000_calc(100%_-_var(--fade-end,0px)),transparent_100%)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
+              className="relative flex min-h-min min-w-0 flex-1 gap-3 overflow-x-auto [mask-image:linear-gradient(to_right,transparent_0,#000_var(--fade-start,0px),#000_calc(100%_-_var(--fade-end,0px)),transparent_100%)] [mask-repeat:no-repeat] [mask-size:100%_100%]"
               onScroll={(event) => markGridEdges(event.currentTarget)}
             >
               {lanes.map((playerId) => (

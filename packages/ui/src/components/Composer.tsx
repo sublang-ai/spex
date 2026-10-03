@@ -89,7 +89,13 @@ export function ComposerBox({
   return (
     <div
       data-testid="composer-box"
-      className="flex min-h-0 flex-1 flex-col gap-1 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400"
+      className="grid min-h-min flex-1 gap-1 rounded-xl border border-neutral-300 bg-white p-2 focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:focus-within:border-neutral-400"
+      style={{ gridTemplateRows: [
+        attachments?.files.length ? "auto" : "",
+        "minmax(1.75rem,auto)",
+        caption !== null && caption !== undefined && caption !== false ? "auto" : "",
+        "auto",
+      ].filter(Boolean).join(" ") }}
       onDragOver={attachments ? (event) => {
         if (!Array.from(event.dataTransfer.types).includes("Files")) return;
         event.preventDefault();
@@ -99,7 +105,7 @@ export function ComposerBox({
       onPaste={attachments ? (event) => composerFilePaste(event, attachments) : undefined}
     >
       {attachments ? <AttachmentChips controls={attachments} pickerRef={pickerRef} /> : null}
-      {field}
+      <div className="flex min-h-7 flex-col">{field}</div>
       {caption}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {attachments ? <AttachmentPicker controls={attachments} buttonRef={pickerRef} inputRef={fileInputRef} /> : null}
@@ -121,7 +127,7 @@ export function ComposerField({
   fieldRef: RefObject<HTMLTextAreaElement | null>;
   value: string;
 }) {
-  useAutoGrow(fieldRef, value);
+  useAutoGrow(fieldRef, value, undefined, '[data-testid="captain-column"]');
   return (
     <textarea
       ref={fieldRef}
@@ -313,7 +319,7 @@ export function Composer({
     // The composer yields inside its column (DR-041 §9): what it holds
     // scrolls in its own frame rather than pushing the transcript away
     // and the action row out of the window.
-    <div className="flex min-h-0 flex-col gap-1.5">
+    <div className="flex min-h-min flex-col gap-1.5">
       {error ? (
         <div
           data-testid="run-error"
@@ -400,7 +406,7 @@ export function Composer({
           ))}
         </div>
       ) : null}
-      <div className="relative flex min-h-0 flex-col">
+      <div className="relative flex min-h-min flex-col">
         {slash ? (
           <SlashMenuList
             items={slash}

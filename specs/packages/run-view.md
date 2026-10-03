@@ -285,6 +285,7 @@ The run view shall provide light and dark color themes and size the Captain and 
 The app shell shall fill the window at every size, giving the surface it shows a box of the window's height that the surface scrolls its own content inside, so the page itself never scrolls and a window resized shorter or taller re-fits with no reload ([DR-041](../decisions/041-chrome-that-fits.md)):
 
 - the Captain home [[run-view-25](#run-view-25)] and a session's panes [[run-view-107](#run-view-107)] fill that box and scroll inside it rather than growing it;
+- a session's Captain column whose notices and one-row composer [[run-view-106](#run-view-106)] exceed its allocated height scrolls that chrome vertically inside its own positioned box, preserving the header's intrinsic height and the composer's caption and action rows rather than collapsing their boxes;
 - every box that scrolls — a pane, the sidebar [[run-view-67](#run-view-67)], the tab strip [[run-view-48](#run-view-48)] — is a positioned box, so the screen-reader-only text and other positioned content it holds is contained by that box instead of being carried by the page.
 
 ### Session Start
@@ -1319,6 +1320,15 @@ Where the harness boots with the demo project registered and the scripted Captai
 #### run-view-166
 
 Where a served Chinese session holds a player question and both players' delivered transcripts, when a long Chinese draft fills its composer at a 630 by 665 pixel viewport, the browser journey shall assert the draft scrolls above its one-row floor, the Send control stays wholly inside the Captain column with its center hit belonging to that control rather than a player pane, and one ordinary click submits exactly one durable Boss turn with the draft cleared [[run-view-106](#run-view-106)] [[run-view-8](#run-view-8)].
+
+#### run-view-167
+
+Where a served Chinese session holds delivered player transcripts and a long draft, when a player question and parked-run notice arrive before its viewport changes among 320 by 400 pixels with the rail collapsed, 630 by 665 pixels and 1280 by 800 pixels, the browser journey shall assert the chrome-capacity flow:
+
+- the arriving notices preserve the draft and its focus, with the field refitted without a value or viewport change [[run-view-106](#run-view-106)];
+- the page never grows, pane headers remain inside their panes, and the Captain header does not overlap the notice [[run-view-119](#run-view-119)];
+- at the short viewport the field yields to its one-row floor with excess text scrollable before the column scrolls its chrome [[run-view-106](#run-view-106)] [[run-view-119](#run-view-119)];
+- the header, notice and composer controls remain reachable within the Captain column's own scrolling box, with one ordinary Send click submitting exactly one durable Boss turn [[run-view-119](#run-view-119)] [[run-view-8](#run-view-8)].
 
 #### run-view-122
 

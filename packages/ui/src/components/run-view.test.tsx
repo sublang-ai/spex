@@ -813,11 +813,11 @@ describe("RUN-38: queued messages read as pending, not sent", () => {
     rerender(run(7));
     expect(queue.scrollTop).toBe(480);
 
-    // The composer yields around the frame, including a constrained
-    // Captain column: its field can shrink while controls keep their place.
+    // The composer keeps its intrinsic chrome floor around the frame;
+    // a constrained Captain column contains any excess in its own scroll box.
     const box = screen.getByTestId("composer-box").parentElement!;
-    expect(box.className).toContain("min-h-0");
-    expect(box.parentElement!.className).toContain("min-h-0");
+    expect(box.className).toContain("min-h-min");
+    expect(box.parentElement!.className).toContain("min-h-min");
   });
 });
 
