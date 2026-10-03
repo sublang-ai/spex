@@ -404,7 +404,7 @@ export function PlayerPane({
   onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
-  const { scrollRef, contentRef, onScroll, newBelow, jump, stuckRef } = useStickToBottom(
+  const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
     view.segments.length,
   );
   // The pane names the role its latest call served, and while that
@@ -625,7 +625,7 @@ export function PlayerPane({
               <button
                 type="button"
                 onClick={() => {
-                  stuckRef.current = false;
+                  revealAbove();
                   setWindowSize((size) => size + RENDER_WINDOW);
                 }}
                 className="text-center text-xs text-neutral-500 hover:text-brand-500"

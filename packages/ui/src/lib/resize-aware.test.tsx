@@ -15,6 +15,8 @@ afterEach(cleanup);
 import { useAutoGrow } from "./useAutoGrow.js";
 import { useStickToBottom } from "./useStickToBottom.js";
 import { CaptainPane } from "../components/CaptainPane.js";
+import { PlayerPane } from "../components/PlayerPane.js";
+import type { PlayerView } from "../state/reducer.js";
 import { applyRecords, initialSessionView } from "../state/reducer.js";
 import type { TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import type { MachineGraph } from "@sublang/spex-core/protocol";
@@ -437,5 +439,51 @@ describe("run-view-163: detached growth retains its Latest notice", () => {
     act(() => { latest.click(); });
     expect(box.top).toBe(382);
     expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+  });
+});
+
+describe("run-view-104: earlier entries revealed above are not news below", () => {
+  test("a reader at the top reveals earlier entries with no Latest, and a new entry still raises it", () => {
+    const observers = observeResizes();
+    const entries = (count: number): PlayerView["segments"] =>
+      Array.from({ length: count }, (_, index) => ({
+        seq: index + 1, at: 1_700_000_000_000 + index, kind: "text" as const,
+        text: `Entry ${index + 1}`, streaming: false,
+      }));
+    const view: PlayerView = { id: "dev.coder", running: false, segments: entries(250) };
+    const { rerender } = render(<PlayerPane view={view} />);
+    const pane = screen.getByTestId("player-pane-dev.coder").querySelector<HTMLElement>(".overflow-y-auto")!;
+    const content = pane.firstElementChild as HTMLElement;
+    // Each rendered entry (and the reveal control) stands 20px tall.
+    const box = { top: 0 };
+    const height = () => content.childElementCount * 20;
+    measured(pane, { clientWidth: () => 336, clientHeight: () => 240, scrollHeight: height });
+    Object.defineProperty(pane, "scrollTop", {
+      configurable: true, get: () => box.top,
+      set: (next: number) => { box.top = Math.max(0, Math.min(next, height() - 240)); },
+    });
+    act(() => observers.fire(pane));
+    expect(box.top).toBe(201 * 20 - 240);
+
+    // The reader scrolls to the top, where the reveal control stands.
+    box.top = 0;
+    act(() => { pane.dispatchEvent(new Event("scroll")); });
+    const reveal = screen.getByRole("button", { name: "Show 50 of 50 earlier entries" });
+    act(() => { reveal.click(); });
+    expect(content.childElementCount).toBe(250);
+    // The grown content reports itself after the commit, in either order.
+    act(() => {
+      observers.fire(content);
+      pane.dispatchEvent(new Event("scroll"));
+      observers.fire(pane);
+    });
+    expect(box.top).toBe(0);
+    expect(screen.queryByRole("button", { name: "↓ Latest" })).toBeNull();
+
+    // An entry appended below is news.
+    rerender(<PlayerPane view={{ ...view, segments: entries(251) }} />);
+    expect(screen.getByText("Entry 251")).toBeTruthy();
+    expect(box.top).toBe(0);
+    expect(screen.getByRole("button", { name: "↓ Latest" })).toBeTruthy();
   });
 });

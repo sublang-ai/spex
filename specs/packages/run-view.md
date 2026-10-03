@@ -490,7 +490,8 @@ The session state chip shall show a human-readable label (amber while waiting on
 
 When new content arrives below the fold of a scrolled-up Captain or player pane, the pane shall show a jump-to-latest pill that scrolls to the bottom and resumes following:
 
-- a record that renders only in another pane is not new content in this one and raises no pill.
+- a record that renders only in another pane is not new content in this one and raises no pill;
+- earlier entries the reader reveals above are not new content below and raise no pill.
 
 #### run-view-120
 
@@ -1202,6 +1203,10 @@ When the integration suite changes a rendered Captain conversation, it shall ver
 - content growth reported by a native scroll event before its resize notification still offers Latest to a scrolled-up reader without moving that reader [[run-view-46](#run-view-46)];
 - the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)];
 - a player-only record leaves a scrolled-up Captain pane without the pill, and a Captain line arriving below then offers it [[run-view-46](#run-view-46)].
+
+#### run-view-104
+
+When the integration suite reveals earlier entries of a long player transcript to a reader scrolled to its top, it shall assert the reader keeps their place with no jump-to-latest control, and an entry appended afterwards offers it [[run-view-46](#run-view-46)].
 
 ### Browser Journeys
 
