@@ -335,14 +335,14 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 
 #### dashboard-54
 
-Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it shall derive exactly the kinds below and no other, and shall derive none from a project whose stored state refuses a verdict or a preference write [[core-service-86](core-service.md#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)):
+Where the fold derives attention entries [[dashboard-10](#dashboard-10)], it shall derive exactly the kinds below and no other, and shall derive none from a project whose stored state refuses a verdict or a preference write [[core-service-86](core-service.md#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md), [DR-098](../decisions/098-live-tool-approvals.md)):
 
 | Band | Kinds |
 | --- | --- |
 | Interrupted | question, failure |
 | Finished | finish, review |
 
-- a permission request raises no entry — nothing in the product answers one — and stands in the asking player's pane instead [[run-view-136](run-view.md#run-view-136)];
+- historical permission telemetry raises no ledger entry and stands in the player's pane [[run-view-136](run-view.md#run-view-136)], while live requests appear only in the approval inbox [[approvals-5](approvals.md#approvals-5)] and never as a ledger entry;
 - a project whose acts are refused raises nothing: its conditions stand as storage diagnostics, where the repair is, exactly as a session whose project holds no local binding already does.
 
 #### dashboard-33

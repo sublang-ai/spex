@@ -80,6 +80,12 @@ test("run-view-167: short Chinese Captain chrome scrolls inside its column", asy
     expect(layout.column.bottom).toBeLessThanOrEqual(layout.viewportHeight + 1);
     expect(layout.pageHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
     for (const player of layout.playerHeaders) expect(player.headerBottom).toBeLessThanOrEqual(player.paneBottom);
+    if (size.width === 630) {
+      // While the field stands above its one-row floor, the column
+      // has not begun scrolling its chrome.
+      expect(layout.fieldHeight).toBeGreaterThan(layout.fieldOneRow);
+      expect(layout.column.scrollHeight).toBeLessThanOrEqual(layout.column.clientHeight + 1);
+    }
     if (size.width === 320) {
       expect(layout.fieldHeight).toBeLessThanOrEqual(layout.fieldOneRow + 1);
       expect(layout.fieldScrollHeight).toBeGreaterThan(layout.fieldClientHeight);

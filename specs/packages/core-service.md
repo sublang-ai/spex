@@ -964,7 +964,9 @@ Where the config references one adapter from several positions — as the captai
 
 When the integration suite opens recorded Captain/player work after removing its playbook modules and changing current configuration, it shall verify historical context and graphs are still served, activity derives from recorded traces, and absent/unknown context is reported without substitution [[core-service-80](#core-service-80)].
 
-### core-service-84
+### Recovery Coverage
+
+#### core-service-84
 
 When an integration suite interrupts CLI-created and desktop-created sessions and recovers them through core commands, it shall verify explicit recovery [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)]:
 
@@ -982,7 +984,7 @@ When an integration suite interrupts CLI-created and desktop-created sessions an
 - Discard restores the prior checkpoint or removes a fresh attempt without loading agents [[core-service-83](#core-service-83)];
 - competing leases and repeated requests start no duplicate turn [[core-service-82](#core-service-82)] [[core-service-83](#core-service-83)].
 
-### core-service-99
+#### core-service-99
 
 When an integration suite parks a real session's run in its recoverable failure state — a scripted player committing its phase and leaving behind the repository evidence Playbook cannot classify — and drives that park through core commands across a restart, it shall verify the named recovery [[core-service-98](#core-service-98)]:
 
@@ -995,7 +997,7 @@ When an integration suite parks a real session's run in its recoverable failure 
 - the abandoned run then stands interrupted on nobody, the session's only attention entry being its finished turn's [[core-service-49](#core-service-49)];
 - a repeated request starts no duplicate turn [[core-service-5](#core-service-5)].
 
-### core-service-105
+#### core-service-105
 
 When an integration suite parks a real session's run in its recoverable failure state and drives it through an unnamed control, it shall verify the fallback, the continuation it leaves, and the deletion that follows [[core-service-98](#core-service-98)]:
 
@@ -1003,7 +1005,7 @@ When an integration suite parks a real session's run in its recoverable failure 
 - an ordinary Boss message then continues the session and its new run publishes its own park [[core-service-73](#core-service-73)] [[core-service-32](#core-service-32)];
 - deleting that session — idle, though its run stands parked — forgets what that run advertised [[core-service-70](#core-service-70)].
 
-### core-service-114
+#### core-service-114
 
 When an integration suite aborts a real session's turn while a scripted call is in flight — its player's, with the phase committed, or the Captain's own decision call — it shall verify the saved stop [[core-service-6](#core-service-6)]:
 
