@@ -26,6 +26,7 @@ import {
   agentBlockOf,
   busyReason,
   derivedIntent,
+  existingRolePlayerId,
   newPlayerId,
 } from "../lib/drafts.js";
 import { i18n } from "../i18n.js";
@@ -78,21 +79,50 @@ export function resolveRegisterForm(
   );
   const choices: Record<string, string> = {};
   const newIds: Record<string, string> = {};
+  // An explicit id is a sharing decision, even when several roles
+  // name it. Reserve later roles' choices before automatic allocation
+  // so no derived default silently joins their provider conversation.
+  const occupied = new Set(roster);
+  const reservedRoster = new Set<string>();
   for (const role of roles) {
     const proposed = proposedFor(role);
-    // The lane a role would mint: the proposal's, when the roster lacks
-    // it, else the role's own name — and never an id the roster already
-    // holds, which registration would overwrite; that lane is chosen as
-    // it stands instead.
-    const minted = proposed && !roster.has(proposed) ? proposed : newPlayerId(role);
-    const newId = roster.has(minted) ? freeId(minted, roster) : minted;
+    if (proposed && !roster.has(proposed)) occupied.add(proposed);
+    const edited = form?.players[role];
+    if (edited?.startsWith(NEW_PREFIX)) occupied.add(edited.slice(NEW_PREFIX.length));
+    const explicit = edited ?? proposed;
+    if (explicit) {
+      const id = explicit.startsWith(NEW_PREFIX) ? explicit.slice(NEW_PREFIX.length) : explicit;
+      if (roster.has(id)) reservedRoster.add(id);
+    }
+  }
+  for (const role of roles) {
+    const proposed = proposedFor(role);
+    const edited = form?.players[role];
+    const editedNew = edited?.startsWith(NEW_PREFIX)
+      ? edited.slice(NEW_PREFIX.length)
+      : undefined;
+    const explicitNew = editedNew && !roster.has(editedNew)
+      ? editedNew
+      : proposed && !roster.has(proposed)
+        ? proposed
+        : undefined;
+    const minted = newPlayerId(role);
+    const newId = explicitNew ?? (occupied.has(minted) ? freeId(minted, occupied) : minted);
+    occupied.add(newId);
     newIds[role] = newId;
     const fromProposal = proposed
       ? roster.has(proposed)
         ? proposed
         : `${NEW_PREFIX}${proposed}`
       : undefined;
-    const byDefault = roster.has(minted) ? minted : `${NEW_PREFIX}${newId}`;
+    const existingOwnId = existingRolePlayerId(role);
+    const byDefault = existingOwnId && roster.has(existingOwnId) && !reservedRoster.has(existingOwnId)
+      ? existingOwnId
+      : `${NEW_PREFIX}${newId}`;
+    // Reserve the named default independently of the Boss's current
+    // choice; choosing this row's New option must not move another
+    // role onto its previously contested roster conversation.
+    if (existingOwnId && roster.has(existingOwnId)) reservedRoster.add(existingOwnId);
     choices[role] = form?.players[role] ?? fromProposal ?? byDefault;
   }
   const extra = proposal
@@ -112,11 +142,11 @@ export function resolveRegisterForm(
   };
 }
 
-/** The first `<id>-2`, `<id>-3`, … the roster does not hold. */
-function freeId(id: string, roster: Set<string>): string {
+/** The first `<id>-2`, `<id>-3`, … no reserved lane holds. */
+function freeId(id: string, occupied: Set<string>): string {
   for (let n = 2; ; n += 1) {
     const candidate = `${id}-${n}`;
-    if (!roster.has(candidate)) return candidate;
+    if (!occupied.has(candidate)) return candidate;
   }
 }
 
