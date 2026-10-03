@@ -10,6 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "yaml";
 
 import {
   applyConfigOp,
@@ -528,4 +529,33 @@ test("an explicit null unsets a pinned key (DR-019)", () => {
   // hand-written instruction — survives.
   assert.match(patched, /effort: high/);
   assert.match(patched, /instruction: keep answers short/);
+});
+
+// approvals-9, settings-21: exercise the real native acceptance stage through
+// the same file-edit validator as config.edit, stopping before any provider.
+test("native approval acceptance replaces seeded auto mode with explicit ask policy", async () => {
+  const path = templateFile();
+  assert.equal(parse(readFileSync(path, "utf8")).players["inspect.inspector"].permissions.mode, "auto");
+  const moduleUrl = new URL("../../../scripts/native-approval-stage.mjs", import.meta.url).href;
+  const { nativeApprovalStage } = await import(moduleUrl);
+  const stopBeforeProvider = new Error("validated configuration; stop before capability/provider work");
+  await assert.rejects(nativeApprovalStage({
+    inspector: "inspect.inspector",
+    client: {
+      async command(type: string, fields: { op: Parameters<typeof editConfigFile>[1] }) {
+        if (type === "agent.capabilities") throw stopBeforeProvider;
+        assert.equal(type, "config.edit");
+        const result = await editConfigFile(path, fields.op, stubLoader);
+        assert.equal(result.ok, true, result.error ?? "config edit rejected");
+        return result;
+      },
+    },
+  }), (error: unknown) => error === stopBeforeProvider);
+  const saved = parse(readFileSync(path, "utf8"));
+  assert.equal(saved.players["inspect.inspector"].adapter, "claude");
+  assert.equal(saved.players["inspect.inspector"].browser, false);
+  assert.deepEqual(saved.players["inspect.inspector"].permissions, {
+    shellExecute: "ask", fileWrite: "deny", networkAccess: "deny",
+  });
+  assert.deepEqual(saved.captain.permissions, { mode: "auto" });
 });

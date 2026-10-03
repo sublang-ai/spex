@@ -136,6 +136,10 @@ This source-checkout option does not replace the independently empty-cache
 source and packaged host checks in CI and is not evidence of a local cold
 installation. Keep failed attempts and classify their cause before any retry;
 never repeat completed provider cases merely to change cache conditions.
+Native perception is verified from the same working invocation's visible
+text and successful terminal, independent of optional provider summaries;
+the random visual token uses only letters and digits to avoid punctuation
+typography deciding an image-transport check.
 
 ## 3. The regression — regular app releases
 
