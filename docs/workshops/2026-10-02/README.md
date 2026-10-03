@@ -8,8 +8,8 @@ It prioritizes reproducible failures and substantial usability barriers.
 The teams below are designed scenarios, not claims about actual companies.
 Results remain pending until their artifacts and execution evidence exist.
 
-The exercise started October 2, 2026 at 08:37 Pacific and ends October 3 at 06:37 Pacific.
-The final two hours are reserved for verification, delivery, concise team reports, and cleanup.
+The exercise started October 2, 2026 at 08:37 Pacific.
+The user removed the 22-hour limit: complete the required outcomes, prioritize critical issues and return on effort, integrate promptly, and clean up owned leftover resources throughout the work.
 
 ## Course adaptation
 
@@ -76,4 +76,16 @@ The exchange order may change to avoid blocking independent work, while preservi
 - One-commit branches or PRs integrate by rebase; multiple-commit branches or PRs integrate with a merge commit.
 
 The evolving execution state is in [status.json](status.json).
-Final team reports and the complete resolved/open issue report will be linked here as they are completed.
+The [issue report](issues.md) distinguishes merged fixes, local candidates and remaining gaps.
+These team reports remain provisional until their stated completion boundaries are met:
+
+- [T01 · Seed SaaS](T01.md)
+- [T02 · 华东软件](T02.md)
+- [T03 · Meridian Bank](T03.md)
+- [T04 · 精工制造](T04.md)
+- [T05 · Harbor Health](T05.md)
+- [T06 · 星河电商](T06.md)
+- [T07 · Northstar Agency](T07.md)
+- [T08 · 城市服务](T08.md)
+- [T09 · Atlas Platform](T09.md)
+- [T10 · 数澜数据](T10.md)
