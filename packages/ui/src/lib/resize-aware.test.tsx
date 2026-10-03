@@ -442,7 +442,7 @@ describe("run-view-163: detached growth retains its Latest notice", () => {
   });
 });
 
-describe("run-view-104: earlier entries revealed above are not news below", () => {
+describe("run-view-164: earlier entries revealed above are not news below", () => {
   test("a reader at the top reveals earlier entries with no Latest, and a new entry still raises it", () => {
     const observers = observeResizes();
     const entries = (count: number): PlayerView["segments"] =>
