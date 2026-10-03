@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { writeFile } from "node:fs/promises";
-import { composer, expect, openTranslated, runTurn, test } from "../src/harness";
+import { expect, openTranslated, runTurn, test } from "../src/harness";
 
 test.use({ locale: "zh-CN", appOptions: { project: true } });
 
@@ -12,15 +12,18 @@ test("run-view-167: short Chinese Captain chrome scrolls inside its column", asy
   await page.setViewportSize({ width: 630, height: 665 });
   await openTranslated(page, app);
   await page.getByTestId(`sidebar-session-${session.id}`).click();
+  // Navigation can still show the home composer until session history loads.
+  const field = page.getByTestId("boss-composer");
   const draft = "Captain, explain the question. I am not answering yet.\n" +
     "请说明上一阶段的独立审阅证据和当前待决事项，保留已完成的提交，不要替负责人作出新的批准。\n".repeat(24);
-  await composer(page).fill(draft);
+  await field.fill(draft);
+  await expect(field).toHaveValue(draft);
   // The new chrome arrives after the draft: neither value nor viewport
   // changes can stand in for the constraint's own content-size signal.
   await runTurn(app, session.id, "ask before migrating");
   await expect(page.getByTestId("boss-reply-banner")).toBeVisible();
-  await expect(composer(page)).toHaveValue(draft);
-  await expect(composer(page)).toBeFocused();
+  await expect(field).toHaveValue(draft);
+  await expect(field).toBeFocused();
 
   const column = page.getByTestId("captain-column");
   // Assert the arriving chrome fits before any resize can refit it.
@@ -81,15 +84,15 @@ test("run-view-167: short Chinese Captain chrome scrolls inside its column", asy
       expect(layout.fieldHeight).toBeLessThanOrEqual(layout.fieldOneRow + 1);
       expect(layout.fieldScrollHeight).toBeGreaterThan(layout.fieldClientHeight);
       expect(layout.fieldOverflow).toBe("auto");
-      const scrolled = await composer(page).evaluate(field => {
+      const scrolled = await field.evaluate(field => {
         field.scrollTop = field.scrollHeight;
         return field.scrollTop;
       });
       expect(scrolled).toBeGreaterThan(0);
       // Text shorter than the preferred growth cap still scrolls when
       // the actual constrained field has yielded to one row.
-      await composer(page).fill("First line\nSecond line\nThird line");
-      const shorter = await composer(page).evaluate(field => {
+      await field.fill("First line\nSecond line\nThird line");
+      const shorter = await field.evaluate(field => {
         field.scrollTop = field.scrollHeight;
         return { height: field.clientHeight, wanted: field.scrollHeight,
           top: field.scrollTop, cap: window.innerHeight * 0.4,
@@ -102,7 +105,7 @@ test("run-view-167: short Chinese Captain chrome scrolls inside its column", asy
       const shorterPath = testInfo.outputPath("capacity-shorter-field.json");
       await writeFile(shorterPath, JSON.stringify(shorter, null, 2));
       await testInfo.attach("capacity-shorter-field.json", { path: shorterPath, contentType: "application/json" });
-      await composer(page).fill(draft);
+      await field.fill(draft);
     }
 
     // Each real chrome control is reachable by scrolling its owning column,
@@ -128,7 +131,7 @@ test("run-view-167: short Chinese Captain chrome scrolls inside its column", asy
   if ((await rail.getAttribute("aria-expanded")) === "true") await rail.click();
   const before = (await app.core.command("session.list", {})).find(s => s.id === session.id)!.turns;
   await page.getByTestId("send-button").click();
-  await expect(composer(page)).toHaveValue("");
+  await expect(field).toHaveValue("");
   await expect.poll(async () => (await app.core.command("session.list", {})).find(s => s.id === session.id)?.turns)
     .toBe(before + 1);
 });
