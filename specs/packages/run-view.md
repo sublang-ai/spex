@@ -908,7 +908,9 @@ When persisted fixture records are replayed into session and authoring conversat
 
 When rendered first-message, session, authoring and queued-intent flows use the protocol client, the integration suite shall verify byte upload and retry, removal cancellation, drafts retained after failed sends and navigation, attachment-only admission, and ordered references retained through queued-intent editing, staging and dispatch [[run-view-158](#run-view-158)].
 
-### run-view-111
+### Recovery Journey
+
+#### run-view-111
 
 When a browser journey opens an interrupted CLI-created session, it shall verify the recovery controls [[run-view-110](#run-view-110)]:
 
