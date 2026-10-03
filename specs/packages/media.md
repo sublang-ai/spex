@@ -122,6 +122,7 @@ When a fresh installed Desktop uses a signed-in native agent to inspect an owned
 - Reopening the app retains the same readable image asset and Captain explanation [[media-4](#media-4)] [[media-6](#media-6)], with a successful root terminal, a settled physical receipt reporting no change, and an independent unchanged fixture-repository comparison.
 - A second fresh session with Browser explicitly off receives an image through the file picker, preserving its exact bytes [[media-5](#media-5)], and the native Inspector and Captain both identify a random visible token absent from the prompt and filename, with the input image and explanation retained after reopening [[media-4](#media-4)] [[media-6](#media-6)], a successful root terminal, and another unchanged repository receipt.
 - A decoded, repainted, fitted Captain view keeps the image and substantive explanation visible within its scrollport and is retained as screenshot evidence outside the disposable app profile [[media-6](#media-6)].
+- The default live check starts with an empty owned browser cache; an explicitly selected installed cache supplies only the managed runtime's matching revisions as independent owned copies, records their versions and byte provenance with `freshBrowserCache: false`, and still performs real UI preparation [[media-8](#media-8)], without replacing separate cold-cache host acceptance.
 
 ### media-18
 

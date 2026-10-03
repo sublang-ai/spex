@@ -256,15 +256,19 @@ export function Composer({
 
   const awaiting = view.pendingQuestion !== undefined;
 
-  // Ready input can take the body's focus, but settlement must not
-  // steal a control the reader chose while its reply was arriving.
-  // Explicit conversation arrival still uses the field's autoFocus.
-  useEffect(() => {
+  // A delayed reply or settlement must not take focus from a control
+  // the reader selected while the update was in flight (run-view-8).
+  function restoreUnclaimedFocus() {
     const field = textareaRef.current;
-    if (!field) return;
-    const active = field.ownerDocument.activeElement;
-    if (active && active !== field.ownerDocument.body && active !== field) return;
+    if (!field || field.disabled) return;
+    const document = field.ownerDocument;
+    const active = document.activeElement;
+    if (active && active !== field && active !== document.body && active !== document.documentElement) return;
     field.focus();
+  }
+
+  useEffect(() => {
+    restoreUnclaimedFocus();
   }, [awaiting, view.turnActive]);
 
   // The newest queued message is the one the Boss just wrote, so the
@@ -293,7 +297,7 @@ export function Composer({
       })
       .finally(() => {
         setSending(false);
-        textareaRef.current?.focus();
+        restoreUnclaimedFocus();
       });
   }
 

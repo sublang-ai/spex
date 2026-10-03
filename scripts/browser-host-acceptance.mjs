@@ -12,6 +12,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
 import { parse } from "yaml";
+import { waitForBrowserPreparation } from "./browser-preparation.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scratch = mkdtempSync(join(tmpdir(), "spex browser host "));
@@ -47,7 +48,7 @@ try {
   const browser = captain.getByRole("checkbox", { name: "Browser", exact: true });
   assert.equal(await browser.isChecked(), false);
   await captain.getByRole("button", { name: "Set up browser" }).click({ timeout: 60_000 });
-  await captain.getByText("Browser ready", { exact: true }).waitFor({ timeout: 930_000 });
+  await waitForBrowserPreparation(captain);
   assert.equal(await browser.isChecked(), false);
   assert.equal(readFileSync(configPath, "utf8"), before, "setup must not save a choice");
   if (process.env.SPEX_BROWSER_SCREENSHOT) await page.screenshot({ path: process.env.SPEX_BROWSER_SCREENSHOT });
@@ -71,6 +72,10 @@ try {
   assert.equal(runtime.absoluteNodeChild, true, "the owned Electron executable runs Node children");
   if (executablePath) assert.equal(runtime.packaged, true);
   console.log(JSON.stringify({ ...runtime, browser: "ready", setupKeptChoiceOff: true, explicitSave: true, globalNodeRequired: false, freshCache }));
+} catch (error) {
+  // Preserve the full UI cause before teardown removes the owned scratch home.
+  console.error(JSON.stringify({ browser: "failed", message: error.message, freshCache }));
+  throw error;
 } finally {
   if (app) {
     const child = app.process();

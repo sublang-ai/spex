@@ -29,14 +29,16 @@ interface Note {
 
 export function WorkingLine({
   intent,
+  inputAvailable,
   onDrop,
-  inputReady,
 }: {
   /** The newest open dispatched intent, or none: the line then yields
    * to any outcome note still standing. */
   intent?: IntentInfo;
+  /** Whether the conversation field is enabled; a temporary outcome
+   * focus returns there only while the notice still owns it. */
+  inputAvailable: boolean;
   onDrop: (intent: IntentInfo) => Promise<void>;
-  inputReady: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [dropping, setDropping] = useState(false);
@@ -44,6 +46,7 @@ export function WorkingLine({
   const [refocus, setRefocus] = useState(false);
   const dropRef = useRef<HTMLButtonElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
+  const pendingInputFocus = useRef(false);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -57,14 +60,25 @@ export function WorkingLine({
     // sensible place (DR-010 §6).
     const field = noteRef.current?.closest('[data-testid="captain-column"]')?.querySelector("textarea");
     if (field && !field.disabled) field.focus();
-    else noteRef.current?.focus();
+    else {
+      pendingInputFocus.current = true;
+      noteRef.current?.focus();
+    }
   }, [refocus, confirming]);
   useEffect(() => {
-    const outcome = noteRef.current;
-    if (!inputReady || !outcome || outcome.ownerDocument.activeElement !== outcome) return;
-    const field = outcome.closest('[data-testid="captain-column"]')?.querySelector("textarea");
-    if (field && !field.disabled) field.focus();
-  }, [inputReady, note]);
+    if (!note) pendingInputFocus.current = false;
+    if (!inputAvailable || !pendingInputFocus.current) return;
+    const notice = noteRef.current;
+    if (!notice || notice.ownerDocument.activeElement !== notice) {
+      pendingInputFocus.current = false;
+      return;
+    }
+    const field = notice.closest('[data-testid="captain-column"]')?.querySelector("textarea");
+    if (field && !field.disabled) {
+      pendingInputFocus.current = false;
+      field.focus();
+    }
+  }, [inputAvailable, note]);
   useEffect(
     () => () => {
       if (noteTimer.current) clearTimeout(noteTimer.current);
@@ -98,10 +112,11 @@ export function WorkingLine({
       // The temporary outcome owns only its own handoff, never a
       // control the reader picked while work was settling.
       const outcome = noteRef.current;
-      if (outcome && outcome.ownerDocument.activeElement === outcome) {
+      if (pendingInputFocus.current && outcome && outcome.ownerDocument.activeElement === outcome) {
         const field = outcome.closest('[data-testid="captain-column"]')?.querySelector("textarea");
         if (field && !field.disabled) field.focus();
       }
+      pendingInputFocus.current = false;
       setNote(undefined);
     }, NOTE_MS);
   };
@@ -164,6 +179,7 @@ export function WorkingLine({
       {note ? (
         <div
           ref={noteRef}
+          onBlur={() => {pendingInputFocus.current = false;}}
           tabIndex={-1}
           role="status"
           data-testid="working-note"

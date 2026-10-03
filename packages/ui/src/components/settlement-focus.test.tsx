@@ -44,7 +44,7 @@ function start(question = false) {
   return { view, settle, ...rendered };
 }
 
-test("run-view-165: settlement preserves an explicitly collapsed lane's focus", () => {
+test("run-view-24: settlement preserves an explicitly collapsed lane's focus", () => {
   const { view, settle } = start(true);
   expect(view.pendingQuestion).toBeDefined();
   expect(view.turnActive).toBe(true);
@@ -58,7 +58,7 @@ test("run-view-165: settlement preserves an explicitly collapsed lane's focus", 
   expect((screen.getByTestId("boss-composer") as HTMLTextAreaElement).disabled).toBe(false);
 });
 
-test.each([false, true])("run-view-165: body focus returns to available input (question: %s)", (question) => {
+test.each([false, true])("run-view-24: body focus returns to available input (question: %s)", (question) => {
   const { settle } = start(question);
   act(() => (document.activeElement as HTMLElement)?.blur());
   expect(document.activeElement).toBe(document.body);
@@ -66,7 +66,7 @@ test.each([false, true])("run-view-165: body focus returns to available input (q
   expect(document.activeElement).toBe(screen.getByTestId("boss-composer"));
 });
 
-test("run-view-165: ordinary settlement preserves the composer draft and selection", () => {
+test("run-view-24: ordinary settlement preserves the composer draft and selection", () => {
   useAppStore.setState({ collapsedLanes: {}, ledger: undefined, stagedIntents: {} });
   const view = initialSessionView(PLAYERS);
   const { rerender } = render(conversation(view));
@@ -82,7 +82,7 @@ test("run-view-165: ordinary settlement preserves the composer draft and selecti
   expect([field.selectionStart, field.selectionEnd]).toEqual([2, 7]);
 });
 
-test("run-view-165: settlement preserves the real agent editor's focused control", async () => {
+test("run-view-24: settlement preserves the real agent editor's focused control", async () => {
   setClientForTests({ command: async () => ({
     adapter: "claude", effortValues: ["low", "high"], discovery: { status: "available", models: [] },
   }) } as never);
@@ -102,7 +102,7 @@ test("run-view-165: settlement preserves the real agent editor's focused control
   expect(screen.getByTestId("agent-settings-captain")).toBe(editor);
 });
 
-test("run-view-165: explicit new conversation arrival still focuses its composer", () => {
+test("run-view-24: explicit new conversation arrival still focuses its composer", () => {
   const { rerender } = start();
   const laneControl = screen.getByRole("button", { name: "Collapse dev.reviewer" });
   act(() => laneControl.focus());

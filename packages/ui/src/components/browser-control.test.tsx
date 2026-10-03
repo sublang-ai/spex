@@ -59,6 +59,19 @@ test("settings-43: unsupported and disabled choices are safe, while stale values
   expect(model.onPrepare).not.toHaveBeenCalled();
 });
 
+test("settings-43: long terminal failures keep a compact summary and complete escaped diagnostic outside the live region", () => {
+  const firstLine = `Installation failed: ${"very long cause ".repeat(80)}`;
+  const plain = `${firstLine}\ngetaddrinfo ENOTFOUND cdn.playwright.dev\n<script>not executable</script>\nlast line`;
+  const decorated = `\u001b[31m${firstLine}\u001b[0m\ngetaddrinfo ENOTFOUND cdn.playwright.dev\n\u001b]8;;https://example.invalid\u0007<script>not executable</script>\u001b]8;;\u001b\\\nlast line`;
+  const { container } = render(<BrowserControl {...props()} preparation={{ status: "failed", detail: decorated }} />);
+  expect(screen.getByRole("status").textContent!.length).toBeLessThan(300);
+  expect(screen.getByTestId("browser-diagnostic").textContent).toBe(plain);
+  expect(screen.getByRole("status").querySelector("summary")).toBeNull();
+  expect(container.querySelector("details")!.open).toBe(false);
+  expect(container.querySelector("script")).toBeNull();
+  expect(screen.getByRole("button", { name: "Retry browser setup" }).closest("details")).toBeNull();
+});
+
 test("settings-43: a conversation reset is explicit and supplied labels follow the UI language", () => {
   const model = props();
   const onReset = vi.fn();

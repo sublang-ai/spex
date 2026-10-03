@@ -120,6 +120,23 @@ extra agent turn runs.
 A provider-side failure may be retried or waived, its reason recorded
 beside the tag; an app-side failure blocks the tag.
 
+The separate `npm run test:inspect-host` feature check exercises native
+screenshots, picked images, and Claude tool denial/one-time approval from
+a fresh installed checkout and app profile. It uses an empty owned browser
+cache by default. Where cold installation is already covered separately,
+`SPEX_INSPECT_BROWSER_CACHE_SOURCE=/absolute/existing/cache` explicitly
+copies only the installed managed Playwright's required Chromium revisions
+into the check's new owned cache. It refuses missing or incomplete matching
+revisions and records their versions, executable and file-tree hashes with
+`freshBrowserCache: false`; the existing cache is never used for installation
+or modified. Root cache links and prior host dependency-validation markers
+are excluded, while vendor-relative framework links and modes are preserved.
+The app still performs its real UI preparation and separate Browser save.
+This source-checkout option does not replace the independently empty-cache
+source and packaged host checks in CI and is not evidence of a local cold
+installation. Keep failed attempts and classify their cause before any retry;
+never repeat completed provider cases merely to change cache conditions.
+
 ## 3. The regression — regular app releases
 
 ```bash
