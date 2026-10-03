@@ -1508,6 +1508,9 @@ export class CoreService {
       case "project.remove": {
         await this.media.retireOwner({kind: "project", id: command.projectId}, () => {
           if (!this.store.removeProject(command.projectId)) throw noProject(command.projectId);
+        }, () => {
+          if (!this.store.getProject(command.projectId)) throw noProject(command.projectId);
+          this.store.assertProjectsWritable();
         });
         return null;
       }
@@ -2214,7 +2217,8 @@ export class CoreService {
         return this.authors.setPlayer(command.draftId, command.playerId);
       case "draft.delete":
         this.authors.assertDeletable(command.draftId);
-        await this.media.retireOwner({kind: "draft", id: command.draftId}, () => this.authors.delete(command.draftId));
+        await this.media.retireOwner({kind: "draft", id: command.draftId}, () => this.authors.delete(command.draftId),
+          () => this.authors.assertDeletable(command.draftId));
         return null;
       case "draft.artifacts": {
         if (!this.authors.has(command.draftId)) {

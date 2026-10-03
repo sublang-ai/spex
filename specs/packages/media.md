@@ -82,7 +82,9 @@ When browser access is configured for an agent, the core shall preserve its bool
 
 ### media-17
 
-When an application owner is removed or a draft is retired after registration, the core shall exclude new media admission and reads for that owner, invalidate its upload identities throughout their existing retry window, and drain already admitted publication, validation, and readers before removing the owner, without blocking other owners or changing the existing retention of historical project intent assets [[media-4](#media-4)].
+When an application owner is removed or a draft is retired after registration, the core shall exclude new media admission and reads for that owner, invalidate its upload identities throughout their existing retry window, and drain already admitted publication, validation, and readers before removing the owner, without blocking other owners or changing the existing retention of historical project intent assets [[media-4](#media-4)]:
+
+- the removal's own refusals are checked after that drain, with nothing awaited between the check, the invalidation, and the removal's start, so a removal refused because its owner admitted other work during the drain leaves that owner's upload identities resumable.
 
 ## Verification
 
@@ -132,4 +134,4 @@ When a fresh installed Desktop uses a signed-in native agent to inspect an owned
 
 ### media-18
 
-When real owner stores and authenticated core clients race media publication with owner removal, integration verification shall assert that removal waits for admitted publication and validation, unrelated owners continue, cached and already closing readers drain, and old incomplete or completed upload identities cannot resume after draft deletion and recreation or registration retirement [[media-17](#media-17)].
+When real owner stores and authenticated core clients race media publication with owner removal, integration verification shall assert that removal waits for admitted publication and validation, unrelated owners continue, cached and already closing readers drain, and old incomplete or completed upload identities cannot resume after draft deletion and recreation or registration retirement, while a draft deletion refused after the drain because a compile was admitted leaves an in-flight upload resumable from its received offset to a successful finish [[media-17](#media-17)].
