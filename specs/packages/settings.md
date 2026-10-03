@@ -83,7 +83,7 @@ When an agent editor or conversation settings opens, the UI shall bind its brows
 - persist Browser only through the editor's ordinary explicit save, preserving false and conversation reset-to-configuration semantics [[media-9](media.md#media-9)];
 - keep preparation separate from enabling, relay progress and diagnostic detail, allow retry and cancellation, and cancel owned work on close or context change;
 - offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice;
-- leave unknown or unsupported capabilities disabled for new admission, allow a stale enabled choice to be cleared, and preserve other editor values after failure.
+- leave unknown or unsupported capabilities disabled for new admission — a Browser the edit turns on or carries to another adapter — while a standing enabled choice can be cleared or kept as other values save, and preserve other editor values after failure.
 
 ### Model and Tuning Options
 
@@ -339,6 +339,7 @@ Where adapter readiness is exercised, given fixture environments and home direct
 When rendered editors exchange capability and browser preparation messages with a fixture core client, integration verification shall assert contextual requests, stale-result suppression, scoped progress, cancellation and retry, unchanged choices after setup, explicit shared saves and conversation false/null overrides, and authoring preparation without configuration writes [[settings-44](#settings-44)]:
 
 - known empty media output shows its limitation without blocking supported browser access, unknown output shows no unsupported claim, and stale capability replies cannot replace either state;
+- an agent configured with Browser whose support check failed or reads unknown saves an effort change through the shared editor and the conversation settings, while Browser newly copied from the Captain onto such an agent leaves Save disabled [[settings-44](#settings-44)];
 - a served-browser journey shall verify unknown support and stale-choice clearing through the real core, including the editor at 320-pixel and 1280-pixel widths;
 - served-browser and Electron host acceptance shall perform native credential-free browser preparation from the UI and save an explicit choice, keeping successful setup separate from that choice; source and packaged Electron hosts shall each start with an independently empty managed browser cache and no external Node on PATH.
 - acceptance waits observe the current control's terminal outcome: ready continues, failure or explicit cancellation stops promptly with the complete displayed diagnostic, and an absent terminal outcome remains bounded; initial idle state never passes or fails preparation.
