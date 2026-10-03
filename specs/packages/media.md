@@ -60,7 +60,9 @@ When application content becomes durable, the core shall use the shared owner-sc
 
 ### media-5
 
-When a Boss submission, queued intent edit, or authoring queue entry contains attachments, the core shall preserve its exact text and ordered immutable references through admission, staging, dispatch, failure, retry, and recovery, accepting empty text only with at least one attachment and deriving a display title from attachment names without inventing prompt text.
+When a Boss submission, queued intent edit, or authoring queue entry contains attachments, the core shall preserve its exact text and ordered immutable references through admission, staging, dispatch, failure, retry, and recovery, accepting empty text only with at least one attachment and deriving a display title from attachment names without inventing prompt text:
+
+- an empty-text Boss submission naming a queued intent is admitted with that intent's own attachments, which the client need not send again, and is refused as an invalid request when the intent holds none.
 
 ### media-6
 
@@ -99,6 +101,10 @@ When macOS Electron and headless Linux hosts request capabilities and prepare th
 ### media-13
 
 When a real WebSocket client uploads a project file and submits an attachment-only session turn, integration verification shall assert that session bytes are readable immediately after acceptance, survive a core restart, and can be deleted with the session while the independent project copy remains [[media-4](#media-4)], with the exact empty prompt and immutable reference preserved in replay and the attachment name used as the session title [[media-5](#media-5)].
+
+### media-19
+
+When a real WebSocket client queues an attachment-only intent and dispatches it by an empty-text session submission naming only that intent, integration verification shall assert the submission is accepted with the intent's attachment readable through the session and preserved in the turn's replayed start, while an empty-text submission naming a text-only intent is refused as an invalid request, starting no turn and leaving that intent queued [[media-5](#media-5)].
 
 ### media-14
 
