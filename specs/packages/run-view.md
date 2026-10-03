@@ -1204,7 +1204,7 @@ When the integration suite changes a rendered Captain conversation, it shall ver
 - the same changes preserve the position of a reader who scrolled up and offer the jump-to-latest control [[run-view-46](#run-view-46)];
 - a player-only record leaves a scrolled-up Captain pane without the pill, and a Captain line arriving below then offers it [[run-view-46](#run-view-46)].
 
-#### run-view-104
+#### run-view-164
 
 When the integration suite reveals earlier entries of a long player transcript to a reader scrolled to its top, it shall assert the reader keeps their place with no jump-to-latest control, and an entry appended afterwards offers it [[run-view-46](#run-view-46)].
 
