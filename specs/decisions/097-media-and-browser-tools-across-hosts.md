@@ -7,6 +7,7 @@
 
 Accepted (2026-10-01).
 Amends the session-bundle boundary in [DR-045](045-unified-session-storage.md), the text-only submission boundary in [DR-085](085-boss-talks-through-captain.md), the execution settings in [DR-019](019-inline-agent-configuration.md), and the authoring content and runtime options in [DR-058](058-chat-assisted-playbook-authoring.md).
+Amended by [DR-102](102-playbook-17-4-1-adoption.md) in its dependency closure alone: the floors its rollout adopted are recorded there, with the Playbook floor raised to `^17.4.1`.
 
 ## Context
 

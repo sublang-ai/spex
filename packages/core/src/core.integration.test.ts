@@ -66,6 +66,11 @@ playbooks:
     from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
+  review:
+    from: "@sublang/playbook/review/registry"
+    roles:
+      coder: dev.coder
+      reviewer: dev.coder
 `;
 
 class Client {
@@ -448,13 +453,7 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   {
     name: "unresolved required role",
     pattern: /roles must exactly cover requiredRoleIds; missing reviewer/,
-    config:
-      VALID_CONFIG +
-      `  review:
-    from: "@sublang/playbook/review/registry"
-    roles:
-      coder: dev.coder
-`,
+    config: VALID_CONFIG.replace("      reviewer: dev.coder\n", ""),
   },
   {
     name: "bindings miss a required role",
@@ -3171,7 +3170,10 @@ test("core-service-77: a real session continues after restart and respects anoth
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {
   const dir = scratchDir("spex-shell-continue-");
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, VALID_CONFIG);
+  // This session engages no packaged playbook, so its catalog stays code
+  // alone and the later addition of review reads as unrelated.
+  const base = VALID_CONFIG.slice(0, VALID_CONFIG.indexOf("  review:\n"));
+  writeFileSync(configPath, base);
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
@@ -3237,7 +3239,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // message restores the snapshot into a fresh shell and a new runtime,
   // seeded with the ledger (core-service-73, core-service-74) — the
   // Captain replies again on the new model.
-  writeFileSync(configPath, VALID_CONFIG.replace("  model: claude-test\nplayers:", "  model: claude-tuned\nplayers:"));
+  writeFileSync(configPath, base.replace("  model: claude-test\nplayers:", "  model: claude-tuned\nplayers:"));
   await service.reloadConfig();
   await client.expectOk("turn.submit", { sessionId: session.id, text: "hello again" });
   await client.waitFor(
@@ -3257,7 +3259,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // An unrelated addition changes nothing (core-service-92): a second
   // playbook with its own player enters the config, the session keeps
   // its stored members, and a third message continues it.
-  writeFileSync(configPath, VALID_CONFIG
+  writeFileSync(configPath, base
     .replace("  model: claude-test\nplayers:", "  model: claude-tuned\nplayers:")
     .replace("    model: claude-test\nplaybooks:", "    model: claude-test\n  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:")
     + "  review:\n    from: \"@sublang/playbook/review/registry\"\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n");
@@ -3271,7 +3273,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // Structural drift: the roster changed since, so the refusal names the
   // change and offers a new session, which the project then accepts
   // (core-service-73, core-service-92).
-  writeFileSync(configPath, VALID_CONFIG.replace(/dev\.coder/g, "dev.other"));
+  writeFileSync(configPath, base.replace(/dev\.coder/g, "dev.other"));
   await service.reloadConfig();
   const drift = await client.command("turn.submit", { sessionId: session.id, text: "once more" });
   assert.ok(!drift.ok && drift.error.code === "invalid_config");
@@ -4229,7 +4231,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
     // unset, which delegates on its own model (DR-095).
     "    model: claude-test\nplaybooks:",
     "    model: claude-test\n    subagentModel: claude-sub-config\n    fastMode: true\n  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:",
-  ) + `  review:\n    from: "@sublang/playbook/review/registry"\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n`;
+  ).replace("      reviewer: dev.coder\n", "      reviewer: dev.reviewer\n");
   writeFileSync(configPath, config);
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);

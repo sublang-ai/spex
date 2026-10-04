@@ -12,6 +12,7 @@ Amends [DR-093](093-a-players-subagent-model.md): the subagent model's choices a
 Amends [DR-094](094-the-compiler-adopts-the-apps-cligent.md) in its floors alone: Cligent `^0.30.0`, Playbook `^17.3.0`, slc `^0.15.0`.
 Amends [DR-067](067-tuning-for-one-conversation.md) and [DR-032](032-session-players.md) in their field count alone: five tuning fields.
 Cites [DR-041](041-chrome-that-fits.md) for the row's fit.
+Amended by [DR-102](102-playbook-17-4-1-adoption.md) in its floors alone: Playbook `^17.4.1`, Cligent `^0.33.3`, slc `^0.15.1`.
 
 ## Context
 

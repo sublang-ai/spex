@@ -1419,6 +1419,11 @@ playbooks:
     from: "@sublang/playbook/code/registry"
     roles:
       coder: dev_coder
+  review:
+    from: "@sublang/playbook/review/registry"
+    roles:
+      coder: dev_coder
+      reviewer: dev_coder
 `;
 
 function sleep(ms: number): Promise<void> {

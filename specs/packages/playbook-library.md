@@ -298,6 +298,7 @@ While the validated configured playbook catalog [[core-service-2](core-service.m
 - The hint leaves the shared config valid and enables no playbook or player.
 - The hint disappears when the validated catalog includes `review`.
 - A different source module with the same `code` or `decide` id receives no hint; this rule covers the known packaged entries, not dependency analysis of custom modules or aliases.
+- The runtime refuses the fresh engagement from Playbook 17.4.1 on, per [DR-102](../decisions/102-playbook-17-4-1-adoption.md).
 
 #### playbook-library-35
 
