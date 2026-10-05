@@ -131,11 +131,6 @@ meta.md       The spec of specs
 | [DR-103](decisions/103-the-home-and-its-spaces.md) | 103-the-home-and-its-spaces.md | The home and its spaces: a project's records on the `spex` branch of its own repository, what a project needs in the project and what you add for yourself on your device, intents as a set of files, the Git host deciding who sees what; amends DR-057, DR-063, DR-036, DR-045, DR-035, DR-077, DR-058 and DR-064; extends DR-006 |
 | [DR-104](decisions/104-spec-package-format-and-client-environments.md) | 104-spec-package-format-and-client-environments.md | Spec package format 2 and client environments: one-file specs with translations, playbooks and applets as kinds, requirements installed with a spec package, requests from a registry, a path or a Git commit, one lock per project and one for this device, built-ins as a spec package; amends DR-005, DR-058, DR-036 and DR-045 |
 
-## Drafts
-
-- [Codex DR draft: Spaces, Projects, and Portable Storage](../codex-dr-spaces-projects-and-storage.md) — Proposed concepts, file schemas, backend operations, GitLab mappings, and lifecycle scenarios; not accepted.
-- [Codex DR draft: Unified Packages and Environments](../codex-dr-package-format-and-environments.md) — Proposed artifact layout, manifest and environment schemas, local snapshots, selection, composition, and registry boundary; not accepted.
-
 ## Packages
 
 | File | Summary |

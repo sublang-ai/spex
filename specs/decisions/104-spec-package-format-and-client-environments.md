@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-10-04) on the owner's decision to adopt this record after reviewing it beside [the Codex draft](../../codex-dr-package-format-and-environments.md), which stays a draft.
+Accepted (2026-10-04).
 Revised the same day, while still being worked on: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, an environment is a project or this device, and a spec package's requirements are installed with it.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
 It fits [DR-103](103-the-home-and-its-spaces.md): a project's working folder and this device's `~/.spex/global/` are the two environments.

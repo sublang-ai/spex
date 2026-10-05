@@ -5,7 +5,7 @@
 
 ## Status
 
-Accepted (2026-10-04) on the owner's decision to adopt this record after reviewing it beside [the Codex draft](../../codex-dr-spaces-projects-and-storage.md), which stays a draft.
+Accepted (2026-10-04).
 Revised the same day, while still being worked on: there is no settings repository for a team or a person; what a project needs is in the project, and what you add for yourself stays on your device; an intent is one file, and intents form a set.
 Spec packages are decided by [DR-104](104-spec-package-format-and-client-environments.md); this record only places their files.
 A host record maps this record onto one Git host and proves it there; the first is spex.pub, which wraps GitLab.com and brokers the Git credential, so the only thing Spex reaches beyond spex.pub is the remote URL it hands over.
