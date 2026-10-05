@@ -11,6 +11,7 @@ Amends [DR-015](015-reference-content.md): the slc example's prefill opens a dra
 Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md) in the workspace's empty conversation alone: the phrase chips become two acts and the prompt teaches the agent what a SKILL.md is.
 
 Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for structured content queues, owned media, and explicit browser access.
+Amended by [DR-103](103-the-home-and-its-spaces.md) and [DR-104](104-spec-package-format-and-client-environments.md): the draft store becomes authoring sessions in a project, and a registration is a request plus a role binding.
 
 ## Context
 

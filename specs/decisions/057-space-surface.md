@@ -15,6 +15,8 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - [DR-011](011-project-workspace.md) and [DR-029](029-session-history-home.md): the sidebar's "Workspace" entry and section read "Projects" in user-facing copy and spec vocabulary, and the taxonomy gains a fifth surface, Space, between Playbooks and Settings; internal identifiers keep `Workspace`.
 - [DR-008](008-native-shell-bridge.md): the bridge gains a second capability, `revealPath(path)`, which clears the bridge's own bar.
 
+Amended by [DR-103](103-the-home-and-its-spaces.md): the home holds one mount per project's records and per space's settings instead of one repository with one remote, and the app signs in to a Git host and consults it; the four duties and the sync machine stand, applied per mount.
+
 ## Context
 
 - Since [DR-045](045-unified-session-storage.md) the Spex home is portable, but using that means a terminal: stop the core, `umask 077`, `git fetch`, `plan`, `merge --no-commit`, `select`, `validate`, `rebind`, restart ([docs/storage-git.md](../../docs/storage-git.md)).
