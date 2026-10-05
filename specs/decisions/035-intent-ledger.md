@@ -18,6 +18,7 @@ Amended by [DR-054](054-issue-intent-delivery.md): issue capture seeds include v
 Amended by [DR-055](055-queue-advancement.md): proven successful queued work advances automatically without a verdict; human confirmations and explicit after-link gates remain.
 Failure acknowledgment amended by [DR-062](062-ending-a-failed-workflow.md): a later Boss turn no longer clears a failure that parked a run, which now stands until that run leaves its failure state; the verdict acts and every other fold contract stand.
 Amended by [DR-077](077-up-next-is-a-committed-queue.md) in scope: every Up next row is visibly queued, only the first unblocked row is next, its derived standing governs whether Start is present, and capture offers Queue without a sibling Start; the stored acts, lifecycle states, verdicts, rank, and after-links stand.
+Amended by [DR-103](103-the-home-and-its-spaces.md): an intent is one file in its project's records, with no rank and no link to another intent, and the next to run is the oldest one waiting; capture, delivery and verdicts stand.
 
 ## Context
 
