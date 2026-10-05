@@ -8,7 +8,7 @@
 Accepted (2026-10-04) on the owner's decision to adopt this record after reviewing it beside [the Codex draft](../../codex-dr-spaces-projects-and-storage.md), which stays a draft.
 Revised the same day, while still being worked on: there is no settings repository for a team or a person; what a project needs is in the project, and what you add for yourself stays on your device; an intent is one file, and intents form a set.
 Spec packages are decided by [DR-104](104-spec-package-format-and-client-environments.md); this record only places their files.
-A host record maps this record onto one Git host and proves it there; the first is GitLab.com.
+A host record maps this record onto one Git host and proves it there; the first is spex.pub, which wraps GitLab.com and brokers the Git credential, so the only thing Spex reaches beyond spex.pub is the remote URL it hands over.
 Amends ([DR-046](046-decision-record-evolution.md)):
 
 - [DR-057](057-space-surface.md): the home is no longer one repository with one remote; it holds one checkout per project's records, and the app signs in to a Git host and consults it. The surface's four duties and the sync machine stand, applied per project.
@@ -77,7 +77,7 @@ Spex never does these; it shows the state and links to the page.
 
 - The `spex` branch has its own history, separate from the code. It appears in no pull request.
 - Spex writes to a repository's `spex` branch and to no other branch.
-- The `spex` branch is never a repository's default branch, so the protection of the default branch never touches it. Every member who can write the repository can push it.
+- The `spex` branch is never a repository's default branch, so the protection of the default branch never touches it. Where another rule would block it, Spex adds one exception for that branch when you are allowed to. Then every member who can write the repository can push it.
 - Everyone who clones the code also gets the `spex` branch. Records cost clone size. Large files use the host's large-file storage where it exists.
 
 ### What lives where
@@ -157,7 +157,7 @@ Spex never does these; it shows the state and links to the page.
 - A settings repository for a team or a person: a member who cannot read it would silently get other tools than the rest. A project's needs belong in the project, and your own additions on your device.
 - Space kinds, personal or team: the member list decides, and a stored kind would lie.
 - A Spex provisioning service with operators and service accounts: the Git host provides groups, and whoever administers it creates them.
-- Spex managing members, roles or branch rules: the host's job. Spex shows and links, and puts its branch where no rule applies.
+- Spex managing members, roles or branch rules: the host's job. Spex shows and links. The one rule it ever writes is the exception for its own branch.
 - Records on the code branches: every session would show up in code history and pull requests.
 - A hidden ref instead of a branch: nobody could see or delete records on the host.
 - Intents as a log of actions with ranks and links: a log needs a fold and per-device files to avoid conflicts; a set of files needs neither.

@@ -62,18 +62,19 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | `org`, `name`, `version` | The identity and the version |
 | `description`, `license`, `repository` | A description, the license, and an optional source repository URL |
 | `dependencies` | Optional: `<org>/<pkg>` to a version requirement, for every spec package this one requires |
-| `artifacts` | Artifact id to `{kind, locale, spec, from, generated-by}` |
+| `artifacts` | Artifact id to `{kind, locale, spec, from, requires, generated-by}` |
 
 - `kind` is `source`, `spec`, `skill`, `playbook` or `applet`.
 - `locale` is the language of the original text. An applet has none. The other language folders of the artifact are its translations.
 - `spec` and `from` say where an artifact came from: which spec it implements, and what it was derived from. They install nothing.
+- `requires` is optional: the ids of artifacts in this release that must be installed with this one, as the built-in `code` requires `review`. Selecting an artifact selects what it requires.
 - `generated-by` is optional: `{agent, model}` of generated content.
 - A skill's id is its Agent Skills name. A playbook's id is its Playbook id. A source's or an applet's id is its folder name.
 - A translated spec keeps the item ids of the original.
 
 ### Dependencies
 
-- A dependency names another spec package this one requires, and which versions fit. Installing a spec package installs what it requires, whichever of its artifacts you selected. A playbook that needs another, as `code` needs `review`, says so here, and both are installed.
+- A dependency names another spec package this one requires, and which versions fit. Installing a spec package installs what it requires, whichever of its artifacts you selected. A playbook that needs one from another spec package says so here; one that needs a sibling in its own spec package says so with `requires`. Either way both are installed.
 - A requirement that cannot be met is reported before anything runs. Installing supplies no credentials and authorizes nothing to run.
 - A spec cites another spec's items by inline citation, as [[meta-14](../meta.md#meta-14)] requires. The written form of a citation across spec packages is decided with meta.md and the lint, not here.
 
@@ -141,7 +142,7 @@ A request names one source:
 
 Selection, within a solution:
 
-1. Artifacts: those a request selects, or all of them by default.
+1. Artifacts: those a request selects, or all of them by default, together with everything they require.
 2. Languages: for each selected artifact, the language its selector names; else the environment's `locale` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
 3. Files: the root files and every file of each selected artifact in its chosen language.
 4. Exports: each selected skill under its artifact id or its alias. Two exports with one name in one environment are an error.
@@ -158,7 +159,8 @@ Selection, within a solution:
 - A project's environment exports to the project: its skills into the project's agent folders, and its playbooks into the sessions started in it.
 - This device's environment exports its skills into your agents' home folders.
 - Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's folder, with everything the playbook requires.
-- Spex Desktop lists a project's skills and this device's together, saying where each comes from.
+- An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, never another environment's copy of the same name and version.
+- When a project and this device export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
 - Exports go only to the folders the adapter table names. Nothing in a shared file chooses a path on your device. An adapter named in `agents` that this device lacks leaves that export unbound and listed. The adapter table belongs to the CLI.
 
 ### Playbooks
@@ -200,6 +202,7 @@ Selection, within a solution:
 - Shipped wrapper skills, and several implementations of one artifact: a skill that only runs a playbook is generated, and a workflow with two implementations is a playbook and an applet implementing one spec.
 - A device-level registry file: two devices would resolve one name differently from one lock.
 - Built-in playbooks outside the format: one more special case, for no gain.
+- A suffix Spex adds to a skill name that both this device and a project export: the name a person types would change with the project open. The agent's precedence applies, and `alias` renames one for good.
 
 ## Consequences
 
