@@ -7,7 +7,7 @@
 
 This package defines Spex's data files under [DR-103](../decisions/103-the-home-and-its-groups.md): the home, the spex repositories cloned under it, the files each holds, the device-local files, the one-time migration from the former layout, and the whole-unit rules by which a spex repository's `spex` branch merges.
 **Spex home** is the application data directory; paths below are relative to it.
-A **spex repository** is a Git repository named `<name>-spex` holding the records of one project or one group on its `spex` branch; its **clone** lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`, such as `acme/a-spex`.
+A **spex repository** is a Git repository named `<name>-spex` holding the records of one project or one group on its `spex` branch; its **clone** lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`, such as `acme/a-spex`, each segment spelled as the host spells its path — letters, digits, `.`, `_` and `-`, never starting with a dot — so a host's group or repository name is a key segment as it is.
 A **working folder** is a folder on this device where a project's or a group's sessions run; a **project** is a working folder paired with a spex repository.
 Playbook owns session files and recovery [[1]]; a **session bundle** consists of a manifest, its matching replay stream, and its owned asset directory, selected from one revision or deleted as a unit during Git synchronization.
 **Closed** JSON objects permit only the declared fields; every file whose layout this package defines carries a `format` field naming its layout's version, and a reader refuses a `format` it does not know.

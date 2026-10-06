@@ -116,7 +116,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 | not on this device | the host listed it and no clone is here | "Not on this device" | Join [[space-63](#space-63)] |
 
 - nothing on this device is deleted because the host refused or stopped listing;
-- a waiting creation or branch preparation [[space-64](#space-64)] shows its phrase on the row in place of the state's.
+- a waiting creation or branch preparation [[space-64](#space-64)] shows its phrase on the row in place of the state's; the wait is held for the app's run alone, so after a restart the row offers its control again and the next attempt finds what a member did meanwhile.
 
 #### space-62
 
