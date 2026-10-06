@@ -9,7 +9,7 @@ Accepted; amended by [DR-036](036-file-state-store.md): the project registry liv
 Amended by [DR-096](096-the-app-supplies-the-scaffold.md) in the create flow's scaffold step: the scaffold CLI is the checkout's own copy, the registry's only where none is built.
 Amended by [DR-100](100-new-project-specs-follow-the-readers-language.md) in new project scaffolding: the creating page supplies its resolved interface language.
 Amended by [DR-099](099-project-creation-preserves-existing-repositories.md) in the create flow's existing-repository refusal and failed-creation recovery.
-Amended by [DR-103](103-the-home-and-its-spaces.md): a project's Spex records live apart from its code, in a `<project>-spex` repository Spex creates on the Git host, and the code may be in any Git repository; the forge binding stands.
+Amended by [DR-103](103-the-home-and-its-spaces.md): a project's Spex records live beside its code in `.spex/`, a clone of the `<name>-spex` repository Spex creates on the Git host, and the code may be in any Git repository; the forge binding stands.
 
 ## Context
 

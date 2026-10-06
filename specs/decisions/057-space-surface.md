@@ -15,7 +15,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - [DR-011](011-project-workspace.md) and [DR-029](029-session-history-home.md): the sidebar's "Workspace" entry and section read "Projects" in user-facing copy and spec vocabulary, and the taxonomy gains a fifth surface, Space, between Playbooks and Settings; internal identifiers keep `Workspace`.
 - [DR-008](008-native-shell-bridge.md): the bridge gains a second capability, `revealPath(path)`, which clears the bridge's own bar.
 
-Amended by [DR-103](103-the-home-and-its-spaces.md): the home holds one mount per records repository, one per project and one per space, instead of one repository with one remote, and the app signs in to a Git host and consults it; the four duties and the sync machine stand, applied per mount.
+Amended by [DR-103](103-the-home-and-its-spaces.md): every project and group has a `.spex/` of its own, each a clone of its spex repository and synced on its own, instead of one repository with one remote, and the app signs in to a Git host and consults it; the four duties and the sync machine stand, applied per mount.
 
 ## Context
 
