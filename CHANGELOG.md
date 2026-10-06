@@ -16,6 +16,36 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Share a project's records through a Git host ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
+  Space becomes **Groups**: sign in to the host — spex.pub, or the one
+  `SPEX_HOST_URL` names when a home is created — through your browser on
+  the desktop or with a code on the server shell, and Spex lists your
+  groups and the spex repositories you can read in each, creates your
+  own group's on the host, and creates a project's in the group you pick.
+  The host's members of a spex repository see its records, with the
+  host's role names and a link to its members page; Spex keeps no member
+  list or access rule of its own. A step that needs rights you lack
+  waits for a member who has them, a rename or transfer on the host is
+  followed, and a spex repository the host stops listing turns
+  unreachable with nothing on the device deleted. Git receives the
+  host's credential through Spex's own credential helper on the app's
+  runtime, never through a remote URL, and the device's token is kept
+  in `local/credentials.yaml`, readable by you alone.
+- Playbooks come in spec packages ([DR-104](specs/decisions/104-spec-package-format-and-client-environments.md)).
+  Each spex repository has an environment: `spex.yaml` requests spec
+  packages from the Git host's registry, a Git repository or a folder in
+  the working folder, and `spex.lock` pins the versions, languages and
+  files resolved, so every member and device installs the same. Installs
+  go through one content-addressed store under the home, replace an
+  environment's files at once, and export skills into each agent's
+  folder in the working folder and, for your own group, your home. The
+  app ships the built-in spec package `sublang/playbooks`, seeded at the
+  first start so the built-in playbooks run offline. **Playbooks** shows
+  each environment's spec packages and the playbooks they export,
+  enabling one by choosing a player for each role; a playbook you author
+  is a spec package in the working folder, compiled there, enabled by
+  path and published to the registry.
+
 - Live tool approval controls for supported agents show the conversation or
   authoring draft, actor, operation, and complete requested action. Approve once
   or Deny works while a turn is running; pending requests survive client
@@ -192,7 +222,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   oldest queued intent first, so rows no longer move or link, and every
   queued row's menu offers Start. Removing a project deletes its clone,
   asking again while it holds records the host has not received, and never
-  touches the working folder. Space syncs each spex repository on its own,
+  touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
 - The app requires Playbook 17.4.1, slc 0.15.1 and Cligent 0.33.3 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),

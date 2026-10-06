@@ -31,9 +31,12 @@ Ignored files can contain durable local state.
 | `<clone>/sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
 | `<clone>/authoring/<id>.json`, `.records.jsonl`, `.assets/` | An authoring session: its queue, compile state, transcript and owned files. | Tracked, one unit |
 | `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
+| `<clone>/packages/`, `<clone>/skills/` | The environment's installed spec packages and the skills exported from them, rebuilt from `spex.lock`. | Ignored |
 | `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
-| `playbooks/<id>/` | Library sources and generated modules/artifacts. | Outside any clone |
+| `store/`, `cache/` | Spec package files by content digest, shared by every environment on the device, and rebuildable caches such as fetched Git sources. | Outside any clone |
+| `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
 | `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
+| `local/credentials.yaml` | The app token the Git host issued to this device, owner-only; removed at sign-out. | Never leaves the device |
 | `local/forge-cache.json` | Rebuildable issue and pull-request cache. | Never leaves the device |
 | `local/migrations/<id>/` | Migration receipts and original inputs. | Never leaves the device |
 | `local/former-home.git` | The former home's Git history, kept aside unchanged. | Never leaves the device |
@@ -93,7 +96,9 @@ Agent-written Markdown paths and remote URLs are not imported as assets.
 Each clone tracks portable files only; provider tokens never enter recovery fields that Git sees.
 Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files and asset directories.
 
-The app's Space surface syncs each spex repository's `spex` branch with its host remote, one spex repository at a time, without stopping the core, and never text-merges a file.
+The app's Groups surface syncs each spex repository's `spex` branch with its host remote, one spex repository at a time, without stopping the core, and never text-merges a file.
+Signed in, Spex asks the Git host for a short-lived Git credential before each transport to the host's Git origin and hands it to Git through its own credential helper, run on the app's runtime, in a file only you can read that is removed when Git ends; it never enters a remote URL.
+A transport to any other remote, and a fetch of a spec package from a Git repository elsewhere, uses this device's own Git and its credentials.
 The command-line path stops local writers of that spex repository during its commit, checkout and merge; the [Git workflow](storage-git.md) gives the selection and validation commands.
 Run each session on at most one device at a time; leases are local.
 
@@ -160,11 +165,14 @@ CLI schemas 2–5 and desktop checkpoints without compatible recovery data remai
 Legacy provider tokens cannot become usable hints because their checkpoint binding is unproven.
 
 [DR-103](../specs/decisions/103-the-home-and-its-groups.md) records the layout;
+[DR-104](../specs/decisions/104-spec-package-format-and-client-environments.md) records spec packages and environments;
 [DR-045](../specs/decisions/045-unified-session-storage.md) records the shared session store.
 Exact formats and behavior are defined by their owning packages:
 
 | Owner | Definition |
 | --- | --- |
 | Spex | [Home files, spex repositories, migration and Git selection](../specs/packages/storage.md) |
+| Spex | [Environments: requests, locks, the store and installs](../specs/packages/environments.md) |
+| Spex | [Sign-in, the app token and the Git credential helper](../specs/packages/git-host.md) |
 | Playbook | [Session format, context, hints and recovery](https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md) |
 | Cligent | [Definite provider session rejection](https://github.com/sublang-ai/cligent/blob/main/specs/packages/engine.md#engine-84) |

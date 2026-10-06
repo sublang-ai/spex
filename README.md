@@ -118,12 +118,36 @@ or `/code …`; `/` in the composer lists the playbooks the starter config
 enables, including `/code`, `/review`, `/decide`, `/dev`, `/branch`,
 `/pr` and `/inspect`, and the quick-start card shows the first of them.
 Coding and design workflows commit in your repository, so Git needs `user.name` and
-`user.email`; the issue and PR panels, the Dashboard's Sources and Space
-on a GitHub remote need `gh auth login`. Config and sessions live in the
+`user.email`; the issue and PR panels and the Dashboard's Sources on a
+GitHub remote need `gh auth login`. Config and sessions live in the
 Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
 `workspace/`: each project's records in its own, and your config at
 `workspace/<you>/<you>-spex/config/playbook.config.yaml`
 ([storage](docs/storage.md)).
+
+**Playbooks come in spec packages.** Each spex repository has an
+environment: `spex.yaml` requests spec packages — specs with the skills
+and playbooks made from them — from the Git host's registry, a Git
+repository, or a folder in the working folder, and `spex.lock` pins what
+was resolved ([environments](specs/packages/environments.md)). The app
+ships the built-in spec package `sublang/playbooks`, which holds `/code`,
+`/review`, `/decide` and the other built-ins: the first start seeds it, so
+they run offline, and every new environment requests it. **Playbooks**
+shows each environment's spec packages and the playbooks they export;
+enable one there by choosing a player for each of its roles.
+
+**Sharing through a Git host.** Spex works offline; sign in on **Groups**
+when you want to share. The host is [spex.pub](https://spex.pub) unless
+`SPEX_HOST_URL` names another when the home is first created. The desktop
+opens the host's sign-in page in your browser; the server shell shows a
+code to enter there. Spex then puts your own group's spex repository on
+the host, and a project's once you pick a group for it; the host's
+members of each spex repository see its records. Git receives the host's
+credential through Spex's own credential helper, run on the app's own
+runtime, never through a remote URL, and the device's token stays in
+`local/credentials.yaml`, readable by you alone
+([git-host](specs/packages/git-host.md),
+[DR-103](specs/decisions/103-the-home-and-its-groups.md)).
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) ship as source with a changelog: check out the tag and run
@@ -170,9 +194,10 @@ Authoring uses the selected agent's saved setting and offers the same setup
 check beside its selector. No MCP package or command needs to be chosen.
 
 Use `/inspect` for a task such as “Open my local app and explain its UX with
-screenshots.” An existing home can add it in **Playbooks → Available built-ins**:
-choose the Inspector's agent and select **Enable**. Enable Browser for the worker
-assigned to Inspect; the Captain's routing calls stay tool-free.
+screenshots.” An existing home finds it on **Playbooks** among the built-in
+spec package's playbooks: choose a player for its Inspector role and select
+**Enable**. Enable Browser for the worker assigned to Inspect; the Captain's
+routing calls stay tool-free.
 Start the app first and include its
 URL. Native figures returned by a supported agent appear in the conversation
 and remain available when it reopens. Browser readiness is separate from
