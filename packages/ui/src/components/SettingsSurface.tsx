@@ -28,6 +28,8 @@ import {
   type ConfigEditOpInput,
   type ReadinessEntry,
   type SessionPlayerSummary,
+  type GroupsState,
+  type MissingPlayer,
 } from "@sublang/spex-core/protocol";
 
 import { getClient, useAppStore } from "../state/store.js";
@@ -339,17 +341,80 @@ const NEW_PLAYER_BLOCK: AgentBlockInput = {
   permissions: { mode: "auto" },
 };
 
+/** A player a project's config names for a role and your own group's
+ * roster lacks (settings-46): named by its project, with Add creating
+ * it from the neutral block, so each person picks their own models. */
+function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
+  const project = useAppStore((state) => state.projects.find((item) => item.id === entry.repository));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`).join(", ");
+  return (
+    <div
+      data-testid={`player-missing-${entry.player}`}
+      className="flex flex-col gap-1 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-2 text-sm dark:border-amber-800 dark:bg-neutral-900"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono font-medium">{entry.player}</span>
+        <span
+          data-testid={`player-missing-note-${entry.player}`}
+          title={positions ? i18n._("Answers {positions}", { positions }) : undefined}
+          className="min-w-0 flex-1 truncate text-xs text-amber-800 dark:text-amber-200"
+        >
+          {i18n._("Named by {project}, not set up here", { project: project?.name ?? entry.repository })}
+        </span>
+        <button
+          type="button"
+          data-testid={`player-missing-add-${entry.player}`}
+          disabled={busy}
+          title={i18n._("Add {id} with the neutral agent, then tune it here", { id: entry.player })}
+          onClick={() => {
+            setBusy(true);
+            setError(undefined);
+            void patchPlayer(entry.player, NEW_PLAYER_BLOCK)
+              .catch((cause: Error) => setError(cause.message))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-md border border-brand-300 px-2 py-0.5 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+        >
+          {busy ? i18n._({ id: "Adding…", comment: "the request is being written" }) : i18n._({ id: "Add", comment: "create this player in your own roster" })}
+        </button>
+      </div>
+      {error ? (
+        <p data-testid={`player-missing-error-${entry.player}`} className="text-xs text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Your own group's spex repository, which the settings file belongs
+ * to (settings-46): as Space reads it, else from the file's place
+ * under `workspace/<key>/config/` (DR-103). */
+function ownRepositoryOf(space: GroupsState | undefined, path: string): string | undefined {
+  for (const group of space?.groups ?? []) {
+    const repository = group.repositories.find((entry) => entry.own);
+    if (repository) return repository.key;
+  }
+  return /\/workspace\/([a-z0-9][a-z0-9/-]*-spex)\/config\//u.exec(path)?.[1];
+}
+
 /** The session-player roster (DR-032): each lane is one identity and
  * one provider conversation, edited here whole. Removal is refused by
  * the core while a binding still names the lane, and that refusal is
  * what the user reads. */
 function PlayerRoster({
   players,
+  missing,
   readiness,
   captain,
   rows,
 }: {
   players: SessionPlayerSummary[];
+  /** Players a project's config names that this roster lacks
+   * (settings-46). */
+  missing: MissingPlayer[];
   readiness: ReadinessEntry[];
   captain: AgentBlockInput;
   rows: RowEditing;
@@ -475,9 +540,14 @@ function PlayerRoster({
           ) : null}
         </div>
       ))}
-      {players.length === 0 ? (
+      {missing
+        .filter((entry) => !players.some((player) => player.id === entry.player))
+        .map((entry) => (
+          <MissingPlayerRow key={`${entry.repository}:${entry.player}`} entry={entry} />
+        ))}
+      {players.length === 0 && missing.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-          {i18n._("No players yet — enabling a playbook in the Library adds the ones its roles need.")}
+          {i18n._("No players yet — enabling a playbook in Playbooks adds the ones its roles need.")}
         </p>
       ) : null}
       {adding ? (
@@ -563,6 +633,7 @@ function PlayerRoster({
 export function SettingsSurface() {
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
+  const space = useAppStore((state) => state.space);
   const refreshReadiness = useAppStore((state) => state.refreshReadiness);
   const refresh = useAppStore((state) => state.refresh);
   const [error, setError] = useState<string>();
@@ -654,6 +725,7 @@ export function SettingsSurface() {
   }
 
   const summary = configState.summary;
+  const ownRepository = ownRepositoryOf(space, summary.path);
   const readinessByAdapter = new Map(
     readiness.map((entry) => [entry.adapter, entry]),
   );
@@ -679,6 +751,18 @@ export function SettingsSurface() {
     <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <div>
         <h1 className="text-lg font-semibold">{i18n._("Settings")}</h1>
+        {/* The file written here is your own group's, named by its
+            spex repository; a project's playbooks and bindings are
+            edited in Playbooks (settings-46). */}
+        {ownRepository ? (
+          <p
+            data-testid="settings-scope"
+            title={i18n._("A project's playbooks and role bindings are edited in Playbooks")}
+            className="mt-0.5 text-xs text-neutral-500"
+          >
+            {i18n._("Your own group's config, in {repository}", { repository: ownRepository })}
+          </p>
+        ) : null}
         <p className="mt-0.5 text-xs text-neutral-500">
           <span className="font-mono break-all" title={i18n._("Shared with the playbook CLI — edits made outside appear here")}>{summary.path}</span>
         </p>
@@ -759,6 +843,7 @@ export function SettingsSurface() {
 
       <PlayerRoster
         players={summary.players}
+        missing={configState.missingPlayers ?? []}
         readiness={readiness}
         captain={summary.captain}
         rows={rows}

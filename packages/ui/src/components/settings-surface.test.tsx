@@ -27,6 +27,7 @@ import {
 import { activateLanguage, i18n } from "../i18n.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import type { ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
+import { OWN_KEY, PROJECT, home } from "../fixtures/playbooks.js";
 
 // The language control writes the real store, which mirrors the choice
 // and activates the catalog: put both back so no later test inherits a
@@ -310,6 +311,61 @@ describe("SET: the session-player roster", () => {
         },
       }),
     );
+  });
+});
+
+describe("settings-46: your own group's file, and the players a project names", () => {
+  afterEach(() => useAppStore.setState({ projects: [], space: undefined }));
+
+  test("a player a project names and the roster lacks reads so, and Add creates it from the neutral block", async () => {
+    useAppStore.setState({ projects: [PROJECT], space: home() });
+    useAppStore.setState({
+      configState: {
+        ...CONFIG,
+        missingPlayers: [
+          { player: "dev.triager", repository: PROJECT.id, roles: [{ playbook: "triage", role: "triager" }] },
+          // One the roster already holds is no longer missing.
+          { player: "dev.coder", repository: PROJECT.id, roles: [{ playbook: "code", role: "coder" }] },
+        ],
+      } as ConfigState,
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    render(<SettingsSurface />);
+    const row = screen.getByTestId("player-missing-dev.triager");
+    expect(within(row).getByTestId("player-missing-note-dev.triager").textContent).toBe(
+      "Named by demo, not set up here",
+    );
+    expect(within(row).getByTestId("player-missing-note-dev.triager").title).toBe("Answers triage.triager");
+    expect(screen.queryByTestId("player-missing-dev.coder")).toBeNull();
+    fireEvent.click(within(row).getByTestId("player-missing-add-dev.triager"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: {
+          kind: "player.set",
+          playerId: "dev.triager",
+          patch: { adapter: "claude", model: "claude-opus-5-5", effort: "high", permissions: { mode: "auto" } },
+        },
+      }),
+    );
+  });
+
+  test("the surface names the file it writes by your own group's spex repository", () => {
+    useAppStore.setState({ space: home() });
+    renderSettings();
+    const scope = screen.getByTestId("settings-scope");
+    expect(scope.textContent).toBe(`Your own group's config, in ${OWN_KEY}`);
+    expect(scope.title).toBe("A project's playbooks and role bindings are edited in Playbooks");
+  });
+
+  test("without Space read yet, the repository comes from the file's place", () => {
+    useAppStore.setState({
+      configState: { ...CONFIG, summary: { ...CONFIG.summary!, path: `/home/me/.spex/workspace/${OWN_KEY}/config/playbook.config.yaml` } } as ConfigState,
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    render(<SettingsSurface />);
+    expect(screen.getByTestId("settings-scope").textContent).toBe(`Your own group's config, in ${OWN_KEY}`);
   });
 });
 
