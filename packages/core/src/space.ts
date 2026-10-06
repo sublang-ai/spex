@@ -1825,6 +1825,39 @@ export class SpaceManager {
     return this.view?.gitOrigin ?? this.described?.gitOrigin;
   }
 
+  /** The Git origin the host's credentials are valid for (git-host-9):
+   * as the last read named it, else asked of the host — a call needing
+   * no token — and kept as a read's is; undefined where the host cannot
+   * say. */
+  async gitOrigin(): Promise<string | undefined> {
+    const known = this.knownOrigin();
+    if (known) return known;
+    try {
+      const described = await this.host.client.describe();
+      if (!described.gitOrigin) return undefined;
+      this.described = { displayName: described.displayName, gitOrigin: described.gitOrigin };
+      return described.gitOrigin;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The brokered credential for a Git source at the host's Git origin
+   * (environments-13, git-host-9), asked of the host each time; none for
+   * a source at any other origin, nor while signed out, where this
+   * device's own Git fetches it. A refusal reads as the host said. */
+  async sourceCredential(repo: string): Promise<{ username: string; secret: string } | undefined> {
+    if (!this.signedIn()) return undefined;
+    const origin = await this.gitOrigin();
+    if (!origin || !underOrigin(repo, origin)) return undefined;
+    try {
+      const credential = await this.host.client.credential(origin);
+      return { username: credential.username, secret: credential.secret };
+    } catch (error) {
+      throw new Error(relayHostError(error, this.hostName()));
+    }
+  }
+
   /** Whether a clone lies on the Git host: it records the host's id, or
    * its remote is under the host's Git origin (git-host-9). */
   private atHost(facts: CloneFacts): boolean {

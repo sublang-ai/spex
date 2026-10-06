@@ -11,6 +11,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer, request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
@@ -19,12 +21,13 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { CoreService, type CoreServiceOptions } from "./service.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { starterText, templatePath } from "./config.js";
-import { builtinPackage, readRelease, type BuiltinPackage } from "./environment/index.js";
+import { builtinPackage, publishRelease, readRelease, RegistryClient, type BuiltinPackage } from "./environment/index.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage, SyncStep } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
+import { createSpaceHarness } from "./testing/space-harness.js";
 import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
 import { stubSlcSource } from "./testing/stub-slc.js";
 
@@ -491,4 +494,163 @@ test("environments-25: every environment command replies and refuses as its tabl
   const applied = await client.environment(key, synced, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed), 60_000);
   assert.equal(applied.stale, null);
   assert.ok(existsSync(join(working, ".claude", "skills", "tidy", "SKILL.md")), "the applied lock's skill is exported");
+});
+
+// ---------------------------------------------------------------------------
+// environments-21 through a real core signed in at the stand-in host
+// ---------------------------------------------------------------------------
+
+interface FrontEntry { to: "host" | "registry"; method: string; path: string; bearer: string | null }
+
+/** One origin in front of the stand-in host and the stand-in registry,
+ * as spex.pub serves both under one URL: the host's routes go to the
+ * one and the registry's to the other, each request logged with the
+ * bearer it carried. The Git transport stays at the host's own origin. */
+async function startFront(hostUrl: string, registryUrl: string): Promise<{ url: string; log: FrontEntry[]; close(): Promise<void> }> {
+  const log: FrontEntry[] = [];
+  const server = createServer((req, res) => {
+    const path = new URL(req.url ?? "/", "http://front").pathname;
+    const toRegistry = path.startsWith("/api/v1/packages") || path === "/api/v1/search"
+      || !(path.startsWith("/api/") || path.startsWith("/login") || path.startsWith("/git"));
+    const target = new URL(req.url ?? "/", toRegistry ? registryUrl : hostUrl);
+    const header = req.headers.authorization;
+    log.push({ to: toRegistry ? "registry" : "host", method: req.method ?? "GET", path, bearer: typeof header === "string" ? header.replace(/^Bearer\s+/i, "") : null });
+    const forward = httpRequest(target, { method: req.method, headers: { ...req.headers, host: target.host } }, (answer) => {
+      res.writeHead(answer.statusCode ?? 502, answer.headers);
+      answer.pipe(res);
+    });
+    forward.on("error", () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+    req.pipe(forward);
+  });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    log,
+    close: () => new Promise<void>((resolveClose) => { server.closeAllConnections(); server.close(() => resolveClose()); }),
+  };
+}
+
+function skillRelease(org: string, name: string): { manifest: Record<string, unknown>; files: Record<string, string> } {
+  return {
+    manifest: { format: 2, org, name, version: "1.0.0", description: `The ${org}/${name} spec package`, license: "Apache-2.0", artifacts: { [`${name}-skill`]: { kind: "skill", language: "en" } } },
+    files: { [`skills/en/${name}-skill/SKILL.md`]: `---\nname: ${name}-skill\ndescription: The ${name} skill\n---\n\nUse ${name}.\n` },
+  };
+}
+
+test("environments-21 through a real core: the registry presents the access secret the host client refreshed, a Git source at the host's origin installs with the brokered credential and one elsewhere with this device's Git, and a signed-out home presents none", { timeout: 240_000 }, async (t) => {
+  const harness = createSpaceHarness();
+  t.after(() => harness.dispose());
+  const host = await harness.startHost();
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-front-registry-") });
+  t.after(() => registry.close());
+  const front = await startFront(host.url, registry.url);
+  t.after(() => front.close());
+  const tools = skillRelease("acme", "tools");
+  await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(harness.scratch, "tools"), tools.manifest, tools.files));
+
+  const home = await harness.startHome("front", { project: false, env: { SPEX_HOST_URL: front.url } });
+  t.after(() => home.stop());
+  const own = `${host.script.person.login}/${host.script.person.login}-spex`;
+  const signing = home.client.mark();
+  await harness.signIn(home, host);
+  // Your own group's spex repository is created on the host and pushed
+  // before its environment takes a write (environments-17).
+  await home.client.waitRepository(signing, own, (repository) => repository.sync.phase === "done", 60_000);
+  const states = (from: number): EnvironmentState[] =>
+    home.client.messages.slice(from).flatMap((m) => (m.type === "environment.state" && m.repository === own ? [m.state] : []));
+  /** One operation run through after a mark: its first busy state, then
+   * the first idle one after that. */
+  const ran = async (from: number): Promise<EnvironmentState> => {
+    const start = Date.now();
+    for (;;) {
+      const seenStates = states(from);
+      const busy = seenStates.findIndex((state) => state.busy !== null);
+      const done = busy < 0 ? undefined : seenStates.slice(busy + 1).find((state) => state.busy === null);
+      if (done) return done;
+      if (Date.now() - start > 90_000) throw new Error(`timeout waiting for an operation on ${own}`);
+      await sleep(15);
+    }
+  };
+  const installed = (state: EnvironmentState, name: string): boolean => state.packages.some((pkg) => pkg.name === name && pkg.installed);
+
+  // The access secret nears its expiry: the registry's next call
+  // presents the one the host client refreshed first (environments-12,
+  // git-host-4), never the file's stale one.
+  const credentials = join(home.dataDir, "local", "credentials.yaml");
+  type Stored = { access: string; accessExpiresAt: number; refresh: string };
+  const stored = (): Stored => (parseYaml(readFileSync(credentials, "utf8")) as { hosts: Record<string, Stored> }).hosts[front.url]!;
+  const stale = stored();
+  writeFileSync(credentials, stringifyYaml({ format: 1, hosts: { [front.url]: { ...stale, accessExpiresAt: Date.now() + 5_000 } } }), { mode: 0o600 });
+  const grants = host.script.tokenGrants.length;
+  front.log.length = 0;
+  let from = home.client.mark();
+  await home.client.expectOk("environment.request", { repository: own, name: "acme/tools", request: { kind: "registry", version: "^1.0.0" } });
+  let state = await ran(from);
+  assert.equal(state.error, null);
+  assert.ok(installed(state, "acme/tools"));
+  const fresh = stored();
+  assert.notEqual(fresh.access, stale.access, "the access secret was refreshed before the registry call");
+  assert.ok(host.script.tokenGrants.slice(grants).some((grant) => grant.grantType === "refresh_token" && grant.ok), JSON.stringify(host.script.tokenGrants));
+  const registryCalls = front.log.filter((entry) => entry.to === "registry");
+  assert.ok(registryCalls.some((entry) => entry.path === "/api/v1/packages/acme/tools"), JSON.stringify(registryCalls));
+  assert.ok(registryCalls.every((entry) => entry.bearer === fresh.access), "every registry call carried the refreshed secret");
+  assert.ok(registry.script.requests.includes("GET /api/v1/packages/acme/tools"));
+
+  // A Git source anywhere but the host's Git origin: this device's own
+  // Git, the host not asked (environments-13).
+  const bare = join(harness.scratch, "local-tools.git");
+  harness.git(harness.scratch, "init", "-q", "--bare", "-b", "main", bare);
+  const localWork = join(harness.scratch, "local-work");
+  harness.git(harness.scratch, "init", "-q", "-b", "main", localWork);
+  const local = skillRelease("acme", "local");
+  await makeRelease(localWork, local.manifest, local.files);
+  harness.git(localWork, "add", "-A");
+  harness.git(localWork, "commit", "-q", "-m", "Release");
+  harness.git(localWork, "push", "-q", bare, "main");
+  let seen = host.script.requests.length;
+  from = home.client.mark();
+  await home.client.expectOk("environment.request", { repository: own, name: "acme/local", request: { kind: "git", git: bare, rev: "main" } });
+  state = await ran(from);
+  assert.equal(state.error, null);
+  assert.ok(installed(state, "acme/local"));
+  assert.ok(!host.script.requests.slice(seen).some((request) => request.path === "/api/v1/host/credential"), "no credential for another origin");
+
+  // A Git source at the host's Git origin: the host is asked for the
+  // credential, and the transport carries it (environments-13, git-host-9).
+  const toolbox = host.script.addRepository({ group: "acme", name: "toolbox" });
+  const work = join(harness.scratch, "toolbox-work");
+  harness.git(harness.scratch, "clone", "-q", toolbox.bare, work);
+  const boxed = skillRelease("acme", "toolbox");
+  await makeRelease(join(work, "pkg"), boxed.manifest, boxed.files);
+  harness.git(work, "add", "-A");
+  harness.git(work, "commit", "-q", "-m", "Release");
+  harness.git(work, "push", "-q", "origin", "HEAD:main");
+  const commit = harness.git(work, "rev-parse", "HEAD");
+  const repo = `${host.gitOrigin}/acme/toolbox.git`;
+  seen = host.script.requests.length;
+  from = home.client.mark();
+  await home.client.expectOk("environment.request", { repository: own, name: "acme/toolbox", request: { kind: "git", git: repo, rev: "main", path: "pkg" } });
+  state = await ran(from);
+  assert.equal(state.error, null);
+  assert.ok(installed(state, "acme/toolbox"));
+  const lock = parseYaml(readFileSync(join(clonePath(home.dataDir, own), "spex.lock"), "utf8")) as { packages: Record<string, { source: unknown }> };
+  assert.deepEqual(lock.packages["acme/toolbox"]!.source, { git: repo, commit, path: "pkg" });
+  const asked = host.script.requests.slice(seen);
+  assert.ok(asked.some((request) => request.method === "POST" && request.path === "/api/v1/host/credential"), "the host was asked for the credential");
+  assert.ok(asked.some((request) => request.path.startsWith("/git/acme/toolbox.git/") && request.authorization), "the transport carried it");
+
+  // Signed out, the registry is called with no bearer at all.
+  from = home.client.mark();
+  await home.client.expectOk("environment.remove", { repository: own, name: "acme/toolbox" });
+  assert.equal((await ran(from)).error, null);
+  await home.client.expectOk("space.signout", {});
+  front.log.length = 0;
+  from = home.client.mark();
+  await home.client.expectOk("environment.resolve", { repository: own });
+  state = await ran(from);
+  assert.equal(state.error, null);
+  assert.ok(installed(state, "acme/tools"));
+  const signedOut = front.log.filter((entry) => entry.to === "registry");
+  assert.ok(signedOut.length > 0 && signedOut.every((entry) => entry.bearer === null), JSON.stringify(signedOut));
 });

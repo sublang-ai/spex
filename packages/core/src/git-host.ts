@@ -680,6 +680,24 @@ export class GitHostClient {
     return { username: text(body.username), secret: text(body.secret), expiresAt: Number.isFinite(expiresAt) ? expiresAt : 0 };
   }
 
+  /**
+   * The access secret a call to the host presents now, for a client of
+   * the same host outside this one — the registry (environments-12):
+   * kept current as every call's is (git-host-4), refreshed first where
+   * it is within a minute of expiring; null where this device holds no
+   * app token, or the host refused the refresh and so signed it out.
+   * An unreachable host or a rate limit is thrown as the host answered.
+   */
+  async accessSecret(): Promise<string | null> {
+    if ((await this.credentials.read()) === null) return null;
+    try {
+      return (await this.current()).access;
+    } catch (error) {
+      if (error instanceof HostError && error.kind === "reauth") return null;
+      throw error;
+    }
+  }
+
   // -------------------------------------------------------------------------
 
   private claimSignIn(): object {

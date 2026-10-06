@@ -124,7 +124,8 @@ import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager, type SpaceHost } from "./space.js";
 import { GitHostClient, fileCredentialStore } from "./git-host.js";
-import { currentRuntime } from "./git-credential.js";
+import { relayHostError } from "./space-groups.js";
+import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
@@ -424,6 +425,8 @@ export class CoreService {
   private configPath: string;
   /** The Git host this home signs in to (git-host-1..11). */
   private readonly hostClient: GitHostClient;
+  /** The runtime the Git credential helper runs on (git-host-9). */
+  private readonly hostRuntime: { execPath: string; electron: boolean };
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
   private readonly store: Store;
@@ -514,6 +517,7 @@ export class CoreService {
       credentials: fileCredentialStore(store.dir, host.url),
       onSignedOut: () => this.space.signedOutByHost(),
     });
+    this.hostRuntime = options.hostRuntime ?? currentRuntime();
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
         const session = this.store.describeSession(sessionId);
@@ -563,6 +567,18 @@ export class CoreService {
       ...(options.compileRuntime?.modulePaths ? { modulePaths: options.compileRuntime.modulePaths } : {}),
       builtin: CoreService.shippedBuiltin(options),
       ...(options.registryFetch ? { fetch: options.registryFetch } : {}),
+      // The registry presents the access secret the host client keeps
+      // current (environments-12, git-host-4); a Git source at the
+      // host's origin takes its brokered credential through the app's
+      // helper (environments-13, git-host-9).
+      token: () => this.registryToken(),
+      gitCredential: (repo) => this.space.sourceCredential(repo),
+      credentialArgs: async (credential) => {
+        const handle = await withGitCredential(credential, this.hostRuntime);
+        const env: Record<string, string> = {};
+        for (const [name, value] of Object.entries(handle.env)) if (value !== undefined) env[name] = value;
+        return { env, configArgs: handle.configArgs, dispose: handle.dispose };
+      },
       broadcast: (repository, state) => this.broadcast({ type: "environment.state", repository, state }),
       changed: (repository) => this.environmentChanged(repository),
     });
@@ -607,7 +623,7 @@ export class CoreService {
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       client: this.hostClient,
       signInFlow: options.signIn ?? "device",
-      hostRuntime: options.hostRuntime ?? currentRuntime(),
+      hostRuntime: this.hostRuntime,
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
     };
@@ -704,6 +720,18 @@ export class CoreService {
     if (options.home !== undefined) return options.home;
     if (options.dataDir && resolve(options.dataDir) === resolve(home, ".spex") && !env.SPEX_HOME?.trim()) return home;
     return null;
+  }
+
+  /** The access secret the registry presents (environments-12): the host
+   * client's, kept current (git-host-4); null while signed out. A host
+   * that cannot be reached, or asks to wait, reads as it answered
+   * (git-host-11). */
+  private async registryToken(): Promise<string | null> {
+    try {
+      return await this.hostClient.accessSecret();
+    } catch (error) {
+      throw new Error(relayHostError(error, this.space.hostName()));
+    }
   }
 
   /** The `org` of a new spec package: the account's login, else `local`

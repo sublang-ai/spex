@@ -56,6 +56,8 @@ import {
   writeLock,
   type BuiltinPackage,
   type Conflict,
+  type CredentialArgs,
+  type GitCredential,
   type GitSource,
   type Lock,
   type Manifest,
@@ -64,7 +66,6 @@ import {
   type Request,
   type Requests,
 } from "./environment/index.js";
-import { fileCredentialStore } from "./git-host.js";
 import { i18n } from "./i18n.js";
 import type { PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentState, PublishPreview } from "./protocol.js";
@@ -85,6 +86,15 @@ export interface EnvironmentManagerOptions {
   builtin: BuiltinPackage | null;
   /** The registry's fetch, for tests. */
   fetch?: typeof fetch;
+  /** The device's current access secret at the home's host, kept
+   * current by the host client (git-host-4); null while signed out. */
+  token: () => Promise<string | null>;
+  /** The brokered credential for a Git source at the host's Git origin,
+   * undefined for any other (environments-13). */
+  gitCredential: (repo: string) => Promise<GitCredential | undefined>;
+  /** How that credential reaches Git: the app's own credential helper
+   * (git-host-9). */
+  credentialArgs: CredentialArgs;
   broadcast: (repository: string, state: EnvironmentState) => void;
   /** An environment's installed files or exports changed. */
   changed?: (repository: string) => void;
@@ -194,7 +204,10 @@ export class EnvironmentManager {
   constructor(private readonly options: EnvironmentManagerOptions) {
     this.contentStore = new ContentStore(options.store.dir);
     this.cacheDir = join(options.store.dir, "cache");
-    this.git = gitSource(this.cacheDir);
+    // A source at the host's Git origin is fetched with the brokered
+    // credential through the app's helper; any other with this device's
+    // own Git (environments-13).
+    this.git = gitSource(this.cacheDir, { credentialArgs: options.credentialArgs });
   }
 
   private get store(): Store {
@@ -240,14 +253,12 @@ export class EnvironmentManager {
     return host.account !== undefined && host.signedOut !== true;
   }
 
-  /** The device's app token where the home is signed in (environments-12). */
+  /** The device's access secret where the home is signed in
+   * (environments-12): current, as the host client keeps it
+   * (git-host-4); null while signed out. */
   async token(): Promise<string | null> {
     if (!this.signedIn()) return null;
-    try {
-      return (await fileCredentialStore(this.store.dir, this.store.home.host.url).read())?.access ?? null;
-    } catch {
-      return null;
-    }
+    return this.options.token();
   }
 
   private cloneState(key: string): CloneState {
@@ -405,7 +416,7 @@ export class EnvironmentManager {
     if (needsResolve && requests !== null) {
       this.setBusy(key, "resolving");
       try {
-        const result = await resolve({ requests, requestsText: requestsText ?? undefined, registry, workingFolder, git: this.git });
+        const result = await resolve({ requests, requestsText: requestsText ?? undefined, registry, workingFolder, git: this.git, gitCredential: this.options.gitCredential });
         if (!result.ok) {
           state.conflicts = result.conflicts;
           state.error = null;
@@ -437,6 +448,7 @@ export class EnvironmentManager {
         cache: this.cacheDir,
         registry,
         git: this.git,
+        gitCredential: this.options.gitCredential,
         workingFolder,
         requestsText,
         ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
@@ -660,7 +672,10 @@ export class EnvironmentManager {
         values: { path },
       }));
     }
-    if (!dryRun && (!this.signedIn() || (await this.token()) === null)) {
+    // Signed in means holding a token the host has not refused; a host
+    // that cannot be reached now fails the upload, reported with its
+    // cause, rather than reading as signed out.
+    if (!dryRun && (await this.token().catch(() => "")) === null) {
       throw new CoreError("invalid_request", i18n._({ id: "Sign in to publish", comment: "Refusal: publishing to the registry needs the home signed in" }));
     }
     let manifest: Manifest;
