@@ -90,7 +90,7 @@ export async function nativeApprovalStage({page, client, inspector, scratch, pro
     assert.equal(run("git", ["rev-parse", "HEAD"], repository).trim(), head);
     assert.equal(run("git", ["status", "--porcelain=v1", "--untracked-files=all"], repository), "");
     assert.equal(readFileSync(file, "utf8"), `${token}\n`);
-    const store = createSessionStore({sessionsDir: join(profile, "spex-home", "sessions")});
+    const store = createSessionStore({sessionsDir: join(profile, "spex-home", "workspace", ...session.projectId.split("/"), "sessions")});
     const stored = await waitFor(async () => { const value = await store.read(session.id); return value?.state === "settled" ? value : undefined; }, 30_000, "durable approval-call settlement");
     const boundaries = stored.effectLedger.boundaries.filter((entry) => entry.playbookId === "inspect" && entry.roleId === "inspector");
     assert.ok(boundaries.length > 0);

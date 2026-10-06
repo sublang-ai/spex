@@ -71,6 +71,7 @@ export interface ServerShellOptions {
     | "scaffoldCommand"
     | "systemLanguages"
     | "watchConfig"
+    | "own"
   >;
 }
 

@@ -21,7 +21,7 @@ import { prepareInspectionBrowserCache } from "./inspection-browser-cache.mjs";
 import { successfulInspectionText } from "./inspection-evidence.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -205,8 +205,25 @@ function initializeRepository(path) {
   assert.equal(run("git", ["status", "--porcelain=v1", "--untracked-files=all"], path), "");
   return run("git", ["rev-parse", "HEAD"], path).trim();
 }
+/** The `sessions/` of the clone under `workspace/` holding a session. */
+function sessionsDirOf(workspace, id) {
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const path = join(dir, entry.name);
+      if (entry.name === "sessions" && existsSync(join(path, `${id}.json`))) return path;
+      const found = walk(path);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  const found = walk(workspace);
+  assert.ok(found, `no clone holds session ${id}`);
+  return found;
+}
 async function assertUnchanged(path, head) {
-  const store = createSessionStore({ sessionsDir: join(profile, "spex-home", "sessions") });
+  // The session lives in its project's spex repository (storage-6).
+  const store = createSessionStore({ sessionsDir: sessionsDirOf(join(profile, "spex-home", "workspace"), sessionId) });
   const settled = await store.read(sessionId);
   assert.equal(settled.state, "settled");
   assert.equal(settled.snapshot.lastSettlementStatus, "ok");

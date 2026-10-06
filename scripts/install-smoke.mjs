@@ -122,6 +122,17 @@ const describeExit = ({ code, signal, error }) =>
       : `exited ${code}`;
 
 /** A quick command; non-zero exit fails the stage. */
+/**
+ * Your own group's config in a home (storage-1): the clone named by
+ * `home.yaml`'s `own`, or a path that cannot exist where the home has
+ * no home file yet.
+ */
+function ownConfigPath(home) {
+  const file = join(home, "home.yaml");
+  const own = existsSync(file) ? /^own: ["']?([a-z0-9][a-z0-9-]*)["']?$/m.exec(readFileSync(file, "utf8"))?.[1] : undefined;
+  return join(home, "workspace", own ?? "(no home.yaml)", `${own}-spex`, "config", "playbook.config.yaml");
+}
+
 function exec(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: "utf-8", ...options });
   if (result.error) throw result.error;
@@ -522,8 +533,9 @@ try {
     `the seeded config is not valid: ${JSON.stringify(config)}`,
   );
   assert(config.seeded === true, "the first start did not seed the config");
-  // The config lands where the README's user finds it: inside the home.
-  const configPath = join(serverHome, "config", "playbook.config.yaml");
+  // The config lands where the README's user finds it: inside the home,
+  // in your own group's spex repository.
+  const configPath = ownConfigPath(serverHome);
   assert(
     config.summary.path === configPath && existsSync(configPath),
     `the config was seeded at ${config.summary.path}, not ${configPath}`,
@@ -700,9 +712,10 @@ try {
   // as its language (storage-5), so the clicks' English names hold on
   // any system; the first start seeds the rest.
   mkdirSync(join(userData, "spex-home"), { recursive: true });
+  mkdirSync(join(userData, "spex-home", "local"), { recursive: true });
   writeFileSync(
-    join(userData, "spex-home", "prefs.json"),
-    JSON.stringify({ v: 1, prefs: { language: "en" } }),
+    join(userData, "spex-home", "local", "prefs.json"),
+    JSON.stringify({ format: 1, prefs: { language: "en" } }),
   );
   const desktop = launch("npm", ["start"], {
     cwd: clone,
@@ -751,7 +764,7 @@ try {
   // (app-shell-24): the first start seeded its config there, and the
   // environment's Spex home stayed untouched.
   assert(
-    existsSync(join(userData, "spex-home", "config", "playbook.config.yaml")),
+    existsSync(ownConfigPath(join(userData, "spex-home"))),
     `the app kept no state under ${userData}`,
   );
   assert(
