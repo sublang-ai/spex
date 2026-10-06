@@ -282,7 +282,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-export async function startStandinHost(opts: { dir: string; displayName?: string }): Promise<StandinHost> {
+/**
+ * Start the stand-in. `registry` names a stand-in registry
+ * (environments-18) whose routes — `/api/v1/packages…` and
+ * `/api/v1/search` — the stand-in forwards, as spex.pub serves the
+ * registry beside the host at one origin (DR-104): a journey then signs
+ * in here and publishes and installs here (playbook-library-95).
+ */
+export async function startStandinHost(opts: { dir: string; displayName?: string; registry?: string }): Promise<StandinHost> {
   const dir = opts.dir;
   mkdirSync(dir, { recursive: true });
   const displayName = opts.displayName ?? "Stand-in Git host";
@@ -383,6 +390,28 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         blocked: repo.blocked,
       },
     };
+  }
+
+  /** Relay one registry request to the stand-in registry, headers and
+   * body as they came, its answer as it went. */
+  async function forwardToRegistry(req: IncomingMessage, res: ServerResponse, method: string, target: URL, registry: string): Promise<void> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    const headers: Record<string, string> = {};
+    for (const name of ["authorization", "content-type", "accept"]) {
+      const value = req.headers[name];
+      if (typeof value === "string") headers[name] = value;
+    }
+    const answer = await fetch(new URL(`${target.pathname}${target.search}`, registry), {
+      method,
+      headers,
+      ...(method === "GET" || method === "HEAD" ? {} : { body: Buffer.concat(chunks) }),
+    });
+    res.writeHead(answer.status, {
+      "content-type": answer.headers.get("content-type") ?? "application/octet-stream",
+      "cache-control": "no-store",
+    });
+    res.end(Buffer.from(await answer.arrayBuffer()));
   }
 
   // ---- tokens -------------------------------------------------------------
@@ -562,6 +591,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (path === "/api/v1/auth/revoke" && method === "POST") return revoke(req, res);
     if (path === "/api/v1/host" && method === "GET") return json(res, 200, { display_name: displayName, git_origin: gitOrigin });
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
+    if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {
+      return forwardToRegistry(req, res, method, target, opts.registry);
+    }
     return envelope(res, 404, "not_found", "Nothing is here.");
   }
 
