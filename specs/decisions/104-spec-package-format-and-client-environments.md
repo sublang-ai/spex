@@ -210,9 +210,7 @@ Selection, within a solution:
 
 ## Consequences
 
-- One name and one version carry sources, the spec, skills, playbooks and applets of one GEARS contract. A user picks any subset by artifact and language, and gets what it requires.
 - A project's tools are its own `spex.yaml` and `spex.lock`. Every member installs the same registry and Git content. The home's `playbooks/<id>/` library and its registration writes disappear.
-- A spec package under development is requested by `path` from the project that holds it, or by `git` from anywhere its repository can be read.
 - The Playbooks surface becomes a view over environments: what each installs, enable by naming players for roles, author in a project.
 - Spec packages change: `playbook-library` for the surface over environments, enabling by roles and authoring in a project; `storage` for the retired library folder and the store; `settings` for the filled `from` and the missing-player report; and a new spec package for requests, resolution and installing. They are updated under this record before the code follows.
 - Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; a playbook's requirement installed with it and a missing one reported before running; the same lock replayed on two devices; a stale lock after changed requests or a changed path-source manifest; a path source missing on a device reported; two working folders of one project each running their own path source; a Git source at a commit; conflicting requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; compile, install, enable and launch in one flow.
