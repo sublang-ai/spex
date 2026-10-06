@@ -68,7 +68,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - `from` is optional: the id of the artifact in this release this one was made from, such as the spec a skill implements or the source a spec was written from. It installs nothing.
 - `requires` is optional: the ids of artifacts in this release that must be installed with this one, as the playbook `code` requires `review`.
 - `generated-by` is optional: `{agent, model}` of generated content.
-- A skill's id is its Agent Skills name. A playbook's id is its Playbook id. A spec's id is `<pkg>`. A source's or an applet's id is its folder name.
+- A skill's id is its Agent Skills name. A playbook's id is its Playbook id, and an Agent Skills name as well [[1]], because Spex exports under it a skill that runs the playbook. A skill and a playbook in one release never share an id. A spec's id is `<pkg>`. A source's or an applet's id is its folder name.
 - A translated spec keeps the item ids of the original.
 
 ### Dependencies
@@ -96,7 +96,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 | `spex.yaml` | Requests | Yes |
 | `spex.lock` | Resolution | Yes, together with `spex.yaml` as one unit |
 | `packages/<org>/<pkg>/` | The root files and selected artifacts of one spec package from the registry or Git, at their release paths | No |
-| `skills/<name>/` | One folder per exported skill, the copy with its `name` rewritten when aliased, from which the agents' folders are filled | No |
+| `skills/<name>/` | One folder per exported skill: an installed skill, its `name` rewritten when aliased, or the skill generated for a playbook; the agents' folders are filled from here | No |
 
 ### Requests: `spex.yaml`
 
@@ -114,7 +114,7 @@ A request names one source:
 | Path | `path` | A folder inside the project's working folder, by relative path |
 | Git | `git`, `rev`, optional `path` | A repository the Git host or this device's Git can read, at a branch, tag or commit, with an optional folder inside |
 
-- A request may add `select`, a list of `{artifact, language}`, and `alias`, artifact id to exported name.
+- A request may add `select`, a list of `{artifact, language}`, and `alias`, the id of a skill or playbook to the Agent Skills name [[1]] its skill is exported under.
 - A direct request fixes the source of that spec package for everything that requires it. Every other spec package comes from the registry.
 
 ### The lock: `spex.lock`
@@ -141,7 +141,7 @@ Selection, within a solution:
 1. Artifacts: those a request selects, or all of them by default, plus everything any requiring spec package needs, together with everything they require.
 2. Languages: for each selected artifact, the language its `select` entry names; else the environment's `language` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
 3. Files: the root files and every file of each selected artifact in its chosen language.
-4. Exports: each selected skill under its artifact id or its alias, and each selected playbook under its id. Two exports of one kind with one name in one environment are an error.
+4. Exports: each selected playbook under its id, and one skill for each selected skill and each selected playbook, under the artifact's id or its alias. Two playbooks with one id, or two skills with one name, in one environment are an error.
 
 ### Installing
 
@@ -152,10 +152,10 @@ Selection, within a solution:
 
 ### Exports
 
-- A project's environment exports its skills into the agent folders of each of the project's working folders on this device, kept out of Git there, and its playbooks to the launcher for sessions started there.
+- A working folder belongs to one project or one group ([DR-103](103-the-home-and-its-groups.md)), so its agent folders hold one environment's exports.
+- A project's or another group's environment exports its skills into the agent folders of each of its working folders on this device, kept out of Git there, and its playbooks to the launcher for sessions started there.
 - Your own group's environment exports its skills into your agents' home folders on each device, so they reach every session you run there.
-- A group's environment exports as a project's does, into the working folder its session runs in.
-- For every exported playbook, Spex writes a skill named after the playbook's id that runs it in the working folder of the session. That skill names the exact spec package and version it came from.
+- For every exported playbook, Spex writes a skill, under the playbook's id or its alias, that runs it in the working folder of the session. That skill names the exact spec package and version it came from.
 - An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, or, for a path source, the files in the working folder it was exported to, never another environment's copy of the same name and version.
 - When a project and your own group export one skill name, both keep it, one in the project's agent folder and one in your agent's home folder, and the agent chooses between them by its own rule. Spex lists both, saying where each comes from. To use both, rename one with `alias`.
 - Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent, the library Spex drives agents through, says for that agent. Nothing in a shared file chooses a path on your device.
@@ -198,12 +198,14 @@ Selection, within a solution:
 - A manifest format in the lock: the installed `meta.yaml` carries its own.
 - Built-in playbooks outside the format: one more special case, for no gain.
 - A suffix Spex adds to a skill name that both your own group and a project export: the name you type would change with the project open.
+- Exports rewritten at each session start, so that one working folder could serve a project and a group: a session starting would swap the skills of one running beside it. A working folder belongs to one of them.
+- Skill names and playbook ids checked apart: every exported playbook also exports a skill, so one list of skill names holds both.
 
 ## Consequences
 
 - The Playbooks surface becomes a view over environments: what each installs, enabling by naming players for roles, authoring in a project.
 - These specs change: `playbook-library` for that surface; `storage` for the retired library folder and the store; `settings` for the launch-time module location; `app-shell` and `server-shell` for the built-in spec package the app ships and seeds; `projects` for requesting it in a new project; and a new spec package for requests, resolution, installing and exports. They are updated under this record before the code follows.
-- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; what a playbook requires installed with it, and an unresolvable dependency reported before running; the same lock installed on two devices; a stale lock after changed requests or a changed path-source manifest; a path source missing on a device reported; two working folders of one project each running their own path source; a Git source at a commit; conflicting version requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; compile, request, enable and launch in one flow.
+- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; what a playbook requires installed with it, and an unresolvable dependency reported before running; the same lock installed on two devices; a stale lock after changed requests or a changed path-source manifest; a path source missing on a device reported; two working folders of one project each running their own path source; a Git source at a commit; conflicting version requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; a skill and a playbook of one name refused in one environment until one is aliased; a working folder that is a project's refused for a group's sessions; compile, request, enable and launch in one flow.
 - spex.pub's DR-017 [[11]] retires the `mode` of its DR-013 [[8]] and validates the one-file spec, the language folders, and the playbook and applet kinds.
 - Ask to Playbook: the built-in playbooks become a spec package.
 - Ask to Cligent: where each agent reads its skills, for a project and for a person.

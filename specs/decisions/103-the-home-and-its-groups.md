@@ -47,7 +47,7 @@ Spex adds no access control, no roles and no member lists of its own.
 
 | Concept | Meaning |
 | --- | --- |
-| Working folder | A folder on this device where sessions run. For a project, usually a clone of its code, which may be any Git repository. |
+| Working folder | A folder on this device where sessions run, belonging to one project or one group. For a project, usually a clone of its code, which may be any Git repository. |
 | Project | A working folder and a spex repository. Add a working folder, and Spex finds or makes its spex repository. |
 | Group | A group on the Git host, at any depth, or your own, since every user has one named after them. Its spex repository is a project without code, holding its sessions across projects, which run in a working folder you choose on each device. |
 
@@ -63,12 +63,12 @@ Spex does six things there, always with your own account:
 2. Lists your groups and the spex repositories you can read in each.
 3. Creates a spex repository in a group: private, its description saying what it is and where the code lives.
 4. Clones, fetches and pushes `spex` branches.
-5. Prepares a `spex` branch. Where a branch rule on the host would block pushes to it, Spex adds a rule allowing them, when you are allowed to.
+5. Prepares a `spex` branch. Where a branch rule on the host would block pushes to it, Spex adds a rule allowing them, or changes the rule named `spex`, when you are allowed to.
 6. Reads a spex repository's members and shows them with the host's own role names, with a link to the host's members page.
 
 Everything else stays on the Git host: adding or removing members, roles, sharing, transferring, archiving, deleting, creating groups.
 
-- When a step needs rights you do not have, Spex says which and waits. A member who has them creates the spex repository or adds the branch rule from their own Spex, and yours finds the result on the next read. Nobody is sent to edit the host's settings.
+- When a step needs rights you do not have, Spex says which and waits. A member who has them creates the spex repository or prepares the branch from their own Spex, and yours finds the result on the next read. Nobody is sent to edit the host's settings.
 - The host's refusal is the answer; Spex derives nothing from a role name or a cached list. A spex repository the host stops listing stays on this device as unreachable, and nothing on the device is deleted because the host refused.
 - Spex never promises privacy. Before your first push into a spex repository with other members, it says once that every session stays there whole, hidden parts and attachments included, and that nothing recalls what others downloaded. A public spex repository makes its records public, and Spex says so.
 - The Git credential reaches Git through a credential helper, never through a remote URL.
