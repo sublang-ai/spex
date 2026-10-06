@@ -1551,6 +1551,7 @@ export class CoreService {
         // A folder paired with a group's own spex repository brings that
         // repository to the host as its first session would (space-65).
         void this.space.ensureGroupRepository(registered.id);
+        this.announceGroups();
         return registered;
       }
       case "project.rebind": {
@@ -1571,6 +1572,7 @@ export class CoreService {
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
         await this.syncForeignSessions();
+        this.announceGroups();
         return project;
       }
       case "storage.diagnostics":
@@ -1620,6 +1622,7 @@ export class CoreService {
         }
         const created = this.store.registerProject(path, basename(path), Date.now());
         this.afterRepositoriesChanged();
+        this.announceGroups();
         return created;
       }
       case "project.status": {
@@ -1690,6 +1693,7 @@ export class CoreService {
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
+        this.announceGroups();
         return null;
       }
       case "session.list":
@@ -2297,7 +2301,7 @@ export class CoreService {
       case "space.signout":
         return this.requireSpace().signOut();
       case "space.pick":
-        return this.requireSpace().pick(command.repository, command.choice);
+        return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
       case "space.join":
         return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
@@ -2450,6 +2454,14 @@ export class CoreService {
    */
   ensureGroupRepository(key: string): Promise<"unchanged" | "local" | "joined" | "created" | "waiting"> {
     return this.space.ensureGroupRepository(key);
+  }
+
+  /** A project was added, paired or removed: the Groups surface re-reads
+   * on its announcement (space-2). */
+  private announceGroups(): void {
+    this.space.publish().catch((error: unknown) => {
+      console.error(`spex: groups state failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   /** A clone came or went: watch its sessions and re-read its

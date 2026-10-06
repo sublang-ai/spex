@@ -1631,6 +1631,11 @@ msgstr "项目不可用。"
 msgid "Published upload has a different byte length."
 msgstr "已保存文件的长度与上传声明不符。"
 
+#. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
+#: src/space.ts
+msgid "Read the sharing notice before joining {name}"
+msgstr "加入 {name} 之前，请先阅读共享说明"
+
 #. Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"

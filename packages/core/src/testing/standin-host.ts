@@ -123,6 +123,9 @@ export interface StandinScript {
   refuseBranch(message: string | null): void;
   /** While set, every transport request answers 403 with these words. */
   refuseTransport(message: string | null): void;
+  /** While set, every transport request answers 401, as to a credential
+   * the host no longer accepts for Git. */
+  unauthorizeTransport(on: boolean): void;
   /** Delay every transport response by this long; 0 stops delaying. */
   sleepTransport(ms: number): void;
   /** Answer the next `count` admitted host requests 429 with `Retry-After`. */
@@ -294,6 +297,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let createRefusal: string | null = null;
   let branchRefusal: string | null = null;
   let transportRefusal: string | null = null;
+  let transportUnauthorized = false;
   let transportSleepMs = 0;
   const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
@@ -511,6 +515,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     refuseCreate: (message) => { createRefusal = message; },
     refuseBranch: (message) => { branchRefusal = message; },
     refuseTransport: (message) => { transportRefusal = message; },
+    unauthorizeTransport: (on) => { transportUnauthorized = on; },
     sleepTransport: (ms) => { transportSleepMs = Math.max(0, ms); },
     rateLimit: (count, retryAfter) => {
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
@@ -823,7 +828,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   async function transport(req: IncomingMessage, res: ServerResponse, target: URL): Promise<void> {
     if (transportSleepMs > 0) await sleep(transportSleepMs);
     const found = bearerDevice(basicToken(req));
-    if ("code" in found) {
+    if ("code" in found || transportUnauthorized) {
       res.writeHead(401, { "www-authenticate": "Basic realm=\"Stand-in Git host\"", "content-type": "text/plain; charset=utf-8" });
       res.end("HTTP Basic: Access denied.\n");
       return;

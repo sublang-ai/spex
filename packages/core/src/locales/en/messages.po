@@ -1631,6 +1631,11 @@ msgstr "Project is unavailable."
 msgid "Published upload has a different byte length."
 msgstr "Published upload has a different byte length."
 
+#. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
+#: src/space.ts
+msgid "Read the sharing notice before joining {name}"
+msgstr "Read the sharing notice before joining {name}"
+
 #. Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
 msgid "Read the sharing notice before the first sync of {name}"

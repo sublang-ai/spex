@@ -2164,7 +2164,7 @@ export class SpaceManager {
 
   /** Pick a group for a local-only spex repository (space-58): join a
    * listed one, or create `<name>-spex` in a group. */
-  async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }): Promise<{ accepted: true }> {
+  async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
     const machine = this.machine(key);
     machine.assertNotRunning();
     if (this.picking.has(key)) throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
@@ -2179,6 +2179,17 @@ export class SpaceManager {
       if (choice.kind === "join") {
         const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
         if (!listing) throw new CoreError("not_found", noLongerShared());
+        // Joining pushes this clone's records into a repository others
+        // read: the notice is seen first (space-57).
+        const store = this.host.store;
+        if (noticed) store.setPref(noticedPref(key), true);
+        else if (!listing.readOnly && (listing.members ?? 0) > 1 && store.getPref<unknown>(noticedPref(key)) !== true) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "Read the sharing notice before joining {name}",
+            values: { name: listing.repository.path },
+            comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
+          }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
+        }
         await this.adopt(machine, listing.repository, true);
         return { accepted: true };
       }
@@ -2605,7 +2616,15 @@ export class SpaceManager {
   private overlay(machine: RepositorySync, base: RepositoryState): RepositoryState {
     const facts = machine.facts;
     const waiting = this.waiting.get(base.key);
-    const row: RepositoryState = { ...base, waiting: waiting ? { step: waiting.step, group: waiting.group, message: waiting.message } : null };
+    // What a pick, a join or a pairing changed since the machine's last
+    // reading is read afresh: its remote, its id and its working folder.
+    const row: RepositoryState = {
+      ...base,
+      id: facts.id,
+      remote: facts.remote === null ? null : displayRemote(facts.remote),
+      folder: this.host.store.home.folderOf(base.key)?.path ?? null,
+      waiting: waiting ? { step: waiting.step, group: waiting.group, message: waiting.message } : null,
+    };
     if (facts.remote === null) return { ...row, state: "local-only", reason: null };
     // A remote the reader named, a path this device reaches: no host.
     if (!this.atHost(facts)) return row;
