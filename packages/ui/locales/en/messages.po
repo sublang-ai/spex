@@ -5658,6 +5658,14 @@ msgstr "waiting — previous work stopped"
 msgid "waiting — your reply"
 msgstr "waiting — your reply"
 
+#: src/lib/space.ts
+msgid "Waiting for a member who can create it in {group}"
+msgstr "Waiting for a member who can create it in {group}"
+
+#: src/lib/space.ts
+msgid "Waiting for a member who can prepare its branch in {group}"
+msgstr "Waiting for a member who can prepare its branch in {group}"
+
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"
 msgstr "waiting for your queued message"

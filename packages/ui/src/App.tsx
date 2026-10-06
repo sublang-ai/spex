@@ -85,14 +85,20 @@ function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | un
 
 declare global {
   interface Window {
-    /** The native bridge (DR-008): OS pickers and, since DR-057, a
-     * path reveal — feature-detected, absent on the served page. */
+    /** The native bridge (DR-008): OS pickers, since DR-057 a path
+     * reveal, and since DR-103 the sign-in URL opened in the system
+     * browser — feature-detected, absent on the served page. */
     spexNative?: {
       pickDirectory(): Promise<string | null>;
       /** An OS file picker, where the shell offers one (DR-008): the
        * Source tab's Pick file (playbook-library-56). */
       pickFile?(): Promise<string | null>;
       revealPath?(path: string): Promise<boolean>;
+      /** Open the Git host's sign-in URL in the system's default
+       * browser (app-shell-37, space-3): false when the shell refuses
+       * it — a URL not at the home's recorded host — and the page then
+       * shows the URL as a link instead. */
+      openExternal?(url: string): Promise<boolean>;
     };
   }
 }

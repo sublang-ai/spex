@@ -46,10 +46,19 @@ export function clonePath(home: string, key: string): string {
   return `${home.replace(/\/$/, "")}/workspace/${key}`;
 }
 
+/** The phrase a step waiting on someone else's rights reads on its
+ * row (space-58, space-64): the step and the group, phrased here in the
+ * reader's language; the host's own words ride the row's title. */
+export function waitingPhrase(waiting: NonNullable<RepositoryState["waiting"]>): string {
+  return waiting.step === "create"
+    ? i18n._("Waiting for a member who can create it in {group}", { group: waiting.group })
+    : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
+}
+
 /** What a spex repository's row reads for its state (space-61): a
  * waiting step's phrase stands in place of the state's (space-64). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
-  if (repo.waiting) return repo.waiting.message;
+  if (repo.waiting) return waitingPhrase(repo.waiting);
   switch (repo.state) {
     case "local-only":
       return i18n._("Only on this device");
@@ -75,6 +84,32 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number): strin
       // A state the page does not know: the raw value is data.
       return repo.state;
   }
+}
+
+/** A group's own spex repository rather than a project's (DR-103):
+ * your own group's, or the one named `<group>-spex` in its group — a
+ * project of that name is refused at creation, the name being taken. */
+export function isGroupRepository(group: { name: string }, repo: RepositoryState): boolean {
+  return repo.own || repo.name === `${group.name}-spex`;
+}
+
+/** Two code remotes name the same repository (space-58): compared as
+ * the reader reads them, with no user part, no `.git` and no trailing
+ * slash, the host's name in any case. */
+export function sameRemote(a: string, b: string): boolean {
+  const norm = (url: string) =>
+    displayRemote(url.trim())
+      .replace(/\/+$/, "")
+      .replace(/\.git$/i, "")
+      .replace(/^([a-z+]+:\/\/)?([^/:@]+@)?([^/:]+)/i, (_, scheme = "", user = "", host: string) =>
+        `${scheme}${user}${host.toLowerCase()}`);
+  return norm(a) === norm(b);
+}
+
+/** A path's last segment: a working folder's name, the default name
+ * of the spex repository made for it (space-58). */
+export function lastSegment(path: string): string {
+  return path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? path;
 }
 
 /** The kinds in the order the lists group them (space-7). */
@@ -346,6 +381,27 @@ export function revealBridge(): ((path: string) => Promise<boolean>) | undefined
   const native = (window as { spexNative?: { revealPath?: unknown } }).spexNative;
   return typeof native?.revealPath === "function"
     ? (native.revealPath as (path: string) => Promise<boolean>)
+    : undefined;
+}
+
+/** The native bridge's browser opener, feature-detected
+ * (app-shell-37, DR-008); absent on the served page, where the
+ * sign-in URL stands as a link instead (space-3). */
+export function openExternalBridge(): ((url: string) => Promise<boolean>) | undefined {
+  if (typeof window === "undefined") return undefined;
+  const native = (window as { spexNative?: { openExternal?: unknown } }).spexNative;
+  return typeof native?.openExternal === "function"
+    ? (native.openExternal as (url: string) => Promise<boolean>)
+    : undefined;
+}
+
+/** The native bridge's directory picker, where the shell offers one
+ * (DR-008): Join and Choose folder… ask through it (space-63). */
+export function pickDirectoryBridge(): (() => Promise<string | null>) | undefined {
+  if (typeof window === "undefined") return undefined;
+  const native = (window as { spexNative?: { pickDirectory?: unknown } }).spexNative;
+  return typeof native?.pickDirectory === "function"
+    ? (native.pickDirectory as () => Promise<string | null>)
     : undefined;
 }
 

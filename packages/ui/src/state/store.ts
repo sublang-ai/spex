@@ -37,6 +37,8 @@ import type {
   SpaceEntry,
   SpaceReadResult,
   GroupsState,
+  HostMemberInfo,
+  CommandResults,
   SpecTreeState,
   MachineGraph,
   TmuxPlayRecord,
@@ -260,6 +262,31 @@ export interface AppState extends AttachmentState {
   /** Set or clear a spex repository's remote (space-5), named by its
    * key; the reply is the new state. */
   spaceSetRemote(repository: string, url: string | null): Promise<void>;
+  /** Ask the core to read the Git host, then re-read the state
+   * (space-2): the reader's Refresh. Signed out, the host is never
+   * contacted and the state alone is re-read (space-3). */
+  spaceRefresh(): Promise<void>;
+  /** Start signing in to the Git host (space-3): the browser flow's
+   * URL or the device flow's code, the outcome arriving as state. */
+  spaceSignIn(): Promise<CommandResults["space.signin.start"]>;
+  /** Stop a sign-in in flight (space-3). */
+  spaceSignInCancel(): Promise<boolean>;
+  /** Sign this device out of the Git host (space-6); the reply is
+   * the new state. */
+  spaceSignOut(): Promise<void>;
+  /** Give a local-only spex repository a home on the host (space-58):
+   * a listed spex repository by its host id, or a new one in a
+   * group. Accepted at once, outcome as state. */
+  spacePick(
+    repository: string,
+    choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+  ): Promise<void>;
+  /** Clone a spex repository the host lists and this device lacks
+   * (space-63), pairing it with a folder. Accepted at once. */
+  spaceJoin(hostId: string, folder?: string): Promise<void>;
+  /** A spex repository's members as the host reports them, read on
+   * every call and held nowhere (space-62). */
+  spaceMembers(repository: string): Promise<{ members: HostMemberInfo[]; membersUrl: string }>;
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
@@ -1429,6 +1456,39 @@ export const useAppStore = create<AppState>((set, get) => {
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
+
+    async spaceRefresh(): Promise<void> {
+      // The host is read only while signed in; the read's end arrives
+      // as `space.state` (space-29), and the state is re-read either way.
+      if (get().space?.account) await getClient().command("space.refresh", {});
+      await get().loadSpace();
+    },
+
+    spaceSignIn: () => getClient().command("space.signin.start", {}),
+
+    async spaceSignInCancel(): Promise<boolean> {
+      const { stopped } = await getClient().command("space.signin.cancel", {});
+      return stopped;
+    },
+
+    async spaceSignOut(): Promise<void> {
+      const space = await getClient().command("space.signout", {});
+      spaceReads += 1;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spacePick(repository, choice): Promise<void> {
+      await getClient().command("space.pick", { repository, choice });
+    },
+
+    async spaceJoin(hostId: string, folder?: string): Promise<void> {
+      await getClient().command("space.join", {
+        hostId,
+        ...(folder !== undefined ? { folder } : {}),
+      });
+    },
+
+    spaceMembers: (repository: string) => getClient().command("space.members", { repository }),
 
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
       const space = await getClient().command("space.repair.decline", { repair, declined });
