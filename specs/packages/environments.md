@@ -192,7 +192,7 @@ When a client sends `environment.request` for a spex repository with a spec pack
 
 The core package shall keep the agent folder table that exports read [[environments-8](#environments-8)] as one data file naming, per agent Cligent drives, the project-level folder relative to a working folder and the user-level folder relative to the user's home — `claude`: `.claude/skills` and `~/.claude/skills` — and shall replace the table with Cligent's answer once Cligent reports where each agent reads its skills ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
-- an agent absent from the table receives no export and is listed as such;
+- an agent absent from the table receives no export and is listed as such; an agent whose user-level folder's parent is absent on this device receives no user-level export, so Spex never creates an agent's own home folder, and your own group's user-level export runs only for the default home or one the shell names as the person's, never for a scratch home;
 - the generated skill for a playbook is a `SKILL.md` whose body tells the agent to run the playbook's command through Spex in the working folder, naming the spec package, version and playbook id, and nothing else.
 
 #### environments-17
