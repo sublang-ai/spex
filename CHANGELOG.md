@@ -181,6 +181,19 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Every record lives in a spex repository ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
+  Each project's sessions, intents and authoring sessions live in its own
+  clone, `workspace/<group>/<name>-spex/`, synced on its `spex` branch; your
+  settings and the sessions of no project live in your own group's,
+  `workspace/<you>/<you>-spex/`. `home.yaml` pairs each working folder with
+  its spex repository, and the home itself is no longer a Git repository.
+  A former home migrates once at startup, keeping its original bytes and its
+  old Git history under `local/`. Each intent is one file; Up next runs the
+  oldest queued intent first, so rows no longer move or link, and every
+  queued row's menu offers Start. Removing a project deletes its clone,
+  asking again while it holds records the host has not received, and never
+  touches the working folder. Space syncs each spex repository on its own,
+  and `scripts/storage-git.mjs` takes `--repository <key>`.
 - The app requires Playbook 17.4.1, slc 0.15.1 and Cligent 0.33.3 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),

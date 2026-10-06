@@ -49,7 +49,7 @@ the README on this machine:
   port (`--port=0`) so it never meets a server already on 8137. It is
   walked over its printed token URL — the default loopback host with a
   generated token: the page served, the socket's hello, the config
-  seeded at the home's `config/playbook.config.yaml` and valid with
+  seeded in your own group's spex repository under the home and valid with
   every template playbook, the built-in catalog and the `/code`
   artifacts, readiness for the Captain's and each bound player's adapter
   (this machine's sign-ins; none is asserted ready and no agent is

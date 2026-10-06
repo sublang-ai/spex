@@ -3,10 +3,12 @@
 
 # The `~/.spex` catalog
 
-**Spex home** is the shared data directory for desktop and CLI.
+**Spex home** is the desktop and CLI data directory.
 It defaults to `~/.spex`; `SPEX_HOME` selects another directory.
-Explicit paths for configuration and session storage replace their respective defaults.
-All paths below are relative to Spex home; files stored elsewhere are outside its Git repository.
+All paths below are relative to Spex home.
+A **spex repository** holds the records of one project or one group on its `spex` branch; its clone lives under `workspace/<group>/<name>-spex/`, and its **key** is that path relative to `workspace/`, such as `alice/a-spex`.
+A **project** is a working folder on this device paired with a spex repository; your own group's spex repository, `workspace/<own>/<own>-spex/`, holds your settings and the sessions that belong to no project.
+The home itself is not a Git repository; only clones are.
 
 ## File catalog
 
@@ -18,26 +20,28 @@ Ignored files can contain durable local state.
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `config/playbook.config.yaml` | Shared Captain, player, playbook and presentation settings; session directory. | Tracked |
-| `projects.json` | Project IDs, names and registration times. | Tracked |
-| `intents/<projectId>.jsonl` | Ordered intent changes with attachment references. | Tracked |
-| `intents/<projectId>.assets/` | Immutable uploaded files retained by project intent history. | Tracked with its intent log |
-| `sessions/<id>.json` | Schema-7 manifest: identity, `cwd`, checkpoint and recovery evidence. | Tracked |
-| `sessions/<id>.records.jsonl` | Captain/player records, historical settings, role bindings, graphs and media references. | Tracked |
-| `sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
-| `playbooks/<id>/` | Library sources and generated modules/artifacts. | Sources tracked; outputs omitted only if rebuildable locally |
-| `local/project-paths.json` | Project IDs mapped to local paths and recorded `cwd` aliases. | Ignored |
-| `prefs.json` | Core preferences, including the last viewed turn per session. | Ignored |
-| `local/drafts/<id>/draft.json`, `local/drafts/<id>/records.jsonl`, `local/drafts/<id>/assets/` | Playbook draft state, structured queue, authoring transcript and owned files. | Ignored |
-| `local/uploads/` | Private incomplete upload staging; completed bytes move into their owner before acknowledgement. | Ignored |
-| `forge-cache.json` | Rebuildable issue and pull-request cache. | Ignored |
-| `meta.json`, `local/migrations/<id>/` | Migration receipts and original inputs. | Ignored |
-| Config backups | Original configuration files. | Ignored |
-| `sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
-| `.lock/`, `sessions/.<id>.lock/`, staging and retired lease directories | Exclusive writer ownership and safe stale-lock recovery. | Ignored |
+| `home.yaml` | This device's id, the Git host, your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
+| `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
+| `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
+| `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
+| `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
+| `<clone>/intents/<id>.assets/` | Immutable uploaded files retained by that intent. | Tracked with its intent |
+| `<clone>/sessions/<id>.json` | Schema-7 manifest: identity, `cwd`, checkpoint and recovery evidence. | Tracked |
+| `<clone>/sessions/<id>.records.jsonl` | Captain/player records, historical settings, role bindings, graphs and media references. | Tracked |
+| `<clone>/sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
+| `<clone>/authoring/<id>.json`, `.records.jsonl`, `.assets/` | An authoring session: its queue, compile state, transcript and owned files. | Tracked, one unit |
+| `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
+| `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
+| `playbooks/<id>/` | Library sources and generated modules/artifacts. | Outside any clone |
+| `local/prefs.json` | Core preferences, including the last viewed turn per session. | Never leaves the device |
+| `local/forge-cache.json` | Rebuildable issue and pull-request cache. | Never leaves the device |
+| `local/migrations/<id>/` | Migration receipts and original inputs. | Never leaves the device |
+| `local/former-home.git` | The former home's Git history, kept aside unchanged. | Never leaves the device |
+| `.lease/`, `<clone>/sessions/.<id>.lock/`, staging and retired lease directories | Exclusive writer ownership and safe stale-lock recovery. | Ignored |
 | Atomic-write temporary files | Pending file replacements. | Ignored |
 
 Spex owns application data; Playbook owns session validation, migration, continuation and deletion.
+A session belongs to the spex repository whose clone holds it; its recorded `cwd` decides only where it may continue.
 One core serves each Spex home; one writer owns each session.
 Writes require the corresponding lease.
 
@@ -86,30 +90,26 @@ Agent-written Markdown paths and remote URLs are not imported as assets.
 
 ## Git synchronization
 
-Track portable files only after migration removes provider tokens from recovery fields.
-Original migration inputs and unsupported files remain ignored.
+Each clone tracks portable files only; provider tokens never enter recovery fields that Git sees.
 Tracked `.gitignore` rules exclude local data; `.gitattributes` disables line-ending conversion for JSON/JSONL files and asset directories.
 
-The app's Space surface syncs one shared branch, `main`, without stopping the core and never text-merges a file.
-The command-line path below may use one branch per device merged to or from `main`; stop local writers during its commit, checkout and merge.
-The [Git workflow](storage-git.md) gives the selection and validation commands.
+The app's Space surface syncs each spex repository's `spex` branch with its host remote, one spex repository at a time, without stopping the core, and never text-merges a file.
+The command-line path stops local writers of that spex repository during its commit, checkout and merge; the [Git workflow](storage-git.md) gives the selection and validation commands.
 Run each session on at most one device at a time; leases are local.
 
-Compare each session bundle in both pre-merge revisions with the common ancestor:
+Compare each unit in both pre-merge revisions with the common ancestor:
 
 | Changes | Selection |
 | --- | --- |
-| Neither side changed, or both agree | Agreed session or deletion |
-| Only one side changed | That session or deletion |
-| Both changed differently | Explicit whole-session choice from either branch |
+| Neither side changed, or both agree | Agreed unit or deletion |
+| Only one side changed | That unit or deletion |
+| Both changed differently | Explicit whole-unit choice from either side |
 
-The bundle rule applies even after a clean text merge.
-Apply the same selection rule to each configuration file and project registry as an individual file, and to each intent log with its complete asset directory as one unit.
+A unit is a session bundle, an intent with its assets, an authoring session, the environment's two files, or any other single file.
+The unit rule applies even after a clean text merge; an intent added on either side never conflicts.
 Unselected changes leave active state but remain recoverable from Git history.
-Git's text merge alone does not enforce these rules.
 
-Before reopening, validate the selected files and intent logs for duplicate artifact sources or queue ranks, dependency cycles and invalid session/turn references.
-Report unresolved project paths and missing project IDs; retain their files unlisted without automatic registration.
+Before reopening, validate the selected files for duplicate open intent sources, unreadable intents or authoring sessions, settings a project may not hold, and invalid session/turn references.
 Before continuing, reconcile repository state and completed external actions with the selected checkpoint.
 Git selection cannot undo actions recorded only in the unselected history.
 
@@ -118,14 +118,11 @@ Use `umask 077` for Git writes to prevent exposure before reopening.
 
 ## Cross-device continuation
 
-Map existing project IDs to local repository paths and aliases for recorded working directories.
-Restore missing registrations from Git ancestry rather than creating replacement IDs.
-Each recorded path must identify the same project across devices; unresolved or conflicting mappings require explicit selection.
+Pair each spex repository with its working folder on this device in `home.yaml`, with aliases for the working directories its sessions recorded elsewhere.
+A clone no folder pairs and a folder whose clone is missing are reported as repairs, never deleted.
+A session continues only in the folder it ran in, or one aliased to it; elsewhere its history stays readable.
 
-Managed playbook `from` paths are relative to the primary configuration directory; package specifiers remain unchanged.
-Validate other paths and rebuild nonportable generated files before use.
-
-Aliases associate history with a project; they do not authorize checkpoint relocation.
+Aliases associate history with a folder; they do not authorize checkpoint relocation.
 **Schema 7 does not relocate checkpoint paths.**
 Different repository or module paths permit history only, even with fresh provider conversations.
 Matching paths still require compatible runtimes and repository/effect reconciliation.
@@ -136,11 +133,11 @@ With the session lease held, delete replay, hints, assets, any active legacy sid
 Interrupted cleanup is retryable; incomplete bundles cannot continue.
 Deletion fails if another writer is active or exclusive ownership cannot be proven.
 Retired lease directories remain so delayed stale-lock recovery cannot affect a new owner.
-If one branch deletes a session and another modifies it, synchronization requires an explicit choice between deletion and the complete modified bundle.
+If one side deletes a session and another modifies it, synchronization requires an explicit choice between deletion and the complete modified bundle.
 
-Project removal retains session and intent files for explicit recovery.
+Removing a project forgets its pair and deletes its clone, asking a second confirmation while the clone holds records that have not reached the host; the working folder is left untouched.
 Replacing session history resets its last-viewed turn.
-Local preferences, path bindings and migration records are excluded from Git; caches are rebuildable.
+Local preferences and migration records never leave the device; caches are rebuildable.
 
 ## External data
 
@@ -151,20 +148,23 @@ Unsaved drafts and access tokens are not portable session state.
 ## Migration and definitions
 
 Before upgrading, stop legacy writers and snapshot both `~/.spex` and `$XDG_STATE_HOME/playbook` (or `~/.local/state/playbook` when XDG is unset).
-Migration replaces desktop sidecars with shared manifests.
-Default-home startup also imports the former CLI session directory.
-After validating each converted session, it removes the old active files; original bytes remain in the destination's ignored migration receipts.
+A home in the former layout — `projects.json` at its root and no `home.yaml` — migrates once at startup under the home lease:
+each project becomes `workspace/<own>/<name>-spex/` with one file per open or finished intent, its intent attachments and the sessions that ran in its folder;
+your own group's spex repository receives the settings, with every `playbooks.<id>.from` dropped, and the remaining sessions;
+preferences move to `local/prefs.json`, and the former home's `.git` moves to `local/former-home.git`, keeping the old remote aside.
+Original bytes stay under `local/migrations/<id>/inputs/` with a receipt; an interrupted migration resumes on the next start.
+Default-home startup also imports the former CLI session directory into your own group's spex repository.
 Skipped files remain in place with their reasons reported.
-Explicit homes or session directories are not auto-populated from that old store.
 Use `playbook migrate-session <id>` to migrate a session in an explicitly configured store; `--with <path>` selects configuration files.
 CLI schemas 2–5 and desktop checkpoints without compatible recovery data remain history only.
 Legacy provider tokens cannot become usable hints because their checkpoint binding is unproven.
 
-[DR-045](../specs/decisions/045-unified-session-storage.md) records the design and rationale.
+[DR-103](../specs/decisions/103-the-home-and-its-groups.md) records the layout;
+[DR-045](../specs/decisions/045-unified-session-storage.md) records the shared session store.
 Exact formats and behavior are defined by their owning packages:
 
 | Owner | Definition |
 | --- | --- |
-| Spex | [Home files, project bindings, migration and Git selection](../specs/packages/storage.md) |
+| Spex | [Home files, spex repositories, migration and Git selection](../specs/packages/storage.md) |
 | Playbook | [Session format, context, hints and recovery](https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md) |
 | Cligent | [Definite provider session rejection](https://github.com/sublang-ai/cligent/blob/main/specs/packages/engine.md#engine-84) |

@@ -120,8 +120,10 @@ enables, including `/code`, `/review`, `/decide`, `/dev`, `/branch`,
 Coding and design workflows commit in your repository, so Git needs `user.name` and
 `user.email`; the issue and PR panels, the Dashboard's Sources and Space
 on a GitHub remote need `gh auth login`. Config and sessions live in the
-Spex home — `~/.spex`, or `SPEX_HOME` — with the config at
-`config/playbook.config.yaml` ([storage](docs/storage.md)).
+Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
+`workspace/`: each project's records in its own, and your config at
+`workspace/<you>/<you>-spex/config/playbook.config.yaml`
+([storage](docs/storage.md)).
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 (`app-v*` tags) ship as source with a changelog: check out the tag and run
