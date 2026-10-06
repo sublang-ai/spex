@@ -183,6 +183,7 @@ function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     name: "academy-spex",
     id: "42",
     own: false,
+    remote: "/tmp/origin.git",
     code: "https://jane@github.com/jane/academy.git",
     folder: "/Users/jane/code/academy",
     state: "reachable",
