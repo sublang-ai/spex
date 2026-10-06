@@ -53,6 +53,11 @@ export function defaultOwnName(env: NodeJS.ProcessEnv = process.env): string {
   return kebab(name) || "me";
 }
 
+/** Whether a name may stand as a group folder under `workspace/`. */
+export function isGroupName(value: string): boolean {
+  return GROUP_NAME.test(value);
+}
+
 /** A spex repository's name for a folder or group name: `<name>-spex`. */
 export function repositoryNameFor(name: string): string {
   return `${kebab(name) || "project"}-spex`;
@@ -191,6 +196,40 @@ export class Home {
       const { group, name } = splitKey(newKey);
       if (`${group}-spex` === name && GROUP_NAME.test(group)) this.data = { ...this.data, own: group };
     }
+  }
+
+  /** Several clones moved in one step (space-59, space-60): every pair
+   * naming a moved key names its new one, and your own group's folder
+   * takes `own` where it was renamed. Validated before it is taken. */
+  move(moves: { from: string; to: string }[], own?: string): void {
+    const to = new Map(moves.map((entry) => [entry.from, entry.to]));
+    const next: HomeFile = {
+      ...this.data,
+      ...(own !== undefined ? { own } : {}),
+      folders: this.data.folders.map((folder) => to.has(folder.repository) ? { ...folder, repository: to.get(folder.repository) as string } : folder),
+    };
+    parseHomeFile(next, Home.file(this.root));
+    this.data = next;
+  }
+
+  /** The account a sign-in read (storage-2): written, and the home no
+   * longer marked signed out. */
+  signIn(account: HomeAccount): void {
+    const host: HomeHost = { url: this.data.host.url, clientId: CLIENT_ID, account: { id: account.id, login: account.login, displayName: account.displayName } };
+    this.data = { ...this.data, host };
+  }
+
+  /** The credential is gone while the account is kept (git-host-4,
+   * git-host-10): the home reads signed out until the next sign-in. */
+  signOut(): void {
+    if (!this.data.host.account) return;
+    this.data = { ...this.data, host: { ...this.data.host, signedOut: true } };
+  }
+
+  /** The account, while the home is signed in. */
+  account(): HomeAccount | null {
+    const host = this.data.host;
+    return host.account && host.signedOut !== true ? structuredClone(host.account) : null;
   }
 
   /** Write `home.yaml` atomically. */
