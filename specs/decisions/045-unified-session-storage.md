@@ -17,7 +17,7 @@ Amends:
 - [DR-037](037-playbook-12-adoption.md): host integration and effect-ledger durability.
 - [DR-042](042-sessions-continue.md): recovery authority, cross-interface continuation, local provider hints, and deletion.
 
-Amended by [DR-103](103-the-home-and-its-spaces.md): `projects.json`, `intents/<projectId>.jsonl`, `prefs.json` and `local/project-paths.json` give way to that record's layout, and Git synchronization runs per mount; every other rule stands.
+Amended by [DR-103](103-the-home-and-its-groups.md): `projects.json`, `intents/<projectId>.jsonl`, `prefs.json` and `local/project-paths.json` give way to that record's layout; Git synchronization runs per spex repository, on its `spex` branch, from the app and the command line alike; queue-order and link validation go with ranks and links; every other rule stands.
 Amended by [DR-104](104-spec-package-format-and-client-environments.md): the playbook library folder gives way to installed spec packages.
 
 ## Context

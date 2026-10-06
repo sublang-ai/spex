@@ -9,7 +9,7 @@ Accepted; registry generation amended by [DR-014](014-released-toolchain.md) —
 Amended by [DR-036](036-file-state-store.md): the library directory lives under the shared state root, relocated by the one-time import with `from` paths rewritten in place.
 Amended by [DR-058](058-chat-assisted-playbook-authoring.md) (2026-09-12): compile inputs may be a draft directory's `<id>.md` an agent writes, and compilation and registration are two steps — the user confirms registration after the compile derives the roles.
 Amended by [DR-081](081-the-app-supplies-the-compiler.md) (2026-09-24): the compiler is the app's own copy of `@sublang/slc`, found where the shell declares it and run on the app's own runtime — Electron's Node now strips types — so the resolution order through a global install and `npx`, the Electron premise and the system-Node guidance give way; never in-process, the compile flow, registry generation and library placement stand.
-Amended by [DR-104](104-spec-package-format-and-client-environments.md): a compiled playbook is registered by requesting its spec package and binding its roles, not by writing a locator into the launcher config; the compile flow stands.
+Amended by [DR-104](104-spec-package-format-and-client-environments.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role, and the launcher gets the module's location from Spex at launch instead of from the launcher config; the compile flow stands.
 
 ## Context
 

@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-09-12).
+Amended by [DR-104](104-spec-package-format-and-client-environments.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
 Supersedes [DR-054](054-issue-intent-delivery.md): the issue seed no longer instructs a coder to branch and open a pull request, and the Boss no longer merges.
 Amends [DR-035](035-intent-ledger.md)'s issue capture seed and [DR-037](037-playbook-12-adoption.md)'s built-in catalog.
 

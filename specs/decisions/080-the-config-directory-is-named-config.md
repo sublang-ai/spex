@@ -9,7 +9,7 @@ Accepted (2026-09-20).
 Amends [DR-037](037-playbook-12-adoption.md): the config relocation serves the home's former `playbook/` location ahead of the XDG one, and a former file inside the home is removed once the canonical file is published.
 Adopts Playbook's [DR-064](https://github.com/sublang-ai/playbook/blob/main/specs/decisions/064-the-config-directory-is-named-config.md), which moves the canonical path; the core's dependency floor moved to ^15.0.0, the release shipping it, on 2026-09-20.
 Amended by [DR-088](088-playbook-17-slc-0-12-cligent-0-27-adoption.md) in its Playbook floor alone, now `^17.0.0`.
-Amended by [DR-103](103-the-home-and-its-spaces.md): the file keeps its name and moves into your own group's spex repository, cloned under `workspace/` and synced with it.
+Amended by [DR-103](103-the-home-and-its-groups.md): the file keeps its name and moves into your own group's spex repository, cloned under `workspace/` and synced with it.
 
 ## Context
 

@@ -15,7 +15,7 @@ Amends ([DR-046](046-decision-record-evolution.md)) [DR-057](057-space-surface.m
 - §"What the user sees": the issues list is a folded list of repairs rather than one row per diagnostic.
 
 [DR-011](011-project-workspace.md) is not amended: the palette keeps sole ownership of choosing, adding, and creating projects, and Space never creates a project identity.
-Amended by [DR-103](103-the-home-and-its-spaces.md): setting up by naming a remote gives way to signing in to a Git host, after which Spex sets up what it needs; the folder repair stands.
+Amended by [DR-103](103-the-home-and-its-groups.md): setting up by naming a remote gives way to signing in to a Git host, after which Spex sets up what it needs, and a spex repository exists on this device before it has a remote; the folder repair stands.
 
 ## Context
 
