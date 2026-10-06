@@ -22,6 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import {
+  createServer as createHttpServer,
   request as httpRequest,
   type IncomingHttpHeaders,
 } from "node:http";
@@ -31,10 +32,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { WebSocket } from "ws";
+import { moduleDirectoriesAbove } from "@sublang/spex-core";
+import { startStandinHost } from "@sublang/spex-core/testing";
 
 import {
   parseArgs,
   retargetCsp,
+  serverCoreOptions,
   shellVersion,
   stampVersion,
   startServer,
@@ -162,6 +166,58 @@ test("the server scaffolds with the checkout's own CLI on its own Node (SERVER-S
     ]);
   } finally {
     await running.close();
+  }
+});
+
+test("the core signs in by the device flow and runs Git's helper on the shell's own Node (SERVER-SHELL-1)", async () => {
+  const options = tempOptions({ core: { systemLanguages: ["en"] } });
+  const server = createHttpServer();
+  const core = serverCoreOptions(options, server);
+  assert.equal(core.httpServer, server);
+  assert.equal(core.signIn, "device");
+  assert.deepEqual(core.hostRuntime, { execPath: process.execPath, electron: false });
+  // The same Node runs the compiler (server-shell-7), and a harness's
+  // overrides come through unchanged (server-shell-20).
+  assert.deepEqual(core.compileRuntime, {
+    execPath: process.execPath,
+    electron: false,
+    modulePaths: moduleDirectoriesAbove(import.meta.url),
+  });
+  assert.deepEqual(core.systemLanguages, ["en"]);
+
+  // Booted, the shell's core starts the device flow at its host.
+  const host = await startStandinHost({ dir: scratchDir("spex-server-host-") });
+  const running = await startServer(
+    tempOptions({ core: { systemLanguages: ["en"], env: { SPEX_HOST_URL: host.url } } }),
+  );
+  try {
+    const base = `http://127.0.0.1:${running.port}`;
+    const socket = new WebSocket(`${base.replace("http", "ws")}/?token=secret`, { origin: base });
+    const replies = new Map<string, (reply: { ok: boolean; result?: unknown }) => void>();
+    const opened = new Promise<void>((resolveOpen, rejectOpen) => {
+      socket.once("error", rejectOpen);
+      socket.on("message", (data) => {
+        const message = JSON.parse(String(data)) as { type: string; id?: string; ok: boolean };
+        if (message.type === "hello") resolveOpen();
+        if (message.type === "reply" && message.id) replies.get(message.id)?.(message);
+      });
+    });
+    await opened;
+    const command = (type: string, id: string) =>
+      new Promise<{ ok: boolean; result?: unknown }>((resolveReply) => {
+        replies.set(id, resolveReply);
+        socket.send(JSON.stringify({ type, id }));
+      });
+    const started = await command("space.signin.start", "s1");
+    assert.ok(started.ok, JSON.stringify(started));
+    const flow = started.result as { flow: string; userCode?: string; verificationUri?: string };
+    assert.equal(flow.flow, "device");
+    assert.deepEqual(host.script.pendingDevices(), [flow.userCode]);
+    assert.ok((await command("space.signin.cancel", "s2")).ok);
+    socket.close();
+  } finally {
+    await running.close();
+    await host.close();
   }
 });
 

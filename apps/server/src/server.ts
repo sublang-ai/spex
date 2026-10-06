@@ -423,6 +423,46 @@ function serveBundle(
   res.end(responseBody);
 }
 
+/**
+ * What the shell boots its core with (server-shell-1, server-shell-7,
+ * server-shell-20): attached to the shell's own HTTP server, this
+ * shell's Node as the runtime of the compiler, the scaffold CLI and the
+ * Git credential helper, and the device sign-in flow, since the browser
+ * reading the page may sit on another machine than the core's loopback.
+ * A harness's core overrides come last; none of them names the flow or
+ * the helper's runtime.
+ */
+export function serverCoreOptions(
+  options: ServerShellOptions,
+  server: HttpServer | HttpsServer,
+): CoreServiceOptions {
+  const legacy = options.legacyDb;
+  const runtime = {
+    execPath: process.execPath,
+    electron: false,
+    modulePaths: moduleDirectoriesAbove(import.meta.url),
+  };
+  return {
+    httpServer: server,
+    token: options.token,
+    dataDir: options.dataDir,
+    ...(existsSync(legacy) ? { legacyDbPath: legacy } : {}),
+    ...(options.configPath ? { configPath: options.configPath } : {}),
+    // Compiles run on this shell's own Node, with the compiler and the
+    // SDKs this package declares (server-shell-7, DR-081).
+    compileRuntime: runtime,
+    // The scaffold runs the checkout's own CLI on that Node too
+    // (server-shell-7, projects-31); with none built, the create flow
+    // falls back to the registry's and names it.
+    ...(suppliedScaffold(runtime) ?? {}),
+    // The device flow, and Git's credential helper on this Node
+    // (server-shell-1, git-host-3, git-host-9).
+    signIn: "device",
+    hostRuntime: { execPath: process.execPath, electron: false },
+    ...(options.core ?? {}),
+  };
+}
+
 export async function startServer(
   options: ServerShellOptions,
 ): Promise<RunningServer> {
@@ -457,27 +497,7 @@ export async function startServer(
       )
     : createHttpServer(handler);
   mkdirSync(options.dataDir, { recursive: true });
-  const legacy = options.legacyDb;
-  const runtime = {
-    execPath: process.execPath,
-    electron: false,
-    modulePaths: moduleDirectoriesAbove(import.meta.url),
-  };
-  const service = await CoreService.start({
-    httpServer: server,
-    token: options.token,
-    dataDir: options.dataDir,
-    ...(existsSync(legacy) ? { legacyDbPath: legacy } : {}),
-    ...(options.configPath ? { configPath: options.configPath } : {}),
-    // Compiles run on this shell's own Node, with the compiler and the
-    // SDKs this package declares (server-shell-7, DR-081).
-    compileRuntime: runtime,
-    // The scaffold runs the checkout's own CLI on that Node too
-    // (server-shell-7, projects-31); with none built, the create flow
-    // falls back to the registry's and names it.
-    ...(suppliedScaffold(runtime) ?? {}),
-    ...(options.core ?? {}),
-  });
+  const service = await CoreService.start(serverCoreOptions(options, server));
   try {
     await new Promise<void>((resolveListen, rejectListen) => {
       server.once("error", rejectListen);
