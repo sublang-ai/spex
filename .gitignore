@@ -6,6 +6,7 @@ apps/desktop/release/
 apps/server/ui-dist/
 packages/cli/scaffold/
 packages/core/assets/academy/
+packages/core/assets/builtins/
 
 # Recording output (scripts/record-demo.mjs).
 demo*.mp4
