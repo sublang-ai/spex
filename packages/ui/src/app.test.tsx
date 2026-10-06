@@ -740,6 +740,65 @@ describe("playbook-library-34, core-service-2: the slash menus offer the project
   });
 });
 
+describe("space-59, space-60, space-63: the page follows a project a move re-keys or a join adds", () => {
+  const repo = (key: string, folder: string | null) => ({
+    key, name: key.split("/").pop(), id: null, own: false, code: null, folder,
+    remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
+    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" },
+  });
+  const groups = (...repositories: object[]) => ({
+    home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
+    account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
+    groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, repositories }],
+  }) as never;
+  const ALPHA = { id: "acme/alpha-spex", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "acme/alpha-spex", name: "alpha-spex", group: "acme", own: false } };
+  const BETA = { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } };
+  const GAMMA = { id: "acme/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 2, repository: { key: "acme/gamma-spex", name: "gamma-spex", group: "acme", own: false } };
+
+  test("a Groups state naming the projects the page holds re-reads nothing", () => {
+    render(<App />);
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state: groups(repo("p1", "/tmp/alpha"), repo("p2", "/tmp/beta"), repo("acme/team-spex", null)) });
+    });
+    expect(commandMock).not.toHaveBeenCalledWith("project.list", {});
+  });
+
+  test("a moved project is followed to its new key, current and open; a joined one lists", async () => {
+    let listed = [ALPHA, BETA];
+    commandMock.mockImplementation(async (type: string) =>
+      type === "project.list"
+        ? listed
+        : type === "session.list"
+          ? SESSIONS.map((entry) => (entry.projectId === "p1" ? { ...entry, projectId: ALPHA.id } : entry))
+          : type === "ledger.get"
+            ? LEDGER
+            : defaultReply(type),
+    );
+    render(<App />);
+    // The sync moved alpha's clone after the host (space-60).
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state: groups(repo(ALPHA.id, "/tmp/alpha"), repo("p2", "/tmp/beta")) });
+    });
+    await vi.waitFor(() => expect(useAppStore.getState().currentProjectId).toBe(ALPHA.id));
+    const state = useAppStore.getState();
+    expect(state.projects.map((project) => project.id)).toEqual([ALPHA.id, "p2"]);
+    expect(state.openTabs[ALPHA.id]).toEqual(["a-live"]);
+    expect(state.openTabs.p1).toBeUndefined();
+    expect(state.workspaceTabs[ALPHA.id]).toBe("a-live");
+    expect(state.sessions.find((entry) => entry.id === "a-live")?.projectId).toBe(ALPHA.id);
+    await screen.findByTestId(`sidebar-project-${ALPHA.id}`);
+    expect(screen.queryByTestId("sidebar-project-p1")).toBeNull();
+
+    // A join paired another (space-63): it lists in the sidebar.
+    listed = [ALPHA, BETA, GAMMA];
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state: groups(repo(ALPHA.id, "/tmp/alpha"), repo("p2", "/tmp/beta"), repo(GAMMA.id, "/tmp/gamma")) });
+    });
+    await screen.findByTestId(`sidebar-project-${GAMMA.id}`);
+    expect(useAppStore.getState().currentProjectId).toBe(ALPHA.id);
+  });
+});
+
 describe("run-view-58, projects-4: the Overview tab pins the project's group", () => {
   test("the strip ends with Specs and Overview; the Overview draws header and group", async () => {
     commandMock.mockImplementation(async (type: string) => {

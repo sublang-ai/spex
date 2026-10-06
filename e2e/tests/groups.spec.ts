@@ -231,10 +231,8 @@ test.describe("first start", () => {
     // local changes by its title; Open session opens its tab; Sync sends
     // it, the host's `spex` holding both bundle files (space-7, space-12).
     // The project's key moved with the sign-in and the pick (space-59,
-    // space-58); the page re-reads its projects on a reload, so the
+    // space-58, space-60); the page follows it with no reload, so the
     // Captain home addresses the project where it now is.
-    await page.reload();
-    await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
     await nav(page, "Projects").click();
     await page
       .getByRole("tree", { name: "Projects and sessions" })
@@ -841,10 +839,7 @@ test.describe("second device", () => {
     expect(existsSync(join(clonePath(app.dataDir, key), "project.json"))).toBe(true);
     expect(existsSync(join(folder, "README.md"))).toBe(true);
     expect(git(folder, "remote", "get-url", "origin")).toBe(code);
-    // The page re-reads its projects on a reload: the joined project
-    // lists in the sidebar from then on.
-    await page.reload();
-    await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
+    // The joined project lists in the sidebar with no reload.
     const tree = page.getByRole("tree", { name: "Projects and sessions" });
     await expect(tree.getByRole("treeitem", { name: "demo-project", exact: true })).toBeVisible();
     await tree.getByRole("treeitem", { name: "demo-project", exact: true }).click();

@@ -879,6 +879,23 @@ let spaceReads = 0;
  * reply older than a `config.state` broadcast is discarded. */
 let configReads = 0;
 
+/** The newest re-read of the projects a Groups state set off: an older
+ * reply is discarded. */
+let projectReads = 0;
+
+/** Whether a Groups state pairs other spex repositories with working
+ * folders than the page lists as projects (space-59, space-60,
+ * space-63): a move re-keyed one, or a join added one. */
+export function projectsMoved(state: GroupsState, projects: readonly ProjectInfo[]): boolean {
+  const paired = new Set(
+    state.groups
+      .flatMap((group) => group.repositories)
+      .filter((repository) => repository.folder !== null && repository.state !== "absent")
+      .map((repository) => repository.key),
+  );
+  return paired.size !== projects.length || projects.some((project) => !paired.has(project.id));
+}
+
 export const useAppStore = create<AppState>((set, get) => {
   /** Records describe the conversation; the listing owns activity,
    * including settlement after the final reply and stopped history. */
@@ -891,6 +908,55 @@ export const useAppStore = create<AppState>((set, get) => {
 
   function setRunError(sessionId: string, message: string): void {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
+  }
+
+  /**
+   * Re-read the projects and the sessions after a Groups state named
+   * other projects than the page holds (space-59, space-60, space-63):
+   * a joined project lists, and a moved one is followed to its new key
+   * by its working folder — the current project, its open tabs, its
+   * remembered tab and its fold in the sidebar with it.
+   */
+  async function followProjects(): Promise<void> {
+    const read = (projectReads += 1);
+    const [projects, sessions] = await Promise.all([
+      getClient().command("project.list", {}),
+      getClient().command("session.list", {}),
+    ]);
+    if (read !== projectReads) return;
+    const state = get();
+    const moved = new Map<string, string>();
+    for (const old of state.projects) {
+      if (projects.some((project) => project.id === old.id)) continue;
+      const now = projects.find((project) => project.path === old.path);
+      if (now) moved.set(old.id, now.id);
+    }
+    const follow = <T>(record: Record<string, T>): Record<string, T> => {
+      const out = { ...record };
+      for (const [from, to] of moved) {
+        if (!(from in out)) continue;
+        if (!(to in out)) out[to] = out[from];
+        delete out[from];
+      }
+      return out;
+    };
+    for (const old of state.sessions) {
+      if (!sessions.some((session) => session.id === old.id)) get().forgetSession(old.id, old.projectId);
+    }
+    const current = state.currentProjectId && moved.get(state.currentProjectId);
+    const expandedProjects = follow(state.expandedProjects);
+    set({
+      projects,
+      sessions,
+      openTabs: follow(get().openTabs),
+      workspaceTabs: follow(get().workspaceTabs),
+      expandedProjects,
+    });
+    if (moved.size > 0) safeStorageSet(EXPANDED_PROJECTS_KEY, JSON.stringify(expandedProjects));
+    if (current) get().setCurrentProject(current);
+    for (const project of projects) {
+      if (!get().projectMeta[project.id]) void get().loadProjectMeta(project.id);
+    }
   }
 
   /** The home's choice, from wherever it reached this page — the reply
@@ -1264,6 +1330,8 @@ export const useAppStore = create<AppState>((set, get) => {
         // and a read still in flight is older than this broadcast.
         spaceReads += 1;
         set({ space: message.state, spaceError: undefined, spaceReadAt: Date.now() });
+        // A move or a join changed which projects there are.
+        if (projectsMoved(message.state, get().projects)) void followProjects().catch(() => {});
         break;
       case "config.state":
         noteSpaceChange();
