@@ -34,6 +34,7 @@ export function BindingEditorPopover({
   position,
   binding,
   players,
+  playerOnly = false,
   anchorRef,
   onSave,
   onClose,
@@ -44,6 +45,9 @@ export function BindingEditorPopover({
   position: string;
   binding: RoleBindingSummary;
   players: SessionPlayerSummary[];
+  /** A project's entry names the player alone: tuning is personal and
+   * lives in your own group's settings (playbook-library-4, DR-103). */
+  playerOnly?: boolean;
   anchorRef: RefObject<HTMLButtonElement | null>;
   onSave(next: BindingChange): Promise<unknown>;
   onClose(): void;
@@ -125,6 +129,13 @@ export function BindingEditorPopover({
         ) : null}
       </label>
 
+      {playerOnly ? (
+        // One phrase where the boundary applies (DR-069): a project's
+        // entry names players, and each person tunes their own.
+        <p data-testid="binding-personal-note" className="text-xs text-neutral-500 dark:text-neutral-400">
+          {i18n._("Tuning is personal — set it in Settings")}
+        </p>
+      ) : <>
       {/* Each model beside its effort, stacking at the floor
           (playbook-library-4, DR-095). */}
       <div className="@container">
@@ -186,6 +197,7 @@ export function BindingEditorPopover({
       {invalidEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed effort, inherit, or use the provider default.")}</p>}
       {invalidSubagentEffort && <p role="alert" className="text-xs text-red-600">{i18n._("Choose a listed subagent effort, inherit, or let the agent choose.")}</p>}
       {invalidModel && <p role="alert" className="text-xs text-red-600">{i18n._("Enter a model ID, inherit, or use the provider default.")}</p>}
+      </>}
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : null}
@@ -200,11 +212,11 @@ export function BindingEditorPopover({
         <button
           type="button"
           data-testid="binding-save"
-          disabled={busy || invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode}
+          disabled={busy || (!playerOnly && (invalidEffort || invalidSubagentEffort || invalidModel || invalidFastMode))}
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void Promise.resolve(onSave(draft))
+            void Promise.resolve(onSave(playerOnly ? { playerId: draft.playerId } : draft))
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}

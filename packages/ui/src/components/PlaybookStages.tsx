@@ -99,7 +99,7 @@ export function StageRow<Key extends string>({
               disabled={missing}
               title={
                 missing
-                  ? i18n._("{stage} not found next to this playbook's registry", {
+                  ? i18n._("{stage} not found beside this playbook's module", {
                       stage: entry.label,
                     })
                   : entry.hint
