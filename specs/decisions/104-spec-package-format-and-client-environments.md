@@ -6,8 +6,8 @@
 ## Status
 
 Accepted (2026-10-04).
-Revised the same day, while still being worked on: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
-Revised on 2026-10-05: an environment lives in `.spex/`, not in the code, and what you add for yourself is in your home.
+Revised on 2026-10-04: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
+Revised on 2026-10-05: an environment lives in `.spex/`, not in the code, and what you add for yourself is in your home; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
 It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a `.spex/`, the home included.
 Amends ([DR-046](046-decision-record-evolution.md)):
@@ -21,14 +21,14 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - People install any subset of this, in the language they want, for one project or for themselves.
 - The Agent Skills specification [[1]] fixes a skill folder's layout. Playbooks and applications have native layouts. The format encloses these standards instead of restating them.
 - Mainstream package managers do four things we copy: requests are kept apart from the exact lock [[4]]; a dependency comes from a registry, a local path, or a Git repository at a commit [[5]]; what a package requires is installed with it, because a manager cannot guess undeclared needs [[10]]; one content-addressed store shares bytes between installs [[6]].
-- Until now the home held a compiled playbook library and registered a playbook by writing a locator into the launcher config. Both become a request and an installed view.
+- Until now the home held a compiled playbook library and registered a playbook by writing a locator into the launcher config. Both become a request and installed files.
 
 ## Decision
 
 ### Principle
 
 - A spec package is one GEARS contract with everything made from it: sources, the spec, skills, playbooks and applets. One name, one version.
-- An environment says which spec packages it wants, in `spex.yaml`, and records exactly what it got, in `spex.lock`. Every project and group has one, in its `.spex/`. What you add for yourself is in your home, `~/.spex`.
+- An environment is what a `.spex/` installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your home, `~/.spex`.
 - Spex installs verified files under `.spex/packages/`, exports skills to agents, and exports playbooks to the launcher. It commits nothing with the code.
 
 ### A spec package
@@ -44,10 +44,10 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | --- | --- |
 | `meta.yaml` | The manifest |
 | `README.md`, `LICENSE` | Optional description and license |
-| `sources/<locale>/<id>/` | Source material: Markdown, entered at `SOURCE.md`, with attachments beside it |
-| `specs/<locale>/<pkg>.md` | The spec: one spec package file in the form of [[meta-30](../meta.md#meta-30)], with its sections, item ids and citations kept whole |
-| `skills/<locale>/<id>/` | A skill: an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
-| `playbooks/<locale>/<id>/` | A playbook: a workflow in Playbook's native layout, with its source, its compiled module and their artifacts |
+| `sources/<language>/<id>/` | Source material: Markdown, entered at `SOURCE.md`, with attachments beside it |
+| `specs/<language>/<pkg>.md` | The spec: one spec package file in the form of [[meta-30](../meta.md#meta-30)], with its sections, item ids and citations kept whole |
+| `skills/<language>/<id>/` | A skill: an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
+| `playbooks/<language>/<id>/` | A playbook: a workflow in Playbook's native layout, with its source, its compiled module and what the compiler wrote beside them |
 | `applets/<id>/` | An applet: a browser-server application in its native layout |
 
 - The manifest and the folders name the same artifacts and languages. Every file is under one artifact or is a root file.
@@ -63,11 +63,11 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | `org`, `name`, `version` | The identity and the version |
 | `description`, `license`, `repository` | A description, the license, and an optional source repository URL |
 | `dependencies` | Optional: `<org>/<pkg>` to a version requirement, for every spec package this one requires |
-| `artifacts` | Artifact id to `{kind, locale, spec, from, requires, generated-by}` |
+| `artifacts` | Artifact id to `{kind, language, from, requires, generated-by}` |
 
 - `kind` is `source`, `spec`, `skill`, `playbook` or `applet`.
-- `locale` is the language of the original text. An applet has none. The other language folders of the artifact are its translations.
-- `spec` and `from` say where an artifact came from: which spec it implements, and what it was derived from. They install nothing.
+- `language` is the language of the original text. An applet has none. The other language folders of the artifact are its translations.
+- `from` is optional: the id of the artifact in this release this one was made from, such as the spec a skill implements or the source a spec was written from. It installs nothing.
 - `requires` is optional: the ids of artifacts in this release that must be installed with this one, as the built-in `code` requires `review`. Selecting an artifact selects what it requires.
 - `generated-by` is optional: `{agent, model}` of generated content.
 - A skill's id is its Agent Skills name. A playbook's id is its Playbook id. A source's or an applet's id is its folder name.
@@ -106,21 +106,19 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | Field | Content |
 | --- | --- |
 | `format` | `1` |
-| `registries` | Optional names to URLs. `default` is spex.pub unless mapped. A name a request uses and this map lacks is an error |
-| `locale` | Optional preferred language. Absent means each artifact's original text |
-| `agents` | Optional list of agent adapters that receive skills |
+| `language` | Optional preferred language. Absent means each artifact's original text |
 | `packages` | `<org>/<pkg>` to a request |
 
 A request names one source:
 
 | Source | Fields | Meaning |
 | --- | --- | --- |
-| Registry | `version`, optional `registry` | A requirement, resolved at the named registry or `default` |
+| Registry | `version` | A requirement, resolved at spex.pub |
 | Path | `path` | A folder inside the project's folder, by relative path |
 | Git | `git`, `rev`, optional `path` | A repository the Git host or the machine's Git can read, at a branch, tag or commit, with an optional folder inside |
 
-- A request may add `select`, a list of `{artifact, locale}`; `alias`, artifact id to exported name; and `agents`, overriding the environment's list.
-- A direct request fixes the source of that spec package for the whole graph. Every other spec package comes from `default`.
+- A request may add `select`, a list of `{artifact, language}`, and `alias`, artifact id to exported name.
+- A direct request fixes the source of that spec package for the whole graph. Every other spec package comes from the registry.
 
 ### The lock: `spex.lock`
 
@@ -130,21 +128,21 @@ A request names one source:
 | `requests` | A digest of the `spex.yaml` this lock resolved |
 | `packages` | `<org>/<pkg>` to a resolution |
 
-- A resolution holds the exact `source`: a registry, version and archive checksum; a path; or a repository and commit. It also holds `manifest-format`; `required-by`, who pulled this spec package in; `artifacts`, each selected artifact with its chosen language and whether that was a fallback; `files`, every selected file with its SHA-256 and executable flag; and `exports`, skill names to artifact ids.
-- A lock is stale when its `requests` digest no longer matches `spex.yaml`, or a path source's files no longer match. A stale lock installs nothing new; the last view stays, and Spex asks for resolution.
+- A resolution holds the exact `source`: a registry version and archive checksum; a path; or a repository and commit. It also holds `required-by`, who pulled this spec package in; `artifacts`, each selected artifact with its chosen language and whether that was a fallback; `files`, every selected file with its SHA-256 and executable flag; and `exports`, skill names to artifact ids.
+- A lock is stale when its `requests` digest no longer matches `spex.yaml`, or a path source's files no longer match. A stale lock installs nothing new; the last files stay, and Spex asks for resolution.
 - A lock records content, not a promise that a registry or repository stays reachable.
 
 ### Resolution
 
 - The graph holds the requested spec packages and everything they require, at any depth. A cycle adds nothing.
-- A solution gives every spec package one version and every selected artifact one language, so that every requirement and selector holds. Caret and tilde reach active versions only. An exact requirement or a lock replay may reach a yanked one. Nothing reaches a suppressed one.
+- A solution gives every spec package one version and every selected artifact one language, so that every requirement and selector holds. Caret and tilde never pick a yanked version; an exact requirement or a lock replay may. Nothing picks a version the registry suppressed.
 - Among solutions Spex takes the highest, comparing requested spec packages first, each by name and then by version. A newer release that lacks a selected artifact never blocks an older solution.
 - No solution is an error that names the requirements in conflict. A lock replay installs what the lock says, without resolving.
 
 Selection, within a solution:
 
 1. Artifacts: those a request selects, or all of them by default, together with everything they require.
-2. Languages: for each selected artifact, the language its selector names; else the environment's `locale` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
+2. Languages: for each selected artifact, the language its selector names; else the environment's `language` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
 3. Files: the root files and every file of each selected artifact in its chosen language.
 4. Exports: each selected skill under its artifact id or its alias. Two exports with one name in one environment are an error.
 
@@ -162,11 +160,11 @@ Selection, within a solution:
 - Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's folder, with everything the playbook requires.
 - An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, never another environment's copy of the same name and version.
 - When a project and your home export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
-- Exports go only to the folders the adapter table names. Nothing in a shared file chooses a path on your device. An adapter named in `agents` that this device lacks leaves that export unbound and listed. The adapter table belongs to the CLI.
+- Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent's adapter for it says. Nothing in a shared file chooses a path on your device.
 
 ### Playbooks
 
-- A playbook artifact holds what the launcher loads: the playbook source, the compiled module and their artifacts, in Playbook's native layout. The launcher finds the module by that layout.
+- A playbook artifact holds what the launcher loads: the playbook source, the compiled module and what the compiler wrote beside them, in Playbook's native layout. The launcher finds the module by that layout.
 - Compiling is authoring. `slc` runs in the project that holds the spec package, in an authoring session, and writes the compiled files beside the source. The registry never compiles. Installing copies verified files.
 - A playbook is available wherever its spec package is installed. It is enabled where the project's `config/playbook.config.yaml` carries a `playbooks.<id>` entry naming which player each role uses; a session outside any project uses your home's file. Spex fills that entry's `from` with the installed module's location. A player this device does not have is reported before the session starts.
 - The built-in playbooks are a spec package the app ships. The app seeds its files into the store and requests it in your home, and the scaffold requests it in a new project's `.spex/`, so it works offline from the first start. The lock pins its version like any other; an app update changes an environment only through an explicit update. Playbook's compiled-in built-ins move into that spec package.
@@ -201,7 +199,10 @@ Selection, within a solution:
 - Dependencies that apply only when the spec text is selected: a playbook's needs do not depend on whether someone also reads the spec.
 - A generic word, "variant", for an artifact's languages, forms and implementations: with playbook a kind of its own, only language remains, and the word only confused.
 - Shipped wrapper skills, and several implementations of one artifact: a skill that only runs a playbook is generated, and a workflow with two implementations is a playbook and an applet implementing one spec.
-- A device-level registry file: two devices would resolve one name differently from one lock.
+- A `registries` map and a per-request registry: spex.pub is the registry. A private namespace shares privately, and a Git source at a commit shares before publishing.
+- An `agents` list in a shared file: which agents a device has is the device's fact, and Spex exports to all of them.
+- A `spec` field beside `from`: both say what an artifact was made from, and a release has at most one spec.
+- A manifest format in the lock: the installed `meta.yaml` carries its own.
 - Built-in playbooks outside the format: one more special case, for no gain.
 - A suffix Spex adds to a skill name that both your home and a project export: the name a person types would change with the project open. The agent's precedence applies, and `alias` renames one for good.
 
