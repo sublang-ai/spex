@@ -339,7 +339,7 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 
 #### space-16
 
-While a sync or check runs a transport step — Check or Push — the surface shall offer Stop, which ends the Git child and leaves that step's stopped state [[space-15](#space-15)]; Save, Compare, Apply and Refresh are bounded local steps and offer no Stop.
+While a sync or check runs a transport step — Check or Push — the surface shall offer Stop, which ends the Git child and leaves that step's stopped state [[space-15](#space-15)]; Save, Compare, Apply and Refresh are bounded local steps and offer no Stop, and the Check step offers it only once its Git child runs, the host read before it being bounded by the client's own timeout.
 
 #### space-50
 

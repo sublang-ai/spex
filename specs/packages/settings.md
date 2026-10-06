@@ -378,6 +378,10 @@ Where the Settings surface renders against fixture state, the test suite shall a
 
 ### Browser Journeys
 
+#### settings-47
+
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home whose project's config names a player your own group's roster lacks, when the journey opens Settings through the page, the test suite shall assert that the roster shows the player as named by that project and not set up here, that Add creates it from the neutral block so the row leaves the missing list, and that the surface names your own group's spex repository as the file it writes [[settings-46](#settings-46)].
+
 #### settings-29
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a demo config carrying a comment, when the journey edits Settings and opens an agent editor through the page, the test suite shall assert:

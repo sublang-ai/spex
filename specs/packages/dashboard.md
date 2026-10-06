@@ -479,7 +479,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - while the dispatched intent's session runs, the Now band shows it [[dashboard-28](#dashboard-28)];
 - once its turn ends finished, the attention queue lists the finished entry with Confirm and the count badge reads one [[dashboard-1](#dashboard-1)] [[dashboard-9](#dashboard-9)];
 - Confirm removes the entry, the badge clears, and History lists the intent as done [[dashboard-4](#dashboard-4)] [[dashboard-27](#dashboard-27)];
-- in the row menu, Move down changes the queue's order, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place [[dashboard-29](#dashboard-29)];
+- in the row menu, Start dispatches the row's intent, Escape closes the menu with focus back on its trigger, and Remove then Undo restores the row at its place by age [[dashboard-29](#dashboard-29)];
 - an intent dropped from its running session leaves the Now band showing the session serving none, with no Drop beside it, and lists in History as dropped once that turn ends finished, no verdict owed [[dashboard-28](#dashboard-28)] [[dashboard-27](#dashboard-27)].
 
 #### dashboard-57
