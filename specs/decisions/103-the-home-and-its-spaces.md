@@ -36,7 +36,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### Principle
 
 Spex keeps every record under `~/.spex/workspace/`, in a records folder per group and per project, in a tree that mirrors the Git host.
-Each records folder is a repository with a `spex` branch from the start. Once you sign in, it is pushed to a spex repository, named `<name>-spex`, that Spex creates in the group on the Git host.
+Each records folder is a repository with a `spex` branch from the start. Once you sign in, it is pushed to a spex repository, named `<name>-spex`, that Spex creates in the group on the Git host, and is its local clone from then on.
 A project's code lives in any Git repository you choose, and Spex pushes nothing to it.
 What a project needs is in its records folder.
 What you add for yourself is in your own group's records folder.
@@ -51,9 +51,9 @@ Spex adds no access control, no roles and no member lists of its own.
 | Account | You on the Git host, known by its permanent account id. |
 | Working folder | A folder on this device where sessions run. For a project, usually a clone of its code, which may be any Git repository. Spex writes only agent exports into it. |
 | Spex repository | A repository named `<name>-spex` that Spex creates in a group on the Git host, holding the records of one project, or of the group itself, on its `spex` branch. Whoever the host lets read it sees those records, so it is the unit of sharing. Spex follows it by its id, which survives rename and transfer. |
-| Records folder | A repository on this device under `~/.spex/workspace/`, holding one `spex` branch and pushed to one spex repository once you sign in. One per project and per group, in a tree that mirrors the host. |
-| Project | Three things: a working folder, a spex repository in a group, and the records folder between them. Add a working folder, and Spex makes the other two. |
-| Group | Three things too: a group on the Git host, at any depth, or you, since every user has a group of their own named after them; its spex repository; and its records folder, which holds its projects' records folders. Its sessions, the work across its projects, run in a working folder you choose on each device. |
+| Records folder | The local clone of one spex repository, under `~/.spex/workspace/`: a repository on this device holding the `spex` branch, pushed to the spex repository once you sign in. One per project and per group, in a tree that mirrors the host. |
+| Project | Three things: a working folder, a spex repository in a group on the Git host, and its records folder on this device, the local clone of that spex repository. Add a working folder, and Spex makes the other two. |
+| Group | Three things too: a group on the Git host, at any depth, or you, since every user has a group of their own named after them; its spex repository; and its records folder, the local clone of that spex repository, which holds its projects' records folders. Its sessions, the work across its projects, run in a working folder you choose on each device. |
 | Session | A conversation Playbook records as one bundle in a records folder. |
 
 - The home is `SPEX_HOME`, or `~/.spex`: `workspace/` and this device's state.
