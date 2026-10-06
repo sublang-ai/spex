@@ -5,9 +5,10 @@
 // authoring session lives in the spex repository of the project it
 // belongs to — `authoring/<id>.json`, replaced atomically, beside
 // `authoring/<id>.records.jsonl`, appended, and `authoring/<id>.assets/`
-// — written under the Spex home lease the store holds; its source stays
-// under the home's library directory `<library>/<id>/<id>.md` until the
-// spec packages of DR-104 hold it. No provider token enters any file.
+// — written under the Spex home lease the store holds; its spec package
+// under development stands in the project's working folder at
+// `spex-packages/<id>/`, the source at `playbooks/en/<id>/<id>.md`
+// (environments-10). No provider token enters any file.
 
 import {
   appendFileSync,
@@ -69,8 +70,19 @@ export interface StoredDraft {
 }
 
 /** Where an authoring session's spec package sits in its working
- * folder, until the environment's packages hold it (DR-104). */
+ * folder (environments-10, playbook-library-70). */
 export const draftPackagePath = (id: string): string => `spex-packages/${id}`;
+
+/** A session file's `package`, read without validating the rest: a
+ * damaged file still names where its package is, else the default. */
+function readPackagePath(file: string, id: string): string {
+  try {
+    const value = JSON.parse(readFileSync(file, "utf8")) as { package?: unknown };
+    const path = value.package;
+    if (typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..")) return path;
+  } catch { /* the default below */ }
+  return draftPackagePath(id);
+}
 
 const OUTCOMES: readonly string[] = ["running", "ok", "failed", "canceled", "interrupted"];
 const RELAYS: readonly string[] = ["sent", "stopped", "queued"];
@@ -261,16 +273,37 @@ export interface ReadDraftRecords {
   incompleteAfterSeq?: number;
 }
 
-/** Where an authoring session is kept: its project's spex repository. */
-export interface AuthoringLocation { key: string; authoringDir: string }
+/** Where an authoring session is kept: its project's spex repository,
+ * and the working folder on this device holding its spec package. */
+export interface AuthoringLocation { key: string; authoringDir: string; workingFolder: string | null }
+
+/** The language a new playbook artifact is authored in (playbook-library-70). */
+export const AUTHORING_LANGUAGE = "en";
+
+/** The `meta.yaml` of a new spec package under development
+ * (playbook-library-70): one playbook artifact, version 0.1.0. */
+export function authoringManifest(id: string, org: string): string {
+  return [
+    "format: 2",
+    `org: ${org}`,
+    `name: ${id}`,
+    "version: 0.1.0",
+    `description: The ${id} playbook`,
+    "artifacts:",
+    `  ${id}:`,
+    "    kind: playbook",
+    `    language: ${AUTHORING_LANGUAGE}`,
+    "",
+  ].join("\n");
+}
 
 export class DraftStore {
   /** Which spex repository holds each authoring session. */
   private locations = new Map<string, AuthoringLocation>();
+  /** Each session's spec package path inside its working folder. */
+  private packages = new Map<string, string>();
 
   constructor(
-    /** `<home>/playbooks`, where a session's source stays this wave. */
-    readonly libraryDir: string,
     /** Every clone's `authoring/` directory, read on each rescan. */
     private readonly repositories: () => AuthoringLocation[],
   ) {
@@ -280,6 +313,7 @@ export class DraftStore {
   /** Re-read which clone holds which session (space-20). */
   refresh(): void {
     const next = new Map<string, AuthoringLocation>();
+    const packages = new Map<string, string>();
     for (const location of this.repositories()) {
       if (!existsSync(location.authoringDir)) continue;
       for (const name of readdirSync(location.authoringDir)) {
@@ -287,9 +321,11 @@ export class DraftStore {
         const id = name.slice(0, -5);
         if (!DRAFT_ID.test(id) || next.has(id)) continue;
         next.set(id, location);
+        packages.set(id, readPackagePath(join(location.authoringDir, name), id));
       }
     }
     this.locations = next;
+    this.packages = packages;
   }
 
   private location(id: string): AuthoringLocation {
@@ -317,12 +353,35 @@ export class DraftStore {
     return join(this.location(id).authoringDir, `${id}.assets`);
   }
 
-  draftDir(id: string): string {
-    return join(this.libraryDir, id);
+  /** The working folder holding the session's spec package, on this
+   * device; null where the project has none here. */
+  workingFolder(id: string): string | null {
+    return this.locations.get(id)?.workingFolder ?? null;
   }
 
-  sourcePath(id: string): string {
-    return join(this.draftDir(id), `${id}.md`);
+  /** The spec package path inside the working folder (storage-23). */
+  packagePath(id: string): string {
+    return this.packages.get(id) ?? draftPackagePath(id);
+  }
+
+  /** The spec package under development: `<working folder>/<package>`
+   * (environments-10); null without a working folder here. */
+  draftDir(id: string): string | null {
+    const workingFolder = this.workingFolder(id);
+    return workingFolder === null ? null : join(workingFolder, ...this.packagePath(id).split("/"));
+  }
+
+  /** The playbook artifact's folder, `playbooks/en/<id>/` of the
+   * package, where the compiler runs (playbook-library-12). */
+  artifactDir(id: string): string | null {
+    const dir = this.draftDir(id);
+    return dir === null ? null : join(dir, "playbooks", AUTHORING_LANGUAGE, id);
+  }
+
+  /** The playbook's text the compiler reads: `<artifact>/<id>.md`. */
+  sourcePath(id: string): string | null {
+    const dir = this.artifactDir(id);
+    return dir === null ? null : join(dir, `${id}.md`);
   }
 
   /** Every id holding an authoring file, sorted. */
@@ -352,33 +411,47 @@ export class DraftStore {
     writeApplicationFile(this.recordFile(draft.id), parseStoredDraft(draft, this.recordFile(draft.id), draft.id));
   }
 
-  /** Make the library directory and the record in the project's spex
-   * repository (playbook-library-70, storage-23). */
-  create(id: string, now: number, location: AuthoringLocation): StoredDraft {
-    mkdirSync(this.draftDir(id), { recursive: true });
+  /** Make the spec package under development in the working folder —
+   * its `meta.yaml` unless a folder brought in already holds one — and
+   * the record in the project's spex repository (playbook-library-70,
+   * playbook-library-51, storage-23). */
+  create(id: string, now: number, location: AuthoringLocation, org: string): StoredDraft {
+    if (location.workingFolder === null) {
+      throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
+        id: "{projectId} has no working folder on this device",
+        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
+        values: { projectId: location.key },
+      }));
+    }
+    const packagePath = draftPackagePath(id);
+    const dir = join(location.workingFolder, ...packagePath.split("/"));
+    mkdirSync(join(dir, "playbooks", AUTHORING_LANGUAGE, id), { recursive: true });
+    if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, org));
     this.locations.set(id, location);
+    this.packages.set(id, packagePath);
     // A transcript left behind without its record would put the new
     // draft's first records after a stranger's; it goes first.
     rmSync(this.recordsFile(id), { force: true });
-    const draft: StoredDraft = { format: 1, id, createdAt: now, touchedAt: now, package: draftPackagePath(id), queued: [], failures: 0 };
+    const draft: StoredDraft = { format: 1, id, createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
     this.write(draft);
     return draft;
   }
 
-  /** Remove the record, transcript and attachments, leaving the library
-   * directory. */
+  /** Remove the record, transcript and attachments, leaving the spec
+   * package folder in the working folder (playbook-library-63). */
   retire(id: string): void {
     if (!this.locations.has(id)) return;
     rmSync(this.assetsDir(id), { recursive: true, force: true });
     rmSync(this.recordsFile(id), { force: true });
     rmSync(this.recordFile(id), { force: true });
     this.locations.delete(id);
+    this.packages.delete(id);
   }
 
-  /** Remove the record, the transcript, and the library directory. */
+  /** Delete the session: its record, transcript and attachments; the
+   * spec package folder stays (playbook-library-63, playbook-library-70). */
   delete(id: string): void {
     this.retire(id);
-    rmSync(this.draftDir(id), { recursive: true, force: true });
   }
   /** The transcript's readable prefix: newline-terminated `{seq,record}`
    * lines in sequence order; an incomplete final line is not a record. */
@@ -424,7 +497,7 @@ export class DraftStore {
   /** The source as it stands on disk, with its version token. */
   readSource(id: string): (DraftSource & { sha256: string }) | undefined {
     const path = this.sourcePath(id);
-    if (!existsSync(path)) return undefined;
+    if (path === null || !existsSync(path)) return undefined;
     const bytes = readFileSync(path);
     return {
       markdown: bytes.toString("utf8"),
@@ -443,6 +516,13 @@ export class DraftStore {
     baseVersion?: string,
   ): { ok: true; version: string; mtime: number } | { ok: false; code: "conflict"; message: string } {
     const path = this.sourcePath(id);
+    if (path === null) {
+      throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
+        id: "{projectId} has no working folder on this device",
+        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
+        values: { projectId: this.projectOf(id) ?? id },
+      }));
+    }
     mkdirSync(dirname(path), { recursive: true });
     const current = existsSync(path) ? readFileSync(path) : undefined;
     const currentVersion = current ? sourceVersion(current) : undefined;

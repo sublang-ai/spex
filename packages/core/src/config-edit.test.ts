@@ -16,8 +16,9 @@ import {
   applyConfigOp,
   editConfigFile,
   type AgentPatch,
+  type ConfigEditOp,
 } from "./config-edit.js";
-import { templatePath, type LoadModule } from "./config.js";
+import { starterText, templatePath, type LoadModule, type PlaybookModules } from "./config.js";
 import { ARTIFACT_SCHEMAS } from "./config.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -64,8 +65,18 @@ const stubLoader: LoadModule = async (specifier) => {
 function templateFile(): string {
   const dir = scratchDir("spex-edit-");
   const path = join(dir, "playbook.config.yaml");
-  writeFileSync(path, readFileSync(templatePath(), "utf8"));
+  writeFileSync(path, starterText(readFileSync(templatePath(), "utf8")));
   return path;
+}
+
+/** The environments' module locations, standing in (environments-9). */
+const STUB_MODULES: PlaybookModules = {
+  repository: "me/me-spex",
+  find: (id) => ({ module: id === "other" ? "@stub/other" : `@sublang/playbook/${id}/registry`, builtin: true }),
+};
+
+function edit(path: string, op: ConfigEditOp, loader?: LoadModule) {
+  return editConfigFile(path, op, loader, { modules: STUB_MODULES });
 }
 
 /** Every comment in the text, content-level (the yaml library may
@@ -87,7 +98,7 @@ function assertCommentsSurvive(before: string, after: string): void {
 test("captain.set merge patch preserves comments and unrelated keys", async () => {
   const path = templateFile();
   const before = readFileSync(path, "utf8");
-  const result = await editConfigFile(
+  const result = await edit(
     path,
     { kind: "captain.set", patch: { model: "claude-opus-4-9", effort: "max" } },
     stubLoader,
@@ -107,7 +118,7 @@ test("captain.set merge patch preserves comments and unrelated keys", async () =
 test("player.set merge patch swaps a lane's vendor in place", async () => {
   const path = templateFile();
   const before = readFileSync(path, "utf8");
-  const result = await editConfigFile(
+  const result = await edit(
     path,
     {
       kind: "player.set",
@@ -130,7 +141,7 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
     before.indexOf("\n\n", before.indexOf("  dev.coder:")),
   );
   assert.ok(after.includes(coderBlock), "the coder lane is untouched");
-  const option = await editConfigFile(
+  const option = await edit(
     path,
     {
       kind: "playbook.option.set",
@@ -145,7 +156,7 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
 });
 
 test("a scalar shorthand becomes a block on first edit", () => {
-  const text = `captain: claude\nplayers:\n  dev.coder: claude\n  dev.reviewer: codex\nplaybooks:\n  code:\n    from: "@sublang/playbook/code/registry"\n    roles:\n      coder: dev.coder\n`;
+  const text = `captain: claude\nplayers:\n  dev.coder: claude\n  dev.reviewer: codex\nplaybooks:\n  code:\n    roles:\n      coder: dev.coder\n`;
   const captain = applyConfigOp(text, {
     kind: "captain.set",
     patch: { model: "claude-test" },
@@ -174,7 +185,6 @@ players:
   dev.reviewer: claude
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;
@@ -201,7 +211,6 @@ players:
   dev.reviewer: claude
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;
@@ -223,17 +232,18 @@ test("playbook.add binds its roles to session players", async () => {
   const path = templateFile();
   // A binding may only name a lane that exists, so the lane is minted
   // first — the order the compile flow uses (DR-032).
-  const minted = await editConfigFile(
+  const minted = await edit(
     path,
     { kind: "player.set", playerId: "dev.helper", patch: { adapter: "claude" } },
     stubLoader,
   );
   assert.equal(minted.ok, true);
-  const result = await editConfigFile(
+  const result = await edit(
     path,
     {
       kind: "playbook.add",
       playbookId: "other",
+      // A client's `from` is retired: accepted, never written (DR-104).
       from: "@stub/other",
       roles: { helper: "dev.helper" },
       options: { committer: "helper" },
@@ -242,7 +252,8 @@ test("playbook.add binds its roles to session players", async () => {
   );
   assert.equal(result.ok, true);
   const after = readFileSync(path, "utf8");
-  assert.match(after, /other:\n\s+from: "@stub\/other"/);
+  assert.doesNotMatch(after, /from:/);
+  assert.match(after, /other:\n\s+roles:/);
   // Enabling binds roles to lanes; the lanes live in their own map.
   assert.match(after, /roles:\n\s+helper: dev\.helper/);
   assert.match(after, /committer: helper/);
@@ -252,7 +263,7 @@ test("edits the launcher would reject never reach the file", async () => {
   const path = templateFile();
   const before = readFileSync(path, "utf8");
 
-  const badAdapter = await editConfigFile(
+  const badAdapter = await edit(
     path,
     { kind: "captain.set", patch: { adapter: "mystery" } },
     stubLoader,
@@ -263,7 +274,7 @@ test("edits the launcher would reject never reach the file", async () => {
 
   // Effort validation is adapter-scoped at composition (DR-019): a
   // value the block's adapter refuses fails closed the same way.
-  const badEffort = await editConfigFile(
+  const badEffort = await edit(
     path,
     {
       kind: "player.set",
@@ -294,12 +305,11 @@ players:
   dev.coder: claude
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `,
   );
-  const result = await editConfigFile(
+  const result = await edit(
     path,
     { kind: "captain.set", patch: { model: "claude-test" } },
     stubLoader,
@@ -353,7 +363,7 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
   assert.equal(attached.length, 2);
 
   // Writing the key puts it in the lane it names.
-  const written = await editConfigFile(
+  const written = await edit(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { fastMode: true } },
     stubLoader,
@@ -363,7 +373,7 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
   assert.match(block(before, "dev.coder"), /\n\s+fastMode: true/);
 
   // null removes it again, and every comment survives the round trip.
-  const off = await editConfigFile(
+  const off = await edit(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { fastMode: null } },
     stubLoader,
@@ -374,13 +384,13 @@ test("a fastMode patch writes the key, null removes it, comments kept (DR-038)",
   assertCommentsSurvive(before, afterOff);
 
   // true and false both write the key.
-  const on = await editConfigFile(
+  const on = await edit(
     path,
     { kind: "captain.set", patch: { fastMode: true } },
     stubLoader,
   );
   assert.ok(on.ok, on.error ?? "edit refused");
-  const literalOff = await editConfigFile(
+  const literalOff = await edit(
     path,
     { kind: "player.set", playerId: "dev.reviewer", patch: { fastMode: false } },
     stubLoader,
@@ -398,7 +408,7 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   assert.doesNotMatch(seeded, /^\s+subagentModel:/m);
 
   // The shared editor's merge patch writes it in the lane it names.
-  const written = await editConfigFile(
+  const written = await edit(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { subagentModel: "claude-sonnet-5-5" } },
     stubLoader,
@@ -415,11 +425,11 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
     ["claude-haiku-5", /\n\s+subagentModel: claude-haiku-5/],
     [false, /\n\s+subagentModel: false/],
   ] as const) {
-    const bound = await editConfigFile(path, { ...bind, subagentModel }, stubLoader);
+    const bound = await edit(path, { ...bind, subagentModel }, stubLoader);
     assert.ok(bound.ok, bound.error ?? "edit refused");
     assert.match(readFileSync(path, "utf8"), expected);
   }
-  const inherit = await editConfigFile(path, { ...bind, subagentModel: null }, stubLoader);
+  const inherit = await edit(path, { ...bind, subagentModel: null }, stubLoader);
   assert.ok(inherit.ok, inherit.error ?? "edit refused");
   const inherited = readFileSync(path, "utf8");
   // The template's own comments name the key, so only key lines count.
@@ -427,7 +437,7 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
   assertCommentsSurvive(pinned, inherited);
 
   // null removes the player's key again.
-  const cleared = await editConfigFile(
+  const cleared = await edit(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { subagentModel: null } },
     stubLoader,
@@ -439,7 +449,7 @@ test("a subagentModel patch and a role binding write the key, null clears it, co
 
   // An adapter cligent serves no subagent model for is refused in the
   // runtime's words, and the file does not move.
-  const refused = await editConfigFile(
+  const refused = await edit(
     path,
     { kind: "player.set", playerId: "dev.reviewer", patch: { adapter: "codex", model: null, effort: null, subagentModel: "gpt-6" } },
     stubLoader,
@@ -456,13 +466,13 @@ test("a subagent effort, the inherit literal and Off write their keys, null clea
 
   // The shared editor's patch writes the literal and the effort in the
   // lane it names, and "Off" as `false` on the Captain.
-  const player = await editConfigFile(
+  const player = await edit(
     path,
     { kind: "player.set", playerId: "dev.coder", patch: { subagentModel: "inherit", subagentEffort: "high" } },
     stubLoader,
   );
   assert.ok(player.ok, player.error ?? "edit refused");
-  const off = await editConfigFile(path, { kind: "captain.set", patch: { subagentModel: false } }, stubLoader);
+  const off = await edit(path, { kind: "captain.set", patch: { subagentModel: false } }, stubLoader);
   assert.ok(off.ok, off.error ?? "edit refused");
   const pinned = readFileSync(path, "utf8");
   assert.match(block(pinned, "dev.coder"), /\n\s+subagentModel: inherit\n\s+subagentEffort: high/);
@@ -476,18 +486,18 @@ test("a subagent effort, the inherit literal and Off write their keys, null clea
     ["low", /\n\s+subagentEffort: low/],
     [false, /\n\s+subagentEffort: false/],
   ] as const) {
-    const bound = await editConfigFile(path, { ...bind, subagentEffort }, stubLoader);
+    const bound = await edit(path, { ...bind, subagentEffort }, stubLoader);
     assert.ok(bound.ok, bound.error ?? "edit refused");
     assert.match(readFileSync(path, "utf8"), expected);
   }
-  const inherit = await editConfigFile(path, { ...bind, subagentEffort: null }, stubLoader);
+  const inherit = await edit(path, { ...bind, subagentEffort: null }, stubLoader);
   assert.ok(inherit.ok, inherit.error ?? "edit refused");
   assert.equal(readFileSync(path, "utf8").match(/^\s+subagentEffort:/gm)?.length, 1, "only the player's own key remains");
 
   // An effort beside a subagent model switched off is refused in its
   // own words, the file unmoved.
   const before = readFileSync(path, "utf8");
-  const refused = await editConfigFile(path, { ...bind, subagentModel: false }, stubLoader);
+  const refused = await edit(path, { ...bind, subagentModel: false }, stubLoader);
   assert.ok(!refused.ok);
   assert.match(refused.error ?? "", /playbooks\.code\.roles\.coder\.subagentEffort for adapter "claude" requires subagentModel/);
   assert.equal(readFileSync(path, "utf8"), before);
@@ -497,7 +507,7 @@ test("a subagent effort, the inherit literal and Off write their keys, null clea
     { kind: "player.set" as const, playerId: "dev.coder", patch: { subagentModel: null, subagentEffort: null } },
     { kind: "captain.set" as const, patch: { subagentModel: null } },
   ]) {
-    const cleared = await editConfigFile(path, op, stubLoader);
+    const cleared = await edit(path, op, stubLoader);
     assert.ok(cleared.ok, cleared.error ?? "edit refused");
   }
   const after = readFileSync(path, "utf8");
@@ -545,7 +555,7 @@ test("native approval acceptance replaces seeded auto mode with explicit ask pol
       async command(type: string, fields: { op: Parameters<typeof editConfigFile>[1] }) {
         if (type === "agent.capabilities") throw stopBeforeProvider;
         assert.equal(type, "config.edit");
-        const result = await editConfigFile(path, fields.op, stubLoader);
+        const result = await edit(path, fields.op, stubLoader);
         assert.equal(result.ok, true, result.error ?? "config edit rejected");
         return result;
       },

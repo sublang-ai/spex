@@ -12,7 +12,9 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
+import { parse as parseYaml } from "yaml";
 
 import { CoreService } from "./service.js";
 import { authoringDocuments } from "./authoring.js";
@@ -49,11 +51,9 @@ players:
     model: codex-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev.coder
       reviewer: dev.reviewer
@@ -280,12 +280,15 @@ const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
 
 test("playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol", async () => {
   const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
-  const { stats, dataDir, configPath, projectId, clone } = harness;
+  const { stats, configPath, projectId, clone } = harness;
   const files = authoringFiles(clone, "triage");
   const client = new Client(harness.service.port());
   await client.open();
   const configBefore = readFileSync(configPath, "utf8");
-  const draftDir = join(dataDir, "playbooks", "triage");
+  // The spec package under development stands in the project's working
+  // folder, the source in its playbook artifact (environments-10).
+  const draftDir = join(harness.dir, "project", "spex-packages", "triage");
+  const artifactDir = join(draftDir, "playbooks", "en", "triage");
 
   // The channel exists once the draft does (core-service-96).
   const created = await client.expectOk("draft.create", { projectId, draftId: "triage" });
@@ -295,7 +298,15 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(created.player, null);
   assert.equal(created.agent.adapter, "claude");
   assert.equal(created.projectId, projectId);
-  assert.ok(existsSync(draftDir), "the library directory is made");
+  assert.equal(created.enabled, false);
+  assert.equal(created.package, "spex-packages/triage");
+  assert.ok(existsSync(draftDir), "the spec package folder is made");
+  // playbook-library-70: its manifest names one playbook in en, 0.1.0.
+  const meta = parseYaml(readFileSync(join(draftDir, "meta.yaml"), "utf8")) as Record<string, unknown>;
+  assert.deepEqual(meta, {
+    format: 2, org: "local", name: "triage", version: "0.1.0", description: "The triage playbook",
+    artifacts: { triage: { kind: "playbook", language: "en" } },
+  });
   // storage-23: the record lands in the project's spex repository.
   const record = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
   assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "package", "queued", "touchedAt"]);
@@ -316,18 +327,20 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     return draft?.activity === "idle" && draft.proposal !== undefined;
   }, 120_000, "the proposal");
 
-  // playbook-library-64: the fake ran in the draft directory with
-  // `{ mode: "auto" }`, no tool lists, no resume.
+  // playbook-library-64: the fake ran in the spec package's folder with
+  // `{ mode: "auto" }` and that folder as its one writable path, no tool
+  // lists, no resume.
   const first = stats.runs[0];
   assert.equal(first.cwd, draftDir);
-  assert.deepEqual(first.permissions, { mode: "auto" });
+  assert.deepEqual(first.permissions, { mode: "auto", writablePaths: [draftDir] });
   assert.equal(first.allowedTools, undefined);
   assert.equal(first.disallowedTools, undefined);
   assert.equal(first.resume, undefined);
   assert.equal(first.model, "claude-test");
   // playbook-library-65: the prompt carried the source path, the four
   // documents, and both directive kinds.
-  assert.ok(first.prompt.includes(join(draftDir, "triage.md")), "the source path");
+  assert.ok(first.prompt.includes(join(artifactDir, "triage.md")), "the source path");
+  assert.ok(first.prompt.includes(join(draftDir, "meta.yaml")), "the manifest the description lives in");
   for (const document of authoringDocuments()) assert.ok(first.prompt.includes(document.path), document.path);
   assert.match(first.prompt, /kind: compile/);
   assert.match(first.prompt, /kind: register/);
@@ -380,7 +393,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   // playbook-library-68/66: the success turn named the roles; the
   // proposal landed with the block's fields.
   const success = stats.runs[1];
-  assert.match(success.prompt, /The compile of triage succeeded; the roles are Triager, Verifier\. Propose the registration in a register block/);
+  assert.match(success.prompt, /The compile of triage succeeded; the roles are Triager, Verifier\. Propose enabling in a register block/);
   assert.match(success.prompt, /^Spex: /m);
   assert.ok(success.resume, "the success turn continued the provider conversation");
   assert.doesNotMatch(success.prompt, /You are helping the Boss/);
@@ -395,11 +408,11 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.ok(artifacts.gears && artifacts.fsm, "the compiled stages serve");
   assert.ok(artifacts.stateIds?.includes("ready"));
 
-  // playbook-library-69/70: registration writes the new player, then
-  // the entry keyed by the derived roles; the draft retires.
-  const uploadId = randomUUID();
-  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", projectId, id: "triage"}, name: "registration.txt", mimeType: "text/plain", byteLength: 0});
-  await client.expectOk("media.finish", {uploadId});
+  // playbook-library-69/70: enabling requests the spec package by path
+  // from the project's environment and installs it, writes the new
+  // player to your own roster first, then the project's entry keyed by
+  // the derived roles, no `from`; the session stays, enabled.
+  const projectConfig = join(clone, "config", "playbook.config.yaml");
   const state = await client.expectOk("draft.register", {
     projectId,
     draftId: "triage",
@@ -409,24 +422,41 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     newPlayers: { "dev.triager": { adapter: "claude" } },
   });
   assert.equal(state.status, "valid");
-  await client.expectError("media.finish", {uploadId}, "invalid_request");
-  const registered = state.status === "valid" ? state.summary.playbooks.find((p) => p.id === "triage") : undefined;
-  assert.ok(registered, "the playbook is configured");
-  assert.deepEqual(Object.keys(registered.roles), ["Triager", "Verifier"]);
-  assert.equal(registered.roles.Triager.playerId, "dev.triager");
-  assert.equal(registered.roles.Verifier.playerId, "dev.coder");
-  assert.equal(registered.command, "triage");
-  assert.equal(registered.intent, "Label new issues");
-  const config = readFileSync(configPath, "utf8");
-  assert.ok(config.indexOf("dev.triager:") < config.indexOf("\n  triage:\n"), "the new player is written before the entry");
-  const wrapper = readFileSync(join(draftDir, "triage.registry.ts"), "utf8");
+  const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+  assert.deepEqual(requests.packages["local/triage"], { path: "spex-packages/triage" });
+  const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as { packages: Record<string, { exports: Record<string, string>; source: Record<string, unknown> }> };
+  assert.deepEqual(lock.packages["local/triage"]?.exports, { triage: "triage" });
+  assert.equal(lock.packages["local/triage"]?.source.path, "spex-packages/triage");
+  const own = parseYaml(readFileSync(configPath, "utf8")) as { players: Record<string, unknown>; playbooks: Record<string, unknown> };
+  assert.deepEqual(own.players["dev.triager"], { adapter: "claude" }, "the new player joins your own roster");
+  assert.equal(own.playbooks.triage, undefined, "your own group's config is not the one enabling it");
+  const entry = (parseYaml(readFileSync(projectConfig, "utf8")) as { playbooks: Record<string, unknown> }).playbooks.triage;
+  assert.deepEqual(entry, { roles: { Triager: "dev.triager", Verifier: "dev.coder" } });
+  const wrapper = readFileSync(join(artifactDir, "triage.registry.ts"), "utf8");
   assert.match(wrapper, /command: "triage"/);
   assert.match(wrapper, /intent: "Label new issues"/);
-  assert.deepEqual(await client.expectOk("draft.list", {}), []);
-  await client.waitFor((m) => m.type === "draft.removed" && m.draftId === "triage" && m.projectId === projectId);
-  for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
-  assert.ok(existsSync(join(draftDir, "triage.md")), "the directory stays with the playbook");
-  await client.expectError("draft.open", { projectId, draftId: "triage" }, "not_found");
+  // The session reads enabled and stays (playbook-library-61), its
+  // files where they were.
+  await until(() => client.latest("triage")?.enabled === true, 10_000, "the enabled session");
+  const listed = await client.expectOk("draft.list", {});
+  assert.deepEqual(listed.map((draft) => [draft.id, draft.enabled]), [["triage", true]]);
+  assert.ok(!client.messages.some((m) => m.type === "draft.removed"), "nothing retires the session");
+  for (const path of [files.record, files.records]) assert.ok(existsSync(path), `${path} stays`);
+  // The playbook is listed from the project's environment, enabled there.
+  const playbooks = await client.expectOk("environment.playbooks", { projectId });
+  const triage = playbooks.project?.find((row) => row.id === "triage");
+  assert.ok(triage, "the project's environment exports it");
+  assert.deepEqual([triage.command, triage.intent, triage.roles, triage.source, triage.package, triage.version, triage.enabled],
+    ["triage", "Label new issues", ["Triager", "Verifier"], "path", "local/triage", "0.1.0", ["project"]]);
+  // A session of the project launches it from the working folder.
+  const session = await client.expectOk("session.create", { projectId });
+  const manifestFile = join(clone, "sessions", `${session.id}.json`);
+  await until(() => existsSync(manifestFile), 10_000, "the session's manifest");
+  const manifest = JSON.parse(readFileSync(manifestFile, "utf8")) as { structuralProjection?: { catalog?: Record<string, { from: string }> } };
+  const catalog = manifest.structuralProjection?.catalog ?? {};
+  assert.equal(catalog.triage?.from, pathToFileURL(join(artifactDir, "triage.registry.mjs")).href);
+  // The built-ins come from the project's own installed spec package.
+  assert.match(catalog.code?.from ?? "", /\/packages\/sublang\/playbooks\/playbooks\/en\/code\//);
 
   client.close();
   await harness.service.stop();
@@ -744,11 +774,12 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const transcript = readFileSync(files.records, "utf8");
   assert.ok(transcript.endsWith("{not json"), "nothing was appended after the damage");
 
-  // playbook-library-70: delete removes the record, the preference, and the directory.
+  // playbook-library-63/70: delete removes the record, the transcript and
+  // the preference, and leaves the spec package folder.
   assert.equal(await client3.expectOk("draft.delete", { projectId, draftId: "persist" }), null);
   await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist" && m.projectId === projectId);
   for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
-  assert.ok(!existsSync(join(dataDir, "playbooks", "persist")), "the library directory is gone");
+  assert.ok(existsSync(join(dir, "project", "spex-packages", "persist", "playbooks", "en", "persist", "persist.md")), "the spec package folder stays");
   assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs["authoring:persist:player"], undefined);
   assert.deepEqual(await client3.expectOk("draft.list", {}), []);
   await client3.expectError("draft.open", { projectId, draftId: "persist" }, "not_found");

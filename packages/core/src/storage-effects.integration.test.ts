@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { launcherConfig } from "./testing/launcher-config.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -56,11 +57,11 @@ players:
     adapter: claude
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `);
-  const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath }));
+  writeFileSync(`${configPath}.launcher.yaml`, launcherConfig(readFileSync(configPath, "utf8")));
+  const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: `${configPath}.launcher.yaml` }));
   const { imports } = fakeAdapterImports({ fallback: { result: "Done" } });
   const sessionsDir = join(clone, "sessions");
   const store = createSessionStore({ sessionsDir });

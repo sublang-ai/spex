@@ -7,11 +7,13 @@
 // same fail-closed validation as loading — an edit the playbook
 // launcher would reject never reaches the file.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
-import { composeConfig, type LoadModule } from "./config.js";
+import { composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
 import { writeApplicationBytes } from "./app-storage.js";
+import { i18n } from "./i18n.js";
 
 export interface AgentBlock {
   adapter: string;
@@ -76,7 +78,9 @@ export type ConfigEditOp =
   | {
       kind: "playbook.add";
       playbookId: string;
-      from: string;
+      /** Retired (DR-104): a module comes from the environment, so a
+       * client's `from` is ignored and never written. */
+      from?: string;
       roles: Record<string, string>;
       options?: Record<string, unknown>;
     };
@@ -197,8 +201,9 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
     case "playbook.add": {
       // Enabling a playbook binds its roles to existing lanes; the
       // players themselves are edited in their own map (DR-032).
+      // No `from`: the module comes from the environment that installs
+      // the playbook's spec package (environments-9, core-service-2).
       const node = doc.createNode({
-        from: op.from,
         roles: { ...op.roles },
         ...(op.options ?? {}),
       }) as YAMLMap;
@@ -223,7 +228,7 @@ export async function editConfigFile(
   path: string,
   op: ConfigEditOp,
   loadModule?: LoadModule,
-  options: { libraryDir?: string } = {},
+  options: { modules?: PlaybookModules } = {},
 ): Promise<EditResult> {
   const text = readFileSync(path, "utf8");
   const candidate = applyConfigOp(text, op);
@@ -236,6 +241,47 @@ export async function editConfigFile(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+  writeApplicationBytes(path, candidate);
+  return { ok: true };
+}
+
+/** The operations a project's or another group's file takes: only its
+ * playbook entries, each naming its roles' players (core-service-2). */
+const PROJECT_OPS = new Set<ConfigEditOp["kind"]>(["playbook.add", "playbook.delete", "playbook.role.bind", "playbook.option.set"]);
+
+/**
+ * Edit a project's or another group's config file (playbook-library-3,
+ * playbook-library-16): the operation applied comment-preservingly, the
+ * candidate checked as a project's file and composed on top of your own
+ * group's, written only when both pass. A missing file starts empty.
+ */
+export async function editProjectConfigFile(
+  path: string,
+  ownPath: string,
+  op: ConfigEditOp,
+  loadModule: LoadModule | undefined,
+  modules: PlaybookModules,
+): Promise<EditResult> {
+  if (!PROJECT_OPS.has(op.kind)) {
+    return {
+      ok: false,
+      error: i18n._({
+        id: "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings",
+        comment: "Refusal: an edit to a project's config file that only your own group's file may take",
+      }),
+    };
+  }
+  const text = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const candidate = applyConfigOp(text, op);
+  try {
+    const projectTop = parseDocument(candidate).toJS() as unknown;
+    validateProjectConfig(projectTop, path);
+    const ownTop = parseDocument(readFileSync(ownPath, "utf8")).toJS() as unknown;
+    await composeConfig(ownTop, loadModule, ownPath, { modules, project: { top: projectTop, path } });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+  mkdirSync(dirname(path), { recursive: true });
   writeApplicationBytes(path, candidate);
   return { ok: true };
 }

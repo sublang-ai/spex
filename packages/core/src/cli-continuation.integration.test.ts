@@ -28,7 +28,6 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;
@@ -135,10 +134,16 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     await writeFile(preload, "import {register} from 'node:module';register('./loader.mjs',import.meta.url);\n");
     const providerLog = join(scratch, "provider.jsonl");
     // The CLI knows no spex repositories: its own config's `sessions` key
-    // points it at the project clone's session store.
+    // points it at the project clone's session store, and its `from`
+    // names the module Spex launched the session on — the installed
+    // built-in in the project's environment (environments-9), which
+    // Spex hands a launcher rather than writing into a shared file.
+    const manifest = JSON.parse(await readFile(join(sessionsDir, `${session.id}.json`), "utf8")) as { structuralProjection: { catalog: { code: { from: string } } } };
+    const moduleUrl = manifest.structuralProjection.catalog.code.from;
+    assert.match(moduleUrl, /^file:.*\/packages\/sublang\/playbooks\/playbooks\/en\/code\//);
     const cliHome = join(scratch, "cli-home");
     await mkdir(join(cliHome, "config"), { recursive: true, mode: 0o700 });
-    await writeFile(join(cliHome, "config", "playbook.config.yaml"), `sessions: ${sessionsDir}\n${CONFIG}`, { mode: 0o600 });
+    await writeFile(join(cliHome, "config", "playbook.config.yaml"), `sessions: ${sessionsDir}\n${CONFIG.replace("  code:\n", `  code:\n    from: ${JSON.stringify(moduleUrl)}\n`)}`, { mode: 0o600 });
     const cli = join(dirname(fileURLToPath(import.meta.resolve("@sublang/playbook/code/registry"))), "bin", "playbook.js");
     const result = await exec(process.execPath, ["--import", preload, cli, "run", "--continue", "--json", "Continue in the terminal."], {
       cwd, timeout: 30_000,

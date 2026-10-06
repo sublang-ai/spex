@@ -35,11 +35,9 @@ players:
     model: gpt-6-sol
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev.coder
       reviewer: dev.reviewer

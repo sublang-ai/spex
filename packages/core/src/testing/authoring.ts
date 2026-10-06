@@ -3,7 +3,8 @@
 
 // The authoring narration (DR-058): one fake-adapter script that plays
 // the authoring agent for the core suite and the browser journeys —
-// it writes a two-role `<id>.md` into its working directory and asks
+// it writes a two-role `<id>.md` into the playbook artifact of the
+// spec package under development it runs in (environments-10) and asks
 // for a compile, fixes the source after a relayed failure, proposes
 // the registration after a success, and proves a reseed reached it.
 
@@ -23,9 +24,12 @@ import type { FakeScript } from "./fake-adapter.js";
  * the next start reads it as interrupted and relays nothing.
  */
 export function seedInterruptedDraft(dataDir: string, projectId: string, id: string, source: string, at = Date.now()): void {
-  const authoringDir = join(Home.load(dataDir).clonePath(projectId), "authoring");
-  const store = new DraftStore(join(dataDir, "playbooks"), () => [{ key: projectId, authoringDir }]);
-  const draft = store.create(id, at - 60_000, { key: projectId, authoringDir });
+  const home = Home.load(dataDir);
+  const authoringDir = join(home.clonePath(projectId), "authoring");
+  const workingFolder = home.folderOf(projectId)?.path ?? null;
+  const location = { key: projectId, authoringDir, workingFolder };
+  const store = new DraftStore(() => [location]);
+  const draft = store.create(id, at - 60_000, location, "local");
   store.writeSource(id, source);
   store.append(id, 1, { type: "captain_status", turnId: null, timestamp: at, message: "◇ Compiling — asked by you" } as TmuxPlayRecord);
   store.write({ ...draft, touchedAt: at, compile: { at, by: "boss", outcome: "running" } });
@@ -56,6 +60,10 @@ Results:
 `;
 
 const COMPILE_BLOCK = "```spex\nkind: compile\n```";
+
+/** Where the agent writes the source, relative to the spec package it
+ * runs in: the playbook artifact's folder (playbook-library-64). */
+export const SOURCE_PATH = "playbooks/en/<id>/<id>.md";
 
 /** A reply as an adapter streams it: the text in deltas — the prose,
  * then any directive block — and the same text as the done result,
@@ -92,8 +100,8 @@ export function authoringScript(
         match: /(failed at|asks for clarification)/,
         response: {
           ...streamed(`The compiler rejected the duplicated result; I rewrote the \`Results:\` bullets. Asking for another compile.\n\n${COMPILE_BLOCK}`),
-          writes: { "<id>.md": AUTHORING_SOURCE.replace("- `labeled`: the labels were applied.", "- `labeled`: every proposed label was applied.") },
-          tools: [{ toolName: "Edit", input: { file_path: "<id>.md" }, output: "ok", durationMs: 120 }],
+          writes: { [SOURCE_PATH]: AUTHORING_SOURCE.replace("- `labeled`: the labels were applied.", "- `labeled`: every proposed label was applied.") },
+          tools: [{ toolName: "Edit", input: { file_path: SOURCE_PATH }, output: "ok", durationMs: 120 }],
         },
       },
       {
@@ -106,10 +114,10 @@ export function authoringScript(
         match: "Boss: I want",
         response: {
           ...streamed(`I wrote \`<id>.md\`: Triager proposes labels, Verifier applies all but security. Compiling now.\n\n${COMPILE_BLOCK}`),
-          writes: { "<id>.md": AUTHORING_SOURCE },
+          writes: { [SOURCE_PATH]: AUTHORING_SOURCE },
           tools: [
             { toolName: "Read", input: { file_path: "reference/sdlc/review.md" }, output: "…", durationMs: 80 },
-            { toolName: "Write", input: { file_path: "<id>.md" }, output: "ok", durationMs: 140 },
+            { toolName: "Write", input: { file_path: SOURCE_PATH }, output: "ok", durationMs: 140 },
           ],
         },
       },

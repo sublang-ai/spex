@@ -190,7 +190,6 @@ players:
     model: ${model}
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;

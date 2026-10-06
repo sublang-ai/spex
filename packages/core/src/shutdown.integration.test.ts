@@ -33,7 +33,6 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;

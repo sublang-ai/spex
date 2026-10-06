@@ -1039,6 +1039,12 @@ export const commandSchema = z.discriminatedUnion("type", [
     /** Lanes to create for bindings naming a player not yet in the
      * roster — the Playbooks surface may mint one in place. */
     newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
+    /** The project whose working folder holds the spec package under
+     * development, `spex-packages/<id>/` (environments-10). */
+    projectId: repositoryKeySchema.optional(),
+    /** The spex repository to enable in — the project's, the default,
+     * or your own group's (playbook-library-7, playbook-library-69). */
+    repository: repositoryKeySchema.optional(),
   }),
   z.object({
     type: z.literal("compile.abort"),
@@ -1458,6 +1464,11 @@ export interface DraftInfo {
   /** The playbook artifact's `<id>.md`, relative to the working folder
    * (playbook-library-56). */
   sourcePath?: string;
+  /** The playbook is enabled: an environment of the project or your own
+   * group requests this session's spec package by path and that spex
+   * repository's config enables its id (playbook-library-69); the state
+   * then reads "enabled" unless a compile, a failure or a change stands. */
+  enabled?: boolean;
   activity: DraftActivity;
   state: DraftState;
   /** Boss messages waiting for the draft to go idle, in order. */

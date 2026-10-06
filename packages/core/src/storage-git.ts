@@ -151,8 +151,11 @@ function copySafe(source: string, target: string, top = true): void {
 export interface ValidateStorageOptions {
   /** Your own group's clone: its config holds the captain and players. */
   own?: boolean;
-  /** The home's compiled-playbook library, for a `from`-less entry. */
+  /** Retired with the library folder (DR-104); ignored. */
   libraryDir?: string;
+  /** The environments' module locations for your own group's config; a
+   * playbook none exports is a non-blocking diagnostic (environments-9). */
+  modules?: import("./config.js").PlaybookModules;
   selectedSessionIds?: ReadonlySet<string>;
 }
 
@@ -217,7 +220,7 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
       try { validateProjectConfig(document.toJS(), config); }
       catch (error) { throw new StorageFormatError(config, (error as Error).message); }
     } else {
-      try { await composeConfig(document.toJS(), undefined, config, { ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) }); }
+      try { await composeConfig(document.toJS(), undefined, config, { ...(options.modules ? { modules: options.modules } : {}) }); }
       catch (error) {
         const reason = (error as Error).message;
         if (error instanceof RegistryError) diagnostics.push({ file: config, reason, blocking: false });

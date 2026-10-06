@@ -61,7 +61,7 @@ async function fixture(expiresInMs = 600_000, approvalPatch: Partial<NonNullable
   await mkdir(project);
   execFileSync("git", ["init", "--quiet", project]);
   const configPath = join(dir, "config.yaml");
-  await writeFile(configPath, `captain:\n  adapter: claude\nplayers:\n  inspector:\n    adapter: claude\nplaybooks:\n  code:\n    from: "@sublang/playbook/code/registry"\n    roles:\n      coder: inspector\n`);
+  await writeFile(configPath, `captain:\n  adapter: claude\nplayers:\n  inspector:\n    adapter: claude\nplaybooks:\n  code:\n    roles:\n      coder: inspector\n`);
   const {imports, stats} = fakeAdapterImports({rules: [{match: "approval-fixture", response: {
     result: "Approved native action completed", approval: {toolName: "desktop.inspect", input: {app: "Task-owned Example", operation: "read-window", target: "<script>untrusted</script>"}, reason: "Read this task-owned window", expiresInMs, ...approvalPatch},
     effect: (cwd) => writeFileSync(join(cwd, "approved-effect.txt"), "once"),

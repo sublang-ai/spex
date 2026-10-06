@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { composeConfig, templatePath } from "./config.js";
+import { composeConfig, starterText, templatePath } from "./config.js";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { SessionManager, CoreError, currentSession, type RecordEnvelope } from "./session.js";
@@ -35,8 +35,12 @@ async function setup(
     script?: CaptainTurnScript;
   },
 ) {
-  const top = parseYaml(readFileSync(templatePath(), "utf8"));
-  const composed = await composeConfig(top);
+  // The starter as Spex seeds it, each playbook's module where the
+  // built-in spec package's would be found (environments-9).
+  const top = parseYaml(starterText(readFileSync(templatePath(), "utf8")));
+  const composed = await composeConfig(top, undefined, undefined, {
+    modules: { repository: "tester/tester-spex", find: (id) => ({ module: `@sublang/playbook/${id}/registry`, builtin: true }) },
+  });
   const scratch = scratchDir("spex-sess-");
   const projectDir = join(scratch, "project"); mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);

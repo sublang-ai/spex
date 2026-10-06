@@ -12,15 +12,17 @@ import { ApprovalBroker } from "./approvals.js";
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
   watch,
+  writeFileSync,
   type FSWatcher,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { WebSocketServer, WebSocket } from "ws";
@@ -33,14 +35,18 @@ import {
   checkAdapterRuntime,
   composeConfig,
   createModuleLoader,
+  isValidRegistryEntry,
   loadConfig,
+  missingPlayersOf,
   relocateLegacyConfig,
   resolveFormerConfigPaths,
   seedConfig,
   summarizeConfig,
+  validateProjectConfig,
   type ComposedConfig,
   type AdapterRuntimeCheck,
   type LoadModule,
+  type PlaybookModules,
 } from "./config.js";
 import {
   CAPTAIN_AGENT_ID,
@@ -79,16 +85,31 @@ import {
   type RunCommand,
 } from "./forge.js";
 import {
+  applyConfigOp,
   editConfigFile,
+  editProjectConfigFile,
   rewriteLibraryPaths,
   type AgentBlock,
   type ConfigEditOp,
 } from "./config-edit.js";
 import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
-import { BUILTIN_IDS, loadBuiltinCatalog } from "./builtins.js";
+import { loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { DraftStore } from "./drafts.js";
+import { AUTHORING_LANGUAGE, authoringManifest, DraftStore, draftPackagePath } from "./drafts.js";
+import { EnvironmentManager, toRequest } from "./environments.js";
+import {
+  builtinPackage,
+  isGitSource,
+  isPathSource,
+  isSkillName,
+  prepareBuiltinEnvironment,
+  readManifest,
+  writeExcludeBlock,
+  type BuiltinPackage,
+} from "./environment/index.js";
+import { kebab } from "./home.js";
+import type { PlaybookAvailability } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -101,7 +122,7 @@ import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
-import { SpaceManager } from "./space.js";
+import { SpaceManager, type SpaceHost } from "./space.js";
 import { GitHostClient, fileCredentialStore } from "./git-host.js";
 import { currentRuntime } from "./git-credential.js";
 import { validateRemoteUrl } from "./space-git.js";
@@ -198,6 +219,17 @@ export interface CoreServiceOptions {
    * shell's own executable, Electron's run as Node; this process's by
    * default. */
   hostRuntime?: { execPath: string; electron: boolean };
+  /** The built-in spec package this app ships (environments-11): the
+   * build's staged one by default; null ships none. A test seam. */
+  builtinPackage?: BuiltinPackage | null;
+  /** Your agents' home folders' root, where your own group's skills are
+   * exported (environments-8); null writes none. By default the given
+   * `home`, or this user's home for the default Spex home at `~/.spex`;
+   * a home elsewhere exports nothing there, so a scratch home never
+   * writes into the person's real agent folders. */
+  userHome?: string | null;
+  /** The registry's fetch (environments-12); a test seam. */
+  registryFetch?: typeof fetch;
 }
 
 /** Commands that write beneath a clone (space-21): refused `busy` while
@@ -208,11 +240,27 @@ const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
   "project.rebind", "project.remove",
   "intent.queue", "intent.edit", "intent.close", "intent.remove",
   "config.edit", "compile.run", "media.begin", "media.chunk", "media.finish", "media.cancel",
-  "draft.create", "draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.register", "draft.player.set", "draft.delete",
+  "draft.create", "draft.open", "draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.register", "draft.player.set", "draft.delete", "draft.artifacts",
+  // An environment's writes (environments-15, environments-17).
+  "environment.request", "environment.remove", "environment.resolve", "environment.install", "environment.publish",
 ]);
 
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
+
+/** What a sync tells the environments once it applied a lock or moved a
+ * clone (environments-8, environments-17): optional on the Space host. */
+interface SpaceEnvironmentHooks {
+  environmentChanged?(key: string): void | Promise<void>;
+  environmentMoved?(oldKey: string, newKey: string): void | Promise<void>;
+}
+
+/** The engine links a compile provisions in a spec package under
+ * development stay out of the working folder's Git (playbook-library-12). */
+function excludeEngineLinks(workingFolder: string): void {
+  try { writeExcludeBlock(workingFolder, [`/${draftPackagePath("**")}/node_modules/`], "engine links"); }
+  catch (error) { console.error(`spex: ${workingFolder}'s engine links are not excluded: ${String(error)}`); }
+}
 
 interface ClientState {
   socket: WebSocket;
@@ -275,6 +323,15 @@ const noDraft = (draftId: string): CoreError =>
     id: "no draft {draftId}",
     comment: "Refusal: no playbook draft of this id is open",
     values: { draftId },
+  }));
+
+/** A playbook id outside the Agent Skills name rule (playbook-library-51):
+ * it names the spec package, the file and the command. */
+const invalidPlaybookId = (id: string): CoreError =>
+  new CoreError("invalid_request", i18n._({
+    id: "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters",
+    comment: "Refusal: the id offered for a new playbook breaks the Agent Skills name rule",
+    values: { id },
   }));
 
 /** Expand a leading ~ so the most natural path spelling works. */
@@ -411,6 +468,10 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
+  /** Every spex repository's environment (DR-104). */
+  private readonly environments: EnvironmentManager;
+  /** Set once start finished: environment changes then reload. */
+  private started = false;
   private readonly media: ApplicationMedia;
   private readonly browserPreparations = new Map<string, {
     client: ClientState;
@@ -493,7 +554,24 @@ export class CoreService {
         this.queueLedgerChange([handoff.projectId]);
       });
     };
-    this.space = new SpaceManager({
+    this.environments = new EnvironmentManager({
+      store: this.store,
+      userHome: CoreService.userHomeOf(options, this.env, this.home),
+      deviceHome: this.home,
+      ...(options.compileRuntime?.modulePaths ? { modulePaths: options.compileRuntime.modulePaths } : {}),
+      builtin: CoreService.shippedBuiltin(options),
+      ...(options.registryFetch ? { fetch: options.registryFetch } : {}),
+      broadcast: (repository, state) => this.broadcast({ type: "environment.state", repository, state }),
+      changed: (repository) => this.environmentChanged(repository),
+    });
+    // A working folder unpaired from its project keeps nothing the
+    // exports wrote there (environments-8).
+    this.store.onProjectRemoving = (key, folder) => this.environments.removeExportsFor(key, folder);
+    // The hooks a sync calls once it applied a lock or moved a clone
+    // (environments-8, environments-17), beside the host's own fields.
+    const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
+      environmentChanged: (key: string) => this.environments.applied(key),
+      environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
       home: this.store.dir,
       env: this.env,
       store: this.store,
@@ -513,7 +591,15 @@ export class CoreService {
       },
       resumeWatchers: (repository) => { this.watchersPaused.delete(repository); },
       reloadConfig: () => this.reloadConfig(),
-      rescanSessions: async () => { await this.media.reset(); this.drafts.refresh(); await this.syncForeignSessions(); },
+      rescanSessions: async (repository) => {
+        await this.media.reset();
+        this.drafts.refresh();
+        await this.syncForeignSessions();
+        // A sync applied what the host holds, its lock among it: the
+        // environment installs from it and exports (environments-8,
+        // environments-17), its state broadcast.
+        void this.environments.applied(repository).catch(() => {});
+      },
       ledgerChanged: (projectIds) => this.queueLedgerChange(projectIds),
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
@@ -522,11 +608,17 @@ export class CoreService {
       hostRuntime: options.hostRuntime ?? currentRuntime(),
       repositoriesChanged: () => this.afterRepositoriesChanged(),
       repositoriesMoved: (moves) => this.repositoriesMoved(moves),
-    });
+    };
+    this.space = new SpaceManager(spaceHost);
     // Authoring sessions live in the spex repository of their project
-    // (storage-23); their sources stay in the home's library this wave.
-    this.drafts = new DraftStore(this.libraryDir(), () =>
-      this.store.listRepositories().map((repository) => ({ key: repository.key, authoringDir: repository.authoringDir })));
+    // (storage-23); their spec packages in its working folder
+    // (environments-10).
+    this.drafts = new DraftStore(() =>
+      this.store.listRepositories().map((repository) => ({
+        key: repository.key,
+        authoringDir: repository.authoringDir,
+        workingFolder: this.store.home.folderOf(repository.key)?.path ?? null,
+      })));
     const service = this;
     this.authors = new AuthorManager({
       approvalHandler: (draftId) => this.approvals.handler({kind: "draft", id: draftId}, () => ({ownerLabel: draftId})),
@@ -546,7 +638,11 @@ export class CoreService {
       activeCompiles: this.activeCompiles,
       composed: () => this.composed,
       readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
-      reservedIds: () => [...(this.composed?.playbooks.map((playbook) => playbook.id) ?? []), ...BUILTIN_IDS],
+      // An id either environment exports is taken (playbook-library-51).
+      reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
+      org: () => this.packageOrg(),
+      enabled: (id) => this.draftEnabled(id),
+      excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
     });
     this.authors.events.onRecord = (draftId, record) => {
       const key = `draft:${draftId}`;
@@ -590,6 +686,102 @@ export class CoreService {
     this.spoken = this.speakHomeLanguage();
   }
 
+  // -- environments (DR-104) --------------------------------------------------
+
+  /** The built-in spec package this app ships (environments-11). */
+  private static shippedBuiltin(options: CoreServiceOptions): BuiltinPackage | null {
+    if (options.builtinPackage !== undefined) return options.builtinPackage;
+    try { return builtinPackage(); } catch { return null; }
+  }
+
+  /** Where your own group's skills are exported (environments-8): the
+   * given root; else the given `home`; else, for the default Spex home
+   * at `~/.spex`, this user's home; a home elsewhere writes none there. */
+  private static userHomeOf(options: CoreServiceOptions, env: NodeJS.ProcessEnv, home: string): string | null {
+    if (options.userHome !== undefined) return options.userHome;
+    if (options.home !== undefined) return options.home;
+    if (options.dataDir && resolve(options.dataDir) === resolve(home, ".spex") && !env.SPEX_HOME?.trim()) return home;
+    return null;
+  }
+
+  /** The `org` of a new spec package: the account's login, else `local`
+   * (playbook-library-70). */
+  private packageOrg(): string {
+    const host = this.store.home.host;
+    const login = host.account && !host.signedOut ? kebab(host.account.login).slice(0, 64) : "";
+    return login || "local";
+  }
+
+  /** Playbook ids a new authoring session of a project may not take:
+   * every playbook the project's or your own group's environment
+   * exports, but the one a folder `spex-packages/<id>/` left by a
+   * deleted session exports, which the new session takes over
+   * (playbook-library-51). */
+  private reservedPlaybookIds(projectId: string): string[] {
+    const ids = new Set(this.composed?.playbooks.map((playbook) => playbook.id) ?? []);
+    for (const key of new Set([projectId, this.store.home.own()])) {
+      for (const resolution of Object.values(this.environments.lockOf(key)?.packages ?? {})) {
+        for (const [exported, artifact] of Object.entries(resolution.exports)) {
+          const own = isPathSource(resolution.source) && key === projectId && resolution.source.path === draftPackagePath(artifact);
+          if (!own) { ids.add(exported); ids.add(artifact); }
+        }
+      }
+    }
+    return [...ids];
+  }
+
+  /** Whether an authoring session's playbook is enabled: a config of
+   * the session's project or your own group enables its id, and that
+   * spex repository's environment requests the session's spec package
+   * by path (playbook-library-69). */
+  private draftEnabled(id: string): boolean {
+    const projectId = this.drafts.projectOf(id);
+    const draftFolder = this.drafts.workingFolder(id);
+    if (!projectId || draftFolder === null) return false;
+    const packageDir = resolve(draftFolder, this.drafts.packagePath(id));
+    for (const key of new Set([projectId, this.store.home.own()])) {
+      const repository = this.store.repository(key);
+      const folder = this.environments.workingFolder(key);
+      if (!repository || folder === null) continue;
+      const requested = [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
+      if (!requested) continue;
+      const configPath = key === this.store.home.own() ? this.configPath : repository.configPath;
+      try {
+        const top = existsSync(configPath) ? parseYaml(readFileSync(configPath, "utf8")) as { playbooks?: Record<string, unknown> } | null : null;
+        if (top?.playbooks && Object.hasOwn(top.playbooks, id)) return true;
+      } catch { /* an unreadable config enables nothing */ }
+    }
+    return false;
+  }
+
+  /** An environment's files or exports changed (environments-17): your
+   * own group's config composes anew; a session's enabled mark may move. */
+  private environmentChanged(repository: string): void {
+    if (!this.started || this.stopping) return;
+    if (repository === this.store.home.own()) void this.reloadConfig();
+    this.authors.republish();
+  }
+
+  /** Where your own group's config, or a project's session, finds each
+   * enabled playbook's module (environments-9). */
+  private modules(projectId: string | null): PlaybookModules {
+    return this.environments.modulesFor(projectId);
+  }
+
+  /** The players every project's file names that your own group's
+   * roster lacks (core-service-2, settings-46), listed on the valid
+   * config state; a project's session raises them when it opens. */
+  private missingPlayers(ownTop: unknown): import("./protocol.js").MissingPlayer[] {
+    const own = this.store.home.own();
+    const projects: { repository: string; top: unknown }[] = [];
+    for (const repository of this.store.listRepositories()) {
+      if (repository.key === own || resolve(repository.configPath) === resolve(this.configPath) || !existsSync(repository.configPath)) continue;
+      try { projects.push({ repository: repository.key, top: parseYaml(readFileSync(repository.configPath, "utf8")) }); }
+      catch { /* that project's own load reports it */ }
+    }
+    return missingPlayersOf(ownTop, projects);
+  }
+
   /** Where an application owner keeps its assets (media-4): a spex
    * repository's ignored staging owner, an intent's directory beside its
    * file, an authoring session's beside its file. */
@@ -629,6 +821,9 @@ export class CoreService {
    */
   private async spaceBlocker(repository: string): Promise<string | undefined> {
     if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
+    // An environment resolving or installing writes beneath the clone.
+    const installing = this.environments.busyFor(repository);
+    if (installing) return installing;
     const sessions = this.sessions.listSessions().filter((session) => session.projectId === repository);
     for (const session of sessions) {
       const project = this.store.getProject(session.projectId)?.name ?? i18n._({
@@ -691,8 +886,14 @@ export class CoreService {
         return command.projectId;
       case "intent.edit": case "intent.close": case "intent.remove":
         return this.store.getIntent(command.intentId)?.projectId;
-      case "config.edit": case "compile.run":
-        return this.store.home.own();
+      case "config.edit":
+        return command.repository ?? this.store.home.own();
+      case "compile.run":
+        return command.projectId ?? this.store.home.own();
+      case "environment.request": case "environment.remove": case "environment.resolve": case "environment.install": case "environment.publish":
+        return command.repository;
+      case "draft.open": case "draft.artifacts":
+        return command.projectId;
       case "media.begin":
         return mediaOwnerRepository(command.owner);
       case "media.chunk": case "media.finish": case "media.cancel": {
@@ -774,7 +975,10 @@ export class CoreService {
       }
       : undefined;
     // The home opens under its lease, migrating the former layout once
-    // before any writer is admitted (storage-9, core-service-15).
+    // before any writer is admitted (storage-9, core-service-15). Every
+    // clone the store makes requests the built-in spec package before
+    // its first commit (storage-6, environments-11).
+    const builtin = CoreService.shippedBuiltin(options);
     const store = await Store.open({
       ...(options.dataDir ? { dir: options.dataDir } : {}),
       ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
@@ -782,6 +986,7 @@ export class CoreService {
       env,
       ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
       ...(relocateConfig ? { relocateConfig } : {}),
+      ...(builtin ? { prepareRepository: (dir: string, _key: string, hostUrl: string) => { prepareBuiltinEnvironment(dir, builtin, hostUrl); } } : {}),
     });
     let service: CoreService;
     try { service = new CoreService(options, store); }
@@ -800,6 +1005,10 @@ export class CoreService {
     // An apply a crash interrupted is repaired from its marker before the
     // clone reopens (space-31); a failure stands as a blocking issue.
     await service.space.repairAtStartup();
+    // The built-in spec package is seeded and every environment installed
+    // and exported before the config composes from them (environments-11,
+    // environments-9).
+    await service.environments.startup();
     await service.reloadConfig();
     await service.migrateLegacySessionDefault();
     await service.store.initializeSessions();
@@ -820,6 +1029,7 @@ export class CoreService {
       service.watchRepositories();
     }
     await service.listen(options.port ?? 0);
+    service.started = true;
     return service;
     } catch (error) {
       await service.stop();
@@ -1045,6 +1255,8 @@ export class CoreService {
     if (this.adoptTimer) clearTimeout(this.adoptTimer);
     // A Space transport in flight is stopped; a local step finishes.
     await this.space.stop();
+    // An environment's resolve or install finishes; nothing new starts.
+    await this.environments.stop();
     await this.adoptScan;
     if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
     // A draft compile cut here stays "running" on disk and reads as
@@ -1162,21 +1374,27 @@ export class CoreService {
       throw new CoreError("invalid_config", this.configRefusal());
     }
     const repository = this.store.repository(projectId);
-    if (!repository || resolve(repository.configPath) === resolve(this.configPath) || !existsSync(repository.configPath)) return this.composed;
+    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return this.composed;
+    const hasProjectFile = existsSync(repository.configPath);
+    const file = hasProjectFile ? repository.configPath : this.configPath;
     const cause = (error: unknown): CoreError => new CoreError("invalid_config", i18n._({
       id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
-      values: { file: repository.configPath, reason: error instanceof Error ? error.message : String(error) },
+      values: { file, reason: error instanceof Error ? error.message : String(error) },
     }));
     let projectTop: unknown;
     let ownTop: unknown;
     try {
-      projectTop = parseYaml(readFileSync(repository.configPath, "utf8"));
+      projectTop = hasProjectFile ? parseYaml(readFileSync(repository.configPath, "utf8")) : undefined;
       ownTop = parseYaml(readFileSync(this.configPath, "utf8"));
     } catch (error) { throw cause(error); }
+    // The session's playbooks come from the project's environment before
+    // your own group's (environments-9), whether or not the project's
+    // own file enables any; one not yet resolved resolves first.
+    await this.environments.ready(projectId);
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
-        libraryDir: this.libraryDir(),
-        project: { top: projectTop, path: repository.configPath },
+        modules: this.modules(projectId),
+        ...(hasProjectFile ? { project: { top: projectTop, path: repository.configPath } } : {}),
       });
     } catch (error) { throw cause(error); }
   }
@@ -1205,12 +1423,14 @@ export class CoreService {
       nextComposed = undefined;
     } else {
       try {
-        const loaded = await loadConfig(this.configPath, this.options.loadModule, {libraryDir:this.libraryDir()});
+        const loaded = await loadConfig(this.configPath, this.options.loadModule, { modules: this.modules(null) });
         nextComposed = loaded.composed;
+        const missingPlayers = this.missingPlayers(loaded.raw);
         nextState = {
           status: "valid",
           summary: summarizeConfig(loaded),
           seeded: this.seeded,
+          ...(missingPlayers.length > 0 ? { missingPlayers } : {}),
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1439,7 +1659,9 @@ export class CoreService {
       cwd = project.path;
     } else if (command.context?.kind === "draft") {
       if (!this.authors.has(command.context.id)) throw new CoreError("invalid_request", i18n._({id: "Draft is unavailable.", comment: "Refusal: the selected authoring draft does not exist"}));
-      cwd = join(this.libraryDir(), command.context.id);
+      const packageDir = this.drafts.draftDir(command.context.id);
+      if (packageDir === null) throw new CoreError("invalid_request", i18n._({id: "Draft is unavailable.", comment: "Refusal: the selected authoring draft does not exist"}));
+      cwd = packageDir;
     }
     try {
       return await browserAgent(command.agent, cwd, command.context?.kind === "draft", this.options.adapterImports);
@@ -1859,12 +2081,21 @@ export class CoreService {
           }));
         }
         const op = command.op as ConfigEditOp;
-        const result = await editConfigFile(
-          this.configPath,
-          op,
-          this.options.loadModule,
-          { libraryDir: this.libraryDir() },
-        );
+        // A project's or another group's file (playbook-library-3): its
+        // playbook entries alone, composed on top of yours with the
+        // modules its environment exports before yours.
+        const target = command.repository !== undefined && command.repository !== this.store.home.own()
+          ? this.store.repository(command.repository)
+          : undefined;
+        if (command.repository !== undefined && command.repository !== this.store.home.own() && !target) throw noProject(command.repository);
+        const result = target
+          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key))
+          : await editConfigFile(
+            this.configPath,
+            op,
+            this.options.loadModule,
+            { modules: this.modules(null) },
+          );
         if (!result.ok) {
           throw new CoreError(
             "invalid_config",
@@ -1876,21 +2107,17 @@ export class CoreService {
           );
         }
         await this.reloadConfig();
+        this.authors.republish();
         return this.configState;
       }
       case "compile.check":
         return checkToolchain(this.env, this.options.compileSpawner, this.options.compileRuntime);
       case "playbook.artifacts": {
-        if (this.configState.status !== "valid" || !this.composed) {
-          throw new CoreError("invalid_config", i18n._({
-            id: "config is not valid",
-            comment: "Refusal: the loaded config carries errors",
-          }));
-        }
-        const playbook = this.composed.playbooks.find(
-          (entry) => entry.id === command.playbookId,
-        );
-        if (!playbook) {
+        // A playbook's stages beside its module, wherever an environment
+        // of this device installs it (playbook-library-24).
+        const from = this.composed?.playbooks.find((entry) => entry.id === command.playbookId)?.from
+          ?? this.installedModule(command.playbookId);
+        if (!from) {
           throw new CoreError(
             "not_found",
             i18n._({
@@ -1900,17 +2127,18 @@ export class CoreService {
             }),
           );
         }
-        return resolveArtifacts(
-          { id: playbook.id, from: playbook.from },
-          this.env,
-        );
+        return resolveArtifacts({ id: command.playbookId, from }, this.env);
       }
       case "library.builtins": {
+        // The built-in spec package's playbooks your own group's
+        // environment installs, each `configured` where the config
+        // enables it (playbook-library-34).
         const configuredIds = new Set(
           this.composed?.playbooks.map((playbook) => playbook.id) ?? [],
         );
         return {
           builtins: await loadBuiltinCatalog(
+            this.environments.locations(this.store.home.own()),
             configuredIds,
             this.options.loadModule,
           ),
@@ -1923,6 +2151,17 @@ export class CoreService {
             comment: "Refusal: no config file exists at the path the core reads",
           }));
         }
+        // The one-shot compile writes the spec package under development
+        // in a project's working folder (environments-10).
+        if (command.projectId === undefined) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "name the project whose working folder holds the playbook's spec package",
+            comment: "Refusal: a compile writes its spec package inside a project's working folder",
+          }));
+        }
+        const project = this.store.getProject(command.projectId);
+        if (!project) throw noProject(command.projectId);
+        if (!isSkillName(command.playbookId)) throw invalidPlaybookId(command.playbookId);
         // One compile per playbook id, fail-closed (DR-010 §5): a
         // duplicate submission is rejected, never queued or merged.
         if (this.activeCompiles.has(command.playbookId)) {
@@ -1938,12 +2177,16 @@ export class CoreService {
         const controller = new AbortController();
         this.activeCompiles.set(command.playbookId, controller);
         try {
-          const libraryDir = this.libraryDir();
+          const packagePath = draftPackagePath(command.playbookId);
+          const packageDir = join(project.path, ...packagePath.split("/"));
+          mkdirSync(join(packageDir, "playbooks", AUTHORING_LANGUAGE), { recursive: true });
+          if (!existsSync(join(packageDir, "meta.yaml"))) writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, this.packageOrg()));
+          excludeEngineLinks(project.path);
+          const libraryDir = join(packageDir, "playbooks", AUTHORING_LANGUAGE);
           let result;
           try {
             result = await compilePlaybook({
               playbookId: command.playbookId,
-              configPath: this.configPath,
               source: {
                 ...(command.sourceText !== undefined
                   ? { text: command.sourceText }
@@ -1988,8 +2231,16 @@ export class CoreService {
             throw new CoreError("invalid_request", message);
           }
           // The one-shot form is a draft-style compile followed by the
-          // registration path a draft takes (playbook-library-69).
-          return await this.registerCompiled(command.playbookId, result, command.bindings, command.newPlayers);
+          // enabling path a session takes (playbook-library-69).
+          return await this.enableCompiled({
+            playbookId: command.playbookId,
+            result,
+            bindings: command.bindings,
+            newPlayers: command.newPlayers,
+            projectId: project.id,
+            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            packageDir,
+          });
         } finally {
           this.activeCompiles.delete(command.playbookId);
         }
@@ -2341,14 +2592,17 @@ export class CoreService {
             values: { projectId: command.projectId },
           }));
         }
+        // The id names the spec package, the file and the command: the
+        // Agent Skills name rule (playbook-library-51).
+        if (!isSkillName(command.draftId)) throw invalidPlaybookId(command.draftId);
         if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== project.id) {
           throw new CoreError("invalid_request", i18n._({
-            id: "{id} is already a configured playbook or a built-in; pick another id",
+            id: "{id} is already an authoring session of another project; pick another id",
             values: { id: command.draftId },
-            comment: "Refusal: the id offered for a new draft is taken by a playbook already",
+            comment: "Refusal: the id offered for a new playbook is another project's authoring session",
           }));
         }
-        return this.authors.create(command.draftId, { key: repository.key, authoringDir: repository.authoringDir });
+        return this.authors.create(command.draftId, { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path });
       }
       case "draft.open":
         this.requireDraft(command.projectId, command.draftId);
@@ -2381,17 +2635,23 @@ export class CoreService {
             comment: "Refusal: no config file exists at the path the core reads",
           }));
         }
-        // Re-package with the confirmed command and intent, register
-        // through the shared path, then retire the draft — the draft
-        // held busy throughout, so no message starts a turn on a draft
-        // about to go; a refused write leaves it standing with its
-        // artifacts (playbook-library-69).
+        // Re-package with the confirmed command and intent, then enable
+        // through the shared path — the session held busy throughout and
+        // kept after, enabled; a refused write leaves it standing with
+        // its artifacts (playbook-library-69).
         return await this.authors.register(
           command.draftId,
           command.command,
           command.intent,
-          this.libraryDir(),
-          (result) => this.registerCompiled(command.draftId, result, command.bindings, command.newPlayers),
+          (result, location) => this.enableCompiled({
+            playbookId: command.draftId,
+            result,
+            bindings: command.bindings,
+            newPlayers: command.newPlayers,
+            projectId: command.projectId,
+            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            packageDir: location.packageDir,
+          }),
         );
       }
       case "draft.player.set":
@@ -2405,12 +2665,217 @@ export class CoreService {
         return null;
       case "draft.artifacts": {
         this.requireDraft(command.projectId, command.draftId);
+        // The compiled stages in the playbook artifact's folder of the
+        // spec package under development (playbook-library-24).
+        const artifactDir = this.drafts.artifactDir(command.draftId) ?? join(this.store.dir, "missing");
         return resolveArtifacts(
-          { id: command.draftId, from: join(this.libraryDir(), command.draftId, `${command.draftId}.registry.mjs`) },
+          { id: command.draftId, from: join(artifactDir, `${command.draftId}.registry.mjs`) },
           this.env,
         );
       }
+      // Environments (environments-14, environments-15, environments-17).
+      case "environment.get":
+        return this.environments.state(command.repository);
+      case "environment.request": {
+        const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request));
+        void done.catch(() => {});
+        return { accepted: true };
+      }
+      case "environment.remove": {
+        const { done } = await this.environments.remove(command.repository, command.name);
+        void done.catch(() => {});
+        return { accepted: true };
+      }
+      case "environment.resolve":
+        void this.environments.resolveLater(command.repository).catch(() => {});
+        return { accepted: true };
+      case "environment.install":
+        void this.environments.installLater(command.repository).catch(() => {});
+        return { accepted: true };
+      case "environment.search":
+        return { packages: await this.environments.search(command.query) };
+      case "environment.publish": {
+        const { done } = await this.environments.publish(command.repository, command.path);
+        void done.catch(() => {});
+        return { accepted: true };
+      }
+      case "environment.playbooks":
+        return this.playbookAvailability(command.projectId);
     }
+  }
+
+  /** A playbook's installed module on this device, from any spex
+   * repository's environment, your own group's first. */
+  private installedModule(playbookId: string): string | undefined {
+    const own = this.store.home.own();
+    const keys = [own, ...this.store.listRepositories().map((repository) => repository.key).filter((key) => key !== own)];
+    for (const key of keys) {
+      for (const location of this.environments.locations(key).values()) {
+        if (location.id === playbookId && location.present) return location.module;
+      }
+    }
+    return undefined;
+  }
+
+  /** `environment.playbooks` (playbook-library-1): every playbook the
+   * project's and your own group's environments export, with where each
+   * is enabled, read from the config files. */
+  private async playbookAvailability(projectId: string | undefined): Promise<{ project: PlaybookAvailability[] | null; own: PlaybookAvailability[] }> {
+    const own = this.store.home.own();
+    const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
+    if (projectId !== undefined && projectId !== own && !projectRepository) throw noProject(projectId);
+    const enabledIn = (path: string | undefined): Record<string, Record<string, unknown>> => {
+      if (!path || !existsSync(path)) return {};
+      try {
+        const top = parseYaml(readFileSync(path, "utf8")) as { playbooks?: unknown } | null;
+        return top && typeof top.playbooks === "object" && top.playbooks !== null ? top.playbooks as Record<string, Record<string, unknown>> : {};
+      } catch { return {}; }
+    };
+    const ownEntries = enabledIn(this.configPath);
+    const projectEntries = enabledIn(projectRepository?.configPath);
+    const list = async (key: string): Promise<PlaybookAvailability[]> => {
+      const lock = this.environments.lockOf(key);
+      const out: PlaybookAvailability[] = [];
+      for (const [name, location] of this.environments.locations(key)) {
+        let entry: { command?: unknown; intent?: unknown; requiredRoleIds?: unknown } | undefined;
+        if (location.present) {
+          try {
+            const value = ((await this.options.loadModule!(location.module)) as { default?: unknown }).default;
+            if (isValidRegistryEntry(value)) entry = value;
+          } catch { entry = undefined; }
+        }
+        const resolution = lock?.packages[location.package];
+        const source: PlaybookAvailability["source"] = location.builtin ? "builtin"
+          : resolution && isPathSource(resolution.source) ? "path"
+            : resolution && isGitSource(resolution.source) ? "git" : "registry";
+        const config = projectEntries[location.id] ?? ownEntries[location.id];
+        const command = typeof config?.command === "string" ? config.command : typeof entry?.command === "string" ? entry.command : null;
+        out.push({
+          name,
+          id: location.id,
+          command,
+          intent: typeof config?.intent === "string" ? config.intent : typeof entry?.intent === "string" ? entry.intent : null,
+          roles: Array.isArray(entry?.requiredRoleIds) ? [...entry!.requiredRoleIds as string[]] : [],
+          package: location.package,
+          version: location.version,
+          source,
+          repository: key,
+          enabled: [
+            ...(projectRepository && Object.hasOwn(projectEntries, location.id) ? ["project" as const] : []),
+            ...(Object.hasOwn(ownEntries, location.id) ? ["own" as const] : []),
+          ],
+          present: location.present,
+        });
+      }
+      return out;
+    };
+    return { project: projectRepository ? await list(projectRepository.key) : null, own: await list(own) };
+  }
+
+  /**
+   * The tail of a compile (playbook-library-69), shared by the one-shot
+   * `compile.run` and an authoring session's enabling: re-key the
+   * bindings onto the compiled entry's derived roles; check the whole
+   * enabling against the config's fail-closed rules before anything is
+   * written (playbook-library-15, playbook-library-20); request the spec
+   * package by path from the chosen spex repository's environment and
+   * install it; write the players your own group's roster lacks; write
+   * the `playbooks.<id>` entry, no `from`, into that spex repository's
+   * config; reload.
+   */
+  private async enableCompiled(input: {
+    playbookId: string;
+    result: CompileResult;
+    bindings: Record<string, string>;
+    newPlayers: Record<string, AgentBlock> | undefined;
+    projectId: string;
+    /** The spex repository to enable in: the project's, by default, or your own group's. */
+    repository?: string;
+    packageDir: string;
+  }): Promise<ConfigState> {
+    const { playbookId, result } = input;
+    const roles = this.rekeyRoles(result, input.bindings);
+    const own = this.store.home.own();
+    const targetKey = input.repository ?? input.projectId;
+    if (targetKey !== own && targetKey !== input.projectId) throw noProject(targetKey);
+    const target = this.store.repository(targetKey);
+    if (!target) throw noProject(targetKey);
+    const targetFolder = this.environments.workingFolder(targetKey);
+    const relativePath = targetFolder === null ? undefined : relative(resolve(targetFolder), resolve(input.packageDir));
+    if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry",
+        comment: "Refusal: a request by path names a folder inside the repository's working folder (environments-2)",
+        values: { repository: targetKey },
+      }));
+    }
+    const packagePath = relativePath.split(sep).join("/");
+    let manifest;
+    try { manifest = readManifest(input.packageDir); }
+    catch (error) { throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error)); }
+    const name = `${manifest.org}/${manifest.name}`;
+    const entryOp: ConfigEditOp = { kind: "playbook.add", playbookId, roles };
+    const playerOps: ConfigEditOp[] = Object.entries(input.newPlayers ?? {}).map(([playerId, block]) => ({ kind: "player.set", playerId, patch: block }));
+
+    // Nothing is written until the whole enabling passes the config's
+    // own rules, the new module standing in for the one the environment
+    // will export (playbook-library-15).
+    const base = this.modules(targetKey === own ? null : targetKey);
+    const overlay: PlaybookModules = {
+      repository: base.repository,
+      find: (id) => (id === playbookId ? { module: result.from, builtin: false } : base.find(id)),
+    };
+    try {
+      let ownText = readFileSync(this.configPath, "utf8");
+      for (const op of playerOps) ownText = applyConfigOp(ownText, op);
+      if (targetKey === own) ownText = applyConfigOp(ownText, entryOp);
+      const ownTop = parseYaml(ownText) as unknown;
+      if (targetKey === own) {
+        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay });
+      } else {
+        const projectText = applyConfigOp(existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "", entryOp);
+        const projectTop = parseYaml(projectText) as unknown;
+        validateProjectConfig(projectTop, target.configPath);
+        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath } });
+      }
+    } catch (error) {
+      throw new CoreError("invalid_config", i18n._({
+        id: "compiled, but enabling was refused: {error}",
+        comment: "Refusal after a successful compile; `error` is the config validation's own words",
+        values: { error: error instanceof Error ? error.message : String(error) },
+      }));
+    }
+
+    // The spec package is requested by path and installed before the
+    // config names its playbook (playbook-library-69, environments-15).
+    await this.environments.requestAndInstall(targetKey, name, { path: packagePath });
+
+    // Lanes the bindings name but the roster lacks are created first,
+    // so the binding never dangles (DR-032, playbook-library-3).
+    for (const op of playerOps) {
+      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
+      if (!minted.ok) {
+        throw new CoreError("invalid_config", i18n._({
+          id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
+          comment: "Refusal after a successful compile; `error` is the config validation's own words",
+          values: { playerId: (op as { playerId: string }).playerId, error: minted.error },
+        }));
+      }
+    }
+    const edit = targetKey === own
+      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
+      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+    if (!edit.ok) {
+      throw new CoreError("invalid_config", i18n._({
+        id: "compiled, but registration was refused: {error}",
+        comment:
+          "Refusal after a successful compile; `error` is the config validation's own words",
+        values: { error: edit.error },
+      }));
+    }
+    await this.reloadConfig();
+    this.authors.republish();
+    return this.configState;
   }
 
   /** An authoring session of the named project, or `not_found`
@@ -2469,20 +2934,16 @@ export class CoreService {
   private afterRepositoriesChanged(): void {
     this.drafts.refresh();
     if (this.options.watchConfig !== false) this.watchRepositories();
+    // A new clone's environment — requesting the built-in spec package
+    // since the store made it (storage-6) — resolves and installs.
+    this.environments.settleUnresolved();
   }
 
   /**
-   * The tail of a compile (playbook-library-69), shared by the one-shot
-   * `compile.run` and a draft's registration: re-key the bindings onto
-   * the compiled entry's derived roles, create the players the roster
-   * lacks first, write the `playbooks.<id>` entry, reload the config.
+   * Re-key an enabling's role -> player bindings onto the compiled
+   * entry's derived roles (playbook-library-32).
    */
-  private async registerCompiled(
-    playbookId: string,
-    result: CompileResult,
-    bindings: Record<string, string>,
-    newPlayers: Record<string, AgentBlock> | undefined,
-  ): Promise<ConfigState> {
+  private rekeyRoles(result: CompileResult, bindings: Record<string, string>): Record<string, string> {
     // The compiled entry's derived roles are authoritative (DR-014):
     // re-key the request's role -> player bindings onto them by
     // case-insensitive name match — slc emits the ids as the gears
@@ -2513,43 +2974,7 @@ export class CoreService {
         }),
       );
     }
-    // Lanes the bindings name but the roster lacks are created first,
-    // so the binding never dangles (DR-032).
-    for (const [playerId, block] of Object.entries(newPlayers ?? {})) {
-      const minted = await editConfigFile(
-        this.configPath,
-        { kind: "player.set", playerId, patch: block },
-        this.options.loadModule,
-        { libraryDir: this.libraryDir() },
-      );
-      if (!minted.ok) {
-        throw new CoreError(
-          "invalid_config",
-          i18n._({
-            id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
-            comment:
-              "Refusal after a successful compile; `error` is the config validation's own words",
-            values: { playerId, error: minted.error },
-          }),
-        );
-      }
-    }
-    const edit = await editConfigFile(
-      this.configPath,
-      { kind: "playbook.add", playbookId, from: result.from, roles },
-      this.options.loadModule,
-      { libraryDir: this.libraryDir() },
-    );
-    if (!edit.ok) {
-      throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but registration was refused: {error}",
-        comment:
-          "Refusal after a successful compile; `error` is the config validation's own words",
-        values: { error: edit.error },
-      }));
-    }
-    await this.reloadConfig();
-    return this.configState;
+    return roles;
   }
 
   /** Starting an intent authorizes its same-project successor, not a

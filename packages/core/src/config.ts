@@ -20,12 +20,13 @@ import {
   rmdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse as parseYaml } from "yaml";
+import { isMap, isScalar, parse as parseYaml, parseDocument } from "yaml";
 import {
   AGENT_RUNTIME_TARGETS,
   classifyRuntime,
@@ -54,35 +55,35 @@ import type {
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
 
-/** Registry specifiers of the built-ins shipped by @sublang/playbook:
- * the playbooks the built-in spec package provides (DR-104). */
-export const BUILTIN_FROMS: Readonly<Record<string, string>> = {
-  code: "@sublang/playbook/code/registry",
-  review: "@sublang/playbook/review/registry",
-  decide: "@sublang/playbook/decide/registry",
-  dev: "@sublang/playbook/dev/registry",
-  branch: "@sublang/playbook/branch/registry",
-  pr: "@sublang/playbook/pr/registry",
-  inspect: "@sublang/playbook/inspect/registry",
-};
+/** An enabled playbook's module, as an environment exports it
+ * (environments-9): the installed artifact's registry module, absolute,
+ * and whether it is the app's built-in spec package's, whose modules
+ * carry no registry-contract marker (playbook-library-33). */
+export interface PlaybookModule {
+  module: string;
+  builtin: boolean;
+}
 
-/** The module a `from`-less playbook entry resolves to until the
- * environment's lock names it (storage-7): a built-in, or a playbook the
- * home's compiled library holds. */
-export function providedFrom(id: string, libraryDir?: string): string | undefined {
-  if (Object.hasOwn(BUILTIN_FROMS, id)) return BUILTIN_FROMS[id];
-  if (!libraryDir) return undefined;
-  const local = join(libraryDir, id, `${id}.registry.mjs`);
-  return existsSync(local) ? local : undefined;
+/** Where composition finds each enabled playbook's module: the
+ * environments of the session's spex repositories, the project's before
+ * your own group's (environments-9). A shared file names no path. */
+export interface PlaybookModules {
+  find(id: string): PlaybookModule | undefined;
+  /** The spex repository whose environment lacks a playbook no
+   * environment of the session exports, named in that config error. */
+  repository: string;
 }
 
 /** What composition is told beyond the file (core-service-2). */
 export interface ComposeOptions {
-  /** The home's compiled-playbook library, for a `from`-less entry. */
-  libraryDir?: string;
+  /** The environments' module locations; absent, no playbook has one. */
+  modules?: PlaybookModules;
   /** A project's or another group's own file, added on top of yours. */
   project?: { top: unknown; path: string };
 }
+
+/** No environment at all: every enabled playbook is missing. */
+const NO_MODULES: PlaybookModules = { find: () => undefined, repository: "" };
 
 /** Fields a project's file may not hold: what each player runs on is
  * yours alone (core-service-2, DR-103). */
@@ -722,8 +723,30 @@ export function relocateLegacyConfig(
 export function seedConfig(path: string): boolean {
   if (existsSync(path)) return false;
   mkdirSync(dirname(path), { recursive: true });
-  copyFileSync(templatePath(), path, constants.COPYFILE_EXCL);
+  writeFileSync(path, starterText(readFileSync(templatePath(), "utf8")), { flag: "wx" });
   return true;
+}
+
+/**
+ * The starter as Spex seeds it: the playbook CLI's own template, its
+ * comments kept, with every `playbooks.<id>.from` dropped — a playbook's
+ * module comes from the environment that installs it and never from a
+ * path in a shared file (core-service-2, environments-9).
+ */
+export function starterText(template: string): string {
+  const document = parseDocument(template);
+  if (document.errors.length > 0) return template;
+  const playbooks = document.get("playbooks", true);
+  if (!isMap(playbooks)) return template;
+  let dropped = false;
+  for (const item of playbooks.items) {
+    const id = isScalar(item.key) ? String(item.key.value) : String(item.key);
+    if (document.hasIn(["playbooks", id, "from"])) {
+      document.deleteIn(["playbooks", id, "from"]);
+      dropped = true;
+    }
+  }
+  return dropped ? document.toString() : template;
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,6 +1295,7 @@ export async function composeConfig(
   // (core-service-2); the project's file is checked before it layers.
   if (options.project) validateProjectConfig(options.project.top, options.project.path);
   const top = options.project ? layerProjectConfig(ownTop, options.project.top) : ownTop;
+  const modules = options.modules ?? NO_MODULES;
 
   if (top.profiles !== undefined) {
     // The load path migrates profiles-era files (DR-019); a map
@@ -1402,37 +1426,31 @@ export async function composeConfig(
       );
     }
     const block = blockValue;
-    const configuredFrom = block.from;
-    let from: string;
-    if (configuredFrom === undefined) {
-      // A playbook named without a module is one the environment
-      // provides (storage-7); until its lock names one, a built-in or
-      // the home's compiled library does.
-      const provided = providedFrom(id, options.libraryDir);
-      if (!provided) {
-        throw new RegistryError(
-          "unavailable",
-          i18n._({
-            id: "playbooks.{id} names no module, and no installed playbook provides it",
-            comment: "Config error: an enabled playbook carries no `from` and nothing installed provides it",
-            values: { id },
-          }),
-        );
-      }
-      from = provided;
-    } else {
-      if (typeof configuredFrom !== "string" || configuredFrom.length === 0) {
-        throw new Error(
-          i18n._({
-            id: "playbooks.{id}.from must be a module specifier",
-            comment:
-              "Config error; `playbooks.<id>.from` is the config file's own field name",
-            values: { id },
-          }),
-        );
-      }
-      from = configPath ? resolveConfigModule(configuredFrom, configPath) : configuredFrom;
+    // A playbook's module comes from the environment that installs it
+    // and never from a path in a shared file (core-service-2, DR-104).
+    if (Object.hasOwn(block, "from")) {
+      throw new Error(
+        i18n._({
+          id: "playbooks.{id}.from is not allowed: a playbook's module comes from the environment that installs its spec package",
+          comment:
+            "Config error; `playbooks.<id>.from` is the config file's own field name, retired by environments",
+          values: { id },
+        }),
+      );
     }
+    const located = modules.find(id);
+    if (!located) {
+      throw new RegistryError(
+        "unavailable",
+        i18n._({
+          id: "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}",
+          comment:
+            "Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key",
+          values: { id, repository: modules.repository },
+        }),
+      );
+    }
+    const from = located.module;
     let moduleValue: unknown;
     try {
       moduleValue = await loadModule(from);
@@ -1441,7 +1459,7 @@ export async function composeConfig(
       throw new RegistryError(
         "unavailable",
         i18n._({
-          id: "playbooks.{id}.from \"{from}\" failed to import: {message}",
+          id: "playbooks.{id}: its module \"{from}\" failed to import: {message}",
           comment:
             "Config error; `message` is the import failure's own words, relayed",
           values: { id, from, message },
@@ -1452,29 +1470,29 @@ export async function composeConfig(
     if (!isValidRegistryEntry(entry)) {
       throw new Error(
         i18n._({
-          id: "playbooks.{id}.from \"{from}\" exposes no valid registry entry",
+          id: "playbooks.{id}: its module \"{from}\" exposes no valid registry entry",
           comment:
-            "Config error: the module the config names is no compiled playbook",
+            "Config error: the module the environment installs is no compiled playbook",
           values: { id, from },
         }),
       );
     }
-    // File-path registries are Spex-generated bundles; one without the
-    // DR-014 contract marker predates the playbook 2.0 runtime and
-    // would fail mid-turn — refuse it at load with recompile guidance.
-    // Package-specifier registries ship with their runtime and are
-    // exempt.
+    // A compiled playbook's module is a Spex-generated bundle; one
+    // without the DR-014 contract marker predates the playbook 2.0
+    // runtime and would fail mid-turn — refuse it at load with
+    // recompile guidance. The built-in spec package's modules ship with
+    // their runtime and need no marker (playbook-library-33).
     if (
-      isAbsolute(from) &&
+      !located.builtin &&
       (moduleValue as { spexRegistryContract?: unknown }).spexRegistryContract !==
         REGISTRY_CONTRACT
     ) {
       throw new RegistryError(
         "stale",
         i18n._({
-          id: "playbooks.{id}.from \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\"",
+          id: "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\"",
           comment:
-            "Config error; \"the Playbooks surface\" is the app's own Library surface",
+            "Config error; \"Playbooks\" is the app's own surface",
           values: { id, from },
         }),
       );
@@ -1770,7 +1788,7 @@ export interface LoadedConfig {
 export async function loadConfig(
   path: string,
   loadModule?: LoadModule,
-  options: { libraryDir?: string } = {},
+  options: { modules?: PlaybookModules } = {},
 ): Promise<LoadedConfig> {
   // A profiles-era file migrates in place first (DR-019, launcher
   // parity): the shared config composes whichever host loads it, and
@@ -1789,17 +1807,37 @@ export async function loadConfig(
   }
   const text = readFileSync(path, "utf8");
   const raw: unknown = parseYaml(text);
-  if (options.libraryDir && isPlainObject(raw) && isPlainObject(raw.playbooks)) {
-    for (const [id, block] of Object.entries(raw.playbooks)) {
-      if (!isPlainObject(block) || typeof block.from !== "string") continue;
-      const from = resolveConfigModule(block.from, path);
-      if (from !== resolve(options.libraryDir, id, `${id}.registry.mjs`) || existsSync(from)) continue;
-      const { rebuildManagedRegistry } = await import("./compile.js");
-      await rebuildManagedRegistry(options.libraryDir, id);
-    }
-  }
-  const composed = await composeConfig(raw, loadModule, path, { ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });
+  const composed = await composeConfig(raw, loadModule, path, { ...(options.modules ? { modules: options.modules } : {}) });
   return { path, raw, composed };
+}
+
+/**
+ * The players project files name for a role that your own group's
+ * roster lacks (core-service-2, settings-46): one entry per player,
+ * naming the spex repository whose file names it and every role that
+ * does. A file that will not read names none; its own load reports it.
+ */
+export function missingPlayersOf(
+  ownTop: unknown,
+  projects: readonly { repository: string; top: unknown }[],
+): { player: string; repository: string; roles: { playbook: string; role: string }[] }[] {
+  const roster = isPlainObject(ownTop) && isPlainObject(ownTop.players) ? new Set(Object.keys(ownTop.players)) : new Set<string>();
+  const out: { player: string; repository: string; roles: { playbook: string; role: string }[] }[] = [];
+  for (const { repository, top } of projects) {
+    if (!isPlainObject(top) || !isPlainObject(top.playbooks)) continue;
+    const byPlayer = new Map<string, { playbook: string; role: string }[]>();
+    for (const [playbook, entry] of Object.entries(top.playbooks)) {
+      if (!isPlainObject(entry) || !isPlainObject(entry.roles)) continue;
+      for (const [role, player] of Object.entries(entry.roles)) {
+        if (typeof player !== "string" || roster.has(player)) continue;
+        const list = byPlayer.get(player) ?? [];
+        list.push({ playbook, role });
+        byPlayer.set(player, list);
+      }
+    }
+    for (const [player, roles] of [...byPlayer].sort(([a], [b]) => a.localeCompare(b))) out.push({ player, repository, roles });
+  }
+  return out;
 }
 
 export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {

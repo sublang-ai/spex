@@ -3,7 +3,8 @@
 
 // Chat-assisted playbook authoring (DR-058): one conversation per
 // draft, run through cligent directly on the Captain's block or a
-// chosen roster player in the draft directory (playbook-library-64),
+// chosen roster player in the spec package under development, in the
+// project's working folder (playbook-library-64, environments-10),
 // prompts composed from the shipped documents (playbook-library-65),
 // directives read from the reply (playbook-library-66), the draft
 // compile and its bounded failure relay (playbook-library-67/68), the
@@ -32,7 +33,7 @@ import { stripLeadingComments } from "./artifacts.js";
 import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
-import { DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
+import { AUTHORING_LANGUAGE, DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { i18n } from "./i18n.js";
 import type {
   AdapterName,
@@ -50,7 +51,7 @@ import type {
 } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
-import type { StorageDiagnostic } from "./app-storage.js";
+import { StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
 
 /** The player every authoring record names (playbook-library-64). */
 export const AUTHOR_PLAYER = "author";
@@ -107,8 +108,16 @@ export interface AuthorManagerOptions {
   activeCompiles: Map<string, AbortController>;
   composed: () => ComposedConfig | undefined;
   readiness: (adapter: AdapterName) => boolean | null;
-  /** Ids a configured playbook or a built-in holds; a draft never takes one. */
-  reservedIds: () => string[];
+  /** Ids a playbook of the project's or your own group's environment
+   * holds; a new session never takes one (playbook-library-51). */
+  reservedIds: (projectId: string) => string[];
+  /** The `org` a new spec package names: the account's login, else
+   * `local` (playbook-library-70). */
+  org: () => string;
+  /** Whether a session's playbook is enabled (playbook-library-69). */
+  enabled: (id: string) => boolean;
+  /** List a working folder's engine links in its `info/exclude`. */
+  excludeEngineLinks?: (workingFolder: string) => void;
   now?: () => number;
 }
 
@@ -274,7 +283,7 @@ export function relayText(id: string, compile: StoredDraftCompile, elapsed: stri
 
 /** The success text (playbook-library-65). */
 export function successText(id: string, roles: readonly string[]): string {
-  return `The compile of ${id} succeeded; the roles are ${roles.join(", ")}. Propose the registration in a register block.`;
+  return `The compile of ${id} succeeded; the roles are ${roles.join(", ")}. Propose enabling in a register block.`;
 }
 
 function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
@@ -458,7 +467,8 @@ export class AuthorManager {
     // The transcript's state is part of the draft's: a damaged one is
     // known before the draft is described.
     this.recordsOf(id, live);
-    const dirExists = existsSync(this.drafts.draftDir(id));
+    const dir = this.drafts.draftDir(id);
+    const dirExists = dir !== null && existsSync(dir);
     const source = dirExists ? this.drafts.readSource(id) : undefined;
     const activity = this.activity(id);
     const resolved = this.resolveAgent(id);
@@ -476,7 +486,9 @@ export class AuthorManager {
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
       firstLine: source ? firstLineOf(source.markdown) : null,
+      package: draft.package,
       ...(dirExists ? {} : { sourceMissing: true }),
+      enabled: this.options.enabled(id),
       activity,
       state,
       queued: [...draft.queued],
@@ -495,7 +507,8 @@ export class AuthorManager {
    * its source and directory as they stand, the record's mtime for
    * its times, and the diagnostic (playbook-library-70). */
   private damagedInfo(id: string, diagnostic: string): DraftInfo {
-    const dirExists = existsSync(this.drafts.draftDir(id));
+    const dir = this.drafts.draftDir(id);
+    const dirExists = dir !== null && existsSync(dir);
     const source = dirExists ? this.drafts.readSource(id) : undefined;
     let at = this.now();
     try {
@@ -510,7 +523,9 @@ export class AuthorManager {
       createdAt: at,
       touchedAt: at,
       firstLine: source ? firstLineOf(source.markdown) : null,
+      package: this.drafts.packagePath(id),
       ...(dirExists ? {} : { sourceMissing: true }),
+      enabled: this.options.enabled(id),
       activity: this.activity(id),
       state: source ? "draft" : "no-source",
       queued: [],
@@ -658,17 +673,9 @@ export class AuthorManager {
 
   // -- commands -------------------------------------------------------------
 
-  create(id: string, location: { key: string; authoringDir: string }): DraftInfo {
-    if (this.options.reservedIds().includes(id)) {
-      throw new CoreError(
-        "invalid_request",
-        i18n._({
-          id: "{id} is already a configured playbook or a built-in; pick another id",
-          values: { id },
-          comment: "Refusal: the id offered for a new draft is taken by a playbook already",
-        }),
-      );
-    }
+  create(id: string, location: { key: string; authoringDir: string; workingFolder: string | null }): DraftInfo {
+    // An id naming a session already standing opens it: the page reads
+    // the conflict as "open it" (playbook-library-51).
     if (this.drafts.exists(id)) {
       throw new CoreError(
         "conflict",
@@ -679,7 +686,22 @@ export class AuthorManager {
         }),
       );
     }
-    const draft = this.drafts.create(id, this.now(), location);
+    if (this.options.reservedIds(location.key).includes(id)) {
+      throw new CoreError(
+        "invalid_request",
+        i18n._({
+          id: "{id} is already a playbook of this project's or your own environment; pick another id",
+          values: { id },
+          comment: "Refusal: the id offered for a new playbook is one an installed spec package exports",
+        }),
+      );
+    }
+    let draft: StoredDraft;
+    try {
+      draft = this.drafts.create(id, this.now(), location, this.options.org());
+    } catch (error) {
+      throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));
+    }
     const live = this.liveOf(id);
     live.records = [];
     live.seq = 0;
@@ -793,21 +815,21 @@ export class AuthorManager {
   }
 
   /**
-   * Register the draft (playbook-library-69): re-package the last
-   * successful compile with the confirmed command and intent, hand the
-   * result to `commit` — the registration path shared with
-   * `compile.run`, which writes the config — and retire the draft. The
-   * id's compile marker is held from the first check to the
-   * retirement, so a Boss message arriving meanwhile queues rather
-   * than starting a turn on a draft about to go (core-service-96); a
-   * refused commit releases it with the draft standing, artifacts kept.
+   * Enable the session's playbook (playbook-library-69): re-package the
+   * last successful compile with the confirmed command and intent, hand
+   * the result to `commit` — the enabling path shared with
+   * `compile.run`, which requests the spec package and writes the
+   * config — and keep the session, now enabled, so the playbook can be
+   * worked on further and published (playbook-library-61). The id's
+   * compile marker is held throughout, so a Boss message arriving
+   * meanwhile queues (core-service-96); a refused commit leaves the
+   * session standing with its artifacts.
    */
   async register(
     id: string,
     command: string,
     intent: string,
-    libraryDir: string,
-    commit: (result: CompileResult) => Promise<ConfigState>,
+    commit: (result: CompileResult, location: { packageDir: string; packagePath: string; workingFolder: string }) => Promise<ConfigState>,
   ): Promise<ConfigState> {
     const draft = this.read(id);
     this.assertReadable(id);
@@ -821,20 +843,29 @@ export class AuthorManager {
         }),
       );
     }
+    const packageDir = this.drafts.draftDir(id);
+    const workingFolder = this.drafts.workingFolder(id);
+    if (packageDir === null || workingFolder === null || !existsSync(packageDir)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "the spec package of {id} is missing from the working folder",
+        values: { id },
+        comment: "Refusal: the authoring session's spec package folder is not on this device",
+      }));
+    }
     if (this.options.activeCompiles.has(id)) throw new CoreError("busy", compileRunning(id));
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
+    this.publish(id);
     try {
       let result: CompileResult;
       try {
         result = await compilePlaybook({
           playbookId: id,
-          configPath: this.options.configPath,
           source: {},
           roles: draft.compile.roles,
           command,
           intent,
-          libraryDir,
+          libraryDir: join(packageDir, "playbooks", AUTHORING_LANGUAGE),
           env: this.options.env,
           skipSlc: true,
           signal: controller.signal,
@@ -843,27 +874,16 @@ export class AuthorManager {
       } catch (error) {
         throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
       }
-      const state = await commit(result);
-      await this.retire(id);
-      return state;
+      return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder });
     } finally {
       this.options.activeCompiles.delete(id);
+      this.publish(id);
     }
   }
 
-  /** The draft is registered: its record and preference go, the
-   * directory stays with the playbook (playbook-library-70). */
-  private async retire(id: string): Promise<void> {
-    const projectId = this.drafts.projectOf(id) ?? "";
-    const remove = () => {
-      this.drafts.retire(id);
-      this.options.store.deletePref(`authoring:${id}:player`);
-      this.live.delete(id);
-      this.problems.delete(id);
-      this.events.onRemoved(id, projectId);
-    };
-    if (this.options.retireMedia) await this.options.retireMedia(id, remove);
-    else remove();
+  /** Announce a session's state again: its enabled mark may have moved. */
+  republish(): void {
+    for (const id of this.drafts.ids()) this.publish(id);
   }
 
   setPlayer(id: string, playerId: string | null): DraftInfo {
@@ -1086,20 +1106,28 @@ export class AuthorManager {
     resume: string | undefined,
     attachments?: readonly MediaAsset[],
   ): Promise<{ status: string; result?: string; text: string; resumeToken?: string; resumeRejected: boolean; error?: string }> {
+    const packageDir = this.drafts.draftDir(id);
+    if (packageDir === null) {
+      throw new Error(i18n._({
+        id: "the spec package of {id} is missing from the working folder",
+        values: { id },
+        comment: "Refusal: the authoring session's spec package folder is not on this device",
+      }));
+    }
     this.append(id, live, { type: "player_prompt", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, prompt } as TmuxPlayRecord);
     // The block's model, effort and fast mode, and its subagent model
     // and effort (DR-093) — an unset subagent model resolved to
     // `inherit` and an Off sent as none, as the launcher resolves them
-    // (DR-095); `{ mode: "auto" }` alone as permissions; no tool lists,
-    // no maxTurns, no role — the records name the player, not the events
-    // (playbook-library-64).
+    // (DR-095); `{ mode: "auto" }` with the spec package's folder as the
+    // one writable path; no tool lists, no maxTurns, no role — the
+    // records name the player, not the events (playbook-library-64).
     const options: CligentOptions<string, boolean, string> = {
-      cwd: this.drafts.draftDir(id),
+      cwd: packageDir,
       ...(agent.model !== undefined ? { model: agent.model } : {}),
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
       ...subagentTuningOf(agent),
-      permissions: { mode: "auto" },
+      permissions: { mode: "auto", writablePaths: [packageDir] },
       ...(agent.browser !== undefined ? {browser: agent.browser} : {}),
     };
     const cligent = new Cligent<string, boolean, string>(new Adapter(), options);
@@ -1256,7 +1284,8 @@ export class AuthorManager {
   }
 
   private preamble(id: string, draft: StoredDraft, resolved: ResolvedAuthorAgent): string {
-    const sourcePath = this.drafts.sourcePath(id);
+    const sourcePath = this.drafts.sourcePath(id) ?? join(draft.package, "playbooks", AUTHORING_LANGUAGE, id, `${id}.md`);
+    const packageDir = this.drafts.draftDir(id) ?? draft.package;
     const documents = authoringDocuments();
     const width = Math.max(...documents.map((document) => document.path.length)) + 2;
     const compile = draft.compile;
@@ -1268,7 +1297,7 @@ export class AuthorManager {
     const composed = this.options.composed();
     const roster = (composed?.players ?? []).map((player) => `${player.id} (${player.adapter}${player.model ? ` · ${player.model}` : ""})`);
     return [
-      `You are helping the Boss write a Spex playbook: a markdown source the slc compiler turns into a state machine that coordinates agents. Write and edit exactly one file — ${sourcePath} — with your file tools. Never run slc, git, or npm; Spex compiles when asked.`,
+      `You are helping the Boss write a Spex playbook: a markdown source the slc compiler turns into a state machine that coordinates agents. It is the playbook artifact of a spec package under development at ${packageDir}. Write and edit exactly one file — ${sourcePath} — with your file tools, and, where it helps, the \`description\` line of ${join(packageDir, "meta.yaml")}; nothing else. Never run slc, git, or npm; Spex compiles when asked.`,
       "",
       "What a source is (read the documents below before writing anything non-trivial):",
       "- An H1 title, then `Roles:` — a list of capitalized, unique role names (two or three is right).",
@@ -1301,7 +1330,7 @@ export class AuthorManager {
       "",
       "Working rules: ask at most one question per reply, and only when the answer changes the roles or the ending; otherwise write a first draft at once and say in three lines what it does; keep prompts as the player will read them; after a relayed failure, fix the source and explain the cause.",
       "",
-      `Draft state: id=${id} · source=${existsSync(sourcePath) ? sourcePath : "none"} · last compile=${lastCompile}${resolved.playerId ? ` · answering as ${resolved.playerId}` : ""}`,
+      `Draft state: id=${id} · spec package=${packageDir} · source=${existsSync(sourcePath) ? sourcePath : "none"} · last compile=${lastCompile}${resolved.playerId ? ` · answering as ${resolved.playerId}` : ""}`,
       roster.length > 0
         ? `Roster players you may name: ${roster.join(", ")}`
         : "Roster players you may name: none yet — propose new ones as dev.<role>",
@@ -1358,7 +1387,8 @@ export class AuthorManager {
     if (live.compile || this.options.activeCompiles.has(id)) {
       return { ok: false, code: "busy", message: compileRunning(id) };
     }
-    if (!existsSync(this.drafts.sourcePath(id))) {
+    const sourcePath = this.drafts.sourcePath(id);
+    if (sourcePath === null || !existsSync(sourcePath)) {
       return {
         ok: false,
         code: "invalid_request",
@@ -1401,15 +1431,26 @@ export class AuthorManager {
             }),
       );
       this.publish(id);
+      const packageDir = this.drafts.draftDir(id);
+      if (packageDir === null) throw new Error(i18n._({
+        id: "the spec package of {id} is missing from the working folder",
+        values: { id },
+        comment: "Refusal: the authoring session's spec package folder is not on this device",
+      }));
+      // The engine links the compile provisions stay out of the working
+      // folder's Git (playbook-library-12).
+      const workingFolder = this.drafts.workingFolder(id);
+      if (workingFolder !== null) this.options.excludeEngineLinks?.(workingFolder);
       const result = await compilePlaybook({
         playbookId: id,
-        configPath: this.options.configPath,
-        // The `<id>.md` already in the draft directory: nothing is copied.
+        // The `<id>.md` already in the playbook artifact's folder of the
+        // spec package under development: nothing is copied
+        // (playbook-library-67).
         source: {},
         roles: [],
         command: id,
         intent: "(draft)",
-        libraryDir: this.drafts.libraryDir,
+        libraryDir: join(packageDir, "playbooks", AUTHORING_LANGUAGE),
         env: this.options.env,
         // The compile runs on the block that answers the draft
         // (playbook-library-42).

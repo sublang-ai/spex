@@ -19,7 +19,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { Store } from "./store.js";
 import { sha256 } from "./app-storage.js";
 import { Home } from "./home.js";
-import { templatePath } from "./config.js";
+import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
 import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
@@ -569,10 +569,12 @@ test("storage-16: a config naming a playbook the environment lacks stays a nonbl
   const own = Home.load(home);
   const ownClone = own.clonePath(own.own());
   const config = join(ownClone, "config", "playbook.config.yaml");
-  const template = readFileSync(templatePath(), "utf8");
-  assert.ok(template.includes('"@sublang/playbook/code/registry"'));
-  writeFileSync(config, template.replace('"@sublang/playbook/code/registry"', '"@sublang/definitely-missing"'), { mode: 0o600 });
-  const configDiagnostic = async () => (await validateStorageTree(ownClone, { own: true, libraryDir: join(home, "playbooks") })).find((entry) => entry.file.endsWith(join("config", "playbook.config.yaml")));
+  // The starter as Spex seeds it; the environment exports code from a
+  // module that will not import (environments-9).
+  const template = starterText(readFileSync(templatePath(), "utf8"));
+  writeFileSync(config, template, { mode: 0o600 });
+  const modules: PlaybookModules = { repository: own.own(), find: (id) => ({ module: id === "code" ? "@sublang/definitely-missing" : `@sublang/playbook/${id}/registry`, builtin: true }) };
+  const configDiagnostic = async () => (await validateStorageTree(ownClone, { own: true, modules })).find((entry) => entry.file.endsWith(join("config", "playbook.config.yaml")));
   try {
     const english = await configDiagnostic();
     assert.ok(english); assert.equal(english.blocking, false); assert.match(english.reason, /failed to import/);
@@ -584,7 +586,7 @@ test("storage-16: a config naming a playbook the environment lacks stays a nonbl
       assert.doesNotMatch(chinese.reason, /failed to import/);
       assert.match(chinese.reason, /导入失败/);
     } finally { speak("en"); }
-    // A from-less entry no built-in and no library playbook provides.
+    // An entry no environment of the session exports.
     writeFileSync(config, `${template}\n`.replace(/^playbooks:\n/m, "playbooks:\n  absent-playbook:\n    roles:\n      coder: dev.coder\n"), { mode: 0o600 });
     const unavailable = await configDiagnostic();
     assert.ok(unavailable, "the missing playbook is reported"); assert.equal(unavailable.blocking, false);

@@ -25,7 +25,7 @@ import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@subla
 import { CoreService } from "./service.js";
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { speak } from "./i18n.js";
-import { templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
+import { starterText, templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
@@ -48,6 +48,7 @@ import type {
   TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
+import { launcherConfig } from "./testing/launcher-config.js";
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -63,11 +64,9 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev.coder
       reviewer: dev.coder
@@ -191,6 +190,15 @@ function seedRepository(projectDir: string): void {
 }
 
 /** Every scratch home's own group (storage-2). */
+
+/** The playbook CLI's own config beside Spex's (DR-104): the launcher
+ * still names each playbook's module itself. */
+function launcherFile(configPath: string): string {
+  const path = `${configPath}.launcher.yaml`;
+  writeFileSync(path, launcherConfig(readFileSync(configPath, "utf8")));
+  return path;
+}
+
 const OWN = "tester";
 
 /** A spex repository's clone under a home (storage-1). */
@@ -459,30 +467,17 @@ test("CORE-20: hidden records reach only debug subscribers", async () => {
 // ---------------------------------------------------------------------------
 
 const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
+  // A playbook's module comes from an environment, never from a path in
+  // a shared file (core-service-2, environments-9).
   {
-    name: "empty from",
-    pattern: /playbooks\.code\.from must be a module specifier/,
-    config: VALID_CONFIG.replace('"@sublang/playbook/code/registry"', '""'),
-  },
-  // A from-less entry is one the environment provides (storage-7): a
-  // built-in does, an id nothing installed provides is refused.
-  {
-    name: "a from-less playbook nothing provides",
-    pattern: /playbooks\.triage names no module, and no installed playbook provides it/,
-    config: VALID_CONFIG.replace('  code:\n    from: "@sublang/playbook/code/registry"\n', "  triage:\n"),
+    name: "a from in your own file",
+    pattern: /playbooks\.code\.from is not allowed: a playbook's module comes from the environment/,
+    config: VALID_CONFIG.replace("  code:\n", '  code:\n    from: "@sublang/playbook/code/registry"\n'),
   },
   {
-    name: "import failure",
-    pattern: /failed to import/,
-    config: VALID_CONFIG.replace(
-      "@sublang/playbook/code/registry",
-      "@sublang/definitely-missing",
-    ),
-  },
-  {
-    name: "key/manifest id mismatch",
-    pattern: /key must equal the module manifest id "code"/,
-    config: VALID_CONFIG.replace("  code:", "  wrong:"),
+    name: "a playbook no environment of the session exports",
+    pattern: /playbooks\.triage is enabled, but the environment of tester\/tester-spex exports no playbook triage/,
+    config: VALID_CONFIG.replace('  code:\n', "  triage:\n"),
   },
   {
     name: "reserved captain role",
@@ -682,11 +677,9 @@ players:
     adapter: kimi
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev.coder
       reviewer: dev.reviewer
@@ -931,7 +924,7 @@ test("CORE-28: the starter template yields one readiness entry per adapter it na
   const adapters = [
     ...new Set([parsed.captain.adapter, ...Object.values(parsed.players).map((p) => p.adapter)]),
   ].sort();
-  const harness = await startHarness(template, {
+  const harness = await startHarness(starterText(template), {
     env: { ANTHROPIC_API_KEY: "test-key", OPENAI_API_KEY: "test-key" },
   });
   const client = new Client(harness.service.port());
@@ -969,11 +962,9 @@ players:
   dev.reviewer: codex
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev.coder
       reviewer: dev.reviewer
@@ -1072,12 +1063,13 @@ test("CORE-27: a second compile.run for the same playbook rejects busy", async (
   });
   const client = new Client(harness.service.port());
   await client.open();
+  const { id: projectId } = await client.expectOk("project.register", { path: harness.projectDir });
 
-  const first = client.command("compile.run", COMPILE_INPUT);
+  const first = client.command("compile.run", { ...COMPILE_INPUT, projectId });
   await client.waitFor(
     (m) => m.type === "compile.progress" && m.line === "slc: working",
   );
-  const second = await client.command("compile.run", COMPILE_INPUT);
+  const second = await client.command("compile.run", { ...COMPILE_INPUT, projectId });
   assert.ok(!second.ok, "duplicate compile must be rejected");
   if (!second.ok) {
     assert.equal(second.error.code, "busy");
@@ -1104,8 +1096,9 @@ test("CORE-27: compile.abort cancels the run; the ◇ line closes progress", asy
   // Aborting with nothing in flight is a not_found.
   const idle = await client.command("compile.abort", { playbookId: "demo" });
   assert.ok(!idle.ok && idle.error.code === "not_found");
+  const { id: projectId } = await client.expectOk("project.register", { path: harness.projectDir });
 
-  const pending = client.command("compile.run", COMPILE_INPUT);
+  const pending = client.command("compile.run", { ...COMPILE_INPUT, projectId });
   await client.waitFor(
     (m) => m.type === "compile.progress" && m.line === "slc: working",
   );
@@ -1128,7 +1121,7 @@ test("CORE-27: compile.abort cancels the run; the ◇ line closes progress", asy
   assert.equal(progress[progress.length - 1].line, "◇ compile canceled");
 
   // The slot is free again: a new compile is accepted (not busy).
-  const again = client.command("compile.run", COMPILE_INPUT);
+  const again = client.command("compile.run", { ...COMPILE_INPUT, projectId });
   await client.waitFor(
     (m) =>
       m.type === "compile.progress" &&
@@ -1491,8 +1484,10 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   });
   assert.equal(cachedForge.at, forge.at);
 
-  // Removal keeps the repo on disk (PROJ-8/19).
-  await client.expectOk("project.remove", { projectId: created.id });
+  // Removal keeps the repo on disk (PROJ-8/19). The local-only spex
+  // repository holds its environment, which has not reached a host, so
+  // removal asks the second confirm (projects-9, storage-6).
+  await client.expectOk("project.remove", { projectId: created.id, confirm: true });
   assert.ok(existsSync(join(created.path, ".git")));
 
   client.close();
@@ -1513,7 +1508,7 @@ test("real captain shell: the installed template's session binds its roster, and
   // adapter: the substitute adapter speaks no effort vocabulary and
   // refuses a call carrying one. Its roster and playbooks stay the
   // template's own.
-  const template = parseYaml(readFileSync(templatePath(), "utf8")) as {
+  const template = parseYaml(starterText(readFileSync(templatePath(), "utf8"))) as {
     players: Record<string, unknown>;
   };
   const dropEfforts = (node: unknown): void => {
@@ -3339,7 +3334,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   writeFileSync(configPath, base
     .replace("  model: claude-test\nplayers:", "  model: claude-tuned\nplayers:")
     .replace("    model: claude-test\nplaybooks:", "    model: claude-test\n  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:")
-    + "  review:\n    from: \"@sublang/playbook/review/registry\"\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n");
+    + "  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n");
   await service.reloadConfig();
   await client.expectOk("turn.submit", { sessionId: session.id, text: "and again" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 3 && m.session.live === false);
@@ -3520,7 +3515,7 @@ test("core-service-66: a former config whose locator points into its own directo
   assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays too");
   const published = readFileSync(canonical, "utf8");
   assert.notEqual(published, legacyText, "no older file is published past the nearer one");
-  assert.equal(published, readFileSync(templatePath(), "utf8"), "the starter is seeded instead");
+  assert.equal(published, starterText(readFileSync(templatePath(), "utf8")), "the starter is seeded instead");
   assert.ok(
     reported.some((line) => line.includes(former) && line.includes("sessions")),
     `the refusal names the file and its locator: ${reported.join(" | ")}`,
@@ -3600,9 +3595,12 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   });
   const client = new Client(harness.service.port());
   await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
 
   // The form keys one binding as the role reads and one lowercased;
-  // both must land on the derived ids.
+  // both must land on the derived ids. The compile writes the spec
+  // package under development in the project's working folder and
+  // enables it there (environments-10, playbook-library-69).
   const state = await client.expectOk("compile.run", {
     playbookId: "pair",
     sourceText: "# Pair\n\nA two-player workflow.\n",
@@ -3611,30 +3609,32 @@ test("playbook-library-32: compile.run binds derived roles however the form case
     intent: "pair workflow for tests",
     bindings: { Coder: "dev.coder", reviewer: "dev.reviewer" },
     newPlayers: { "dev.reviewer": { adapter: "claude" } },
+    projectId: project.id,
   });
   assert.equal(state.status, "valid");
-  const registered =
-    state.status === "valid"
-      ? state.summary.playbooks.find((p) => p.id === "pair")
-      : undefined;
-  assert.ok(registered, "the compiled playbook is configured");
   // The form's compile ran on the Captain's block (playbook-library-17, playbook-library-42).
   assert.equal(slcEnvs.length, 1, "one stub slc run");
   assert.equal(slcEnvs[0]?.SLC_AGENT, "claude-code");
   assert.equal(slcEnvs[0]?.SLC_MODEL, "claude-test");
   assert.equal(slcEnvs[0]?.SLC_EFFORT, undefined);
-  assert.ok(
-    registered.from.startsWith(join(harness.dataDir, "playbooks", "pair")),
-    `manifest under the library: ${registered.from}`,
-  );
-  // The config entry binds each derived role by its own id.
-  const config = readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8");
-  const start = config.indexOf("\n  pair:\n");
+  const artifactDir = join(harness.projectDir, "spex-packages", "pair", "playbooks", "en", "pair");
+  assert.ok(existsSync(join(artifactDir, "pair.registry.mjs")), "the module stands in the playbook artifact's folder");
+  // The project's environment requests it by path; its config entry
+  // binds each derived role by its own id, and names no module.
+  const clone = clonePath(harness.dataDir, project.id);
+  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), /local\/pair:\n\s+path: spex-packages\/pair\n/);
+  const config = readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8");
+  const start = config.indexOf("  pair:\n");
   assert.ok(start >= 0, "the pair entry is written");
   const pairEntry = config.slice(start);
   assert.match(pairEntry, /\n      Coder: dev\.coder\n/);
   assert.match(pairEntry, /\n      Reviewer: dev\.reviewer\n/);
   assert.doesNotMatch(pairEntry, /\n      (coder|reviewer): /);
+  assert.doesNotMatch(pairEntry, /from:/);
+  // The new player joined your own roster first (playbook-library-3).
+  assert.match(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), /dev\.reviewer:\n\s+adapter: claude/);
+  const listed = await client.expectOk("environment.playbooks", { projectId: project.id });
+  assert.deepEqual(listed.project?.find((row) => row.id === "pair")?.enabled, ["project"]);
 
   // The new playbook's artifacts serve its machine.
   const artifacts = await client.expectOk("playbook.artifacts", {
@@ -3658,7 +3658,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
     mkdirSync(legacyDir,{recursive:true,mode:0o700}); mkdirSync(projectPath);
     execFileSync("git",["init","-q",projectPath]);
     writeFileSync(configPath,(selection === "sessions override" ? `sessions: ${join(dataDir,"sessions")}\n` : "") + VALID_CONFIG);
-    const plan = await loadLaunchPlan({userConfigPath:configPath});
+    const plan = await loadLaunchPlan({userConfigPath:launcherFile(configPath)});
     const {imports} = fakeAdapterImports({fallback:{result:"Done"}});
     const seedDir = join(home,"seed-sessions");
     const seed = await openSessionHost({store:createSessionStore({sessionsDir:seedDir}),mode:"new",cwd:projectPath,
@@ -3709,7 +3709,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     // project pairs with (storage-6).
     const { sessionsDir } = pairedHome(dataDir, projectPath);
     writeFileSync(configPath, VALID_CONFIG);
-    const plan = await loadLaunchPlan({userConfigPath: configPath});
+    const plan = await loadLaunchPlan({userConfigPath: launcherFile(configPath)});
     const config = executionConfigFromPlan(plan);
     const {imports, stats} = fakeAdapterImports({fallback: {result: "recovered answer"}});
     const shared = createSessionStore({sessionsDir});
@@ -4231,14 +4231,12 @@ test("core-service-32/39: shutdown waits for a paused durable settlement after r
 
 
 test("core-service-81: saved Captain, player context and graphs survive removal of the playbook module", async (t) => {
-  const moduleDir=scratchDir("spex-removed-module-");
-  const registry=resolveModulePath("@sublang/playbook/code/registry")!;
-  const wrapper=join(moduleDir,"code.registry.mjs");
-  writeFileSync(wrapper,`export {default} from ${JSON.stringify(pathToFileURL(registry).href)};\nexport const spexRegistryContract = ${REGISTRY_CONTRACT};\n`);
-  writeFileSync(join(moduleDir,"code.fsm.ts"),readFileSync(join(dirname(registry),"code.fsm.ts")));
-  const harness=await startHarness(VALID_CONFIG.replace("@sublang/playbook/code/registry",wrapper),{realShell:true});
+  // The session runs the code playbook the project's environment
+  // installs (environments-9); a later core whose modules will not
+  // load stands for that module's removal.
+  const harness=await startHarness(VALID_CONFIG,{realShell:true});
   let service=harness.service; let client=new Client(service.port()); await client.open();
-  t.after(async()=>{client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true}); rmSync(moduleDir,{recursive:true,force:true});});
+  t.after(async()=>{client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
   const project=await client.expectOk("project.register",{path:harness.projectDir});
   const session=await client.expectOk("session.create",{projectId:project.id});
   await client.expectOk("turn.submit",{sessionId:session.id,text:"Retained history"});
@@ -4248,7 +4246,7 @@ test("core-service-81: saved Captain, player context and graphs survive removal 
   assert.equal(context.configuration.captain.adapter,"claude");
   assert.equal(context.configuration.players[0].id,"dev.coder");
   assert.ok(context.graphs.find((entry)=>entry.playbookId==="code")?.graph,"graph stored with context");
-  client.close(); await service.stop(); rmSync(moduleDir,{recursive:true,force:true});
+  client.close(); await service.stop();
   let imports=0;
   service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,loadModule:async()=>{imports++; throw new Error("playbook module removed");}});
   client=new Client(service.port()); await client.open();

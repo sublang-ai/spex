@@ -15,6 +15,9 @@ import {
 
 import {
   ARTIFACT_SCHEMAS,
+  starterText,
+  type ComposeOptions,
+  type PlaybookModules,
   checkAdapterReadiness,
   checkAdapterRuntime,
   composeConfig,
@@ -141,10 +144,23 @@ const stubLoader: LoadModule = async (specifier) => {
 };
 
 function baseConfig(): Record<string, unknown> {
-  return parseYaml(readFileSync(templatePath(), "utf8")) as Record<
+  // The starter as Spex seeds it: the template with no `from` (core-service-2).
+  return parseYaml(starterText(readFileSync(templatePath(), "utf8"))) as Record<
     string,
     unknown
   >;
+}
+
+/** The environments' module locations, standing in: each playbook
+ * from the stub loader's specifier, as the built-in spec package's
+ * modules are, needing no marker (environments-9). */
+const STUB_MODULES: PlaybookModules = {
+  repository: "me/me-spex",
+  find: (id) => ({ module: `@sublang/playbook/${id}/registry`, builtin: true }),
+};
+
+function compose(top: unknown, loader?: LoadModule, path?: string, options: ComposeOptions = {}) {
+  return composeConfig(top, loader, path, { modules: STUB_MODULES, ...options });
 }
 
 function codeBlock(top: Record<string, unknown>): Record<string, unknown> {
@@ -175,7 +191,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   const players = roster(top) as Record<string, Record<string, unknown>>;
   const ids = Object.keys(players);
   const coder = players[String(codeRoles(top).coder)];
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.deepEqual(composed.captainAgent, {
     adapter: captain.adapter,
     model: captain.model,
@@ -192,6 +208,7 @@ test("bundled template composes with launcher-equivalent output", async () => {
   assert.deepEqual(binding.model, { kind: "value", value: coder.model });
   assert.deepEqual(binding.effort, { kind: "value", value: coder.effort });
   assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
+  assert.ok(!Object.values(top.playbooks as Record<string, Record<string, unknown>>).some((entry) => "from" in entry), "the starter names no module");
   // The session's agents travel as one block the shell reads.
   assert.deepEqual(
     Object.keys(composed.captainOptions.sessionAgents.players).sort(),
@@ -208,7 +225,7 @@ test("a codex captain composes and stamps captainAdapter", async () => {
   // fail-closes to an empty allowlist and fails every turn.
   const top = baseConfig();
   top.captain = { adapter: "codex", model: "gpt-5.5" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.equal(composed.captainAgent.adapter, "codex");
   assert.equal(composed.captainAgent.model, "gpt-5.5");
   assert.equal(composed.captainOptions.captainAdapter, "codex");
@@ -219,7 +236,7 @@ async function expectError(
   pattern: RegExp,
   loader: LoadModule = stubLoader,
 ) {
-  await assert.rejects(composeConfig(top, loader), (error: Error) => {
+  await assert.rejects(compose(top, loader), (error: Error) => {
     assert.match(error.message, pattern);
     return true;
   });
@@ -267,28 +284,25 @@ test("captain must resolve an adapter", async () => {
   );
 });
 
-test("from must be a module specifier and import failures carry the cause", async () => {
+test("core-service-2: a from in your own file is refused, and a module that will not import carries its cause", async () => {
   const top = baseConfig();
-  const code = codeBlock(top);
-  code.from = "";
-  await expectError(top, /^playbooks\.code\.from must be a module specifier$/);
-  code.from = "@nope/missing";
-  await expectError(
-    top,
-    /^playbooks\.code\.from "@nope\/missing" failed to import: no module @nope\/missing$/,
-  );
-  // The failure carries its kind, so callers never read the words.
-  await assert.rejects(composeConfig(top, stubLoader), (error: Error) => {
+  codeBlock(top).from = "@sublang/playbook/code/registry";
+  await expectError(top, /^playbooks\.code\.from is not allowed: a playbook's module comes from the environment that installs its spec package$/);
+  const missing: PlaybookModules = { repository: "me/me-spex", find: (id) => (id === "code" ? { module: "@nope/missing", builtin: false } : STUB_MODULES.find(id)) };
+  await assert.rejects(compose(baseConfig(), stubLoader, undefined, { modules: missing }), (error: Error) => {
+    assert.equal(error.message, 'playbooks.code: its module "@nope/missing" failed to import: no module @nope/missing');
+    // The failure carries its kind, so callers never read the words.
     assert.ok(error instanceof RegistryError);
     assert.equal(error.kind, "unavailable");
     return true;
   });
 });
 
-test("file-path registry compatibility guidance is truthful and keeps the marker gate", async () => {
+test("playbook-library-91: a compiled module's compatibility guidance is truthful and keeps the marker gate; a built-in needs none", async () => {
   const top = baseConfig();
   const registry = join(scratchDir("spex-registry-compatibility-"), "registry.mjs");
-  codeBlock(top).from = registry;
+  const compiled: PlaybookModules = { repository: "me/a-spex", find: (id) => (id === "code" ? { module: registry, builtin: false } : STUB_MODULES.find(id)) };
+  const builtin: PlaybookModules = { repository: "me/a-spex", find: (id) => (id === "code" ? { module: registry, builtin: true } : STUB_MODULES.find(id)) };
   // Freshly supplied current-schema entry: an absent host wrapper marker
   // establishes no fact about its generation age or compiler version.
   const entry = registryEntry();
@@ -299,21 +313,23 @@ test("file-path registry compatibility guidance is truthful and keeps the marker
         const loader: LoadModule = async (specifier) => specifier === registry
           ? { default: entry, ...(marker === undefined ? {} : { spexRegistryContract: marker }) }
           : stubLoader(specifier);
-        await assert.rejects(composeConfig(top, loader), (error: Error) => {
+        await assert.rejects(compose(top, loader, undefined, { modules: compiled }), (error: Error) => {
           const expected = language === "zh"
-            ? `playbooks.code.from 的“${registry}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以启用“code”`
-            : `playbooks.code.from "${registry}" is not compatible with this version of Spex; compile its source in Playbooks to enable "code"`;
+            ? `playbooks.code：其模块“${registry}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以启用“code”`
+            : `playbooks.code: its module "${registry}" is not compatible with this version of Spex; compile its source in Playbooks to enable "code"`;
           assert.equal(error.message, expected);
           assert.ok(error instanceof RegistryError);
           assert.equal(error.kind, "stale");
           return true;
         });
+        // The built-in spec package's module needs no marker.
+        assert.equal((await compose(top, loader, undefined, { modules: builtin })).playbooks[0].from, registry);
       }
       const currentLoader: LoadModule = async (specifier) => specifier === registry
         ? { default: entry, spexRegistryContract: 3 }
         : stubLoader(specifier);
-      assert.equal((await composeConfig(top, currentLoader)).playbooks[0].from, registry);
-      assert.ok((await composeConfig(baseConfig(), stubLoader)).playbooks.some((playbook) => playbook.id === "code"));
+      assert.equal((await compose(top, currentLoader, undefined, { modules: compiled })).playbooks[0].from, registry);
+      assert.ok((await compose(baseConfig(), stubLoader)).playbooks.some((playbook) => playbook.id === "code"));
     }
   } finally { speak("en"); }
 });
@@ -385,7 +401,7 @@ test("role bindings cover the manifest exactly, as the launcher requires", async
   // A roleless playbook is legal in v8 and contributes no player.
   const roleless = baseConfig();
   codeBlock(roleless).roles = {};
-  const composed = await composeConfig(roleless, async (specifier) =>
+  const composed = await compose(roleless, async (specifier) =>
     specifier.includes("code")
       ? { default: registryEntry({ id: "code", command: "code", requiredRoleIds: [] }) }
       : stubLoader(specifier),
@@ -396,7 +412,7 @@ test("role bindings cover the manifest exactly, as the launcher requires", async
 test("scalar shorthands still compose as bare-adapter blocks", async () => {
   const top = baseConfig();
   roster(top)["dev.reviewer"] = "claude";
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
   assert.deepEqual(reviewer, { id: "dev.reviewer", adapter: "claude" });
 });
@@ -409,7 +425,7 @@ test("fast mode composes on agents and roles; a non-boolean is refused", async (
   (top.captain as Record<string, unknown>).fastMode = true;
   roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
   codeRoles(top).coder = { player: "dev.coder", fastMode: false };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.equal(
     composed.captainAgent.fastMode,
     true,
@@ -450,7 +466,7 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   (roster(top)[coderId] as Record<string, unknown>).subagentModel = "claude-haiku-5";
   reviewRoles(top).coder = { player: coderId, subagentModel: false };
   reviewRoles(top).reviewer = { player: String(reviewRoles(top).reviewer), subagentModel: "claude-haiku-5" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.equal(composed.captainAgent.subagentModel, "claude-sonnet-5-5");
   assert.equal(composed.captainOptions.sessionAgents.captain.subagentModel, "claude-sonnet-5-5");
   assert.equal(composed.captainOptions.sessionAgents.players[coderId]?.subagentModel, "claude-haiku-5");
@@ -485,7 +501,7 @@ test("a subagent model composes on agents and bindings; blank or on an adapter c
   await expectError(onCodex, /^playbooks\.code\.roles\.coder\.subagentModel is not supported for adapter "codex"$/);
   codeRoles(onCodex).coder = { player: coderId, subagentModel: false };
   reviewRoles(onCodex).coder = { player: coderId, subagentModel: false };
-  await composeConfig(onCodex, stubLoader);
+  await compose(onCodex, stubLoader);
 });
 
 test("a subagent effort and the inherit literal compose; an effort outside the vocabulary, beside no model, or off its adapter is refused", async () => {
@@ -502,7 +518,7 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   codeRoles(top).coder = { player: coderId, subagentEffort: "max" };
   reviewRoles(top).coder = { player: coderId, subagentEffort: false };
   reviewRoles(top).reviewer = { player: reviewerId, subagentModel: "claude-haiku-5", subagentEffort: "medium" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   const agents = composed.captainOptions.sessionAgents;
   assert.equal(agents.captain.subagentModel, "inherit");
   assert.equal(agents.captain.subagentEffort, "high");
@@ -569,7 +585,7 @@ test("a subagent effort and the inherit literal compose; an effort outside the v
   await expectError(onCodex, new RegExp(`^players\\.${coderId.replace(".", "\\.")}\\.subagentEffort is not supported for adapter "codex"$`));
   // `false` asks nothing of the adapter, so a codex lane may carry it.
   roster(onCodex)[coderId] = { adapter: "codex", subagentModel: false };
-  await composeConfig(onCodex, stubLoader);
+  await compose(onCodex, stubLoader);
 
   // A binding's effort is one of its keys, its blank refused as the others are.
   const blank = baseConfig();
@@ -585,7 +601,7 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   const coderId = String(codeRoles(top).coder);
   const reviewerId = String(reviewRoles(top).reviewer);
   roster(top)[reviewerId] = { adapter: "codex" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   const agents = composed.captainOptions.sessionAgents;
   assert.equal(agents.captain.subagentModel, "inherit");
   assert.equal(agents.players[coderId]?.subagentModel, "inherit");
@@ -601,7 +617,7 @@ test("an unset subagent model delegates on the agent's own model wherever cligen
   // carried through composition is dropped only there.
   (roster(top)[coderId] as Record<string, unknown>).subagentModel = false;
   reviewRoles(top).coder = { player: coderId, subagentModel: "claude-haiku-5" };
-  const off = await composeConfig(top, stubLoader);
+  const off = await compose(top, stubLoader);
   assert.equal(off.captainOptions.sessionAgents.players[coderId]?.subagentModel, false);
   assert.equal(off.captainOptions.playbooks.code.roles.coder.subagentModel, false);
   const projection = executionConfig(off, "/work") as unknown as {
@@ -622,7 +638,7 @@ test("a player no binding names is listed as bound to no role and opens no sessi
   // players a role binds (DR-032).
   const top = baseConfig();
   roster(top)["compiler"] = { adapter: "codex", model: "gpt-6-astra", effort: "xhigh" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.ok(!composed.players.some((p) => p.id === "compiler"), "no session lane for an unbound player");
   assert.deepEqual(
     composed.roster.map((p) => p.id),
@@ -650,7 +666,7 @@ test("unknown agent fields and adapters are rejected; kimi is known", async () =
   );
 
   roster(top)["dev.reviewer"] = { adapter: "kimi" };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   const reviewer = composed.players.find((p) => p.id === "dev.reviewer");
   assert.equal(reviewer?.adapter, "kimi");
 });
@@ -659,13 +675,13 @@ test("effort vocabularies are adapter-scoped", async () => {
   // Kimi accepts only off/on.
   const top = baseConfig();
   roster(top)["dev.reviewer"] = { adapter: "kimi", effort: "off" };
-  let composed = await composeConfig(top, stubLoader);
+  let composed = await compose(top, stubLoader);
   assert.equal(
     composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "off",
   );
   roster(top)["dev.reviewer"] = { adapter: "kimi", effort: "on" };
-  composed = await composeConfig(top, stubLoader);
+  composed = await compose(top, stubLoader);
   assert.equal(
     composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "on",
@@ -679,12 +695,12 @@ test("effort vocabularies are adapter-scoped", async () => {
   // Claude adds ultracode; Codex adds ultra.
   const claudeTop = baseConfig();
   (claudeTop.captain as Record<string, unknown>).effort = "ultracode";
-  composed = await composeConfig(claudeTop, stubLoader);
+  composed = await compose(claudeTop, stubLoader);
   assert.equal(composed.captainAgent.effort, "ultracode");
 
   const codexTop = baseConfig();
   roster(codexTop)["dev.reviewer"] = { adapter: "codex", effort: "ultra" };
-  composed = await composeConfig(codexTop, stubLoader);
+  composed = await compose(codexTop, stubLoader);
   assert.equal(
     composed.players.find((p) => p.id === "dev.reviewer")?.effort,
     "ultra",
@@ -708,7 +724,7 @@ test("legacy reasoningEffort composes as effort; both keys are invalid", async (
   assert.equal(typeof original, "string");
   delete coder.effort;
   coder.reasoningEffort = original;
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   const player = composed.players.find((p) => p.id === "dev.coder");
   assert.equal(player?.effort, original);
   assert.ok(!("reasoningEffort" in (player ?? {})));
@@ -745,18 +761,18 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
     }
     return stubLoader(specifier);
   };
-  const accepting = await composeConfig(baseConfig(), cwdLoader);
+  const accepting = await compose(baseConfig(), cwdLoader);
   assert.equal(accepting.playbooks[0]?.acceptsCwdOption, true);
 
   // The real CODE registry rejects unknown options, so the probe
   // reports false and sessions must not inject.
-  const rejecting = await composeConfig(baseConfig(), stubLoader);
+  const rejecting = await compose(baseConfig(), stubLoader);
   assert.equal(rejecting.playbooks[0]?.acceptsCwdOption, false);
 
   // A config-set cwd wins: no injection even for accepting entries.
   const top = baseConfig();
   codeBlock(top).cwd = "/x";
-  const preset = await composeConfig(top, cwdLoader);
+  const preset = await compose(top, cwdLoader);
   assert.equal(preset.playbooks[0]?.acceptsCwdOption, false);
   assert.equal(
     (preset.captainOptions.playbooks.code?.options as { cwd?: string }).cwd,
@@ -767,20 +783,18 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
 test("command overrides land in captain options and duplicates are rejected", async () => {
   const top = baseConfig();
   codeBlock(top).command = "build";
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.equal(composed.captainOptions.playbooks.code.command, "build");
   assert.equal(composed.playbooks[0].command, "build");
 
   const dupes = baseConfig();
   (dupes.playbooks as Record<string, unknown>).other = {
-    from: "@stub/other",
-    players: {
-      coder: { adapter: "claude" },
-      reviewer: { adapter: "codex" },
+    roles: {
+      coder: "dev.coder",
     },
   };
   const loader: LoadModule = async (specifier) =>
-    specifier === "@stub/other"
+    specifier === "@sublang/playbook/other/registry"
       ? { default: registryEntry({ id: "other", command: "code" }) }
       : stubLoader(specifier);
   await expectError(dupes, /^duplicate effective command "code"$/, loader);
@@ -813,21 +827,21 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));
 });
 
-test("storage-7: a from-less entry is a built-in or the library's, never a guess", async () => {
-  const top = baseConfig();
-  delete codeBlock(top).from;
+test("environments-9: an enabled playbook comes from the environments' modules, and one none exports is a config error naming both", async () => {
   const requested: string[] = [];
   const recording: LoadModule = async (specifier) => { requested.push(specifier); return stubLoader(specifier); };
-  const composed = await composeConfig(top, recording);
+  const composed = await compose(baseConfig(), recording);
   assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
   assert.ok(requested.includes("@sublang/playbook/code/registry"));
-  // An id nothing installed provides is unavailable, by its kind.
+  // An id no environment of the session exports is unavailable, by its
+  // kind, naming the playbook and the spex repository lacking it.
   const unknown = baseConfig();
   (unknown.playbooks as Record<string, unknown>).triage = { roles: { triager: String(codeRoles(unknown).coder) } };
-  await assert.rejects(composeConfig(unknown, stubLoader), (error: Error) => {
+  const lacking: PlaybookModules = { repository: "acme/app-spex", find: (id) => (id === "triage" ? undefined : STUB_MODULES.find(id)) };
+  await assert.rejects(compose(unknown, stubLoader, undefined, { modules: lacking }), (error: Error) => {
     assert.ok(error instanceof RegistryError);
     assert.equal(error.kind, "unavailable");
-    assert.match(error.message, /playbooks\.triage names no module/);
+    assert.equal(error.message, "playbooks.triage is enabled, but the environment of acme/app-spex exports no playbook triage");
     return true;
   });
 });
@@ -839,7 +853,7 @@ test("core-service-2: a project's file layers on yours, naming players only", as
   const other = players.find((id) => id !== coder) ?? coder;
   // The project's file binds the code role to another of your players.
   const project = { playbooks: { code: { roles: { coder: other } } } };
-  const composed = await composeConfig(own, stubLoader, undefined, { project: { top: project, path: "/p/config/playbook.config.yaml" } });
+  const composed = await compose(own, stubLoader, undefined, { project: { top: project, path: "/p/config/playbook.config.yaml" } });
   assert.equal(composed.captainOptions.playbooks.code.roles.coder.playerId, other);
   // Its playbooks join yours: review stays enabled.
   assert.ok(composed.playbooks.some((playbook) => playbook.id === "review"));
@@ -852,11 +866,11 @@ test("core-service-2: a project's file layers on yours, naming players only", as
     [{ playbooks: { code: { roles: { coder: { player: coder, model: "x" } } } } }, "playbooks.code.roles.coder"],
   ] as const) {
     assert.throws(() => validateProjectConfig(bad, "/p/config/playbook.config.yaml"), new RegExp(`${entry.replace(/\./g, "\\.")} is not allowed in a project's settings`));
-    await assert.rejects(composeConfig(own, stubLoader, undefined, { project: { top: bad, path: "/p" } }), new RegExp(entry.replace(/\./g, "\\.")));
+    await assert.rejects(compose(own, stubLoader, undefined, { project: { top: bad, path: "/p" } }), new RegExp(entry.replace(/\./g, "\\.")));
   }
   // A player the project names and yours lacks fails composition, named.
   await assert.rejects(
-    composeConfig(own, stubLoader, undefined, { project: { top: { playbooks: { code: { roles: { coder: "team.missing" } } } }, path: "/p" } }),
+    compose(own, stubLoader, undefined, { project: { top: { playbooks: { code: { roles: { coder: "team.missing" } } } }, path: "/p" } }),
     /absent session player "team\.missing"/,
   );
 });
@@ -1033,7 +1047,7 @@ test("fast mode reaches the shell's agent blocks and role bindings", async () =>
   (roster(top)["dev.coder"] as Record<string, unknown>).fastMode = true;
   roster(top)["dev.reviewer"] = { adapter: "codex", fastMode: false };
   codeRoles(top).coder = { player: "dev.coder", fastMode: false };
-  const composed = await composeConfig(top, stubLoader);
+  const composed = await compose(top, stubLoader);
   assert.equal(composed.captainOptions.sessionAgents.captain.fastMode, true);
   assert.equal(
     composed.captainOptions.sessionAgents.players["dev.reviewer"]?.fastMode,

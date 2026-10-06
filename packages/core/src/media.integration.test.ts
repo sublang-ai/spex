@@ -79,7 +79,6 @@ players:
       networkAccess: deny
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;

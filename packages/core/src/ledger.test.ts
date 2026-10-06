@@ -1520,11 +1520,9 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev_coder
   review:
-    from: "@sublang/playbook/review/registry"
     roles:
       coder: dev_coder
       reviewer: dev_coder

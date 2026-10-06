@@ -152,7 +152,7 @@ function copyAssets(fromDir: string, toDir: string, assetIds: string[]): void {
  * interrupted run resumes from its receipt, verifying what it already
  * wrote and never overwriting a destination that diverged.
  */
-export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string } = {}): Promise<GroupsReceipt> {
+export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string; prepareRepository?: (dir: string, key: string, hostUrl: string) => void } = {}): Promise<GroupsReceipt> {
   const migrations = migrationsDir(root);
   mkdirSync(migrations, { recursive: true, mode: 0o700 });
 
@@ -401,6 +401,9 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   Home.load(root);
   parsePrefs(readJsonFile(join(root, "local", "prefs.json")), join(root, "local", "prefs.json"));
   const keys = [...new Set([...Object.values(plan!), home.own()])];
+  // Each clone's environment requests the built-in spec package before
+  // its first history is written (storage-9, environments-11).
+  for (const key of keys) options.prepareRepository?.(home.clonePath(key), key, home.host.url);
   for (const key of keys) {
     await validateStorageTree(home.clonePath(key), { own: key === home.own(), ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });
   }

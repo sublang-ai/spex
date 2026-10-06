@@ -30,7 +30,9 @@ msgstr ", "
 #. Separates reasons listed in one message
 #. Separates reasons listed in one message
 #. Separates reasons listed in one message
+#. Separates reasons listed in one message
 #: src/config.ts
+#: src/environments.ts
 #: src/service.ts
 #: src/session.ts
 #: src/store.ts
@@ -56,6 +58,11 @@ msgstr "; then: {steps}"
 #: src/config.ts
 msgid "; unknown {roles}"
 msgstr "; unknown {roles}"
+
+#. Refusal: the id offered for a new playbook breaks the Agent Skills name rule
+#: src/service.ts
+msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
+msgstr "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 
 #. A session's own title, quoted
 #. A session's own title, quoted
@@ -168,17 +175,30 @@ msgstr "{host} refused this machine's access"
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
 
-#. Refusal: the id offered for a new draft is taken by a playbook already
-#. Refusal: the id offered for a new draft is taken by a playbook already
+#. Refusal: the id offered for a new playbook is one an installed spec package exports
 #: src/authoring.ts
+msgid "{id} is already a playbook of this project's or your own environment; pick another id"
+msgstr "{id} is already a playbook of this project's or your own environment; pick another id"
+
+#. Refusal: the id offered for a new playbook is another project's authoring session
 #: src/service.ts
-msgid "{id} is already a configured playbook or a built-in; pick another id"
-msgstr "{id} is already a configured playbook or a built-in; pick another id"
+msgid "{id} is already an authoring session of another project; pick another id"
+msgstr "{id} is already an authoring session of another project; pick another id"
+
+#. Refusal: publishing reads a folder inside the repository's working folder
+#: src/environments.ts
+msgid "{key} has no working folder on this device"
+msgstr "{key} has no working folder on this device"
 
 #. Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label
 #: src/space.ts
 msgid "{label} has no divergent change"
 msgstr "{label} has no divergent change"
+
+#. A spec package requested by path changed its manifest since the lock was written
+#: src/environments.ts
+msgid "{name} changed in {path}; resolve again to install"
+msgstr "{name} changed in {path}; resolve again to install"
 
 #. Repair row: the project is registered, but nothing here holds it
 #: src/store.ts
@@ -210,6 +230,11 @@ msgstr "{name} is joining; wait for it to finish"
 msgid "{name} is moving; wait for it to finish"
 msgstr "{name} is moving; wait for it to finish"
 
+#. Refusal: removing a spec package this environment does not request
+#: src/environments.ts
+msgid "{name} is not requested here"
+msgstr "{name} is not requested here"
+
 #. Refusal of a pick: the spex repository is not local only
 #: src/space.ts
 msgid "{name} is on the host already"
@@ -219,6 +244,11 @@ msgstr "{name} is on the host already"
 #: src/space.ts
 msgid "{name} is on this device already"
 msgstr "{name} is on this device already"
+
+#. Refusal: a request by path needs the repository's working folder here
+#: src/environments.ts
+msgid "{name} is requested by path, and this spex repository has no working folder on this device"
+msgstr "{name} is requested by path, and this spex repository has no working folder on this device"
 
 #. Refusal: one working turn per project
 #: src/session.ts
@@ -287,10 +317,21 @@ msgstr "{path} is not a file"
 msgid "{path} is not a folder"
 msgstr "{path} is not a folder"
 
+#. Refusal: the folder fails the core's release checks; {issues} are the checks' own words
+#: src/environments.ts
+msgid "{path} is not a spec package release: {issues}"
+msgstr "{path} is not a spec package release: {issues}"
+
 #. Refusal: the folder offered for rebinding is no git repository
 #: src/service.ts
 msgid "{path} is not the root of a git work tree"
 msgstr "{path} is not the root of a git work tree"
+
+#. Refusal: a request by path names a folder outside the repository's working folder
+#. Refusal: a request by path names a folder outside the repository's working folder
+#: src/environments.ts
+msgid "{path} is outside the working folder"
+msgstr "{path} is outside the working folder"
 
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
@@ -455,6 +496,9 @@ msgid "{playbookId} is compiling"
 msgstr "{playbookId} is compiling"
 
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#: src/drafts.ts
 #: src/service.ts
 msgid "{projectId} has no working folder on this device"
 msgstr "{projectId} has no working folder on this device"
@@ -568,6 +612,11 @@ msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 #: src/service.ts
 msgid "a new session"
 msgstr "a new session"
+
+#. Refusal: an edit to a project's config file that only your own group's file may take
+#: src/config-edit.ts
+msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
+msgstr "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
 
 #. Media transfer refusal
 #: src/media-transfers.ts
@@ -760,6 +809,11 @@ msgstr "compiled, but creating session player \"{playerId}\" was refused: {error
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
+msgid "compiled, but enabling was refused: {error}"
+msgstr "compiled, but enabling was refused: {error}"
+
+#. Refusal after a successful compile; `error` is the config validation's own words
+#: src/service.ts
 msgid "compiled, but registration was refused: {error}"
 msgstr "compiled, but registration was refused: {error}"
 
@@ -790,11 +844,6 @@ msgstr "config file is missing"
 #: src/service.ts
 msgid "config is invalid: {errors}"
 msgstr "config is invalid: {errors}"
-
-#. Refusal: the loaded config carries errors
-#: src/service.ts
-msgid "config is not valid"
-msgstr "config is not valid"
 
 #. Config error: the file's top level is not a mapping
 #. Config error: the file's top level is not a mapping
@@ -830,6 +879,7 @@ msgstr "draft {id} already exists; open it"
 msgid "draft id disagrees with its file name"
 msgstr "draft id disagrees with its file name"
 
+#. Refusal: the selected authoring draft does not exist
 #. Refusal: the selected authoring draft does not exist
 #: src/service.ts
 msgid "Draft is unavailable."
@@ -1008,6 +1058,11 @@ msgstr "Initialize the repository first"
 #: src/compile.ts
 msgid "Install Node >= 23.6 first; slc runs on it."
 msgstr "Install Node >= 23.6 first; slc runs on it."
+
+#. An environment's install failed and kept its previous files; {cause} is the library's or the registry's own words
+#: src/environments.ts
+msgid "Installing stopped; the last files stay: {cause}"
+msgstr "Installing stopped; the last files stay: {cause}"
 
 #. Attachment transfer or storage diagnostic
 #: src/app-storage.ts
@@ -1259,6 +1314,11 @@ msgstr "migration output verification failed"
 msgid "Move that folder aside, then Retry."
 msgstr "Move that folder aside, then Retry."
 
+#. Refusal: a compile writes its spec package inside a project's working folder
+#: src/service.ts
+msgid "name the project whose working folder holds the playbook's spec package"
+msgstr "name the project whose working folder holds the playbook's spec package"
+
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -1352,6 +1412,11 @@ msgstr "no roster player {playerId}"
 msgid "no session {sessionId}"
 msgstr "no session {sessionId}"
 
+#. Refusal: resolution found no solution; {conflicts} names each spec package with the requirements in conflict
+#: src/environments.ts
+msgid "No set of versions meets every requirement: {conflicts}"
+msgstr "No set of versions meets every requirement: {conflicts}"
+
 #. Why a compile cannot start: the draft has no source file written yet
 #: src/authoring.ts
 msgid "No source yet"
@@ -1365,6 +1430,8 @@ msgstr "no spec file at specs/{path}"
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
+#: src/environments.ts
 #: src/space.ts
 #: src/store.ts
 msgid "no spex repository {key} on this device"
@@ -1504,6 +1571,11 @@ msgstr "playbooks must be an object"
 msgid "playbooks must enable at least one playbook"
 msgstr "playbooks must enable at least one playbook"
 
+#. Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key
+#: src/config.ts
+msgid "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
+msgstr "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
+
 #. Config error: the key enabling a playbook differs from the id its module declares
 #: src/config.ts
 msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
@@ -1515,11 +1587,6 @@ msgstr "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 msgid "playbooks.{id} must be an object"
 msgstr "playbooks.{id} must be an object"
 
-#. Config error: an enabled playbook carries no `from` and nothing installed provides it
-#: src/config.ts
-msgid "playbooks.{id} names no module, and no installed playbook provides it"
-msgstr "playbooks.{id} names no module, and no installed playbook provides it"
-
 #. Config error; `captain` is the reserved role id and `tmux-play` the runtime's name
 #: src/config.ts
 msgid "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain"
@@ -1530,25 +1597,25 @@ msgstr "playbooks.{id} requires local role \"captain\", which is reserved for th
 msgid "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players"
 msgstr "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players"
 
-#. Config error: the module the config names is no compiled playbook
+#. Config error: the module the environment installs is no compiled playbook
 #: src/config.ts
-msgid "playbooks.{id}.from \"{from}\" exposes no valid registry entry"
-msgstr "playbooks.{id}.from \"{from}\" exposes no valid registry entry"
+msgid "playbooks.{id}: its module \"{from}\" exposes no valid registry entry"
+msgstr "playbooks.{id}: its module \"{from}\" exposes no valid registry entry"
 
 #. Config error; `message` is the import failure's own words, relayed
 #: src/config.ts
-msgid "playbooks.{id}.from \"{from}\" failed to import: {message}"
-msgstr "playbooks.{id}.from \"{from}\" failed to import: {message}"
+msgid "playbooks.{id}: its module \"{from}\" failed to import: {message}"
+msgstr "playbooks.{id}: its module \"{from}\" failed to import: {message}"
 
-#. Config error; "the Playbooks surface" is the app's own Library surface
+#. Config error; "Playbooks" is the app's own surface
 #: src/config.ts
-msgid "playbooks.{id}.from \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
-msgstr "playbooks.{id}.from \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
+msgid "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
+msgstr "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
 
-#. Config error; `playbooks.<id>.from` is the config file's own field name
+#. Config error; `playbooks.<id>.from` is the config file's own field name, retired by environments
 #: src/config.ts
-msgid "playbooks.{id}.from must be a module specifier"
-msgstr "playbooks.{id}.from must be a module specifier"
+msgid "playbooks.{id}.from is not allowed: a playbook's module comes from the environment that installs its spec package"
+msgstr "playbooks.{id}.from is not allowed: a playbook's module comes from the environment that installs its spec package"
 
 #. Config error; `players`, `playbooks.<id>.roles` are the config file's own field names
 #: src/config.ts
@@ -1631,6 +1698,11 @@ msgstr "Project is unavailable."
 msgid "Published upload has a different byte length."
 msgstr "Published upload has a different byte length."
 
+#. A publish to the registry failed; {cause} is the core's checks' or the registry's own words
+#: src/environments.ts
+msgid "Publishing stopped: {cause}"
+msgstr "Publishing stopped: {cause}"
+
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
 msgid "Read the sharing notice before joining {name}"
@@ -1645,6 +1717,16 @@ msgstr "Read the sharing notice before the first sync of {name}"
 #: src/space.ts
 msgid "Refusing to share {leak}"
 msgstr "Refusing to share {leak}"
+
+#. The lock no longer matches spex.yaml; the last installed files stay in use
+#: src/environments.ts
+msgid "Requests changed; resolve again to install"
+msgstr "Requests changed; resolve again to install"
+
+#. An environment's resolution failed; {cause} is the library's or the registry's own words
+#: src/environments.ts
+msgid "Resolving stopped: {cause}"
+msgstr "Resolving stopped: {cause}"
 
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
@@ -1752,6 +1834,11 @@ msgstr "Sign in first"
 #: src/space.ts
 msgid "Sign in from the header, then Retry."
 msgstr "Sign in from the header, then Retry."
+
+#. Refusal: publishing to the registry needs the home signed in
+#: src/environments.ts
+msgid "Sign in to publish"
+msgstr "Sign in to publish"
 
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
@@ -1939,6 +2026,11 @@ msgstr "the config is not valid; fix it in Settings before the agent can answer"
 msgid "The core is stopping."
 msgstr "The core is stopping."
 
+#. Refusal: a request by path names a folder inside the repository's working folder (environments-2)
+#: src/service.ts
+msgid "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
+msgstr "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
+
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
@@ -2086,6 +2178,13 @@ msgstr "the source is empty; nothing was written"
 #: src/space.ts
 msgid "The space changed twice while syncing"
 msgstr "The space changed twice while syncing"
+
+#. Refusal: the authoring session's spec package folder is not on this device
+#. Refusal: the authoring session's spec package folder is not on this device
+#. Refusal: the authoring session's spec package folder is not on this device
+#: src/authoring.ts
+msgid "the spec package of {id} is missing from the working folder"
+msgstr "the spec package of {id} is missing from the working folder"
 
 #. Guidance after a join's code clone failed
 #: src/space.ts
@@ -2350,6 +2449,11 @@ msgstr "wait for the running turn to finish, or abort it, before deleting"
 #: src/space.ts
 msgid "Wait for the session to finish, then Retry."
 msgstr "Wait for the session to finish, then Retry."
+
+#. What blocks a Space operation: the spex repository's environment is resolving, installing or publishing
+#: src/environments.ts
+msgid "Wait for the spec packages of {repository} to finish installing"
+msgstr "Wait for the spec packages of {repository} to finish installing"
 
 #. What blocks a Space operation: a turn is being admitted
 #: src/service.ts

@@ -231,7 +231,7 @@ export function executionConfig(composed: ComposedConfig, cwd: string, members?:
  * new session offered — and the tuning's own refusal only when the
  * structure still matches (core-service-92). */
 function tunedExecution(composed: ComposedConfig, cwd: string, members: StoredMembers | undefined, tuning: SessionAgentSettingsMap | undefined, stored: SessionStructuralProjection | undefined): SessionExecutionProjection {
-  try { return executionConfig(composed, cwd, members, tuning); }
+  try { return keepStoredModules(executionConfig(composed, cwd, members, tuning), stored); }
   catch (error) {
     if (!stored || error instanceof SettingsDriftError) throw error;
     const untuned = executionConfig(composed, cwd, members);
@@ -239,6 +239,29 @@ function tunedExecution(composed: ComposedConfig, cwd: string, members: StoredMe
     catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(untuned))); }
     throw error;
   }
+}
+
+/**
+ * A continued session keeps the module each of its playbooks was opened
+ * on: the module location is the session's identity, which Playbook's
+ * continuation reproduces exactly, not a setting the current config
+ * applies (DR-051). So a session begun before its playbook came from an
+ * environment (DR-104) — on a package specifier or a library path —
+ * continues on that module, while every new session takes the module
+ * the environments export (environments-9).
+ */
+function keepStoredModules(config: SessionExecutionProjection, stored: SessionStructuralProjection | undefined): SessionExecutionProjection {
+  if (!stored) return config;
+  const storedCatalog = stored.catalog as Record<string, { from?: unknown }>;
+  const catalog = config.catalog as Record<string, { from: string }>;
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [id, entry] of Object.entries(catalog)) {
+    const from = storedCatalog[id]?.from;
+    if (typeof from === "string" && from !== entry.from) { next[id] = { ...entry, from }; changed = true; }
+    else next[id] = entry;
+  }
+  return changed ? validateCaptainSessionExecutionProjection({ ...config, catalog: next } as SessionExecutionProjection) : config;
 }
 
 /** Name every structural field whose change makes the current projection

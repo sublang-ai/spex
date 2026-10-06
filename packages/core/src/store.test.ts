@@ -813,10 +813,16 @@ test("unsupported or damaged migration metadata stays unchanged and releases the
 test("storage-23: authoring session encodings are written and read back exactly", () => {
   const dir = tempRoot(); mkdirSync(dir, { recursive: true });
   const authoringDir = join(dir, "workspace", "tester", "proj-spex", "authoring");
-  const location = { key: "tester/proj-spex", authoringDir };
-  const drafts = new DraftStore(join(dir, "playbooks"), () => [location]);
-  const draft = drafts.create("triage", 1000, location);
-  assert.ok(existsSync(join(dir, "playbooks", "triage")), "the library directory is made");
+  const workingFolder = join(dir, "project");
+  const location = { key: "tester/proj-spex", authoringDir, workingFolder };
+  const drafts = new DraftStore(() => [location]);
+  const draft = drafts.create("triage", 1000, location, "local");
+  // The spec package under development stands in the working folder
+  // with its manifest (environments-10, playbook-library-70).
+  const packageDir = join(workingFolder, "spex-packages", "triage");
+  assert.equal(drafts.draftDir("triage"), packageDir);
+  assert.equal(drafts.sourcePath("triage"), join(packageDir, "playbooks", "en", "triage", "triage.md"));
+  assert.match(readFileSync(join(packageDir, "meta.yaml"), "utf8"), /^format: 2\norg: local\nname: triage\nversion: 0\.1\.0\n/);
   assert.equal(drafts.recordFile("triage"), join(authoringDir, "triage.json"));
   assert.equal(drafts.projectOf("triage"), "tester/proj-spex");
   assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
@@ -832,7 +838,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.deepEqual(drafts.read("triage"), full);
   assert.deepEqual(drafts.ids(), ["triage"]);
   // A fresh store finds the session by its clone.
-  assert.deepEqual(new DraftStore(join(dir, "playbooks"), () => [location]).ids(), ["triage"]);
+  assert.deepEqual(new DraftStore(() => [location]).ids(), ["triage"]);
   // The transcript: newline-terminated {seq,record} lines in order,
   // no provider token, and an incomplete final line is not a record.
   const started = { type: "turn_started", turnId: 1, timestamp: 3000, turn: { id: 1, prompt: "hi", timestamp: 3000 } } as unknown as TmuxPlayRecord;
@@ -861,12 +867,13 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const next = drafts.writeSource("triage", "# Triage 2\n", first.ok ? first.version : undefined);
   assert.ok(next.ok && next.version !== (first.ok ? first.version : ""));
   assert.equal(drafts.readSource("triage")?.markdown, "# Triage 2\n");
-  // Retire keeps the directory to the registered playbook; delete removes it.
+  // Delete removes the session's files and leaves the spec package
+  // folder in the working folder (playbook-library-63).
   mkdirSync(join(authoringDir, "triage.assets"));
-  drafts.retire("triage");
-  assert.ok(!existsSync(join(authoringDir, "triage.json")) && !existsSync(join(authoringDir, "triage.records.jsonl")) && !existsSync(join(authoringDir, "triage.assets")));
-  assert.ok(existsSync(drafts.sourcePath("triage")));
+  const source = drafts.sourcePath("triage")!;
   drafts.delete("triage");
-  assert.ok(!existsSync(drafts.draftDir("triage")));
+  assert.ok(!existsSync(join(authoringDir, "triage.json")) && !existsSync(join(authoringDir, "triage.records.jsonl")) && !existsSync(join(authoringDir, "triage.assets")));
+  assert.ok(existsSync(source));
+  assert.ok(existsSync(join(packageDir, "meta.yaml")));
   rmSync(dir, { recursive: true, force: true });
 });

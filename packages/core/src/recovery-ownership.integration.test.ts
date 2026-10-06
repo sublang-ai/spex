@@ -15,6 +15,7 @@ import { SessionManager, CoreError } from "./session.js";
 import { Store } from "./store.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
+import { launcherConfig } from "./testing/launcher-config.js";
 
 const CONFIG = `captain:
   adapter: claude
@@ -25,7 +26,6 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;
@@ -46,7 +46,8 @@ async function interrupted(t: TestContext) {
   // The CLI writes into the session store of the project's spex
   // repository, which makes the session the project's (storage-6).
   const shared = store.sessionStore(project.id);
-  const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath }));
+  writeFileSync(`${configPath}.launcher.yaml`, launcherConfig(CONFIG));
+  const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: `${configPath}.launcher.yaml` }));
   const { imports, stats } = fakeAdapterImports({ fallback: { result: "unused fixture answer" } });
   const cli = await openSessionHost({ store: shared, mode: "new", cwd: projectPath, config, adapterImports: imports });
   const id = cli.sessionId;
@@ -61,7 +62,7 @@ async function interrupted(t: TestContext) {
   t.after(async () => { await manager.disposeAll(); await cli.dispose(); store.close(); rmSync(dir, { recursive: true, force: true }); });
   const manifest = join(shared.sessionsDir, `${id}.json`);
   const stream = join(shared.sessionsDir, `${id}.records.jsonl`);
-  return { store, shared, project, manager, stats, id, manifest, stream, states, composed: await composeConfig(parseYaml(CONFIG)) };
+  return { store, shared, project, manager, stats, id, manifest, stream, states, composed: await composeConfig(parseYaml(CONFIG), undefined, undefined, { modules: { repository: "tester/tester-spex", find: (id) => ({ module: `@sublang/playbook/${id}/registry`, builtin: true }) } }) };
 }
 
 async function restored(fixture: Awaited<ReturnType<typeof interrupted>>) {

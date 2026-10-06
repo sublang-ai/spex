@@ -113,6 +113,11 @@ export interface StoreOptions {
   relocateConfig?: (configPath: string) => void;
   /** Internal: Store.open runs the migration the constructor defers. */
   deferMigration?: boolean;
+  /** Fill a clone the store makes, before its first commit: your own
+   * group's at every open and a new project's at registration — where
+   * the environment requests the built-in spec package (storage-6,
+   * environments-11). The migration calls it for each clone it makes. */
+  prepareRepository?: (dir: string, key: string, hostUrl: string) => void;
 }
 
 /** One spex repository's clone and the files it holds (storage-1). */
@@ -489,6 +494,7 @@ export class Store {
           env: store.env,
           ...(options.own ? { own: options.own } : {}),
           libraryDir: options.libraryDir ?? join(store.dir, "playbooks"),
+          ...(options.prepareRepository ? { prepareRepository: options.prepareRepository } : {}),
         });
         store.migrationPending = false;
         store.openHome();
@@ -635,8 +641,20 @@ export class Store {
     // The starter is the playbook CLI's own (core-service-3); where it
     // cannot be read, the core reports the missing config itself.
     try { this.seededConfig = seedConfig(config); } catch { /* reported as a missing config */ }
+    this.prepareRepository(dir, this.homeFile.own());
     this.initializeRepository(dir);
   }
+
+  /** The caller's filling of a clone; its failure leaves the clone as
+   * it is, reported, never failing the open. */
+  private prepareRepository(dir: string, key: string): void {
+    try { this.options.prepareRepository?.(dir, key, this.homeFile.host.url); }
+    catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** Called before a project's pair is forgotten, with its working
+   * folder: what exports wrote there is removed (environments-8). */
+  onProjectRemoving?: (key: string, folder: string | undefined) => void;
 
   /** A clone becomes a repository on its `spex` branch with one commit;
    * where Git cannot run, it stays a plain folder until it can. */
@@ -1356,6 +1374,7 @@ export class Store {
     const dir = this.homeFile.clonePath(key);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeApplicationFile(join(dir, "project.json"), { format: 1, name: name || basename(normalized), remote: folderRemote(normalized, this.env) });
+    this.prepareRepository(dir, key);
     this.initializeRepository(dir);
     this.homeFile.pair(normalized, key);
     this.saveHome();
@@ -1461,6 +1480,8 @@ export class Store {
     const folder = this.homeFile.folderOf(key);
     const repository = this.repositories.get(key);
     if (!folder && !repository) return false;
+    try { this.onProjectRemoving?.(key, folder?.path); }
+    catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
     if (folder) { this.homeFile.unpair(key); this.saveHome(); }
     if (repository && key !== this.homeFile.own()) {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }

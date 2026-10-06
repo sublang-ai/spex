@@ -29,7 +29,6 @@ players:
     model: claude-test
 playbooks:
   code:
-    from: "@sublang/playbook/code/registry"
     roles:
       coder: dev.coder
 `;
@@ -105,7 +104,8 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   const scratch = scratchDir("spex-project-removal-");
   const dataDir = join(scratch, "home");
   const home = join(scratch, "user");
-  mkdirSync(home);
+  // The device has claude, so the environment exports to it (environments-8).
+  mkdirSync(join(home, ".claude"), { recursive: true });
   const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
   mkdirSync(config, { recursive: true });
   writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
@@ -115,6 +115,10 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   writeFileSync(join(folder, "README.md"), "# Fixture\n");
   git(folder, "add", "-A");
   git(folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture");
+  // The folder as it stood before Spex paired it: removal leaves it so,
+  // the skills the environment exported there gone with the pair
+  // (projects-9, environments-8).
+  const before = snapshot(folder);
 
   let { service, client } = await boot(dataDir, home);
   const project = await client.ok("project.register", { path: folder });
@@ -124,14 +128,16 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   const session = await client.ok("session.create", { projectId: project.id });
   await client.ok("turn.submit", { sessionId: session.id, text: "Read the fixture" });
   await client.until((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns > 0);
-  const before = snapshot(folder);
+  assert.ok(existsSync(join(folder, ".claude", "skills", "code", "SKILL.md")), "the environment exported its skills into the folder");
 
-  // The first confirm meets what would be lost: one unit, named.
+  // The first confirm meets what would be lost, named by count: the
+  // session's unit, and the environment the new spex repository
+  // requests the built-in spec package in (storage-6, environments-11).
   const refused = await client.command("project.remove", { projectId: project.id });
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, "conflict");
-  assert.match(refused.error.message, /1 record has not reached the host/);
-  assert.deepEqual(refused.error.details, { units: 1 });
+  assert.match(refused.error.message, /2 records have not reached the host/);
+  assert.deepEqual(refused.error.details, { units: 2 });
   assert.ok(existsSync(clone), "nothing is deleted before the second confirm");
 
   // The second confirm removes it, announcing the session's removal.
