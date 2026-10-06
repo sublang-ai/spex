@@ -4883,3 +4883,60 @@ test("writable paths: Chinese Settings refusal names the field and preserves pri
   assert.equal(readFileSync(configPath, "utf8"), before);
   assert.equal(harness.stats.runs.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// core-service-2: a project's composed configuration, read and announced
+// ---------------------------------------------------------------------------
+
+/** Your own group's config enabling `code` alone. */
+const OWN_CODE_ONLY = VALID_CONFIG.replace(/ {2}review:\n(?: {4,}.*\n)*/, "");
+
+/** The commands a config state offers, sorted. */
+function offered(state: import("./protocol.js").ConfigState | undefined): string[] {
+  return state?.status === "valid" ? state.summary.playbooks.map((playbook) => `/${playbook.command}`).sort() : [];
+}
+
+test("core-service-2: config.get with a project answers its composition, and the broadcast carries every project's", async (t) => {
+  const harness = await startHarness(OWN_CODE_ONLY);
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+
+  // No file of its own: the project runs with yours.
+  const before = await client.expectOk("config.get", { projectId: project.id });
+  assert.equal(before.status, "valid", JSON.stringify(before));
+  assert.deepEqual(offered(before), ["/code"]);
+
+  // Enabling a playbook in the project's file: the project's composition
+  // offers it, yours does not, and the broadcast says both.
+  const seen = client.messages.length;
+  await client.expectOk("config.edit", {
+    repository: project.id,
+    op: { kind: "playbook.add", playbookId: "review", roles: { coder: "dev.coder", reviewer: "dev.coder" } },
+  });
+  assert.deepEqual(offered(await client.expectOk("config.get", { projectId: project.id })), ["/code", "/review"]);
+  assert.deepEqual(offered(await client.expectOk("config.get", {})), ["/code"]);
+  const announced = await client.waitFor((message) => client.messages.indexOf(message) >= seen &&
+    message.type === "config.state" && message.projects?.[project.id] !== undefined);
+  assert.ok(announced.type === "config.state");
+  assert.deepEqual(offered(announced.state), ["/code"]);
+  assert.deepEqual(offered(announced.projects?.[project.id]), ["/code", "/review"]);
+  const composed = announced.projects?.[project.id];
+  assert.ok(composed?.status === "valid");
+  assert.equal(composed.summary.captain.adapter, "claude", "your own group's captain");
+
+  // A project's file naming a player yours lacks: that project reads
+  // invalid naming it, yours stays valid.
+  const projectConfig = join(clonePath(harness.dataDir, project.id), "config", "playbook.config.yaml");
+  writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
+  await harness.service.reloadConfig();
+  const refused = await client.expectOk("config.get", { projectId: project.id });
+  assert.equal(refused.status, "invalid", JSON.stringify(refused));
+  if (refused.status === "invalid") assert.match(refused.errors.join("\n"), /dev\.auditor/);
+  assert.equal((await client.expectOk("config.get", {})).status, "valid");
+
+  // A project the home does not hold is named not found.
+  const unknown = await client.command("config.get", { projectId: `${OWN}/nowhere-spex` });
+  assert.ok(!unknown.ok && unknown.error.code === "not_found");
+});

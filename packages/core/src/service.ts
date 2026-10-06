@@ -789,6 +789,13 @@ export class CoreService {
   private environmentChanged(repository: string): void {
     if (!this.started || this.stopping) return;
     if (repository === this.store.home.own()) void this.reloadConfig();
+    // A project's playbooks come from its environment first
+    // (environments-9): its composition is announced again.
+    else if (this.store.listProjects().some((project) => project.id === repository)) {
+      void this.broadcastConfig(this.reloadGeneration).catch((error: unknown) => {
+        console.error(`spex: the config state was not announced: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
     this.authors.republish();
   }
 
@@ -1400,6 +1407,14 @@ export class CoreService {
    */
   private async composedFor(projectId: string): Promise<ComposedConfig> {
     await this.settledConfig();
+    return this.composeProject(projectId, true);
+  }
+
+  /** The composition of {@link composedFor} on the config already
+   * loaded: `ready` first waits for the project's environment, which a
+   * reload's own broadcast does not, its environment announcing itself
+   * when it settles (environments-17). */
+  private async composeProject(projectId: string, ready: boolean): Promise<ComposedConfig> {
     if (this.configState.status !== "valid" || !this.composed) {
       throw new CoreError("invalid_config", this.configRefusal());
     }
@@ -1420,13 +1435,68 @@ export class CoreService {
     // The session's playbooks come from the project's environment before
     // your own group's (environments-9), whether or not the project's
     // own file enables any; one not yet resolved resolves first.
-    await this.environments.ready(projectId);
+    if (ready) await this.environments.ready(projectId);
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
         modules: this.modules(projectId),
         ...(hasProjectFile ? { project: { top: projectTop, path: repository.configPath } } : {}),
       });
     } catch (error) { throw cause(error); }
+  }
+
+  /**
+   * The configuration a session of this project runs with, as a state
+   * a client reads (core-service-2, DR-104: every member gets the same
+   * tools): your own group's summary with the project's file on top and
+   * its environment's playbooks first; your own group's state while that
+   * is not valid; and invalid, naming the cause, where the project's
+   * file is refused.
+   */
+  private async projectConfigState(projectId: string, ready: boolean): Promise<ConfigState> {
+    const own = this.configState;
+    if (own.status !== "valid") return own;
+    const repository = this.store.repository(projectId);
+    if (!repository) throw noProject(projectId);
+    try {
+      const composed = await this.composeProject(projectId, ready);
+      if (composed === this.composed) return own;
+      // Notifications and theme are your own group's alone.
+      const summary = summarizeConfig({ path: own.summary.path, raw: null, composed });
+      return {
+        ...own,
+        summary: {
+          ...summary,
+          ...(own.summary.notifications !== undefined ? { notifications: own.summary.notifications } : {}),
+          ...(own.summary.theme !== undefined ? { theme: own.summary.theme } : {}),
+        },
+      };
+    } catch (error) {
+      if (!(error instanceof CoreError)) throw error;
+      return {
+        status: "invalid",
+        path: existsSync(repository.configPath) ? repository.configPath : this.configPath,
+        errors: [error.message],
+      };
+    }
+  }
+
+  /** Every project's composed configuration, for the broadcast; none
+   * while your own group's is not valid. */
+  private async projectConfigStates(): Promise<Record<string, ConfigState> | undefined> {
+    if (this.configState.status !== "valid") return undefined;
+    const out: Record<string, ConfigState> = {};
+    for (const project of this.store.listProjects()) {
+      try { out[project.id] = await this.projectConfigState(project.id, false); }
+      catch (error) { console.error(`spex: the config of ${project.id} was not composed: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+    return out;
+  }
+
+  /** Broadcast the config state with every project's composition. */
+  private async broadcastConfig(generation: number): Promise<void> {
+    const projects = await this.projectConfigStates();
+    if (generation !== this.reloadGeneration) return;
+    this.broadcast({ type: "config.state", state: this.configState, ...(projects ? { projects } : {}) });
   }
 
   private async settledConfig(): Promise<void> {
@@ -1477,7 +1547,8 @@ export class CoreService {
     if (generation !== this.reloadGeneration) return;
     this.composed = nextComposed;
     this.configState = nextState;
-    this.broadcast({ type: "config.state", state: this.configState });
+    await this.broadcastConfig(generation);
+    if (generation !== this.reloadGeneration) return;
     const entries = await this.readiness();
     if (generation !== this.reloadGeneration) return;
     this.broadcast({ type: "readiness.state", entries });
@@ -1765,7 +1836,9 @@ export class CoreService {
         return {canceled};
       }
       case "config.get":
-        return this.configState;
+        if (command.projectId === undefined) return this.configState;
+        await this.settledConfig();
+        return this.projectConfigState(command.projectId, true);
       case "readiness.get":
         return this.readiness();
       case "agent.options":

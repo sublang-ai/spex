@@ -934,7 +934,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("media.read"), id, owner: mediaOwnerSchema,
     assetId: mediaAssetSchema.shape.assetId, offset: z.number().int().nonnegative(),
     length: z.number().int().positive().max(MEDIA_CHUNK_BYTES) }).strict(),
-  z.object({ type: z.literal("config.get"), id }),
+  /** With `projectId`, the configuration a session of that project
+   * runs with: your own group's, the project's own file on top, its
+   * environment's playbooks first (core-service-2, environments-9). */
+  z.object({ type: z.literal("config.get"), id, projectId: repositoryKeySchema.optional() }),
   z.object({ type: z.literal("readiness.get"), id }),
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
   z.object({ type: z.literal("project.list"), id }),
@@ -1875,6 +1878,11 @@ export interface RecordMessage {
 export interface ConfigStateMessage {
   type: "config.state";
   state: ConfigState;
+  /** Each project's composed configuration, as `config.get` with its
+   * `projectId` answers it, keyed by the project's id: what a session
+   * of that project offers and runs with (core-service-2). Absent while
+   * your own group's config is not valid. */
+  projects?: Record<string, ConfigState>;
 }
 
 export interface ReadinessStateMessage {
