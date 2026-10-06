@@ -29,6 +29,7 @@ Where the host platform is supported [[core-service-89](core-service.md#core-ser
 - An empty token is refused at startup, naming the mistake: a blank secret would disable the handshake.
 - An IPv6 bind host appears bracketed in the URL.
 - A store an earlier release left at the retired `--db` default is handed to the core for its one-time import [[core-service-64](core-service.md#core-service-64)].
+- The core runs with the device sign-in flow [[git-host-3](git-host.md#git-host-3)], since the browser may be on another machine, and the shell's own Node is the runtime of the Git credential helper [[git-host-9](git-host.md#git-host-9)].
 
 #### server-shell-2
 
@@ -114,7 +115,9 @@ Where `npm ci` has installed the repository dependencies, when a contributor inv
 
 #### server-shell-7
 
-The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so SDK-backed adapters, the compiler and the scaffold CLI resolve when its embedded core loads or runs them.
+The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so SDK-backed adapters, the compiler and the scaffold CLI resolve when its embedded core loads or runs them:
+
+- the shell also ships the built-in spec package the core seeds at start [[environments-11](environments.md#environments-11)], staged from the `@sublang/playbook` it depends on at build time ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
 #### server-shell-8
 

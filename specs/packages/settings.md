@@ -180,7 +180,7 @@ Where the Settings surface is open, the Settings surface shall provide a languag
 
 #### settings-7
 
-When a Settings edit is saved, the Settings surface shall write the shared config file as a targeted edit that preserves comments, key order, and keys the Settings surface does not recognize, so the file stays hand-editable for playbook CLI use ([DR-004](../decisions/004-config-and-persistence.md); see [[settings-13](#settings-13)]).
+When a Settings edit is saved, the Settings surface shall write your own group's config file — `config/playbook.config.yaml` in your own group's spex repository [[storage-1](storage.md#storage-1)] — as a targeted edit that preserves comments, key order, and keys the Settings surface does not recognize, so the file stays hand-editable for playbook CLI use ([DR-004](../decisions/004-config-and-persistence.md), [DR-103](../decisions/103-the-home-and-its-groups.md); see [[settings-13](#settings-13)]).
 
 #### settings-8
 
@@ -190,9 +190,15 @@ While the Settings surface is open, when the shared config file changes on disk 
 
 #### settings-9
 
-Where the app starts on a machine with no shared config file, while the core service has seeded the starter config ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content:
+Where the app starts on a machine whose own group holds no config file, while the core service has seeded the starter config there ([DR-004](../decisions/004-config-and-persistence.md)), the Settings surface shall display the starter's values as the current settings before any user save, and the displayed values shall equal the seeded file's content:
 
 - For that run the surface says it created a starter config at the file's path, so the file's origin is never a mystery.
+
+#### settings-46
+
+While a project's config file names, for a role, a player your own group's file lacks [[core-service-2](core-service.md#core-service-2)], the Settings surface shall show that player in the roster as "Named by <project>, not set up here" with an Add control that creates it from the neutral block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+
+- the Settings surface shows the file it writes — your own group's — by its spex repository, and names no project file as editable here: a project's playbooks and role bindings are edited in the Playbooks surface [[playbook-library-1](playbook-library.md#playbook-library-1)].
 
 ### Guidance
 

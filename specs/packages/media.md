@@ -51,11 +51,11 @@ When application content becomes durable, the core shall use the shared owner-sc
 
 | Content | Owner and lifetime |
 | --- | --- |
-| Initial messages, session follow-ups before acceptance, queued intents | Project intent asset directory beside that project's append-only intent log |
-| Authoring input and output | Local draft asset directory under the ignored draft owner |
+| Initial messages, session follow-ups before acceptance, queued intents | The intent's own asset directory beside its file [[storage-4](storage.md#storage-4)]; a session's first message before its intent exists under the spex repository's staging owner |
+| Authoring input and output | The authoring session's asset directory beside its file [[storage-23](storage.md#storage-23)] |
 | Accepted session input and observed output | Playbook session asset bundle |
 | Intent-to-session handoff | Copy and validate bytes into the session before acknowledging acceptance; retain independent project ownership |
-| Removed or edited intent | Retain bytes referenced by append-only history |
+| Edited intent | Keep the bytes its references still name; a removed intent's directory goes with its file |
 | Deleted owner | Remove its assets with that owner's guarded deletion; preserve copies in other owners |
 
 ### media-5

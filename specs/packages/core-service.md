@@ -42,9 +42,12 @@ An Origin is not foreign only in these cases:
 
 #### core-service-2
 
-Where the shared config file exists at the path defined by [DR-004](../decisions/004-config-and-persistence.md), when the core service starts, the core service shall load and validate the config, reloading and revalidating it without a restart whenever the file's content changes on disk while the service runs.
+Where your own group's spex repository holds its `config/playbook.config.yaml` [[storage-1](storage.md#storage-1)], when the core service starts, the core service shall load and validate the config, composing a session's configuration from your own group's file with the session's spex repository's file on top [[storage-7](storage.md#storage-7)], reloading and revalidating without a restart whenever either file's content changes on disk while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
 On every load and reload:
+
+- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, or a `from` in any file, is a config error naming the entry.
+- A player the project's file names and your own group's lacks is reported before a session of that project starts, as a config error that names the player and offers to add it [[settings-46](settings.md#settings-46)]; sessions of other spex repositories are unaffected.
 
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
@@ -228,7 +231,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Another session of the project is live, or a session lease is active | `busy`, naming the session working or the holder |
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
 | Uncertain work | `invalid_request`, restore it first [[core-service-82](#core-service-82)] |
-| Missing/ambiguous project binding | `invalid_request`, bind an existing project identity first |
+| The spex repository's working folder is not paired on this device, or the session's recorded working directory is neither that folder nor one of its aliases [[storage-6](storage.md#storage-6)] | `invalid_request`, continue it on the device whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md)) |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
@@ -283,7 +286,7 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 #### core-service-96
 
-The core service shall accept the draft command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — validated as every command is [[core-service-13](#core-service-13)], stream a draft's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per draft ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per authoring session ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 | Command | While a turn runs | While a compile runs |
 | --- | --- | --- |
@@ -293,17 +296,17 @@ The core service shall accept the draft command family — `draft.list`, `draft.
 | `draft.abort` | ends the turn | `{aborted: false}` |
 
 - a draft compile is the playbook id's one compile, canceled by `compile.abort` as any compile is; `compile.run` and `draft.compile` for one id exclude each other;
-- `draft.create` replies `invalid_request` for an id a configured playbook or built-in holds; `draft.open` and every other command reply `not_found` for an unknown draft; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
-- a draft retired by registration or deleted is announced to every client as `draft.removed`, so no client keeps a trace of it;
+- `draft.create` replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, or for a project with no working folder on this device; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`; every command replies `busy` while the project's spex repository syncs;
+- a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an enabled one stays and reads enabled;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
 
 ### Intent Ledger
 
 #### core-service-42
 
-When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), its optional after-link, and its queue position — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent as one file of its project's spex repository [[storage-4](storage.md#storage-4)] — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), the signed-in account as its author where one is, and its capture time — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the request places the intent at the head or the tail of the project's queue as it asks, tail when it says nothing;
+- an intent holds no place of its own: the project's queue is its queued intents oldest first, and the next to run is the oldest;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
 - a chat-sourced or unsourced intent is never deduplicated.
 
@@ -312,20 +315,6 @@ When a client sends `intent.queue` for a registered project ([DR-006](../decisio
 While an intent is queued [[core-service-47](#core-service-47)], when a client sends `intent.edit` for it, the core service shall replace the intent's text and any supplied attachment list, preserving omitted attachments [[media-5](media.md#media-5)], and announce the write [[core-service-51](#core-service-51)]:
 
 - an edit of a dispatched or closed intent is rejected: from its dispatch binding on, the text is history ([DR-035](../decisions/035-intent-ledger.md)).
-
-#### core-service-44
-
-When a client sends `intent.move` for an intent, the core service shall reorder the intent within its own project's queue — to the position after a named intent of that project, or to the head when none is named — and announce the write [[core-service-51](#core-service-51)]:
-
-- a move naming an intent of another project is rejected: only a project's own order has dispatch meaning ([DR-035](../decisions/035-intent-ledger.md)).
-
-#### core-service-45
-
-When a client sends `intent.link` for an intent, the core service shall set the intent's single after-link to the named open intent — of any project — or clear it when the request names none, and announce the write [[core-service-51](#core-service-51)]:
-
-- a link to a closed intent is rejected;
-- a link that would close a cycle of after-links is rejected fail-closed;
-- while its after-link names a still-open intent, the intent is blocked — ineligible for dispatch [[core-service-47](#core-service-47)] — and the block lifts by derivation when that predecessor closes, with nothing written.
 
 #### core-service-46
 
@@ -338,32 +327,32 @@ When a client sends `intent.close` for an open intent with a verdict of `done` o
 
 #### core-service-79
 
-While an intent is closed [[core-service-46](#core-service-46)], when a client sends `intent.remove` for it, the core service shall append a remove act retiring that intent from every read — no queue row, no source binding, no attention entry [[core-service-49](#core-service-49)], and no history page [[core-service-50](#core-service-50)] — and announce the write [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
+While an intent is closed [[core-service-46](#core-service-46)], when a client sends `intent.remove` for it, the core service shall delete that intent's file and attachments, retiring it from every read — no queue row, no source binding, no attention entry [[core-service-49](#core-service-49)], and no history page [[core-service-50](#core-service-50)] — and announce the write [[core-service-51](#core-service-51)] ([DR-038](../decisions/038-history-is-done-work.md)):
 
 - a remove of an open intent is rejected with a `conflict` error: the ledger still owns work that is not ruled on;
 - a remove naming an intent no read knows — never stored, or already removed — is rejected `not_found`;
-- the intent's acts stay in the append-only log [[core-service-52](#core-service-52)], and its dispatch stamp keeps bounding its neighbours' turn ranges [[core-service-47](#core-service-47)], so no other intent's derived state moves.
+- the removed intent's dispatch stamp no longer bounds its neighbours' turn ranges [[core-service-47](#core-service-47)], so the preceding dispatched intent owns the removed one's turns; its file is recoverable from the spex repository's Git history alone.
 
 #### core-service-47
 
-While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, queued, and unblocked [[core-service-45](#core-service-45)] — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
+While a session is live, when a Boss submission for it — from a client [[core-service-5](#core-service-5)] or automatic advancement [[core-service-94](#core-service-94)] — carries an intent id, the core service shall validate the intent at submission — open, of the session's project, and queued — and stamp the dispatch (session, turn, and time) onto the intent when and only when the submitted turn starts, announcing the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md)):
 
 - a submission whose intent fails validation is rejected and starts no turn;
 - a submission that never starts a turn stamps nothing, and the intent stays queued;
 - a later dispatch of the same intent re-writes the stamps;
 - the stamp attributes turns: an intent's turns run from its dispatch turn up to, not including, the next turn in the session that is another intent's dispatch turn, so the newest dispatched open intent owns follow-up turns;
-- an intent is queued while it is open and holds no standing dispatch — never dispatched, its dispatch turn ended aborted, or its dispatching session stopped before that turn finished — the release derived, never written: the stamps remain and the queue position keeps its rank.
+- an intent is queued while it is open and holds no standing dispatch — never dispatched, its dispatch turn ended aborted, or its dispatching session stopped before that turn finished — the release derived, never written: the stamps remain and the intent keeps its place by age.
 
 #### core-service-94
 
-When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall, after publishing the released conversation, automatically submit the project's first queued, unblocked intent in current rank order into that same conversation exactly once only while the just-settled turn ended finished — a restore's report [[core-service-82](#core-service-82)] never does — did not run an ending control [[core-service-98](#core-service-98)], and would leave its attributed owner Finished rather than Interrupted if that owner remained open, no run of the conversation remains parked on the Boss, and the turn, dispatch boundary, project lane, and conversation remain current ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When a locally owned intent-attributed turn completes full settlement [[core-service-91](#core-service-91)], the core service shall, after publishing the released conversation, automatically submit the project's oldest queued intent into that same conversation exactly once only while the just-settled turn ended finished — a restore's report [[core-service-82](#core-service-82)] never does — did not run an ending control [[core-service-98](#core-service-98)], and would leave its attributed owner Finished rather than Interrupted if that owner remained open, no run of the conversation remains parked on the Boss, and the turn, dispatch boundary, project lane, and conversation remain current ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 - an ordinary Captain reply qualifies with no `playbook.trace` record or typed terminal evidence, as does a reply that sounds like a question but parks no run;
 - a Boss answer qualifies after its own turn settles finished and the question park has left; a question or failure park still standing, a failed turn, or an aborted turn starts no successor;
 - an aborted follow-up starts no successor even where an older finished turn leaves the intent's derived state Finished; a later clean attributed follow-up — one recovering a failure among them — may qualify, while an ending control never does;
 - a permission record and absent, unsupported, child, failed, or non-terminal playbook trace evidence add no gate of their own;
 - a Done or Drop verdict accepted before or during the eligible settlement, and a later removal of that settled owner, neither authorizes nor cancels that settlement's successor; no verdict or removal initiates advancement;
-- selection snapshots the successor's then-current identity before release can expose a manual Start and submits its latest text only while it remains the first eligible row; later capture, reorder, closing of that successor, or blocking that changes the next row cancels the handoff rather than substituting another intent, except that a settled-owner verdict may reveal a formerly blocked next without cancelling the already-authorized successor; explicit after-link blocking [[core-service-45](#core-service-45)], normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)] stand, a competing manual submission wins normal admission, and a refused admission causes no automatic retry;
+- selection snapshots the successor's then-current identity before release can expose a manual Start and submits its latest text only while it remains the first eligible row; a later arrival of an older intent through a sync, or the closing of that successor, that changes the next row cancels the handoff rather than substituting another intent; normal admission [[core-service-5](#core-service-5)], and actual-start dispatch stamping and attribution [[core-service-47](#core-service-47)] stand, a competing manual submission wins normal admission, and a refused admission causes no automatic retry;
 - the settled intent remains finished and awaiting its human verdict unless that verdict already landed [[core-service-46](#core-service-46)] [[core-service-49](#core-service-49)];
 - no next eligible intent starts nothing, and queue capture or edits, ledger reads, verdicts after settlement, adoption and restart initiate no advancement or retained runner state.
 
@@ -383,7 +372,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 | Attention entries | two bands — intents standing interrupted on the Boss (a pending question or an unacknowledged failure among their turns), then intents finished and awaiting a verdict — each band ordered longest waiting first by condition onset, and no entry from a project whose stored state refuses the acts that would end it [[core-service-86](#core-service-86)] ([DR-066](../decisions/066-every-summons-has-a-door.md)) |
 | Run stats | each finished entry carries stats folded from its intent's attributed turns [[core-service-47](#core-service-47)]: turn count, elapsed time, and the review rounds when any |
 | Session stand-ins | a session bound to no intent enters the same bands for its own question, failure, or finished turn past the viewed marker [[core-service-48](#core-service-48)] |
-| Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue in rank order with each blocked intent marked [[core-service-45](#core-service-45)], its first unblocked intent as next with the scheduling standing, manual-start availability, and structured cause [[core-service-107](#core-service-107)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)) |
+| Project groups | per project: the current conversation's state [[core-service-93](#core-service-93)], the queue oldest first, its oldest queued intent as next with the scheduling standing, manual-start availability, and structured cause [[core-service-107](#core-service-107)], and the open intents' source-artifact references [[core-service-42](#core-service-42)] ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)) |
 | Badge | the count of all attention entries |
 
 - a failure entry or queue standing carries the structured cause the runtime attached to that failure — the `{ code, evidence }` the stream reports beside the failure it decided — read defensively, so a shape that is not a code with an optional evidence object is dropped rather than half-read and the entry or standing states no reason the runtime did not state ([DR-075](../decisions/075-a-failure-says-what-and-what-now.md));
@@ -391,7 +380,7 @@ When a client sends `ledger.get`, the core service shall reply with the cross-pr
 
 #### core-service-107
 
-When the core service derives a project's queue reading, it shall choose the first queued, unblocked intent in rank order as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+When the core service derives a project's queue reading, it shall choose the oldest queued intent — by capture time, then by id — as next and publish exactly one scheduling standing with its manual-start availability by the first matching row of this ordered table, attaching the standing failure's structured cause where one is known ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
 | First matching lane condition | Standing | Manual start |
 | --- | --- | --- |
@@ -404,8 +393,7 @@ When the core service derives a project's queue reading, it shall choose the fir
 
 - a run is a playbook run: the Captain shell's own machine — which an abort taken during the Captain's call moves to its failure state — parks nothing;
 - a restore's report reuses the id of the turn it reports, so only a failure recorded after the report began is that turn ending failed;
-- a queued row whose after-link names an open predecessor is excluded before next is chosen [[core-service-45](#core-service-45)];
-- an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; rank still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
+- an eligible automatic handoff [[core-service-94](#core-service-94)] is selected before publication can expose `manual-ready`, so clean settlement never flickers a Start; age still chooses next while admission is pending, and a non-verdict queue change that changes that next cancels the handoff;
 - the standing and availability are derived from the lane and intent records, never stored on an intent.
 
 #### core-service-50
@@ -423,7 +411,7 @@ When the intents table is written [[core-service-52](#core-service-52)], or a se
 
 #### core-service-52
 
-The core package shall hold intents in one per-project append-only act log of acts and provenance only — no state or status field, every visible state derived at read time by folding the acts [[core-service-49](#core-service-49)] — kept in the state root [[core-service-15](#core-service-15)] and appended solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-44](#core-service-44)] [[core-service-45](#core-service-45)] [[core-service-46](#core-service-46)] [[core-service-79](#core-service-79)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md), [DR-036](../decisions/036-file-state-store.md)):
+The core package shall hold each intent as one file of its project's spex repository holding provenance and stamps only — no state or status field, every visible state derived at read time from the file, the session records and the viewed markers [[core-service-49](#core-service-49)] — kept as the storage package encodes it [[storage-4](storage.md#storage-4)] and written solely by the intent commands ([[core-service-42](#core-service-42)] [[core-service-43](#core-service-43)] [[core-service-46](#core-service-46)] [[core-service-79](#core-service-79)]) and the dispatch stamp [[core-service-47](#core-service-47)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 | Field(s) | Content |
 | --- | --- |
@@ -432,15 +420,13 @@ The core package shall hold intents in one per-project append-only act log of ac
 | `text` | the exact staged Boss turn text; the display title uses its trimmed first line when nonblank, otherwise the trimmed text, falling back to attachment names when the text is blank [[media-5](media.md#media-5)] |
 | `attachments` | optional ordered project-owned immutable file references [[media-4](media.md#media-4)] |
 | `source` (`kind`, `ref`, `url`) | provenance — issue, PR, record, or chat, with reference and URL — absent when unsourced |
-| `rank` | the per-project lexicographic order key |
-| `afterId` | the single optional predecessor intent, of any project |
-| `createdAt` | the capture time |
+| `author` | optional: the signed-in account that captured it |
+| `createdAt` | the capture time, which orders the queue |
 | `dispatched` (`sessionId`, `turnId`, `at`) | the dispatch stamp, re-written by a later dispatch |
 | `closedAt`, `closedAs` | the close time and verdict — `done` or `dropped` |
 
-- Within a local history, an act is never deleted or rewritten: an edit, move, link, dispatch, close, or remove appends, and the fold takes each field's latest act; an intent removed before it was worked, and one a remove act retired [[core-service-79](#core-service-79)], keep their acts in the log while every read excludes them ([DR-038](../decisions/038-history-is-done-work.md)).
-
-- Offline Git selection replaces a complete act log under the explicit whole-file rule [[storage-11](storage.md#storage-11)]; file-order folding does not merge divergent logs.
+- An edit, dispatch or close rewrites the file whole; a remove, and a drop before any work, delete it with its attachments, so no read sees it ([DR-038](../decisions/038-history-is-done-work.md)).
+- Git selection replaces a complete intent file under the explicit whole-unit rule [[storage-11](storage.md#storage-11)]; an intent added on each device merges without a choice.
 
 ### Record Streaming
 
@@ -834,11 +820,10 @@ Where a core service runs with a config carrying an error and an adapter that is
 
 #### core-service-53
 
-Where the core service runs with a valid config and the scripted fake adapter [[core-service-18](#core-service-18)], the test suite shall drive intents through their lives over the protocol — queue, edit, reorder, dispatch on a session's turn, finish, and close — and assert that:
+Where the core service runs with a valid config and the scripted fake adapter [[core-service-18](#core-service-18)], the test suite shall drive intents through their lives over the protocol — queue, edit, dispatch on a session's turn, finish, and close — and assert that:
 
-- a queued intent comes back from `ledger.get` in its project's queue at the requested position [[core-service-42](#core-service-42)] [[core-service-49](#core-service-49)];
+- a queued intent comes back from `ledger.get` in its project's queue at its place by age, written as one file of the project's spex repository [[core-service-42](#core-service-42)] [[core-service-49](#core-service-49)] [[core-service-52](#core-service-52)];
 - an edit lands while the intent is queued, and the same edit after dispatch is rejected [[core-service-43](#core-service-43)];
-- a move reorders the queue within the project, and a move naming another project's intent is rejected [[core-service-44](#core-service-44)];
 - closing the dispatched intent as `done` before its turn finishes is rejected, succeeds after the finish, and `dropped` is accepted on a second, still-queued intent, which then appears in no `ledger.history` page while the done one does [[core-service-46](#core-service-46)] [[core-service-50](#core-service-50)];
 - removing the closed done intent takes it out of every `ledger.history` page and leaves the rest of the ledger as it was, while the same request against a still-open intent is refused `conflict` and against an unknown or already-removed one `not_found` [[core-service-79](#core-service-79)];
 - an `intents.changed` broadcast naming the project arrives for each write and for the turn's start and finish [[core-service-51](#core-service-51)].
@@ -860,30 +845,30 @@ Where a project holds an open issue-sourced intent, the test suite shall send a 
 
 #### core-service-56
 
-Where two open intents are linked one after the other, the test suite shall assert the link guards of [[core-service-45](#core-service-45)]: a reverse link closing the cycle is rejected fail-closed, a link to a closed intent is rejected, and closing the predecessor [[core-service-46](#core-service-46)] lifts the successor's blocked mark in the next `ledger.get` reply [[core-service-49](#core-service-49)].
+Where two intents are captured a moment apart and a third arrives through a sync with an older capture time, the test suite shall assert the order of [[core-service-42](#core-service-42)]: the queue reads the synced one first, then the two by capture time, and `ledger.get` names the oldest as next [[core-service-49](#core-service-49)] [[core-service-107](#core-service-107)].
 
 #### core-service-57
 
 Where a session is live on the fake adapter, the test suite shall submit Boss text carrying an intent id and assert the stamping contract of [[core-service-47](#core-service-47)]:
 
 - when the submitted turn starts, the intent carries that session, that turn, and a dispatch time;
-- a submission carrying the id of a blocked intent, or of another project's intent, is rejected and starts no turn;
+- a submission carrying the id of another project's intent, or of a closed one, is rejected and starts no turn;
 - a submission rejected busy while a turn is active [[core-service-5](#core-service-5)] stamps nothing and leaves the intent queued;
-- a dispatch turn that is aborted [[core-service-6](#core-service-6)] keeps its stamps while the next `ledger.get` re-derives the intent as queued at its kept rank [[core-service-49](#core-service-49)].
+- a dispatch turn that is aborted [[core-service-6](#core-service-6)] keeps its stamps while the next `ledger.get` re-derives the intent as queued at its place by age [[core-service-49](#core-service-49)].
 
 #### core-service-95
 
 Where the integration suite starts project turns through real core commands with substitute agents, it shall verify automatic advancement [[core-service-94](#core-service-94)] and queue-standing derivation [[core-service-107](#core-service-107)] across the following settlement cases:
 
-- an ordinary Captain reply carrying no typed terminal evidence starts the next unblocked intent exactly once after release and publication, using its latest queued text and rank, while the first remains finished and unconfirmed;
+- an ordinary Captain reply carrying no typed terminal evidence starts the oldest queued intent exactly once after release and publication, using its latest queued text, while the first remains finished and unconfirmed;
 - a prose question that parks no run and permission telemetry add no hold, while an answered parked question starts the successor only after the answer turn settles and the park leaves;
 - an unattributed turn in the project lane publishes `after-current-work` with manual start unavailable, starts no successor when it settles, and then publishes `manual-ready` with manual start available [[core-service-107](#core-service-107)];
 - a failed turn, a finished turn retaining an unparked failure condition, an aborted dispatch, an aborted follow-up after an older finish, and a reply or control settling with a question or failure park still standing start no successor; either abort leaves its conversation continuable with no recovery owed and keeps it as the current lane [[core-service-6](#core-service-6)] [[core-service-93](#core-service-93)], while a later clean attributed follow-up — one recovering a failure among them — may start one and an ending control may not;
 - a restore of an interrupted follow-up settles its report, leaves the conversation continuable and the next row `stopped`, and starts no successor, and a restore of an interrupted dispatch whose lost attempt failed turns the next row from `failed` to `stopped` and leaves its intent Queued as the stopped dispatch left it, its stamps kept, raising no finish and starting no successor [[core-service-82](#core-service-82)] [[core-service-94](#core-service-94)] [[core-service-107](#core-service-107)];
 - `ledger.get` publishes the ordered standings of [[core-service-107](#core-service-107)]: active or settling work wins over every settled condition, a surviving failure park wins over a simultaneous question park and carries its structured cause, either park wins over the turn that left it, a failed turn or finished turn retaining an unparked failure reports `failed` with its cause, an abort, a successful ending or a restore reports `stopped`, and the fallback alone reports `manual-ready`;
 - a Done or Drop verdict accepted before or during an otherwise eligible settlement neither selects a row that only the verdict releases nor cancels the verdict-independent successor, while either verdict after settlement and a later removal initiate nothing; an ending turn required by Drop remains ineligible;
-- an explicit after-link to the unconfirmed predecessor remains blocked, and a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
-- adding or editing queued work during the active turn affects the next selection, while a capture, reorder, close, or after-link that changes next after authorization cancels rather than substitutes work; later queue edits, ledger reads, adoption and restart initiate no handoff;
+- a competing manual submission or admission refusal creates no duplicate turn, dispatch stamp, or automatic retry;
+- adding or editing queued work during the active turn affects the next selection, while an older intent arriving through a sync, or a close, that changes next after authorization cancels rather than substitutes work; later queue edits, ledger reads, adoption and restart initiate no handoff;
 - subsequent dispatch bounds the first intent's attribution, and confirming that first intent changes neither the second intent nor its active turn.
 
 #### core-service-104
@@ -937,7 +922,7 @@ Where the core service runs with an injected compile spawner whose toolchain run
 
 #### core-service-97
 
-Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the draft command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, and `conflict` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, and that a malformed draft command is rejected with no state change [[core-service-96](#core-service-96)].
+Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, `conflict` and `busy` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
 
 ### Endpoint Coverage
 

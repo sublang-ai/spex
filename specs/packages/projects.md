@@ -6,7 +6,7 @@
 ## Intent
 
 This spec covers project management in the Spex desktop app — its palette and Overview-tab behavior, the core-service implementation behind it, and the integration coverage that verifies both.
-Users register and create local git projects in the project palette, and the workspace's Overview tab shows the project's ledger group under its repository and GitHub state: a project is a local git repository, with registry persistence in the app state root, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
+Users add and create local git projects in the project palette, and the workspace's Overview tab shows the project's ledger group under its repository and GitHub state: a project is a working folder paired with a spex repository holding its records ([DR-103](../decisions/103-the-home-and-its-groups.md)), the pair recorded in the home file, repository state collected from local git only, and forge access exclusively through the forge adapter interface.
 Integration coverage exercises registration and card state against fixture repositories, the create-project flow, forge panels against a stubbed gh CLI, and removal without touching the repository on disk.
 
 ## External Behavior
@@ -17,7 +17,7 @@ Integration coverage exercises registration and card state against fixture repos
 
 When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
 
-- The top level of a git work tree: the palette registers the directory as a project and makes it the workspace's current project.
+- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in, through the picker of matching spex repositories and groups [[space-58](space.md#space-58)], else locally — and makes it the workspace's current project.
 - Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
 - No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
 
@@ -35,7 +35,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 2. initialize a git repository in it,
 3. generate the spex specs scaffold in it with the scaffold command [[projects-31](#projects-31)] when the scaffold option is on, in the creating page's resolved interface language [[localization-2](localization.md#localization-2)] using the scaffold's localized templates [[scaffold-28](scaffold.md#scaffold-28)] — the scaffold pinning the creator's git identity as the project's copyright holder [[scaffold-58](scaffold.md#scaffold-58)] — and generate no scaffold when it is off,
 4. create an initial commit containing the generated files, or an empty initial commit when scaffolding is off, and
-5. register the project and make it the workspace's current project.
+5. pair the project with a spex repository as Add does [[projects-1](#projects-1)] and make it the workspace's current project.
 
 - Any step failing: the palette reports the failed operation and its output — a failed scaffold naming the command that ran [[projects-31](#projects-31)] — does not register the project, and leaves already-created files on disk for inspection.
 - A target already containing its own Git repository: the palette changes nothing and directs the user to Add; where that repository has no initial commit, the guidance first directs the user to finish that commit in a terminal ([DR-099](../decisions/099-project-creation-preserves-existing-repositories.md)).
@@ -64,6 +64,7 @@ While a project is the workspace's current project, the Overview tab shall show 
 | --- | --- |
 | name | the project name |
 | path | the absolute repository path |
+| records | the spex repository's name with its group, and its state [[space-61](space.md#space-61)] |
 | branch | the current branch name, or a detached-HEAD indicator |
 | dirty | an indicator shown while the work tree has uncommitted changes, and hidden while it is clean |
 | ahead/behind | commit counts relative to the upstream branch, hidden while no upstream is configured |
@@ -96,7 +97,9 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Overview tab, the workspace shall forget the project and clear it from the sidebar, leaving the repository directory, its files, and its git state on disk unmodified:
+When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files, and its git state on disk unmodified and nothing on the host changed ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+
+- While anything in the clone has not reached the host — a local-only spex repository, or one with local units [[space-7](space.md#space-7)] — the confirm says what would be lost and asks a second confirmation naming the count.
 
 - While a session of the project has a turn in flight, the Overview tab disables removal, stating that the running turn must finish or be aborted first ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - Removal confirms inline with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4); Keep returns focus to the Remove control, and a completed removal moves focus to the sidebar's Dashboard entry — never to the page body.
@@ -137,10 +140,10 @@ While the project palette is open, the palette shall stand inside the window at 
 
 #### projects-10
 
-Where the core manages projects, the registry shall persist stable identities separately from machine-local paths [[storage-2](storage.md#storage-2)] [[storage-3](storage.md#storage-3)], using explicit identity-preserving rebinding and Git restoration [[storage-6](storage.md#storage-6)] ([DR-045](../decisions/045-unified-session-storage.md)):
+Where the core manages projects, the home file shall pair each working folder with its spex repository's key [[storage-2](storage.md#storage-2)], the key being the clone's path under `workspace/` and no identity Spex mints [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- removing a project removes its registration only; repository, session and intent files remain;
-- unresolved or orphaned identities are reported without automatic registration or a replacement UUID.
+- removing a project forgets the pair and deletes the clone; the working folder remains;
+- a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
 ### Repository State
 
@@ -189,7 +192,7 @@ When a forge adapter operation fails — executable missing, not authenticated, 
 Where a fixture git repository exists with a named branch checked out, an uncommitted change, and a local upstream remote that it is ahead of and behind by known commit counts, when the repository is registered through the registration flow [[projects-1](#projects-1)], the test suite shall assert that a project card appears showing the project name, the absolute path, the branch name, a dirty indicator, and the expected ahead/behind counts [[projects-4](#projects-4)], collected without any network access [[projects-11](#projects-11)], and shall assert the palette cases below:
 
 - Confirming the same path again creates no duplicate entry [[projects-2](#projects-2)], the core's `conflict` carrying the registered path as a detail of its reply [[projects-27](#projects-27)].
-- Explicit rebinding selects an existing ID or restores its exact registration from Git ancestry; a missing or conflicting binding prompts selection without silently minting or registering an identity [[projects-10](#projects-10)].
+- Pairing a repair's spex repository with a folder keeps its key; a clone no pair names prompts the repair without silently pairing anything [[projects-10](#projects-10)].
 - Confirming a directory inside a work tree below its top level is rejected with a message and creates no project entry [[projects-1](#projects-1)].
 - Confirming a directory that is no Git work tree registers nothing and points to the Create action [[projects-1](#projects-1)].
 
@@ -230,7 +233,7 @@ Where the Overview tab renders a project whose GitHub binding names an unmet con
 
 #### projects-21
 
-Where a fixture repository is registered, when the project is removed and the core service is restarted, the test suite shall assert that no project card or registry entry for it remains, its session and intent files remain unlisted without automatic registration [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)].
+Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming one unit — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
 
 ### Label Coverage
 

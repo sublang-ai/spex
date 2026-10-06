@@ -177,15 +177,14 @@ While the Now band shows the open intent the session serves [[dashboard-28](#das
 
 #### dashboard-29
 
-The group's Up next band shall list the project's queued intents in rank order, every row carrying a neutral `Queued` tag, with the core-published first unblocked intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
+The group's Up next band shall list the project's queued intents oldest first, every row carrying a neutral `Queued` tag, with the core-published oldest queued intent [[core-service-107](core-service.md#core-service-107)] emphasized as the project's next and rendering its scheduling standing [[dashboard-59](#dashboard-59)], followed by an inline add row whose one Queue action captures a new queued intent ([DR-077](../decisions/077-up-next-is-a-committed-queue.md)):
 
-- the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later eligible row carries only its `Queued` tag, since rank says it is later;
+- the next row carries Start only where its standing makes manual dispatch available, and otherwise carries the standing phrase with no Start; every later row carries only its `Queued` tag, since age says it is later, and a row may be started directly from its menu ([DR-103](../decisions/103-the-home-and-its-groups.md));
 - the visible Start and Queue labels stay short while Start's accessible name identifies its intent and project and Queue's identifies its destination project ([DR-041](../decisions/041-chrome-that-fits.md));
 - the title and standing share the row's sole shrinkable text region and one line at and above the `@md` container step, each truncating with its full text in its title; below `@md` the standing takes its own line within that region, while the grip, `Queued` mark, available Start, and row menu remain visible ([DR-041](../decisions/041-chrome-that-fits.md));
 - the add field is one row while empty, soft-wraps and grows with its text to the smaller of eight lines and two fifths of the viewport, then scrolls with no native resize grip; Queue and Enter take the same capture of a nonblank draft or at least one ready attachment, preserving the exact text and ordered files [[run-view-158](run-view.md#run-view-158)], Shift+Enter inserts a line, and no Start stands beside Queue ([DR-041](../decisions/041-chrome-that-fits.md));
-- a blocked intent — one whose after-link names a still-open intent [[dashboard-10](#dashboard-10)] — stays visible at its place with `after ⟨title⟩`, the predecessor's project named when it lives in another project, carries no Start, and is never presented as next;
-- reorder works by drag — the grip at the row's left is the affordance — by keyboard (Alt+↑/↓ on the focused row), and by the row menu's Move up and Move down, which take the same step, are disabled at the queue's ends, and name the shortcut; a reorder changes only the queue's rank order;
-- each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Move up, Move down, Edit, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
+- the queue has no order of its own to change: no grip, no drag, no move control, so an intent captured on another device lands at its place by age on the next sync;
+- each row's actions live in a ⋯ menu that follows the house popover idiom ([DR-010](../decisions/010-interface-craft.md) §6) — focus moves into it on open and returns to the trigger on close, Escape and an outside click close it, at most one row menu is open — offering Start, Edit, Remove, and, for a sourced intent, a provenance action named after what it opens: "Issue #N" or "PR #N" opening the page, the record row [[dashboard-40](#dashboard-40)] opening the record, "Session" opening the capturing session;
 - Attachment-only titles use the selected filenames; capture and edit use the shared file composer, and staging and Undo preserve the ordered selected files [[run-view-158](run-view.md#run-view-158)].
 - Remove acts on the click with no confirmation and leaves no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — re-queues the same text and provenance at the row's former place; a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt.
 
@@ -266,7 +265,7 @@ Where a project's `specs/` tree lists intent records [[spec-view-14](spec-view.m
 
 When the user selects a project filter, the Dashboard shall show only that project's attention entries and ledger group until the filter is cleared, as pure visibility in the linked-views ghost grammar ([DR-027](../decisions/027-linked-views-contract.md)):
 
-- no derived state, rank, or persisted data changes, and the published attention count [[dashboard-9](#dashboard-9)] stays the unfiltered queue's size.
+- no derived state or persisted data changes, and the published attention count [[dashboard-9](#dashboard-9)] stays the unfiltered queue's size.
 - filtering never changes the globally named next: where no attention entry exists anywhere, the global all-clear remains and names its cross-project scope; where another project still holds an entry but the selected project holds none, the project-named quiet note of [[dashboard-8](#dashboard-8)] stands with no queued head or Start.
 
 #### dashboard-61
@@ -281,7 +280,7 @@ While a Dashboard section or band has no content, the Dashboard shall display gu
 
 | Section | Empty condition | Guidance |
 | --- | --- | --- |
-| Attention queue | no entry in the unfiltered queue, with the ledger read | all-clear copy naming the globally next unblocked queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available and its accessible name identifying the intent and project; or plain all-clear copy when no unblocked head exists |
+| Attention queue | no entry in the unfiltered queue, with the ledger read | all-clear copy naming the globally next queue head — first by sidebar order — and mirroring its scheduling standing [[dashboard-59](#dashboard-59)], with Start only where manual dispatch is available and its accessible name identifying the intent and project; or plain all-clear copy when no queued head exists |
 | Attention queue | the selected project's visible slice has no entry while the unfiltered queue does [[dashboard-32](#dashboard-32)] | a focusable quiet note, `Nothing in ⟨project⟩ needs attention.`, with no queued head or Start |
 | Running | no live session holds a turn in flight unattended by the queue [[dashboard-50](#dashboard-50)] | a quiet note that nothing is running |
 | Project groups | no registered project | how to register a project, with a navigation control to Projects |
@@ -321,7 +320,6 @@ Each intent's state derives exactly as follows, over its turn range [[dashboard-
 | State | Holds while |
 | --- | --- |
 | Queued | not closed and not bound: never dispatched, or released [[dashboard-34](#dashboard-34)] |
-| Blocked (a Queued sub-condition) | its after-link names an intent that is still open; the block lifts by derivation when the predecessor closes |
 | Working | bound, and the latest turn in its range is active |
 | Interrupted — question | bound, not closed, captain telemetry in its range reported a pending Boss question — `playbook.fsm.state` reaching `awaitBossReply`, or a report carrying pending questions under any state — with no later report of it gone: the parked machine leaving its park, a report carrying none, or the parked run's disposal within a turn; another machine's state report, the Captain's own included, leaves the question standing, and so does a later Boss turn starting, a clarification among them ([DR-085](../decisions/085-boss-talks-through-captain.md)) |
 | Interrupted — failure | bound, not closed, a `runtime_error` record — or a turn whose engagement settled failed, a restore moving a run into its failure state among them, though not one bringing back a run the stream already showed parked there [[core-service-82](core-service.md#core-service-82)] — lies in its range, and the failure still stands: while a run of that session is parked in its failure state the entry stands until that run leaves the state or its call is disposed within a turn, and otherwise the Boss's next turn acknowledges it; a verdict clears it either way ([DR-062](../decisions/062-ending-a-failed-workflow.md)) |
@@ -357,7 +355,7 @@ Where turns attribute to intents, an intent's turn range shall run from its disp
 While an intent's dispatch turn ended aborted, or its session stopped before the dispatch turn finished, the fold shall derive that intent released — Queued again — with nothing written:
 
 - the dispatch stamps remain as history, and a later dispatch re-writes them;
-- the row keeps its rank, and its text is editable again.
+- the row keeps its place by age, and its text is editable again.
 
 #### dashboard-35
 
@@ -412,7 +410,7 @@ Where the displayed Dashboard is filtered to one project while another project r
 
 #### dashboard-36
 
-Where a fixture project holds a queue of three intents, the second after-linked to the first, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its kept rank with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the after-linked second blocked and never offered as next until the first closes, then unblocked as the project's next [[dashboard-10](#dashboard-10)] [[dashboard-29](#dashboard-29)], a reorder by keyboard and by the row menu's Move up and Move down — disabled at the ends — yielding the new rank order [[dashboard-29](#dashboard-29)], the row menu opening with focus inside and closing on Escape and on an outside click with focus back on its trigger, one menu open at a time [[dashboard-29](#dashboard-29)], and a Remove followed by Undo re-queuing the same text and provenance at the row's former place, the status line outlasting six seconds only while its control holds the focus a keyboard removal gave it, a pointer removal's line lapsing on schedule with focus untouched [[dashboard-29](#dashboard-29)], attachment-only capture, edit, staging, and Undo preserving the selected files and using their filenames as titles [[dashboard-29](#dashboard-29)], and each sourced row's provenance item named after what it opens, the record's drawn as the record row [[dashboard-29](#dashboard-29)] [[dashboard-40](#dashboard-40)].
+Where a fixture project holds a queue of three intents captured in order, when the fixture stream dispatches the first, runs a follow-up Boss turn, dispatches the third from its row menu into a turn that aborts, then finishes the first and closes it done, the test suite shall assert each derived state in sequence: Working on dispatch and again on the follow-up owned by the newest open intent [[dashboard-10](#dashboard-10)] [[dashboard-33](#dashboard-33)], the aborted dispatch releasing the third to Queued at its place by age with its stamps intact and text editable [[dashboard-34](#dashboard-34)], Finished when its last turn ends finished [[dashboard-10](#dashboard-10)], the second standing as the project's next throughout with no grip, drag or move control drawn [[dashboard-29](#dashboard-29)], the row menu opening with focus inside and closing on Escape and on an outside click with focus back on its trigger, one menu open at a time [[dashboard-29](#dashboard-29)], and a Remove followed by Undo re-queuing the same text and provenance at the row's former place, the status line outlasting six seconds only while its control holds the focus a keyboard removal gave it, a pointer removal's line lapsing on schedule with focus untouched [[dashboard-29](#dashboard-29)], attachment-only capture, edit, staging, and Undo preserving the selected files and using their filenames as titles [[dashboard-29](#dashboard-29)], and each sourced row's provenance item named after what it opens, the record's drawn as the record row [[dashboard-29](#dashboard-29)] [[dashboard-40](#dashboard-40)].
 
 #### dashboard-42
 
@@ -422,11 +420,10 @@ Where two ledger reads overlap and the older one's reply lands last, the test su
 
 Where fixture ledger replies publish next intents spanning every scheduling standing, when the Dashboard renders them, the test suite shall assert the queue presentation case by case:
 
-- every Up next row carries `Queued`, exactly the core-published first unblocked row is next, and every later eligible row carries no Start [[dashboard-29](#dashboard-29)];
+- every Up next row carries `Queued`, exactly the core-published oldest row is next, and every later row carries no Start outside its menu [[dashboard-29](#dashboard-29)];
 - a `manual-ready` next carries Start with no explanatory phrase, while `after-current-work` reads `after current work` with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - `question-park` reads `waiting — your reply`, and `failure-park` reads `waiting — current work failed` with the fixture catalogue cause, each with no Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
 - `failed` reads `waiting — previous work failed` with its known catalogue cause and carries Start, while `stopped` reads `waiting — previous work stopped` and carries Start [[dashboard-29](#dashboard-29)] [[dashboard-59](#dashboard-59)];
-- an after-linked row reads `after ⟨title⟩`, names a foreign project where applicable, carries no Start, and is skipped when choosing next [[dashboard-29](#dashboard-29)];
 - the all-clear names the same global next with the same phrase and Start availability, its Start accessible name identifying the intent and project; under a project filter its copy names the cross-project scope, while hidden attention replaces it with the selected project's quiet empty note [[dashboard-8](#dashboard-8)] [[dashboard-32](#dashboard-32)] [[dashboard-59](#dashboard-59)];
 - visible row Start and Queue labels keep their short forms while their accessible names identify the intent and project or destination project, respectively [[dashboard-29](#dashboard-29)].
 

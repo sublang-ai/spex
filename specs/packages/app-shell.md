@@ -55,6 +55,10 @@ When a UI flow requests a file or directory selection (for example, choosing a p
 
 When a UI flow asks to reveal a path lying inside the state root, the app shall show that path in the operating system's file manager and change no state ([DR-057](../decisions/057-space-surface.md)): a path outside the state root is ignored, and a deployment without the bridge offers the path itself instead.
 
+#### app-shell-37
+
+When a UI flow asks to open the Git host's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md)): a URL not at the home's recorded Git host is refused, and a deployment without the bridge shows the URL as a link to open instead.
+
 ### Quit
 
 #### app-shell-7
@@ -135,7 +139,9 @@ When the app starts, the shell shall capture the user's login-shell environment 
 
 #### app-shell-33
 
-The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)) and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that binary run as Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so compiles and scaffolds run on the app's own Node and find the compiler, the scaffold CLI and the SDKs the app ships.
+The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)) and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that binary run as Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so compiles and scaffolds run on the app's own Node and find the compiler, the scaffold CLI and the SDKs the app ships:
+
+- the shell also ships the built-in spec package the core seeds at start [[environments-11](environments.md#environments-11)], staged from the `@sublang/playbook` it depends on at build time, so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
 ### Packaging
 
@@ -162,12 +168,15 @@ The shell shall start the core against the shared state root of [DR-036](../deci
 
 - The shell writes no app-only state to the shared config file or into project working trees ([DR-004](../decisions/004-config-and-persistence.md)).
 - The shell hands the core the legacy `userData` store path, so the core's one-time import [[core-service-64](core-service.md#core-service-64)] finds a store an earlier release left there.
+- The shell starts the core with the browser sign-in flow [[git-host-2](git-host.md#git-host-2)] and names its own executable as the runtime of the Git credential helper [[git-host-9](git-host.md#git-host-9)], so a clone, fetch or push to the Git host runs with no Node beyond the app's.
 
 ### Native Bridge
 
 #### app-shell-20
 
-The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking and path reveal, one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback.
+The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking, path reveal, and opening the Git host's sign-in URL in the system browser [[git-host-2](git-host.md#git-host-2)], one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback:
+
+- the open-URL channel accepts only an `https` URL at the home's recorded Git host, refusing any other ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
 #### app-shell-22
 
