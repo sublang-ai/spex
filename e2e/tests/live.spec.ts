@@ -162,11 +162,11 @@ test.describe("the app's own example", () => {
     }
 
     // Every passing compile is followed by the agent's turn, which may
-    // propose a registration (playbook-library-61); the form stands
+    // propose an enabling (playbook-library-61); the form stands
     // once it ends.
     await expect(page.getByTestId("draft-working")).toHaveCount(0, { timeout: TURN });
     const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
-    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
     const form = page.getByTestId("register-form");
     await expect(form).toBeVisible();
     const playerFor = (role: string) => page.getByTestId(new RegExp(`^register-player-${role}$`, "i"));
@@ -195,18 +195,20 @@ test.describe("the app's own example", () => {
       await expect(playerFor("coder")).toHaveValue("dev.coder");
       await expect(playerFor("reviewer")).toHaveValue("dev.reviewer");
     }
-    // The command the session invokes is the one registered.
+    // The command the session invokes is the one enabled.
     const command = await page.getByTestId("register-command").inputValue();
     expect(command, "the form names a command").not.toBe("");
     await page.getByTestId("register-submit").click();
 
-    // Register lists it and the draft leaves (playbook-library-10);
-    // both roles run on claude.
-    await expect(page.getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByTestId("drafts-section")).toHaveCount(0);
-    const config = parse(app.readConfig()) as {
-      players: Record<string, Block>;
-      playbooks: Record<string, { roles: Record<string, unknown> }>;
+    // The surface lists it among the enabled, the authoring session
+    // staying (playbook-library-10, playbook-library-61); the project's
+    // config names its players, your own group's says what they run on,
+    // and both roles run on claude.
+    await expect(page.getByTestId("playbooks-enabled").getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId(`draft-row-${EXAMPLE_ID}`).getByTestId("draft-chip")).toContainText("Enabled");
+    const config = {
+      players: (parse(app.readConfig()) as { players: Record<string, Block> }).players,
+      playbooks: (parse(app.readProjectConfig()) as { playbooks: Record<string, { roles: Record<string, unknown> }> }).playbooks,
     };
     const roles = config.playbooks[EXAMPLE_ID].roles;
     expect(Object.keys(roles).map((role) => role.toLowerCase()).sort()).toEqual(["coder", "reviewer"]);
@@ -219,7 +221,7 @@ test.describe("the app's own example", () => {
     }
 
     // A new session's slash menu offers its command, and its turn runs
-    // the registered playbook to its finish with both role players
+    // the enabled playbook to its finish with both role players
     // engaged and the change committed (playbook-library-14), any
     // player's question answered through the Captain.
     await surfaceEntry(page, "Workspace").click();
@@ -254,7 +256,7 @@ test.describe("the app's own example", () => {
 test.describe("the changelog playbook", () => {
   test.use({ appOptions: { config: "none", project: true, compiler: COMPILER } });
 
-  test("playbook-library-78 @live: a two-role changelog playbook is authored, compiled, registered, and run", async ({
+  test("playbook-library-78 @live: a two-role changelog playbook is authored, compiled, enabled, and run", async ({
     page,
     app,
   }) => {
@@ -370,9 +372,9 @@ test.describe("the changelog playbook", () => {
     await expect(working).toHaveCount(0, { timeout: TURN });
     await attach("the proposal");
 
-    // /changelog registered with a player per role (playbook-library-61).
+    // /changelog enabled with a player per role (playbook-library-61).
     const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
-    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
     await expect(page.getByTestId("register-form")).toContainText("Prefilled from the agent's proposal");
     await expect(page.getByTestId("register-command")).toHaveValue("changelog");
     const playerFor = (role: string) => page.getByTestId(new RegExp(`^register-player-${role}$`, "i"));
@@ -394,12 +396,14 @@ test.describe("the changelog playbook", () => {
       }
     }
     await page.getByTestId("register-submit").click();
-    await expect(page.getByTestId("playbook-card-changelog")).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByTestId("drafts-section")).toHaveCount(0);
-    await expect.poll(() => app.readConfig()).toContain("changelog:");
-    const config = parse(app.readConfig()) as {
-      players: Record<string, Block>;
-      playbooks: Record<string, { roles: Record<string, unknown> }>;
+    await expect(page.getByTestId("playbooks-enabled").getByTestId("playbook-card-changelog")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("draft-row-changelog").getByTestId("draft-chip")).toContainText("Enabled");
+    await expect.poll(() => app.readProjectConfig()).toContain("changelog:");
+    // The project's config names the players, your own group's says
+    // what each runs on.
+    const config = {
+      players: (parse(app.readConfig()) as { players: Record<string, Block> }).players,
+      playbooks: (parse(app.readProjectConfig()) as { playbooks: Record<string, { roles: Record<string, unknown> }> }).playbooks,
     };
     const roles = config.playbooks.changelog.roles;
     expect(Object.keys(roles).map((role) => role.toLowerCase()).sort()).toEqual(["coder", "reviewer"]);
@@ -417,7 +421,7 @@ test.describe("the changelog playbook", () => {
     await box.fill("/");
     await expect(page.getByRole("listbox")).toContainText("/changelog");
 
-    // The registered playbook runs (DR-086): a session's /changelog
+    // The enabled playbook runs (DR-086): a session's /changelog
     // turn finishes with both role players engaged and the repository
     // carrying a commit of its notes (playbook-library-14), any
     // player's question answered through the Captain.
