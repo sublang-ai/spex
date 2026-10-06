@@ -83,7 +83,7 @@ Spex never does these; it shows the state and links to the page.
 ### Spex repositories
 
 - The name is `<name>-spex`: the working folder's name for a project, which you may change, and the group's or the user's name for a group's own. A `<name>-spex` repository with a `spex` branch is Spex's; the name alone proves nothing. Where the name is taken by something else, Spex asks you for another.
-- A renamed user or group keeps the old name in its spex repository's name. Spex follows the repository by its id, and the host lets you rename it.
+- The host gives every repository a permanent id that survives renames and moves, and Spex remembers that id, never the name. So the name is only what Spex proposes at creation: renaming a group, a working folder or the spex repository itself breaks nothing. The host does not rename a spex repository when its group or project is renamed, so group B renamed from A still holds `A-spex` until someone renames it there.
 - Spex writes to the `spex` branch of a spex repository and to nothing else on the host. The default branch holds the host's README and nothing else.
 - Spex creates the `spex` branch beside the default branch, never as it. A group's rule protects a new repository's default branch, and the repository's creator may not be allowed to change that rule, while a branch of another name carries no rule unless one names it. So every member who can write the repository can push `spex` from the first day, on any host and any tier. Where a branch rule still blocks pushes to it, Spex adds one rule allowing them, when you are allowed to.
 - Large files use the host's large-file storage where it exists.
