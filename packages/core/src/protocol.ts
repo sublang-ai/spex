@@ -46,9 +46,12 @@ export const mediaAssetSchema = z.object({
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 /** A spex repository's key: its clone's path under `workspace/`, the
- * name ending in `-spex` (storage-1, projects-10). A project is named
- * by its spex repository's key. */
-export const REPOSITORY_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*-spex$/;
+ * name ending in `-spex` (storage-1, projects-10), each segment spelled
+ * as the Git host spells its paths — letters, digits, `.`, `_` and `-`,
+ * never starting with a dot or a hyphen — so a host's group or
+ * repository name stands as a segment unchanged. A project is named by
+ * its spex repository's key. */
+export const REPOSITORY_KEY_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*-spex$/;
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */

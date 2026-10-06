@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -678,6 +678,27 @@ test("projects-10: removal forgets the pair and deletes the clone; the working f
   const reopened = new Store({ dir, own: "tester" });
   assert.deepEqual(reopened.listProjects(), []);
   assert.deepEqual(reopened.storageDiagnostics(), []);
+  reopened.close();
+});
+
+test("storage-1: a clone whose group and name the host spells with capitals, dots and underscores pairs under that key", () => {
+  const dir = tempRoot();
+  const store = new Store({ dir, own: "tester" });
+  const project = store.registerProject(join(tmpdir(), "spex-spelled"), "spelled", 1);
+  store.close();
+  // The host's own spelling of the group and the repository, as a sync
+  // that followed a transfer would leave them (space-60).
+  const key = "Acme.Corp/platform_team/web.app-spex";
+  mkdirSync(join(dir, "workspace", "Acme.Corp", "platform_team"), { recursive: true });
+  renameSync(join(dir, "workspace", ...project.id.split("/")), join(dir, "workspace", ...key.split("/")));
+  const home = parseYaml(readFileSync(join(dir, "home.yaml"), "utf8")) as { folders: { repository: string }[] };
+  for (const folder of home.folders) if (folder.repository === project.id) folder.repository = key;
+  writeFileSync(join(dir, "home.yaml"), stringifyYaml(home));
+  // A dot folder is never a group or a clone.
+  mkdirSync(join(dir, "workspace", ".trash", "old-spex"), { recursive: true });
+  const reopened = new Store({ dir, own: "tester" });
+  assert.deepEqual(reopened.listProjects().map((entry) => entry.id), [key]);
+  assert.ok(!reopened.listRepositories().some((repository) => repository.key.includes(".trash")));
   reopened.close();
 });
 

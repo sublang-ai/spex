@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseCommand, PROTOCOL_VERSION } from "./protocol.js";
+import { parseCommand, PROTOCOL_VERSION, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 test("protocol version is a positive integer", () => {
   assert.ok(Number.isInteger(PROTOCOL_VERSION) && PROTOCOL_VERSION >= 1);
@@ -79,9 +79,24 @@ test("parseCommand accepts the space commands and their optional fields", () => 
 });
 
 test("space-29: a space command names its repository by key", () => {
-  for (const repository of [undefined, "a-spex/", "Alice/a-spex", "alice/a", "../a-spex", ""]) {
+  for (const repository of [undefined, "a-spex/", "alice/a", "../a-spex", ""]) {
     const parsed = parseCommand({ type: "space.fetch", id: "k1", ...(repository !== undefined ? { repository } : {}) });
     assert.ok(!parsed.ok, String(repository));
+  }
+});
+
+test("storage: a key's segments are spelled as the host spells its paths", () => {
+  // Letters of either case, digits, `.`, `_` and `-`: a host's group or
+  // repository name stands as a segment unchanged.
+  for (const key of ["alice/a-spex", "a-spex", "Alice/a-spex", "Acme.Corp/platform_team/web.app-spex", "_ops/x_y-spex", "acme/sub.group/a..b-spex"]) {
+    assert.ok(REPOSITORY_KEY_PATTERN.test(key), key);
+    assert.ok(parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
+  }
+  // Never a segment starting with a dot or a hyphen, never an empty
+  // segment, never a name without `-spex`, nothing outside the set.
+  for (const key of [".hidden/a-spex", "alice/.a-spex", "alice/..-spex", "-x/a-spex", "alice/-spex", "alice//a-spex", "/alice/a-spex", "alice/a b-spex", "alice/a+b-spex", "alice/a-spex.git", "alice/a-Spex", "-spex"]) {
+    assert.ok(!REPOSITORY_KEY_PATTERN.test(key), key);
+    assert.ok(!parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
   }
 });
 
