@@ -7,7 +7,7 @@
 
 Accepted (2026-10-04).
 Revised on 2026-10-04: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
-Revised on 2026-10-05: an environment lives in a spex repository, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
+Revised on 2026-10-05: an environment lives in a spex repository, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock. After a review on 2026-10-06: a path source is used in place, and a lock is stale when a path source's manifest changes.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
 It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a spex repository, your own group's included.
 Amends ([DR-046](046-decision-record-evolution.md)):
@@ -90,7 +90,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### An environment
 
 - An environment resolves from its own `spex.yaml` and `spex.lock` and nothing else. Two devices with the same files install the same thing, a path source following each device's working folder.
-- A project's environment is in its spex repository, so every member installs the same thing. Your own group's is yours alone and follows you to every device you sign in on.
+- A project's environment is in its spex repository, so every member installs the same registry and Git content, while a path source follows each working folder. Your own group's is yours alone and follows you to every device you sign in on.
 - The Git host controls who reads a repository. The registry controls who publishes and downloads. Neither permission grants the other.
 - An environment holds one version of a spec package and one language of an artifact.
 
@@ -98,7 +98,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | --- | --- | --- |
 | `spex.yaml` | Requests | Yes |
 | `spex.lock` | Resolution | Yes, as one sync unit with `spex.yaml` |
-| `packages/<org>/<pkg>/` | The root files and selected artifacts of one release, at their release paths | No |
+| `packages/<org>/<pkg>/` | The root files and selected artifacts of one registry or Git release, at their release paths. A path source has no folder here; it is used where it is | No |
 | `skills/<name>/` | One folder per exported skill | No |
 
 ### Requests: `spex.yaml`
@@ -114,7 +114,7 @@ A request names one source:
 | Source | Fields | Meaning |
 | --- | --- | --- |
 | Registry | `version` | A requirement, resolved at spex.pub |
-| Path | `path` | A folder inside the project's working folder, by relative path, installed as it is on each device |
+| Path | `path` | A folder inside the project's working folder, by relative path, used where it is |
 | Git | `git`, `rev`, optional `path` | A repository the Git host or the machine's Git can read, at a branch, tag or commit, with an optional folder inside |
 
 - A request may add `select`, a list of `{artifact, language}`, and `alias`, artifact id to exported name.
@@ -128,9 +128,9 @@ A request names one source:
 | `requests` | A digest of the `spex.yaml` this lock resolved |
 | `packages` | `<org>/<pkg>` to a resolution |
 
-- A resolution holds the exact `source`: a registry version and archive checksum; a path and the version its manifest states; or a repository and commit. It also holds `required-by`, who pulled this spec package in; `artifacts`, each selected artifact with its chosen language and whether that was a fallback; `files`, every selected file with its SHA-256 and executable flag; and `exports`, skill names to artifact ids.
-- A path source records no files. It installs from the working folder as it is on each device, as path dependencies do in Cargo and npm [[5]], and a device whose working folder lacks it reports it missing.
-- A lock is stale when its `requests` digest no longer matches `spex.yaml`. A stale lock installs nothing new; the last files stay, and Spex asks for resolution.
+- A resolution holds the exact `source`: a registry version and archive checksum; a path with the version, dependencies and `requires` its manifest states; or a repository and commit. It also holds `required-by`, who pulled this spec package in; `artifacts`, each selected artifact with its chosen language and whether that was a fallback; `files`, every selected file with its SHA-256 and executable flag; and `exports`, skill names to artifact ids.
+- A path source records no files. It is used where it is, in the working folder, as path dependencies are in Cargo and npm [[5]]: nothing is copied into `packages/`, each working folder runs its own files, and a device whose working folder lacks it reports it missing.
+- A lock is stale when its `requests` digest no longer matches `spex.yaml`, or a path source's manifest no longer states the version, dependencies and `requires` the lock recorded. A stale lock installs nothing new; the last files stay, and Spex asks for resolution.
 - A lock records content, not a promise that a registry or repository stays reachable.
 
 ### Resolution
@@ -150,7 +150,7 @@ Selection, within a solution:
 ### Installing
 
 - The store at `~/.spex/store/files/sha256/<digest>` and `<digest>-exec` keeps one immutable blob per content and executable flag, written once after its digest is verified, kept while any known lock selects it. `cache/` holds fetched archives and metadata and may be deleted. Registry credentials live in `local/credentials.yaml`.
-- Installing keeps only the selected files. It fetches them by any transport the registry offers [[9]], from the path, or from the repository at the locked commit. It stores a file only when its digest matches the manifest or, for a Git source, the digest taken at resolution; a path source's files are copied as they are. It re-checks the path rules. It runs no code.
+- Installing keeps only the selected files. It fetches them by any transport the registry offers [[9]] or from the repository at the locked commit, and stores a file only when its digest matches the manifest or, for a Git source, the digest taken at resolution. A path source is read in place. It re-checks the path rules. It runs no code.
 - Installing uses links, clones or copies. An environment changes atomically: the new installed files are complete before they replace the old ones.
 - An aliased skill is copied with its `name` rewritten, because Agent Skills requires the name to match the folder. Verified files are never changed.
 
@@ -159,7 +159,7 @@ Selection, within a solution:
 - A project's environment exports to the project: its skills into the agent folders of the project's working folder, kept out of Git there, and its playbooks into the sessions started in it.
 - Your own group's environment exports its skills into your agents' home folders on each device, so they reach every session you run there.
 - Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's working folder, with everything the playbook requires.
-- An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, never another environment's copy of the same name and version.
+- An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, or its working folder's for a path source, never another environment's copy of the same name and version.
 - When a project and your own group export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
 - Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent's adapter for it says. Nothing in a shared file chooses a path on your device.
 
@@ -210,11 +210,11 @@ Selection, within a solution:
 ## Consequences
 
 - One name and one version carry sources, the spec, skills, playbooks and applets of one GEARS contract. A user picks any subset by artifact and language, and gets what it requires.
-- A project's tools are its own `spex.yaml` and `spex.lock`. Every member installs the same thing. The home's `playbooks/<id>/` library and its registration writes disappear.
+- A project's tools are its own `spex.yaml` and `spex.lock`. Every member installs the same registry and Git content. The home's `playbooks/<id>/` library and its registration writes disappear.
 - A spec package under development is requested by `path` from the project that holds it, or by `git` from anywhere its repository can be read.
 - The Playbooks surface becomes a view over environments: what each installs, enable by naming players for roles, author in a project.
 - Spec packages change: `playbook-library` for the surface over environments, enabling by roles and authoring in a project; `storage` for the retired library folder and the store; `settings` for the filled `from` and the missing-player report; and a new spec package for requests, resolution and installing. They are updated under this record before the code follows.
-- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; a playbook's requirement installed with it and a missing one reported before running; the same lock replayed on two devices; a stale lock after changed requests; a path source missing on a device reported; a Git source at a commit; conflicting requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; compile, install, enable and launch in one flow.
+- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; a playbook's requirement installed with it and a missing one reported before running; the same lock replayed on two devices; a stale lock after changed requests or a changed path-source manifest; a path source missing on a device reported; two working folders of one project each running their own path source; a Git source at a commit; conflicting requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; compile, install, enable and launch in one flow.
 - spex.pub retires the materialization rules and the `mode` of its dependency record, and validates the one-file spec, the language folders, and the playbook and applet kinds.
 - Ask to Playbook: the built-in playbooks become a spec package.
 
