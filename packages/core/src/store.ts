@@ -1383,6 +1383,77 @@ export class Store {
     return this.projects.get(repository.key)!;
   }
 
+  /** The account a sign-in read, written into `home.yaml` (storage-2). */
+  signIn(account: { id: string; login: string; displayName: string | null }): void {
+    this.assertProjectsWritable();
+    this.homeFile.signIn(account);
+    this.saveHome();
+  }
+
+  /** The credential went; the account stays, marked signed out
+   * (git-host-4, git-host-10). */
+  signOut(): void {
+    if (this.homeProblem) return;
+    this.homeFile.signOut();
+    this.saveHome();
+  }
+
+  /**
+   * Clones the caller already moved on disk (space-59, space-60): every
+   * pair naming a moved key names its new one in `home.yaml`, your own
+   * group's name follows where it was renamed, and the indexes — clones,
+   * sessions, intents, the preferences keyed by repository — follow in
+   * the same step, so no reader sees a key that names nothing.
+   */
+  moveRepositories(moves: { from: string; to: string }[], own?: string): void {
+    this.assertProjectsWritable();
+    if (moves.length === 0 && own === undefined) return;
+    this.homeFile.move(moves, own);
+    this.saveHome();
+    const to = new Map(moves.map((entry) => [entry.from, entry.to]));
+    for (const { from } of moves) this.repositories.delete(from);
+    this.discoverRepositories();
+    for (const [id, location] of [...this.sessionLocations]) {
+      const next = to.get(location);
+      if (next) this.sessionLocations.set(id, next);
+    }
+    for (const [id, meta] of [...this.sessions]) {
+      const next = to.get(meta.projectId);
+      if (!next) continue;
+      const repository = this.repositories.get(next);
+      this.sessions.set(id, { ...meta, projectId: next, ...(repository && meta.originDir ? { originDir: repository.sessionsDir } : {}) });
+    }
+    for (const [id, intent] of [...this.intents]) {
+      const next = to.get(intent.projectId);
+      if (next) this.intents.set(id, { ...intent, projectId: next });
+    }
+    let prefsChanged = false;
+    for (const { from, to: next } of moves) {
+      for (const key of this.prefKeys(`sync:${from}:`)) {
+        this.prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, this.prefs.get(key));
+        this.prefs.delete(key);
+        prefsChanged = true;
+      }
+      const cached = this.forgeCache.get(from);
+      if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
+    }
+    if (prefsChanged) this.savePrefs();
+    for (const { from } of moves) {
+      const gone = `${this.homeFile.clonePath(from)}/`;
+      for (const file of [...this.intentProblems.keys()]) if (file.startsWith(gone)) this.intentProblems.delete(file);
+    }
+    const targets = new Set(moves.map((entry) => entry.to));
+    for (const repository of this.repositories.values()) if (targets.has(repository.key)) this.loadIntents(repository);
+    this.refreshProjects();
+  }
+
+  /** A clone that came under `workspace/` from outside the store — a
+   * join's — is indexed with its intents (space-63). */
+  adoptRepositories(): void {
+    this.discoverRepositories();
+    for (const repository of this.repositories.values()) this.loadIntents(repository);
+  }
+
   /** Forget the pair and delete the clone (projects-9, projects-10); the
    * working folder stays as it is. */
   removeProject(key: string): boolean {
@@ -1924,10 +1995,33 @@ export class Store {
   }
 
   /** Retire an intent (core-service-79): its file and attachments go,
-   * recoverable from the spex repository's history alone. */
+   * recoverable from the spex repository's history alone. Its turns pass
+   * to the preceding dispatch once its stamp is gone, so the session's
+   * viewed marker first advances past its last ended turn: work already
+   * ruled on summons no review. */
   removeIntent(id: string, _at?: number): void {
     const { intent, repository } = this.requireIntent(id);
+    const lastEnded = this.lastEndedTurnOf(intent);
     this.deleteIntentFiles(repository, intent);
+    if (lastEnded) {
+      const key = `viewed:${lastEnded.sessionId}`;
+      const viewed = this.getPref<number>(key) ?? -1;
+      if (lastEnded.turnId > viewed) this.setPref(key, lastEnded.turnId);
+    }
+  }
+
+  /** The last ended turn a dispatched intent attributes: from its
+   * dispatch turn up to the next dispatch of another intent in the
+   * session, or the session's end (DR-035). */
+  private lastEndedTurnOf(intent: IntentInfo): { sessionId: string; turnId: number } | undefined {
+    const bound = intent.dispatched;
+    if (!bound) return undefined;
+    const next = this.listSessionDispatches(bound.sessionId)
+      .find((dispatch) => dispatch.turnId > bound.turnId && dispatch.intentId !== intent.id);
+    const last = this.listTurns(bound.sessionId)
+      .filter((turn) => turn.turnId >= bound.turnId && (next === undefined || turn.turnId < next.turnId) && turn.endedAt !== null)
+      .at(-1);
+    return last ? { sessionId: bound.sessionId, turnId: last.turnId } : undefined;
   }
 
   private deleteIntentFiles(repository: SpexRepository, intent: IntentInfo): void {

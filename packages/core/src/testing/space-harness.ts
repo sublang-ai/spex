@@ -13,6 +13,7 @@ import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
+import { startStandinHost, type StandinHost } from "./standin-host.js";
 import type { LineSpawner } from "../compile.js";
 import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
 
@@ -60,7 +61,7 @@ class Client {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
     // The state-shaped replies carry the GroupsState shape (space-30).
-    if (type === "space.get" || type === "space.remote.set") assertGroupsState(reply.result as GroupsState);
+    if (type === "space.get" || type === "space.remote.set" || type === "space.signout") assertGroupsState(reply.result as GroupsState);
     return reply.result;
   }
   async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
@@ -122,7 +123,7 @@ function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) =>
 
 const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "signIn"];
 
-const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "state", "sync", "visibility", "waiting"];
+const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
@@ -162,9 +163,12 @@ interface Home {
   stop(): Promise<void>;
 }
 
-/** Your own group's clone in a scratch home. */
+/** Your own group's clone in a scratch home: under the name its
+ * `home.yaml` records, once it has one — a sign-in renames it. */
 export function ownClone(dataDir: string): string {
-  return join(dataDir, "workspace", OWN, `${OWN}-spex`);
+  let own = OWN;
+  try { own = /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? OWN; } catch { own = OWN; }
+  return join(dataDir, "workspace", own, `${own}-spex`);
 }
 
 /** A project's clone in a scratch home. */
@@ -273,9 +277,35 @@ playbooks:
     newPlayers: { "dev.helper": { adapter: "claude" as const } },
   };
 
+  const hosts: StandinHost[] = [];
+
+  /** A stand-in Git host (git-host-12) of this suite's own. */
+  async function startHost(): Promise<StandinHost> {
+    const host = await startStandinHost({ dir: mkdtempSync(join(scratch, "host-")) });
+    hosts.push(host);
+    return host;
+  }
+
+  /** Sign a home in at the stand-in through the flow its core runs —
+   * the browser's redirect followed as the system browser would, or the
+   * user code approved — and wait for the set-up to end (space-4). */
+  async function signIn(home: Home, host: StandinHost): Promise<GroupsState> {
+    const from = home.client.mark();
+    const started = await home.client.expectOk("space.signin.start", {});
+    if (started.flow === "browser") {
+      const first = await fetch(started.url, { redirect: "manual" });
+      const location = first.headers.get("location");
+      assert.ok(location, `the stand-in answered ${first.status}`);
+      await (await fetch(location)).text();
+    } else {
+      host.script.approveDevice(started.userCode);
+    }
+    return home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
+  }
+
   /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository. */
-  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
+   * group's spex repository; `host` names the stand-in it signs in to. */
+  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
     const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
     if (!existsSync(configPath)) { mkdirSync(join(ownClone(dataDir), "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
@@ -302,7 +332,7 @@ playbooks:
       adapterImports: imports,
       adapterRuntime: () => ({ usable: true }),
       captainFactory: async () => captain,
-      env: coreEnv(options.env),
+      env: coreEnv({ ...(options.host ? { SPEX_HOST_URL: options.host.url } : {}), ...(options.env ?? {}) }),
       home: userHome,
       watchConfig: false,
       // Real Git operations here run against local bare repositories, so
@@ -374,5 +404,11 @@ playbooks:
     { type: "turn_finished", turnId, timestamp: at + 1 },
   ];
 
-  return { scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords, dispose: () => rmSync(scratch, { recursive: true, force: true }) };
+  return {
+    scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    dispose: async () => {
+      await Promise.all(hosts.map((host) => host.close()));
+      rmSync(scratch, { recursive: true, force: true });
+    },
+  };
 }

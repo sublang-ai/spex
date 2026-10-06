@@ -138,10 +138,35 @@ msgstr "{file}: {reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}: damaged transcript after record {seq}"
 
+#. The Git host's rate limit; {retry} is its own Retry-After value, kept as given
+#: src/space-groups.ts
+msgid "{host} asks to wait; try again after {retry}"
+msgstr "{host} asks to wait; try again after {retry}"
+
+#. The Git host's rate limit, with no retry time of its own
+#: src/space-groups.ts
+msgid "{host} asks to wait; try again later"
+msgstr "{host} asks to wait; try again later"
+
+#. A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name
+#: src/space.ts
+msgid "{host} holds no default branch for it yet"
+msgstr "{host} holds no default branch for it yet"
+
+#. A refusal relayed from the Git host that carried no words; {host} is its display name
+#: src/space-git.ts
+msgid "{host} refused"
+msgstr "{host} refused"
+
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
 msgid "{host} refused this machine's access"
 msgstr "{host} refused this machine's access"
+
+#. A refusal relayed from the Git host; {host} is its display name, {words} its own words, kept whole
+#: src/space-git.ts
+msgid "{host} refused: {words}"
+msgstr "{host} refused: {words}"
 
 #. Refusal: the id offered for a new draft is taken by a playbook already
 #. Refusal: the id offered for a new draft is taken by a playbook already
@@ -160,6 +185,11 @@ msgstr "{label} has no divergent change"
 msgid "{name} has no folder on this device"
 msgstr "{name} has no folder on this device"
 
+#. Refusal while a spex repository checks the Git host; {name} is its name
+#: src/space.ts
+msgid "{name} is checking the host; wait for it to finish"
+msgstr "{name} is checking the host; wait for it to finish"
+
 #. A session another host is writing right now
 #: src/service.ts
 msgid "{name} is in use elsewhere"
@@ -170,20 +200,65 @@ msgstr "{name} is in use elsewhere"
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{name} is in use elsewhere in {project}"
 
+#. Refusal while a spex repository is being joined; {name} is its name
+#: src/space.ts
+msgid "{name} is joining; wait for it to finish"
+msgstr "{name} is joining; wait for it to finish"
+
+#. Refusal while a spex repository's clone moves or is renamed; {name} is its name
+#: src/space.ts
+msgid "{name} is moving; wait for it to finish"
+msgstr "{name} is moving; wait for it to finish"
+
+#. Refusal of a pick: the spex repository is not local only
+#: src/space.ts
+msgid "{name} is on the host already"
+msgstr "{name} is on the host already"
+
+#. Refusal of a join: the spex repository has a clone here
+#: src/space.ts
+msgid "{name} is on this device already"
+msgstr "{name} is on this device already"
+
 #. Refusal: one working turn per project
 #: src/session.ts
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} is still working in {project} — wait for it to finish, or abort it"
+
+#. Refusal while a spex repository syncs; {name} is its name
+#: src/space.ts
+msgid "{name} is syncing; wait for it to finish"
+msgstr "{name} is syncing; wait for it to finish"
+
+#. Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path
+#: src/space-groups.ts
+msgid "{name} is taken in {group}; choose another name"
+msgstr "{name} is taken in {group}; choose another name"
 
 #. A session whose lease this host cannot read
 #: src/service.ts
 msgid "{name} ownership cannot be verified"
 msgstr "{name} ownership cannot be verified"
 
+#. A stopped sync: the folder a renamed spex repository moves to is taken
+#: src/space.ts
+msgid "{path} already exists, so the clone cannot follow the host there"
+msgstr "{path} already exists, so the clone cannot follow the host there"
+
+#. Refusal of a join: the host's names hold characters a folder under the home cannot
+#: src/space.ts
+msgid "{path} cannot stand as a folder on this device"
+msgstr "{path} cannot stand as a folder on this device"
+
 #. Refusal: a project already holds this folder
 #: src/service.ts
 msgid "{path} is already registered"
 msgstr "{path} is already registered"
+
+#. Refusal of a join: the folder named is paired already
+#: src/space.ts
+msgid "{path} is another project's working folder"
+msgstr "{path} is another project's working folder"
 
 #. Config error: a role is bound to a malformed player id
 #: src/config.ts
@@ -516,6 +591,11 @@ msgstr "a session is starting in {project} — wait a moment"
 msgid "a session, an intent or an authoring session offers no text diff"
 msgstr "a session, an intent or an authoring session offers no text diff"
 
+#. Refusal of a second sign-in while one runs
+#: src/space.ts
+msgid "A sign-in is already running"
+msgstr "A sign-in is already running"
+
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
 #: src/session.ts
@@ -537,11 +617,6 @@ msgstr "a turn is being submitted in this session"
 msgid "act targets unknown intent {intentId}"
 msgstr "act targets unknown intent {intentId}"
 
-#. Refusal: the home names no remote to sync with
-#: src/space.ts
-msgid "Add a remote first"
-msgstr "Add a remote first"
-
 #. The act that gives access to an SSH remote, inside a sentence
 #: src/space-git.ts
 msgid "add this machine's SSH key to an account that can see it"
@@ -551,6 +626,13 @@ msgstr "add this machine's SSH key to an account that can see it"
 #: src/space-git.ts
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "Add this machine's SSH key to an account that can see it"
+
+#. Refusal of a second operation on a spex repository while one runs
+#. Refusal of a second operation on a spex repository while one runs
+#. Refusal of a second operation on a spex repository while one runs
+#: src/space.ts
+msgid "Already syncing"
+msgstr "Already syncing"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -571,6 +653,11 @@ msgstr "an open intent already holds this source: \"{title}\""
 #: src/space.ts
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
 msgstr "Another process is writing to the home; wait for it to finish, then Retry."
+
+#. A spex repository's read-only reason where the host gave no words for its archive
+#: src/space.ts
+msgid "Archived"
+msgstr "Archived"
 
 #. Storage diagnostic: an intent's attachment folder stands without the intent's file
 #: src/storage-git.ts
@@ -607,6 +694,11 @@ msgstr "cannot read file: {message}"
 msgid "captain must resolve an adapter"
 msgstr "captain must resolve an adapter"
 
+#. Guidance after a transfer to the Git host ran past its time limit
+#: src/space-git.ts
+msgid "Check the connection, then Retry."
+msgstr "Check the connection, then Retry."
+
 #. Refusal: the remote's side was asked for before the remote was checked
 #: src/space.ts
 msgid "Check the host first"
@@ -616,6 +708,13 @@ msgstr "Check the host first"
 #: src/space-git.ts
 msgid "Check the network or the remote URL, then try again."
 msgstr "Check the network or the remote URL, then try again."
+
+#. Guidance where the Git host could not be reached
+#. Guidance where the Git host could not be reached
+#: src/space-git.ts
+#: src/space.ts
+msgid "Check the network, then Retry."
+msgstr "Check the network, then Retry."
 
 #. Guidance where a local-path remote holds no repository this machine can see; {act} is the act that gives this machine access
 #: src/space-git.ts
@@ -704,7 +803,10 @@ msgid "config must be a YAML mapping"
 msgstr "config must be a YAML mapping"
 
 #. A stopped transfer's message; {host} is the remote's host
+#. A stopped transfer's message; {host} is the remote's host
+#. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
+#: src/space-groups.ts
 msgid "Could not reach {host}"
 msgstr "Could not reach {host}"
 
@@ -816,6 +918,11 @@ msgstr "Finish or abort the merge in your terminal"
 #: src/home.ts
 msgid "folder {path} is paired twice"
 msgstr "folder {path} is paired twice"
+
+#. A join's stop where git failed to clone the code and printed nothing
+#: src/space.ts
+msgid "Git could not clone the code"
+msgstr "Git could not clone the code"
 
 #. A stopped save's message where git failed and printed nothing
 #: src/space.ts
@@ -1073,6 +1180,11 @@ msgstr "invalid working folder pair"
 msgid "It belongs to a family that stays on this device; check the sync rules. Nothing was saved."
 msgstr "It belongs to a family that stays on this device; check the sync rules. Nothing was saved."
 
+#. Guidance under a sync stopped because a step at the Git host waits for a member with the rights
+#: src/space.ts
+msgid "It is asked again at the next sync."
+msgstr "It is asked again at the next sync."
+
 #. Spec notice; `##` is the markdown heading level and stays as it is
 #: src/specs.ts
 msgid "item {item} appears before any ## section"
@@ -1142,6 +1254,12 @@ msgstr "migration destination diverged; preserved unchanged"
 msgid "migration output verification failed"
 msgstr "migration output verification failed"
 
+#. Guidance where a renamed spex repository's new folder is taken
+#: src/space.ts
+msgid "Move that folder aside, then Retry."
+msgstr "Move that folder aside, then Retry."
+
+#. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
 msgid "No answer from {host}"
@@ -1197,6 +1315,11 @@ msgstr "no intent {intentId}"
 msgid "no live session {sessionId}"
 msgstr "no live session {sessionId}"
 
+#. A spex repository's state or a stopped transfer: the Git host no longer lists it for this account
+#: src/space-git.ts
+msgid "No longer shared with you"
+msgstr "No longer shared with you"
+
 #. Stands where a role binds no player at all
 #: src/session.ts
 msgid "no one"
@@ -1241,6 +1364,7 @@ msgstr "no spec file at specs/{path}"
 
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
 #: src/space.ts
 #: src/store.ts
 msgid "no spex repository {key} on this device"
@@ -1255,6 +1379,18 @@ msgstr "Normalize"
 #: src/space.ts
 msgid "Not on a branch; check out spex in a terminal"
 msgstr "Not on a branch; check out spex in a terminal"
+
+#. The browser page's title once a sign-in failed
+#: src/space-groups.ts
+msgid "Not signed in"
+msgstr "Not signed in"
+
+#. Guidance where the Git host no longer lists a spex repository for this account
+#. Guidance where the Git host no longer lists a spex repository for this account
+#: src/space-git.ts
+#: src/space.ts
+msgid "Nothing on this device was deleted."
+msgstr "Nothing on this device was deleted."
 
 #. Guidance where a file under the home failed validation before the save
 #: src/space.ts
@@ -1285,6 +1421,11 @@ msgstr "only a closed intent leaves history"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "only a finished intent confirms done"
+
+#. A spex repository's state: it has no remote on the Git host
+#: src/space.ts
+msgid "Only on this device"
+msgstr "Only on this device"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts
@@ -1326,6 +1467,11 @@ msgstr "path or alias already belongs to another project"
 #: src/specs.ts
 msgid "path resolves outside the project"
 msgstr "path resolves outside the project"
+
+#. Refusal: the spex repository is only on this device; a group must be picked for it
+#: src/space.ts
+msgid "Pick a group first"
+msgstr "Pick a group first"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -1485,6 +1631,16 @@ msgstr "Project is unavailable."
 msgid "Published upload has a different byte length."
 msgstr "Published upload has a different byte length."
 
+#. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
+#: src/space.ts
+msgid "Read the sharing notice before joining {name}"
+msgstr "Read the sharing notice before joining {name}"
+
+#. Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice
+#: src/space.ts
+msgid "Read the sharing notice before the first sync of {name}"
+msgstr "Read the sharing notice before the first sync of {name}"
+
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
@@ -1510,6 +1666,7 @@ msgstr "Retry; if it fails again, run git commit in the home from a terminal for
 msgid "Retry; if it fails again, run the same step in a terminal for detail."
 msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 
+#. Guidance under a step that stopped for a reason the app does not classify
 #. Guidance under a step that stopped for a reason the app does not classify
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
@@ -1570,6 +1727,11 @@ msgstr "Settings changed"
 msgid "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back."
 msgstr "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back."
 
+#. A state or a stopped transfer: the Git host asks this device to sign in again
+#: src/space-git.ts
+msgid "Sign in again"
+msgstr "Sign in again"
+
 #: src/config.ts
 msgid "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
 msgstr "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
@@ -1578,6 +1740,18 @@ msgstr "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
 #: src/config.ts
 msgid "sign in by running codex in a terminal, or set OPENAI_API_KEY"
 msgstr "sign in by running codex in a terminal, or set OPENAI_API_KEY"
+
+#. Refusal: the act needs the Git host, and the home is not signed in
+#: src/space.ts
+msgid "Sign in first"
+msgstr "Sign in first"
+
+#. Guidance where the Git host asked this device to sign in again
+#. Guidance where the Git host asked this device to sign in again
+#: src/space-git.ts
+#: src/space.ts
+msgid "Sign in from the header, then Retry."
+msgstr "Sign in from the header, then Retry."
 
 #. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
@@ -1589,6 +1763,11 @@ msgstr "sign this machine in at that host as an account that can see it"
 msgid "Sign this machine in at that host as an account that can see it"
 msgstr "Sign this machine in at that host as an account that can see it"
 
+#. The browser page's title once a sign-in completed
+#: src/space-groups.ts
+msgid "Signed in"
+msgstr "Signed in"
+
 #. Spec notice: a link under specs/ pointed outside the project and was not read
 #: src/specs.ts
 msgid "skipped symlink escaping the project: {path}"
@@ -1598,21 +1777,6 @@ msgstr "skipped symlink escaping the project: {path}"
 #: src/forge.ts
 msgid "Some forge data could not be loaded from gh."
 msgstr "Some forge data could not be loaded from gh."
-
-#. Refusal while a Space operation runs
-#: src/space.ts
-msgid "Space is busy"
-msgstr "Space is busy"
-
-#. Refusal while the Space checks the remote
-#: src/space.ts
-msgid "Space is checking the host; wait for it to finish"
-msgstr "Space is checking the host; wait for it to finish"
-
-#. Refusal while the Space syncs
-#: src/space.ts
-msgid "Space is syncing; wait for it to finish"
-msgstr "Space is syncing; wait for it to finish"
 
 #. compile phase: slc derives the spec items
 #: src/authoring.ts
@@ -1629,10 +1793,35 @@ msgstr "Spec packages changed"
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
 msgstr "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
 
+#. The browser page once a sign-in failed
+#: src/space-groups.ts
+msgid "Spex did not sign in. You may close this browser window and return to Spex."
+msgstr "Spex did not sign in. You may close this browser window and return to Spex."
+
+#. The browser page once a sign-in completed
+#: src/space-groups.ts
+msgid "Spex is signed in. You may close this browser window."
+msgstr "Spex is signed in. You may close this browser window."
+
 #. Why an interrupted sync's repair failed; spex is the branch's own name
 #: src/space.ts
 msgid "spex moved since the interrupted sync; resolve it in a terminal"
 msgstr "spex moved since the interrupted sync; resolve it in a terminal"
+
+#. A project's new spex repository's description on the Git host, its code on no remote
+#: src/space-groups.ts
+msgid "Spex records of {name}"
+msgstr "Spex records of {name}"
+
+#. A project's new spex repository's description on the Git host; {code} is the code's remote URL
+#: src/space-groups.ts
+msgid "Spex records of {name}; its code is at {code}"
+msgstr "Spex records of {name}; its code is at {code}"
+
+#. A group's new spex repository's description on the Git host
+#: src/space-groups.ts
+msgid "Spex records of the group {group}"
+msgstr "Spex records of the group {group}"
 
 #. Storage diagnostic: one spex repository appears in two pairs
 #: src/home.ts
@@ -1755,6 +1944,11 @@ msgstr "The core is stopping."
 msgid "The file has not finished uploading."
 msgstr "The file has not finished uploading."
 
+#. Refusal of a remote the reader named under the Git host's own origin
+#: src/space.ts
+msgid "The Git host's own URLs are used as the host gives them; pick a group instead."
+msgstr "The Git host's own URLs are used as the host gives them; pick a group instead."
+
 #. Refusal: the home itself is no folder
 #: src/space.ts
 msgid "the home is not a folder"
@@ -1766,6 +1960,16 @@ msgstr "the home is not a folder"
 #: src/space.ts
 msgid "The host changed again"
 msgstr "The host changed again"
+
+#. Refusal of a pick naming a group the Git host does not list
+#: src/space.ts
+msgid "The host lists no such group"
+msgstr "The host lists no such group"
+
+#. Guidance under a transfer the Git host refused; it names the members page and claims no role
+#: src/space-git.ts
+msgid "The host's members page shows who may send here."
+msgstr "The host's members page shows who may send here."
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts
@@ -1781,6 +1985,16 @@ msgstr "the intent is already closed"
 #: src/service.ts
 msgid "the intent is already dispatched"
 msgstr "the intent is already dispatched"
+
+#. The Git host reports the name of a new spex repository taken
+#: src/space-groups.ts
+msgid "The name is taken"
+msgstr "The name is taken"
+
+#. Refusal of a new spex repository's name with nothing of a name in it
+#: src/space.ts
+msgid "The name must hold a letter or a digit"
+msgstr "The name must hold a letter or a digit"
 
 #. Live tool approval refusal
 #: src/approvals.ts
@@ -1853,6 +2067,16 @@ msgstr "the session is recovering"
 msgid "the session's structure no longer matches its stored one"
 msgstr "the session's structure no longer matches its stored one"
 
+#. A sign-in that ended because nobody approved it in time
+#: src/space-groups.ts
+msgid "The sign-in expired before it was approved"
+msgstr "The sign-in expired before it was approved"
+
+#. A sign-in that ended because the person denied it at the Git host
+#: src/space-groups.ts
+msgid "The sign-in was denied at {host}"
+msgstr "The sign-in was denied at {host}"
+
 #. Refusal: the draft's source would have been emptied
 #: src/authoring.ts
 msgid "the source is empty; nothing was written"
@@ -1862,6 +2086,11 @@ msgstr "the source is empty; nothing was written"
 #: src/space.ts
 msgid "The space changed twice while syncing"
 msgstr "The space changed twice while syncing"
+
+#. Guidance after a join's code clone failed
+#: src/space.ts
+msgid "The spex repository is here; choose a folder for its code to pair it."
+msgstr "The spex repository is here; choose a folder for its code to pair it."
 
 #. Repair row: a working folder is paired with a spex repository whose clone is gone
 #: src/store.ts
@@ -2127,10 +2356,45 @@ msgstr "Wait for the session to finish, then Retry."
 msgid "Wait for the turn being submitted"
 msgstr "Wait for the turn being submitted"
 
+#. A step the Git host left waiting, with no words of its own
+#: src/space-groups.ts
+msgid "Waiting"
+msgstr "Waiting"
+
+#. A spex repository's row while its creation waits; {group} is the group's full path
+#: src/space-groups.ts
+msgid "Waiting for a member who can create it in {group}"
+msgstr "Waiting for a member who can create it in {group}"
+
+#. A spex repository's row while its creation waits; {group} is the group's full path, {words} the host's own words
+#: src/space-groups.ts
+msgid "Waiting for a member who can create it in {group}: {words}"
+msgstr "Waiting for a member who can create it in {group}: {words}"
+
+#. A spex repository's row while its branch preparation waits; {group} is the group's full path
+#: src/space-groups.ts
+msgid "Waiting for a member who can prepare its branch in {group}"
+msgstr "Waiting for a member who can prepare its branch in {group}"
+
+#. A spex repository's row while its branch preparation waits; {group} is the group's full path, {words} the host's own words
+#: src/space-groups.ts
+msgid "Waiting for a member who can prepare its branch in {group}: {words}"
+msgstr "Waiting for a member who can prepare its branch in {group}: {words}"
+
+#. A step the Git host left waiting; {words} are its own words
+#: src/space-groups.ts
+msgid "Waiting: {words}"
+msgstr "Waiting: {words}"
+
 #. Why a compile cannot start: the draft's agent is answering
 #: src/authoring.ts
 msgid "Waits for the reply"
 msgstr "Waits for the reply"
+
+#. Guidance after the reader stopped a transfer to the Git host
+#: src/space-git.ts
+msgid "You stopped the transfer; your commits stand."
+msgstr "You stopped the transfer; your commits stand."
 
 #. Guidance after the reader stopped a transfer
 #: src/space-git.ts

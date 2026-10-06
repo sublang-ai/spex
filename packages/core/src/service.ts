@@ -21,7 +21,7 @@ import {
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
-import { homedir, tmpdir } from "node:os";
+import { homedir, hostname, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
@@ -102,6 +102,9 @@ import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { SpaceManager } from "./space.js";
+import { GitHostClient, fileCredentialStore } from "./git-host.js";
+import { currentRuntime } from "./git-credential.js";
+import { validateRemoteUrl } from "./space-git.js";
 import type { SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
@@ -187,6 +190,14 @@ export interface CoreServiceOptions {
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
+  /** The Git host's sign-in flow this deployment runs: `browser` on the
+   * desktop (git-host-2), `device` on the server shell (git-host-3), the
+   * default. */
+  signIn?: "browser" | "device";
+  /** The runtime the Git credential helper runs on (git-host-9): the
+   * shell's own executable, Electron's run as Node; this process's by
+   * default. */
+  hostRuntime?: { execPath: string; electron: boolean };
 }
 
 /** Commands that write beneath a clone (space-21): refused `busy` while
@@ -351,7 +362,11 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 
 export class CoreService {
   private readonly options: CoreServiceOptions;
-  private readonly configPath: string;
+  /** Your own group's config, which follows its clone when your own
+   * group is renamed at sign-in (space-59); an explicit path stays. */
+  private configPath: string;
+  /** The Git host this home signs in to (git-host-1..11). */
+  private readonly hostClient: GitHostClient;
   private readonly env: NodeJS.ProcessEnv;
   private readonly home: string;
   private readonly store: Store;
@@ -425,6 +440,17 @@ export class CoreService {
     this.forge =
       options.forgeAdapter ?? new GitHubForgeAdapter(this.runCommand);
     this.configState = { status: "missing", path: this.configPath };
+    // One client of the Git host the home records (git-host-1): its
+    // credential in `local/credentials.yaml`, this device and app as its
+    // label, and a refusal that signs the device out marking the home so
+    // (git-host-4).
+    const host = store.home.host;
+    this.hostClient = new GitHostClient({
+      url: host.url,
+      label: `Spex on ${hostname()}`,
+      credentials: fileCredentialStore(store.dir, host.url),
+      onSignedOut: () => this.space.signedOutByHost(),
+    });
     this.sessions = new SessionManager({
       approvalHandler: (sessionId) => this.approvals.handler({kind: "session", id: sessionId}, () => {
         const session = this.store.describeSession(sessionId);
@@ -491,11 +517,17 @@ export class CoreService {
       ledgerChanged: (projectIds) => this.queueLedgerChange(projectIds),
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
+      client: this.hostClient,
+      signInFlow: options.signIn ?? "device",
+      hostRuntime: options.hostRuntime ?? currentRuntime(),
+      repositoriesChanged: () => this.afterRepositoriesChanged(),
+      repositoriesMoved: (moves) => this.repositoriesMoved(moves),
     });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their sources stay in the home's library this wave.
     this.drafts = new DraftStore(this.libraryDir(), () =>
       this.store.listRepositories().map((repository) => ({ key: repository.key, authoringDir: repository.authoringDir })));
+    const service = this;
     this.authors = new AuthorManager({
       approvalHandler: (draftId) => this.approvals.handler({kind: "draft", id: draftId}, () => ({ownerLabel: draftId})),
       cancelApprovals: (draftId, invocationId) => this.approvals.cancel({kind: "draft", id: draftId}, invocationId),
@@ -505,7 +537,8 @@ export class CoreService {
       },
       store: this.store,
       drafts: this.drafts,
-      configPath: this.configPath,
+      // Read when used: your own group's config moves with its clone.
+      get configPath() { return service.configPath; },
       env: this.env,
       adapterImports: options.adapterImports,
       compileSpawner: options.compileSpawner,
@@ -1502,11 +1535,23 @@ export class CoreService {
             `${path} is not the root of a git work tree (run git init first, or use project.create)`,
           );
         }
+        // The code's remote is written without a credential, and one
+        // carrying any is refused before `project.json` is (space-5).
+        const origin = await this.runCommand("git", ["remote", "get-url", "origin"], path);
+        const remote = origin.code === 0 ? origin.stdout.trim() : "";
+        if (/^[a-z][a-z0-9+.-]*:\/\/[^/]*@/i.test(remote)) {
+          const checked = validateRemoteUrl(remote);
+          if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
+        }
         // The folder pairs with a local spex repository in your own group
         // until a group is picked (storage-6).
         const registered = this.store.registerProject(path, basename(path), Date.now());
         this.afterRepositoriesChanged();
         await this.syncForeignSessions();
+        // A folder paired with a group's own spex repository brings that
+        // repository to the host as its first session would (space-65).
+        void this.space.ensureGroupRepository(registered.id);
+        this.announceGroups();
         return registered;
       }
       case "project.rebind": {
@@ -1527,6 +1572,7 @@ export class CoreService {
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
         await this.syncForeignSessions();
+        this.announceGroups();
         return project;
       }
       case "storage.diagnostics":
@@ -1576,6 +1622,7 @@ export class CoreService {
         }
         const created = this.store.registerProject(path, basename(path), Date.now());
         this.afterRepositoriesChanged();
+        this.announceGroups();
         return created;
       }
       case "project.status": {
@@ -1646,6 +1693,7 @@ export class CoreService {
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
+        this.announceGroups();
         return null;
       }
       case "session.list":
@@ -2242,6 +2290,22 @@ export class CoreService {
       // report as state.
       case "space.get":
         return this.requireSpace().state();
+      // The Git host (git-host-2..10, space-3..6, space-58..65): sign-in
+      // and its set-up, the host read, picks, joins and members.
+      case "space.refresh":
+        return this.requireSpace().refresh();
+      case "space.signin.start":
+        return this.requireSpace().signInStart();
+      case "space.signin.cancel":
+        return { stopped: this.requireSpace().signInCancel() };
+      case "space.signout":
+        return this.requireSpace().signOut();
+      case "space.pick":
+        return this.requireSpace().pick(command.repository, command.choice, command.noticed === true);
+      case "space.join":
+        return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
+      case "space.members":
+        return this.requireSpace().members(command.repository);
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);
       case "space.fetch":
@@ -2353,6 +2417,51 @@ export class CoreService {
    * (core-service-96). */
   private requireDraft(projectId: string, draftId: string): void {
     if (!this.authors.has(draftId) || this.drafts.projectOf(draftId) !== projectId) throw noDraft(draftId);
+  }
+
+  /**
+   * Clones moved under `workspace/` — your own group renamed at sign-in
+   * (space-59), a rename or transfer followed (space-60) — the store
+   * already re-keyed: your own group's config is read where it now lies,
+   * every moved clone's sessions are watched there, and each moved
+   * session and ledger is announced under its new key.
+   */
+  private async repositoriesMoved(moves: { from: string; to: string }[]): Promise<void> {
+    if (this.options.configPath === undefined) {
+      const configPath = this.store.ownRepository().configPath;
+      if (configPath !== this.configPath) {
+        this.configPath = configPath;
+        this.watcher?.close();
+        this.watcher = undefined;
+        if (this.options.watchConfig !== false) this.watchConfigFile();
+        await this.reloadConfig();
+      }
+    }
+    this.afterRepositoriesChanged();
+    const moved = new Set(moves.map((move) => move.to));
+    for (const session of this.sessions.listSessions()) {
+      if (moved.has(session.projectId)) this.broadcast({ type: "session.state", session });
+    }
+    this.queueLedgerChange(moves.flatMap((move) => [move.from, move.to]));
+  }
+
+  /**
+   * A group's spex repository on the Git host at its first session
+   * (space-65): where the working folder a session starts in pairs a
+   * group's own key, its repository is joined where the host lists one,
+   * else created there and pushed; a refusal leaves it local only and
+   * the session running. It never throws.
+   */
+  ensureGroupRepository(key: string): Promise<"unchanged" | "local" | "joined" | "created" | "waiting"> {
+    return this.space.ensureGroupRepository(key);
+  }
+
+  /** A project was added, paired or removed: the Groups surface re-reads
+   * on its announcement (space-2). */
+  private announceGroups(): void {
+    this.space.publish().catch((error: unknown) => {
+      console.error(`spex: groups state failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   /** A clone came or went: watch its sessions and re-read its
