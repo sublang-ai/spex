@@ -9,12 +9,14 @@
 // running core (space-20), and the read-only explorer (space-35).
 
 import { randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, openSync, readSync, readdirSync, realpathSync, rmSync, statSync, type Dirent } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
-import { splitKey } from "./home.js";
+import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
+import { HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostRepository } from "./git-host.js";
+import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import type {
   GroupsState,
@@ -32,7 +34,14 @@ import type {
   SyncStep,
 } from "./protocol.js";
 import { CoreError } from "./session.js";
-import { classifyTransportFailure, displayRemote, GitMissingError, lastLines, SpaceGit, validateRemoteUrl, type GitFailure } from "./space-git.js";
+import {
+  classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, membersDecide, noLongerShared,
+  signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun,
+} from "./space-git.js";
+import {
+  callbackPages, hostKey, listingFor, nameTaken, ownNameFor, readHostView, relayHostError, repositoryDescription, signInFailure,
+  underOrigin, userGroup, waitingPhrase, type HostListing, type HostView,
+} from "./space-groups.js";
 import {
   APPLY_MARKER,
   applyStorageSelection,
@@ -85,6 +94,36 @@ export interface SpaceHost {
   /** Test seam: awaited before each step runs, so a suite can act
    * between steps deterministically. */
   beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** The Git host's client (git-host-1..11): the one this home signs in
+   * to and reads. */
+  client: GitHostClient;
+  /** The sign-in flow this deployment runs: the browser flow on the
+   * desktop (git-host-2), the device flow on the server (git-host-3). */
+  signInFlow: "browser" | "device";
+  /** The runtime the credential helper runs on (git-host-9). */
+  hostRuntime: { execPath: string; electron: boolean };
+  /** Clones appeared under `workspace/` — a join's (space-63): the core
+   * watches their sessions and re-reads their authoring sessions. */
+  repositoriesChanged: () => void;
+  /** Clones moved under `workspace/` (space-59, space-60), the store
+   * already re-keyed: the core re-points what it holds by key or path. */
+  repositoriesMoved?: (moves: { from: string; to: string }[]) => Promise<void>;
+  /** The environment's exports beneath a moved clone are rewritten
+   * (space-60): the `.git/info/exclude` blocks naming its paths. */
+  environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
+}
+
+/** What a spex repository's clone says of its host: its origin URL and
+ * the host's id recorded beside it (git-host-5). */
+interface CloneFacts { remote: string | null; id: string | null }
+
+/** A step at the host waiting for a member with the rights (space-64). */
+interface Waiting {
+  step: "create" | "branch";
+  group: string;
+  message: string;
+  /** What a creation asks again at the next read. */
+  create?: { groupId: string | null; name: string; description: string };
 }
 
 const KIND_ORDER: SpaceUnitKind[] = ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"];
@@ -110,6 +149,78 @@ const initializeFirst = (): string => i18n._({
   id: "Initialize the repository first",
   comment: "Refusal: the home is not a Git repository yet",
 });
+
+/** The refusal of an act at the Git host while the home is signed out
+ * (space-11). */
+const signInFirst = (): string => i18n._({
+  id: "Sign in first",
+  comment: "Refusal: the act needs the Git host, and the home is not signed in",
+});
+
+/** Guidance under a stop the host's sign-in answers (space-15). */
+const signInThenRetry = (): string => i18n._({
+  id: "Sign in from the header, then Retry.",
+  comment: "Guidance where the Git host asked this device to sign in again",
+});
+
+/** A second sign-in while one runs (git-host-2). */
+const signInRunning = (): string => i18n._({
+  id: "A sign-in is already running",
+  comment: "Refusal of a second sign-in while one runs",
+});
+
+/** Guidance under a step stopped for a reason the app does not classify. */
+const retryGuidance = (): string => i18n._({
+  id: "Retry; if it fails again, run the step in a terminal for detail.",
+  comment: "Guidance under a step that stopped for a reason the app does not classify",
+});
+
+/** Guidance where the host no longer lists a spex repository (space-15). */
+const nothingDeleted = (): string => i18n._({
+  id: "Nothing on this device was deleted.",
+  comment: "Guidance where the Git host no longer lists a spex repository for this account",
+});
+
+/** Guidance under a step the host left waiting (space-64). */
+const syncLater = (): string => i18n._({
+  id: "It is asked again at the next sync.",
+  comment: "Guidance under a sync stopped because a step at the Git host waits for a member with the rights",
+});
+
+/** A failure of a call to the host as the stopped state of space-15. */
+function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
+  const message = relayHostError(error, host);
+  if (!(error instanceof HostError)) return new SpaceStopped(step, { cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true });
+  switch (error.kind) {
+    case "reauth":
+      return new SpaceStopped(step, { cause: "reauth", message, guidance: signInThenRetry(), retry: true });
+    case "not_found":
+      return new SpaceStopped(step, { cause: "gone", message, guidance: nothingDeleted(), retry: true });
+    case "unreachable":
+    case "rate_limited":
+      return new SpaceStopped(step, {
+        cause: "unreachable",
+        message,
+        guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Git host could not be reached" }),
+        retry: true,
+      });
+    default:
+      return new SpaceStopped(step, { cause: "refused", message, guidance: membersDecide(), retry: true });
+  }
+}
+
+/** Remove the folders a move left empty, up to the workspace itself. */
+function pruneEmptyFolders(dir: string, stopAt: string): void {
+  let current = resolve(dir);
+  const root = resolve(stopAt);
+  while (current !== root && current.startsWith(`${root}/`)) {
+    try {
+      if (readdirSync(current).length > 0) return;
+      rmdirSync(current);
+    } catch { return; }
+    current = dirname(current);
+  }
+}
 
 /** The diagnostic a pending Git merge stands as (space-11). */
 const mergePendingReason = (): string => i18n._({
@@ -367,8 +478,14 @@ const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "
 /** One spex repository's sync machine (space-31): at most one operation
  * at a time on this clone, any number of clones at once. */
 class RepositorySync {
-  readonly git: SpaceGit;
+  git: SpaceGit;
   phase: SpaceSyncPhase = { phase: "idle" };
+  /** The clone's remote and recorded id, as last read. */
+  facts: CloneFacts = { remote: null, id: null };
+  /** What the last transport learnt of the host before the next read
+   * (space-15): a refusal turns the repository read-only, a missing one
+   * unreachable. */
+  hostOverride?: { state: "read-only" | "unreachable"; reason: string };
   private checkedAt: number | null = null;
   private remoteEmpty = false;
   private unrelated = false;
@@ -384,8 +501,22 @@ class RepositorySync {
   private refreshProblem?: StorageDiagnostic;
   private mergePending = false;
 
-  constructor(private readonly host: SpaceHost, private readonly owner: SpaceManager, readonly repository: SpexRepository) {
-    this.git = new SpaceGit(repository.dir, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
+  constructor(private readonly host: SpaceHost, private readonly owner: SpaceManager, public repository: SpexRepository) {
+    this.git = this.makeGit(repository.dir);
+  }
+
+  private makeGit(dir: string): SpaceGit {
+    return new SpaceGit(dir, this.host.env, {
+      ...(this.host.transportTimeoutMs !== undefined ? { transportTimeoutMs: this.host.transportTimeoutMs } : {}),
+      identity: () => this.owner.identity(),
+    });
+  }
+
+  /** The clone moved (space-59, space-60): this machine follows it. */
+  rebind(repository: SpexRepository): void {
+    this.repository = repository;
+    this.git = this.makeGit(repository.dir);
+    if (this.cached) this.cached = { ...this.cached, key: repository.key, name: splitKey(repository.key).name };
   }
 
   get key(): string { return this.repository.key; }
@@ -398,16 +529,82 @@ class RepositorySync {
     if (this.phase.phase !== "running") return undefined;
     // One whole sentence per operation: a verb dropped into a frame
     // carries to no other language (core-service-111).
-    if (this.phase.op === "sync") {
-      return i18n._({ id: "Space is syncing; wait for it to finish", comment: "Refusal while the Space syncs" });
+    const name = splitKey(this.key).name;
+    switch (this.phase.op) {
+      case "sync":
+        return i18n._({ id: "{name} is syncing; wait for it to finish", values: { name }, comment: "Refusal while a spex repository syncs; {name} is its name" });
+      case "join":
+        return i18n._({ id: "{name} is joining; wait for it to finish", values: { name }, comment: "Refusal while a spex repository is being joined; {name} is its name" });
+      case "move":
+        return i18n._({ id: "{name} is moving; wait for it to finish", values: { name }, comment: "Refusal while a spex repository's clone moves or is renamed; {name} is its name" });
+      default:
+        return i18n._({ id: "{name} is checking the host; wait for it to finish", values: { name }, comment: "Refusal while a spex repository checks the Git host; {name} is its name" });
     }
-    return i18n._({ id: "Space is checking the host; wait for it to finish", comment: "Refusal while the Space checks the remote" });
   }
 
-  private assertNotRunning(): void {
+  assertNotRunning(): void {
     if (this.phase.phase === "running") {
-      throw new CoreError("busy", i18n._({ id: "Space is busy", comment: "Refusal while a Space operation runs" }));
+      throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
     }
+  }
+
+  /** Hold the gate for an operation the manager runs beneath this clone
+   * — a rename or a join's code clone (space-21); false while another
+   * runs. */
+  hold(op: SpaceOp, step: SyncStep): boolean {
+    if (this.phase.phase === "running") return false;
+    this.phase = { phase: "running", op, step, since: Date.now(), cancelable: false };
+    return true;
+  }
+
+  /** Lift a hold, or end it stopped. */
+  release(stopped?: { op: SpaceOp; step: SyncStep; failure: GitFailure }): void {
+    this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : { phase: "idle" };
+  }
+
+  /** The clone's remote and recorded host id, read afresh. */
+  async readFacts(): Promise<CloneFacts> {
+    await this.readRepository();
+    return this.facts;
+  }
+
+  /** Give the clone the host's own remote and id (space-58, space-63):
+   * the URL the host handed over, used as given (space-5). */
+  async attachHost(url: string, id: string): Promise<void> {
+    const repo = await this.readRepository();
+    this.requireGit(repo);
+    if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
+    if (repo.remote === null) await this.git.ok(["remote", "add", "origin", url]);
+    else if (repo.remote !== url) await this.git.ok(["remote", "set-url", "origin", url]);
+    await this.git.ok(["config", "spex.repositoryId", id]);
+    if (repo.remote !== url) {
+      await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
+      await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
+      this.checkedAt = null;
+      this.remoteEmpty = false;
+      this.unrelated = false;
+    }
+    this.facts = { remote: url, id };
+    this.hostOverride = undefined;
+  }
+
+  /** Record the host's id beside a clone matched by its remote URL
+   * (git-host-5). */
+  async recordId(id: string): Promise<void> {
+    if (this.phase.phase === "running" || this.facts.id === id) return;
+    await this.recordIdNow(id);
+  }
+
+  /** The same, inside this clone's own operation. */
+  async recordIdNow(id: string): Promise<void> {
+    if ((await this.git.run(["config", "spex.repositoryId", id])).code === 0) this.facts = { ...this.facts, id };
+  }
+
+  /** The URL the host hands over after a rename or a transfer
+   * (space-60), used as given, inside this clone's own operation. */
+  async setOrigin(url: string): Promise<void> {
+    await this.git.ok(["remote", "set-url", "origin", url]);
+    this.facts = { ...this.facts, remote: url };
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -436,6 +633,10 @@ class RepositorySync {
     const gitDir = resolve(this.dir, await this.git.ok(["rev-parse", "--git-dir"]));
     const mergePending = (await this.git.succeeds(["rev-parse", "-q", "--verify", "MERGE_HEAD"])) || existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
     this.mergePending = mergePending;
+    this.facts = {
+      remote: remote.code === 0 ? remote.stdout.toString("utf8").trim() : null,
+      id: id.code === 0 ? id.stdout.toString("utf8").trim() || null : null,
+    };
     return {
       git: version,
       root: true,
@@ -696,10 +897,11 @@ class RepositorySync {
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
     if (repo.remote === null) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "Add a remote first",
-        comment: "Refusal: the home names no remote to sync with",
-      }));
+      // A local-only spex repository reaches the host by a group picked
+      // for it, once signed in (space-58, space-61).
+      throw new CoreError("invalid_request", this.owner.signedIn()
+        ? i18n._({ id: "Pick a group first", comment: "Refusal: the spex repository is only on this device; a group must be picked for it" })
+        : signInFirst());
     }
     if (repo.branch !== SPEX_BRANCH) {
       throw new CoreError("invalid_request", repo.branch
@@ -740,6 +942,14 @@ class RepositorySync {
     } else {
       const checked = validateRemoteUrl(url);
       if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
+      // The Git host's own remote URLs are those it hands over, used as
+      // given and never named by the reader (space-5).
+      if (await this.owner.atHostOrigin(url)) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "The Git host's own URLs are used as the host gives them; pick a group instead.",
+          comment: "Refusal of a remote the reader named under the Git host's own origin",
+        }));
+      }
       if (url !== repo.remote) await this.git.ok(repo.remote === null ? ["remote", "add", "origin", url] : ["remote", "set-url", "origin", url]);
     }
     if (url !== repo.remote) {
@@ -747,10 +957,13 @@ class RepositorySync {
       // what the old remote held says nothing about the new one.
       await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
       await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
+      // A remote the reader names is no repository the host listed.
+      await this.git.run(["config", "--unset", "spex.repositoryId"]);
       this.checkedAt = null;
       this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
+      this.hostOverride = undefined;
       this.phase = { phase: "idle" };
     }
     await this.state(true);
@@ -793,17 +1006,22 @@ class RepositorySync {
     const previous = this.phase;
     this.phase = { phase: "running", op: "check", step: "check", since: Date.now(), cancelable: false };
     let repo: ReadyRepository;
-    try { repo = await this.requireReady(); }
-    catch (error) { this.phase = previous; throw error; }
+    try {
+      repo = await this.requireReady();
+      await this.owner.admit(this, { push: false, noticed: true });
+    } catch (error) { this.phase = previous; throw error; }
     void this.runOperation("check", async () => {
       await this.enter("check", "check", true);
-      await this.check(repo.remote);
+      await this.check(repo.remote, "check");
       this.phase = { phase: "idle" };
     });
     return { accepted: true };
   }
 
-  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
+  /** `internal` marks a sync the core starts itself — after a sign-in, a
+   * pick or a creation (space-4, space-58) — whose act already said what
+   * a join does (space-13). */
+  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean }): Promise<{ accepted: true }> {
     this.assertNotRunning();
     const previous = this.phase;
     // The gate is set before the admission checks (space-21).
@@ -834,6 +1052,7 @@ class RepositorySync {
         }
       }
       if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
+      await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
     } catch (error) {
       this.phase = previous;
       throw error;
@@ -862,6 +1081,11 @@ class RepositorySync {
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
     let upstream = repo.upstream;
+    // The host may hand over another URL, after a rename or a transfer,
+    // and may answer that this account only reads (space-60, space-61).
+    let remote = repo.remote;
+    let readOnly = false;
+    let atHost = false;
     let next: SyncStep | "done" = "save";
     while (next !== "done") {
       switch (next) {
@@ -873,7 +1097,11 @@ class RepositorySync {
         }
         case "check": {
           await this.enter(op, "check", true);
-          const remoteEmpty = await this.check(repo.remote);
+          const checked = await this.check(remote, "sync");
+          remote = checked.remote;
+          readOnly = checked.readOnly;
+          atHost = checked.atHost;
+          const remoteEmpty = checked.empty;
           if (remoteEmpty) {
             counts = { sent: planStorageUnits({ ours: readStorageTree(this.dir, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
             next = "push";
@@ -923,8 +1151,17 @@ class RepositorySync {
           break;
         }
         case "push": {
+          if (readOnly) {
+            // A read-only spex repository brings and sends nothing; its
+            // new sessions stay on this device (space-12, space-61).
+            const at = Date.now();
+            this.host.store.setPref(lastSyncPref(this.key), { at, sent: 0, received: counts.received });
+            this.phase = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
+            next = "done";
+            break;
+          }
           await this.enter(op, "push", true);
-          const pushed = await this.push(repo.remote, upstream);
+          const pushed = await this.push(remote, upstream, atHost);
           if (pushed === "rejected") {
             if (rechecks >= 1) {
               throw new SpaceStopped("push", {
@@ -1014,22 +1251,45 @@ class RepositorySync {
     return { own: this.key === this.host.store.home.own(), libraryDir: this.host.libraryDir };
   }
 
-  /** Step 2 — Check: fetch the host's `spex` without merging; true when
-   * the host holds no `spex` (space-8, space-12). */
-  private async check(remote: string): Promise<boolean> {
-    const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${SPEX_BRANCH}`], { transport: true });
-    if (heads.code === 2) {
-      this.remoteEmpty = true;
-      this.unrelated = false;
+  /** Step 2 — Check: read the host for this repository where it lies on
+   * the Git host, prepare its branch before a first push, then fetch the
+   * host's `spex` without merging with the brokered credential;
+   * `empty` where the host holds no `spex` (space-8, space-12). */
+  private async check(remote: string, op: SpaceOp): Promise<{ empty: boolean; readOnly: boolean; atHost: boolean; remote: string }> {
+    const host = await this.owner.hostCheck(this, op);
+    const target = host?.remote ?? remote;
+    const credential = host ? await this.owner.credentialFor(target, "check") : null;
+    const options = { transport: true, ...(credential ? { credential } : {}) };
+    try {
+      const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${SPEX_BRANCH}`], options);
+      const outcome = { readOnly: host?.readOnly ?? false, atHost: host !== undefined, remote: target };
+      if (heads.code === 2) {
+        this.remoteEmpty = true;
+        this.unrelated = false;
+        this.checkedAt = Date.now();
+        return { empty: true, ...outcome };
+      }
+      if (heads.code !== 0) throw new SpaceStopped("check", this.classify(heads, target, host !== undefined));
+      const fetched = await this.git.run(["fetch", "-q", "--no-tags", "origin", `+refs/heads/${SPEX_BRANCH}:refs/remotes/origin/${SPEX_BRANCH}`], options);
+      if (fetched.code !== 0) throw new SpaceStopped("check", this.classify(fetched, target, host !== undefined));
+      this.remoteEmpty = false;
       this.checkedAt = Date.now();
-      return true;
+      return { empty: false, ...outcome };
+    } finally {
+      await credential?.dispose();
     }
-    if (heads.code !== 0) throw new SpaceStopped("check", classifyTransportFailure(heads, remote));
-    const fetched = await this.git.run(["fetch", "-q", "--no-tags", "origin", `+refs/heads/${SPEX_BRANCH}:refs/remotes/origin/${SPEX_BRANCH}`], { transport: true });
-    if (fetched.code !== 0) throw new SpaceStopped("check", classifyTransportFailure(fetched, remote));
-    this.remoteEmpty = false;
-    this.checkedAt = Date.now();
-    return false;
+  }
+
+  /** A failed transport in the plain words of space-15: the Git host's
+   * own, with its words kept whole, for a clone on the host — which a
+   * refusal turns read-only and a missing repository unreachable until
+   * the next read — and the remote's form's otherwise (space-50). */
+  private classify(run: GitRun, remote: string, atHost: boolean): GitFailure {
+    if (!atHost) return classifyTransportFailure(run, remote);
+    const failure = classifyHostTransportFailure(run, this.owner.hostName());
+    if (failure.cause === "refused") this.hostOverride = { state: "read-only", reason: failure.message };
+    if (failure.cause === "gone") this.hostOverride = { state: "unreachable", reason: failure.message };
+    return failure;
   }
 
   /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
@@ -1208,18 +1468,24 @@ class RepositorySync {
   }
 
   /** Step 6 — Push `spex` to the host, setting the upstream once (space-12). */
-  private async push(remote: string, upstream: boolean): Promise<"ok" | "nothing" | "rejected"> {
+  private async push(remote: string, upstream: boolean, atHost: boolean): Promise<"ok" | "nothing" | "rejected"> {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.run(["rev-parse", "-q", "--verify", `refs/remotes/origin/${SPEX_BRANCH}^{commit}`]);
     if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
-    const run = await this.git.run(upstream ? ["push", "-q", "origin", SPEX_BRANCH] : ["push", "-q", "-u", "origin", SPEX_BRANCH], { transport: true });
+    const credential = atHost ? await this.owner.credentialFor(remote, "push") : null;
+    let run: GitRun;
+    try {
+      run = await this.git.run(upstream ? ["push", "-q", "origin", SPEX_BRANCH] : ["push", "-q", "-u", "origin", SPEX_BRANCH], { transport: true, ...(credential ? { credential } : {}) });
+    } finally {
+      await credential?.dispose();
+    }
     if (run.code === 0) {
       // The host now holds `spex`: later plans compare against it.
       this.remoteEmpty = false;
       await this.git.run(["update-ref", `refs/remotes/origin/${SPEX_BRANCH}`, head]);
       return "ok";
     }
-    const failure = classifyTransportFailure(run, remote);
+    const failure = this.classify(run, remote, atHost);
     if (failure.cause === "rejected") return "rejected";
     throw new SpaceStopped("push", failure);
   }
@@ -1505,9 +1771,720 @@ export class SpaceManager {
   private readonly probe: SpaceGit;
   private publishing?: Promise<void>;
   private republish = false;
+  /** The host's last answer (git-host-5), held until the next read. */
+  private view?: HostView;
+  /** The host's name and Git origin as last read, kept past a sign-out
+   * so a clone on the host is still known for one. */
+  private described?: { displayName: string; gitOrigin: string };
+  /** The last read's failure, in the reader's words, until a read
+   * succeeds (git-host-5). */
+  private readFailure?: string;
+  private reading?: Promise<HostView>;
+  /** The sign-in shown on the header (space-30). */
+  private signInState: GroupsState["signIn"] = { phase: "idle" };
+  private flow?: { cancel(): void };
+  private settingUp?: Promise<void>;
+  /** Steps at the host waiting for a member with the rights (space-64),
+   * by the clone's key; asked again at the next read. */
+  private readonly waiting = new Map<string, Waiting>();
+  /** Joins in flight or stopped, by the host's id (space-63). */
+  private readonly joining = new Map<string, SpaceSyncPhase>();
+  /** Picks being asked of the host, by key. */
+  private readonly picking = new Set<string>();
 
   constructor(private readonly host: SpaceHost) {
-    this.probe = new SpaceGit(host.home, host.env);
+    this.probe = new SpaceGit(host.home, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
+  }
+
+  // -- the account (git-host-2..4, git-host-10) ------------------------------
+
+  /** Whether the home is signed in to the Git host. */
+  signedIn(): boolean {
+    return this.host.store.home.account() !== null;
+  }
+
+  /** The host's display name, or its URL's host name before any read
+   * (space-15: a report names the host by its display name). */
+  hostName(): string {
+    const name = this.view?.displayName ?? this.described?.displayName;
+    if (name) return name;
+    try { return new URL(this.host.store.home.host.url).hostname; } catch { return this.host.store.home.host.url; }
+  }
+
+  /** The commit identity of a signed-in home (space-32): the account's
+   * display name or login, at the host's no-reply address. */
+  identity(): { name: string; email: string } | null {
+    const account = this.host.store.home.account();
+    if (!account) return null;
+    let domain: string;
+    try { domain = new URL(this.host.store.home.host.url).hostname; } catch { domain = "localhost"; }
+    return { name: account.displayName || account.login, email: `${account.login}@users.noreply.${domain}` };
+  }
+
+  private knownOrigin(): string | undefined {
+    return this.view?.gitOrigin ?? this.described?.gitOrigin;
+  }
+
+  /** Whether a clone lies on the Git host: it records the host's id, or
+   * its remote is under the host's Git origin (git-host-9). */
+  private atHost(facts: CloneFacts): boolean {
+    return facts.remote !== null && (facts.id !== null || underOrigin(facts.remote, this.knownOrigin()));
+  }
+
+  /** Whether a URL the reader names lies at the Git host's own origin
+   * (space-5): those are the host's to hand over. */
+  async atHostOrigin(url: string): Promise<boolean> {
+    return underOrigin(url, this.knownOrigin()) || underOrigin(url, this.host.store.home.host.url);
+  }
+
+  /** Start the configured sign-in flow (git-host-2, git-host-3): its
+   * shape goes back at once, and its end sets the home up (space-4). */
+  async signInStart(): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number }> {
+    if (this.flow || this.signInState.phase === "running" || this.host.client.signingIn()) throw new CoreError("busy", signInRunning());
+    const kind = this.host.signInFlow;
+    let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
+    try {
+      started = kind === "browser"
+        ? { kind, flow: await this.host.client.startBrowserSignIn({ pages: callbackPages() }) }
+        : { kind, flow: await this.host.client.startDeviceSignIn() };
+    } catch (error) {
+      if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
+      const failure = signInFailure(error, this.hostName());
+      this.signInState = failure ? { phase: "failed", ...failure } : { phase: "idle" };
+      void this.publish();
+      throw new CoreError("invalid_request", failure?.message ?? relayHostError(error, this.hostName()));
+    }
+    const flow = started.flow;
+    this.flow = flow;
+    this.signInState = started.kind === "browser"
+      ? { phase: "running", flow: "browser", since: Date.now() }
+      : { phase: "running", flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, since: Date.now() };
+    void this.publish();
+    void flow.done.then(
+      (account) => this.signedInAs(account),
+      (error: unknown) => this.signInEnded(error),
+    );
+    return started.kind === "browser"
+      ? { flow: "browser", url: started.flow.url }
+      : { flow: "device", userCode: started.flow.userCode, verificationUri: started.flow.verificationUri, expiresAt: started.flow.expiresAt };
+  }
+
+  /** Stop the running sign-in; false where none runs. */
+  signInCancel(): boolean {
+    const flow = this.flow;
+    if (!flow) return false;
+    flow.cancel();
+    return true;
+  }
+
+  private async signedInAs(account: HostAccount): Promise<void> {
+    this.flow = undefined;
+    try {
+      this.host.store.signIn(account);
+      this.view = undefined;
+      this.readFailure = undefined;
+      await this.publish();
+      await this.setUp();
+    } catch (error) {
+      console.error(`spex: setting the home up for the account failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.signInState = { phase: "idle" };
+      await this.publish();
+    }
+  }
+
+  private signInEnded(error: unknown): void {
+    this.flow = undefined;
+    const failure = signInFailure(error, this.hostName());
+    this.signInState = failure ? { phase: "failed", ...failure } : { phase: "idle" };
+    void this.publish();
+  }
+
+  /** The host signed this device out (git-host-4): the credential is
+   * gone, the account kept and marked signed out. */
+  signedOutByHost(): void {
+    this.host.store.signOut();
+    this.view = undefined;
+    void this.publish();
+  }
+
+  /** Sign out (git-host-10): revoke at the host, tried once, forget the
+   * credential, keep every clone and record. */
+  async signOut(): Promise<GroupsState> {
+    const busy = this.busy();
+    if (busy) throw new CoreError("busy", busy);
+    this.flow?.cancel();
+    await this.host.client.signOut();
+    this.host.store.signOut();
+    this.view = undefined;
+    this.readFailure = undefined;
+    this.waiting.clear();
+    this.joining.clear();
+    for (const machine of this.machines.values()) machine.hostOverride = undefined;
+    const state = await this.state();
+    this.host.broadcast(state);
+    return state;
+  }
+
+  /** Refresh (space-2): read the host, and finish what a sign-in left
+   * for the next read (space-4, space-64). */
+  refresh(): { accepted: true } {
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    void this.setUp().catch((error: unknown) => {
+      console.error(`spex: refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    return { accepted: true };
+  }
+
+  /** The account's set-up, in order (space-4): your own group renamed
+   * after the login, the host read, your own group's spex repository on
+   * the host, and every step left waiting asked again. */
+  private setUp(): Promise<void> {
+    if (this.settingUp) return this.settingUp;
+    const work = this.runSetUp().finally(() => { if (this.settingUp === work) this.settingUp = undefined; });
+    this.settingUp = work;
+    return work;
+  }
+
+  private async runSetUp(): Promise<void> {
+    const account = this.host.store.home.account();
+    if (!account) return;
+    const renamed = await this.renameOwn(account);
+    let view: HostView;
+    try { view = await this.readHost(); } catch { return; }
+    if (renamed !== "busy") await this.ensureOwnOnHost(view);
+    await this.retryWaiting(view);
+    await this.publish();
+  }
+
+  /** Read the host (git-host-5): one read at a time, the answer held as
+   * the current view, a failure keeping the previous view and its time. */
+  readHost(): Promise<HostView> {
+    if (this.reading) return this.reading;
+    const work = (async (): Promise<HostView> => {
+      try {
+        const view = await readHostView(this.host.client);
+        this.view = view;
+        this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
+        this.readFailure = undefined;
+        // A clone matched by its remote records the host's id (git-host-5).
+        for (const repository of this.host.store.listRepositories()) {
+          const machine = this.machine(repository.key);
+          machine.hostOverride = undefined;
+          if (machine.facts.id === null && machine.facts.remote !== null) {
+            const listing = listingFor(view, null, machine.facts.remote);
+            if (listing) await machine.recordId(listing.repository.id);
+          }
+        }
+        return view;
+      } catch (error) {
+        if (error instanceof HostError && error.kind === "reauth" && this.signedIn()) this.signedOutByHost();
+        this.readFailure = relayHostError(error, this.hostName());
+        throw error;
+      } finally {
+        this.reading = undefined;
+        void this.publish();
+      }
+    })();
+    this.reading = work;
+    work.catch(() => undefined);
+    return work;
+  }
+
+  // -- your own group (space-4, space-59, space-65) ---------------------------
+
+  /** Rename your own group's folder and its spex repository after the
+   * account's login (space-59): every clone beneath it moves, every pair
+   * naming one is rewritten, in one step while nothing beneath runs. */
+  private async renameOwn(account: HostAccount): Promise<"none" | "done" | "busy"> {
+    const store = this.host.store;
+    const target = ownNameFor(account.login);
+    const current = store.home.ownName;
+    if (!target || target === current) return "none";
+    const keys = store.listRepositories().map((repository) => repository.key).filter((key) => key.startsWith(`${current}/`));
+    const ownFrom = `${current}/${current}-spex`;
+    const ownTo = `${target}/${target}-spex`;
+    const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
+    if (moves.some((move) => existsSync(store.home.clonePath(move.to)))) return "busy";
+    const held: RepositorySync[] = [];
+    try {
+      for (const key of keys) {
+        const machine = this.machine(key);
+        if (!machine.hold("move", "apply")) return "busy";
+        held.push(machine);
+      }
+      await this.publish();
+      for (const key of keys) if (await this.host.blocker(key)) return "busy";
+      for (const move of moves) {
+        const to = store.home.clonePath(move.to);
+        mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+        renameSync(store.home.clonePath(move.from), to);
+      }
+      pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
+      this.relocate(moves, target);
+      await this.afterMove(moves);
+      return "done";
+    } finally {
+      for (const machine of held) machine.release();
+    }
+  }
+
+  /** Your own group's spex repository on the host (space-4, space-65):
+   * joined where the host lists one, else created and pushed. */
+  private async ensureOwnOnHost(view: HostView): Promise<void> {
+    const store = this.host.store;
+    const key = store.home.own();
+    if (!store.repository(key) || this.waiting.has(key)) return;
+    const machine = this.machine(key);
+    const facts = await machine.readFacts();
+    if (facts.remote !== null) return;
+    const user = userGroup(view);
+    const group = { id: user?.id ?? null, fullPath: user?.fullPath ?? store.home.ownName };
+    const name = splitKey(key).name;
+    const listed = view.listings.find((listing) => listing.repository.group.fullPath === group.fullPath && listing.repository.path === name);
+    if (listed) {
+      await this.adopt(machine, listed.repository, true);
+      return;
+    }
+    await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
+  }
+
+  /**
+   * A group's spex repository on the host at its first session (space-65):
+   * joined where the host lists `<group>-spex` in that group, else created
+   * there and pushed. A refused creation leaves the clone local only with
+   * its waiting phrase (space-64); nothing here refuses the session.
+   */
+  async ensureGroupRepository(key: string): Promise<"unchanged" | "local" | "joined" | "created" | "waiting"> {
+    try {
+      const store = this.host.store;
+      const { group, name } = splitKey(key);
+      if (name !== `${group.split("/").pop()}-spex` || key === store.home.own() || !store.repository(key)) return "unchanged";
+      if (this.waiting.has(key)) return "waiting";
+      const machine = this.machine(key);
+      const facts = await machine.readFacts();
+      if (facts.remote !== null) return "unchanged";
+      if (!this.signedIn()) return "local";
+      const view = this.view ?? await this.readHost();
+      const listed = view.listings.find((listing) => listing.repository.group.fullPath === group && listing.repository.path === name);
+      if (listed) {
+        await this.adopt(machine, listed.repository, true);
+        return "joined";
+      }
+      const hostGroup = view.groups.find((entry) => entry.fullPath === group);
+      if (!hostGroup) return "local";
+      return await this.create(machine, { id: hostGroup.id, fullPath: hostGroup.fullPath }, name, repositoryDescription({ kind: "group", group }), "quiet");
+    } catch (error) {
+      console.error(`spex: ${key} stays on this device: ${error instanceof Error ? error.message : String(error)}`);
+      return "local";
+    }
+  }
+
+  // -- picks, creations and joins (space-58, space-63, space-64) --------------
+
+  /** Give a clone the host's repository and sync it — a join of two
+   * histories where `join` (space-13), a first push otherwise. */
+  private async adopt(machine: RepositorySync, repository: HostRepository, join: boolean): Promise<void> {
+    await machine.attachHost(repository.remoteUrl, repository.id);
+    this.waiting.delete(machine.key);
+    await this.publish();
+    this.startSync(machine.key, { join });
+  }
+
+  /** Ask the host to create `name` in a group for a clone (git-host-6). */
+  private async create(
+    machine: RepositorySync,
+    group: { id: string | null; fullPath: string },
+    name: string,
+    description: string,
+    mode: "refuse" | "quiet",
+  ): Promise<"created" | "waiting" | "local"> {
+    const key = machine.key;
+    const ask = { groupId: group.id, name, description };
+    let answer: Awaited<ReturnType<GitHostClient["create"]>>;
+    try {
+      answer = await this.host.client.create(ask);
+    } catch (error) {
+      if (mode === "refuse") {
+        throw new CoreError("invalid_request", error instanceof HostError && error.kind === "name_taken"
+          ? nameTaken(name, group.fullPath)
+          : relayHostError(error, this.hostName()));
+      }
+      // The refusal stands on the row with the host's words, and the
+      // creation is asked again at the next read (space-4, space-64).
+      this.waiting.set(key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
+      await this.publish();
+      return "waiting";
+    }
+    if (answer.status === "pending") {
+      this.waiting.set(key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
+      await this.publish();
+      return "waiting";
+    }
+    await this.adopt(machine, answer.repository, false);
+    return "created";
+  }
+
+  /** Every step left waiting, asked again at a read (space-64): a
+   * creation a member with the rights did is found and joined. */
+  private async retryWaiting(view: HostView): Promise<void> {
+    for (const [key, waiting] of [...this.waiting]) {
+      if (!this.host.store.repository(key)) { this.waiting.delete(key); continue; }
+      const machine = this.machine(key);
+      if (waiting.step === "create" && waiting.create) {
+        const ask = waiting.create;
+        const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
+        this.waiting.delete(key);
+        if (found) await this.adopt(machine, found.repository, true);
+        else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
+        continue;
+      }
+      const listing = listingFor(view, machine.facts.id, machine.facts.remote);
+      if (!listing) continue;
+      if (listing.branchPresent) { this.waiting.delete(key); continue; }
+      try {
+        const answer = await this.host.client.prepareBranch(listing.repository.id);
+        if (answer.status === "ready") {
+          this.waiting.delete(key);
+          this.startSync(key, {});
+        } else this.waiting.set(key, { ...waiting, message: answer.message });
+      } catch (error) {
+        this.waiting.set(key, { ...waiting, message: relayHostError(error, this.hostName()) });
+      }
+    }
+  }
+
+  private startSync(key: string, input: { join?: boolean }): void {
+    const machine = this.machines.get(key);
+    if (!machine) return;
+    machine.sync({ ...input, internal: true }).catch((error: unknown) => {
+      console.error(`spex: ${key} did not start syncing: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  /** Pick a group for a local-only spex repository (space-58): join a
+   * listed one, or create `<name>-spex` in a group. */
+  async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }): Promise<{ accepted: true }> {
+    const machine = this.machine(key);
+    machine.assertNotRunning();
+    if (this.picking.has(key)) throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
+    this.picking.add(key);
+    try {
+      const facts = await machine.readFacts();
+      if (facts.remote !== null) {
+        throw new CoreError("invalid_request", i18n._({ id: "{name} is on the host already", values: { name: splitKey(key).name }, comment: "Refusal of a pick: the spex repository is not local only" }));
+      }
+      if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+      const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+      if (choice.kind === "join") {
+        const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
+        if (!listing) throw new CoreError("not_found", noLongerShared());
+        await this.adopt(machine, listing.repository, true);
+        return { accepted: true };
+      }
+      const base = kebab(choice.name.trim().replace(/-spex$/i, ""));
+      if (!base) {
+        throw new CoreError("invalid_request", i18n._({ id: "The name must hold a letter or a digit", comment: "Refusal of a new spex repository's name with nothing of a name in it" }));
+      }
+      const group = choice.groupId === null
+        ? (userGroup(view) ?? { id: null, fullPath: this.host.store.home.ownName })
+        : view.groups.find((entry) => entry.id === choice.groupId);
+      if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
+      const project = this.projectFile(machine.repository);
+      await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
+        repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse");
+      return { accepted: true };
+    } finally {
+      this.picking.delete(key);
+    }
+  }
+
+  private projectFile(repository: SpexRepository): { name: string; remote: string | null } | undefined {
+    try {
+      const value = existsSync(repository.projectFile) ? readJsonFile(repository.projectFile) as { name?: unknown; remote?: unknown } : undefined;
+      if (!value) return undefined;
+      return { name: typeof value.name === "string" ? value.name : splitKey(repository.key).name, remote: typeof value.remote === "string" ? value.remote : null };
+    } catch { return undefined; }
+  }
+
+  /** Join a spex repository the host lists and this device lacks
+   * (space-63): clone it under `workspace/<group>/`, then the code into
+   * `folder`, and pair the two. */
+  async join(hostId: string, folder?: string): Promise<{ accepted: true }> {
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+    const listing = view.listings.find((entry) => entry.repository.id === hostId);
+    if (!listing) throw new CoreError("not_found", noLongerShared());
+    const key = hostKey(listing.repository);
+    if (!key) {
+      throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
+    }
+    const store = this.host.store;
+    const here = store.listRepositories().some((repository) => {
+      const facts = this.machine(repository.key).facts;
+      return facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId;
+    });
+    if (here || store.repository(key) || existsSync(store.home.clonePath(key))) {
+      throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
+    }
+    if (this.joining.get(hostId)?.phase === "running") throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
+    const path = folder === undefined ? undefined : resolve(folder);
+    if (path !== undefined && store.home.keyForFolder(path)) {
+      throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
+    }
+    this.joining.set(hostId, { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false });
+    await this.publish();
+    void this.runJoin(listing, key, path);
+    return { accepted: true };
+  }
+
+  private async runJoin(listing: HostListing, key: string, folder: string | undefined): Promise<void> {
+    const store = this.host.store;
+    const id = listing.repository.id;
+    const url = listing.repository.remoteUrl;
+    const dir = store.home.clonePath(key);
+    const stop = (failure: GitFailure): void => {
+      this.joining.set(id, { phase: "stopped", op: "join", step: "check", ...failure });
+    };
+    try {
+      mkdirSync(dirname(dir), { recursive: true, mode: 0o700 });
+      let credential: GitCredentialHandle | null;
+      try { credential = await this.credentialFor(url, "check"); }
+      catch (error) {
+        if (error instanceof SpaceStopped) { stop(error.failure); return; }
+        throw error;
+      }
+      // Sessions are private: the clone is written owner-only (space-32).
+      const umask = process.umask(0o077);
+      let run: GitRun;
+      try {
+        const options = { transport: true, ...(credential ? { credential } : {}) };
+        run = await this.probe.run(["clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", url, dir], options);
+        if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
+          // The host holds no `spex` yet: its default branch, then `spex`
+          // beside it (space-32).
+          rmSync(dir, { recursive: true, force: true });
+          run = await this.probe.run(["clone", "-q", url, dir], options);
+          if (run.code === 0) run = await this.probe.run(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
+        }
+      } finally {
+        process.umask(umask);
+        await credential?.dispose();
+      }
+      if (run.code !== 0) {
+        rmSync(dir, { recursive: true, force: true });
+        stop(credential ? classifyHostTransportFailure(run, this.hostName()) : classifyTransportFailure(run, url));
+        return;
+      }
+      await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
+      this.joining.delete(id);
+      store.adoptRepositories();
+      this.host.repositoriesChanged();
+      const machine = this.machine(key);
+      await machine.readFacts();
+      await this.host.rescanSessions(key);
+      this.host.ledgerChanged([key]);
+      if (folder !== undefined) await this.pairJoined(machine, folder);
+    } catch (error) {
+      stop({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
+    } finally {
+      await this.publish();
+    }
+  }
+
+  /** The joined clone's working folder (space-63): the code cloned from
+   * the remote its `project.json` names with this device's own Git and
+   * credentials, or a folder already holding it, paired with the clone;
+   * a group's own spex repository pairs the folder its sessions run in. */
+  private async pairJoined(machine: RepositorySync, folder: string): Promise<void> {
+    if (!machine.hold("join", "check")) return;
+    await this.publish();
+    let failure: GitFailure | undefined;
+    try {
+      const project = this.projectFile(machine.repository);
+      const root = existsSync(folder) && await this.workTreeRoot(folder);
+      if (!root && project?.remote) {
+        mkdirSync(dirname(folder), { recursive: true });
+        const run = await this.probe.run(["clone", "-q", project.remote, folder], { transport: true });
+        if (run.code !== 0) {
+          failure = {
+            cause: run.killed ?? "git",
+            message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
+            guidance: i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" }),
+            retry: false,
+          };
+          return;
+        }
+      }
+      mkdirSync(folder, { recursive: true });
+      this.host.store.rebindProject({ id: machine.key, path: folder });
+      this.host.repositoriesChanged();
+      await this.host.rescanSessions(machine.key);
+      this.host.ledgerChanged([machine.key]);
+    } catch (error) {
+      failure = { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false };
+    } finally {
+      machine.release(failure ? { op: "join", step: "check", failure } : undefined);
+    }
+  }
+
+  private async workTreeRoot(folder: string): Promise<boolean> {
+    try {
+      const run = await this.probe.run(["-C", folder, "rev-parse", "--show-toplevel"]);
+      return run.code === 0 && realPath(run.stdout.toString("utf8").trim()) === realPath(folder);
+    } catch { return false; }
+  }
+
+  /** A spex repository's members as the host reports them (space-62,
+   * git-host-8), read on each ask and held nowhere. */
+  async members(key: string): Promise<{ members: { id: string; login: string; displayName: string | null; role: string; url: string | null }[]; membersUrl: string }> {
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    let id: string | null;
+    if (this.host.store.repository(key)) {
+      const facts = await this.machine(key).readFacts();
+      if (facts.remote === null) {
+        throw new CoreError("invalid_request", i18n._({ id: "Only on this device", comment: "A spex repository's state: it has no remote on the Git host" }));
+      }
+      id = facts.id ?? listingFor(this.view, null, facts.remote)?.repository.id ?? null;
+    } else {
+      id = this.view?.listings.find((listing) => hostKey(listing.repository) === key)?.repository.id ?? null;
+      if (id === null) {
+        throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device", comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+      }
+    }
+    if (id === null) throw new CoreError("not_found", noLongerShared());
+    try {
+      const answer = await this.host.client.members(id);
+      return { members: answer.members.map((member) => ({ ...member })), membersUrl: answer.membersUrl };
+    } catch (error) {
+      throw new CoreError(error instanceof HostError && error.kind === "not_found" ? "not_found" : "invalid_request", relayHostError(error, this.hostName()));
+    }
+  }
+
+  // -- the sync against the host (space-11, space-12, space-60) ---------------
+
+  /** The admission of space-11 the host decides: a clone on the host
+   * needs a sign-in, and its first push into a repository with other
+   * members needs the notice seen (space-57). */
+  async admit(machine: RepositorySync, input: { push: boolean; noticed: boolean }): Promise<void> {
+    const facts = machine.facts;
+    if (!this.atHost(facts)) return;
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    if (!input.push || input.noticed) return;
+    const store = this.host.store;
+    if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
+    let view = this.view;
+    if (!view) { try { view = await this.readHost(); } catch { return; } }
+    const listing = listingFor(view, facts.id, facts.remote);
+    if (!listing || listing.readOnly || (listing.members ?? 0) <= 1) return;
+    throw new CoreError("invalid_request", i18n._({
+      id: "Read the sharing notice before the first sync of {name}",
+      values: { name: splitKey(machine.key).name },
+      comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
+    }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
+  }
+
+  /** The Check step's read of the host for one clone (space-12): follow
+   * a rename or a transfer on a sync (space-60), take the URL the host
+   * hands over, and prepare the branch before a first push (git-host-7).
+   * Undefined for a clone whose remote is not on the host. */
+  async hostCheck(machine: RepositorySync, op: SpaceOp): Promise<{ remote: string; readOnly: boolean } | undefined> {
+    const facts = await machine.readFacts();
+    if (!this.atHost(facts)) return undefined;
+    if (!this.signedIn()) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    let view: HostView;
+    try { view = await this.readHost(); }
+    catch (error) { throw hostStop("check", error, this.hostName()); }
+    const listing = listingFor(view, facts.id, facts.remote);
+    if (!listing) {
+      machine.hostOverride = { state: "unreachable", reason: noLongerShared() };
+      throw new SpaceStopped("check", { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
+    }
+    const repository = listing.repository;
+    if (facts.id === null) await machine.recordIdNow(repository.id);
+    const key = hostKey(repository);
+    if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key);
+    if (facts.remote !== repository.remoteUrl) await machine.setOrigin(repository.remoteUrl);
+    const readOnly = listing.readOnly !== null;
+    if (!readOnly && !listing.branchPresent) {
+      // `spex` beside the default branch, never as it (git-host-7).
+      const group = repository.group.fullPath;
+      if (repository.empty) {
+        this.waiting.set(machine.key, { step: "branch", group, message: "" });
+        throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+      }
+      let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
+      try { answer = await this.host.client.prepareBranch(repository.id); }
+      catch (error) { throw hostStop("check", error, this.hostName()); }
+      if (answer.status === "pending") {
+        this.waiting.set(machine.key, { step: "branch", group, message: answer.message });
+        throw new SpaceStopped("check", { cause: "refused", message: waitingPhrase("branch", group, answer.message), guidance: syncLater(), retry: true });
+      }
+      if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
+    }
+    return { remote: repository.remoteUrl, readOnly };
+  }
+
+  /** The brokered credential for a transport to the host's Git origin
+   * (git-host-9); none for any other origin. */
+  async credentialFor(remote: string, step: SyncStep): Promise<GitCredentialHandle | null> {
+    const origin = this.knownOrigin();
+    if (!origin || !underOrigin(remote, origin)) return null;
+    if (!this.signedIn()) throw new SpaceStopped(step, { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
+    let credential: { username: string; secret: string; expiresAt: number };
+    try { credential = await this.host.client.credential(origin); }
+    catch (error) { throw hostStop(step, error, this.hostName()); }
+    return withGitCredential(credential, this.host.hostRuntime);
+  }
+
+  /** Follow the host's rename or transfer of one clone, inside its sync's
+   * gate (space-60). */
+  private async moveInSync(machine: RepositorySync, to: string): Promise<void> {
+    const store = this.host.store;
+    const from = machine.key;
+    const target = store.home.clonePath(to);
+    if (existsSync(target)) {
+      throw new SpaceStopped("check", {
+        cause: "git",
+        message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
+        guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where a renamed spex repository's new folder is taken" }),
+        retry: true,
+      });
+    }
+    const source = machine.repository.dir;
+    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    renameSync(source, target);
+    pruneEmptyFolders(dirname(source), store.home.workspace);
+    this.relocate([{ from, to }]);
+    await this.afterMove([{ from, to }]);
+  }
+
+  /** The store, the machines and the waiting steps follow moved clones. */
+  private relocate(moves: { from: string; to: string }[], own?: string): void {
+    this.host.store.moveRepositories(moves, own);
+    for (const { from, to } of moves) {
+      const machine = this.machines.get(from);
+      this.machines.delete(from);
+      const repository = this.host.store.repository(to);
+      if (machine && repository) {
+        machine.rebind(repository);
+        this.machines.set(to, machine);
+      }
+      const waiting = this.waiting.get(from);
+      if (waiting) {
+        this.waiting.delete(from);
+        this.waiting.set(to, waiting);
+      }
+    }
+  }
+
+  private async afterMove(moves: { from: string; to: string }[]): Promise<void> {
+    try { await this.host.repositoriesMoved?.(moves); }
+    catch (error) { console.error(`spex: re-pointing moved clones failed: ${error instanceof Error ? error.message : String(error)}`); }
+    for (const { from, to } of moves) {
+      try { await this.host.environmentMoved?.(from, to); }
+      catch (error) { console.error(`spex: the exports of ${to} were not rewritten: ${error instanceof Error ? error.message : String(error)}`); }
+    }
   }
 
   /** The machine of one spex repository, made on first use. */
@@ -1601,33 +2578,124 @@ export class SpaceManager {
     const repositories: RepositoryState[] = [];
     for (const repository of store.listRepositories()) {
       const machine = this.machine(repository.key);
-      repositories.push(recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase });
+      const base = recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase };
+      repositories.push(this.overlay(machine, base));
     }
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
-    const own = store.home.own();
-    repositories.sort((a, b) => Number(b.key === own) - Number(a.key === own) || a.key.localeCompare(b.key));
+    repositories.push(...this.absentRows());
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
     const host = store.home.host;
     return {
       home: resolve(this.host.home),
       git: await this.probe.version(),
-      host: { url: host.url, displayName: null },
-      account: null,
-      signIn: { phase: "idle" },
-      readAt: null,
-      groups: [{
-        id: null,
-        fullPath: store.home.ownName,
-        name: store.home.ownName,
-        url: null,
-        own: true,
-        repositories,
-      }],
+      host: { url: host.url, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
+      account: store.home.account(),
+      signIn: this.signInState,
+      readAt: this.signedIn() ? this.view?.readAt ?? null : null,
+      groups: this.groupsOf(repositories),
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
       // what the reader has not answered, and everything unfolded.
       issues: countIssues(diagnostics),
     };
+  }
+
+  /** A clone's state as the host's last answer and this device's files
+   * make it (space-61). */
+  private overlay(machine: RepositorySync, base: RepositoryState): RepositoryState {
+    const facts = machine.facts;
+    const waiting = this.waiting.get(base.key);
+    const row: RepositoryState = { ...base, waiting: waiting ? { step: waiting.step, group: waiting.group, message: waiting.message } : null };
+    if (facts.remote === null) return { ...row, state: "local-only", reason: null };
+    // A remote the reader named, a path this device reaches: no host.
+    if (!this.atHost(facts)) return row;
+    if (!this.signedIn()) return { ...row, state: "unreachable", reason: signInAgain() };
+    const listing = listingFor(this.view, facts.id, facts.remote);
+    const listed: RepositoryState = listing ? { ...row, members: listing.members, visibility: listing.repository.visibility } : row;
+    if (machine.hostOverride) return { ...listed, state: machine.hostOverride.state, reason: machine.hostOverride.reason };
+    if (this.readFailure !== undefined) return { ...listed, state: "unreachable", reason: this.readFailure };
+    // Not read since this core started: as the last sync left it.
+    if (!this.view) return row;
+    if (!listing) return { ...row, state: "unreachable", reason: noLongerShared() };
+    if (listing.readOnly) {
+      return { ...listed, state: "read-only", reason: listing.readOnly.message || i18n._({ id: "Archived", comment: "A spex repository's read-only reason where the host gave no words for its archive" }) };
+    }
+    return { ...listed, state: "reachable", reason: null };
+  }
+
+  /** A row for every spex repository the host lists and this device
+   * lacks (space-61: "Not on this device"). */
+  private absentRows(): RepositoryState[] {
+    const view = this.view;
+    if (!view || !this.signedIn()) return [];
+    const store = this.host.store;
+    const matched = new Set<string>();
+    for (const repository of store.listRepositories()) {
+      const facts = this.machines.get(repository.key)?.facts;
+      const listing = facts ? listingFor(view, facts.id, facts.remote) : undefined;
+      if (listing) matched.add(listing.repository.id);
+    }
+    const rows: RepositoryState[] = [];
+    for (const listing of view.listings) {
+      const repository = listing.repository;
+      const key = hostKey(repository);
+      if (!key || matched.has(repository.id) || store.repository(key)) continue;
+      const code = repository.project && typeof repository.project.remote === "string" ? displayRemote(repository.project.remote) : null;
+      rows.push({
+        key,
+        name: repository.path,
+        id: repository.id,
+        own: false,
+        code,
+        folder: null,
+        remote: displayRemote(repository.remoteUrl),
+        state: "absent",
+        reason: null,
+        waiting: null,
+        members: listing.members,
+        visibility: repository.visibility,
+        branch: null,
+        local: [],
+        incoming: [],
+        conflicts: [],
+        lastSync: null,
+        noticed: false,
+        sync: this.joining.get(repository.id) ?? { phase: "idle" },
+      });
+    }
+    return rows;
+  }
+
+  /** Your own group first, then every group the host lists, each with
+   * its spex repositories, the group's own first (space-1); before
+   * sign-in, your own group with what this device holds. */
+  private groupsOf(rows: RepositoryState[]): GroupsState["groups"] {
+    const store = this.host.store;
+    const ownName = store.home.ownName;
+    const view = this.signedIn() ? this.view : undefined;
+    const user = userGroup(view);
+    type Entry = GroupsState["groups"][number];
+    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, repositories: [] };
+    const entries = new Map<string, Entry>([[ownName, own]]);
+    for (const group of view?.groups ?? []) {
+      if (group.kind === "user") continue;
+      entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, repositories: [] });
+    }
+    for (const row of rows) {
+      let path = splitKey(row.key).group;
+      if (user && path === user.fullPath) path = ownName;
+      let entry = entries.get(path);
+      if (!entry) {
+        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, url: null, own: false, repositories: [] };
+        entries.set(path, entry);
+      }
+      entry.repositories.push(row);
+    }
+    const groupsOwn = (entry: Entry, row: RepositoryState): boolean => row.name === `${entry.fullPath.split("/").pop()}-spex`;
+    for (const entry of entries.values()) {
+      entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
+    }
+    return [own, ...[...entries.values()].filter((entry) => entry !== own).sort((a, b) => a.fullPath.localeCompare(b.fullPath))];
   }
 
   /** Broadcast the state after one machine moved, from each machine's

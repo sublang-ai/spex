@@ -28,6 +28,10 @@ export interface GitRunOptions {
   input?: string;
   /** Extra environment for this child only (a temporary index file). */
   env?: Record<string, string>;
+  /** The brokered credential for a transport to the Git host's origin
+   * (git-host-9): its `-c` prefix goes before the subcommand and its
+   * environment joins the child's; any other origin carries none. */
+  credential?: { configArgs: string[]; env: NodeJS.ProcessEnv };
 }
 
 /** `git` itself is not runnable: absent from PATH or not executable. */
@@ -338,6 +342,106 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   };
 }
 
+/** The words the host itself sent back, which Git prints as `remote:`
+ * lines (space-50): kept whole, never paraphrased. */
+export function hostWords(stderr: string): string | null {
+  const lines = stderr.split("\n")
+    .map((line) => /^remote:\s?(.*)$/.exec(line.trimEnd())?.[1]?.trim() ?? "")
+    .filter((line) => line.length > 0);
+  return lines.length > 0 ? lines.join(" ") : null;
+}
+
+/** A spex repository the host no longer lists for this account
+ * (space-15, git-host-11). */
+export function noLongerShared(): string {
+  return i18n._({
+    id: "No longer shared with you",
+    comment: "A spex repository's state or a stopped transfer: the Git host no longer lists it for this account",
+  });
+}
+
+/** The host's refusal in its own words (space-15, git-host-11). */
+export function hostRefused(host: string, words: string | null): string {
+  return words
+    ? i18n._({
+        id: "{host} refused: {words}",
+        values: { host, words },
+        comment: "A refusal relayed from the Git host; {host} is its display name, {words} its own words, kept whole",
+      })
+    : i18n._({
+        id: "{host} refused",
+        values: { host },
+        comment: "A refusal relayed from the Git host that carried no words; {host} is its display name",
+      });
+}
+
+/** Where membership decides (space-50): the members page, no role
+ * claimed and no act the host did not name. */
+export function membersDecide(): string {
+  return i18n._({
+    id: "The host's members page shows who may send here.",
+    comment: "Guidance under a transfer the Git host refused; it names the members page and claims no role",
+  });
+}
+
+/** The host asks this device to sign in again (space-15, git-host-11). */
+export function signInAgain(): string {
+  return i18n._({
+    id: "Sign in again",
+    comment: "A state or a stopped transfer: the Git host asks this device to sign in again",
+  });
+}
+
+/**
+ * Classify a failed transport to the Git host's own origin (space-15,
+ * space-50): the host's display name in each message, a refusal carried
+ * in the host's own words with nothing claimed beyond them, a failed
+ * authentication asking for a sign-in, a missing repository read as no
+ * longer shared. Its credential is the app's (git-host-9), so no act on
+ * this machine's keys or helpers is offered.
+ */
+export function classifyHostTransportFailure(run: GitRun, host: string): GitFailure {
+  const text = run.stderr;
+  if (run.killed) {
+    return {
+      cause: run.killed,
+      message: i18n._({ id: "No answer from {host}", values: { host }, comment: "A stopped transfer's message; {host} is the remote's host" }),
+      guidance: run.killed === "stopped"
+        ? i18n._({ id: "You stopped the transfer; your commits stand.", comment: "Guidance after the reader stopped a transfer to the Git host" })
+        : i18n._({ id: "Check the connection, then Retry.", comment: "Guidance after a transfer to the Git host ran past its time limit" }),
+      retry: true,
+    };
+  }
+  if (/Could not resolve host|Connection refused|Network is unreachable|Connection timed out|No route to host|Failed to connect|returned error: 50[234]/i.test(text)) {
+    return {
+      cause: "unreachable",
+      message: i18n._({ id: "Could not reach {host}", values: { host }, comment: "A stopped transfer's message; {host} is the remote's host" }),
+      guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Git host could not be reached" }),
+      retry: true,
+    };
+  }
+  if (/returned error: 401|HTTP 401|Authentication failed|could not read Username|could not read Password|terminal prompts disabled/i.test(text)) {
+    return {
+      cause: "reauth",
+      message: signInAgain(),
+      guidance: i18n._({ id: "Sign in from the header, then Retry.", comment: "Guidance where the Git host asked this device to sign in again" }),
+      retry: true,
+    };
+  }
+  if (/returned error: 404|Repository not found|repository '[^']*' not found|does not appear to be a git repository/i.test(text)) {
+    return {
+      cause: "gone",
+      message: noLongerShared(),
+      guidance: i18n._({ id: "Nothing on this device was deleted.", comment: "Guidance where the Git host no longer lists a spex repository for this account" }),
+      retry: true,
+    };
+  }
+  if (/returned error: 403|HTTP 403|Permission denied|protected branch|pre-receive hook declined|You are not allowed/i.test(text)) {
+    return { cause: "refused", message: hostRefused(host, hostWords(text)), guidance: membersDecide(), retry: true };
+  }
+  return classifyTransportFailure(run, null);
+}
+
 /**
  * Git as a child process per step, from the home, never through a shell
  * (space-32): the core's captured environment plus non-interactive
@@ -348,12 +452,15 @@ export class SpaceGit {
   private readonly transportTimeoutMs: number;
   private transportChild?: { child: import("node:child_process").ChildProcess; kill: (why: "timeout" | "stopped") => void };
 
+  private readonly identity?: () => { name: string; email: string } | null;
+
   constructor(
     private readonly home: string,
     private readonly captured: NodeJS.ProcessEnv,
-    options: { transportTimeoutMs?: number } = {},
+    options: { transportTimeoutMs?: number; identity?: () => { name: string; email: string } | null } = {},
   ) {
     this.transportTimeoutMs = options.transportTimeoutMs ?? DEFAULT_TRANSPORT_TIMEOUT_MS;
+    this.identity = options.identity;
   }
 
   /** The environment every child runs with (space-32). */
@@ -370,8 +477,8 @@ export class SpaceGit {
   /** Run one Git command; a non-zero exit is a result, not an exception. */
   run(args: string[], options: GitRunOptions = {}): Promise<GitRun> {
     return new Promise<GitRun>((resolveRun, rejectRun) => {
-      const env = { ...this.environment(), ...(options.env ?? {}) };
-      const child = spawn("git", ["-C", this.home, ...args], {
+      const env = { ...this.environment(), ...(options.credential?.env ?? {}), ...(options.env ?? {}) };
+      const child = spawn("git", ["-C", this.home, ...(options.credential?.configArgs ?? []), ...args], {
         env,
         stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         // A transport child leads its own process group, so Stop and the
@@ -469,10 +576,14 @@ export class SpaceGit {
     return !(await this.succeeds(["var", "GIT_COMMITTER_IDENT"]));
   }
 
-  /** The `-c` prefix every commit-writing command carries (space-32). */
+  /** The `-c` prefix every commit-writing command carries (space-32):
+   * the signed-in account's name and no-reply address where the home is
+   * signed in, else the fallback only where Git has no identity. */
   async committerArgs(): Promise<string[]> {
     const args = ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"];
-    if (await this.identityFallback()) args.push("-c", "user.name=Spex", "-c", `user.email=spex@${hostname()}`);
+    const identity = this.identity?.();
+    if (identity) args.push("-c", `user.name=${identity.name}`, "-c", `user.email=${identity.email}`);
+    else if (await this.identityFallback()) args.push("-c", "user.name=Spex", "-c", `user.email=spex@${hostname()}`);
     return args;
   }
 

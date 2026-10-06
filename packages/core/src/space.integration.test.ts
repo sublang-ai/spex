@@ -138,7 +138,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const home = await startHome("remote");
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /Add a remote first/);
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /Sign in first/);
   await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /no spex repository/);
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
@@ -160,7 +160,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   assert.equal(git(clone, "remote", "get-url", "origin"), other);
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Add a remote first/);
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Sign in first/);
 });
 
 test("space-37: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:last", async (t) => {
@@ -274,10 +274,10 @@ test("space-37: while a check runs, writes beneath that clone are refused naming
   ] as const) {
     const reply = await home.client.command(type as Command["type"], fields as never);
     assert.ok(!reply.ok && reply.error.code === "busy", `${type} must be refused busy: ${JSON.stringify(reply)}`);
-    assert.match(reply.error.message, /Space is syncing/);
+    assert.match(reply.error.message, /-spex is syncing; wait for it to finish/);
   }
-  await home.client.expectError("space.sync", { repository: key }, "busy", /Space is busy/);
-  await home.client.expectError("space.fetch", { repository: key }, "busy", /Space is busy/);
+  await home.client.expectError("space.sync", { repository: key }, "busy", /Already syncing/);
+  await home.client.expectError("space.fetch", { repository: key }, "busy", /Already syncing/);
   // Other spex repositories stay writable (space-21).
   await home.client.expectOk("intent.queue", { projectId: other.key, text: "elsewhere" });
   await runTurn(home, other.key, "Admitted elsewhere", otherSession);
