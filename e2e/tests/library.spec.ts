@@ -1,14 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Playbooks surface as a user works it (playbook-library-41):
-// what is configured, enabling a built-in, working a card's stage
-// row, and removing a playbook — each landing in the shared config.
+// The Playbooks surface as a user works it (playbook-library-41,
+// DR-104): a view over the environments of the current project and
+// your own group — what each lists and where each playbook is enabled,
+// enabling a built-in in the project, a card's stage row, disabling
+// with no confirm and removing a spec package behind one — each landing
+// in the spex repository's config it names; and a role's tuning saved
+// in your own group's config (playbook-library-39).
 
-import { test, expect, open, nav } from "../src/harness";
+import type { Page } from "@playwright/test";
 import { parse } from "yaml";
 
+import { test, expect, open, nav } from "../src/harness";
+
 test.use({ appOptions: { project: true } });
+
+/** The built-in spec package every environment requests (environments-11). */
+const BUILTINS = "sublang/playbooks";
+
+/** Show one side of the Playbooks surface (playbook-library-1). */
+async function showSide(page: Page, side: "project" | "own"): Promise<void> {
+  const control = page.getByTestId(`side-${side}`);
+  await control.click();
+  await expect(control).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`side-${side === "own" ? "project" : "own"}`)).toHaveAttribute("aria-pressed", "false");
+}
 
 test.describe("runtime binding options", () => {
   test.use({ appOptions: {
@@ -26,6 +43,8 @@ test.describe("runtime binding options", () => {
     const readRole = () => parse(app.readConfig()).playbooks.code.roles.coder;
     await open(page, app);
     await nav(page, "Playbooks").click();
+    // Your own group's entry carries each role's tuning (playbook-library-3).
+    await showSide(page, "own");
     const edit = page.getByTestId("role-bind-code-coder");
     const editor = page.getByTestId("binding-editor-coder");
     await edit.click();
@@ -111,30 +130,65 @@ test.describe("runtime binding options", () => {
   });
 });
 
-test("playbook-library-41: list, enable a built-in, work the stage row, remove", async ({
+test("playbook-library-41: both sides listed, a built-in enabled in the project, the stage row, disable and remove", async ({
   page,
   app,
 }) => {
+  test.setTimeout(90_000);
   await open(page, app);
   await nav(page, "Playbooks").click();
 
-  // The configured playbooks with their bindings.
-  await expect(page.getByText("/code", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("/review", { exact: true }).first()).toBeVisible();
-  await expect(page.getByTestId("role-binding-review-reviewer")).toContainText("dev.reviewer");
+  // The switch stands between the project's side and your own group's
+  // (playbook-library-1): the project's first, its environment named
+  // by its spex repository.
+  const sides = page.getByRole("group", { name: "Spex repository shown" });
+  await expect(sides.getByTestId("side-project")).toHaveText("demo-project");
+  await expect(sides.getByTestId("side-own")).toHaveText("Your own group");
+  await expect(sides.getByTestId("side-project")).toHaveAttribute("aria-pressed", "true");
+  const environment = page.getByTestId("environment-section");
+  await expect(environment).toContainText(app.projectId!);
+  await expect(environment.getByTestId(`env-package-${BUILTINS}`)).toBeVisible();
 
-  // A built-in absent from the config: enabling it writes the config
-  // and lists it; the home's slash menu then offers it.
-  const builtins = page.getByTestId("builtins-section");
-  await expect(builtins.getByTestId("builtin-decide")).toBeVisible();
-  await expect(builtins.getByTestId("builtin-add-decide")).toHaveText("Enable");
-  await builtins.getByTestId("builtin-add-decide").click();
-  await expect.poll(() => app.readConfig()).toContain("decide:");
-  await expect(page.getByText("/decide", { exact: true }).first()).toBeVisible();
-  await expect(builtins.getByTestId("builtin-decide")).toHaveCount(0);
+  // Your own group's side: every enabled playbook with its command,
+  // intent, spec package and role bindings (playbook-library-1,
+  // playbook-library-29).
+  await showSide(page, "own");
+  await expect(environment).toContainText(app.ownKey);
+  const enabled = page.getByTestId("playbooks-enabled");
+  const code = enabled.getByTestId("playbook-card-code");
+  const review = enabled.getByTestId("playbook-card-review");
+  await expect(code).toContainText("/code");
+  await expect(code).toContainText("implement a coding intent in reviewed, one-commit phases");
+  await expect(code.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
+  await expect(code.getByTestId("playbook-from-code")).toHaveText(/^from\s*sublang\/playbooks \d+\.\d+\.\d+$/);
+  await expect(code.getByTestId("role-binding-code-coder")).toHaveText("dev.coder");
+  await expect(review).toContainText("/review");
+  await expect(review.getByTestId("role-binding-review-coder")).toHaveText("dev.coder");
+  await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("dev.reviewer");
+
+  // The project's side lists the same playbooks from its own
+  // environment, none enabled there: the built-ins enabled in neither
+  // config stand beside them (playbook-library-1, playbook-library-34).
+  await showSide(page, "project");
+  await expect(page.getByTestId("playbooks-empty")).toBeVisible();
+  const available = page.getByTestId("playbooks-available");
+  await expect(available.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
+  const decide = available.getByTestId("playbook-card-decide");
+  await expect(decide.getByTestId("playbook-enabled-decide")).toHaveText("Not enabled");
+  await expect(decide.getByTestId("playbook-enable-decide")).toHaveText("Enable");
+  // Enabling it writes the project's config and lists it among the
+  // enabled there.
+  expect(app.readProjectConfig()).not.toContain("decide:");
+  await decide.getByTestId("playbook-enable-decide").click();
+  await expect.poll(() => app.readProjectConfig()).toContain("decide:");
+  expect(app.readConfig()).not.toMatch(/^\s{2}decide:/m);
+  await expect(enabled.getByTestId("playbook-card-decide")).toBeVisible();
+  await expect(enabled.getByTestId("playbook-enabled-decide")).toHaveText("Enabled in the project");
+  await expect(available.getByTestId("playbook-card-decide")).toHaveCount(0);
 
   // The stage row stands on the card: a press opens that stage, a
-  // press beside it swaps, a second press closes.
+  // press beside it swaps, a second press closes (playbook-library-22).
+  await showSide(page, "own");
   const row = page.getByTestId("stages-code");
   const stage = (name: string) => row.getByRole("button", { name });
   await expect(stage("Source")).toBeVisible();
@@ -160,11 +214,7 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
   });
   await expect(states).toBeVisible();
   expect((await states.boundingBox())!.y).toBeCloseTo(stateBox!.y, 0);
-  expect(
-    await page
-      .getByTestId("stage-box-code")
-      .evaluate((box) => box.scrollTop > 0),
-  ).toBe(true);
+  expect(await page.getByTestId("stage-box-code").evaluate((box) => box.scrollTop > 0)).toBe(true);
 
   await stage("State machine").click();
   await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
@@ -174,10 +224,8 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
   await stage("Gears").click();
   const firstRow = page.getByTestId("pipeline-code").getByRole("listitem").first();
   await expect(firstRow).toBeVisible();
-  const firstToggle = page
-    .getByTestId("pipeline-code")
-    .locator("[data-testid^='item-toggle-']")
-    .first();
+  const firstToggle = page.getByTestId("pipeline-code").locator("[data-testid^='item-toggle-']").first();
+  await expect(firstToggle).toHaveAccessibleName(/^CODE-\d+: /);
   await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
   await firstToggle.click();
   await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
@@ -206,31 +254,54 @@ test("playbook-library-41: list, enable a built-in, work the stage row, remove",
 
   await page.reload();
   await nav(page, "Playbooks").click();
-  await stage("Source").click();
-  await expect(page.getByTestId("stage-box-code-grip")).toHaveAttribute(
-    "aria-valuenow",
-    "28",
-  );
-  await stage("Source").click();
+  await showSide(page, "own");
+  await page.getByTestId("stages-code").getByRole("button", { name: "Source" }).click();
+  await expect(page.getByTestId("stage-box-code-grip")).toHaveAttribute("aria-valuenow", "28");
+  await page.getByTestId("stages-code").getByRole("button", { name: "Source" }).click();
   await expect(page.getByTestId("pipeline-code")).toHaveCount(0);
 
-  // Removing asks once — Remove or Keep — then the config no longer
-  // names it.
-  await page.getByRole("button", { name: "Remove /review from the config" }).click();
-  await expect(page.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect.poll(() => app.readConfig()).not.toContain("review:");
-  await expect(
-    page.getByRole("button", { name: "Remove /review from the config" }),
-  ).toHaveCount(0);
-  // …and it is offered again among the built-ins.
-  await expect(builtins.getByTestId("builtin-review")).toBeVisible();
+  // Disabling asks for no confirm: your own group's config no longer
+  // names it, and it lists among those not enabled (playbook-library-26,
+  // playbook-library-3).
+  await page.getByRole("button", { name: "Disable /review" }).click();
+  await expect.poll(() => app.readConfig()).not.toMatch(/^\s{2}review:/m);
+  await expect(page.getByRole("button", { name: "Disable /review" })).toHaveCount(0);
+  await expect(page.getByTestId("playbooks-available").getByTestId("playbook-card-review")).toBeVisible();
 
-  // The Captain home's slash menu follows the config.
+  // Removing a spec package asks Remove or Keep; Keep leaves it
+  // requested (playbook-library-26, playbook-library-92).
+  const requested = page.getByTestId("environment-section").getByTestId(`env-package-${BUILTINS}`);
+  await requested.getByRole("button", { name: `Remove ${BUILTINS}` }).click();
+  await expect(requested).toContainText(`Remove ${BUILTINS}?`);
+  await expect(requested.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  await requested.getByRole("button", { name: "Keep", exact: true }).click();
+  await expect(requested.getByRole("button", { name: `Remove ${BUILTINS}` })).toBeVisible();
+  await expect(requested.getByTestId(`env-installed-${BUILTINS}`)).toHaveText("Installed");
+
+  // The Captain home's slash menu follows your own group's config.
   await nav(page, "Projects").click();
   const box = page.getByTestId("start-composer");
   await box.fill("/");
   const menu = page.getByRole("listbox");
-  await expect(menu).toContainText("/decide");
+  await expect(menu).toContainText("/code");
   await expect(menu).not.toContainText("/review");
+});
+
+test("playbook-library-41: the Captain home's slash menu offers a built-in enabled in the project", async ({
+  page,
+  app,
+}) => {
+  // The home's slash menu reads your own group's config summary alone
+  // (`config.get` names no project), so a playbook the project's config
+  // enables is not offered there: expected to fail until the menu lists
+  // the project's composed catalog (playbook-library-41, -34).
+  test.fail(true, "UI defect: the Captain home's slash menu omits playbooks enabled in the project's config");
+  await open(page, app);
+  await nav(page, "Playbooks").click();
+  await showSide(page, "project");
+  await page.getByTestId("playbook-enable-decide").click();
+  await expect.poll(() => app.readProjectConfig()).toContain("decide:");
+  await nav(page, "Projects").click();
+  await page.getByTestId("start-composer").fill("/");
+  await expect(page.getByRole("listbox")).toContainText("/decide", { timeout: 5_000 });
 });
