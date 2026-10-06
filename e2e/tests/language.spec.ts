@@ -30,7 +30,7 @@ const RAIL_ZH: [SurfaceName, string][] = [
   ["Dashboard", "仪表盘"],
   ["Workspace", "项目"],
   ["Playbooks", "规程"],
-  ["Space", "空间"],
+  ["Space", "群组"],
   ["Settings", "设置"],
 ];
 
@@ -39,7 +39,7 @@ const RAIL_EN: [SurfaceName, string][] = [
   ["Dashboard", "Dashboard"],
   ["Workspace", "Projects"],
   ["Playbooks", "Playbooks"],
-  ["Space", "Space"],
+  ["Space", "Groups"],
   ["Settings", "Settings"],
 ];
 

@@ -31,6 +31,14 @@ const PATHS: Record<string, ReactNode> = {
   refresh: (
     <path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.8v2.7h-2.7" />
   ),
+  // The Groups surface (DR-103): people sharing what is kept.
+  people: (
+    <>
+      <circle cx="6" cy="5.5" r="2" />
+      <path d="M2.5 13c0-2.2 1.6-3.8 3.5-3.8S9.5 10.8 9.5 13" />
+      <path d="M10.5 3.8a2 2 0 0 1 0 3.6M11.5 9.4c1.2.4 2 1.7 2 3.6" />
+    </>
+  ),
   caretDown: <path d="M4 6.5 8 10.5 12 6.5" />,
   caretRight: <path d="M6.5 4 10.5 8 6.5 12" />,
   arrowDown: <path d="M8 3v10M4 9l4 4 4-4" />,

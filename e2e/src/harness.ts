@@ -1157,7 +1157,7 @@ export type SurfaceName =
 /** The sidebar entry for a surface, by its English name. */
 export function nav(
   page: Page,
-  name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",
+  name: "Dashboard" | "Projects" | "Playbooks" | "Groups" | "Settings",
 ) {
   return page.getByRole("button", { name, exact: true });
 }

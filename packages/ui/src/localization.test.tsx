@@ -360,10 +360,10 @@ describe("localization-4: the rail reads the resolved language", () => {
     speak("zh");
     render(<Root />);
     const labels = railLabels();
-    for (const label of ["仪表盘", "项目", "规程", "空间", "设置"]) {
+    for (const label of ["仪表盘", "项目", "规程", "群组", "设置"]) {
       expect(labels).toContain(label);
     }
-    for (const label of ["Dashboard", "Playbooks", "Space", "Settings"]) {
+    for (const label of ["Dashboard", "Playbooks", "Groups", "Settings"]) {
       expect(labels).not.toContain(label);
     }
   });

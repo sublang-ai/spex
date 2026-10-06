@@ -95,7 +95,7 @@ async function setRemote(page: Page, url: string): Promise<void> {
 
 /** Open the Space surface from the sidebar. */
 async function showSpace(page: Page): Promise<void> {
-  await nav(page, "Space").click();
+  await nav(page, "Groups").click();
   await expect(page.getByTestId("space-surface")).toBeVisible();
   await expect(page.getByTestId("space-header")).toBeVisible();
 }

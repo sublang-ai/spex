@@ -396,7 +396,7 @@ describe("SPACE: the home at a glance (space-1), its groups (space-61) and its r
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("region", { name: "academy-spex" })).toBeTruthy();
-    expect(screen.getByRole("tablist", { name: "Space views" })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: "Views of academy-spex" })).toBeTruthy();
     fireEvent.click(row);
     expect(screen.queryByTestId("space-repository")).toBeNull();
   });
@@ -1422,6 +1422,7 @@ describe("SPACE: copy and roles (space-27, space-44)", () => {
   test("the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
     await renderSpace(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Groups" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
     const syncTab = screen.getByRole("tab", { name: "Sync" });
     const exploreTab = screen.getByRole("tab", { name: "Explore" });
     expect(syncTab.getAttribute("aria-selected")).toBe("true");

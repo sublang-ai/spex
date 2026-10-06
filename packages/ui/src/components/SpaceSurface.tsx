@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface (DR-057, DR-103): the home at a glance in one
+// The Groups surface (DR-103; DR-057 named it Space): the home at a glance in one
 // header (space-1) over its groups, each listing its spex repositories
 // with where their code lives and the state each stands in (space-61).
 // Activating a repository's row opens its Sync and Explore tabs
@@ -446,7 +446,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   return (
     <section
       data-testid="space-surface"
-      aria-label={i18n._("Space")}
+      aria-label={i18n._({ id: "Groups", comment: "the surface: your groups on the Git host and their spex repositories" })}
       // The surface root is the box the surface scrolls in, positioned
       // so what it holds is contained by it (DR-041 §9); its width is
       // the container every step queries.
@@ -456,7 +456,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
         {note}
       </div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold">{i18n._("Space")}</h1>
+        <h1 className="text-lg font-semibold">
+          {i18n._({ id: "Groups", comment: "the surface: your groups on the Git host and their spex repositories" })}
+        </h1>
         <span className="flex items-center gap-2 text-xs text-neutral-500">
           {spaceReadAt ? (
             <span title={absoluteTitle(spaceReadAt)} data-testid="space-read-at">
@@ -476,7 +478,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
       </div>
       {spaceError ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {i18n._("Couldn't read the space: {reason}", { reason: spaceError })}
+          {i18n._("Couldn't read your groups: {reason}", { reason: spaceError })}
         </p>
       ) : null}
       {groups ? (
@@ -517,7 +519,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
           ) : null}
         </>
       ) : !spaceError ? (
-        <p className="text-sm text-neutral-500">{i18n._("Reading the space…")}</p>
+        <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
       ) : null}
     </section>
   );
@@ -622,7 +624,7 @@ function GroupsList({
   return (
     <section
       data-testid="space-groups"
-      aria-label={i18n._({ id: "Groups", comment: "the list of the home's groups and their spex repositories" })}
+      aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
       {groups.groups.map((group) => (
@@ -1035,7 +1037,7 @@ function RepositoryPanel({
       </div>
       <div
         role="tablist"
-        aria-label={i18n._("Space views")}
+        aria-label={i18n._("Views of {name}", { name: repo.name })}
         className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
       >
         {tabButton(
@@ -1044,7 +1046,7 @@ function RepositoryPanel({
         )}
         {tabButton(
           "explore",
-          i18n._({ id: "Explore", comment: "tab: browse the files in the space" }),
+          i18n._({ id: "Explore", comment: "tab: browse the files of a spex repository" }),
         )}
       </div>
       <div

@@ -47,16 +47,17 @@ export const SURFACES: readonly Surface[] = [
   "Settings",
 ];
 
-/** What each surface is called on screen (DR-057): the Workspace
- * reads "Projects" while every identifier and state key keeps the
- * internal name, so nothing stored changes shape. Each label is a
+/** What each surface is called on screen (DR-057, DR-103): the
+ * Workspace reads "Projects" and Space reads "Groups" while every
+ * identifier and state key keeps the internal name, so nothing stored
+ * — the remembered surface among it — changes shape. Each label is a
  * thunk, never a string: a table read at module load would freeze the
  * language the module was imported in (localization-4). */
 export const SURFACE_LABELS: Record<Surface, () => string> = {
   Dashboard: () => i18n._("Dashboard"),
   Workspace: () => i18n._("Projects"),
   Playbooks: () => i18n._("Playbooks"),
-  Space: () => i18n._("Space"),
+  Space: () => i18n._({ id: "Groups", comment: "the surface: your groups on the Git host and their spex repositories" }),
   Settings: () => i18n._("Settings"),
 };
 
@@ -73,7 +74,7 @@ const SURFACE_ICONS: Record<Surface, IconName> = {
   Dashboard: "grid",
   Workspace: "folder",
   Playbooks: "book",
-  Space: "home",
+  Space: "people",
   Settings: "gear",
 };
 
@@ -824,7 +825,7 @@ export function NavRail(props: NavRailProps) {
           {surfaceEntry("Workspace")}
           {paletteControl}
           {/* Entries keep their places across the fold: Playbooks,
-              Space and Settings stay at the foot in both states. */}
+              Groups and Settings stay at the foot in both states. */}
           <div className="flex-1" />
         </>
       ) : (

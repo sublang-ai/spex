@@ -43,7 +43,7 @@ export interface Shortcut {
 export const SHORTCUTS: readonly Shortcut[] = [
   { keys: "P", get does() { return i18n._("Switch or add a project"); } },
   { keys: "N", get does() { return i18n._("Start a new session in the current project"); } },
-  { keys: "1–5", get does() { return i18n._("Go to Dashboard, Projects, Playbooks, Space, Settings"); } },
+  { keys: "1–5", get does() { return i18n._("Go to Dashboard, Projects, Playbooks, Groups, Settings"); } },
   { keys: ",", get does() { return i18n._("Open Settings"); } },
   { keys: "B", get does() { return i18n._("Collapse or show the sidebar"); } },
   { keys: "⇧S", get does() { return i18n._("Open the project's Specs"); } },

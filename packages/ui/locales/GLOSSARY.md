@@ -34,7 +34,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | turn | 轮次 | one Boss turn; "Turn finished" → 本轮已完成 |
 | conversation | 对话 | |
 | project | 项目 | |
-| Space | 空间 | the shared home |
+| Groups (surface) | 群组 | your groups on the Git host and their spex repositories; it was named Space |
 | Dashboard | 仪表盘 | |
 | Projects (surface) | 项目 | |
 | Playbooks (surface) | 规程 | |
@@ -83,7 +83,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | adapter-wide | 适配器级 | a setting applying to the whole adapter |
 | core | 核心 | the Spex core the page connects to |
 | ledger | 意图台账 | the intent ledger |
-| unit (Space) | 单元 | one unit of the shared home |
+| unit (Groups) | 单元 | one unit a spex repository syncs whole |
 | tree (specs) | 规约树 | |
 | record (open/closed) | 记录 / 未完成记录 | a decision or intent record |
 | bug / bug fixed | 缺陷 / 已修复缺陷 | history row tags |
@@ -94,7 +94,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Finder | 访达 | macOS's own Chinese name |
 | token (a provider token) | 令牌 | `tok` as a usage unit stays Latin |
 | Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
-| Keep mine / Take host's / All mine / All host's | 保留本机 / 取平台版 / 全用本地 / 全用平台版 | Space conflict choices |
+| Keep mine / Take host's / All mine / All host's | 保留本机 / 取平台版 / 全用本地 / 全用平台版 | Groups conflict choices |
 | Git host, the host | Git 托管平台, 托管平台 | where groups and spex repositories live; 平台 alone in a tight control ("检查平台") |
 | group | 群组 | a group on the Git host |
 | spex repository | spex 仓库 | one project's or group's records, `<name>-spex` |

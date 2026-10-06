@@ -1849,8 +1849,8 @@ msgid "Couldn't read the repository's state"
 msgstr "Couldn't read the repository's state"
 
 #: src/components/SpaceSurface.tsx
-msgid "Couldn't read the space: {reason}"
-msgstr "Couldn't read the space: {reason}"
+msgid "Couldn't read your groups: {reason}"
+msgstr "Couldn't read your groups: {reason}"
 
 #: src/lib/labels.ts
 msgid "Couldn't reconcile the repository: {detail}"
@@ -2339,7 +2339,7 @@ msgstr "Expand image"
 msgid "Expand image {name}"
 msgstr "Expand image {name}"
 
-#. tab: browse the files in the space
+#. tab: browse the files of a spex repository
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
 msgstr "Explore"
@@ -2601,15 +2601,18 @@ msgid "Give the player an id first."
 msgstr "Give the player an id first."
 
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
-msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgid "Go to Dashboard, Projects, Playbooks, Groups, Settings"
+msgstr "Go to Dashboard, Projects, Playbooks, Groups, Settings"
 
 #. toggle: show the citation graph
 #: src/components/SpecView.tsx
 msgid "Graph"
 msgstr "Graph"
 
-#. the list of the home's groups and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#: src/components/NavRail.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Groups"
 msgstr "Groups"
@@ -3949,8 +3952,8 @@ msgid "reading specs…"
 msgstr "reading specs…"
 
 #: src/components/SpaceSurface.tsx
-msgid "Reading the space…"
-msgstr "Reading the space…"
+msgid "Reading your groups…"
+msgstr "Reading your groups…"
 
 #. the specs tree is being re-read
 #: src/components/SpecView.tsx
@@ -4749,15 +4752,6 @@ msgstr "Sources: GitHub not connected · {records, plural, one {# open record} o
 #: src/components/SourcesTabs.tsx
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
-
-#: src/components/NavRail.tsx
-#: src/components/SpaceSurface.tsx
-msgid "Space"
-msgstr "Space"
-
-#: src/components/SpaceSurface.tsx
-msgid "Space views"
-msgstr "Space views"
 
 #. the list of unanswered space issues (problems, not GitHub issues)
 #: src/components/SpaceSync.tsx
@@ -5620,6 +5614,10 @@ msgstr "View diff"
 msgid "View source"
 msgstr "View source"
 
+#: src/components/SpaceSurface.tsx
+msgid "Views of {name}"
+msgstr "Views of {name}"
+
 #: src/components/ParkedRun.tsx
 msgid "Wait for the running turn"
 msgstr "Wait for the running turn"
@@ -5790,6 +5788,11 @@ msgstr "Your changes are saved; nothing is pushed yet"
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
 msgstr "Your config file has errors — playbooks are unavailable."
+
+#. the list of the home's groups and their spex repositories
+#: src/components/SpaceSurface.tsx
+msgid "Your groups"
+msgstr "Your groups"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx

@@ -1849,8 +1849,8 @@ msgid "Couldn't read the repository's state"
 msgstr "无法读取仓库状态"
 
 #: src/components/SpaceSurface.tsx
-msgid "Couldn't read the space: {reason}"
-msgstr "无法读取空间：{reason}"
+msgid "Couldn't read your groups: {reason}"
+msgstr "无法读取你的群组：{reason}"
 
 #: src/lib/labels.ts
 msgid "Couldn't reconcile the repository: {detail}"
@@ -2339,7 +2339,7 @@ msgstr "展开图片"
 msgid "Expand image {name}"
 msgstr "展开图片 {name}"
 
-#. tab: browse the files in the space
+#. tab: browse the files of a spex repository
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
 msgstr "浏览"
@@ -2601,15 +2601,18 @@ msgid "Give the player an id first."
 msgstr "请先为该 Player 设置 id。"
 
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
-msgstr "前往仪表盘、项目、规程、空间、设置"
+msgid "Go to Dashboard, Projects, Playbooks, Groups, Settings"
+msgstr "前往仪表盘、项目、规程、群组、设置"
 
 #. toggle: show the citation graph
 #: src/components/SpecView.tsx
 msgid "Graph"
 msgstr "图谱"
 
-#. the list of the home's groups and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#. the surface: your groups on the Git host and their spex repositories
+#: src/components/NavRail.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Groups"
 msgstr "群组"
@@ -3949,8 +3952,8 @@ msgid "reading specs…"
 msgstr "正在读取规约…"
 
 #: src/components/SpaceSurface.tsx
-msgid "Reading the space…"
-msgstr "正在读取空间…"
+msgid "Reading your groups…"
+msgstr "正在读取你的群组…"
 
 #. the specs tree is being re-read
 #: src/components/SpecView.tsx
@@ -4749,15 +4752,6 @@ msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未完成记�
 #: src/components/SourcesTabs.tsx
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未完成记录}}"
-
-#: src/components/NavRail.tsx
-#: src/components/SpaceSurface.tsx
-msgid "Space"
-msgstr "空间"
-
-#: src/components/SpaceSurface.tsx
-msgid "Space views"
-msgstr "空间视图"
 
 #. the list of unanswered space issues (problems, not GitHub issues)
 #: src/components/SpaceSync.tsx
@@ -5620,6 +5614,10 @@ msgstr "查看差异"
 msgid "View source"
 msgstr "查看源文"
 
+#: src/components/SpaceSurface.tsx
+msgid "Views of {name}"
+msgstr "{name} 的视图"
+
 #: src/components/ParkedRun.tsx
 msgid "Wait for the running turn"
 msgstr "等待运行中的轮次"
@@ -5790,6 +5788,11 @@ msgstr "更改已保存；尚未推送"
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
 msgstr "配置文件有错误 — 规程不可用。"
+
+#. the list of the home's groups and their spex repositories
+#: src/components/SpaceSurface.tsx
+msgid "Your groups"
+msgstr "你的群组"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
