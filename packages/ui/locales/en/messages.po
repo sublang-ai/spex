@@ -401,6 +401,11 @@ msgstr "{name} · now a project at {path}, {count, plural, one {# session} other
 msgid "{name} agent"
 msgstr "{name} agent"
 
+#. the Overview's records field: a spex repository's name, then the group holding it
+#: src/components/ProjectsSurface.tsx
+msgid "{name} in {group}"
+msgstr "{name} in {group}"
+
 #: src/components/SpaceSync.tsx
 msgid "{name} not added."
 msgstr "{name} not added."
@@ -5731,6 +5736,7 @@ msgid "The project's spec packages ({keys})"
 msgstr "The project's spec packages ({keys})"
 
 #: src/components/LibrarySurface.tsx
+#: src/components/ProjectsSurface.tsx
 msgid "The project's spex repository: {repository}"
 msgstr "The project's spex repository: {repository}"
 

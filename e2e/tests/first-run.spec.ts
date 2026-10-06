@@ -173,10 +173,9 @@ test("projects-28: the Overview names the project's spex repository and its stat
   page,
   app,
 }) => {
-  // The Overview's repository header carries no records field — the
-  // spex repository's name with its group, and its state (projects-4):
-  // expected to fail until the header carries it.
-  test.fail(true, "UI defect: the Overview's header lacks the records field of projects-4");
+  // The Overview's repository header carries the records field — the
+  // spex repository's name with its group, and its state (projects-4,
+  // space-61).
   seedDemoProject(app.projectDir);
   await app.core.command("project.register", { path: app.projectDir });
   await open(page, app);

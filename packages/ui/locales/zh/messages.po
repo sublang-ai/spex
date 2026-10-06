@@ -401,6 +401,11 @@ msgstr "{name} · 已成为项目，位于 {path}，已列出 {count, plural, ot
 msgid "{name} agent"
 msgstr "{name} 智能体"
 
+#. the Overview's records field: a spex repository's name, then the group holding it
+#: src/components/ProjectsSurface.tsx
+msgid "{name} in {group}"
+msgstr "{group} 中的 {name}"
+
 #: src/components/SpaceSync.tsx
 msgid "{name} not added."
 msgstr "未添加 {name}。"
@@ -5731,6 +5736,7 @@ msgid "The project's spec packages ({keys})"
 msgstr "项目的规约包（{keys}）"
 
 #: src/components/LibrarySurface.tsx
+#: src/components/ProjectsSurface.tsx
 msgid "The project's spex repository: {repository}"
 msgstr "项目的 spex 仓库：{repository}"
 

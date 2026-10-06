@@ -36,7 +36,12 @@ function defaultReply(type: string): object {
       ? { repository: "p1", language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null }
       : type === "environment.playbooks"
         ? { project: [], own: [] }
-        : {};
+        : type === "space.get"
+          ? {
+              home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
+              account: null, signIn: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
+            }
+          : {};
 }
 
 vi.mock("./state/store.js", async (importOriginal) => {
@@ -158,10 +163,11 @@ function seed(): void {
     connection: "open",
     everConnected: true,
     projects: [
-      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0 },
-      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1 },
+      { id: "p1", name: "alpha", path: "/tmp/alpha", registeredAt: 0, repository: { key: "p1", name: "alpha-spex", group: "me", own: true } },
+      { id: "p2", name: "beta", path: "/tmp/beta", registeredAt: 1, repository: { key: "p2", name: "beta-spex", group: "me", own: true } },
     ] as never,
     projectMeta: {},
+    space: undefined,
     sessions: SESSIONS,
     views: {
       "a-live": view("Which migration should I run first?"),
@@ -797,6 +803,52 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     expect(
       within(overview).getByTestId("sources-guidance-p1").textContent,
     ).toContain("No GitHub origin remote");
+  });
+
+  test("the header's records field names the spex repository with its group and its state", async () => {
+    const row = (state: string, extra: object = {}) => ({
+      key: "p1", name: "alpha-spex", id: null, own: false, code: null, folder: "/tmp/alpha",
+      remote: null, state, reason: null, waiting: null, members: null, visibility: null,
+      branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false,
+      sync: { phase: "idle" }, ...extra,
+    });
+    const groups = (repository: object) => ({
+      home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
+      account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
+      groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, repositories: [repository] }],
+    });
+    commandMock.mockImplementation(async (type: string) =>
+      type === "space.get"
+        ? groups(row("local-only"))
+        : type === "ledger.get"
+          ? LEDGER
+          : type === "ledger.history"
+            ? { intents: [], more: false }
+            : defaultReply(type),
+    );
+    useAppStore.setState({ workspaceTabs: { p1: "overview" } });
+    render(<App />);
+    const records = await screen.findByTestId("overview-records");
+
+    // Unread, the name with its group; the Groups state is asked for,
+    // and its row's state is worded as that surface words it
+    // (projects-4, space-61).
+    expect(records.textContent).toContain("alpha-spex in me");
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("overview-records-state").textContent).toBe("Only on this device"),
+    );
+    expect(commandMock).toHaveBeenCalledWith("space.get", {});
+
+    // The Groups broadcast moves it: a waiting creation reads its phrase.
+    act(() => {
+      deliverServerMessageForTests({
+        type: "space.state",
+        state: groups(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })) as never,
+      });
+    });
+    expect(screen.getByTestId("overview-records-state").textContent).toBe(
+      "Waiting for a member who can create it in acme",
+    );
   });
 
   test("a remembered 'repo' tab lands on the Overview, and the cycle walks it", () => {

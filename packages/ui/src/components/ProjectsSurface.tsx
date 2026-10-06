@@ -8,10 +8,11 @@
 // create) lives in the project palette; removal lives here.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { IntentInfo } from "@sublang/spex-core/protocol";
+import type { IntentInfo, ProjectInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type ProjectMeta } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { repositoryStatePhrase } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
@@ -89,6 +90,43 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
       className="text-xs text-neutral-500 [overflow-wrap:anywhere]"
     >
       {i18n._("GitHub: {state}", { state: text })}
+    </div>
+  );
+}
+
+/** Where the project's records live (projects-4): its spex repository's
+ * name with its group, and its state worded as the Groups surface
+ * words its row (space-61) — read from the Groups state, which this
+ * line asks for when nothing has read it yet. */
+function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
+  const space = useAppStore((state) => state.space);
+  const loadSpace = useAppStore((state) => state.loadSpace);
+  const connected = useAppStore((state) => state.connection === "open");
+  useEffect(() => {
+    if (connected && !useAppStore.getState().space) void loadSpace().catch(() => {});
+  }, [connected, loadSpace]);
+  const { key, name, group } = project.repository;
+  const row = space?.groups
+    .flatMap((entry) => entry.repositories)
+    .find((repository) => repository.key === key);
+  const state = row ? repositoryStatePhrase(row, now) : undefined;
+  return (
+    <div
+      data-testid="overview-records"
+      className="truncate text-xs text-neutral-500"
+      title={i18n._("The project's spex repository: {repository}", { repository: key })}
+    >
+      {i18n._({
+        id: "{name} in {group}",
+        values: { name, group },
+        comment: "the Overview's records field: a spex repository's name, then the group holding it",
+      })}
+      {state ? (
+        <>
+          <span aria-hidden> · </span>
+          <span data-testid="overview-records-state">{state}</span>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -206,6 +244,7 @@ export function OverviewTab({
           <div className="truncate text-xs text-neutral-500">
             {project.path}
           </div>
+          <RecordsLine project={project} now={now} />
           <GitHubLine meta={meta} projectId={project.id} />
         </div>
         <button
