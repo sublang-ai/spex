@@ -25,13 +25,13 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
-- the groups list stands beneath the header: your own group first, then every group the host lists, each with its full path and, under it, one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its local-only repositories;
+- the groups list stands beneath the header: your own group first, then every group the host lists, each with its full path and, under it, one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories;
 - a spex repository's row carries its name, where its code lives — the remote `project.json` names, "No code" for a group's own, or "Not on this device" — its reachability, its local-changes count [[space-7](#space-7)], the time of its last sync, and its Sync control, titled as sending what is here and bringing back anything new, or the control its state offers [[space-61](#space-61)];
 - activating a row opens that spex repository's Sync and Explore tabs beneath the list.
 
 #### space-2
 
-The Groups surface shall re-read the core's state only on an event, never on a timer: when the surface opens, when the window regains focus, when the core announces a sync's end, a sign-in's end, a host read, or a session, intent or configuration change, and when the reader activates Refresh, which also makes the core read the host [[git-host-5](git-host.md#git-host-5)].
+The Groups surface shall re-read the core's state only on an event, never on a timer: when the surface opens, when the window regains focus, when the core announces a sync's end, a sign-in's end, a host read, a project added or removed, or a session, intent or configuration change, and when the reader activates Refresh, which also makes the core read the host [[git-host-5](git-host.md#git-host-5)].
 
 ### Signing In
 
@@ -42,7 +42,7 @@ While the home is not signed in, the Groups surface shall offer Sign in as the h
 - on the desktop, Sign in starts the browser flow [[git-host-2](git-host.md#git-host-2)], the control reading "Signing in…" and offering Cancel until the flow ends, and the surface saying that the browser has been opened and where;
 - in a browser client of the server shell, Sign in starts the device flow [[git-host-3](git-host.md#git-host-3)]: the surface shows the user code in a copyable field and the verification URL as a link, saying to enter the code there, until the flow ends;
 - a denial, an expiry or a refusal ends the flow with its cause shown beside the control, which reads Sign in again;
-- while signed out, every spex repository is local only [[space-61](#space-61)] and the surface never contacts the host.
+- while signed out, a spex repository with a remote at the host is unreachable with "Sign in again" and the others are local only [[space-61](#space-61)], and the surface never contacts the host.
 
 #### space-4
 
@@ -70,20 +70,20 @@ When a working folder's remote is read for `project.json` [[storage-3](storage.m
 
 #### space-6
 
-When the reader activates Sign out, the core shall revoke this device at the host and forget its credential [[git-host-10](git-host.md#git-host-10)], and the surface shall read "Not signed in", every spex repository turning local only with its records and clone kept ([DR-103](../decisions/103-the-home-and-its-groups.md)).
+When the reader activates Sign out, the core shall revoke this device at the host and forget its credential [[git-host-10](git-host.md#git-host-10)], and the surface shall read "Not signed in", every spex repository with a remote at the host turning unreachable with "Sign in again" and the others local only, their records and clones kept ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
 ### Groups and Spex Repositories
 
 #### space-57
 
-While a spex repository has other members and has never been pushed from this device, when a sync of it is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While a spex repository has other members and has never been pushed from this device, when a sync of it, or a pick joining it [[space-58](#space-58)], is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync; Cancel starts nothing;
+- Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing;
 - a spex repository whose only member is the account says nothing.
 
 #### space-58
 
-When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the account may create in, the folder's name as the new repository's name in an editable field ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)];
 - picking a group creates `<name>-spex` there [[git-host-6](git-host.md#git-host-6)] and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
@@ -128,7 +128,7 @@ When the reader activates Members on a reachable spex repository's row, the surf
 
 When the reader activates Join on a spex repository the host lists and this device lacks, the core shall clone it under `workspace/<group>/`, then, where its `project.json` names a remote, clone the code from that remote with this device's own Git and its credentials into a folder the reader picks, or take a working folder the reader already has, and pair the two [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device;
+- a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
 - a code clone that fails reports Git's words, leaving the spex repository cloned and the row offering "Choose folder…" to pair it later.
 
 #### space-64
@@ -466,7 +466,7 @@ The Groups surface shall fit its pane at every width down to the 320-pixel floor
 - below 42rem the header's at-a-glance words yield — the read time, then the account's host name — and below 20rem the header's fields stack with the primary control last and full-width;
 - in each repository row and change row the label owns the slack and truncates with its title, the code remote and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Signing in…, Sign out, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss;
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Copy code, Refresh, Dismiss;
 - the surface scrolls inside its own box and the page never scrolls.
 
 ## Internal Behavior
@@ -484,8 +484,8 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.signin.start` | — | `{ flow: "browser", url } \| { flow: "device", userCode, verificationUri, expiresAt }` | `busy` (a sign-in in flight) |
 | `space.signin.cancel` | — | `{ stopped: boolean }` | — |
 | `space.signout` | — | `GroupsState` | `busy` (a sync running) |
-| `space.pick` | `{ repository, choice: { kind: "join", id } \| { kind: "create", groupId, name } }` | `{ accepted: true }` | `invalid_request` (not local only; malformed name), `busy` |
-| `space.join` | `{ id, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here), `busy` |
+| `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `busy` |
+| `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here), `busy` |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only), `busy` |
 | `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `busy` naming the blocker [[space-11](#space-11)], `invalid_request` (local only, merge pending, blocking diagnostic; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)]) |

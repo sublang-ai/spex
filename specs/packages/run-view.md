@@ -591,7 +591,7 @@ When the session record stream delivers a captain turn result reporting an error
 
 While the app is connected, the sidebar shall present navigation as surface entries around a Projects section listing every registered project ([DR-029](../decisions/029-session-history-home.md)) [[core-service-32](core-service.md#core-service-32)]:
 
-- Dashboard stands first, then the Projects section, then Playbooks, Space and Settings;
+- Dashboard stands first, then the Projects section, then Playbooks, Groups and Settings;
 - each project node discloses its sessions on a control of its own, an axis independent of which project is current ([DR-027](../decisions/027-linked-views-contract.md)) — the current project starts disclosed, and thereafter the reader's arrangement stands;
 - activating a project row makes it the current project and changes no disclosure;
 - a disclosed project lists its sessions by last activity, a working one first, the five most recent shown with one control revealing the rest in place and one control opening that project's start tab — a project holds at most one turn in flight [[core-service-4](core-service.md#core-service-4)], so starting a session is a composer away, never a conflict away ([DR-051](../decisions/051-runtime-held-for-a-turn.md));

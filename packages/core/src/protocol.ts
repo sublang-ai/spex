@@ -1120,6 +1120,8 @@ export const commandSchema = z.discriminatedUnion("type", [
       z.object({ kind: z.literal("join"), hostId: z.string().min(1) }).strict(),
       z.object({ kind: z.literal("create"), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
     ]),
+    /** The privacy notice was shown for a join into a repository with other members (space-57). */
+    noticed: z.boolean().optional(),
   }).strict(),
   z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
   z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema }).strict(),
