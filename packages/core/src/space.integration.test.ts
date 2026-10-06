@@ -16,7 +16,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
@@ -1055,6 +1056,83 @@ test("space-37: the device sign-in shows the stand-in's user code and completes 
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   assert.equal(own.state, "reachable");
   assert.ok(host.script.repositories.some((repository) => repository.id === own.id && repository.path === `${LOGIN}-spex`));
+});
+
+/** A `git` on the core's PATH that holds one clone's `rev-parse
+ * --git-dir` — the read a Groups state makes of it — while the test
+ * holds it, then runs the real Git: a read caught in flight. */
+function holdingGit(clone: string): { path: string; hold(): void; held(): Promise<void>; release(): void } {
+  const dir = mkdtempSync(join(scratch, "holding-git-"));
+  const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+  const hold = join(dir, "hold");
+  const held = join(dir, "held");
+  writeFileSync(join(dir, "git"), [
+    "#!/bin/sh",
+    'case " $* " in',
+    `  *" ${clone} rev-parse --git-dir "*)`,
+    `    if [ -e "${hold}" ]; then : > "${held}"; while [ -e "${hold}" ]; do sleep 0.05; done; fi ;;`,
+    "esac",
+    `exec "${real}" "$@"`,
+    "",
+  ].join("\n"));
+  chmodSync(join(dir, "git"), 0o755);
+  return {
+    path: `${dir}:${process.env.PATH ?? ""}`,
+    hold: () => writeFileSync(hold, ""),
+    held: async () => {
+      for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
+      assert.ok(existsSync(held), "the read reached Git");
+    },
+    release: () => rmSync(hold, { force: true }),
+  };
+}
+
+test("space-59: a sign-in while a read of your own group is in flight moves the folder once the read ends, then pushes it", async (t) => {
+  const host = await startHost();
+  const dataDir = mkdtempSync(join(scratch, "signin-reading-"));
+  const shim = holdingGit(ownClone(dataDir));
+  const home = await startHome("signin-reading", { host, dataDir, env: { PATH: shim.path } });
+  t.after(() => { shim.release(); return home.stop(); });
+  const added = home.client.mark();
+  const { key } = await addFolder(home, home.projectDir);
+  // The announcement of the new folder has read every clone.
+  await home.client.waitSpace(added, (state) => state.groups.some((group) => group.repositories.some((repository) => repository.key === key)));
+  await sleep(200);
+
+  // A Groups read stands inside Git on your own group's clone.
+  shim.hold();
+  const reading = home.client.command("space.get", {});
+  await shim.held();
+
+  // The account arrives meanwhile; the set-up's rename waits for the
+  // read, the gate held for every clone beneath (space-59, space-21).
+  const from = home.client.mark();
+  const started = await home.client.expectOk("space.signin.start", {});
+  assert.ok(started.flow === "device", JSON.stringify(started));
+  host.script.approveDevice(started.userCode);
+  for (let i = 0; i < 400 && Home.load(dataDir).file.host.account === undefined; i += 1) await sleep(25);
+  assert.equal(Home.load(dataDir).file.host.account?.login, LOGIN);
+  await sleep(400);
+  assert.ok(existsSync(ownClone(dataDir)), "the folder stays while the read is in flight");
+  const refused = await home.client.command("intent.queue", { projectId: key, text: "written mid-move" });
+  assert.ok(!refused.ok && refused.error.code === "busy", JSON.stringify(refused));
+
+  // The read ends where the clone lay; the folder then moves, and your
+  // own group's spex repository is created and pushed.
+  shim.release();
+  const read = await reading;
+  assert.ok(read.ok, JSON.stringify(read));
+  assert.ok(read.result.groups.some((group) => group.repositories.some((repository) => repository.key === OWN_KEY)));
+  const signed = await home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
+  assert.equal(signed.account?.login, LOGIN);
+  assert.ok(!existsSync(join(dataDir, "workspace", OWN)), "the former folder left with its clones");
+  assert.equal(repositoryOf(signed, `${LOGIN}/${basename(home.projectDir)}-spex`).folder, home.projectDir);
+  const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  assert.equal(own.state, "reachable");
+  assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(clonePath(dataDir, HOST_OWN), "rev-parse", "spex"));
+  // A read after the move finds every clone where it lies.
+  const after = await home.client.expectOk("space.get", {});
+  assert.deepEqual(after.groups.flatMap((group) => group.repositories.map((repository) => repository.key)).filter((repoKey) => repoKey.startsWith(`${OWN}/`)), []);
 });
 
 test("space-37: Pick a group creates <name>-spex there and pushes; a taken name is refused; a refused creation waits until a Refresh finds it", async (t) => {

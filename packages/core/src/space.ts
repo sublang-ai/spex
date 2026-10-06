@@ -111,6 +111,9 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
+  /** What the core is already writing beneath these clones — an
+   * environment's install — lands before they move (space-59). */
+  settleBeneath?: (repositories: string[]) => Promise<void>;
 }
 
 /** What a spex repository's clone says of its host: its origin URL and
@@ -562,10 +565,58 @@ class RepositorySync {
     this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : { phase: "idle" };
   }
 
+  // -- reads and moves (space-59, space-60) -----------------------------------
+
+  /** Reads of the clone in flight, outside its operations, and who
+   * waits for the last to end. */
+  private readers = 0;
+  private drainWaiters: (() => void)[] = [];
+  /** Set while the clone moves: a read waits for it. */
+  private move?: { done: Promise<void>; end: () => void };
+
+  /** A read of the clone outside its operations — its state, its facts,
+   * the explorer, a diff: it waits while the clone moves and then reads
+   * where the clone now lies, and a move waits for it, so no read meets
+   * a clone half moved (space-59, space-60). */
+  async reading<T>(body: () => Promise<T>): Promise<T> {
+    while (this.move) await this.move.done;
+    this.readers += 1;
+    try { return await body(); }
+    finally {
+      this.readers -= 1;
+      if (this.readers === 0) for (const wake of this.drainWaiters.splice(0)) wake();
+    }
+  }
+
+  /** Every read in flight done. */
+  async quiesce(): Promise<void> {
+    while (this.readers > 0) await new Promise<void>((wake) => { this.drainWaiters.push(wake); });
+  }
+
+  /** Begin a move of this clone: reads starting from now wait for its
+   * end, and this resolves once the reads in flight are done. */
+  async beginMove(): Promise<void> {
+    if (!this.move) {
+      let end = (): void => {};
+      const done = new Promise<void>((resolveDone) => { end = resolveDone; });
+      this.move = { done, end };
+    }
+    await this.quiesce();
+  }
+
+  /** End a move: the reads that waited read the clone where it lies. */
+  endMove(): void {
+    const move = this.move;
+    this.move = undefined;
+    move?.end();
+  }
+
   /** The clone's remote and recorded host id, read afresh. */
   async readFacts(): Promise<CloneFacts> {
-    await this.readRepository();
-    return this.facts;
+    return this.reading(async () => {
+      await this.readRepository();
+      return this.facts;
+    });
   }
 
   /** Give the clone the host's own remote and id (space-58, space-63):
@@ -592,7 +643,7 @@ class RepositorySync {
    * (git-host-5). */
   async recordId(id: string): Promise<void> {
     if (this.phase.phase === "running" || this.facts.id === id) return;
-    await this.recordIdNow(id);
+    await this.reading(() => this.recordIdNow(id));
   }
 
   /** The same, inside this clone's own operation. */
@@ -653,6 +704,11 @@ class RepositorySync {
   /** The repository's state, recomputing the lists from the working
    * tree when asked (space-33: mine is the working tree outside a sync). */
   async state(recompute: boolean): Promise<RepositoryState> {
+    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
+    return this.reading(() => this.readState(recompute));
+  }
+
+  private async readState(recompute: boolean): Promise<RepositoryState> {
     if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
     const repo = await this.readRepository();
     if (recompute && repo.root && repo.head !== null && this.phase.phase !== "choices") {
@@ -1560,7 +1616,7 @@ class RepositorySync {
   // -- diff (space-10) -------------------------------------------------------
 
   async diff(unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
-    if (!this.lastPlan) await this.state(true);
+    if (!this.lastPlan) await this.readState(true);
     const plan = this.lastPlan;
     if (!plan) throw new CoreError("invalid_request", initializeFirst());
     const found = plan.units.find((u) => u.name === unit);
@@ -1791,6 +1847,8 @@ export class SpaceManager {
   private readonly joining = new Map<string, SpaceSyncPhase>();
   /** Picks being asked of the host, by key. */
   private readonly picking = new Set<string>();
+  /** Set once the core stops: nothing is read or announced after. */
+  private stopping = false;
 
   constructor(private readonly host: SpaceHost) {
     this.probe = new SpaceGit(host.home, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
@@ -2002,6 +2060,7 @@ export class SpaceManager {
         this.readFailure = undefined;
         // A clone matched by its remote records the host's id (git-host-5).
         for (const repository of this.host.store.listRepositories()) {
+          if (!this.host.store.repository(repository.key)) continue;
           const machine = this.machine(repository.key);
           machine.hostOverride = undefined;
           if (machine.facts.id === null && machine.facts.remote !== null) {
@@ -2039,8 +2098,14 @@ export class SpaceManager {
     const ownTo = `${target}/${target}-spex`;
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
     if (moves.some((move) => existsSync(store.home.clonePath(move.to)))) return "busy";
+    // A pick in flight writes the clone's remote: it ends first.
+    if (keys.some((key) => this.picking.has(key))) return "busy";
     const held: RepositorySync[] = [];
+    const moving: RepositorySync[] = [];
     try {
+      // The gate of every clone beneath, old key and new (space-21):
+      // held before the checks, and through the move until the store,
+      // the machines and the core read every clone where it now lies.
       for (const key of keys) {
         const machine = this.machine(key);
         if (!machine.hold("move", "apply")) return "busy";
@@ -2048,6 +2113,14 @@ export class SpaceManager {
       }
       await this.publish();
       for (const key of keys) if (await this.host.blocker(key)) return "busy";
+      // Reads in flight end where the clones lie, and what an
+      // environment is writing beneath them lands, before the folders
+      // move; a read starting meanwhile waits and reads them moved.
+      for (const machine of held) {
+        moving.push(machine);
+        await machine.beginMove();
+      }
+      await this.host.settleBeneath?.(keys);
       for (const move of moves) {
         const to = store.home.clonePath(move.to);
         mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
@@ -2055,9 +2128,11 @@ export class SpaceManager {
       }
       pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
       this.relocate(moves, target);
+      for (const machine of moving.splice(0)) machine.endMove();
       await this.afterMove(moves);
       return "done";
     } finally {
+      for (const machine of moving) machine.endMove();
       for (const machine of held) machine.release();
     }
   }
@@ -2189,7 +2264,7 @@ export class SpaceManager {
 
   private startSync(key: string, input: { join?: boolean }): void {
     const machine = this.machines.get(key);
-    if (!machine) return;
+    if (!machine || this.stopping) return;
     machine.sync({ ...input, internal: true }).catch((error: unknown) => {
       console.error(`spex: ${key} did not start syncing: ${error instanceof Error ? error.message : String(error)}`);
     });
@@ -2495,11 +2570,17 @@ export class SpaceManager {
         retry: true,
       });
     }
-    const source = machine.repository.dir;
-    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-    renameSync(source, target);
-    pruneEmptyFolders(dirname(source), store.home.workspace);
-    this.relocate([{ from, to }]);
+    // Reads in flight end, and an environment's writes land, before the
+    // clone moves; a read starting meanwhile reads it moved.
+    await machine.beginMove();
+    try {
+      await this.host.settleBeneath?.([from]);
+      const source = machine.repository.dir;
+      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+      renameSync(source, target);
+      pruneEmptyFolders(dirname(source), store.home.workspace);
+      this.relocate([{ from, to }]);
+    } finally { machine.endMove(); }
     await this.afterMove([{ from, to }]);
   }
 
@@ -2621,6 +2702,9 @@ export class SpaceManager {
     const store = this.host.store;
     const repositories: RepositoryState[] = [];
     for (const repository of store.listRepositories()) {
+      // A clone that moved while this read waited is read under its
+      // new key, and its old one names nothing (space-59, space-60).
+      if (!store.repository(repository.key)) continue;
       const machine = this.machine(repository.key);
       const base = recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase };
       repositories.push(this.overlay(machine, base));
@@ -2753,6 +2837,7 @@ export class SpaceManager {
   /** Broadcast the state after one machine moved, from each machine's
    * last reading; transitions in a burst coalesce into one. */
   async publish(): Promise<void> {
+    if (this.stopping) return;
     if (this.publishing) { this.republish = true; return this.publishing; }
     this.publishing = (async () => {
       try {
@@ -2781,16 +2866,25 @@ export class SpaceManager {
   cancel(key: string): boolean { return this.machine(key).cancel(); }
 
   diff(key: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
-    return this.machine(key).diff(unit, path, side);
+    const machine = this.machine(key);
+    return machine.reading(() => machine.diff(unit, path, side));
   }
 
-  tree(key: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }> { return this.machine(key).tree(path); }
+  tree(key: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }> {
+    const machine = this.machine(key);
+    return machine.reading(() => machine.tree(path));
+  }
 
-  read(key: string, path: string): Promise<SpaceReadResult> { return this.machine(key).read(path); }
+  read(key: string, path: string): Promise<SpaceReadResult> {
+    const machine = this.machine(key);
+    return machine.reading(() => machine.read(path));
+  }
 
   /** What removing a project would lose (projects-9). */
   pendingUnits(key: string): Promise<number> {
-    return this.host.store.repository(key) ? this.machine(key).pendingUnits() : Promise.resolve(0);
+    if (!this.host.store.repository(key)) return Promise.resolve(0);
+    const machine = this.machine(key);
+    return machine.reading(() => machine.pendingUnits());
   }
 
   /** An interrupted apply in any clone is repaired from its marker before
@@ -2801,6 +2895,10 @@ export class SpaceManager {
 
   /** Cancel every transport and wait for the operations (shutdown). */
   async stop(): Promise<void> {
+    this.stopping = true;
     await Promise.all([...this.machines.values()].map((machine) => machine.stop()));
+    // No read of a clone outlives the core that started it.
+    try { await this.publishing; } catch { /* reported where it ran */ }
+    await Promise.all([...this.machines.values()].map((machine) => machine.quiesce()));
   }
 }

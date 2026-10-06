@@ -855,6 +855,12 @@ export class EnvironmentManager {
   }
 
   /** Every operation still running ends; nothing is broadcast after. */
+  /** The operations already chained on these clones done, starting
+   * none: a move waits for what they write beneath (space-59). */
+  async idle(keys: readonly string[]): Promise<void> {
+    await Promise.allSettled(keys.map((key) => this.clones.get(key)?.chain ?? Promise.resolve()));
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     await Promise.allSettled([...this.clones.values()].map((state) => state.chain));

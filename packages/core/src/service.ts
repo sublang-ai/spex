@@ -593,6 +593,7 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
+      settleBeneath: (repositories: string[]) => this.environments.idle(repositories),
       home: this.store.dir,
       env: this.env,
       store: this.store,
