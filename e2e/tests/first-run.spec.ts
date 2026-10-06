@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, nav, git, clonePath } from "../src/harness";
 
 test.use({ appOptions: { config: "none" } });
 
@@ -140,19 +140,48 @@ test("projects-28: the palette adds, refuses, switches, and the Overview removes
   await expect(palette).toBeHidden();
   await expect(tree.getByText("demo-project", { exact: true })).toHaveCount(1);
 
-  // The Overview: branch and GitHub guidance in GitHub terms.
+  // The Overview: the branch, and GitHub guidance in GitHub terms
+  // (projects-4, projects-7, projects-25).
+  const key = (await app.core.command("project.list", {})).find((project) => project.path === app.projectDir)!.id;
   await page.getByRole("tab", { name: "Overview" }).click();
-  const overview = page.getByRole("tabpanel").or(page.locator("main"));
-  await expect(page.getByText(/GitHub/).first()).toBeVisible();
-  await expect(page.getByText(/no github origin remote/i).first()).toBeVisible();
+  const overview = page.getByTestId("overview-tab");
+  await expect(overview).toContainText(git(app.projectDir, "symbolic-ref", "--short", "HEAD"));
+  await expect(overview.getByText(/GitHub/).first()).toBeVisible();
+  await expect(overview.getByText(/no github origin remote/i).first()).toBeVisible();
   await expect(page.getByText(/\bforge\b/i)).toHaveCount(0);
-  void overview;
 
-  // Removal forgets the project and leaves the directory.
-  await page.getByRole("button", { name: /remove project|remove/i }).first().click();
-  await page.getByRole("button", { name: /^remove$/i }).click();
+  // Removal confirms with Remove and Keep; the clone holds records that
+  // never reached the host, so a second confirm names their count; then
+  // the project leaves the sidebar, its clone is deleted, and the
+  // working folder stays (projects-9).
+  await overview.getByRole("button", { name: "Remove project" }).click();
+  await expect(overview).toContainText("Remove from Spex? The repo stays on disk.");
+  await expect(overview.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
+  await overview.getByRole("button", { name: "Remove", exact: true }).click();
+  const unsent = overview.getByTestId("remove-project-unsent");
+  await expect(unsent).toContainText(/[1-9]\d* records? (has|have) not reached the host and would be lost; confirm to remove anyway Remove anyway\?/);
+  await expect(tree).toContainText("demo-project");
+  await unsent.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(tree).not.toContainText("demo-project");
   expect(existsSync(`${app.projectDir}/.git`)).toBe(true);
+  expect(existsSync(clonePath(app.dataDir, key))).toBe(false);
   await nav(page, "Dashboard").click();
   await expect(page.getByTestId("projects-empty")).toBeVisible();
+});
+
+test("projects-28: the Overview names the project's spex repository and its state", async ({
+  page,
+  app,
+}) => {
+  // The Overview's repository header carries no records field — the
+  // spex repository's name with its group, and its state (projects-4):
+  // expected to fail until the header carries it.
+  test.fail(true, "UI defect: the Overview's header lacks the records field of projects-4");
+  seedDemoProject(app.projectDir);
+  await app.core.command("project.register", { path: app.projectDir });
+  await open(page, app);
+  await page.getByRole("tab", { name: "Overview" }).click();
+  const overview = page.getByTestId("overview-tab");
+  await expect(overview).toContainText("demo-project-spex", { timeout: 5_000 });
+  await expect(overview).toContainText("Only on this device", { timeout: 5_000 });
 });
