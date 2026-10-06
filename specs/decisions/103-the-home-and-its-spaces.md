@@ -27,19 +27,19 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - The owner's direction: use the Git host for everything it already does. Accounts, groups, projects, members and roles belong to the Git host. Spex shows them and never manages them. End users must not need to know what happens behind the scenes.
 - The smallest thing a Git host shares is a repository. Folders and branches inside it cannot have different readers. So each thing Spex shares is one repository.
 - The people who share work on a codebase are not always the people who own it. A team works on code it cannot push to, on another host, or owned by someone else, and still keeps and shares its records.
-- A project must carry what it needs. A person who can read its records but nothing else the team keeps must get the same tools as everyone else on that project.
-- Playbook stores sessions in one flat folder per launch and keeps leases beside each bundle. A session continues only where its recorded working folder exists.
+- A project must carry what it needs. A person who can read its sessions must also get the tools those sessions used, even if that is all of the team's they can read.
+- Playbook runs a playbook: a workflow whose roles are played by agents you name, the players, under a Captain that talks with you. It writes each session, one conversation, as files in one folder, and marks with a lease file which process may write it. A session continues only where the working folder it ran in exists.
 - Two words. A **Git host** is a Git system with OAuth sign-in, such as GitLab.com. The **Spex server** is the process behind the desktop or the browser, on this device or a remote one. Earlier records call that process a host.
 
 ## Decision
 
 ### Principle
 
-Spex keeps every record in spex repositories, named `<name>-spex`: one per project and one per group.
+For every project and every group, Spex keeps what is not code: its sessions, the conversations with agents; its intents, instructions waiting to run; and what running them needs, the spec packages it installs, skills and playbooks made from specs, and the settings naming which player plays each role.
+These are its records, and they live in a spex repository named `<name>-spex`: one per project and one per group.
 Each lives on this device under `~/.spex/workspace/`, in a tree that mirrors the Git host, and, once you sign in, in its group on the Git host, where Spex creates it and pushes.
 A project's code lives in any Git repository you choose, and Spex pushes nothing to it.
-What a project needs is in its spex repository.
-What you add for yourself is in your own group's.
+What you add for yourself is in your own group's spex repository.
 The Git host decides who sees what: a spex repository's members see its records.
 Spex adds no access control, no roles and no member lists of its own.
 
@@ -49,11 +49,11 @@ Spex adds no access control, no roles and no member lists of its own.
 | --- | --- |
 | Git host | A Git system with OAuth. It owns accounts, groups, projects, members and roles. |
 | Account | You on the Git host, known by its permanent account id. |
-| Working folder | A folder on this device where sessions run. For a project, usually a clone of its code, which may be any Git repository. Spex writes only agent exports into it. |
+| Working folder | A folder on this device where sessions run. For a project, usually a clone of its code, which may be any Git repository. Spex writes into it only the skills an agent reads from there, kept out of the code's Git. |
 | Spex repository | A repository named `<name>-spex` holding the records of one project, or of a group itself, on its `spex` branch. It lives on this device under `~/.spex/workspace/` and, once you sign in, in its group on the Git host, where its members see the records: it is the unit of sharing. Spex follows it by the host's id, which survives rename and transfer. |
 | Project | A working folder and a spex repository. Add a working folder, and Spex makes the spex repository. |
 | Group | A group on the Git host, at any depth, or you, since every user has a group of their own named after them; and its spex repository, holding its sessions across projects, which run in a working folder you choose on each device. Under `workspace/`, a group's folder holds its own spex repository and its projects'. |
-| Session | A conversation Playbook records as one bundle in a spex repository. |
+| Session | One conversation, as Playbook writes it, in a spex repository. |
 
 - The home is `SPEX_HOME`, or `~/.spex`: `workspace/` and this device's state.
 - Spex works offline. Add a working folder and work. Sign in when you want to share.
@@ -68,7 +68,7 @@ Spex does six things there, always with your own account:
 2. Lists your groups and the spex repositories you can read in each.
 3. Creates a spex repository in a group: private, its description saying what it is and where the code lives.
 4. Clones, fetches and pushes `spex` branches.
-5. Prepares a `spex` branch. Where a rule on the host would block it, Spex adds an exception for it when you are allowed to.
+5. Prepares a `spex` branch. Where a branch rule on the host would block pushes to it, Spex adds a rule allowing them, when you are allowed to.
 6. Reads a spex repository's members and shows them with the host's own role names, with a link to the host's page.
 
 Everything else stays on the Git host: adding or removing members, roles, sharing, transferring, archiving, deleting, creating groups.
@@ -77,7 +77,7 @@ Spex never does these; it shows the state and links to the page.
 - When a step needs rights you do not have, it waits, and a member who has them finishes it from Spex. Nobody is sent to edit Git settings.
 - The host's refusal is the answer. Spex derives nothing from a role name or a cached list.
 - A cached list proves nothing. A spex repository the host stops listing stays on this device as unreachable. Nothing on the device is deleted because the host refused.
-- Spex never promises privacy. Before your first push into a repository with other members, it says once that the records stay there, hidden records and attachments included, and that nothing recalls what others downloaded. A public repository makes its records public, and Spex says so.
+- Spex never promises privacy. Before your first push into a repository with other members, it says once that the whole session stays there, what the interface hides and attachments included, and that nothing recalls what others downloaded. A public repository makes its records public, and Spex says so.
 - The token reaches Git through a credential helper, never through a remote URL.
 - Spex reads the host when you sign in, when you press Refresh, and before a sync. Never on a timer.
 
@@ -87,7 +87,7 @@ Spex never does these; it shows the state and links to the page.
 - A renamed user or group keeps the old name in its spex repository's name. Spex follows the repository by its id, and the host lets you rename it.
 - The `spex` branch holds the records and has its own history. The default branch holds the host's README and nothing else.
 - Spex writes to the `spex` branch of a spex repository and to nothing else on the host.
-- The `spex` branch is never the default branch. The host protects a new repository's default branch by its group's rule, which the repository's creator may not be allowed to change, while a branch of another name has no rule unless one names it. Where a rule would still block it, Spex adds one exception for that branch when you are allowed to. Then every member who can write the repository can push it.
+- Spex creates the `spex` branch beside the default branch, never as it. A group's rule protects a new repository's default branch, and the repository's creator may not be allowed to change that rule, while a branch of another name carries no rule unless one names it. So every member who can write the repository can push `spex` from the first day, on any host and any tier. Where a branch rule still blocks pushes to it, Spex adds one rule allowing them, when you are allowed to.
 - Records cost storage on the host and nothing in anyone's code. Large files use the host's large-file storage where it exists.
 
 ### What lives where
@@ -100,8 +100,8 @@ Spex never does these; it shows the state and links to the page.
       config/playbook.config.yaml           its playbooks, and which player each role uses; your own group's also what each player runs on
       project.json                          the remote of the code, when there is code
       intents/<id>.json                     one file per intent, with <id>.assets/ beside it when it has attachments
-      sessions/                             Playbook's store
-      packages/, skills/                    installed registry and Git content (DR-104), kept out of Git
+      sessions/                             the sessions, as Playbook writes them
+      packages/, skills/                    spec packages installed from the registry or Git (DR-104), kept out of Git
   home.yaml                                 device id, Git hosts and accounts, and each working folder with its spex repository
   store/, cache/                            spec package bytes and caches (DR-104)
   local/                                    preferences, sync state, credentials, migration receipts
@@ -110,16 +110,16 @@ Spex never does these; it shows the state and links to the page.
 
 - Every Spex file is JSON or YAML with a `format` field, the version of its layout. A reader refuses one it does not know and never guesses.
 - `workspace/` mirrors the host: a plain folder per group, holding its subgroups' folders, its own spex repository and its projects', every clone named as on the host. Each clone holds the `spex` branch, with the host's copy as its remote once you sign in. A rename or transfer on the host moves the folder on the next sync, once no session under it has a turn in flight, and rebinds and re-exports everything beneath it in the same step.
-- A working folder gets only the agent exports, kept out of the code's Git through the repository's own local exclude file. Nothing is committed with the code.
+- Spex writes into a working folder only the skills an agent reads from there, listed in the repository's own local exclude file so the code's Git ignores them. Nothing is committed with the code.
 - An intent is one instruction waiting to run: its text and attachments, who wrote it and when, where it came from, its state (waiting, running, done or dropped), and the session and turn that ran it. A project's intents form a set. Adding one never conflicts with anything. They have no order of their own: the next to run is the oldest one waiting, and you may run any of them directly.
-- Sessions are Playbook's bundles. Hints and leases beside them stay on the device.
+- The agent runtimes' own session ids and the lease file beside a session stay on the device.
 - `home.yaml` holds the device id, each Git host with its OAuth client id and your account, and each working folder with its spex repository.
 - `local/` never leaves the device: preferences, sync state per spex repository, credentials with owner-only permissions, migration receipts.
 
 ### Sync, one spex repository at a time
 
-- Every spex repository syncs on its own with the machine of [DR-057](057-space-surface.md): save local changes as a commit, fetch, compare whole units, ask per conflict, apply, push. The sync stages known units only, never the whole tree.
-- The units are a session bundle, one intent with its attachments, `spex.yaml` with `spex.lock`, `config/playbook.config.yaml`, and `project.json`. A unit is taken whole from one side. Nothing is merged line by line.
+- Every spex repository syncs on its own, with the machine of [DR-057](057-space-surface.md): Spex commits local changes, fetches, compares each unit with the host's copy, asks you where both sides changed one, applies, and pushes. It stages known units only, never the whole tree.
+- A unit is a session, an intent with its attachments, `spex.yaml` with `spex.lock`, `config/playbook.config.yaml`, or `project.json`. A unit is taken whole from one side. Nothing is merged line by line.
 - A sync runs while no session of that spex repository has a turn in flight. It blocks writes to it only.
 - A spex repository is reachable, unreachable (the host refused, or you are signed out), read-only (archived, or you may only read), or local only (not on the host yet).
 - A read-only spex repository keeps your new sessions on this device and says so.
@@ -127,15 +127,15 @@ Spex never does these; it shows the state and links to the page.
 ### Which settings apply
 
 - A session runs with your own group's `config/playbook.config.yaml`, the project's own added on top, and the session's tuning last. The project's file names the playbooks it enables and which player each role uses, by name, and never a model. Yours says what each player runs on, from what this device has, so a team shares player names and each person picks their own models. A player the project names and yours lacks is reported before the session starts, and Settings offers to add it.
-- History reads anywhere the records are. A session continues only on a device where the project's working folder matches the bundle's, the runtime validates, and no lease is held.
+- You can read a session wherever its spex repository is. You can continue it only on a device where the project's working folder is the one it ran in, the agent runtime accepts it, and no other process holds its lease.
 
 ### Projects on this device
 
-- Adding a working folder: Spex offers the spex repositories you can read whose `project.json` names its remote, or creates one in a group you pick, named after it. Its spex repository appears under `workspace/`, with a remote once you sign in and pick the group, and `home.yaml` binds the two.
+- Adding a working folder: Spex offers the spex repositories you can read whose `project.json` names its remote, or creates one in a group you pick, named after it. Its spex repository appears under `workspace/`, with a remote once you sign in and pick the group, and `home.yaml` pairs the two.
 - Joining a project: pick its spex repository on the host. Spex clones it under `workspace/`, then clones the code from the remote its `project.json` names, with your machine's own Git and its credentials, or takes a working folder you already have.
 - Two working folders bound to one spex repository are one project, checked out twice; each runs its own sessions and its own path sources. A fork of a spex repository is another project.
 - Sharing a project with more or fewer people, moving it to another group, or archiving it, is done on the Git host. The records travel with the repository, and Spex follows it by id.
-- Removing a project from this device forgets its working folder and deletes its spex repository's clone. It refuses while local units are not on the host, unless you confirm. Nothing on the host changes.
+- Removing a project from this device forgets its working folder and deletes its spex repository's clone. It refuses while anything in it has not reached the host, unless you confirm. Nothing on the host changes.
 
 ### Migration
 
@@ -152,13 +152,13 @@ Spex never does these; it shows the state and links to the page.
 | A team's codebase | Add the working folder and pick the team's group. Spex creates `<name>-spex` there and pushes. Every member of that repository sees its records. |
 | Code you cannot push to, or on another host | The same. Nothing touches the code. |
 | Work across a group's projects | Start a session at the group, in a working folder you choose. Spex creates `<group>-spex` there. Group members see it. |
-| Bob can read Project A's spex repository and nothing else of the team's | Bob gets exactly what Project A's spex repository declares. Nothing is substituted. |
+| Bob can read Project A's spex repository and nothing else of the team's | Bob gets exactly the tools Project A's spex repository names. Nothing is filled in from elsewhere. |
 | You can only read a project | You see its records. Your own sessions stay on this device, marked so. |
 | The name is taken | A repository of that name exists and is not Spex's. Spex asks you for another. |
 | A spex repository is renamed or transferred on the host | Spex follows it by id and moves its clone once nothing under it is running. Its label changes. |
 | A member leaves, or access is revoked | The records turn unreachable on the next read. Nothing on the device is deleted. |
 | Archived or over quota | The records turn read-only with the host's reason. |
-| Two devices add intents to one project | Two new files; no conflict. Editing the same intent on both is one whole-unit choice. |
+| Two devices add intents to one project | Two new files; no conflict. Editing the same intent on both is one choice between the two versions. |
 | A second device | Sign in, join the project, bind or clone the code, sync. |
 
 ### Considered and declined
@@ -170,15 +170,15 @@ Spex never does these; it shows the state and links to the page.
 - A group holding the records of many projects: sharing would be all-or-nothing per group.
 - A team settings repository that projects depend on: a member who cannot read it would silently get other tools than the rest. A project's needs are in its own spex repository.
 - A device environment beside your own group's: a second personal place for skills, and nobody could say which one holds yours.
-- Records on the default branch: the host's rule on it, which the repository's creator may not be allowed to change, and which a group sets for every new repository alike, with no rule by name, so releasing it for spex repositories would release it for the code too.
+- Records on the default branch: the host's rule on it, which the repository's creator may not be allowed to change, and which a group sets for every new repository alike, with no rule by name, so releasing it for spex repositories would release it for the code too. A host whose administrator makes `spex` every repository's writable default would work, but the design would then rest on that setup; a second branch costs nothing and works everywhere.
 - A kind of its own for a group's sessions: a project without code needs no new rule.
 - A spex repository known by its name alone: anyone may name a project `<name>-spex`; the `spex` branch decides.
 - A folder per intent: a directory, a tree and a listing for what is mostly one short instruction. A file, with attachments beside it when there are any, is Playbook's own session pattern.
 - Group kinds, personal or team: the member list decides, and a stored kind would lie.
 - A Spex provisioning service with operators and service accounts: the Git host provides groups, and whoever administers it creates them.
-- Spex managing members, roles or branch rules: the host's job. Spex shows and links. The one rule it ever writes is the exception for its own branch.
+- Spex managing members, roles or branch rules: the host's job. Spex shows and links. The one rule it ever writes is the one allowing pushes to its own branch.
 - A hidden ref instead of a branch: nobody could see or delete records on the host.
-- Intents as a log of actions with ranks and links: a log needs a fold and per-device files to avoid conflicts; a set of files needs neither.
+- Intents as a log of actions with ranks and links: a log needs replaying, and one file per device to avoid conflicts; a set of files needs neither.
 
 ## Consequences
 

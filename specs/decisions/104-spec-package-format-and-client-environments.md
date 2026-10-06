@@ -17,10 +17,10 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 
 ## Context
 
-- Spex artifacts form one pipeline. Source material, such as a description or an intent, becomes GEARS specs. GEARS specs become runnable playbooks and applications. Each phase is optional.
+- Spex artifacts form one pipeline. Source material, such as a description or an intent, becomes specs in the GEARS form that meta.md fixes. Specs become runnable playbooks and applications. Each phase is optional.
 - People install any subset of this, in the language they want, for one project or for themselves.
 - The Agent Skills specification [[1]] fixes a skill folder's layout. Playbooks and applications have native layouts. The format encloses these standards instead of restating them.
-- Mainstream package managers do four things we copy: requests are kept apart from the exact lock [[4]]; a dependency comes from a registry, a local path, or a Git repository at a commit [[5]]; what is required is installed with what requires it, because a manager cannot guess undeclared needs [[10]]; one content-addressed store shares bytes between installs [[6]].
+- Mainstream package managers do four things we copy: requests are kept apart from the exact lock [[4]]; a dependency comes from a registry, a local path, or a Git repository at a commit [[5]]; what is required is installed with what requires it, because a manager cannot guess undeclared needs [[10]]; one store keeps each distinct file once, so installs share bytes [[6]].
 - Until now the home held a compiled playbook library and registered a playbook by writing a locator into the launcher config. Both become a request and installed files.
 
 ## Decision
@@ -97,7 +97,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 | Path, in the spex repository's clone | Content | Synced |
 | --- | --- | --- |
 | `spex.yaml` | Requests | Yes |
-| `spex.lock` | Resolution | Yes, as one sync unit with `spex.yaml` |
+| `spex.lock` | Resolution | Yes, together with `spex.yaml` as one unit |
 | `packages/<org>/<pkg>/` | The root files and selected artifacts of one registry or Git release, at their release paths. A path source has no folder here; it is used where it is | No |
 | `skills/<name>/` | One folder per exported skill | No |
 
@@ -118,7 +118,7 @@ A request names one source:
 | Git | `git`, `rev`, optional `path` | A repository the Git host or the machine's Git can read, at a branch, tag or commit, with an optional folder inside |
 
 - A request may add `select`, a list of `{artifact, language}`, and `alias`, artifact id to exported name.
-- A direct request fixes the source of that spec package for the whole graph. Every other spec package comes from the registry.
+- A direct request fixes the source of that spec package for everything that requires it. Every other spec package comes from the registry.
 
 ### The lock: `spex.lock`
 
@@ -136,32 +136,33 @@ A request names one source:
 ### Resolution
 
 - The graph holds the requested spec packages and everything they require, at any depth. A cycle adds nothing.
-- A solution gives every spec package one version and every selected artifact one language, so that every requirement and selector holds. Caret and tilde never pick a yanked version; an exact requirement or a lock replay may. Nothing picks a version the registry suppressed.
+- A solution gives every spec package one version and every selected artifact one language, so that every requirement and selector holds. Caret and tilde never pick a version its author yanked; an exact requirement or a replay of the lock may. Nothing picks a version the registry's operator suppressed.
 - Among solutions Spex takes the highest, comparing requested spec packages first, each by name and then by version. A newer release that lacks a selected artifact never blocks an older solution.
-- No solution is an error that names the requirements in conflict. A lock replay installs what the lock says, without resolving.
+- No solution is an error that names the requirements in conflict. Installing from an existing lock, a replay, takes what the lock says and resolves nothing.
 
 Selection, within a solution:
 
 1. Artifacts: those a request selects, or all of them by default, together with everything they require.
-2. Languages: for each selected artifact, the language its selector names; else the environment's `language` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
+2. Languages: for each selected artifact, the language its `select` entry names; else the environment's `language` when the artifact has it; else its original text, recorded as a fallback when another language was wanted.
 3. Files: the root files and every file of each selected artifact in its chosen language.
 4. Exports: each selected skill under its artifact id or its alias. Two exports with one name in one environment are an error.
 
 ### Installing
 
-- The store at `~/.spex/store/files/sha256/<digest>` and `<digest>-exec` keeps one immutable blob per content and executable flag, written once after its digest is verified, kept while any known lock selects it. `cache/` holds fetched archives and metadata and may be deleted. Registry credentials live in `local/credentials.yaml`.
+- The store at `~/.spex/store/files/sha256/<digest>` keeps each distinct file once, named by its SHA-256, and once more as `<digest>-exec` when it is executable; a file is written once after its digest is verified and kept while any known lock selects it. `cache/` holds fetched archives and metadata and may be deleted. Registry credentials live in `local/credentials.yaml`.
 - Installing keeps only the selected files. It fetches them by any transport the registry offers [[9]] or from the repository at the locked commit, and stores a file only when its digest matches the manifest or, for a Git source, the digest taken at resolution. A path source is read in place. It re-checks the path rules. It runs no code.
 - Installing uses links, clones or copies. An environment changes atomically: the new installed files are complete before they replace the old ones.
 - An aliased skill is copied with its `name` rewritten, because Agent Skills requires the name to match the folder. Verified files are never changed.
 
 ### Exports
 
+- Exporting puts a skill where an agent reads its skills, and a playbook where the launcher loads it, so both find what the environment installed.
 - A project's environment exports to the project: its skills into the agent folders of the project's working folder, kept out of Git there, and its playbooks into the sessions started in it.
 - Your own group's environment exports its skills into your agents' home folders on each device, so they reach every session you run there.
 - Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's working folder, with everything the playbook requires.
 - An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, or its working folder's for a path source, never another environment's copy of the same name and version.
 - When a project and your own group export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
-- Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent's adapter for it says. Nothing in a shared file chooses a path on your device.
+- Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent, the agent runtime, says for that agent. Nothing in a shared file chooses a path on your device.
 
 ### Playbooks
 
