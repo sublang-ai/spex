@@ -1108,6 +1108,21 @@ export const commandSchema = z.discriminatedUnion("type", [
   // long commands reply `accepted` at once and report their outcome as
   // `space.state`.
   z.object({ type: z.literal("space.get"), id }).strict(),
+  z.object({ type: z.literal("space.refresh"), id }).strict(),
+  z.object({ type: z.literal("space.signin.start"), id }).strict(),
+  z.object({ type: z.literal("space.signin.cancel"), id }).strict(),
+  z.object({ type: z.literal("space.signout"), id }).strict(),
+  z.object({
+    type: z.literal("space.pick"),
+    id,
+    repository: repositoryKeySchema,
+    choice: z.union([
+      z.object({ kind: z.literal("join"), hostId: z.string().min(1) }).strict(),
+      z.object({ kind: z.literal("create"), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
+    ]),
+  }).strict(),
+  z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
+  z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema }).strict(),
   /** The way a test or a reader gives a clone a remote until the Git
    * host sets it up (DR-103); null removes it. */
   z.object({ type: z.literal("space.remote.set"), id, repository: repositoryKeySchema, url: z.string().nullable() }).strict(),
@@ -1272,6 +1287,15 @@ export interface CommandResults {
   "environment.publish": { accepted: true };
   "environment.playbooks": { project: PlaybookAvailability[] | null; own: PlaybookAvailability[] };
   "space.get": GroupsState;
+  "space.refresh": { accepted: true };
+  "space.signin.start":
+    | { flow: "browser"; url: string }
+    | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number };
+  "space.signin.cancel": { stopped: boolean };
+  "space.signout": GroupsState;
+  "space.pick": { accepted: true };
+  "space.join": { accepted: true };
+  "space.members": { members: HostMemberInfo[]; membersUrl: string };
   "space.remote.set": GroupsState;
   "space.fetch": { accepted: true };
   "space.sync": { accepted: true };
@@ -1652,6 +1676,8 @@ export interface RepositoryState {
   code: string | null;
   /** The working folder paired with it on this device, or null. */
   folder: string | null;
+  /** The clone's origin URL, null while local only. */
+  remote: string | null;
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
   /** The host's words for read-only or unreachable. */
   reason: string | null;
@@ -1675,6 +1701,9 @@ export interface RepositoryState {
 }
 
 /** The home, its groups and their spex repositories (space-30). */
+/** A spex repository's member as the host reports them (space-62). */
+export interface HostMemberInfo { id: string; login: string; displayName: string | null; role: string; url: string | null }
+
 export interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };

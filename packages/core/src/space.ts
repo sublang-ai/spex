@@ -489,6 +489,7 @@ class RepositorySync {
       own: this.key === store.home.own(),
       code,
       folder: store.home.folderOf(this.key)?.path ?? null,
+      remote: remote === null ? null : displayRemote(remote),
       state: remote === null ? "local-only" : "reachable",
       reason: null,
       waiting: null,
