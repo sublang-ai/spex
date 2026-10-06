@@ -5,10 +5,11 @@
 // writing the shared config with its comment kept, a refused edit,
 // readiness per adapter, and an outside edit reflected live.
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parse } from "yaml";
 
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, nav, clonePath } from "../src/harness";
 
 test.use({ appOptions: { project: true } });
 
@@ -173,4 +174,42 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   // An outside edit lands on the surface without a reload.
   writeFileSync(app.configPath, before.replace("claude-sonnet-5", "claude-opus-5-5"));
   await expect(chip).toContainText("claude-opus-5-5");
+});
+
+test.describe("a player the project names", () => {
+  test.use({ appOptions: { project: true, homeConfig: true } });
+
+  test("settings-46: a player the project names and your own roster lacks is added here from the neutral block", async ({
+    page,
+    app,
+  }) => {
+    // The project's config binds review's reviewer to a player your
+    // own group's roster lacks, by name alone (core-service-2), as a
+    // teammate's file arrives: the core reads it when it next starts.
+    const projectConfig = join(clonePath(app.dataDir, app.projectId!), "config", "playbook.config.yaml");
+    await app.stop();
+    mkdirSync(dirname(projectConfig), { recursive: true });
+    writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
+    await app.start();
+    await open(page, app);
+    await nav(page, "Settings").click();
+
+    // The surface names the file it writes — your own group's — by its
+    // spex repository, and points a project's bindings to Playbooks.
+    const scope = page.getByTestId("settings-scope");
+    await expect(scope).toHaveText(`Your own group's config, in ${app.ownKey}`);
+    await expect(scope).toHaveAttribute("title", "A project's playbooks and role bindings are edited in Playbooks");
+
+    // The roster shows the missing player, named by its project, with
+    // Add (settings-46).
+    const missing = page.getByTestId("player-missing-dev.auditor");
+    await expect(missing).toBeVisible();
+    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveText("Named by demo-project, not set up here");
+    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveAttribute("title", "Answers review.reviewer");
+    expect(parse(app.readConfig()).players["dev.auditor"]).toBeUndefined();
+    await missing.getByTestId("player-missing-add-dev.auditor").click();
+    await expect.poll(() => parse(app.readConfig()).players["dev.auditor"]).toMatchObject({ adapter: "claude" });
+    await expect(missing).toHaveCount(0);
+    await expect(page.getByTestId("players-section").getByTestId("player-row-dev.auditor")).toBeVisible();
+  });
 });
