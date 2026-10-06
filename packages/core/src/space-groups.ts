@@ -127,12 +127,12 @@ export function userGroup(view: HostView | undefined): HostGroup | undefined {
   return view?.groups.find((group) => group.kind === "user");
 }
 
-/** Your own group's folder name for an account: its login, lower-cased,
- * or kebab-cased where the login is not a folder name already. */
+/** Your own group's folder name for an account: its login as the host
+ * spells it where that is a key segment (storage-2, space-59), else the
+ * login kebab-cased. */
 export function ownNameFor(login: string): string {
-  const lower = login.toLowerCase();
-  if (/^[a-z0-9][a-z0-9-]*$/.test(lower)) return lower;
-  return lower.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(login) && !login.endsWith("-spex")) return login;
+  return login.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "me";
 }
 
 // ---------------------------------------------------------------------------

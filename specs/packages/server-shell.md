@@ -191,9 +191,13 @@ Where built server artifacts and a controlled npm executable are available on a 
 
 #### server-shell-23
 
-Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to the home's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler and a project created over it with the scaffold option scaffolds with the npm registry unreachable [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
+Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm run start:server` as the README does — a scratch Spex home in its environment and, beyond the README, only an ephemeral port — the smoke shall assert the source launch in its installed shape: the command builds the workspaces and starts the compiled shell [[server-shell-14](#server-shell-14)], whose printed access URL — the default loopback host and a generated token — serves the page and answers the token-bearing WebSocket handshake on the one port, the shell's defaults leaving the config to your own group's spex repository's `config/playbook.config.yaml` [[server-shell-1](#server-shell-1)], the compiler check over that socket names the app's own compiler and a project created over it with the scaffold option scaffolds with the npm registry unreachable [[server-shell-7](#server-shell-7)], and SIGTERM to the command exits it with the port closed [[server-shell-6](#server-shell-6)]:
 
 - the same socket then carries the smoke's first-run walk of the installed core, as the release rules describe it.
+
+#### server-shell-24
+
+When the server's test suite reads the shell's own core options and starts a served core against a stand-in Git host, the test suite shall assert that the core runs with the device sign-in flow and the shell's Node as the helper's runtime, and that `space.signin.start` over the served socket answers a device code [[server-shell-1](#server-shell-1)].
 
 ### Compression Coverage
 

@@ -57,7 +57,7 @@ When a UI flow asks to reveal a path lying inside the state root, the app shall 
 
 #### app-shell-37
 
-When a UI flow asks to open the Git host's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md)): a URL not at the home's recorded Git host is refused, and a deployment without the bridge shows the URL as a link to open instead.
+When a UI flow asks to open the Git host's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md)): a URL not at the home's recorded Git host — `https`, or `http` on a loopback host where a stand-in serves the journeys — or one carrying a credential is refused with no browser opened, and a deployment without the bridge shows the URL as a link to open instead.
 
 ### Quit
 
@@ -255,6 +255,10 @@ Where the host is macOS with Apple's command-line tools installed, when the sour
 #### app-shell-35
 
 Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has cloned the committed tree into a scratch directory and installed it with `npm ci` on an empty npm cache, when the smoke runs that clone's root `npm start` with the acceptance variable naming a screenshot, the smoke user-data variable naming a scratch directory whose Spex home stores English as its language, and a scratch Spex home, the smoke shall assert the guarded launch in its installed shape: the command builds the workspaces, rebuilds the native module for Electron, launches the app, and returns zero after restoring the module for Node [[app-shell-26](#app-shell-26)]; the app took its lock and its state under the scratch directories, the developer's own Spex untouched [[app-shell-24](#app-shell-24)]; and the render exited clean with the screenshot written.
+
+#### app-shell-38
+
+When the desktop's test suite starts a real core through the shell's own option builder against a stand-in Git host and drives the open-URL channel, the test suite shall assert that the core was started with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)], that the channel opens the core's own browser sign-in URL and an `https` URL at the recorded host, refuses one at another origin, one carrying a credential and one outside the host's path, returning false and opening nothing [[app-shell-37](#app-shell-37)].
 
 ### Release Coverage
 

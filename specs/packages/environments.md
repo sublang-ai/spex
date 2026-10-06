@@ -162,7 +162,7 @@ When the core starts, it shall seed the app's built-in spec package — the play
 
 #### environments-12
 
-When the core resolves or installs from the registry, it shall read the registry's version index for every spec package of the graph, read a version resource only for each version it picks, fetch files by the raw-file URLs or the release archive, and present the device's app token where the home is signed in [[git-host-4](git-host.md#git-host-4)], so a private namespace the account may read installs and a public one needs no credential ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the core resolves or installs from the registry, it shall read the registry's version index for every spec package of the graph, read a version resource only for each version it picks, fetch files by the raw-file URLs or the release archive, and present the device's app token where the home is signed in — the access secret kept current before each call [[git-host-4](git-host.md#git-host-4)], an answer that it expired reported as a failure of that operation — so a private namespace the account may read installs and a public one needs no credential ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - a release whose `format` the core does not know is refused naming it; a registry answer the core cannot read, or a digest that does not match, installs nothing and is reported;
 - the Git host controls who reads a spex repository and the registry who downloads; neither grants the other, so a member lacking the registry's permission is told which spec package they cannot fetch.
@@ -171,7 +171,8 @@ When the core resolves or installs from the registry, it shall read the registry
 
 When the core resolves or installs a Git source, it shall fetch the repository at the named `rev` with the Git host's credential where the repository is at the Git host's origin [[git-host-9](git-host.md#git-host-9)] and this device's Git otherwise, record the commit, read the manifest at the optional `path`, digest every file at resolution and install from those bytes ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
-- a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone.
+- a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone;
+- while the home is signed out, a repository at the Git host's origin is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
 
 ### Listing
 
