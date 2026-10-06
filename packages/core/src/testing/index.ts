@@ -11,3 +11,5 @@ export * from "./compiled-run.js";
 // home (space-36): the same rules the core writes, so a joining home
 // meets no rules conflict of the fixture's making.
 export { prepareStorageGitFiles } from "../storage-git.js";
+export * from "./standin-registry.js";
+export * from "./git-http-host.js";
