@@ -1555,6 +1555,12 @@ export class CoreService {
     return this.authToken;
   }
 
+  /** The Git host this home records (git-host-1): the one URL whose
+   * pages a shell opens in the system browser (app-shell-20). */
+  hostUrl(): string {
+    return this.store.home.host.url;
+  }
+
   private async listen(port: number): Promise<void> {
     const verifyClient = (info: {
       origin?: string;

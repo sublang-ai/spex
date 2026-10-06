@@ -12,4 +12,8 @@ contextBridge.exposeInMainWorld("spexNative", {
   /** Reveal a state-root path in the OS file manager (DR-057,
    * app-shell-28): true when shown, false for a path outside the root. */
   revealPath: (path) => ipcRenderer.invoke("spex:reveal-path", path),
+  /** Open the Git host's sign-in page in the system browser (DR-103,
+   * app-shell-37): true when opened, false for a URL not at the home's
+   * recorded host. */
+  openExternal: (url) => ipcRenderer.invoke("spex:open-external", url),
 });

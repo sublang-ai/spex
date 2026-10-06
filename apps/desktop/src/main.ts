@@ -19,13 +19,15 @@ import {
   Notification as ElectronNotification,
   shell,
 } from "electron";
-import { CoreService, moduleDirectoriesAbove, suppliedScaffold } from "@sublang/spex-core";
+import { CoreService } from "@sublang/spex-core";
 import { resolveLanguage } from "@sublang/spex-core/language";
 import type { I18n } from "@lingui/core";
 
 import { captureLoginShellEnv, mergeEnv } from "./shell-env.js";
+import { desktopCoreOptions } from "./core-options.js";
 import { speak } from "./i18n.js";
 import { notificationFor } from "./notifications.js";
+import { resolveHostUrl } from "./open-external.js";
 import { resolveRevealTarget } from "./reveal-path.js";
 
 let service: CoreService | undefined;
@@ -153,29 +155,18 @@ async function main(): Promise<void> {
   const dataDir = isolatedUserData
     ? join(isolatedUserData, "spex-home")
     : process.env.SPEX_HOME?.trim() ? process.env.SPEX_HOME : join(homedir(), ".spex");
-  // This Electron run as Node is the runtime of the compiler and the
-  // scaffold CLI alike (app-shell-33).
-  const runtime = {
-    execPath: process.execPath,
-    electron: true,
-    modulePaths: moduleDirectoriesAbove(import.meta.url),
-  };
-  service = await CoreService.start({
-    dataDir,
-    legacyDbPath: join(app.getPath("userData"), "spex.db"),
-    port: 0,
-    // The shell's OS is the reader's device, so the core it embeds
-    // resolves the reader's system exactly as the shell does
-    // (app-shell-29, core-service-111).
-    systemLanguages: app.getPreferredSystemLanguages(),
-    // Compiles run on this Electron as Node, with the compiler and
-    // the SDKs this package declares (app-shell-33, DR-081).
-    compileRuntime: runtime,
-    // The scaffold runs the checkout's own CLI on this Electron as
-    // Node too (app-shell-33, projects-31); with none built, the
-    // create flow falls back to the registry's and names it.
-    ...(suppliedScaffold(runtime) ?? {}),
-  });
+  // This Electron run as Node is the runtime of the compiler, the
+  // scaffold CLI and the Git credential helper alike, and sign-in runs
+  // the browser flow (app-shell-15, app-shell-33).
+  service = await CoreService.start(
+    desktopCoreOptions({
+      dataDir,
+      userData: app.getPath("userData"),
+      systemLanguages: app.getPreferredSystemLanguages(),
+      execPath: process.execPath,
+      moduleUrl: import.meta.url,
+    }),
+  );
 
   // The menu waits for the core: its one item of the shell's own text
   // reads the home's language choice (app-shell-29).
@@ -219,7 +210,8 @@ async function main(): Promise<void> {
   };
 
   // Native bridge (DR-008): OS affordances only, one invoke channel
-  // each — the directory picker, and the path reveal (DR-057).
+  // each — the directory picker, the path reveal (DR-057), and the Git
+  // host's sign-in page opened in the system browser (DR-103).
   ipcMain.handle("spex:pick-directory", async () => {
     if (!window) return null;
     const result = await dialog.showOpenDialog(window, {
@@ -235,6 +227,20 @@ async function main(): Promise<void> {
     if (!target) return false;
     shell.showItemInFolder(target);
     return true;
+  });
+  // An open hands the system browser a URL at the home's recorded Git
+  // host and changes no state (app-shell-37, app-shell-20); any other
+  // URL, or one the OS fails to open, is false, and the page shows it
+  // as a link instead.
+  ipcMain.handle("spex:open-external", async (_event, requested: unknown) => {
+    const target = resolveHostUrl(service?.hostUrl(), requested);
+    if (!target) return false;
+    try {
+      await shell.openExternal(target);
+      return true;
+    } catch {
+      return false;
+    }
   });
 
   window = new BrowserWindow({
