@@ -29,7 +29,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 
 - A spec package is one GEARS contract with everything made from it: sources, the spec, skills, playbooks and applets. One name, one version.
 - An environment is what a records folder installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your own group's.
-- Spex installs verified files under the records folder's `packages/`, exports skills to agents, and exports playbooks to the launcher. It commits nothing with the code.
+- Spex installs verified files under the records folder's `packages/`, exports skills to agents, and exports playbooks to Playbook's launcher, the command that runs a session. It commits nothing with the code.
 
 ### A spec package
 
@@ -158,7 +158,7 @@ Selection, within a solution:
 
 - A project's environment exports to the project: its skills into the agent folders of the project's working folder, kept out of Git there, and its playbooks into the sessions started in it.
 - Your own group's environment exports its skills into your agents' home folders on each device, so they reach every session you run there.
-- Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's folder, with everything the playbook requires.
+- Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's working folder, with everything the playbook requires.
 - An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, never another environment's copy of the same name and version.
 - When a project and your own group export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
 - Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent's adapter for it says. Nothing in a shared file chooses a path on your device.
