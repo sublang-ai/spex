@@ -170,7 +170,7 @@ Spex never does these; it shows the state and links to the page.
 - A group holding the records of many projects: sharing would be all-or-nothing per group.
 - A team settings repository that projects depend on: a member who cannot read it would silently get other tools than the rest. A project's needs are in its own spex repository.
 - A device environment beside your own group's: a second personal place for skills, and nobody could say which one holds yours.
-- Records on the default branch: the host's rule on it, which the repository's creator may not be allowed to change.
+- Records on the default branch: the host's rule on it, which the repository's creator may not be allowed to change, and which a group sets for every new repository alike, with no rule by name, so releasing it for spex repositories would release it for the code too.
 - A kind of its own for a group's sessions: a project without code needs no new rule.
 - A spex repository known by its name alone: anyone may name a project `<name>-spex`; the `spex` branch decides.
 - A folder per intent: a directory, a tree and a listing for what is mostly one short instruction. A file, with attachments beside it when there are any, is Playbook's own session pattern.
