@@ -174,6 +174,10 @@ msgstr "{count, plural, other {# 条引用}}"
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, other {# 项}}"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
+msgstr "{count, plural, other {将上传 # 个文件：}}"
+
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
 msgstr "{count, plural, other {# 个文件}} — 清单、记录，以及本设备运行过时留下的服务商提示。"
@@ -281,8 +285,8 @@ msgid "{days}d ago"
 msgstr "{days} 天前"
 
 #: src/components/LibrarySurface.tsx
-msgid "{diagnostic} — delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic} — 删除草稿，或修复文件后重启 Spex"
+msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
+msgstr "{diagnostic} — 删除该会话，或修复文件后重启 Spex"
 
 #: src/components/AgentEditor.tsx
 #: src/components/TuningField.tsx
@@ -330,8 +334,12 @@ msgid "{hours}h ago"
 msgstr "{hours} 小时前"
 
 #: src/components/LibrarySurface.tsx
-msgid "{id} is a built-in — enable it below instead"
-msgstr "{id} 是内置规程 — 请在下方启用"
+msgid "{id} is a built-in — enable it instead"
+msgstr "{id} 是内置规程 — 请直接启用它"
+
+#: src/components/LibrarySurface.tsx
+msgid "{id} is already a playbook of {package}"
+msgstr "{id} 已是 {package} 中的规程"
 
 #: src/components/SpecView.tsx
 msgid "{id} not found"
@@ -457,9 +465,21 @@ msgstr "{playbookId} 状态机"
 msgid "{playbookId} state machine, {state} active"
 msgstr "{playbookId} 状态机，当前处于 {state}"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "{project} — the project"
+msgstr "{project} — 本项目"
+
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
 msgstr "{reason}仍要移除吗？"
+
+#: src/components/EnvironmentSection.tsx
+msgid "{requirement} by {requirer}"
+msgstr "{requirer} 要求 {requirement}"
+
+#: src/components/LibrarySurface.tsx
+msgid "{role} needs a player id: lowercase segments joined by dots"
+msgstr "{role} 需要 Player ID：用点连接的小写分段"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
@@ -493,13 +513,17 @@ msgstr "{size} KB"
 msgid "{size} MB"
 msgstr "{size} MB"
 
+#: src/components/EnvironmentSection.tsx
+msgid "{source}, required by {packages}"
+msgstr "{source}，{packages} 依赖它"
+
 #: src/lib/time.ts
 msgid "{span} ago"
 msgstr "{span}前"
 
 #: src/components/PlaybookStages.tsx
-msgid "{stage} not found next to this playbook's registry"
-msgstr "在该规程的注册表旁未找到 {stage}"
+msgid "{stage} not found beside this playbook's module"
+msgstr "在该规程的模块旁未找到 {stage}"
 
 #: src/components/SpaceGroups.tsx
 msgid "{state} · last synced {at}"
@@ -574,8 +598,8 @@ msgid "/ for playbooks · Enter sends"
 msgstr "/ 打开规程 · Enter 发送"
 
 #: src/components/LibrarySurface.tsx
-msgid "/{id} is already a configured playbook"
-msgstr "/{id} 已在配置中"
+msgid "/{command} stops being offered; the spec package stays"
+msgstr "不再提供 /{command}；规约包保留"
 
 #. a run's one-line strip: the workflow, where it stands, who called it
 #: src/components/MachineCard.tsx
@@ -706,6 +730,10 @@ msgstr "有 Player 在等待你的回复：{detail}"
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "已存在名为 {id} 的 Player — 请在上方编辑。"
 
+#: src/components/SettingsSurface.tsx
+msgid "A project's playbooks and role bindings are edited in Playbooks"
+msgstr "项目的规程和角色绑定在“规程”界面编辑"
+
 #: src/components/Composer.tsx
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "需要回复。请回答，或请 Captain 解释。"
@@ -725,6 +753,10 @@ msgstr "有会话在等待你的回复"
 #: src/state/dashboard.ts
 msgid "A session is waiting for your verdict"
 msgstr "有会话在等待你的裁定"
+
+#: src/components/EnvironmentSection.tsx
+msgid "A spec package is named org/name, each part lowercase words joined by single hyphens"
+msgstr "规约包名为 org/name，每部分由单个连字符连接的小写单词组成"
 
 #: src/state/reducer.ts
 #: src/state/store.ts
@@ -783,10 +815,19 @@ msgstr "适配器选项；模型支持未验证"
 msgid "Adapter option; model support unverified."
 msgstr "适配器选项；模型支持未验证。"
 
+#. create this player in your own roster
 #. register the typed path as an existing repository
+#. request this spec package at the chosen version
+#. request this spec package at the chosen version
+#: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
+#: src/components/SettingsSurface.tsx
 msgid "Add"
 msgstr "添加"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add {id} with the neutral agent, then tune it here"
+msgstr "以中性智能体添加 {id}，再在此调整"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add a player"
@@ -813,9 +854,28 @@ msgstr "请先添加项目（{keys}）"
 msgid "Add a project…"
 msgstr "添加项目…"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Add a spec package"
+msgstr "添加规约包"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "向 {project} 添加意图"
+
+#. request a spec package by its folder in the working folder
+#: src/components/EnvironmentSection.tsx
+msgid "Add from folder"
+msgstr "从文件夹添加"
+
+#. request a spec package from a Git repository at a rev
+#: src/components/EnvironmentSection.tsx
+msgid "Add from Git"
+msgstr "从 Git 添加"
+
+#. open the search over the registry's spec packages
+#: src/components/EnvironmentSection.tsx
+msgid "Add from registry"
+msgstr "从注册表添加"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
@@ -848,6 +908,11 @@ msgstr "已加入“接下来” — 见项目概览。"
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
+#. the request is being written
+#. the request is being written
+#. the request is being written
+#: src/components/EnvironmentSection.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
@@ -1002,6 +1067,11 @@ msgstr "任意字母"
 msgid "app state failed to load: {reason}"
 msgstr "应用状态加载失败：{reason}"
 
+#. a spec package's artifact kind: a browser-server application
+#: src/lib/environments.ts
+msgid "applet"
+msgstr "小应用"
+
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
 #. sync step: applying the chosen versions
@@ -1081,6 +1151,8 @@ msgid "Attachments"
 msgstr "附件"
 
 #. heading over a spex repository's changed authoring sessions
+#. section heading: playbooks being written in this project
+#: src/components/LibrarySurface.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "编写"
@@ -1118,17 +1190,13 @@ msgstr "自动（受保护）"
 msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的保护"
 
-#: src/components/LibrarySurface.tsx
-msgid "Available built-ins"
-msgstr "可用内置规程"
-
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "返回 {id}"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Back to the playbook list — the draft stays as it is"
-msgstr "返回规程列表 — 草稿保持原样"
+msgid "Back to the playbook list — the session stays as it is"
+msgstr "返回规程列表 — 会话保持原样"
 
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
@@ -1160,6 +1228,10 @@ msgstr "阻塞"
 #: src/components/SettingsSurface.tsx
 msgid "bound to no role yet"
 msgstr "尚未绑定任何角色"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Branch, tag or commit"
+msgstr "分支、标签或提交"
 
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
@@ -1232,6 +1304,11 @@ msgstr "缺陷"
 msgid "bug fixed"
 msgstr "已修复缺陷"
 
+#. a spec package's source: the one the app ships
+#: src/lib/environments.ts
+msgid "built-in"
+msgstr "内置"
+
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
 msgid "bypass"
@@ -1262,6 +1339,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave an editor without saving
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1272,6 +1350,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
@@ -1399,7 +1478,9 @@ msgid "Checking host…"
 msgstr "检查托管平台中…"
 
 #. the Check host control, while the check runs
+#. the checks a publish makes are running, nothing uploads yet
 #: src/components/CaptainHome.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/SpaceSync.tsx
 msgid "Checking…"
 msgstr "检查中…"
@@ -1709,10 +1790,6 @@ msgstr "配置 {name}"
 msgid "Configure the Captain agent"
 msgstr "配置 Captain 智能体"
 
-#: src/components/LibrarySurface.tsx
-msgid "Configured playbooks"
-msgstr "已配置的规程"
-
 #. default confirm button: go ahead with the act
 #. verdict control: accept the delivered work
 #. verdict control: accept the delivered work
@@ -1723,8 +1800,8 @@ msgid "Confirm"
 msgstr "确认"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Confirm the command, intent, and players"
-msgstr "确认命令、意图与 Player"
+msgid "Confirm the command, intent, players and where to enable it"
+msgstr "确认命令、意图、Player 以及启用位置"
 
 #. verdict control, busy: the verdict is in flight
 #. verdict control, busy: the verdict is in flight
@@ -1974,16 +2051,16 @@ msgid "Decisions, {count} records"
 msgstr "决策记录，共 {count} 条"
 
 #. confirm: delete this session for good
-#. confirm: remove the draft for good
-#. remove the draft for good
+#. confirm: remove the authoring session for good
+#. remove the authoring session for good
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 msgid "Delete"
 msgstr "删除"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete draft {id}"
-msgstr "删除草稿 {id}"
+msgid "Delete authoring session {id}"
+msgstr "删除编写会话 {id}"
 
 #: src/components/NavRail.tsx
 msgid "delete failed"
@@ -1994,8 +2071,8 @@ msgid "Delete session {title}"
 msgstr "删除会话 {title}"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete this draft and its source?"
-msgstr "删除该草稿及其源文件？"
+msgid "Delete this authoring session? Its spec package folder stays."
+msgstr "删除此编写会话？其规约包文件夹会保留。"
 
 #: src/components/NavRail.tsx
 msgid "Delete this session and its transcript"
@@ -2018,17 +2095,21 @@ msgid "Delete this session? It was run from the terminal; its history goes too. 
 msgstr "删除此会话？它由终端运行，其历史也会一并删除。未发送的草稿也随之删除。"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete waits: the draft's compile is running"
-msgstr "删除需等待：草稿正在编译"
+msgid "Delete waits: the session's compile is running"
+msgstr "删除需等待：该会话正在编译"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete waits: the draft's turn is running"
-msgstr "删除需等待：草稿的轮次正在运行"
+msgid "Delete waits: the session's turn is running"
+msgstr "删除需等待：该会话的轮次正在运行"
 
 #. a sync unit's change: it is gone on this side
 #: src/components/SpaceSync.tsx
 msgid "deleted"
 msgstr "已删除"
+
+#: src/components/LibrarySurface.tsx
+msgid "Deleted {id}; its spec package folder stays at {path}"
+msgstr "已删除 {id}；其规约包文件夹保留在 {path}"
 
 #. session row, busy: the delete is in flight
 #: src/components/NavRail.tsx
@@ -2057,6 +2138,26 @@ msgstr "描述这个规程…"
 #: src/components/SettingsSurface.tsx
 msgid "desktop"
 msgstr "桌面通知"
+
+#. stop offering this playbook in this config
+#. stop offering this playbook in this config
+#: src/components/LibrarySurface.tsx
+msgid "Disable"
+msgstr "停用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Disable {id}"
+msgstr "停用 {id}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Disable /{command}"
+msgstr "停用 /{command}"
+
+#. the disable request is in flight
+#. the disable request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Disabling…"
+msgstr "停用中…"
 
 #. act: throw the interrupted attempt away
 #. confirm: drop the unsaved draft
@@ -2130,11 +2231,6 @@ msgstr "草稿产物"
 #: src/components/ApprovalInbox.tsx
 msgid "Draft: {name}"
 msgstr "草稿：{name}"
-
-#. section heading: playbooks being written
-#: src/components/LibrarySurface.tsx
-msgid "Drafts"
-msgstr "草稿"
 
 #. act: end the parked run
 #. act: end the parked run
@@ -2284,16 +2380,61 @@ msgstr "推理强度"
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "推理强度选项适用于适配器；该模型的支持情况未验证。"
 
-#. add this built-in playbook to the config
+#. enable this playbook in this config
+#. enable this playbook in this config
+#. enable this playbook in this config
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Enable"
 msgstr "启用"
 
 #: src/components/LibrarySurface.tsx
-msgid "Enable this playbook — it is written to the shared config"
-msgstr "启用此规程 — 会写入共享配置"
+msgid "Enable /{command}"
+msgstr "启用 /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enable /{command} with a player per role"
+msgstr "为每个角色指定 Player 并启用 /{command}"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Enable in"
+msgstr "启用于"
+
+#. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
+#. section heading: the playbooks this config enables
+#: src/components/LibrarySurface.tsx
+#: src/lib/drafts.ts
+msgid "Enabled"
+msgstr "已启用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled /{command}"
+msgstr "已启用 /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in the project"
+msgstr "已在项目中启用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in the project and your own group"
+msgstr "已在项目和你自己的群组中启用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in your own group"
+msgstr "已在你自己的群组中启用"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled. Sessions started before must be restarted to use it."
+msgstr "已启用。此前开始的会话须重启后才能使用。"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Enables the last compile — the source changed since."
+msgstr "将启用上一次编译的结果 — 源文此后已更改。"
 
 #. the enable request is in flight
+#. the enable request is in flight
+#: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Enabling…"
 msgstr "启用中…"
@@ -2327,6 +2468,8 @@ msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter 发送 · Shift+Enter 换行"
 
 #. heading over a spex repository's spec package requests and lock
+#. section heading: the spec packages one spex repository installs
+#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Environment"
 msgstr "环境"
@@ -2460,6 +2603,11 @@ msgstr "{age}在未知阶段失败"
 msgid "Failed workflow"
 msgstr "失败的工作流"
 
+#. mark: this artifact's wanted language was missing, the original stands
+#: src/components/EnvironmentSection.tsx
+msgid "fallback"
+msgstr "回退"
+
 #. an agent runs in its adapter's fast mode
 #. mark on an agent: it runs in the runtime's fast mode
 #. mark on an agent: it runs in the runtime's fast mode
@@ -2552,6 +2700,14 @@ msgstr "在设置中修复 Player"
 msgid "Folder for its code on this device"
 msgstr "此设备上存放其代码的文件夹"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Folder inside {folder}"
+msgstr "{folder} 内的文件夹"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Folder inside it (optional)"
+msgstr "其中的文件夹（可选）"
+
 #: src/components/SpaceGroups.tsx
 msgid "Folder its sessions run in on this device"
 msgstr "此设备上运行其会话的文件夹"
@@ -2570,7 +2726,7 @@ msgstr "忘记文件夹"
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "在此忘记这个文件夹？文件夹会保留在磁盘上。"
 
-#. label before the path a playbook was loaded from
+#. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
 msgid "from"
 msgstr "来自"
@@ -2626,6 +2782,19 @@ msgstr "来自上次成功的编译"
 #: src/components/PlaybookStages.tsx
 msgid "Gears"
 msgstr "Gears"
+
+#. a spec package's source: a Git repository at a commit
+#: src/lib/environments.ts
+msgid "Git"
+msgstr "Git"
+
+#: src/lib/environments.ts
+msgid "Git {repository} at {rev}"
+msgstr "Git {repository}，版本 {rev}"
+
+#: src/lib/environments.ts
+msgid "Git {repository} at {rev}, {path}"
+msgstr "Git {repository}，版本 {rev}，{path}"
 
 #. entry mark: the repository's own files
 #. entry mark: the repository's own files
@@ -2703,10 +2872,6 @@ msgstr "隐藏快速开始（规程仍在输入框的 / 菜单中）"
 msgid "Hide sessions in {project}"
 msgstr "隐藏 {project} 中的会话"
 
-#: src/components/LibrarySurface.tsx
-msgid "Hide source"
-msgstr "隐藏源文"
-
 #: src/components/CaptainHome.tsx
 msgid "Hide the quick-start card"
 msgstr "隐藏快速开始卡片"
@@ -2781,13 +2946,27 @@ msgstr "继承 Player（关闭）"
 msgid "Inherit the player (on)"
 msgstr "继承 Player（开启）"
 
+#. install the locked files that are missing on this device
+#: src/components/EnvironmentSection.tsx
+msgid "Install"
+msgstr "安装"
+
 #: src/lib/labels.ts
 msgid "Install {command}"
 msgstr "安装 {command}"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Install the locked files on this device"
+msgstr "在本机安装锁定的文件"
+
 #: src/lib/labels.ts
 msgid "Install the missing command"
 msgstr "安装缺失的命令"
+
+#. a spec package's files are installed on this device
+#: src/components/EnvironmentSection.tsx
+msgid "Installed"
+msgstr "已安装"
 
 #. catalog family: spec packages installed on this device from the lock
 #: src/lib/space.ts
@@ -2802,6 +2981,13 @@ msgstr "已安装的规约包与导出的技能"
 #: src/lib/useBrowserTools.ts
 msgid "Installing browser…"
 msgstr "正在安装浏览器…"
+
+#. the environment's locked files are being installed
+#. the environment's locked files are being installed
+#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
+msgid "Installing…"
+msgstr "安装中…"
 
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
@@ -2863,6 +3049,10 @@ msgstr "{age}中断 — 编译期间 Spex 被关闭"
 msgid "Interrupted turn"
 msgstr "中断的轮次"
 
+#: src/components/LibrarySurface.tsx
+msgid "Invalid: {reason}"
+msgstr "无效：{reason}"
+
 #: src/lib/media.ts
 msgid "Invocation {call}"
 msgstr "调用 {call}"
@@ -2906,6 +3096,10 @@ msgstr "不会有任何作用"
 #: src/App.tsx
 msgid "its endpoint"
 msgstr "该端点"
+
+#: src/components/LibrarySurface.tsx
+msgid "Its files are not on this device"
+msgstr "它的文件不在本机"
 
 #: src/components/SpecView.tsx
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
@@ -2964,6 +3158,7 @@ msgstr "刚刚"
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
 #: src/components/DashboardSurface.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
@@ -3057,7 +3252,10 @@ msgstr "加载对话记录中…"
 
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/LibrarySurface.tsx
 msgid "loading…"
 msgstr "加载中…"
@@ -3077,12 +3275,12 @@ msgid "Local changes ({count})"
 msgstr "本地更改（{count}）"
 
 #: src/lib/drafts.ts
-msgid "Lowercase letters, digits, - or _, starting with a letter"
-msgstr "小写字母、数字、- 或 _，且以字母开头"
+msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "由单个连字符连接的小写字母和数字，最多 64 个字符"
 
 #: src/lib/drafts.ts
-msgid "Lowercase; it names the file and the /command — the command can change at registration"
-msgstr "小写；它决定文件名和斜杠命令 — 该命令可在注册时更改"
+msgid "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it"
+msgstr "小写；它决定规约包名、文件名和斜杠命令 — 该命令可在启用时更改"
 
 #. pipeline stage: the compiled state machine
 #. pipeline stage: the compiled state machine
@@ -3143,6 +3341,10 @@ msgstr "给 Captain 发消息…"
 msgid "migration receipts and inputs"
 msgstr "迁移回执与输入文件"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Missing on this device: {path}"
+msgstr "本机缺失：{path}"
+
 #: src/components/LibrarySurface.tsx
 msgid "missing stages: {stages}"
 msgstr "缺少阶段：{stages}"
@@ -3191,6 +3393,10 @@ msgstr "请填写本设备上的文件夹路径。"
 #: src/components/SpaceGroups.tsx
 msgid "Name the new spex repository."
 msgstr "请为新的 spex 仓库命名。"
+
+#: src/components/SettingsSurface.tsx
+msgid "Named by {project}, not set up here"
+msgstr "{project} 指定，此处尚未设置"
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3242,8 +3448,9 @@ msgstr "新增"
 msgid "New in a group"
 msgstr "在群组中新建"
 
-#. start a draft of one's own
-#. start a draft of one's own
+#. start writing a playbook of one's own
+#. start writing a playbook of one's own
+#. start writing a playbook of one's own
 #: src/components/LibrarySurface.tsx
 msgid "New playbook"
 msgstr "新建规程"
@@ -3283,6 +3490,10 @@ msgstr "下一页"
 #: src/lib/shortcuts.ts
 msgid "Next tab in Projects"
 msgstr "项目中的下一个标签页"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No {language} text; the original stands"
+msgstr "没有 {language} 文本；保留原文"
 
 #: src/components/SpecView.tsx
 msgid "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
@@ -3352,7 +3563,7 @@ msgid "No player named \"{player}\" — check the config"
 msgstr "没有名为“{player}”的 Player — 请检查配置"
 
 #: src/components/SettingsSurface.tsx
-msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
+msgid "No players yet — enabling a playbook in Playbooks adds the ones its roles need."
 msgstr "还没有 Player — 在“规程”界面启用规程会自动添加其角色所需的 Player。"
 
 #: src/components/SpaceExplorer.tsx
@@ -3384,6 +3595,14 @@ msgstr "还没有源文"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "还没有源文 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
 
+#: src/components/EnvironmentSection.tsx
+msgid "No spec package matches"
+msgstr "没有匹配的规约包"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No spec packages requested yet"
+msgstr "尚未请求任何规约包"
+
 #: src/components/SpaceGroups.tsx
 msgid "No spex repositories here yet"
 msgstr "这里还没有 spex 仓库"
@@ -3391,6 +3610,14 @@ msgstr "这里还没有 spex 仓库"
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
 msgstr "没有未完成的意图记录。"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No version meets every requirement:"
+msgstr "没有版本满足全部要求："
+
+#: src/components/EnvironmentSection.tsx
+msgid "No working folder on this device"
+msgstr "本机没有工作文件夹"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -3449,6 +3676,12 @@ msgstr "未连接"
 msgid "not deleted"
 msgstr "未删除"
 
+#. a listed playbook no config enables
+#. section heading: playbooks this config does not enable
+#: src/components/LibrarySurface.tsx
+msgid "Not enabled"
+msgstr "未启用"
+
 #. the cited item is not in this tree
 #. the cited item is not in this tree
 #: src/components/SpecItemRows.tsx
@@ -3458,6 +3691,11 @@ msgstr "未找到"
 #: src/components/ModelField.tsx
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "不在此运行时的列表中。请检查模型 ID。"
+
+#. a spec package's files are not installed on this device yet
+#: src/components/EnvironmentSection.tsx
+msgid "Not installed"
+msgstr "未安装"
 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
@@ -3474,6 +3712,11 @@ msgstr "尚未读取"
 #: src/components/AgentChip.tsx
 msgid "not ready"
 msgstr "未就绪"
+
+#. a requested spec package the lock holds no version of yet
+#: src/components/EnvironmentSection.tsx
+msgid "not resolved"
+msgstr "未解析"
 
 #. stands where the Captain agent is not configured
 #: src/components/CaptainHome.tsx
@@ -3616,7 +3859,7 @@ msgstr "每个状态行为一条规约条目，来自上次编译"
 msgid "Only on this device"
 msgstr "仅在此设备上"
 
-#. open this draft's authoring workspace
+#. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
 msgid "Open"
 msgstr "打开"
@@ -3649,10 +3892,18 @@ msgstr "打开 {title} — 正在 {project} 中运行"
 msgid "Open and send a message to pick it up."
 msgstr "打开并发送一条消息即可接续。"
 
+#: src/components/DraftConversation.tsx
+msgid "Open Enable"
+msgstr "打开“启用”"
+
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "打开文件夹…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Open its page"
+msgstr "打开其页面"
 
 #: src/components/SpaceSync.tsx
 msgid "Open project"
@@ -3662,10 +3913,6 @@ msgstr "打开项目"
 #: src/components/SourcesTabs.tsx
 msgid "Open records"
 msgstr "未完成记录"
-
-#: src/components/DraftConversation.tsx
-msgid "Open Register"
-msgstr "打开“注册”"
 
 #: src/components/SpaceExplorer.tsx
 #: src/components/SpaceSync.tsx
@@ -3712,15 +3959,15 @@ msgstr "打开以重试或放弃该运行。"
 msgid "Opened {id}"
 msgstr "已打开 {id}"
 
-#. a draft is being opened
-#. a draft is being opened
+#. an authoring session is being opened
+#. an authoring session is being opened
 #: src/components/LibrarySurface.tsx
 msgid "Opening…"
 msgstr "打开中…"
 
 #: src/components/LibrarySurface.tsx
-msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
-msgstr "打开名为 {id} 的草稿，规范化文本已备好可粘贴 — 不会写入或编译任何内容"
+msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
+msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — 不写入也不编译"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -3777,14 +4024,27 @@ msgstr "粘贴源文或选择文件"
 msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
 msgstr "粘贴规程源文 — 自由文本、SKILL.md 或工作流 markdown…"
 
+#. a spec package's source: a folder in the working folder
+#: src/lib/environments.ts
+msgid "path"
+msgstr "路径"
+
 #. field holding a path to select and copy
 #: src/components/SpaceSurface.tsx
 msgid "Path"
 msgstr "路径"
 
+#: src/lib/environments.ts
+msgid "path {path}"
+msgstr "路径 {path}"
+
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
 msgstr "权限模式"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Pick a folder inside {folder}"
+msgstr "请选择 {folder} 内的文件夹"
 
 #. choose where on the Git host a project's records go
 #: src/components/SpaceGroups.tsx
@@ -3804,6 +4064,11 @@ msgstr "请先选择项目（{keys}）"
 msgid "Pick file"
 msgstr "选择文件"
 
+#. open the system's folder picker
+#: src/components/EnvironmentSection.tsx
+msgid "Pick folder"
+msgstr "选择文件夹"
+
 #. tuning choice: set an explicit value here
 #: src/components/TuningField.tsx
 msgid "pin a value…"
@@ -3812,6 +4077,11 @@ msgstr "指定一个值…"
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "把六行示例放为你的第一条消息"
+
+#. a spec package's artifact kind: a playbook
+#: src/lib/environments.ts
+msgid "playbook"
+msgstr "规程"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -3840,6 +4110,7 @@ msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
 
 #: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
 msgid "Player for {role}"
 msgstr "{role} 的 Player"
 
@@ -3864,7 +4135,7 @@ msgstr "想用自己的？"
 msgid "preferences"
 msgstr "偏好设置"
 
-#. open a draft carrying the example's text
+#. open an authoring session carrying the example's text
 #: src/components/LibrarySurface.tsx
 msgid "Prefill"
 msgstr "预填"
@@ -3923,8 +4194,8 @@ msgid "Prompt"
 msgstr "提示词"
 
 #: src/components/DraftConversation.tsx
-msgid "Proposed registration"
-msgstr "拟定的注册信息"
+msgid "Proposed enabling"
+msgstr "拟定的启用信息"
 
 #. an agent chip's model reading when the provider's own default is taken
 #: src/lib/session-agents.ts
@@ -3947,6 +4218,24 @@ msgstr "服务商提示"
 #: src/components/SourcesTabs.tsx
 msgid "PRs"
 msgstr "PR"
+
+#. upload the spec package to the registry
+#. upload the spec package to the registry
+#: src/components/DraftRegisterTab.tsx
+msgid "Publish"
+msgstr "发布"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Published {name} {version}"
+msgstr "已发布 {name} {version}"
+
+#. a spec package is being uploaded to the registry
+#. a spec package is being uploaded to the registry
+#. a spec package is being uploaded to the registry
+#: src/components/DraftRegisterTab.tsx
+#: src/lib/environments.ts
+msgid "Publishing…"
+msgstr "发布中…"
 
 #. sync step: sending to the host
 #: src/lib/space.ts
@@ -4155,33 +4444,18 @@ msgstr "刷新状态和 GitHub 数据"
 msgid "Refreshing…"
 msgstr "刷新中…"
 
-#. tab: write the compiled playbook into the config
-#. write the compiled playbook into the config
-#: src/components/AuthoringWorkspace.tsx
-#: src/components/DraftRegisterTab.tsx
-msgid "Register"
-msgstr "注册"
-
 #: src/components/ProjectPalette.tsx
 msgid "Register this existing repository"
 msgstr "注册这个已有的仓库"
 
-#: src/components/LibrarySurface.tsx
-msgid "Registered /{command}"
-msgstr "已注册 /{command}"
+#. a spec package's source: the registry
+#: src/lib/environments.ts
+msgid "registry"
+msgstr "注册表"
 
-#: src/components/LibrarySurface.tsx
-msgid "Registered. Sessions started before this registration must be restarted to use it."
-msgstr "已注册。在此之前开始的会话须重启后才能使用。"
-
-#. the registration is in flight
-#: src/components/DraftRegisterTab.tsx
-msgid "Registering…"
-msgstr "注册中…"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Registers the last compile — the source changed since."
-msgstr "注册的是上次编译的结果 — 此后源文已更改。"
+#: src/lib/environments.ts
+msgid "registry {requirement}"
+msgstr "注册表 {requirement}"
 
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
@@ -4199,12 +4473,13 @@ msgstr "重新加载页面"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
-#. confirm: take this playbook out of the config
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
+#. confirm: take this spec package out of the requests
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
-#: src/components/LibrarySurface.tsx
+#. take this spec package out of the requests
+#: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
@@ -4221,8 +4496,13 @@ msgid "Remove {id}?"
 msgstr "移除 {id}？"
 
 #: src/components/ComposerAttachments.tsx
+#: src/components/EnvironmentSection.tsx
 msgid "Remove {name}"
 msgstr "移除 {name}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Remove {name}?"
+msgstr "移除 {name}？"
 
 #: src/components/NextCard.tsx
 msgid "Remove {title}"
@@ -4232,10 +4512,6 @@ msgstr "移除 {title}"
 msgid "Remove {title} from history"
 msgstr "从历史中移除 {title}"
 
-#: src/components/LibrarySurface.tsx
-msgid "Remove /{command} from the config"
-msgstr "从配置中移除 /{command}"
-
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
 msgstr "从 Spex 移除（仓库保留在磁盘上）"
@@ -4244,17 +4520,13 @@ msgstr "从 Spex 移除（仓库保留在磁盘上）"
 msgid "Remove from Spex? The repo stays on disk."
 msgstr "从 Spex 移除？仓库会保留在磁盘上。"
 
-#: src/components/LibrarySurface.tsx
-msgid "Remove from the config (compiled artifacts stay in the library)"
-msgstr "从配置中移除（编译产物保留在规程库中）"
-
 #: src/components/ProjectsSurface.tsx
 msgid "Remove project"
 msgstr "移除项目"
 
 #: src/components/LibrarySurface.tsx
-msgid "Remove the draft, its conversation, and its source"
-msgstr "移除草稿及其对话和源文"
+msgid "Remove the session and its conversation; the spec package folder stays"
+msgstr "移除会话及其对话；规约包文件夹保留"
 
 #: src/components/ProjectGroup.tsx
 msgid "Remove this intent from history"
@@ -4267,10 +4539,6 @@ msgstr "从历史中移除此意图？"
 #: src/components/Composer.tsx
 msgid "Remove this message"
 msgstr "移除这条消息"
-
-#: src/components/LibrarySurface.tsx
-msgid "Remove this playbook from the config?"
-msgstr "从配置中移除此规程？"
 
 #: src/components/SettingsSurface.tsx
 msgid "Remove this player from the roster"
@@ -4286,6 +4554,8 @@ msgid "Removed “{title}”"
 msgstr "已移除“{title}”"
 
 #. queue row control, busy: the removal is in flight
+#. the removal is in flight
+#: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 msgid "Removing…"
 msgstr "移除中…"
@@ -4299,8 +4569,8 @@ msgid "Replace the source with pasted text or a file"
 msgstr "用粘贴的文本或文件替换源文"
 
 #: src/components/DraftSourceTab.tsx
-msgid "Replaces the draft's source"
-msgstr "将替换草稿的源文"
+msgid "Replaces the playbook's source"
+msgstr "替换规程的源文"
 
 #: src/components/Composer.tsx
 msgid "Reply to {player}…"
@@ -4319,6 +4589,26 @@ msgstr "自动模式下智能体可在常规范围之外写入的仓库相对路
 msgid "Report it"
 msgstr "上报这个问题"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Repository URL"
+msgstr "仓库 URL"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request {requirement}"
+msgstr "请求 {requirement}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a folder inside the working folder"
+msgstr "请求工作文件夹内的一个文件夹"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a Git repository at a branch, tag or commit"
+msgstr "请求某个分支、标签或提交上的 Git 仓库"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Requested {name}"
+msgstr "已请求 {name}"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Requested action"
 msgstr "请求的操作"
@@ -4330,6 +4620,14 @@ msgstr "请求工具审批：{tool}"
 #: src/state/reducer.ts
 msgid "Requested tool approval: {tool} — {reason}"
 msgstr "请求工具审批：{tool} — {reason}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Requests changed; resolve again to install"
+msgstr "请求已更改；请重新解析后安装"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Requests the spec package by path, then writes the playbook and any new player"
+msgstr "按路径请求规约包，再写入规程和新的 Player"
 
 #: src/components/ProjectGroup.tsx
 msgid "Resize History"
@@ -4362,6 +4660,22 @@ msgstr "调整图谱窗格大小"
 #: src/components/SpaceExplorer.tsx
 msgid "Resize the tree pane"
 msgstr "调整目录树窗格大小"
+
+#. resolve the changed requests into a new lock
+#: src/components/EnvironmentSection.tsx
+msgid "Resolve again"
+msgstr "重新解析"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Resolve the requests into a new lock and install it"
+msgstr "将请求解析为新的锁并安装"
+
+#. the environment's requests are being resolved into a lock
+#. the environment's requests are being resolved into a lock
+#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
+msgid "Resolving…"
+msgstr "解析中…"
 
 #. act: bring back the interrupted work's saved position and report what was recorded; nothing runs again
 #: src/components/SessionRecovery.tsx
@@ -4541,6 +4855,19 @@ msgstr "在项目目录中生成一个："
 #: src/components/ProjectPalette.tsx
 msgid "Scaffold specs when creating"
 msgstr "创建时生成规约"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Search the registry"
+msgstr "搜索注册表"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Search the registry and request a version"
+msgstr "搜索注册表并请求某个版本"
+
+#. the registry search is in flight
+#: src/components/EnvironmentSection.tsx
+msgid "Searching…"
+msgstr "搜索中…"
 
 #: src/App.tsx
 msgid "seeding the example failed"
@@ -4823,6 +5150,10 @@ msgstr "请先登录"
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "Sign in to publish"
+msgstr "登录后发布"
+
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
 msgid "Sign out"
@@ -4869,6 +5200,11 @@ msgstr "让此设备退出 {host}；所有记录仍保留在此"
 msgid "size — items"
 msgstr "大小 — 条目数"
 
+#. a spec package's artifact kind: an Agent Skills folder
+#: src/lib/environments.ts
+msgid "skill"
+msgstr "技能"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Slash command"
 msgstr "斜杠命令"
@@ -4876,6 +5212,11 @@ msgstr "斜杠命令"
 #: src/main.tsx
 msgid "Something broke in the UI"
 msgstr "界面出错了"
+
+#. a spec package's artifact kind: source material
+#: src/lib/environments.ts
+msgid "source"
+msgstr "源材料"
 
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
@@ -4890,14 +5231,10 @@ msgstr "源文"
 msgid "Source file path (overrides the text)"
 msgstr "源文件路径（优先于文本）"
 
-#. draft state chip, at most 14 characters: the draft's library directory is gone
+#. authoring state chip, at most 14 characters: the spec package folder is gone from the working folder
 #: src/lib/drafts.ts
 msgid "Source missing"
 msgstr "源文缺失"
-
-#: src/components/LibrarySurface.tsx
-msgid "Source this playbook was loaded from: {from}"
-msgstr "此规程的来源：{from}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
@@ -4916,6 +5253,11 @@ msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未完�
 msgid "space.issues"
 msgstr "问题"
 
+#. a spec package's artifact kind: the spec
+#: src/lib/environments.ts
+msgid "spec"
+msgstr "规约"
+
 #. compile phase: slc derives the spec items
 #: src/lib/compile-log.ts
 msgid "Spec items"
@@ -4929,6 +5271,10 @@ msgstr "规约包引用图谱"
 #: src/lib/space.ts
 msgid "spec package lock"
 msgstr "规约包锁定文件"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Spec package name"
+msgstr "规约包名称"
 
 #. catalog family: the spec packages the environment asks for
 #: src/lib/space.ts
@@ -4959,6 +5305,10 @@ msgstr "Spex 无法在 <0>{path}</0> 创建初始配置 — 请确认该文件�
 msgid "Spex could not read this block"
 msgstr "Spex 无法读取此代码块"
 
+#: src/state/store.ts
+msgid "Spex could not read what this would publish."
+msgstr "Spex 无法读取此次将要发布的内容。"
+
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex 还没有配置文件 — 规程不可用。"
@@ -4970,6 +5320,10 @@ msgstr "Spex 本身跟随系统主题。"
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex 导航"
+
+#: src/components/LibrarySurface.tsx
+msgid "Spex repository shown"
+msgstr "显示的 spex 仓库"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -5086,6 +5440,10 @@ msgstr "步骤：{state}"
 #: src/components/SpaceSync.tsx
 msgid "Stop"
 msgstr "停止"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Stop requesting this spec package"
+msgstr "不再请求此规约包"
 
 #. how a run ended: it was stopped
 #: src/components/MachineCard.tsx
@@ -5332,17 +5690,13 @@ msgstr "无法加载对话：{reason}"
 msgid "The diff is cut here; the file is longer."
 msgstr "差异在此截断；文件更长。"
 
-#: src/lib/drafts.ts
-msgid "The draft's library directory is gone; only Delete remains"
-msgstr "草稿的库目录已不存在；只能删除"
-
 #: src/components/AuthoringWorkspace.tsx
 msgid "The draft's markdown as it stands on disk"
 msgstr "草稿在磁盘上的 markdown 原文"
 
 #: src/components/DraftSourceTab.tsx
-msgid "The file is copied in as the draft's source"
-msgstr "该文件会被复制为草稿的源文"
+msgid "The file is copied in as the playbook's source"
+msgstr "该文件会被复制为规程的源文"
 
 #: src/lib/media-client.ts
 msgid "The file returned inconsistent content."
@@ -5368,9 +5722,17 @@ msgstr "上一轮失败。发送消息即可接续。"
 msgid "The ledger could not be loaded: {reason}"
 msgstr "无法加载意图台账：{reason}"
 
+#: src/components/EnvironmentSection.tsx
+msgid "The original text stands"
+msgstr "保留原文"
+
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"
 msgstr "项目的规约包（{keys}）"
+
+#: src/components/LibrarySurface.tsx
+msgid "The project's spex repository: {repository}"
+msgstr "项目的 spex 仓库：{repository}"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "The proposal names {roles}, which the compiled entry lacks."
@@ -5404,6 +5766,10 @@ msgstr "保存失败"
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "登录未能开始"
+
+#: src/lib/drafts.ts
+msgid "The spec package folder is gone from the working folder; only Delete remains"
+msgstr "规约包文件夹已不在工作文件夹中；只能删除"
 
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -5604,6 +5970,10 @@ msgstr "试试 Academy 示例"
 msgid "Try the example"
 msgstr "试试示例"
 
+#: src/components/BindingEditor.tsx
+msgid "Tuning is personal — set it in Settings"
+msgstr "调优属于个人设置 — 请在“设置”中调整"
+
 #: src/lib/media.ts
 msgid "Turn {turn}"
 msgstr "第 {turn} 轮"
@@ -5625,6 +5995,11 @@ msgstr "就地调整 {name} 智能体"
 #: src/components/CaptainHome.tsx
 msgid "Tweak the Captain agent in place"
 msgstr "就地调整 Captain 智能体"
+
+#. a required role no player answers yet
+#: src/components/LibrarySurface.tsx
+msgid "unbound"
+msgstr "未绑定"
 
 #: src/components/ProjectsSurface.tsx
 msgid "uncommitted changes"
@@ -5721,6 +6096,10 @@ msgstr "{age}由智能体更新"
 msgid "Updated {age} by you"
 msgstr "{age}由你更新"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "Upload {path} to the registry"
+msgstr "将 {path} 上传到注册表"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Upload failed"
 msgstr "上传失败"
@@ -5760,13 +6139,13 @@ msgstr "使用设置中的浏览器选项"
 msgid "Use default"
 msgstr "使用默认"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Version of {name}"
+msgstr "{name} 的版本"
+
 #: src/components/SpaceSync.tsx
 msgid "View diff"
 msgstr "查看差异"
-
-#: src/components/LibrarySurface.tsx
-msgid "View source"
-msgstr "查看源文"
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
@@ -5845,6 +6224,10 @@ msgstr "等待回复"
 msgid "Waits for the reply — the agent switches on the next turn"
 msgstr "等待回复 — 智能体将在下一轮切换"
 
+#: src/lib/environments.ts
+msgid "Waits for the sync of {repository}"
+msgstr "等待 {repository} 同步完成"
+
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."
 msgstr "项目所在位置只记录在本设备；从不同步。"
@@ -5922,10 +6305,6 @@ msgstr "执行中…"
 msgid "Writable paths (comma-separated)"
 msgstr "可写路径（逗号分隔）"
 
-#: src/components/DraftRegisterTab.tsx
-msgid "Writes the playbook and any new player to the shared config"
-msgstr "把规程和新增的 Player 写入共享配置"
-
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
@@ -5951,6 +6330,17 @@ msgstr "你的群组"
 #: src/components/SpaceSignIn.tsx
 msgid "Your groups and each project's records shared with its members · nothing contacted until you sign in"
 msgstr "你的群组，以及与成员共享的各项目记录 · 登录前不会联系任何服务"
+
+#. switch: show your own group's playbooks
+#. switch: show your own group's playbooks
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Your own group"
+msgstr "你自己的群组"
+
+#: src/components/SettingsSurface.tsx
+msgid "Your own group's config, in {repository}"
+msgstr "你自己的群组的配置，位于 {repository}"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx

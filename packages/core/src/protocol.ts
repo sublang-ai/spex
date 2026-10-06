@@ -308,6 +308,10 @@ export interface EnvironmentState {
   busy: "resolving" | "installing" | "publishing" | null;
   /** The last operation's failure, phrased for the reader; null when none. */
   error: string | null;
+  /** The last publish from this spex repository's working folder that
+   * succeeded: what the registry now holds and its page there
+   * (playbook-library-93). */
+  published?: { name: string; version: string; url: string } | null;
 }
 export type EnvironmentRequest = (
   | { kind: "registry"; version: string }
@@ -345,6 +349,31 @@ export interface PlaybookAvailability {
   enabled: ("project" | "own")[];
   /** The module is present on this device (a path source may be missing). */
   present: boolean;
+  /** Each enabling config's role bindings: a project's names players
+   * alone, your own group's may carry tuning; `display` says what the
+   * binding effectively runs (playbook-library-1). */
+  bindings?: { project?: Record<string, RoleBindingSummary>; own?: Record<string, RoleBindingSummary> };
+  /** The installed playbook artifact's folder on this device, or the
+   * path source's (playbook-library-29). */
+  folder?: string;
+}
+
+/** A configured entry failing validation (playbook-library-2): an
+ * unresolved required role, a duplicate command, or a playbook no
+ * environment of the session exports. */
+export interface InvalidPlaybookEntry {
+  config: "project" | "own";
+  playbook: string;
+  /** The specific failure, phrased for the reader. */
+  reason: string;
+}
+
+/** What `environment.publish` would upload (playbook-library-93). */
+export interface PublishPreview {
+  name: string;
+  version: string;
+  /** Release paths, in upload order. */
+  files: string[];
 }
 
 /** A project: a working folder paired with a spex repository
@@ -838,7 +867,10 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("playbook.add"),
     playbookId: z.string().min(1),
-    from: z.string().min(1),
+    /** A legacy module specifier; an entry enabling a playbook an
+     * environment exports carries none (DR-104), and a project's file
+     * refuses one. */
+    from: z.string().min(1).optional(),
     roles: z.record(z.string(), playerIdSchema),
     options: z.record(z.string(), z.unknown()).optional(),
   }),
@@ -980,12 +1012,18 @@ export const commandSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("usage.get"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("usage.days"), id }),
-  z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema }),
+  /** `repository` names the spex repository whose config the op
+   * writes — a project's, or your own group's, the default
+   * (playbook-library-3, DR-103). */
+  z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema, repository: repositoryKeySchema.optional() }),
   z.object({ type: z.literal("compile.check"), id }),
   z.object({
     type: z.literal("playbook.artifacts"),
     id,
     playbookId: z.string().min(1),
+    /** The spex repository whose environment exports the playbook
+     * (playbook-library-24); absent, the composed config's. */
+    repository: repositoryKeySchema.optional(),
   }),
   z.object({
     type: z.literal("compile.run"),
@@ -1101,7 +1139,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("environment.resolve"), id, repository: repositoryKeySchema }).strict(),
   z.object({ type: z.literal("environment.install"), id, repository: repositoryKeySchema }).strict(),
   z.object({ type: z.literal("environment.search"), id, query: z.string().max(200) }).strict(),
-  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
+  /** `dryRun` runs the checks and replies the inline summary — name,
+   * version and the files it would upload — uploading nothing
+   * (playbook-library-93). */
+  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
   // one spex repository at a time, `repository` naming it by its key;
@@ -1199,6 +1240,9 @@ export const commandSchema = z.discriminatedUnion("type", [
     bindings: z.record(z.string(), playerIdSchema),
     /** Lanes to create for bindings naming a player the roster lacks. */
     newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
+    /** The spex repository to enable in — the project's, the default,
+     * or your own group's (playbook-library-7, playbook-library-61). */
+    repository: repositoryKeySchema.optional(),
   }),
   z.object({
     type: z.literal("draft.player.set"),
@@ -1286,8 +1330,14 @@ export interface CommandResults {
   "environment.resolve": { accepted: true };
   "environment.install": { accepted: true };
   "environment.search": { packages: { name: string; description: string | null; versions: string[] }[] };
-  "environment.publish": { accepted: true };
-  "environment.playbooks": { project: PlaybookAvailability[] | null; own: PlaybookAvailability[] };
+  "environment.publish": { accepted: true; preview?: PublishPreview };
+  "environment.playbooks": {
+    project: PlaybookAvailability[] | null;
+    own: PlaybookAvailability[];
+    /** Enabled entries failing the fail-closed validation
+     * (playbook-library-2), each with the specific failure. */
+    invalid?: InvalidPlaybookEntry[];
+  };
   "space.get": GroupsState;
   "space.refresh": { accepted: true };
   "space.signin.start":
@@ -1348,7 +1398,9 @@ export type DraftState =
   | "failed"
   | "interrupted"
   | "compiled"
-  | "changed";
+  | "changed"
+  /** Enabled in a config, the session kept to work on (playbook-library-61). */
+  | "enabled";
 
 export type DraftCompileOutcome =
   | "running"
@@ -1395,8 +1447,17 @@ export interface DraftInfo {
   touchedAt: number;
   /** The source's first line, null with no source. */
   firstLine: string | null;
-  /** The library directory is gone; the row offers only Delete. */
+  /** The spec package folder is gone; the row offers only Delete. */
   sourceMissing?: boolean;
+  /** The spec package under development's name, `<org>/<id>`
+   * (playbook-library-52). */
+  package?: string;
+  /** Its folder in the working folder, e.g. `spex-packages/<id>`
+   * (playbook-library-70). */
+  packagePath?: string;
+  /** The playbook artifact's `<id>.md`, relative to the working folder
+   * (playbook-library-56). */
+  sourcePath?: string;
   activity: DraftActivity;
   state: DraftState;
   /** Boss messages waiting for the draft to go idle, in order. */

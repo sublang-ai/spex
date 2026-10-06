@@ -32,7 +32,11 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
 function defaultReply(type: string): object {
   return type === "specs.get"
     ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
-    : {};
+    : type === "environment.get"
+      ? { repository: "p1", language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null }
+      : type === "environment.playbooks"
+        ? { project: [], own: [] }
+        : {};
 }
 
 vi.mock("./state/store.js", async (importOriginal) => {

@@ -15,7 +15,7 @@ import type { DraftInfo } from "@sublang/spex-core/protocol";
 
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import type { DraftSourceMode, DraftSourceState } from "../state/store.js";
-import { busyReason } from "../lib/drafts.js";
+import { busyReason, draftSourcePath } from "../lib/drafts.js";
 import { relativeAge } from "../lib/time.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
@@ -176,8 +176,8 @@ export function DraftSourceTab({
           <span data-testid="paste-caption" className="text-xs text-neutral-500">
             {waiting ??
               (mode.pastePath.trim()
-                ? i18n._("The file is copied in as the draft's source")
-                : i18n._("Replaces the draft's source"))}
+                ? i18n._("The file is copied in as the playbook's source")
+                : i18n._("Replaces the playbook's source"))}
           </span>
           <span className="ml-auto flex items-center gap-1.5">
             <button
@@ -249,6 +249,14 @@ export function DraftSourceTab({
   return (
     <div data-testid="source-view" className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Where the file is in the working folder (playbook-library-56). */}
+        <span
+          data-testid="source-path"
+          title={draftSourcePath(draft)}
+          className="min-w-0 truncate font-mono text-xs text-neutral-500"
+        >
+          {draftSourcePath(draft)}
+        </span>
         <span
           data-testid="source-caption"
           title={new Date(source.mtime).toLocaleString(currentLocale())}

@@ -18,21 +18,40 @@ import { ageSpan, relativeAge } from "./time.js";
 import { i18n } from "../i18n.js";
 import type { StatusTone } from "./labels.js";
 
-/** A draft id names the file, the directory, and the /command. */
-export const DRAFT_ID_RULE = /^[a-z][a-z0-9_-]*$/u;
+/** A playbook id names the spec package, the file, and the /command;
+ * it is an Agent Skills name as well (DR-104, playbook-library-51). */
+export const DRAFT_ID_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+export const DRAFT_ID_MAX = 64;
+
+/** Whether an id meets the Agent Skills name rule. */
+export function isDraftId(id: string): boolean {
+  return id.length <= DRAFT_ID_MAX && DRAFT_ID_RULE.test(id);
+}
 
 /** The id field's caption (playbook-library-51). A function, never a
  * constant: a text read at module load would freeze the language the
  * module was imported in (localization-4). */
 export function draftIdCaption(): string {
   return i18n._(
-    "Lowercase; it names the file and the /command — the command can change at registration",
+    "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it",
   );
 }
 
 /** The rule, as the refusal names it. */
 export function draftIdRuleText(): string {
-  return i18n._("Lowercase letters, digits, - or _, starting with a letter");
+  return i18n._("Lowercase letters and digits in words joined by single hyphens, at most 64 characters");
+}
+
+/** The spec package folder under development, in the working folder
+ * (playbook-library-70). */
+export function draftPackagePath(draft: DraftInfo): string {
+  return draft.packagePath ?? `spex-packages/${draft.id}`;
+}
+
+/** The playbook artifact's `<id>.md`, in the working folder
+ * (playbook-library-56). */
+export function draftSourcePath(draft: DraftInfo): string {
+  return draft.sourcePath ?? `${draftPackagePath(draft)}/playbooks/en/${draft.id}/${draft.id}.md`;
 }
 
 /** The chip's word (playbook-library-50): at most 14 characters, the
@@ -41,7 +60,7 @@ export function draftChipWord(draft: DraftInfo): string {
   if (draft.sourceMissing) {
     return i18n._({
       id: "Source missing",
-      comment: "draft state chip, at most 14 characters: the draft's library directory is gone",
+      comment: "authoring state chip, at most 14 characters: the spec package folder is gone from the working folder",
     });
   }
   switch (draft.state) {
@@ -80,6 +99,11 @@ export function draftChipWord(draft: DraftInfo): string {
         id: "Changed",
         comment: "draft state chip, at most 14 characters: the source changed after the last compile",
       });
+    case "enabled":
+      return i18n._({
+        id: "Enabled",
+        comment: "authoring state chip, at most 14 characters: the compiled playbook is enabled in a config",
+      });
   }
 }
 
@@ -91,6 +115,7 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
   switch (draft.state) {
     case "compiling":
     case "compiled":
+    case "enabled":
       return "emerald";
     case "failed":
       return "red";
@@ -106,7 +131,7 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
  * in the chip itself (playbook-library-50). */
 export function draftChipTitle(draft: DraftInfo, now: number): string | undefined {
   if (draft.sourceMissing) {
-    return i18n._("The draft's library directory is gone; only Delete remains");
+    return i18n._("The spec package folder is gone from the working folder; only Delete remains");
   }
   const compile = draft.compile;
   if (!compile) return undefined;

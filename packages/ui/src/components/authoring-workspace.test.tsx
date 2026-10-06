@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// DR-058 authoring coverage over a simulated document: the Drafts
-// section and the New playbook field (playbook-library-50/51), the
-// workspace's header, tabs, and compile control by the state table
+// DR-058/DR-104 authoring coverage over a simulated document: the
+// Authoring section and the New playbook field (playbook-library-50/51),
+// the workspace's header, tabs, and compile control by the state table
 // (playbook-library-52/57/59/60), the conversation's bubbles, cards,
 // and running mark (playbook-library-53), the composer's labels and
 // queue (playbook-library-54), the agent picker (playbook-library-55),
-// the Source tab's edit, conflict, and paste paths
-// (playbook-library-56), the band's phases and failure
-// (playbook-library-57/58), the Register tab's prefill precedence and
-// mismatch (playbook-library-61) and its role defaults
-// (playbook-library-88), Delete's confirm (playbook-library-63),
-// the example prefill (playbook-library-35), and the 14-character
-// budget on every workspace control (DR-041).
+// the Source tab's path, edit, conflict, and paste paths
+// (playbook-library-56), the band's phases, failure and Cancel
+// (playbook-library-57/58, playbook-library-30), the Enable tab's
+// prefill precedence, mismatch and spex repository
+// (playbook-library-61) and its role defaults (playbook-library-88),
+// Publish beneath it (playbook-library-93), Delete's confirm
+// (playbook-library-63), the example prefill (playbook-library-35),
+// and the 14-character budget on every workspace control (DR-041).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -25,12 +26,13 @@ import {
   within,
 } from "@testing-library/react";
 import type {
-  BuiltinPlaybookInfo,
+  CommandResults,
   ConfigState,
   DraftInfo,
   ReadinessEntry,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
+import { OWN_KEY, available, home } from "../fixtures/playbooks.js";
 
 afterEach(cleanup);
 
@@ -101,16 +103,34 @@ const READINESS: ReadinessEntry[] = [
   },
 ];
 
-const BUILTINS: BuiltinPlaybookInfo[] = [
-  {
-    id: "review",
-    command: "review",
-    intent: "review of committed phases",
-    from: "@sublang/playbook/review/registry",
-    roles: ["host"],
-    configured: false,
-  },
-];
+/** What the environments export: the project's own `code` playbook,
+ * enabled there, and the built-in `review` no config enables. */
+function playbookLists(extra: ReturnType<typeof available>[] = []): CommandResults["environment.playbooks"] {
+  return {
+    project: [
+      available({
+        id: "code",
+        package: "acme/flows",
+        version: "2.0.0",
+        source: "registry",
+        repository: PROJECT_ID,
+        roles: ["coder", "reviewer"],
+        enabled: ["project"],
+        bindings: {
+          project: {
+            coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+            reviewer: { playerId: "dev.reviewer", display: "gpt-6-astra" },
+          },
+        },
+      }),
+      available({ id: "review", repository: PROJECT_ID, roles: ["host"] }),
+      ...extra,
+    ],
+    own: [available({ id: "review", roles: ["host"] })],
+  };
+}
+
+let lists: CommandResults["environment.playbooks"];
 
 const ARTIFACTS = {
   source: "# Triage",
@@ -242,8 +262,11 @@ function seed(overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}) 
     connection: "open",
     configState: CONFIG_STATE,
     readiness: READINESS,
-    builtins: BUILTINS,
-    loadBuiltins: vi.fn(async () => {}),
+    space: home(),
+    playbooksSide: "project",
+    playbookLists: undefined,
+    environments: {},
+    environmentErrors: {},
     drafts: {},
     draftsLoaded: true,
     draftViews: {},
@@ -300,13 +323,18 @@ beforeEach(() => {
     }),
   });
   commandMock.mockReset();
+  lists = playbookLists();
   commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
     const state = useAppStore.getState();
     switch (type) {
       case "compile.check":
         return { node: { ok: true, version: "v23.6.0", command: "node" }, slc: { ok: true, command: ["npx", "@sublang/slc"] } };
-      case "library.builtins":
-        return { builtins: BUILTINS };
+      case "environment.playbooks":
+        return lists;
+      case "environment.get":
+        return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null };
+      case "playbook.artifacts":
+        return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
       case "config.edit":
         return CONFIG_STATE;
       case "draft.list":
@@ -345,30 +373,37 @@ beforeEach(() => {
   } as unknown as Parameters<typeof setClientForTests>[0]);
 });
 
-describe("playbook-library-50: the Drafts section", () => {
-  test("rows carry the id, the chip, the age, Open, and Delete; the chip's title holds the phase", () => {
+describe("playbook-library-50: the Authoring section", () => {
+  test("rows carry the id, the chip, the age, Open, and Delete; the chip's title holds the phase", async () => {
     seed({
       drafts: {
         changelog: { ...COMPILED, id: "changelog" },
+        intake: draftInfo({ id: "intake", state: "enabled", compile: { at: now - HOUR, by: "boss", outcome: "ok", roles: ["Triager"] } }),
         triage: draftInfo({
           state: "failed",
           compile: { at: now - 9 * HOUR, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed" },
         }),
         gone: draftInfo({ id: "gone", sourceMissing: true, firstLine: null }),
         broken: draftInfo({ id: "broken", diagnostic: "/home/local/drafts/broken/draft.json: expected fields v, id, createdAt, touchedAt, queued, failures" }),
+        // Another project's session is that project's.
+        elsewhere: draftInfo({ id: "elsewhere", projectId: "acme/tools-spex" }),
       },
     });
     render(<LibrarySurface />);
     const section = screen.getByTestId("drafts-section");
-    // Between the configured playbooks and the built-ins.
+    expect(within(section).getByRole("heading").textContent).toBe("Authoring");
+    // Between the playbooks and the ways to add a spec package.
+    const playbooks = await screen.findByTestId("playbooks-available");
     expect(
-      screen.getByTestId("playbook-card-code").compareDocumentPosition(section) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      playbooks.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      section.compareDocumentPosition(screen.getByTestId("builtins-section")) &
+      section.compareDocumentPosition(screen.getByTestId("add-packages")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    expect(within(section).queryByTestId("draft-row-elsewhere")).toBeNull();
+    // An enabled playbook's session stays, its chip saying so.
+    expect(within(within(section).getByTestId("draft-row-intake")).getByTestId("draft-chip").textContent).toBe("Enabled");
 
     const failed = within(section).getByTestId("draft-row-triage");
     const chip = within(failed).getByTestId("draft-chip");
@@ -380,9 +415,12 @@ describe("playbook-library-50: the Drafts section", () => {
 
     expect(within(within(section).getByTestId("draft-row-changelog")).getByTestId("draft-chip").textContent).toBe("Compiled");
 
-    // A draft whose directory is gone offers only Delete.
+    // A session whose spec package folder is gone offers only Delete.
     const missing = within(section).getByTestId("draft-row-gone");
     expect(within(missing).getByTestId("draft-chip").textContent).toBe("Source missing");
+    expect(within(missing).getByTestId("draft-chip").title).toBe(
+      "The spec package folder is gone from the working folder; only Delete remains",
+    );
     expect(within(missing).queryByTestId("draft-open-gone")).toBeNull();
     expect(within(missing).getByTestId("draft-delete-gone")).toBeTruthy();
 
@@ -398,45 +436,55 @@ describe("playbook-library-50: the Drafts section", () => {
     expect(screen.queryByTestId("new-playbook-section")).toBeNull();
   });
 
-  test("without a draft the section is absent, the empty state names New playbook, and the field stands below the built-ins", () => {
-    seed({
-      configState: { ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary, playbooks: [] } },
-    });
+  test("without a session the section is absent, the empty state names New playbook, and the field stands after the playbooks", async () => {
+    lists = { project: [available({ id: "review", repository: PROJECT_ID, roles: ["host"] })], own: [] };
+    seed();
     render(<LibrarySurface />);
     expect(screen.queryByTestId("drafts-section")).toBeNull();
-    expect(screen.getByTestId("playbooks-empty").textContent).toBe(
+    expect((await screen.findByTestId("playbooks-empty")).textContent).toBe(
       "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
     );
     const field = screen.getByTestId("new-playbook-section");
     expect(
-      screen.getByTestId("builtins-section").compareDocumentPosition(field) &
+      screen.getByTestId("playbooks-available").compareDocumentPosition(field) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByTestId("new-playbook-button").textContent).toBe("New playbook");
     expect(screen.getByTestId("new-playbook").textContent).toContain(
-      "Lowercase; it names the file and the /command — the command can change at registration",
+      "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it",
     );
+  });
+
+  test("your own group's side carries no Authoring section", async () => {
+    seed({ drafts: { triage: draftInfo() }, playbooksSide: "own" });
+    render(<LibrarySurface />);
+    await screen.findByTestId("playbook-card-review");
+    expect(screen.queryByTestId("drafts-section")).toBeNull();
+    expect(screen.queryByTestId("new-playbook")).toBeNull();
   });
 });
 
 describe("playbook-library-51: New playbook asks for the id", () => {
-  test("an id outside the rule or one a playbook or built-in holds is refused in place", () => {
+  test("an id outside the Agent Skills name rule, or one an environment's playbook holds, is refused in place", async () => {
     seed();
     render(<LibrarySurface />);
+    await screen.findByTestId("playbook-card-code");
     const input = screen.getByTestId("new-playbook-id");
-    fireEvent.change(input, { target: { value: "Triage" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByTestId("new-playbook-error").textContent).toBe(
-      "Lowercase letters, digits, - or _, starting with a letter",
-    );
+    for (const bad of ["Triage", "tri_age", "-triage", "tri--age", "a".repeat(65)]) {
+      fireEvent.change(input, { target: { value: bad } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(screen.getByTestId("new-playbook-error").textContent, bad).toBe(
+        "Lowercase letters and digits in words joined by single hyphens, at most 64 characters",
+      );
+    }
     fireEvent.change(input, { target: { value: "code" } });
     fireEvent.click(screen.getByTestId("new-playbook-button"));
     expect(screen.getByTestId("new-playbook-error").textContent).toBe(
-      "/code is already a configured playbook",
+      "code is already a playbook of acme/flows",
     );
     fireEvent.change(input, { target: { value: "review" } });
     fireEvent.click(screen.getByTestId("new-playbook-button"));
-    expect(screen.getByTestId("new-playbook-error").textContent).toContain("built-in");
+    expect(screen.getByTestId("new-playbook-error").textContent).toBe("review is a built-in — enable it instead");
     expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
   });
 
@@ -502,11 +550,11 @@ describe("playbook-library-51: New playbook asks for the id", () => {
 });
 
 describe("playbook-library-63: Delete behind the inline confirm", () => {
-  test("Keep writes nothing; Delete removes the draft", async () => {
+  test("Keep writes nothing; Delete removes the session, saying its spec package folder stays", async () => {
     seed({ drafts: { triage: draftInfo() } });
     render(<LibrarySurface />);
     fireEvent.click(screen.getByTestId("draft-delete-triage"));
-    expect(screen.getByText("Delete this draft and its source?")).toBeTruthy();
+    expect(screen.getByText("Delete this authoring session? Its spec package folder stays.")).toBeTruthy();
     const keep = screen.getByRole("button", { name: "Keep" });
     // The safe default holds focus (DR-010 §4).
     expect(document.activeElement).toBe(keep);
@@ -518,6 +566,10 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
       expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage" }),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("draft-row-triage")).toBeNull());
+    // The folder stays, and the surface says where.
+    const note = "Deleted triage; its spec package folder stays at spex-packages/triage";
+    expect((await screen.findByTestId("deleted-note")).textContent).toBe(note);
+    expect(screen.getByTestId("library-live").textContent).toBe(note);
   });
 
   test("a removal broadcast drops the draft everywhere, closing an open workspace", () => {
@@ -538,19 +590,21 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     fireEvent.click(screen.getByTestId("draft-delete-triage"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(screen.getByTestId("draft-row-error-triage").textContent).toBe(
-      "Delete waits: the draft's compile is running",
+      "Delete waits: the session's compile is running",
     );
     expect(commandMock).not.toHaveBeenCalledWith("draft.delete", expect.anything());
   });
 });
 
 describe("playbook-library-52: the workspace replaces the list", () => {
-  test("the header carries the way back, the id, and the chip; returning ends nothing", () => {
-    renderWorkspace(draftInfo(), { view: foldView(THREAD) });
+  test("the header carries the way back, the id with its spec package, and the chip; returning ends nothing", async () => {
+    renderWorkspace(draftInfo({ package: "me/triage" }), { view: foldView(THREAD) });
     expect(screen.queryByTestId("playbook-card-code")).toBeNull();
     const header = screen.getByTestId("authoring-workspace").querySelector("header")!;
     expect(screen.getByTestId("workspace-back").textContent).toContain("Playbooks");
     expect(header.textContent).toContain("triage");
+    expect(within(header).getByTestId("workspace-package").textContent).toBe("me/triage");
+    expect(within(header).getByTestId("workspace-package").title).toBe("spex-packages/triage");
     expect(within(header).getByTestId("draft-chip").textContent).toBe("Draft");
     // Both forms of the divider stand: the rule beside the panes and
     // the grip between them once they stack (DR-030, DR-041 §9).
@@ -570,12 +624,12 @@ describe("playbook-library-52: the workspace replaces the list", () => {
       "Source",
       "Gears",
       "Machine",
-      "Register",
+      "Enable",
     ]);
     expect(screen.getByTestId("compile-button").textContent).toBe("Compile");
 
     fireEvent.click(screen.getByTestId("workspace-back"));
-    expect(screen.getByTestId("playbook-card-code")).toBeTruthy();
+    expect(await screen.findByTestId("playbook-card-code")).toBeTruthy();
     expect(commandMock).not.toHaveBeenCalledWith("unsubscribe", expect.anything());
     expect(commandMock).not.toHaveBeenCalledWith("draft.abort", expect.anything());
     // The transcript stays for the next open.
@@ -617,7 +671,7 @@ describe("playbook-library-52: the workspace replaces the list", () => {
 describe("playbook-library-57/59/60: the right pane by the draft's state", () => {
   test("no source: the compiled tabs and Compile stand disabled with their reasons", () => {
     renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { source: null });
-    for (const name of ["Gears", "Machine", "Register"]) {
+    for (const name of ["Gears", "Machine", "Enable"]) {
       expect(tab(name).disabled).toBe(true);
       expect(tab(name).title).toBe("Compiles first");
     }
@@ -658,11 +712,11 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("compile-band").getAttribute("data-outcome")).toBe("running");
   });
 
-  test("a successful compile fills Gears and Machine, enables Register with a dot, and Changed captions the artifacts", async () => {
+  test("a successful compile fills Gears and Machine, enables Enable with a dot, and Changed captions the artifacts", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
-    expect(tab("Register").disabled).toBe(false);
-    expect(screen.getByTestId("tab-dot-register")).toBeTruthy();
+    expect(tab("Enable").disabled).toBe(false);
+    expect(screen.getByTestId("tab-dot-enable")).toBeTruthy();
     expect(screen.queryByTestId("tab-dot-source")).toBeNull();
     expect(screen.getByTestId("compile-roles").textContent).toBe("roles: Triager, Verifier");
 
@@ -674,9 +728,9 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("panel-machine").textContent).toContain("xstate");
     expect(screen.queryByTestId("artifact-caption")).toBeNull();
 
-    // Opening Register clears its dot.
-    fireEvent.click(tab("Register"));
-    expect(screen.queryByTestId("tab-dot-register")).toBeNull();
+    // Opening Enable clears its dot.
+    fireEvent.click(tab("Enable"));
+    expect(screen.queryByTestId("tab-dot-enable")).toBeNull();
 
     // The source changed since: the chip says so and the artifacts are captioned.
     act(() => {
@@ -702,7 +756,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
       draftInfo({ state: "failed", failures: 1, compile: { at: now - 60_000, by: "agent", outcome: "failed", phase: "gears2fsm", output: "result 'labeled' declared twice" } }),
     );
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
-    expect(tab("Register").disabled).toBe(true);
+    expect(tab("Enable").disabled).toBe(true);
     fireEvent.click(tab("Machine"));
     expect(screen.getByTestId("artifact-caption").textContent).toBe("from the last good compile");
   });
@@ -753,10 +807,26 @@ describe("playbook-library-57/58: the compile band", () => {
     expect(screen.getByTestId("last-output").textContent).toMatch(/^last output 4m \d\ds ago$/);
     expect(screen.getByTestId("compile-by").textContent).toBe("asked by the agent");
     expect(screen.getByTestId("compile-log").textContent).toContain("Show log");
+    // [playbook-library-30] the start control stays disabled for the
+    // whole compile; Cancel asks the core to abort this playbook's.
+    expect((screen.getByTestId("compile-button") as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByTestId("compile-cancel"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("compile.abort", { playbookId: "triage" }),
     );
+    expect((screen.getByTestId("compile-button") as HTMLButtonElement).disabled).toBe(true);
+    // The recorded cancellation lands in the log, and the compile
+    // settles: the start control returns.
+    act(() => {
+      deliverServerMessageForTests({ type: "compile.progress", playbookId: "triage", line: "◇ compile canceled" });
+      deliverServerMessageForTests({
+        type: "draft.state",
+        draft: draftInfo({ state: "draft", compile: { at: t, by: "agent", outcome: "canceled" } }),
+      });
+    });
+    expect(screen.getByTestId("compile-canceled").textContent).toBe("Compile canceled");
+    expect(useAppStore.getState().compileProgress.triage).toContain("◇ compile canceled");
+    expect((screen.getByTestId("compile-button") as HTMLButtonElement).disabled).toBe(false);
   });
 
   test("a failed phase stands red with its output open and the relay's caption", () => {
@@ -833,7 +903,7 @@ describe("playbook-library-53: the conversation pane", () => {
     const cards = within(thread).getAllByTestId("directive-card");
     expect(cards.map((card) => card.getAttribute("data-kind"))).toEqual(["compile", "register"]);
     expect(cards[0].textContent).toBe("Asked to compile");
-    expect(cards[1].textContent).toContain("Proposed registration");
+    expect(cards[1].textContent).toContain("Proposed enabling");
     expect(cards[1].textContent).toContain("/triage");
     expect(cards[1].textContent).toContain("Triager");
     expect(cards[1].textContent).toContain("dev.triager");
@@ -856,9 +926,10 @@ describe("playbook-library-53: the conversation pane", () => {
     const compileLine = within(thread).getAllByTestId("system-line").find((line) => line.textContent === "◇ Compiling — asked by the agent")!;
     expect(cards[0].compareDocumentPosition(compileLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(thread).getAllByTestId("player-result")[0].textContent).toBe("✓ finished");
-    // Open Register lands on the tab.
-    fireEvent.click(within(cards[1]).getByTestId("open-register"));
-    expect(tab("Register").getAttribute("aria-selected")).toBe("true");
+    // Open Enable lands on the tab.
+    expect(within(cards[1]).getByTestId("open-enable").textContent).toBe("Open Enable");
+    fireEvent.click(within(cards[1]).getByTestId("open-enable"));
+    expect(tab("Enable").getAttribute("aria-selected")).toBe("true");
   });
 
   test("while a turn runs the header wears the running mark and the ticking span", () => {
@@ -1036,8 +1107,9 @@ describe("playbook-library-55: the agent picker", () => {
 });
 
 describe("playbook-library-56: the Source tab", () => {
-  test("renders the markdown with who changed it and when; Edit saves under the token", async () => {
+  test("renders the markdown captioned with its path in the working folder and who changed it and when; Edit saves under the token", async () => {
     renderWorkspace(draftInfo());
+    expect(screen.getByTestId("source-path").textContent).toBe("spex-packages/triage/playbooks/en/triage/triage.md");
     expect(screen.getByTestId("source-caption").textContent).toBe("Updated 3m ago by the agent");
     expect(within(screen.getByTestId("source-markdown")).getByText("label").tagName).toBe("STRONG");
     fireEvent.click(screen.getByTestId("source-edit"));
@@ -1123,7 +1195,7 @@ describe("playbook-library-56: the Source tab", () => {
 
     fireEvent.click(screen.getByTestId("source-paste"));
     fireEvent.change(screen.getByTestId("paste-path"), { target: { value: "/tmp/skill.md" } });
-    expect(screen.getByTestId("paste-caption").textContent).toBe("The file is copied in as the draft's source");
+    expect(screen.getByTestId("paste-caption").textContent).toBe("The file is copied in as the playbook's source");
     fireEvent.click(use());
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", sourcePath: "/tmp/skill.md" }),
@@ -1170,11 +1242,11 @@ describe("playbook-library-56: the Source tab", () => {
   });
 });
 
-describe("playbook-library-61: the Register tab", () => {
+describe("playbook-library-61: the Enable tab", () => {
   test("prefills from the derived defaults, then the proposal, with the Boss's edits winning", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     expect((screen.getByTestId("register-command") as HTMLInputElement).value).toBe("triage");
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe(
       "When an issue arrives, Captain shall prompt Triager to **label** it.",
@@ -1222,8 +1294,8 @@ describe("playbook-library-61: the Register tab", () => {
       proposal: { command: "triage", intent: "Triage a new issue", players: { Coder: "dev.coder", Verifier: "dev.reviewer" } },
     });
     renderWorkspace(compiled, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     expect((screen.getByTestId("register-player-coder") as HTMLSelectElement).value).toBe("dev.coder");
     expect((screen.getByTestId("register-player-verifier") as HTMLSelectElement).value).toBe("dev.reviewer");
     expect(screen.queryByTestId("register-mismatch")).toBeNull();
@@ -1238,8 +1310,8 @@ describe("playbook-library-61: the Register tab", () => {
       }),
       { view: foldView(THREAD) },
     );
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     const coder = () => screen.getByTestId("register-player-coder") as HTMLSelectElement;
     const offered = () => Array.from(coder().options).map((option) => option.textContent);
     expect(coder().value).toBe("dev.coder");
@@ -1271,13 +1343,13 @@ describe("playbook-library-61: the Register tab", () => {
     expect(offered()).not.toContain("New player dev.coder-2");
   });
 
-  test("Register writes the bindings and the new players, then the list opens with the card in view", async () => {
+  test("Enable writes the bindings and the new players in the project, then the list opens with the card in view and the session stays", async () => {
     renderWorkspace(
       { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.triager", Verifier: "dev.reviewer" } } },
       { view: foldView(THREAD) },
     );
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     // The new lane's block is the draft's agent, tunable in place.
     const row = screen.getByTestId("register-role-Triager");
     expect(within(row).getByLabelText("Triager: claude · claude-opus-5 @ high (ready)")).toBeTruthy();
@@ -1297,7 +1369,8 @@ describe("playbook-library-61: the Register tab", () => {
       type === "draft.register" ? new Promise<ConfigState>((r) => (resolve = r)) : base(type, params),
     );
     fireEvent.click(submit());
-    await vi.waitFor(() => expect(submit().textContent).toBe("Registering…"));
+    await vi.waitFor(() => expect(submit().textContent).toBe("Enabling…"));
+    // The spex repository defaults to the project (playbook-library-7).
     expect(commandMock).toHaveBeenCalledWith("draft.register", {
       projectId: PROJECT_ID,
       draftId: "triage",
@@ -1305,36 +1378,73 @@ describe("playbook-library-61: the Register tab", () => {
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
       newPlayers: { "dev.triager": { adapter: "codex", model: "gpt-6-astra", permissions: { mode: "auto" } } },
+      repository: PROJECT_ID,
     });
-    const registered: ConfigState = {
-      ...CONFIG_STATE,
-      summary: {
-        ...CONFIG_STATE.summary,
-        playbooks: [
-          ...CONFIG_STATE.summary.playbooks,
-          { id: "triage", from: "./playbooks/triage/triage.registry.mjs", command: "triage", intent: "Triage a new issue", roles: { Triager: { playerId: "dev.triager", display: "gpt-6-astra" } } },
-        ],
-      },
-    };
+    // The core requested the package by path and enabled it: the
+    // project's environment now exports it, enabled there.
+    lists = playbookLists([
+      available({
+        id: "triage",
+        intent: "Triage a new issue",
+        package: "me/triage",
+        version: "0.1.0",
+        source: "path",
+        repository: PROJECT_ID,
+        roles: ["Triager", "Verifier"],
+        enabled: ["project"],
+        bindings: { project: { Triager: { playerId: "dev.triager", display: "gpt-6-astra" }, Verifier: { playerId: "dev.reviewer", display: "gpt-6-astra" } } },
+      }),
+    ]);
     await act(async () => {
-      resolve(registered);
+      resolve(CONFIG_STATE);
     });
     await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage")).toBeTruthy());
-    expect(screen.queryByTestId("drafts-section")).toBeNull();
-    expect(screen.getByTestId("playbook-card-triage").className).toContain("ring-2");
-    expect(screen.getByTestId("registered-note").textContent).toContain("restarted to use it");
-    expect(screen.getByTestId("library-live").textContent).toBe("Registered /triage");
+    const card = screen.getByTestId("playbook-card-triage");
+    expect(card.className).toContain("ring-2");
+    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("fromme/triage 0.1.0· path");
+    // [playbook-library-10] sessions started before must restart.
+    expect(screen.getByTestId("enabled-note").textContent).toContain("restarted to use it");
+    expect(screen.getByTestId("library-live").textContent).toBe("Enabled /triage");
+    // The session stays, to be worked on further and published; its
+    // chip reads Enabled once the core says so.
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.state", draft: { ...COMPILED, state: "enabled" } });
+    });
+    expect(within(screen.getByTestId("draft-row-triage")).getByTestId("draft-chip").textContent).toBe("Enabled");
   });
 
-  test("a refusal names the rule inline and leaves the form standing; a busy draft holds Register", async () => {
+  test("[playbook-library-88] the spex repository defaults to the project and offers your own group, the list opening on the side enabled in", async () => {
+    renderWorkspace(
+      { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.coder", Verifier: "dev.reviewer" } } },
+      { view: foldView(THREAD) },
+    );
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    const field = screen.getByTestId("register-repository") as HTMLSelectElement;
+    expect(field.value).toBe(PROJECT_ID);
+    expect([...field.options].map((option) => [option.value, option.textContent])).toEqual([
+      [PROJECT_ID, "demo — the project"],
+      [OWN_KEY, "Your own group"],
+    ]);
+    fireEvent.change(field, { target: { value: OWN_KEY } });
+    fireEvent.click(screen.getByTestId("register-submit"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.register", expect.objectContaining({ repository: OWN_KEY })),
+    );
+    await vi.waitFor(() => expect(screen.queryByTestId("authoring-workspace")).toBeNull());
+    expect(useAppStore.getState().playbooksSide).toBe("own");
+    expect(screen.getByTestId("side-own").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("a refusal names the rule inline and leaves the form standing; a busy session holds Enable", async () => {
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "draft.register") throw new Error("player dev.triager collides with a reserved id");
       return base(type, params);
     });
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     fireEvent.click(screen.getByTestId("register-submit"));
     await vi.waitFor(() => expect(screen.getByTestId("register-error").textContent).toContain("collides"));
     expect(screen.getByTestId("register-form")).toBeTruthy();
@@ -1348,26 +1458,140 @@ describe("playbook-library-61: the Register tab", () => {
     expect(submit.title).toBe("Waits for the reply");
   });
 
-  test("with no prose paragraph the intent defaults to the source's title, so the app's own example registers on its defaults", async () => {
+  test("with no prose paragraph the intent defaults to the source's title, so the app's own example enables on its defaults", async () => {
     // The example is a title over a roles list and numbered steps.
     renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: SLC_DEMO.stages.normalized } });
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe(
       "Two-Agent Change-and-Review Workflow",
     );
     expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
-  test("an empty intent holds Register until the Boss writes one", async () => {
+  test("an empty intent holds Enable until the Boss writes one", async () => {
     // Neither a prose paragraph nor a title to derive one from.
     renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: "Roles:\n- Triager\n- Verifier" } });
-    await vi.waitFor(() => expect(tab("Register").disabled).toBe(false));
-    fireEvent.click(tab("Register"));
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe("");
     expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByTestId("register-intent"), { target: { value: "Sort issues" } });
     expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe("playbook-library-93: Publish beneath the Enable form", () => {
+  const PREVIEW = {
+    name: "me/triage",
+    version: "0.1.0",
+    files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
+  };
+  const CURRENT = { repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null };
+
+  async function openEnable(draft: DraftInfo = COMPILED) {
+    renderWorkspace(draft, { view: foldView(THREAD) });
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+  }
+
+  test("shows the inline summary, publishes as the account, and reads the published version with its page", async () => {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish"
+        ? params?.dryRun ? { accepted: true, preview: PREVIEW } : { accepted: true }
+        : base(type, params),
+    );
+    await openEnable();
+    const publish = screen.getByTestId("publish");
+    // Beneath the form.
+    expect(
+      screen.getByTestId("register-submit").compareDocumentPosition(publish) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(within(publish).getByTestId("publish-button"));
+    // The checks run first and upload nothing.
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: "spex-packages/triage", dryRun: true }),
+    );
+    const summary = await screen.findByTestId("publish-summary");
+    expect(summary.textContent).toContain("me/triage 0.1.0");
+    expect(summary.textContent).toContain("3 files upload:");
+    expect([...within(summary).getByTestId("publish-files").querySelectorAll("li")].map((item) => item.textContent)).toEqual(PREVIEW.files);
+
+    // Cancel uploads nothing.
+    fireEvent.click(within(summary).getByTestId("publish-cancel"));
+    expect(screen.queryByTestId("publish-summary")).toBeNull();
+    fireEvent.click(screen.getByTestId("publish-button"));
+    fireEvent.click(await screen.findByTestId("publish-confirm"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: "spex-packages/triage" }),
+    );
+    expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && !params.dryRun)).toHaveLength(1);
+
+    // The outcome reads from the environment's state.
+    act(() => {
+      deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: { ...CURRENT, busy: "publishing" } });
+    });
+    expect((await screen.findByTestId("publish-button")).textContent).toBe("Publishing…");
+    act(() => {
+      deliverServerMessageForTests({
+        type: "environment.state",
+        repository: PROJECT_ID,
+        state: { ...CURRENT, published: { name: "me/triage", version: "0.1.0", url: "https://spex.pub/me/triage/0.1.0" } },
+      });
+    });
+    expect(screen.getByTestId("publish-done").textContent).toContain("Published me/triage 0.1.0");
+    expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.pub/me/triage/0.1.0");
+  });
+
+  test("a refusal from the checks or the registry shows its issues in place", async () => {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.publish" && params?.dryRun) throw new Error("meta.yaml: description is required");
+      return base(type, params);
+    });
+    await openEnable();
+    fireEvent.click(screen.getByTestId("publish-button"));
+    expect((await screen.findByTestId("publish-error")).textContent).toBe("meta.yaml: description is required");
+    expect(screen.queryByTestId("publish-summary")).toBeNull();
+
+    // A registry refusal arrives as the environment's failure.
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish"
+        ? params?.dryRun ? { accepted: true, preview: PREVIEW } : { accepted: true }
+        : base(type, params),
+    );
+    fireEvent.click(screen.getByTestId("publish-button"));
+    fireEvent.click(await screen.findByTestId("publish-confirm"));
+    await vi.waitFor(() => expect(screen.queryByTestId("publish-summary")).toBeNull());
+    act(() => {
+      deliverServerMessageForTests({
+        type: "environment.state",
+        repository: PROJECT_ID,
+        state: { ...CURRENT, error: "the registry refused me/triage 0.1.0: that version exists" },
+      });
+    });
+    expect(screen.getByTestId("publish-error").textContent).toBe("the registry refused me/triage 0.1.0: that version exists");
+  });
+
+  test("a signed-out home shows Sign in to publish in the control's place", async () => {
+    useAppStore.setState({ space: home({ account: null }) });
+    const onNavigate = vi.fn();
+    seed({
+      space: home({ account: null }),
+      drafts: { triage: COMPILED },
+      openDraftId: "triage",
+      draftViews: { triage: foldView(THREAD) },
+      draftSources: { triage: SOURCE },
+    });
+    render(<LibrarySurface onNavigate={onNavigate} />);
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    expect(screen.queryByTestId("publish-button")).toBeNull();
+    const signIn = screen.getByTestId("publish-signin");
+    expect(signIn.textContent).toBe("Sign in to publish");
+    fireEvent.click(signIn);
+    expect(onNavigate).toHaveBeenCalledWith("Space");
   });
 });
 
