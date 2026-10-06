@@ -516,7 +516,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 | Case | Behavior |
 | --- | --- |
-| create | make `<working folder>/spex-packages/<id>/` with `meta.yaml` — `format: 2`, `org` the account's login or `local`, `name` and one `playbook` artifact `<id>` in `en`, version `0.1.0` — and `authoring/<id>.json` in the clone; refuse an id a playbook of either environment or an authoring session holds |
+| create | make `<working folder>/spex-packages/<id>/` with `meta.yaml` — `format: 2`, `org` the account's login or `local`, `name` and one `playbook` artifact `<id>` in `en`, version `0.1.0` — and `authoring/<id>.json` in the clone; refuse an id a playbook of either environment or an authoring session of any project holds |
 | open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
 | write source | replace `<id>.md` atomically under the token; refused while a turn or compile runs |
 | record | append each record as it is streamed; keep the compile outcome — with what became of a failure: relayed, stopped, or carried by a queued message — the queue, the failure count, and the proposal in the session file; a compile running at core start is rewritten as interrupted |

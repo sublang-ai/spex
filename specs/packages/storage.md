@@ -32,6 +32,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `<clone>/authoring/<id>.json`, `<clone>/authoring/<id>.records.jsonl`, optional `<clone>/authoring/<id>.assets/` | an authoring session [[storage-23](#storage-23)] | Tracked, one unit |
 | `<clone>/packages/`, `<clone>/skills/` | installed spec packages and exported skills [[environments-8](environments.md#environments-8)] | Ignored |
 | `<clone>/sessions/<id>.hints.json`, session leases, staging and atomic-write temporary files | provider hints and writer coordination [[1]] | Ignored |
+| `<clone>/local/`, `<clone>/.spex-uploads/`, `<clone>/.spex-apply.json` | Playbook's own migration receipts, which may hold provider tokens; upload staging; the sync repair marker | Ignored |
 | `home.yaml` | this device, the Git host, the account, and each working folder with its spex repository [[storage-2](#storage-2)] | — |
 | `store/`, `cache/` | spec package bytes and caches [[environments-7](environments.md#environments-7)] | — |
 | `local/prefs.json` | core preferences and viewed markers [[storage-5](#storage-5)] | — |
@@ -50,7 +51,7 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 | Field | Content |
 | --- | --- |
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
-| `host` | `{url, clientId, account?}`: the Git host's URL, the public client id `spex`, and, once signed in, `{id, login, displayName}` as the host reported them |
+| `host` | `{url, clientId, account?, signedOut?}`: the Git host's URL, the public client id `spex`, once signed in `{id, login, displayName}` as the host reported them, and `signedOut` true once the credential was removed while the account is kept [[git-host-4](git-host.md#git-host-4)] |
 | `own` | the folder name of your own group under `workspace/`: this device's user name before sign-in, the account's login after [[storage-6](#storage-6)] |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 

@@ -835,7 +835,7 @@ While the working line names an open intent [[run-view-90](#run-view-90)], the r
 
 #### run-view-114
 
-While the next card names the queue's head [[run-view-88](#run-view-88)], the Captain home shall offer Remove on that card, beside Start where Start is available, acting on the click with no confirmation and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — that re-queues the same text and provenance at the queue's head:
+While the next card names the queue's head [[run-view-88](#run-view-88)], the Captain home shall offer Remove on that card, beside Start where Start is available, acting on the click with no confirmation and leaving no history ([DR-038](../decisions/038-history-is-done-work.md)), then a status line — "Removed “⟨title⟩” — Undo", lasting six seconds beyond the last moment its control holds focus, which it takes from a keyboard-driven removal alone — that re-queues the same text and provenance with its capture time kept, at its place by age:
 
 - a pointer removal leaves the pointer where it is, so the line lapses on schedule and never stands as a prompt;
 - the card stays while the Undo line stands, even once no queued intent is left behind it, and a restored intent's Start takes focus where available, otherwise its Remove does.

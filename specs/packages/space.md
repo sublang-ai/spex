@@ -522,6 +522,7 @@ interface GroupsState {
 }
 interface RepositoryState {
   key: string; name: string; id: string | null; own: boolean; code: string | null; folder: string | null;
+  remote: string | null;                 // the clone's origin URL, null while local only
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
   reason: string | null;                 // the host's words for read-only or unreachable
   waiting: { step: "create" | "branch"; group: string; message: string } | null;

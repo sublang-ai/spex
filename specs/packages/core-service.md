@@ -68,7 +68,7 @@ Where the shared config path is the default one and holds nothing, when the core
 
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
-- A former file whose relative `sessions` or path-shaped `playbooks.<id>.from` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator.
+- A former file whose path-shaped `playbooks.<id>.from` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
 
 ### Sessions
 
@@ -231,7 +231,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Another session of the project is live, or a session lease is active | `busy`, naming the session working or the holder |
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
 | Uncertain work | `invalid_request`, restore it first [[core-service-82](#core-service-82)] |
-| The spex repository's working folder is not paired on this device, or the session's recorded working directory is neither that folder nor one of its aliases [[storage-6](storage.md#storage-6)] | `invalid_request`, continue it on the device whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md)) |
+| The spex repository's working folder is not paired on this device, or the session's recorded working directory is not that folder [[storage-6](storage.md#storage-6)] — an alias keeps the session's history readable, while Playbook's relocation rule refuses to continue it until the folder is the recorded one | `invalid_request`, continue it on the device whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md)) |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
@@ -331,7 +331,7 @@ While an intent is closed [[core-service-46](#core-service-46)], when a client s
 
 - a remove of an open intent is rejected with a `conflict` error: the ledger still owns work that is not ruled on;
 - a remove naming an intent no read knows — never stored, or already removed — is rejected `not_found`;
-- the removed intent's dispatch stamp no longer bounds its neighbours' turn ranges [[core-service-47](#core-service-47)], so the preceding dispatched intent owns the removed one's turns; its file is recoverable from the spex repository's Git history alone.
+- the removed intent's dispatch stamp no longer bounds its neighbours' turn ranges [[core-service-47](#core-service-47)], so the preceding dispatched intent owns the removed one's turns, and the session's viewed marker advances past the removed intent's last ended turn [[core-service-48](#core-service-48)], so no review prompt returns for work already ruled on; its file is recoverable from the spex repository's Git history alone.
 
 #### core-service-47
 
@@ -484,15 +484,15 @@ The core service shall persist and replay sessions through Playbook's common man
 
 #### core-service-60
 
-The core service shall serve every session present in the shared session store's directory — the directory the shared config's `sessions` key names, defaulting to the shared home layout [[storage-1](storage.md#storage-1)] — whether found there at startup or written by another host while the service runs:
+The core service shall serve every session present in the `sessions/` directory of every spex repository's clone [[storage-1](storage.md#storage-1)], one shared session store per clone, whether found there at startup or written by another host while the service runs ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- session `cwd` resolves through local project bindings [[storage-6](storage.md#storage-6)]; resolved sessions list with shared continuation eligibility [[core-service-73](#core-service-73)], while unresolved sessions are reported unlisted;
+- a session's project is the clone holding it [[storage-6](storage.md#storage-6)]; it lists with shared continuation eligibility [[core-service-73](#core-service-73)], and a clone no folder pairs lists its sessions as history only;
 - a record beside no replay stream lists from its Boss journal: each Boss entry opens a turn with its prompt, each Captain reply follows it, and the record's own timestamps bound them ([DR-037](../decisions/037-playbook-12-adoption.md));
 - an arrival or change while the service runs is announced to subscribed clients as a session-state report, with `intents.changed` where a derived intent state can change [[core-service-51](#core-service-51)]; a record's disappearance is forgotten [[core-service-76](#core-service-76)];
 - a stream append also reaches that session's subscribers through the record visibility filter [[core-service-8](#core-service-8)], once per appended record, without waiting for directory activity to stop; a replacement history is served on the next history request;
 - each session is read independently from its complete newline-terminated stream prefix, so an unfinished final line waits for its newline and an unreadable manifest preserves its previous served history without hiding healthy neighbors;
 - preserve opaque records [[core-service-10](#core-service-10)]; summary times use first/last finite record timestamps, otherwise manifest creation/update times or zero;
-- registration or rebinding rescans existing session paths [[storage-6](storage.md#storage-6)], without waiting for a new record.
+- pairing a folder with a spex repository re-reads that clone's sessions [[storage-6](storage.md#storage-6)], without waiting for a new record.
 
 #### core-service-76
 
@@ -784,7 +784,7 @@ Where fixture sessions another host wrote [[core-service-60](#core-service-60)] 
 
 #### core-service-88
 
-When an integration suite changes stored history and project bindings through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
 
 #### core-service-77
 
