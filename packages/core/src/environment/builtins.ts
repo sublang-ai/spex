@@ -65,22 +65,41 @@ function recordFile(cacheDir: string, version: string): string {
 /** Seed a built-in release into the store and record its index
  * (environments-11). Idempotent; an older seeded release stays. */
 export async function seedBuiltinPackage(store: ContentStore, cacheDir: string, pkg: BuiltinPackage = builtinPackage()): Promise<BuiltinRelease> {
-  const { manifest, files } = await readRelease(pkg.dir);
-  if (`${manifest.org}/${manifest.name}` !== BUILTIN_PACKAGE_NAME || manifest.version !== pkg.version) {
-    throw new Error(`${pkg.dir} holds ${manifest.org}/${manifest.name} ${manifest.version}, not ${BUILTIN_PACKAGE_NAME} ${pkg.version}`);
+  // Seeded already, its files whole in the store: nothing to do.
+  const seeded = readRecord(recordFile(cacheDir, pkg.version));
+  if (seeded && seeded.files.every((file) => store.has(file.sha256, file.executable))) return seeded;
+  const release = await shippedRecord(pkg);
+  if (`${release.manifest.org}/${release.manifest.name}` !== BUILTIN_PACKAGE_NAME || release.manifest.version !== pkg.version) {
+    throw new Error(`${pkg.dir} holds ${release.manifest.org}/${release.manifest.name} ${release.manifest.version}, not ${BUILTIN_PACKAGE_NAME} ${pkg.version}`);
   }
-  const data: { path: string; executable: boolean; data: Uint8Array }[] = [];
-  for (const file of files) {
+  for (const file of release.files) {
+    if (store.has(file.sha256, file.executable)) continue;
     const bytes = await readFile(join(pkg.dir, ...file.path.split("/")));
     store.put(bytes, file.sha256, file.executable, `${BUILTIN_PACKAGE_NAME} ${file.path}`);
-    data.push({ path: file.path, executable: file.executable, data: bytes });
   }
-  const archive = packFiles(manifest.name, data);
-  const release: BuiltinRelease = { format: 1, name: BUILTIN_PACKAGE_NAME, version: pkg.version, manifest, files, checksum: sha256Hex(archive), size: archive.length };
   const file = recordFile(cacheDir, pkg.version);
   await mkdir(dirname(file), { recursive: true });
   writeApplicationBytes(file, JSON.stringify(release));
   return release;
+}
+
+/** A shipped release read, checked and packed once per process: the
+ * same for every home this process serves. */
+const shippedRecords = new Map<string, Promise<BuiltinRelease>>();
+
+function shippedRecord(pkg: BuiltinPackage): Promise<BuiltinRelease> {
+  const key = `${pkg.dir}\u0000${pkg.version}`;
+  let record = shippedRecords.get(key);
+  if (!record) {
+    record = (async (): Promise<BuiltinRelease> => {
+      const { manifest, files } = await readRelease(pkg.dir);
+      const archive = packFiles(manifest.name, files.map((file) => ({ path: file.path, executable: file.executable, data: readFileSync(join(pkg.dir, ...file.path.split("/"))) })));
+      return { format: 1, name: BUILTIN_PACKAGE_NAME, version: pkg.version, manifest, files, checksum: sha256Hex(archive), size: archive.length };
+    })();
+    record.catch(() => shippedRecords.delete(key));
+    shippedRecords.set(key, record);
+  }
+  return record;
 }
 
 function readRecord(file: string): BuiltinRelease | null {
@@ -112,16 +131,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
   function shippedRelease(): Promise<BuiltinRelease> | undefined {
     const pkg = options.shipped === undefined ? safeBuiltinPackage() : options.shipped;
     if (!pkg) return undefined;
-    if (shippedCache?.pkg.dir !== pkg.dir) {
-      shippedCache = {
-        pkg,
-        release: (async () => {
-          const { manifest, files } = await readRelease(pkg.dir);
-          const archive = packFiles(manifest.name, files.map((file) => ({ path: file.path, executable: file.executable, data: readFileSync(join(pkg.dir, ...file.path.split("/"))) })));
-          return { format: 1, name: BUILTIN_PACKAGE_NAME, version: pkg.version, manifest, files, checksum: sha256Hex(archive), size: archive.length };
-        })(),
-      };
-    }
+    if (shippedCache?.pkg.dir !== pkg.dir) shippedCache = { pkg, release: shippedRecord(pkg) };
     return shippedCache.release;
   }
 
@@ -277,6 +287,20 @@ function pkgPathOf(dir: string, path: string): string {
  * under its id. A clone the store makes holds it from its first commit.
  */
 export function builtinLock(pkg: BuiltinPackage, registryUrl: string, requestsText: string): Lock {
+  const key = `${pkg.dir}\u0000${pkg.version}\u0000${registryUrl}`;
+  let resolution = builtinResolutions.get(key);
+  if (!resolution) {
+    resolution = builtinResolution(pkg, registryUrl);
+    builtinResolutions.set(key, resolution);
+  }
+  return { format: 1, requests: requestsDigest(requestsText), packages: { [BUILTIN_PACKAGE_NAME]: structuredClone(resolution) } };
+}
+
+/** The built-in release's resolution, once per release and registry:
+ * reading and packing it is the slow part. */
+const builtinResolutions = new Map<string, Lock["packages"][string]>();
+
+function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["packages"][string] {
   const { manifest, issues } = parseManifestText(readFileSync(join(pkg.dir, "meta.yaml"), "utf8"));
   if (!manifest) throw new Error(issues.map((issue) => issue.message).join("; "));
   const files = listFilesSync(pkg.dir);
@@ -292,17 +316,11 @@ export function builtinLock(pkg: BuiltinPackage, registryUrl: string, requestsTe
   const selected = files.filter((file) => (ROOT_FILES as readonly string[]).includes(file.path)
     || ids.some((id) => inArtifact(file.path, manifest.artifacts[id]!.kind, id, artifacts[id]!.language, manifest.name)));
   return {
-    format: 1,
-    requests: requestsDigest(requestsText),
-    packages: {
-      [BUILTIN_PACKAGE_NAME]: {
-        source: { registry: registryUrl.replace(/\/+$/, ""), version: manifest.version, checksum: sha256Hex(archive) },
-        requiredBy: [],
-        artifacts,
-        files: selected.map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable })),
-        exports,
-      },
-    },
+    source: { registry: registryUrl.replace(/\/+$/, ""), version: manifest.version, checksum: sha256Hex(archive) },
+    requiredBy: [],
+    artifacts,
+    files: selected.map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable })),
+    exports,
   };
 }
 

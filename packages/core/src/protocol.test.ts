@@ -169,8 +169,8 @@ test("parseCommand accepts every draft command", () => {
   }
 });
 
-test("parseCommand rejects a draft id outside the lowercase rule", () => {
-  for (const draftId of ["Triage", "1st", "with space", ""]) {
+test("parseCommand rejects a draft id outside the Agent Skills name rule", () => {
+  for (const draftId of ["Triage", "with space", "", "a_b", "-lead", "trail-", "dou--ble", "x".repeat(65)]) {
     const parsed = parseCommand({ type: "draft.create", id: "d16", projectId: "alice/a-spex", draftId });
     assert.ok(!parsed.ok, draftId);
     if (!parsed.ok) assert.match(parsed.error, /draftId/);

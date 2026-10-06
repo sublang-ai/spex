@@ -877,9 +877,13 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
 ]);
 export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
 
-/** A playbook draft id: it names the library directory, the source
- * file, and the compiled entry (DR-058). */
-export const draftIdSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
+/** A playbook id an authoring session or a compile names: the spec
+ * package, the file and the /command, so an Agent Skills name —
+ * lowercase letters and digits in hyphen-joined runs, at most 64
+ * characters (playbook-library-51, DR-104). */
+export const playbookIdSchema = z.string().max(64).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+/** An authoring session's id is its playbook's (DR-058). */
+export const draftIdSchema = playbookIdSchema;
 
 /** Session channels carry a session's records; the draft channel
  * carries one draft's authoring records (DR-058). Drafts never enter
@@ -1028,7 +1032,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("compile.run"),
     id,
-    playbookId: z.string().regex(/^[a-z][a-z0-9_-]*$/),
+    playbookId: playbookIdSchema,
     sourceText: z.string().optional(),
     sourcePath: z.string().optional(),
     roles: z.array(z.string().min(1)).min(1),

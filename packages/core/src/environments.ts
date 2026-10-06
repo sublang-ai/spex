@@ -67,7 +67,7 @@ import {
 import { fileCredentialStore } from "./git-host.js";
 import { i18n } from "./i18n.js";
 import type { PlaybookModules } from "./config.js";
-import type { EnvironmentPackage, EnvironmentRequest, EnvironmentState } from "./protocol.js";
+import type { EnvironmentPackage, EnvironmentRequest, EnvironmentState, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 
@@ -216,16 +216,23 @@ export class EnvironmentManager {
    * offline, and everything else from the home's host (environments-12). */
   registry(): RegistrySource {
     const host = this.store.home.host;
+    // One source per host: the built-in source reads and packs the
+    // shipped release once, not on every resolve.
+    if (this.registryCache?.url === host.url) return this.registryCache.source;
     const remote = new RegistryClient({
       url: host.url,
       token: () => this.token(),
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
     });
-    return compositeRegistry(
+    const source = compositeRegistry(
       builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, url: remote.url, shipped: this.options.builtin }),
       remote,
     );
+    this.registryCache = { url: host.url, source };
+    return source;
   }
+
+  private registryCache?: { url: string; source: RegistrySource };
 
   /** Whether the home is signed in to its host. */
   signedIn(): boolean {
@@ -634,7 +641,7 @@ export class EnvironmentManager {
 
   /** `environment.publish`: the folder read and checked as a release and
    * the sign-in confirmed before the reply; the upload runs after it. */
-  async publish(key: string, path: string): Promise<{ done: Promise<void> }> {
+  async publish(key: string, path: string, dryRun = false): Promise<{ done: Promise<void>; preview: PublishPreview }> {
     this.cloneDir(key);
     const workingFolder = this.workingFolder(key);
     if (workingFolder === null) {
@@ -653,12 +660,15 @@ export class EnvironmentManager {
         values: { path },
       }));
     }
-    if (!this.signedIn() || (await this.token()) === null) {
+    if (!dryRun && (!this.signedIn() || (await this.token()) === null)) {
       throw new CoreError("invalid_request", i18n._({ id: "Sign in to publish", comment: "Refusal: publishing to the registry needs the home signed in" }));
     }
     let manifest: Manifest;
+    let files: string[];
     try {
-      manifest = (await readRelease(folder)).manifest;
+      const release = await readRelease(folder);
+      manifest = release.manifest;
+      files = release.files.map((file) => file.path);
     } catch (error) {
       if (error instanceof FormatError) {
         throw new CoreError("invalid_request", i18n._({
@@ -669,6 +679,10 @@ export class EnvironmentManager {
       }
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
     }
+    // What the upload would hold: the declared release files, in the
+    // archive's order (playbook-library-93).
+    const preview: PublishPreview = { name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
+    if (dryRun) return { done: Promise.resolve(), preview };
     const done = this.enqueue(key, async () => {
       const state = this.cloneState(key);
       this.setBusy(key, "publishing");
@@ -681,7 +695,7 @@ export class EnvironmentManager {
       }
       this.setBusy(key, null);
     });
-    return { done };
+    return { done, preview };
   }
 
   /** `environment.search` through the registry (environments-17). */
@@ -821,7 +835,7 @@ export class EnvironmentManager {
       conflicts: clone.conflicts ? clone.conflicts.map((conflict) => ({ name: conflict.name, requirements: conflict.requirements.map((entry) => ({ ...entry })) })) : null,
       busy: clone.busy,
       error,
-      ...(clone.published ? { published: { ...clone.published } } : {}),
+      published: clone.published ? { ...clone.published } : null,
     };
   }
 

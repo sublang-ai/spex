@@ -891,7 +891,9 @@ msgid "duplicate binding {projectId}"
 msgstr "duplicate binding {projectId}"
 
 #. Config error: two playbooks answer to the same slash command
+#. Config error: two playbooks answer to the same slash command
 #: src/config.ts
+#: src/service.ts
 msgid "duplicate effective command \"{command}\""
 msgstr "duplicate effective command \"{command}\""
 

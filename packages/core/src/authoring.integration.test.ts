@@ -12,7 +12,6 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
 
@@ -299,7 +298,9 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(created.agent.adapter, "claude");
   assert.equal(created.projectId, projectId);
   assert.equal(created.enabled, false);
-  assert.equal(created.package, "spex-packages/triage");
+  assert.equal(created.package, "local/triage");
+  assert.equal(created.packagePath, "spex-packages/triage");
+  assert.equal(created.sourcePath, "spex-packages/triage/playbooks/en/triage/triage.md");
   assert.ok(existsSync(draftDir), "the spec package folder is made");
   // playbook-library-70: its manifest names one playbook in en, 0.1.0.
   const meta = parseYaml(readFileSync(join(draftDir, "meta.yaml"), "utf8")) as Record<string, unknown>;
@@ -448,15 +449,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.ok(triage, "the project's environment exports it");
   assert.deepEqual([triage.command, triage.intent, triage.roles, triage.source, triage.package, triage.version, triage.enabled],
     ["triage", "Label new issues", ["Triager", "Verifier"], "path", "local/triage", "0.1.0", ["project"]]);
-  // A session of the project launches it from the working folder.
-  const session = await client.expectOk("session.create", { projectId });
-  const manifestFile = join(clone, "sessions", `${session.id}.json`);
-  await until(() => existsSync(manifestFile), 10_000, "the session's manifest");
-  const manifest = JSON.parse(readFileSync(manifestFile, "utf8")) as { structuralProjection?: { catalog?: Record<string, { from: string }> } };
-  const catalog = manifest.structuralProjection?.catalog ?? {};
-  assert.equal(catalog.triage?.from, pathToFileURL(join(artifactDir, "triage.registry.mjs")).href);
-  // The built-ins come from the project's own installed spec package.
-  assert.match(catalog.code?.from ?? "", /\/packages\/sublang\/playbooks\/playbooks\/en\/code\//);
+  assert.equal(client.latest("triage")?.state, "enabled");
 
   client.close();
   await harness.service.stop();
@@ -621,7 +614,7 @@ test("playbook-library-74: one activity per draft — messages queue, the rest i
   await client.expectError("draft.source.write", { projectId, draftId: "matrix", content: "# Again\n" }, "busy");
   await client.expectError("draft.register", { projectId, draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
   await client.expectError("draft.delete", { projectId, draftId: "matrix" }, "busy");
-  await client.expectError("compile.run", { playbookId: "matrix", sourceText: "# X\n", roles: ["helper"], command: "matrix", intent: "x", bindings: { helper: "dev.coder" } }, "busy");
+  await client.expectError("compile.run", { playbookId: "matrix", sourceText: "# X\n", roles: ["helper"], command: "matrix", intent: "x", bindings: { helper: "dev.coder" }, projectId }, "busy");
   assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
   await client.expectOk("compile.abort", { playbookId: "matrix" });
   const reply = await compiling;

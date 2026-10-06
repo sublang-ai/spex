@@ -113,11 +113,13 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(row.folder, home.projectDir);
   assert.equal(row.code, null, "the folder has no remote of its own");
   assert.equal(row.sync.phase, "idle");
-  // Its clone begins on `spex` with one commit of the managed rules and
-  // project.json, under the fallback identity (space-32, storage-17).
+  // Its clone begins on `spex` with one commit of the managed rules,
+  // project.json, and its environment requesting the built-in spec
+  // package, under the fallback identity (space-32, storage-17,
+  // storage-6).
   assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
   assert.equal(git(clone, "rev-list", "--count", "HEAD"), "1");
-  assert.deepEqual(git(clone, "ls-files").split("\n"), [".gitattributes", ".gitignore", "project.json"]);
+  assert.deepEqual(git(clone, "ls-files").split("\n"), [".gitattributes", ".gitignore", "project.json", "spex.lock", "spex.yaml"]);
   assert.deepEqual(JSON.parse(readFileSync(join(clone, "project.json"), "utf8")), { format: 1, name: basename(home.projectDir), remote: null });
   assert.match(readFileSync(join(clone, ".gitignore"), "utf8"), /# BEGIN Spex managed storage rules/);
   assert.equal(git(clone, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${hostname()}>`);
@@ -132,7 +134,8 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   const tracked = git(clone, "ls-files").split("\n");
   assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.records.jsonl`));
-  for (const file of tracked) assert.doesNotMatch(file, /\.hints\.json$|\.lock|^\.spex-/, `must not track ${file}`);
+  // The environment's lock is the one tracked `.lock` (storage-1).
+  for (const file of tracked.filter((path) => path !== "spex.lock")) assert.doesNotMatch(file, /\.hints\.json$|\.lock|^\.spex-/, `must not track ${file}`);
   assert.equal(prefsOf(home.dataDir)[`viewed:${sessionId}`], 1, "the viewed marker stays in this device's preferences");
   assert.match(git(clone, "log", "-1", "--format=%s"), /^Sync from /);
   assert.equal(git(clone, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${hostname()}>`);
@@ -243,11 +246,12 @@ test("space-37: a turn in flight, an out-of-band lease and a running compile ref
     await home.client.expectError("space.sync", { repository: key }, "busy", /“Settle first” (is in use elsewhere|ownership cannot be verified)/);
     await proceeds(other.key, "a lease in one clone holds no other");
   } finally { await lease.release(); }
-  // A running compile belongs to your own group's repository.
-  const compile = home.client.command("compile.run", COMPILE_INPUT);
+  // A running compile belongs to the project whose working folder holds
+  // its spec package (environments-10).
+  const compile = home.client.command("compile.run", { ...COMPILE_INPUT, projectId: key });
   await home.client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
-  await home.client.expectError("space.sync", { repository: OWN_KEY }, "busy", /demo is compiling/);
-  await proceeds(key, "a compile holds only its own repository");
+  await home.client.expectError("space.sync", { repository: key }, "busy", /demo is compiling/);
+  await proceeds(other.key, "a compile holds only its own repository");
   await home.client.expectOk("compile.abort", { playbookId: "demo" });
   await compile;
   const settled = await home.client.settle("space.sync", { repository: key });

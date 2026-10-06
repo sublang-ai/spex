@@ -109,7 +109,7 @@ import {
   type BuiltinPackage,
 } from "./environment/index.js";
 import { kebab } from "./home.js";
-import type { PlaybookAvailability } from "./protocol.js";
+import type { CommandResults, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -451,6 +451,8 @@ export class CoreService {
   private readonly forge: ForgeAdapter;
   /** One in-flight compile per playbook id; abort via compile.abort. */
   private readonly activeCompiles = new Map<string, AbortController>();
+  /** The project a one-shot compile writes its spec package in. */
+  private readonly compileHolders = new Map<string, string>();
   /** Projects whose ledger changed since the last broadcast (DR-035). */
   private readonly ledgerChanged = new Set<string>();
   private ledgerTimer?: NodeJS.Timeout;
@@ -848,7 +850,7 @@ export class CoreService {
       comment: "What blocks a Space operation: a turn is being admitted",
     });
     for (const playbookId of this.activeCompiles.keys()) {
-      const holder = this.drafts.projectOf(playbookId) ?? this.store.home.own();
+      const holder = this.compileHolders.get(playbookId) ?? this.drafts.projectOf(playbookId) ?? this.store.home.own();
       if (holder !== repository) continue;
       return i18n._({
         id: "{playbookId} is compiling",
@@ -1925,6 +1927,10 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
+        // A project's group gains its own spex repository at session
+        // start where it has none (DR-103); it checks for itself and
+        // never throws.
+        void this.ensureGroupRepository(project.id).catch(() => {});
         // Yours with the project.s own on top (core-service-2).
         return this.sessions.createSession(project, await this.composedFor(project.id));
       }
@@ -2113,10 +2119,17 @@ export class CoreService {
       case "compile.check":
         return checkToolchain(this.env, this.options.compileSpawner, this.options.compileRuntime);
       case "playbook.artifacts": {
-        // A playbook's stages beside its module, wherever an environment
-        // of this device installs it (playbook-library-24).
-        const from = this.composed?.playbooks.find((entry) => entry.id === command.playbookId)?.from
-          ?? this.installedModule(command.playbookId);
+        // A playbook's stages beside its module: the one the named spex
+        // repository's environment exports, else the composed config's,
+        // else wherever an environment of this device installs it
+        // (playbook-library-24).
+        const named = command.repository !== undefined
+          ? [...this.environments.locations(command.repository).values()].find((location) => location.id === command.playbookId && location.present)?.module
+          : undefined;
+        if (command.repository !== undefined && !this.store.repository(command.repository)) throw noProject(command.repository);
+        const from = named
+          ?? (command.repository === undefined ? this.composed?.playbooks.find((entry) => entry.id === command.playbookId)?.from : undefined)
+          ?? (command.repository === undefined ? this.installedModule(command.playbookId) : undefined);
         if (!from) {
           throw new CoreError(
             "not_found",
@@ -2176,6 +2189,7 @@ export class CoreService {
         }
         const controller = new AbortController();
         this.activeCompiles.set(command.playbookId, controller);
+        this.compileHolders.set(command.playbookId, project.id);
         try {
           const packagePath = draftPackagePath(command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
@@ -2243,6 +2257,7 @@ export class CoreService {
           });
         } finally {
           this.activeCompiles.delete(command.playbookId);
+          this.compileHolders.delete(command.playbookId);
         }
       }
       case "compile.abort": {
@@ -2695,9 +2710,11 @@ export class CoreService {
       case "environment.search":
         return { packages: await this.environments.search(command.query) };
       case "environment.publish": {
-        const { done } = await this.environments.publish(command.repository, command.path);
+        // A dry run replies the inline summary and uploads nothing
+        // (playbook-library-93); the upload reports through state.
+        const { done, preview } = await this.environments.publish(command.repository, command.path, command.dryRun === true);
         void done.catch(() => {});
-        return { accepted: true };
+        return command.dryRun === true ? { accepted: true, preview } : { accepted: true };
       }
       case "environment.playbooks":
         return this.playbookAvailability(command.projectId);
@@ -2720,19 +2737,45 @@ export class CoreService {
   /** `environment.playbooks` (playbook-library-1): every playbook the
    * project's and your own group's environments export, with where each
    * is enabled, read from the config files. */
-  private async playbookAvailability(projectId: string | undefined): Promise<{ project: PlaybookAvailability[] | null; own: PlaybookAvailability[] }> {
+  private async playbookAvailability(projectId: string | undefined): Promise<CommandResults["environment.playbooks"]> {
     const own = this.store.home.own();
     const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
     if (projectId !== undefined && projectId !== own && !projectRepository) throw noProject(projectId);
-    const enabledIn = (path: string | undefined): Record<string, Record<string, unknown>> => {
-      if (!path || !existsSync(path)) return {};
+    const topOf = (path: string | undefined): Record<string, unknown> | null => {
+      if (!path || !existsSync(path)) return null;
       try {
-        const top = parseYaml(readFileSync(path, "utf8")) as { playbooks?: unknown } | null;
-        return top && typeof top.playbooks === "object" && top.playbooks !== null ? top.playbooks as Record<string, Record<string, unknown>> : {};
-      } catch { return {}; }
+        const top = parseYaml(readFileSync(path, "utf8")) as unknown;
+        return typeof top === "object" && top !== null && !Array.isArray(top) ? top as Record<string, unknown> : null;
+      } catch { return null; }
     };
-    const ownEntries = enabledIn(this.configPath);
-    const projectEntries = enabledIn(projectRepository?.configPath);
+    const entriesOf = (top: Record<string, unknown> | null): Record<string, Record<string, unknown>> =>
+      top && typeof top.playbooks === "object" && top.playbooks !== null ? top.playbooks as Record<string, Record<string, unknown>> : {};
+    const ownTop = topOf(this.configPath);
+    const projectTop = topOf(projectRepository?.configPath);
+    const ownEntries = entriesOf(ownTop);
+    const projectEntries = entriesOf(projectTop);
+    const players = (ownTop && typeof ownTop.players === "object" && ownTop.players !== null ? ownTop.players : {}) as Record<string, unknown>;
+    // What each binding effectively runs (playbook-library-1): the
+    // role's own pin, the provider default it chose, or its player's.
+    const bindingsOf = (entry: Record<string, unknown> | undefined): Record<string, RoleBindingSummary> | undefined => {
+      if (!entry || typeof entry.roles !== "object" || entry.roles === null) return undefined;
+      const out: Record<string, RoleBindingSummary> = {};
+      for (const [role, value] of Object.entries(entry.roles as Record<string, unknown>)) {
+        const binding = (typeof value === "string" ? { player: value } : value) as Record<string, unknown> | null;
+        const playerId = typeof binding?.player === "string" ? binding.player : undefined;
+        if (!playerId) continue;
+        const player = players[playerId];
+        const agent = (typeof player === "string" ? { adapter: player } : player ?? {}) as { adapter?: string; model?: string };
+        const tuning: Partial<RoleBindingSummary> = {};
+        for (const field of ["model", "effort", "fastMode", "subagentModel", "subagentEffort"] as const) {
+          const tuned = binding?.[field];
+          if (typeof tuned === "string" || typeof tuned === "boolean") (tuning as Record<string, unknown>)[field] = tuned;
+        }
+        const display = tuning.model === false ? `${agent.adapter ?? "?"} default` : (typeof tuning.model === "string" ? tuning.model : agent.model ?? agent.adapter ?? "?");
+        out[role] = { playerId, ...tuning, display };
+      }
+      return out;
+    };
     const list = async (key: string): Promise<PlaybookAvailability[]> => {
       const lock = this.environments.lockOf(key);
       const out: PlaybookAvailability[] = [];
@@ -2750,11 +2793,16 @@ export class CoreService {
             : resolution && isGitSource(resolution.source) ? "git" : "registry";
         const config = projectEntries[location.id] ?? ownEntries[location.id];
         const command = typeof config?.command === "string" ? config.command : typeof entry?.command === "string" ? entry.command : null;
+        const projectBindings = projectRepository ? bindingsOf(projectEntries[location.id]) : undefined;
+        const ownBindings = bindingsOf(ownEntries[location.id]);
+        // The artifact's folder: the module stands in it, or in its
+        // `<id>.playbook/` (playbook-library-29).
+        const near = dirname(location.module);
         out.push({
           name,
           id: location.id,
           command,
-          intent: typeof config?.intent === "string" ? config.intent : typeof entry?.intent === "string" ? entry.intent : null,
+          intent: typeof entry?.intent === "string" ? entry.intent : null,
           roles: Array.isArray(entry?.requiredRoleIds) ? [...entry!.requiredRoleIds as string[]] : [],
           package: location.package,
           version: location.version,
@@ -2765,11 +2813,69 @@ export class CoreService {
             ...(Object.hasOwn(ownEntries, location.id) ? ["own" as const] : []),
           ],
           present: location.present,
+          ...(projectBindings || ownBindings ? { bindings: { ...(projectBindings ? { project: projectBindings } : {}), ...(ownBindings ? { own: ownBindings } : {}) } } : {}),
+          folder: basename(near) === `${location.id}.playbook` ? dirname(near) : near,
         });
       }
       return out;
     };
-    return { project: projectRepository ? await list(projectRepository.key) : null, own: await list(own) };
+    const invalid = await this.invalidEntries(ownTop, projectRepository ? { key: projectRepository.key, path: projectRepository.configPath, top: projectTop } : undefined);
+    return {
+      project: projectRepository ? await list(projectRepository.key) : null,
+      own: await list(own),
+      ...(invalid.length > 0 ? { invalid } : {}),
+    };
+  }
+
+  /**
+   * Each enabled entry failing the fail-closed validation, with its own
+   * failure (playbook-library-2): every entry composed alone — yours on
+   * your own group's modules, a project's on top of your roster with the
+   * project's modules first — and the effective commands checked across
+   * them, so one bad entry hides no other.
+   */
+  private async invalidEntries(
+    ownTop: Record<string, unknown> | null,
+    project: { key: string; path: string; top: Record<string, unknown> | null } | undefined,
+  ): Promise<InvalidPlaybookEntry[]> {
+    if (!ownTop) return [];
+    const out: InvalidPlaybookEntry[] = [];
+    const entries = (top: Record<string, unknown> | null): Record<string, unknown> =>
+      top && typeof top.playbooks === "object" && top.playbooks !== null ? top.playbooks as Record<string, unknown> : {};
+    const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+    const commands = new Map<string, string>();
+    const check = async (config: "own" | "project", id: string, compose: () => Promise<ComposedConfig>): Promise<void> => {
+      try {
+        const composed = await compose();
+        const command = composed.playbooks.find((playbook) => playbook.id === id)?.command;
+        if (command === undefined) return;
+        const holder = commands.get(command);
+        if (holder !== undefined && holder !== id) {
+          out.push({ config, playbook: id, reason: i18n._({
+            id: "duplicate effective command \"{command}\"",
+            comment: "Config error: two playbooks answer to the same slash command",
+            values: { command },
+          }) });
+        } else commands.set(command, id);
+      } catch (error) {
+        out.push({ config, playbook: id, reason: reason(error) });
+      }
+    };
+    for (const id of Object.keys(entries(ownTop))) {
+      const only = { ...ownTop, playbooks: { [id]: entries(ownTop)[id] } };
+      await check("own", id, () => composeConfig(only, this.options.loadModule, this.configPath, { modules: this.modules(null) }));
+    }
+    if (project) {
+      for (const id of Object.keys(entries(project.top))) {
+        const projectOnly = { playbooks: { [id]: entries(project.top)[id] } };
+        const ownBase = { ...ownTop, playbooks: { ...entries(ownTop) } } as Record<string, unknown>;
+        await check("project", id, () => composeConfig(
+          { ...ownBase, playbooks: { [id]: (ownBase.playbooks as Record<string, unknown>)[id] ?? {} } },
+          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path } },
+        ));
+      }
+    }
+    return out;
   }
 
   /**

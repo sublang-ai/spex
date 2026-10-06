@@ -180,7 +180,9 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
 });
 
 
-test("approvals-7: malformed custom native requests never become authority or perform an action", {timeout: 30_000}, async () => {
+// Ten fresh homes start one after another, each seeding and installing
+// the built-in spec package before its first session (environments-11).
+test("approvals-7: malformed custom native requests never become authority or perform an action", {timeout: 90_000}, async () => {
   class RewrittenAction extends Array<string> {
     toJSON() { return ["different action"]; }
   }

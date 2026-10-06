@@ -34,6 +34,7 @@ import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner,
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { AUTHORING_LANGUAGE, DraftStore, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
+import { parseManifestText } from "./environment/format.js";
 import { i18n } from "./i18n.js";
 import type {
   AdapterName,
@@ -480,15 +481,19 @@ export class AuthorManager {
     else if (compile?.outcome === "interrupted") state = "interrupted";
     else if (compile?.outcome === "ok") state = compile.sourceSha256 === source.sha256 ? "compiled" : "changed";
     else state = "draft";
+    // Enabled in a config, the session stays to work on: its chip reads
+    // so while what it compiled stands (playbook-library-61).
+    const enabled = this.options.enabled(id);
+    if (enabled && state === "compiled") state = "enabled";
     return {
       id,
       projectId: this.drafts.projectOf(id) ?? "",
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
       firstLine: source ? firstLineOf(source.markdown) : null,
-      package: draft.package,
+      ...this.packageFields(id, draft.package, dir),
       ...(dirExists ? {} : { sourceMissing: true }),
-      enabled: this.options.enabled(id),
+      enabled,
       activity,
       state,
       queued: [...draft.queued],
@@ -500,6 +505,24 @@ export class AuthorManager {
       ...(draft.proposal ? { proposal: draft.proposal } : {}),
       ...(live.malformed.length > 0 ? { malformedDirectives: [...live.malformed] } : {}),
       ...(live.damaged ? { diagnostic: live.damaged } : {}),
+    };
+  }
+
+  /** Where the session's spec package stands (playbook-library-52,
+   * -56, -70): its name as its manifest gives it, its folder and its
+   * source relative to the working folder. */
+  private packageFields(id: string, packagePath: string, dir: string | null): Pick<DraftInfo, "package" | "packagePath" | "sourcePath"> {
+    let name: string | undefined;
+    if (dir !== null) {
+      try {
+        const manifest = parseManifestText(readFileSync(join(dir, "meta.yaml"), "utf8")).manifest;
+        if (manifest) name = `${manifest.org}/${manifest.name}`;
+      } catch { /* a folder without a readable manifest names none */ }
+    }
+    return {
+      ...(name ? { package: name } : {}),
+      packagePath,
+      sourcePath: [packagePath, "playbooks", AUTHORING_LANGUAGE, id, `${id}.md`].join("/"),
     };
   }
 
@@ -523,7 +546,7 @@ export class AuthorManager {
       createdAt: at,
       touchedAt: at,
       firstLine: source ? firstLineOf(source.markdown) : null,
-      package: this.drafts.packagePath(id),
+      ...this.packageFields(id, this.drafts.packagePath(id), dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled: this.options.enabled(id),
       activity: this.activity(id),
