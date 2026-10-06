@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Library surface (PBLIB): configured playbooks with per-role inline
-// agents (DR-019) and the pipeline stage row (Source → Gears →
-// State machine), the drafts in progress with the way to a new one
-// (DR-058), the built-ins catalog, and the example adapted from slc's
-// demo. A draft opened here replaces the list with its authoring
-// workspace.
+// The Playbooks surface (playbook-library, DR-104): a view over the
+// environments of the current project and your own group. A switch
+// picks the side; each side shows that spex repository's environment —
+// the spec packages it requests and what it got — above the playbooks
+// it exports, each with its spec package and version, its roles bound
+// to session players, and where it is enabled. Enabling writes that
+// side's config with a player per role; a project's entry names
+// players alone, your own group's may tune each role. On the
+// project's side the authoring sessions follow the playbooks, then the
+// ways to add a spec package; the example closes the surface. An
+// authoring session opened here replaces the list with its workspace.
 
 import {
   useCallback,
@@ -14,19 +19,27 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
-import type {
-  AgentBlockInput,
-  AgentSummary,
-  BuiltinPlaybookInfo,
-  ConfigEditOpInput,
-  DraftInfo,
-  PlaybookArtifacts,
-  ReadinessEntry,
-  SessionPlayerSummary,
+import {
+  playerIdSchema,
+  type AgentBlockInput,
+  type AgentSummary,
+  type DraftInfo,
+  type InvalidPlaybookEntry,
+  type PlaybookArtifacts,
+  type PlaybookAvailability,
+  type ReadinessEntry,
+  type RoleBindingSummary,
+  type SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import { draftNeedsProject, getClient, useAppStore } from "../state/store.js";
+import {
+  draftNeedsProject,
+  getClient,
+  useAppStore,
+  type PlaybooksSide,
+} from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import {
   NEUTRAL_BLOCK,
@@ -34,16 +47,26 @@ import {
   bindRole,
 } from "../lib/config-ops.js";
 import {
-  DRAFT_ID_RULE,
   draftIdCaption,
   draftIdRuleText,
+  draftPackagePath,
+  isDraftId,
+  newPlayerId,
 } from "../lib/drafts.js";
+import {
+  chosenProject,
+  ownRepositoryKey,
+  repositoryOf,
+  sourceKindWord,
+  syncHold,
+} from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
+import { AddSpecPackages, EnvironmentSection } from "./EnvironmentSection.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
@@ -61,10 +84,19 @@ import {
 
 export { NEUTRAL_BLOCK };
 
-/** A configured playbook's pipeline (PBLIB-22/23): the stage row is
- * permanent, and the artifacts arrive on the card's first open —
- * one request, held for every later open. */
-function PlaybookPipeline({ playbookId }: { playbookId: string }) {
+const SECONDARY =
+  "min-h-6 rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
+const PRIMARY =
+  "min-h-6 rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950";
+const ERROR =
+  "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
+const GEAR =
+  "flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200";
+
+/** A listed playbook's pipeline (playbook-library-22/23): the stage
+ * row is permanent, and the artifacts arrive on the card's first open
+ * — one request, held for every later open. */
+function PlaybookPipeline({ playbookId, repository }: { playbookId: string; repository: string }) {
   const [artifacts, setArtifacts] = useState<PlaybookArtifacts>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -78,7 +110,7 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
     setLoading(true);
     setError(undefined);
     getClient()
-      .command("playbook.artifacts", { playbookId })
+      .command("playbook.artifacts", { playbookId, repository })
       .then((loaded) => setArtifacts(loaded))
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setLoading(false));
@@ -144,178 +176,463 @@ function PlaybookPipeline({ playbookId }: { playbookId: string }) {
   );
 }
 
-/** An unconfigured built-in from the catalog (DR-015): browsable
- * source plus an add flow assigning an inline agent block per role
- * (DR-019), seeded from the fixed neutral default. */
-function BuiltinCard({
-  info,
-  captain,
+/** Where a playbook is enabled, in one phrase (playbook-library-1). */
+function enabledPhrase(enabled: readonly ("project" | "own")[]): string {
+  const project = enabled.includes("project");
+  const own = enabled.includes("own");
+  if (project && own) return i18n._("Enabled in the project and your own group");
+  if (project) return i18n._("Enabled in the project");
+  if (own) return i18n._("Enabled in your own group");
+  return i18n._({ id: "Not enabled", comment: "a listed playbook no config enables" });
+}
+
+/** The `from` label (playbook-library-29): the spec package and its
+ * version, with the source's kind for a path or Git request. */
+function FromLabel({ entry }: { entry: PlaybookAvailability }) {
+  const kind = entry.source === "path" || entry.source === "git" ? sourceKindWord(entry.source) : undefined;
+  return (
+    <span
+      data-testid={`playbook-from-${entry.id}`}
+      title={entry.folder ?? `${entry.package} ${entry.version}`}
+      className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500"
+    >
+      {/* The prefix and the kind stand outside the truncation. */}
+      <span className="shrink-0">{i18n._({ id: "from", comment: "label before the spec package a playbook comes from" })}</span>
+      <span className="min-w-0 truncate font-mono">
+        {entry.package} {entry.version}
+      </span>
+      {kind ? <span className="shrink-0">· {kind}</span> : null}
+    </span>
+  );
+}
+
+/** One role of a playbook enabled on this side: the player bound to
+ * it, what that binding runs, whether the lane is shared, and the
+ * binding editor (playbook-library-1, playbook-library-4,
+ * playbook-library-38). */
+function BoundRole({
+  entry,
+  role,
+  binding,
+  roster,
   readiness,
-  summaryPlayers,
+  side,
+  repository,
 }: {
-  info: BuiltinPlaybookInfo;
-  captain?: AgentSummary;
+  entry: PlaybookAvailability;
+  role: string;
+  binding: RoleBindingSummary | undefined;
+  roster: SessionPlayerSummary[];
   readiness: ReadinessEntry[];
-  /** The session roster, so a binding can name a lane that exists. */
-  summaryPlayers: SessionPlayerSummary[];
+  side: PlaybooksSide;
+  repository: string;
 }) {
-  const [showSource, setShowSource] = useState(false);
-  // role -> lane id, and the lane blocks to mint for ids the roster
-  // does not yet hold (DR-032).
-  const [bindings, setBindings] = useState<Record<string, string>>({});
-  const [players, setPlayers] = useState<Record<string, AgentBlockInput>>({});
-  const [openRole, setOpenRole] = useState<string>();
-  // Anchor for the open popover: without it the gear's own mousedown
-  // reads as an outside click, so the trigger could never close it.
-  const roleGearRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const lane = binding ? roster.find((player) => player.id === binding.playerId) : undefined;
+  // A lane bound by more than one position is a shared conversation,
+  // and the binding says so (DR-032).
+  const sharedWith = (lane?.boundBy ?? []).filter(
+    (position) => !position.startsWith(`${entry.id}.`),
+  );
+  const ready = lane ? readiness.find((item) => item.adapter === lane.agent.adapter) : undefined;
+  return (
+    <span
+      // The binding wraps within itself in a narrow pane (DR-041): the
+      // chip and its control drop under the role rather than squeezing
+      // to nothing.
+      className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
+    >
+      <span className="font-mono">{role}:</span>
+      <span
+        data-testid={`role-binding-${entry.id}-${role}`}
+        className="font-mono text-neutral-700 dark:text-neutral-200"
+        title={binding?.display}
+      >
+        {binding?.playerId ?? i18n._({ id: "unbound", comment: "a required role no player answers yet" })}
+      </span>
+      {lane ? (
+        <AgentChip
+          // The row says what the role effectively runs: a binding's
+          // own fast mode over the lane's.
+          agent={binding?.fastMode !== undefined ? { ...lane.agent, fastMode: binding.fastMode } : lane.agent}
+          readiness={ready}
+          label={lane.id}
+        />
+      ) : null}
+      {sharedWith.length > 0 ? (
+        <span
+          data-testid={`role-shared-${entry.id}-${role}`}
+          title={i18n._("This lane also answers {positions} — one conversation across them", { positions: sharedWith.join(", ") })}
+          className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+        >
+          {i18n._({ id: "shared", comment: "badge: this lane answers more than one role" })}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        ref={gearRef}
+        data-testid={`role-bind-${entry.id}-${role}`}
+        title={i18n._("Choose which session player answers {role}", { role })}
+        aria-label={i18n._("Bind {role}", { role })}
+        onClick={() => setOpen((current) => !current)}
+        className={GEAR}
+      >
+        <Icon name="edit" />
+      </button>
+      {open ? (
+        <BindingEditorPopover
+          role={role}
+          position={`${entry.id}.${role}`}
+          binding={binding ?? { playerId: roster[0]?.id ?? "", display: "" }}
+          players={roster}
+          playerOnly={side === "project"}
+          anchorRef={gearRef}
+          onSave={(next) =>
+            bindRole(entry.id, role, next, repository).then((result) => {
+              setOpen(false);
+              return result;
+            })
+          }
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+/** One role of a playbook this side does not enable yet: the player
+ * the enabling would name, `dev.<role>` by default and editable, and —
+ * for a player your own roster lacks — the agent block it is written
+ * with (playbook-library-34). */
+function ProposedRole({
+  entry,
+  role,
+  playerId,
+  block,
+  roster,
+  readiness,
+  captain,
+  onPlayer,
+  onBlock,
+}: {
+  entry: PlaybookAvailability;
+  role: string;
+  playerId: string;
+  block: AgentBlockInput;
+  roster: SessionPlayerSummary[];
+  readiness: ReadinessEntry[];
+  captain?: AgentSummary;
+  onPlayer: (id: string) => void;
+  onBlock: (block: AgentBlockInput) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const lane = roster.find((player) => player.id === playerId);
+  const agent = lane?.agent ?? block;
+  return (
+    <span className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1">
+      <span className="font-mono">{role}:</span>
+      <input
+        data-testid={`enable-player-${entry.id}-${role}`}
+        aria-label={i18n._("Player for {role}", { role })}
+        value={playerId}
+        list="playbooks-roster"
+        spellCheck={false}
+        onChange={(event) => onPlayer(event.target.value)}
+        className="w-36 min-w-0 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
+      />
+      <AgentChip
+        agent={agent}
+        readiness={readiness.find((item) => item.adapter === agent.adapter)}
+        label={role}
+      />
+      {!lane ? (
+        <>
+          <button
+            type="button"
+            ref={gearRef}
+            data-testid={`enable-configure-${entry.id}-${role}`}
+            title={i18n._("Tweak the {name} agent in place", { name: playerId })}
+            aria-label={i18n._("Configure {name}", { name: playerId })}
+            onClick={() => setOpen((current) => !current)}
+            className={GEAR}
+          >
+            <Icon name="edit" />
+          </button>
+          {open ? (
+            <AgentEditorPopover
+              title={i18n._("{name} agent", { name: playerId })}
+              direction="down"
+              initial={block}
+              readiness={readiness}
+              captain={captain}
+              anchorRef={gearRef}
+              onSave={(patch) => {
+                onBlock(applyLocalPatch(block, patch));
+                setOpen(false);
+              }}
+              onClose={() => setOpen(false)}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/** One listed playbook (playbook-library-1): its command and intent,
+ * where it is enabled, its spec package, its roles — bound where this
+ * side enables it, proposed where it does not — Enable or Disable for
+ * this side's config, its hints, and its stage row. */
+function PlaybookRow({
+  entry,
+  side,
+  repository,
+  invalid,
+  bindings,
+  roster,
+  readiness,
+  captain,
+  revealed,
+  hints,
+  onChanged,
+}: {
+  entry: PlaybookAvailability;
+  side: PlaybooksSide;
+  /** The spex repository whose config this side writes. */
+  repository: string;
+  invalid?: string;
+  bindings: Record<string, RoleBindingSummary> | undefined;
+  roster: SessionPlayerSummary[];
+  readiness: ReadinessEntry[];
+  captain?: AgentSummary;
+  revealed: boolean;
+  hints: ReactNode;
+  onChanged: () => void;
+}) {
+  const enabledHere = entry.enabled.includes(side);
+  const [players, setPlayers] = useState<Record<string, string>>({});
+  const [blocks, setBlocks] = useState<Record<string, AgentBlockInput>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const readinessByAdapter = new Map<string, ReadinessEntry>(
-    readiness.map((entry) => [entry.adapter as string, entry]),
-  );
+  const command = entry.command ?? entry.id;
+  const laneFor = (role: string): string => (players[role] ?? newPlayerId(role)).trim();
+  const badLane = entry.roles.find((role) => !playerIdSchema.safeParse(laneFor(role)).success);
 
-  function add(): void {
+  async function enable(): Promise<void> {
+    if (badLane !== undefined) return;
     setBusy(true);
     setError(undefined);
-    // Each role binds to a lane; a lane the roster lacks is minted
-    // first, so the binding never dangles (DR-032). The proposed id is
-    // dev.<role>, which is what makes two playbooks share a coder.
-    const laneFor = (role: string): string => bindings[role] ?? `dev.${role}`;
-    const existing = new Set(summaryPlayers.map((player) => player.id));
-    // A lane carries the block chosen for the role it was minted for;
-    // two roles landing on one lane mint it once, from the first.
-    const mint = info.roles
+    // A player the roster lacks is written to your own roster first,
+    // carrying the block chosen for its role, so no binding is written
+    // dangling (playbook-library-3); two roles naming one player write
+    // it once, from the first.
+    const existing = new Set(roster.map((player) => player.id));
+    const mint = entry.roles
       .map((role) => [laneFor(role), role] as const)
       .filter(([id], index, all) => all.findIndex(([other]) => other === id) === index)
       .filter(([id]) => !existing.has(id));
-    void mint
-      .reduce(
-        (chain, [playerId, role]) =>
-          chain.then(() =>
-            getClient().command("config.edit", {
-              op: {
-                kind: "player.set",
-                playerId,
-                patch: players[role] ?? NEUTRAL_BLOCK,
-              },
-            }),
-          ),
-        Promise.resolve() as Promise<unknown>,
-      )
-      .then(() =>
-        getClient().command("config.edit", {
-          op: {
-            kind: "playbook.add",
-            playbookId: info.id,
-            from: info.from,
-            roles: Object.fromEntries(
-              info.roles.map((role) => [role, laneFor(role)]),
-            ),
-          },
-        }),
-      )
-      // Success arrives as a config.state broadcast: the entry moves
-      // to the configured list and this card unmounts.
-      .catch((cause: Error) => setError(cause.message))
-      .finally(() => setBusy(false));
+    try {
+      for (const [playerId, role] of mint) {
+        await getClient().command("config.edit", {
+          op: { kind: "player.set", playerId, patch: blocks[role] ?? NEUTRAL_BLOCK },
+        });
+      }
+      await getClient().command("config.edit", {
+        repository,
+        op: {
+          kind: "playbook.add",
+          playbookId: entry.id,
+          roles: Object.fromEntries(entry.roles.map((role) => [role, laneFor(role)])),
+        },
+      });
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disable(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await getClient().command("config.edit", {
+        repository,
+        op: { kind: "playbook.delete", playbookId: entry.id },
+      });
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div
-      data-testid={`builtin-${info.id}`}
-      className="flex flex-col gap-2 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
+      id={`playbook-card-${entry.id}`}
+      data-testid={`playbook-card-${entry.id}`}
+      className={`flex flex-col gap-2 rounded-lg border bg-white px-4 py-3 dark:bg-neutral-900 ${
+        enabledHere ? "border-neutral-200 dark:border-neutral-800" : "border-dashed border-neutral-300 dark:border-neutral-700"
+      } ${revealed ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm font-semibold">/{info.command}</span>
-        <span
-          className="min-w-0 flex-1 truncate text-xs text-neutral-500"
-          title={info.intent}
-        >
-          {info.intent}
+        <span className="font-mono text-sm font-semibold">/{command}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-neutral-500" title={entry.intent ?? undefined}>
+          {entry.intent}
         </span>
-        {info.source ? (
+        <span
+          data-testid={`playbook-enabled-${entry.id}`}
+          className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${
+            entry.enabled.length > 0
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+          }`}
+        >
+          {enabledPhrase(entry.enabled)}
+        </span>
+        {enabledHere ? (
           <button
             type="button"
-            data-testid={`builtin-source-toggle-${info.id}`}
-            onClick={() => setShowSource((current) => !current)}
-            className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            data-testid={`playbook-disable-${entry.id}`}
+            disabled={busy}
+            title={i18n._("/{command} stops being offered; the spec package stays", { command })}
+            aria-label={i18n._("Disable /{command}", { command })}
+            onClick={() => void disable()}
+            className={SECONDARY}
           >
-            {showSource ? i18n._("Hide source") : i18n._("View source")}
+            {busy
+              ? i18n._({ id: "Disabling…", comment: "the disable request is in flight" })
+              : i18n._({ id: "Disable", comment: "stop offering this playbook in this config" })}
           </button>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            data-testid={`playbook-enable-${entry.id}`}
+            disabled={busy || badLane !== undefined}
+            title={
+              badLane !== undefined
+                ? i18n._("{role} needs a player id: lowercase segments joined by dots", { role: badLane })
+                : i18n._("Enable /{command} with a player per role", { command })
+            }
+            aria-label={i18n._("Enable /{command}", { command })}
+            onClick={() => void enable()}
+            className={PRIMARY}
+          >
+            {busy
+              ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
+              : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
+          </button>
+        )}
       </div>
+      {invalid ? (
+        <p data-testid={`playbook-invalid-${entry.id}`} className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400">
+          {i18n._("Invalid: {reason}", { reason: invalid })}
+        </p>
+      ) : null}
+      {!entry.present ? (
+        <p data-testid={`playbook-absent-${entry.id}`} className="text-xs text-amber-700 dark:text-amber-300">
+          {i18n._("Its files are not on this device")}
+        </p>
+      ) : null}
+      {revealed ? (
+        <p data-testid="enabled-note" className="text-xs text-neutral-500">
+          {i18n._("Enabled. Sessions started before must be restarted to use it.")}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-        {info.roles.map((role) => {
-          const block = players[role] ?? NEUTRAL_BLOCK;
-          return (
-            <span
+        {entry.roles.map((role) =>
+          enabledHere ? (
+            <BoundRole
               key={role}
-              className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
-            >
-              <span className="font-mono">{role}:</span>
-              <AgentChip
-                agent={block}
-                readiness={readinessByAdapter.get(block.adapter)}
-                label={role}
-              />
-              <button
-                type="button"
-                ref={openRole === role ? roleGearRef : undefined}
-                data-testid={`builtin-player-${role}`}
-                title={i18n._("Tweak the {name} agent in place", { name: role })}
-                aria-label={i18n._("Configure {name}", { name: role })}
-                onClick={() =>
-                  setOpenRole((current) =>
-                    current === role ? undefined : role,
-                  )
-                }
-                className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-              >
-                <Icon name="edit" />
-              </button>
-              {openRole === role ? (
-                <AgentEditorPopover
-                  title={i18n._("{name} agent", { name: role })}
-                  direction="down"
-                  initial={block}
-                  readiness={readiness}
-                  captain={captain}
-                  anchorRef={roleGearRef}
-                  onSave={(patch) => {
-                    setPlayers((current) => ({
-                      ...current,
-                      [role]: applyLocalPatch(
-                        current[role] ?? NEUTRAL_BLOCK,
-                        patch,
-                      ),
-                    }));
-                    setOpenRole(undefined);
-                  }}
-                  onClose={() => setOpenRole(undefined)}
-                />
-              ) : null}
-            </span>
-          );
-        })}
-        <button
-          type="button"
-          data-testid={`builtin-add-${info.id}`}
-          disabled={busy}
-          onClick={add}
-          title={i18n._("Enable this playbook — it is written to the shared config")}
-          className="ml-auto rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
-        >
-          {busy ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" }) : i18n._({ id: "Enable", comment: "add this built-in playbook to the config" })}
-        </button>
+              entry={entry}
+              role={role}
+              binding={bindings?.[role]}
+              roster={roster}
+              readiness={readiness}
+              side={side}
+              repository={repository}
+            />
+          ) : (
+            <ProposedRole
+              key={role}
+              entry={entry}
+              role={role}
+              playerId={players[role] ?? newPlayerId(role)}
+              block={blocks[role] ?? NEUTRAL_BLOCK}
+              roster={roster}
+              readiness={readiness}
+              captain={captain}
+              onPlayer={(id) => setPlayers((current) => ({ ...current, [role]: id }))}
+              onBlock={(block) => setBlocks((current) => ({ ...current, [role]: block }))}
+            />
+          ),
+        )}
+        <FromLabel entry={entry} />
       </div>
       {error ? (
-        <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div role="alert" data-testid={`playbook-error-${entry.id}`} className={ERROR}>
           {error}
         </div>
       ) : null}
-      {showSource && info.source ? (
-        <div className="relative max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
-          <Markdown text={info.source} />
+      {hints}
+      <PlaybookPipeline playbookId={entry.id} repository={entry.repository} />
+    </div>
+  );
+}
+
+/** An enabled entry no environment lists, or whose listing failed
+ * validation, marked invalid with the failure rather than hidden
+ * (playbook-library-2); Disable takes the entry out. */
+function InvalidEntryRow({
+  entry,
+  repository,
+  onChanged,
+}: {
+  entry: InvalidPlaybookEntry;
+  repository: string;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  return (
+    <div
+      data-testid={`playbook-card-${entry.playbook}`}
+      className="flex flex-col gap-1 rounded-lg border border-red-300 bg-white px-4 py-3 dark:border-red-900 dark:bg-neutral-900"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-sm font-semibold">{entry.playbook}</span>
+        <span className="ml-auto" />
+        <button
+          type="button"
+          data-testid={`playbook-disable-${entry.playbook}`}
+          disabled={busy}
+          aria-label={i18n._("Disable {id}", { id: entry.playbook })}
+          onClick={() => {
+            setBusy(true);
+            setError(undefined);
+            void getClient()
+              .command("config.edit", { repository, op: { kind: "playbook.delete", playbookId: entry.playbook } })
+              .then(onChanged)
+              .catch((cause: Error) => setError(cause.message))
+              .finally(() => setBusy(false));
+          }}
+          className={SECONDARY}
+        >
+          {busy
+            ? i18n._({ id: "Disabling…", comment: "the disable request is in flight" })
+            : i18n._({ id: "Disable", comment: "stop offering this playbook in this config" })}
+        </button>
+      </div>
+      <p data-testid={`playbook-invalid-${entry.playbook}`} className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400">
+        {i18n._("Invalid: {reason}", { reason: entry.reason })}
+      </p>
+      {error ? (
+        <div role="alert" className={ERROR}>
+          {error}
         </div>
       ) : null}
     </div>
@@ -371,13 +688,16 @@ const EXAMPLE_STAGES = [
 type ExampleStageKey = (typeof EXAMPLE_STAGES)[number]["key"];
 
 /** Read-only example card (PBLIB-35, DR-015, DR-089): the same stage
- * row as a configured playbook wears, over four in-memory stages, with
- * a prefill that opens a draft workspace in paste mode. */
+ * row as a listed playbook wears, over four in-memory stages, with a
+ * prefill that opens an authoring workspace in paste mode — offered
+ * only with a project chosen, where an authoring session lives. */
 function ExampleCard({
   onPrefill,
+  blockedReason,
   error,
 }: {
   onPrefill: () => Promise<void>;
+  blockedReason?: string;
   error?: string;
 }) {
   const [stage, setStage] = useState<ExampleStageKey>();
@@ -402,24 +722,27 @@ function ExampleCard({
         <button
           type="button"
           data-testid="example-prefill"
-          disabled={busy}
-          title={i18n._(
-            "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled",
-            { id: SLC_DEMO.playbookId },
-          )}
+          disabled={busy || blockedReason !== undefined}
+          title={
+            blockedReason ??
+            i18n._(
+              "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled",
+              { id: SLC_DEMO.playbookId },
+            )
+          }
           onClick={() => {
             setBusy(true);
             void onPrefill().finally(() => setBusy(false));
           }}
           className="rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          {busy ? i18n._({ id: "Opening…", comment: "a draft is being opened" }) : i18n._({ id: "Prefill", comment: "open a draft carrying the example's text" })}
+          {busy ? i18n._({ id: "Opening…", comment: "an authoring session is being opened" }) : i18n._({ id: "Prefill", comment: "open an authoring session carrying the example's text" })}
         </button>
       </div>
       {error ? (
         <div
           data-testid="example-error"
-          className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+          className={ERROR}
         >
           {error}
         </div>
@@ -450,11 +773,12 @@ function ExampleCard({
   );
 }
 
-/** One draft's row (playbook-library-50): its id, state chip, the
- * age of its last activity, Open, and Delete behind the inline
- * confirm (playbook-library-63). A draft whose directory is gone, or
- * whose record the core cannot read, offers only Delete — the latter
- * with the core's diagnostic beneath (playbook-library-70). */
+/** One authoring session's row (playbook-library-50): its id, state
+ * chip, the age of its last activity, Open, and Delete behind the
+ * inline confirm (playbook-library-63). A session whose spec package
+ * folder is gone, or whose record the core cannot read, offers only
+ * Delete — the latter with the core's diagnostic beneath
+ * (playbook-library-70). */
 function DraftRow({
   draft,
   onOpen,
@@ -471,14 +795,14 @@ function DraftRow({
   const deleteRef = useRef<HTMLButtonElement>(null);
   const busyWith =
     draft.activity === "turn"
-      ? i18n._("Delete waits: the draft's turn is running")
+      ? i18n._("Delete waits: the session's turn is running")
       : draft.activity === "compiling"
-        ? i18n._("Delete waits: the draft's compile is running")
+        ? i18n._("Delete waits: the session's compile is running")
         : undefined;
 
   async function remove(): Promise<void> {
     setConfirming(false);
-    // Refused while the draft works, naming which (DR-010 §4).
+    // Refused while the session works, naming which (DR-010 §4).
     if (busyWith) {
       setError(busyWith);
       deleteRef.current?.focus();
@@ -520,15 +844,15 @@ function DraftRow({
             type="button"
             data-testid={`draft-open-${draft.id}`}
             onClick={onOpen}
-            className="rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+            className={PRIMARY}
           >
-            {i18n._({ id: "Open", comment: "open this draft's authoring workspace" })}
+            {i18n._({ id: "Open", comment: "open this authoring session's workspace" })}
           </button>
         ) : null}
         {confirming ? (
           <InlineConfirm
-            question={i18n._("Delete this draft and its source?")}
-            confirmLabel={i18n._({ id: "Delete", comment: "confirm: remove the draft for good" })}
+            question={i18n._("Delete this authoring session? Its spec package folder stays.")}
+            confirmLabel={i18n._({ id: "Delete", comment: "confirm: remove the authoring session for good" })}
             cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
             onConfirm={() => void remove()}
             onCancel={() => {
@@ -542,12 +866,12 @@ function DraftRow({
             type="button"
             data-testid={`draft-delete-${draft.id}`}
             disabled={busy}
-            aria-label={i18n._("Delete draft {id}", { id: draft.id })}
-            title={i18n._("Remove the draft, its conversation, and its source")}
+            aria-label={i18n._("Delete authoring session {id}", { id: draft.id })}
+            title={i18n._("Remove the session and its conversation; the spec package folder stays")}
             onClick={() => setConfirming(true)}
             className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-neutral-800"
           >
-            {busy ? i18n._({ id: "Deleting…", comment: "the delete request is in flight" }) : i18n._({ id: "Delete", comment: "remove the draft for good" })}
+            {busy ? i18n._({ id: "Deleting…", comment: "the delete request is in flight" }) : i18n._({ id: "Delete", comment: "remove the authoring session for good" })}
           </button>
         )}
       </div>
@@ -557,7 +881,7 @@ function DraftRow({
           className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400"
         >
           {/* The core's own reading of the record, and what to do. */}
-          {i18n._("{diagnostic} — delete the draft, or repair the file and restart Spex", {
+          {i18n._("{diagnostic} — delete the session, or repair the file and restart Spex", {
             diagnostic: draft.diagnostic,
           })}
         </div>
@@ -576,11 +900,11 @@ function DraftRow({
 }
 
 /** The New playbook field (playbook-library-51): one thing, the id,
- * checked in place against the rule and the names already taken;
- * Enter creates the draft and opens its workspace. */
+ * checked in place against the Agent Skills name rule and the ids the
+ * environments already hold; Enter creates the authoring session and
+ * opens its workspace. */
 function NewPlaybookField({
-  takenPlaybooks,
-  takenBuiltins,
+  taken,
   drafts,
   onCreate,
   onOpenExisting,
@@ -588,13 +912,11 @@ function NewPlaybookField({
   onAutoFocused,
   blockedReason,
 }: {
-  /** Why no draft can be made here, the field disabled meanwhile: an
-   * authoring session lives in a project's spex repository. */
+  /** Why no session can be made here, the field disabled meanwhile:
+   * an authoring session lives in a project's spex repository. */
   blockedReason?: string;
-  /** Configured playbook ids. */
-  takenPlaybooks: ReadonlySet<string>;
-  /** Built-in ids the catalog offers. */
-  takenBuiltins: ReadonlySet<string>;
+  /** The playbooks either environment exports, by id. */
+  taken: ReadonlyMap<string, PlaybookAvailability>;
   drafts: Record<string, DraftInfo>;
   onCreate: (id: string) => Promise<unknown>;
   onOpenExisting: (id: string) => void;
@@ -619,22 +941,23 @@ function NewPlaybookField({
   async function submit(): Promise<void> {
     const id = value.trim();
     if (!id || busy || blockedReason) return;
-    if (!DRAFT_ID_RULE.test(id)) {
+    if (!isDraftId(id)) {
       setError(draftIdRuleText());
       return;
     }
-    if (takenPlaybooks.has(id)) {
-      setError(i18n._("/{id} is already a configured playbook", { id }));
-      return;
-    }
-    if (takenBuiltins.has(id)) {
-      setError(i18n._("{id} is a built-in — enable it below instead", { id }));
-      return;
-    }
     if (drafts[id]) {
-      // An id naming an existing draft opens that draft.
+      // An id naming an existing authoring session opens that session.
       setError(undefined);
       onOpenExisting(id);
+      return;
+    }
+    const holder = taken.get(id);
+    if (holder) {
+      setError(
+        holder.source === "builtin"
+          ? i18n._("{id} is a built-in — enable it instead", { id })
+          : i18n._("{id} is already a playbook of {package}", { id, package: holder.package }),
+      );
       return;
     }
     setBusy(true);
@@ -690,7 +1013,7 @@ function NewPlaybookField({
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy ? i18n._({ id: "Opening…", comment: "a draft is being opened" }) : i18n._({ id: "New playbook", comment: "start a draft of one's own" })}
+          {busy ? i18n._({ id: "Opening…", comment: "an authoring session is being opened" }) : i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}
         </button>
       </div>
       <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
@@ -709,7 +1032,8 @@ function NewPlaybookField({
   );
 }
 
-/** What the live region says as drafts move (playbook-library-57/58/60). */
+/** What the live region says as authoring sessions move
+ * (playbook-library-57/58/60/61). */
 function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): string | undefined {
   if (previous?.state === next.state) return undefined;
   switch (next.state) {
@@ -727,16 +1051,22 @@ function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): stri
   }
 }
 
+/** The playbooks a side lists, enabled here first (playbook-library-1,
+ * playbook-library-34). */
+function splitBySide(rows: readonly PlaybookAvailability[], side: PlaybooksSide) {
+  const enabled = rows.filter((row) => row.enabled.includes(side));
+  const rest = rows.filter((row) => !row.enabled.includes(side));
+  return { enabled, rest };
+}
+
 export function LibrarySurface({
   onNavigate,
 }: {
-  onNavigate?: (surface: "Settings") => void;
+  onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const configState = useAppStore((state) => state.configState);
   const readiness = useAppStore((state) => state.readiness);
   const connection = useAppStore((state) => state.connection);
-  const builtins = useAppStore((state) => state.builtins);
-  const loadBuiltins = useAppStore((state) => state.loadBuiltins);
   const drafts = useAppStore((state) => state.drafts);
   const draftsLoaded = useAppStore((state) => state.draftsLoaded);
   const openDraftId = useAppStore((state) => state.openDraftId);
@@ -744,65 +1074,84 @@ export function LibrarySurface({
   const createDraft = useAppStore((state) => state.createDraft);
   const openDraft = useAppStore((state) => state.openDraft);
   const closeDraft = useAppStore((state) => state.closeDraft);
-  const hasProject = useAppStore((state) => state.projects.length > 0);
+  const projects = useAppStore((state) => state.projects);
+  const currentProjectId = useAppStore((state) => state.currentProjectId);
   const deleteDraft = useAppStore((state) => state.deleteDraft);
   const setDraftSourceMode = useAppStore((state) => state.setDraftSourceMode);
   const consumeNewPlaybookRequest = useAppStore((state) => state.consumeNewPlaybookRequest);
   const consumeRevealPlaybook = useAppStore((state) => state.consumeRevealPlaybook);
   const newPlaybookRequested = useAppStore((state) => state.newPlaybookRequested);
   const revealPlaybook = useAppStore((state) => state.revealPlaybook);
+  const space = useAppStore((state) => state.space);
+  const loadSpace = useAppStore((state) => state.loadSpace);
+  const lists = useAppStore((state) => state.playbookLists);
+  const loadPlaybookLists = useAppStore((state) => state.loadPlaybookLists);
+  const loadEnvironment = useAppStore((state) => state.loadEnvironment);
+  const storedSide = useAppStore((state) => state.playbooksSide);
+  const setSide = useAppStore((state) => state.setPlaybooksSide);
 
-  const [error, setError] = useState<string>();
+  const [listError, setListError] = useState<string>();
   const [exampleError, setExampleError] = useState<string>();
-  const [confirmDelete, setConfirmDelete] = useState<string>();
-  const [rolePopover, setRolePopover] = useState<{
-    playbookId: string;
-    role: string;
-  }>();
   const [focusNew, setFocusNew] = useState(false);
   const [revealed, setRevealed] = useState<string>();
   const [liveNote, setLiveNote] = useState("");
+  const [deletedNote, setDeletedNote] = useState<string>();
   const previousDrafts = useRef<Record<string, DraftInfo>>({});
-  const playerGearRef = useRef<HTMLButtonElement>(null);
+
+  const project = chosenProject(projects, currentProjectId);
+  const projectId = project?.id;
+  const ownKey = ownRepositoryKey(space, lists?.own);
+  // With no project chosen, your own group's side alone stands
+  // (playbook-library-1).
+  const side: PlaybooksSide = project ? storedSide : "own";
+  const repository = side === "project" ? projectId : ownKey;
+  const connected = connection === "open";
+
+  const reloadLists = useCallback(() => {
+    setListError(undefined);
+    void loadPlaybookLists(projectId).catch((cause: Error) => setListError(cause.message));
+  }, [loadPlaybookLists, projectId]);
 
   useEffect(() => {
-    if (connection === "open") {
-      // Surface activation refreshes the catalog (DR-015) and the
-      // drafts (playbook-library-50); config edits refresh the catalog
-      // again via the config.state broadcast.
-      void loadBuiltins().catch(() => {});
-      void listDrafts().catch(() => {});
+    if (!connected) return;
+    // Surface activation reads the authoring sessions
+    // (playbook-library-50), what each environment exports
+    // (playbook-library-1) and, for the sync and the account, Space.
+    void listDrafts().catch(() => {});
+    reloadLists();
+    if (!useAppStore.getState().space) void loadSpace().catch(() => {});
+  }, [connected, listDrafts, reloadLists, loadSpace]);
+
+  useEffect(() => {
+    if (connected && repository) void loadEnvironment(repository).catch(() => {});
+  }, [connected, repository, loadEnvironment]);
+
+  // The slash menu's request lands on the id field (playbook-library-51),
+  // which stands on the project's side.
+  useEffect(() => {
+    if (newPlaybookRequested && consumeNewPlaybookRequest()) {
+      setSide("project");
+      setFocusNew(true);
     }
-  }, [connection, loadBuiltins, listDrafts]);
+  }, [newPlaybookRequested, consumeNewPlaybookRequest, setSide]);
 
-  // The slash menu's request lands on the id field (playbook-library-51).
-  useEffect(() => {
-    if (newPlaybookRequested && consumeNewPlaybookRequest()) setFocusNew(true);
-  }, [newPlaybookRequested, consumeNewPlaybookRequest]);
-
-  // A registration brings its card into view (playbook-library-61).
+  // An enabling brings its card into view (playbook-library-61).
   useEffect(() => {
     if (revealPlaybook === undefined) return;
     const id = consumeRevealPlaybook();
     if (!id) return;
     setRevealed(id);
-    setLiveNote(
-      i18n._("Registered /{command}", {
-        command:
-          configState?.status === "valid"
-            ? (configState.summary.playbooks.find((entry) => entry.id === id)?.command ?? id)
-            : id,
-      }),
-    );
+    const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === id);
+    setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? id }));
     document.getElementById(`playbook-card-${id}`)?.scrollIntoView?.({ block: "center" });
-  }, [revealPlaybook, consumeRevealPlaybook, configState]);
+  }, [revealPlaybook, consumeRevealPlaybook, lists]);
   useEffect(() => {
     if (revealed === undefined) return;
     const timer = setTimeout(() => setRevealed(undefined), 2400);
     return () => clearTimeout(timer);
   }, [revealed]);
 
-  // The live region narrates the drafts' transitions (DR-010 §7).
+  // The live region narrates the sessions' transitions (DR-010 §7).
   useEffect(() => {
     let note: string | undefined;
     for (const draft of Object.values(drafts)) {
@@ -813,9 +1162,9 @@ export function LibrarySurface({
   }, [drafts]);
 
   const prefillFromExample = useCallback(async (): Promise<void> => {
-    // The example opens a draft in paste mode with the normalized
-    // text — never the raw prose, since the pipeline skips slc's
-    // normalize phase — and writes nothing (playbook-library-35).
+    // The example opens an authoring session in paste mode with the
+    // normalized text — never the raw prose, since the pipeline skips
+    // slc's normalize phase — and writes nothing (playbook-library-35).
     setExampleError(undefined);
     const id = SLC_DEMO.playbookId;
     setDraftSourceMode(id, {
@@ -864,50 +1213,128 @@ export function LibrarySurface({
     );
   }
   const summary = configState.summary;
+  // Your own group's roster: every side's bindings name its players.
+  const roster = summary.players ?? [];
 
-  // A draft's workspace replaces the list (playbook-library-52); the
-  // draft stays open in the core while the list is shown.
+  // An authoring session's workspace replaces the list
+  // (playbook-library-52); it stays open in the core while the list is
+  // shown.
   if (openDraftId && drafts[openDraftId]) {
     return (
       <>
         {liveRegion}
-        <AuthoringWorkspace draftId={openDraftId} onBack={closeDraft} />
+        <AuthoringWorkspace draftId={openDraftId} onBack={closeDraft} onNavigate={onNavigate} />
       </>
     );
   }
 
-  const readinessByAdapter = new Map<string, ReadinessEntry>(
-    readiness.map((entry) => [entry.adapter as string, entry]),
+  const rows = (side === "project" ? lists?.project : lists?.own) ?? [];
+  const invalid = (lists?.invalid ?? []).filter((entry) => entry.config === side);
+  const invalidFor = new Map(invalid.map((entry) => [entry.playbook, entry.reason]));
+  const strayInvalid = invalid.filter((entry) => !rows.some((row) => row.id === entry.playbook));
+  const { enabled, rest } = splitBySide(rows, side);
+  const everyRow = [...(lists?.project ?? []), ...(lists?.own ?? [])];
+  const invalidIds = new Set((lists?.invalid ?? []).map((entry) => entry.playbook));
+  // The validated catalog a session composes: what either config
+  // enables and validation kept (playbook-library-48/89).
+  const enabledIds = new Set(
+    everyRow.filter((row) => row.enabled.length > 0 && !invalidIds.has(row.id)).map((row) => row.id),
   );
-
-  function edit(op: ConfigEditOpInput) {
-    setError(undefined);
-    getClient()
-      .command("config.edit", { op })
-      .catch((cause: Error) => setError(cause.message));
+  const missingDelivery = ["branch", "pr"].filter((id) => !enabledIds.has(id));
+  const taken = new Map<string, PlaybookAvailability>();
+  for (const row of everyRow) {
+    taken.set(row.id, row);
+    taken.set(row.name, row);
   }
+  const projectDrafts = Object.values(drafts)
+    .filter((draft) => draft.projectId === projectId)
+    .sort((a, b) => b.touchedAt - a.touchedAt);
+  const sideRepository = repository ? repositoryOf(space, repository) : undefined;
+  const hold = syncHold(sideRepository);
+  const workingFolder = side === "project" ? project?.path : sideRepository?.folder;
 
-  // dev delivers issues through branch and pr (DR-059); a config that
-  // enables dev without them can still run a plain /dev, so the card
-  // carries a hint, never an invalid mark (playbook-library-48).
-  const configuredIds = new Set(summary.playbooks.map((playbook) => playbook.id));
-  const missingDelivery = ["branch", "pr"].filter((id) => !configuredIds.has(id));
-  const reviewEnabled = configuredIds.has("review");
-  const availableBuiltins = (builtins ?? []).filter(
-    (entry) => !entry.configured,
+  const hintsFor = (entry: PlaybookAvailability): ReactNode => {
+    const notes: ReactNode[] = [];
+    if (
+      entry.enabled.length > 0 &&
+      entry.source === "builtin" &&
+      (entry.id === "code" || entry.id === "decide") &&
+      !enabledIds.has("review")
+    ) {
+      notes.push(
+        <p
+          key="review"
+          data-testid={`review-required-hint-${entry.id}`}
+          className="text-xs text-amber-700 dark:text-amber-300"
+        >
+          {i18n._("{command} is unavailable until /review is enabled below.", {
+            command: `/${entry.command ?? entry.id}`,
+          })}
+        </p>,
+      );
+    }
+    // dev delivers issues through branch and pr (DR-059); a config
+    // that enables dev without them can still run a plain /dev, so the
+    // card carries a hint, never an invalid mark (playbook-library-48).
+    if (entry.id === "dev" && entry.enabled.length > 0 && missingDelivery.length > 0) {
+      notes.push(
+        <p key="delivery" data-testid="dev-delivery-hint" className="text-xs text-amber-700 dark:text-amber-300">
+          {/* One sentence, its verb chosen by how many playbooks are
+              missing — never an "is"/"are" switch spliced in. */}
+          {i18n._(
+            "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}",
+            {
+              count: missingDelivery.length,
+              // Two names at most, and the word between them is a text
+              // of its own language, never English glue.
+              names:
+                missingDelivery.length > 1
+                  ? i18n._({
+                      id: "{first} and {second}",
+                      values: {
+                        first: `/${missingDelivery[0]}`,
+                        second: `/${missingDelivery[1]}`,
+                      },
+                      comment: "joins the two playbook names the /dev hint asks for",
+                    })
+                  : `/${missingDelivery[0]}`,
+            },
+          )}
+        </p>,
+      );
+    }
+    return notes.length > 0 ? <>{notes}</> : null;
+  };
+
+  const rowFor = (entry: PlaybookAvailability) => (
+    <PlaybookRow
+      key={`${entry.repository}:${entry.name}`}
+      entry={entry}
+      side={side}
+      repository={repository ?? entry.repository}
+      invalid={invalidFor.get(entry.id)}
+      bindings={
+        entry.bindings?.[side] ??
+        (side === "own" ? (summary.playbooks ?? []).find((playbook) => playbook.id === entry.id)?.roles : undefined)
+      }
+      roster={roster}
+      readiness={readiness}
+      captain={summary.captain}
+      revealed={revealed === entry.id}
+      hints={hintsFor(entry)}
+      onChanged={reloadLists}
+    />
   );
-  const builtinIds = new Set((builtins ?? []).map((entry) => entry.id));
-  const draftList = Object.values(drafts).sort((a, b) => b.touchedAt - a.touchedAt);
+
   const newPlaybook = (
     <NewPlaybookField
-      takenPlaybooks={configuredIds}
-      takenBuiltins={builtinIds}
+      taken={taken}
       drafts={drafts}
       onCreate={createDraft}
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={focusNew}
       onAutoFocused={() => setFocusNew(false)}
-      blockedReason={hasProject ? undefined : draftNeedsProject()}
+      blockedReason={project ? undefined : draftNeedsProject()}
     />
   );
 
@@ -915,211 +1342,71 @@ export function LibrarySurface({
     // The surface root is the box Playbooks scrolls in (DR-041 §9):
     // height-constrained, and the containing block for its own
     // positioned content, so the page itself never scrolls.
-    <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+    <div className="@container relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       {liveRegion}
-      <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}</h1>
-      {error ? (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-          {error}
+      <datalist id="playbooks-roster">
+        {roster.map((player) => (
+          <option key={player.id} value={player.id} />
+        ))}
+      </datalist>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}</h1>
+        {project ? (
+          <div
+            role="group"
+            aria-label={i18n._("Spex repository shown")}
+            data-testid="playbooks-switch"
+            className="ml-auto flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-neutral-200 p-0.5 dark:border-neutral-800"
+          >
+            {(
+              [
+                ["project", project.name, i18n._("The project's spex repository: {repository}", { repository: project.id })],
+                ["own", i18n._({ id: "Your own group", comment: "switch: show your own group's playbooks" }), ownKey ?? ""],
+              ] as const
+            ).map(([key, label, title]) => (
+              <button
+                key={key}
+                type="button"
+                data-testid={`side-${key}`}
+                aria-pressed={side === key}
+                title={title || undefined}
+                onClick={() => setSide(key)}
+                className={`min-h-6 max-w-[14rem] truncate rounded px-2 py-0.5 text-xs ${
+                  side === key
+                    ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {listError ? (
+        <div role="alert" className={ERROR}>
+          {listError}
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-2">
+      {repository ? <EnvironmentSection repository={repository} sync={hold} /> : null}
+
+      <section data-testid="playbooks-enabled" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          {i18n._("Configured playbooks")}
+          {i18n._({ id: "Enabled", comment: "section heading: the playbooks this config enables" })}
         </h2>
-        {summary.playbooks.map((playbook) => (
-          <div
-            key={playbook.id}
-            id={`playbook-card-${playbook.id}`}
-            data-testid={`playbook-card-${playbook.id}`}
-            className={`flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900 ${
-              revealed === playbook.id ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-semibold">
-                /{playbook.command}
-              </span>
-              <span
-                className="truncate text-xs text-neutral-500"
-                title={playbook.intent}
-              >
-                {playbook.intent}
-              </span>
-              <span className="ml-auto" />
-              {confirmDelete === playbook.id ? (
-                <InlineConfirm
-                  question={i18n._("Remove this playbook from the config?")}
-                  confirmLabel={i18n._({ id: "Remove", comment: "confirm: take this playbook out of the config" })}
-                  cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
-                  onConfirm={() => {
-                    setConfirmDelete(undefined);
-                    edit({ kind: "playbook.delete", playbookId: playbook.id });
-                  }}
-                  onCancel={() => setConfirmDelete(undefined)}
-                />
-              ) : (
-                <button
-                  type="button"
-                  title={i18n._("Remove from the config (compiled artifacts stay in the library)")}
-                  aria-label={i18n._("Remove /{command} from the config", { command: playbook.command })}
-                  onClick={() => setConfirmDelete(playbook.id)}
-                  className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
-                >
-                  <Icon name="close" />
-                </button>
-              )}
-            </div>
-            {revealed === playbook.id ? (
-              <p data-testid="registered-note" className="text-xs text-neutral-500">
-                {i18n._("Registered. Sessions started before this registration must be restarted to use it.")}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
-              {Object.entries(playbook.roles).map(([role, binding]) => {
-                const lane = summary.players.find(
-                  (player) => player.id === binding.playerId,
-                );
-                // A lane bound by more than one playbook is a shared
-                // conversation, and the binding says so (DR-032).
-                const sharedWith = (lane?.boundBy ?? []).filter(
-                  (position) => !position.startsWith(`${playbook.id}.`),
-                );
-                return (
-                  <span
-                    key={role}
-                    // The binding wraps within itself in a narrow pane
-                    // (DR-041): the chip and its control drop under
-                    // the role rather than squeezing to nothing.
-                    className="relative flex min-w-0 max-w-full flex-wrap items-center gap-1"
-                  >
-                    <span className="font-mono">{role}:</span>
-                    <span
-                      data-testid={`role-binding-${playbook.id}-${role}`}
-                      className="font-mono text-neutral-700 dark:text-neutral-200"
-                    >
-                      {binding.playerId}
-                    </span>
-                    {lane ? (
-                      <AgentChip
-                        // The row says what the role effectively runs:
-                        // a binding's own fast mode over the lane's.
-                        agent={
-                          binding.fastMode !== undefined
-                            ? { ...lane.agent, fastMode: binding.fastMode }
-                            : lane.agent
-                        }
-                        readiness={readinessByAdapter.get(lane.agent.adapter)}
-                        label={binding.playerId}
-                      />
-                    ) : null}
-                    {sharedWith.length > 0 ? (
-                      <span
-                        data-testid={`role-shared-${playbook.id}-${role}`}
-                        title={i18n._("This lane also answers {positions} — one conversation across them", { positions: sharedWith.join(", ") })}
-                        className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                      >
-                        {i18n._({ id: "shared", comment: "badge: this lane answers more than one role" })}
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      ref={
-                        rolePopover?.playbookId === playbook.id &&
-                        rolePopover.role === role
-                          ? playerGearRef
-                          : undefined
-                      }
-                      data-testid={`role-bind-${playbook.id}-${role}`}
-                      title={i18n._("Choose which session player answers {role}", { role })}
-                      aria-label={i18n._("Bind {role}", { role })}
-                      onClick={() =>
-                        setRolePopover((current) =>
-                          current?.playbookId === playbook.id &&
-                          current.role === role
-                            ? undefined
-                            : { playbookId: playbook.id, role },
-                        )
-                      }
-                      className="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    >
-                      <Icon name="edit" />
-                    </button>
-                    {rolePopover?.playbookId === playbook.id &&
-                    rolePopover.role === role ? (
-                      <BindingEditorPopover
-                        role={role}
-                        position={`${playbook.id}.${role}`}
-                        binding={binding}
-                        players={summary.players}
-                        anchorRef={playerGearRef}
-                        onSave={(next) =>
-                          bindRole(playbook.id, role, next).then((result) => {
-                            setRolePopover(undefined);
-                            return result;
-                          })
-                        }
-                        onClose={() => setRolePopover(undefined)}
-                      />
-                    ) : null}
-                  </span>
-                );
-              })}
-              <span
-                className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500"
-                title={i18n._("Source this playbook was loaded from: {from}", { from: playbook.from })}
-              >
-                <span>{i18n._({ id: "from", comment: "label before the path a playbook was loaded from" })}</span>
-                <span className="max-w-[16rem] truncate font-mono">
-                  {playbook.from}
-                </span>
-              </span>
-            </div>
-            {!reviewEnabled &&
-            ((playbook.id === "code" && playbook.from === "@sublang/playbook/code/registry") ||
-              (playbook.id === "decide" && playbook.from === "@sublang/playbook/decide/registry")) ? (
-              <p
-                data-testid={`review-required-hint-${playbook.id}`}
-                className="text-xs text-amber-700 dark:text-amber-300"
-              >
-                {i18n._("{command} is unavailable until /review is enabled below.", {
-                  command: `/${playbook.command}`,
-                })}
-              </p>
-            ) : null}
-            {playbook.id === "dev" && missingDelivery.length > 0 ? (
-              <p
-                data-testid="dev-delivery-hint"
-                className="text-xs text-amber-700 dark:text-amber-300"
-              >
-                {/* One sentence, its verb chosen by how many playbooks
-                    are missing — never an "is"/"are" switch spliced in. */}
-                {i18n._(
-                  "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}",
-                  {
-                    count: missingDelivery.length,
-                    // Two names at most, and the word between them is
-                    // a text of its own language, never English glue.
-                    names:
-                      missingDelivery.length > 1
-                        ? i18n._({
-                            id: "{first} and {second}",
-                            values: {
-                              first: `/${missingDelivery[0]}`,
-                              second: `/${missingDelivery[1]}`,
-                            },
-                            comment: "joins the two playbook names the /dev hint asks for",
-                          })
-                        : `/${missingDelivery[0]}`,
-                  },
-                )}
-              </p>
-            ) : null}
-            <PlaybookPipeline playbookId={playbook.id} />
-          </div>
+        {enabled.map(rowFor)}
+        {strayInvalid.map((entry) => (
+          <InvalidEntryRow
+            key={entry.playbook}
+            entry={entry}
+            repository={repository ?? ""}
+            onChanged={reloadLists}
+          />
         ))}
-        {summary.playbooks.length === 0 ? (
+        {!lists ? (
+          <p className="text-xs text-neutral-500">{i18n._({ id: "loading…", comment: "a request for this pane's content is in flight" })}</p>
+        ) : enabled.length === 0 && strayInvalid.length === 0 ? (
           <div
             data-testid="playbooks-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
@@ -1129,56 +1416,75 @@ export function LibrarySurface({
         ) : null}
       </section>
 
-      {draftList.length > 0 ? (
-        // Drafts stand between the configured playbooks and the
-        // built-ins, the way to a new one at the section's foot
-        // (playbook-library-50/51).
-        <section data-testid="drafts-section" className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Drafts", comment: "section heading: playbooks being written" })}</h2>
-          {draftList.map((draft) => (
-            <DraftRow
-              key={draft.id}
-              draft={draft}
-              onOpen={() => void openDraft(draft.id)}
-              onDelete={() => deleteDraft(draft.id)}
-            />
-          ))}
-          {newPlaybook}
-        </section>
-      ) : null}
-
-      {availableBuiltins.length > 0 ? (
-        <section
-          data-testid="builtins-section"
-          className="flex flex-col gap-2"
-        >
+      {rest.length > 0 ? (
+        <section data-testid="playbooks-available" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">
-            {i18n._("Available built-ins")}
+            {i18n._({ id: "Not enabled", comment: "section heading: playbooks this config does not enable" })}
           </h2>
-          {availableBuiltins.map((entry) => (
-            <BuiltinCard
-              key={entry.id}
-              info={entry}
-              captain={summary.captain}
-              readiness={readiness}
-              summaryPlayers={summary.players}
-            />
-          ))}
+          {rest.map(rowFor)}
         </section>
       ) : null}
 
-      {draftList.length === 0 && draftsLoaded ? (
-        // With no draft the section is absent, and the way to a new
-        // playbook stands below the built-ins (playbook-library-50).
+      {side === "project" && project ? (
+        // Authoring stands between the playbooks and the ways to add a
+        // spec package, the way to a new playbook at its foot
+        // (playbook-library-50/51); with no session the section is
+        // absent and the field stands alone.
+        projectDrafts.length > 0 ? (
+          <section data-testid="drafts-section" className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Authoring", comment: "section heading: playbooks being written in this project" })}</h2>
+            {deletedNote ? (
+              <p data-testid="deleted-note" className="text-xs text-neutral-500">
+                {deletedNote}
+              </p>
+            ) : null}
+            {projectDrafts.map((draft) => (
+              <DraftRow
+                key={draft.id}
+                draft={draft}
+                onOpen={() => void openDraft(draft.id)}
+                onDelete={async () => {
+                  await deleteDraft(draft.id);
+                  const note = i18n._("Deleted {id}; its spec package folder stays at {path}", {
+                    id: draft.id,
+                    path: draftPackagePath(draft),
+                  });
+                  setDeletedNote(note);
+                  setLiveNote(note);
+                }}
+              />
+            ))}
+            {newPlaybook}
+          </section>
+        ) : draftsLoaded ? (
+          <section data-testid="new-playbook-section" className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}</h2>
+            {deletedNote ? (
+              <p data-testid="deleted-note" className="text-xs text-neutral-500">
+                {deletedNote}
+              </p>
+            ) : null}
+            {newPlaybook}
+          </section>
+        ) : null
+      ) : !project && draftsLoaded ? (
         <section data-testid="new-playbook-section" className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start a draft of one's own" })}</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}</h2>
           {newPlaybook}
         </section>
+      ) : null}
+
+      {repository ? (
+        <AddSpecPackages repository={repository} sync={hold} folder={workingFolder} />
       ) : null}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Example", comment: "section heading: the demo playbook" })}</h2>
-        <ExampleCard onPrefill={prefillFromExample} error={exampleError} />
+        <ExampleCard
+          onPrefill={prefillFromExample}
+          blockedReason={project ? undefined : draftNeedsProject()}
+          error={exampleError}
+        />
       </section>
     </div>
   );

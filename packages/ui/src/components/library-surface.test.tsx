@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// DR-015/DR-032 Library coverage: configured roles name the session
-// player that answers them and are rebound in place (PBLIB-4),
-// unconfigured built-ins render from the catalog with browsable
-// sources and an add flow that mints a lane per role (PBLIB-34), and the
-// example card, adapted from slc's demo, stages the pipeline (PBLIB-35);
-// its prefill into a draft's paste mode is covered with the workspace
-// (DR-058).
+// Playbooks surface coverage over a simulated document, through the
+// real store against a stand-in client answering as the core does:
+// enabled roles name the session player that answers them and are
+// rebound in place — with tuning on your own group's entry, the player
+// alone on a project's (playbook-library-4, -38, -39); a playbook
+// enabled nowhere offers Enable, writing a missing player to your own
+// roster first (playbook-library-3, -34, -40), and Disable asks no
+// confirm; invalid entries stand marked (playbook-library-2); the
+// review and delivery hints (playbook-library-48, -49, -89, -90); the
+// config gate (playbook-library-28, -31); the permanent stage row
+// (playbook-library-22, -23, -45); and the example card
+// (playbook-library-35).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -18,136 +23,101 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-
-afterEach(() => { cleanup(); activateLanguage("en"); });
-
-const { commandMock } = vi.hoisted(() => ({
-  commandMock: vi.fn(),
-}));
-
-// LibrarySurface talks to the core through getClient; the store and
-// its hooks stay real so state stubbing goes through setState.
-vi.mock("../state/store.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../state/store.js")>();
-  return {
-    ...actual,
-    getClient: () => ({ command: commandMock }),
-  };
-});
+import type {
+  CommandResults,
+  ConfigState,
+  PlaybookAvailability,
+} from "@sublang/spex-core/protocol";
 
 import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
 import { agentChipText } from "./AgentChip.js";
 import { activateLanguage } from "../i18n.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import { SpexCommandError } from "../lib/client.js";
-import type {
-  BuiltinPlaybookInfo,
-  ConfigState,
-  ReadinessEntry,
-} from "@sublang/spex-core/protocol";
+import {
+  CONFIG_STATE,
+  OWN_ENVIRONMENT,
+  OWN_KEY,
+  PROJECT,
+  PROJECT_ENVIRONMENT,
+  PROJECT_ID,
+  READINESS,
+  available,
+  home,
+} from "../fixtures/playbooks.js";
 
-const CONFIG_STATE: ConfigState = {
-  status: "valid",
-  seeded: false,
-  summary: {
-    path: "/tmp/config.yaml",
-    // The Captain is an inline agent block, not a profile ref (DR-019).
-    captain: {
-      adapter: "claude",
-      model: "claude-opus-4-8",
-      effort: "high",
-      permissions: { mode: "auto" },
+const commandMock = vi.fn();
+
+afterEach(() => {
+  cleanup();
+  activateLanguage("en");
+  setClientForTests(undefined);
+});
+
+/** `code` enabled in your own group's config: its coder on a lane a
+ * second position shares, its reviewer with its own effort. */
+const CODE_OWN = available({
+  id: "code",
+  intent: "software development workflow",
+  roles: ["coder", "reviewer"],
+  enabled: ["own"],
+  bindings: {
+    own: {
+      coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+      reviewer: { playerId: "dev.reviewer", effort: "max", display: "gpt-5.6-sol @ max" },
     },
-    // The roster is flat and top-level; playbooks only bind to it.
-    players: [
-      {
-        id: "dev.coder",
-        agent: {
-          adapter: "claude",
-          model: "claude-opus-5",
-          effort: "high",
-          instruction: "Keep the diff small.",
-        },
-        display: "claude-opus-5 @ high",
-        boundBy: ["code.coder", "fix.coder"],
-      },
-      {
-        id: "dev.reviewer",
-        agent: { adapter: "codex", model: "gpt-5.6-sol" },
-        display: "gpt-5.6-sol",
-        boundBy: ["code.reviewer"],
-      },
-    ],
-    playbooks: [
-      {
-        id: "code",
-        from: "@sublang/playbook/code/registry",
-        command: "code",
-        intent: "software development workflow",
-        roles: {
-          coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
-          reviewer: {
-            playerId: "dev.reviewer",
-            effort: "max",
-            display: "gpt-5.6-sol @ max",
-          },
-        },
-      },
-    ],
   },
-};
+});
 
-const READINESS: ReadinessEntry[] = [
-  {
-    adapter: "claude",
-    ready: true,
-    usedBy: ["captain", "dev.coder (code.coder)"],
-    fastModeSupported: true, subagentModelSupported: true,
-  },
-  {
-    adapter: "codex",
-    ready: false,
-    requirement: "set OPENAI_API_KEY or run `codex login`",
-    usedBy: [],
-    fastModeSupported: false, subagentModelSupported: false,
-  },
-];
+/** `review`, a built-in no config enables. */
+const REVIEW_NOWHERE = available({ id: "review", intent: "review of committed phases", roles: ["host"] });
 
-const BUILTINS: BuiltinPlaybookInfo[] = [
-  {
-    id: "code",
-    command: "code",
-    intent: "software development workflow",
-    from: "@sublang/playbook/code/registry",
-    roles: ["coder", "reviewer"],
-    configured: true,
-    source: "# Code Playbook",
-  },
-  {
-    id: "review",
-    command: "review",
-    intent: "review of committed phases",
-    from: "@sublang/playbook/review/registry",
-    roles: ["host"],
-    configured: false,
-    source: "# Review Playbook\n\nA **structured** review workflow.",
-  },
-];
+let lists: CommandResults["environment.playbooks"];
 
-function renderLibrary(configState: ConfigState = CONFIG_STATE) {
+function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
   useAppStore.setState({
     connection: "open",
-    configState,
+    configState: CONFIG_STATE,
     readiness: READINESS,
+    projects: [PROJECT],
+    currentProjectId: PROJECT_ID,
+    space: home(),
+    playbooksSide: "own",
+    playbookLists: undefined,
+    environments: {},
+    environmentErrors: {},
+    drafts: {},
+    draftsLoaded: true,
+    openDraftId: undefined,
+    revealPlaybook: undefined,
+    newPlaybookRequested: false,
     compileProgress: {},
     activeCompile: undefined,
-    builtins: BUILTINS,
-    // The surface refreshes the catalog on activation; state above
-    // already carries it, so the load is a stub here.
-    loadBuiltins: vi.fn(async () => {}),
+    ...over,
   });
-  return render(<LibrarySurface />);
 }
+
+/** Render the surface on a side, its lists answered as `next` says. */
+async function renderLibrary(
+  next: Partial<CommandResults["environment.playbooks"]> = {},
+  over: Partial<ReturnType<typeof useAppStore.getState>> = {},
+) {
+  lists = { project: [], own: [CODE_OWN, REVIEW_NOWHERE], ...next };
+  seed(over);
+  const view = render(<LibrarySurface />);
+  await vi.waitFor(() => expect(useAppStore.getState().playbookLists).toBeTruthy());
+  return view;
+}
+
+/** A playbook of your own group's config, its single coder role. */
+const configured = (id: string, over: Partial<PlaybookAvailability> = {}) =>
+  available({
+    id,
+    intent: `${id} intent`,
+    enabled: ["own"],
+    bindings: { own: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } } },
+    ...over,
+  });
 
 beforeEach(() => {
   useAppStore.setState({ loadAgentOptions: async (adapter) => ({
@@ -158,44 +128,48 @@ beforeEach(() => {
     discovery: { status: "unavailable", reason: "Fixture" },
   }) });
   commandMock.mockReset();
-  commandMock.mockImplementation(async (type: string) => {
-    if (type === "compile.check") {
-      return {
-        node: { ok: true, version: "v23.6.0", command: "node" },
-        slc: { ok: true, command: ["npx", "@sublang/slc"] },
-      };
+  commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+    switch (type) {
+      case "environment.playbooks":
+        return lists;
+      case "environment.get":
+        return params?.repository === PROJECT_ID ? PROJECT_ENVIRONMENT : OWN_ENVIRONMENT;
+      case "config.edit":
+        return CONFIG_STATE;
+      case "draft.list":
+        return [];
+      case "playbook.artifacts":
+        return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
+      default:
+        return null;
     }
-    if (type === "config.edit") return CONFIG_STATE;
-    if (type === "library.builtins") return { builtins: BUILTINS };
-    if (type === "playbook.artifacts") {
-      return { source: null, gears: null, fsm: null, stateIds: null, missing: [] };
-    }
-    return null;
   });
+  setClientForTests({ command: commandMock } as unknown as Parameters<typeof setClientForTests>[0]);
 });
 
-describe("PBLIB-4: configured roles name the player that answers them", () => {
-  test("a role prints its lane, its agent, and that the lane is shared", () => {
-    renderLibrary();
+function edits(): unknown[] {
+  return commandMock.mock.calls.filter(([type]) => type === "config.edit").map(([, params]) => params);
+}
+
+describe("playbook-library-1/38/39: enabled roles name the player that answers them", () => {
+  test("a role prints its lane, what it runs, and that the lane is shared", async () => {
+    await renderLibrary();
     // The role's own line says which session player answers it, and
     // the chip describes that lane's agent (DR-032).
-    expect(screen.getByTestId("role-binding-code-coder").textContent).toBe(
-      "dev.coder",
-    );
+    expect(screen.getByTestId("role-binding-code-coder").textContent).toBe("dev.coder");
+    expect(screen.getByTestId("role-binding-code-coder").title).toBe("claude-opus-5 @ high");
     expect(
       screen.getByLabelText("dev.coder: claude · claude-opus-5 @ high (ready)"),
     ).toBeTruthy();
     // dev.coder answers a second position, so it is one conversation
-    // across both and the badge says so.
-    expect(screen.getByTestId("role-shared-code-coder").title).toContain(
-      "fix.coder",
-    );
+    // across both and the badge names the other.
+    expect(screen.getByTestId("role-shared-code-coder").title).toContain("fix.coder");
     // dev.reviewer answers this binding alone: no shared badge.
     expect(screen.queryByTestId("role-shared-code-reviewer")).toBeNull();
   });
 
-  test("the gear rebinds the role and pins its own effort", async () => {
-    renderLibrary();
+  test("on your own group's entry the gear rebinds the role and pins its own effort", async () => {
+    await renderLibrary();
     fireEvent.click(screen.getByTestId("role-bind-code-coder"));
     const editor = screen.getByTestId("binding-editor-coder");
     await within(editor).findByText("Model list unavailable: Fixture");
@@ -205,6 +179,7 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
         within(editor).getByTestId("binding-player").querySelectorAll("option"),
       ).map((option) => (option as HTMLOptionElement).value),
     ).toEqual(["dev.coder", "dev.reviewer"]);
+    expect(within(editor).queryByTestId("binding-personal-note")).toBeNull();
 
     fireEvent.change(within(editor).getByTestId("binding-effort-mode"), {
       target: { value: "pin" },
@@ -215,7 +190,8 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
     fireEvent.click(within(editor).getByTestId("binding-save"));
     await vi.waitFor(() =>
       // A binding carries a player and its own tuning only — adapter
-      // and permissions belong to the lane (DR-032).
+      // and permissions belong to the lane (DR-032) — in your own
+      // group's config.
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "playbook.role.bind",
@@ -224,6 +200,7 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
           playerId: "dev.coder",
           effort: "ultracode",
         },
+        repository: OWN_KEY,
       }),
     );
     await vi.waitFor(() =>
@@ -232,7 +209,7 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
   });
 
   test("the gear pins the role's subagent model and effort where the lane's adapter serves one (DR-093, DR-095)", async () => {
-    renderLibrary();
+    await renderLibrary();
     // A codex lane is offered neither.
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
     const reviewer = screen.getByTestId("binding-editor-reviewer");
@@ -283,15 +260,25 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
           subagentModel: "claude-haiku-5",
           subagentEffort: "high",
         },
+        repository: OWN_KEY,
       }),
     );
   });
 
   test("a binding's standing Off reads as such and stays clearable (DR-095)", async () => {
-    const summary = structuredClone(CONFIG_STATE.summary!);
-    const code = summary.playbooks.find((playbook) => playbook.id === "code")!;
-    code.roles.coder = { ...code.roles.coder!, subagentModel: false, subagentEffort: false };
-    renderLibrary({ ...CONFIG_STATE, summary });
+    await renderLibrary({
+      own: [
+        {
+          ...CODE_OWN,
+          bindings: {
+            own: {
+              ...CODE_OWN.bindings!.own!,
+              coder: { playerId: "dev.coder", display: "claude-opus-5 @ high", subagentModel: false, subagentEffort: false },
+            },
+          },
+        },
+      ],
+    });
     fireEvent.click(screen.getByTestId("role-bind-code-coder"));
     const editor = screen.getByTestId("binding-editor-coder");
     await within(editor).findByText("Model list unavailable: Fixture");
@@ -310,12 +297,13 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: expect.objectContaining({ kind: "playbook.role.bind", role: "coder", subagentModel: null, subagentEffort: false }),
+        repository: OWN_KEY,
       }),
     );
   });
 
-  test("choosing a busy lane warns that the conversation is shared", () => {
-    renderLibrary();
+  test("choosing a busy lane warns that the conversation is shared", async () => {
+    await renderLibrary();
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
     const editor = screen.getByTestId("binding-editor-reviewer");
     // On its own lane the reviewer holds the only position.
@@ -330,17 +318,12 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
   });
 
   test("a refused rebind surfaces inline and keeps the editor open", async () => {
-    commandMock.mockImplementation(async (type: string) => {
+    await renderLibrary();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "config.edit") throw new Error("dev.ghost is not a player");
-      if (type === "compile.check") {
-        return {
-          node: { ok: true, version: "v23.6.0", command: "node" },
-          slc: { ok: true, command: ["npx", "@sublang/slc"] },
-        };
-      }
-      return null;
+      return base(type, params);
     });
-    renderLibrary();
     fireEvent.click(screen.getByTestId("role-bind-code-coder"));
     fireEvent.click(screen.getByTestId("binding-save"));
     await vi.waitFor(() =>
@@ -349,37 +332,72 @@ describe("PBLIB-4: configured roles name the player that answers them", () => {
       ).toContain("dev.ghost is not a player"),
     );
   });
+
+  test("on a project's entry the editor offers the player alone, says tuning is personal, and writes the name alone", async () => {
+    await renderLibrary(
+      {
+        project: [
+          available({
+            id: "code",
+            repository: PROJECT_ID,
+            roles: ["coder", "reviewer"],
+            enabled: ["project"],
+            bindings: {
+              project: {
+                coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+                reviewer: { playerId: "dev.reviewer", display: "gpt-5.6-sol" },
+              },
+            },
+          }),
+        ],
+      },
+      { playbooksSide: "project" },
+    );
+    await screen.findByTestId("role-bind-code-reviewer");
+    fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
+    const editor = screen.getByTestId("binding-editor-reviewer");
+    expect(within(editor).getByTestId("binding-personal-note").textContent).toBe(
+      "Tuning is personal — set it in Settings",
+    );
+    // No tuning field stands: the player is the only choice.
+    expect(within(editor).queryByTestId("binding-tuning-rows")).toBeNull();
+    expect(within(editor).queryByTestId("binding-fast-mode")).toBeNull();
+    fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "dev.coder" } });
+    fireEvent.click(within(editor).getByTestId("binding-save"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: { kind: "playbook.role.bind", playbookId: "code", role: "reviewer", playerId: "dev.coder" },
+        repository: PROJECT_ID,
+      }),
+    );
+  });
 });
 
-describe("DR-015: built-ins section from the catalog", () => {
-  test("only unconfigured entries render as available built-ins", () => {
-    renderLibrary();
-    const section = screen.getByTestId("builtins-section");
-    const card = within(section).getByTestId("builtin-review");
+describe("playbook-library-3/34/40: enabling and disabling", () => {
+  test("a built-in enabled in neither config lists its command, intent and roles with Enable, and its source browses with no write", async () => {
+    await renderLibrary();
+    const card = within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-review");
     expect(card.textContent).toContain("/review");
     expect(card.textContent).toContain("review of committed phases");
     expect(card.textContent).toContain("host:");
-    // An unassigned role starts on the fixed neutral block (DR-019).
-    expect(within(card).getByTestId("agent-chip").textContent).toContain(
-      agentChipText(NEUTRAL_BLOCK),
+    expect(within(card).getByTestId("playbook-enabled-review").textContent).toBe("Not enabled");
+    // The proposed player is dev.<role>, on the fixed neutral block
+    // until the reader tunes it (DR-019, DR-032).
+    expect((within(card).getByTestId("enable-player-review-host") as HTMLInputElement).value).toBe("dev.host");
+    expect(within(card).getByTestId("agent-chip").textContent).toContain(agentChipText(NEUTRAL_BLOCK));
+    expect(within(card).getByTestId("playbook-enable-review").textContent).toBe("Enable");
+    // The source browses through the stage row, writing nothing.
+    fireEvent.click(within(within(card).getByTestId("stages-review")).getByRole("button", { name: "Source" }));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("playbook.artifacts", { playbookId: "review", repository: OWN_KEY }),
     );
-    // The configured /code built-in stays in the configured list only.
-    expect(within(section).queryByTestId("builtin-code")).toBeNull();
+    expect(edits()).toEqual([]);
   });
 
-  test("the source toggle renders the playbook markdown", () => {
-    renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-source-toggle-review"));
-    // Markdown rendered: **structured** becomes a <strong>.
-    expect(screen.getByText("structured").tagName).toBe("STRONG");
-    fireEvent.click(screen.getByTestId("builtin-source-toggle-review"));
-    expect(screen.queryByText("structured")).toBeNull();
-  });
-
-  test("the add flow mints a lane per role, then binds to it", async () => {
-    renderLibrary();
-    const card = screen.getByTestId("builtin-review");
-    fireEvent.click(within(card).getByTestId("builtin-player-host"));
+  test("[playbook-library-40] enabling writes the missing player to your own roster first, with the block chosen, then the entry", async () => {
+    await renderLibrary({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }] }, { playbooksSide: "project" });
+    const card = await screen.findByTestId("playbook-card-review");
+    fireEvent.click(within(card).getByTestId("enable-configure-review-host"));
     const popover = within(card).getByTestId("agent-popover");
     fireEvent.click(within(popover).getByTestId("agent-adapter-codex"));
     await within(popover).findByText("Model list unavailable: Fixture");
@@ -394,11 +412,14 @@ describe("DR-015: built-ins section from the catalog", () => {
       "codex · gpt-5.5-codex @ ultra",
     );
 
-    fireEvent.click(screen.getByTestId("builtin-add-review"));
-    // The lane the roster lacks is minted first, carrying the whole
-    // agent block, so the binding that follows never dangles (DR-032).
-    await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+    fireEvent.click(within(card).getByTestId("playbook-enable-review"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(2));
+    // The player the roster lacks is written to your own roster first,
+    // carrying the whole block, so the binding that follows never
+    // dangles; the project's entry names the player alone, with no
+    // `from` (playbook-library-3, DR-104).
+    expect(edits()).toEqual([
+      {
         op: {
           kind: "player.set",
           playerId: "dev.host",
@@ -409,194 +430,207 @@ describe("DR-015: built-ins section from the catalog", () => {
             permissions: { mode: "auto" },
           },
         },
-      }),
-    );
+      },
+      {
+        repository: PROJECT_ID,
+        op: { kind: "playbook.add", playbookId: "review", roles: { host: "dev.host" } },
+      },
+    ]);
+    // The list reads again to show where it is now enabled.
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("config.edit", {
-        op: {
-          kind: "playbook.add",
-          playbookId: "review",
-          from: "@sublang/playbook/review/registry",
-          roles: { host: "dev.host" },
-        },
-      }),
+      expect(commandMock.mock.calls.filter(([type]) => type === "environment.playbooks").length).toBeGreaterThan(1),
     );
   });
 
-  test("an untouched role mints its lane on the neutral block", async () => {
-    renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-add-review"));
+  test("an untouched role is written on the neutral block; an id the roster holds is bound as it stands", async () => {
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("playbook-enable-review"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("config.edit", {
-        op: { kind: "player.set", playerId: "dev.host", patch: NEUTRAL_BLOCK },
-      }),
+      expect(edits()[0]).toEqual({ op: { kind: "player.set", playerId: "dev.host", patch: NEUTRAL_BLOCK } }),
+    );
+    cleanup();
+    commandMock.mockClear();
+
+    // The proposed id is editable: naming a lane the roster holds
+    // writes no player and shares that lane by choice (DR-032).
+    await renderLibrary();
+    const input = screen.getByTestId("enable-player-review-host");
+    fireEvent.change(input, { target: { value: "dev.reviewer" } });
+    // A lane the roster holds wears its own agent and needs no block.
+    expect(screen.queryByTestId("enable-configure-review-host")).toBeNull();
+    fireEvent.click(screen.getByTestId("playbook-enable-review"));
+    await vi.waitFor(() =>
+      expect(edits()).toEqual([
+        { repository: OWN_KEY, op: { kind: "playbook.add", playbookId: "review", roles: { host: "dev.reviewer" } } },
+      ]),
     );
   });
 
-  test("an add failure surfaces inline on the card", async () => {
-    commandMock.mockImplementation(async (type: string) => {
+  test("an id outside the player rule holds Enable, naming the role", async () => {
+    await renderLibrary();
+    fireEvent.change(screen.getByTestId("enable-player-review-host"), { target: { value: "Dev Host" } });
+    const enable = screen.getByTestId("playbook-enable-review") as HTMLButtonElement;
+    expect(enable.disabled).toBe(true);
+    expect(enable.title).toContain("host needs a player id");
+  });
+
+  test("an enabling failure surfaces inline on the card", async () => {
+    await renderLibrary();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "config.edit") throw new Error("config file is read-only");
-      if (type === "compile.check") {
-        return {
-          node: { ok: true, version: "v23.6.0", command: "node" },
-          slc: { ok: true, command: ["npx", "@sublang/slc"] },
-        };
-      }
-      return null;
+      return base(type, params);
     });
-    renderLibrary();
-    fireEvent.click(screen.getByTestId("builtin-add-review"));
-    await vi.waitFor(() => {
-      const card = screen.getByTestId("builtin-review");
-      expect(card.textContent).toContain("config file is read-only");
-    });
-  });
-});
-
-describe("playbook-library-89: packaged work names its required review", () => {
-  const configured = (id: string, from: string, command = id) => ({
-    id, from, command, intent: `${id} intent`,
-    roles: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
-  });
-
-  test.each(["en", "zh"] as const)("code and decide name their effective commands until validated review is enabled (%s)", (language) => {
-    activateLanguage(language);
-    const playbooks = [
-      configured("code", "@sublang/playbook/code/registry", "build"),
-      configured("decide", "@sublang/playbook/decide/registry", "design"),
-    ];
-    renderLibrary({ ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary, playbooks } });
-    expect(screen.getByTestId("review-required-hint-code").textContent).toBe(
-      language === "zh" ? "/build 暂不可运行；请先在下方启用 /review。" : "/build is unavailable until /review is enabled below.",
-    );
-    expect(screen.getByTestId("review-required-hint-decide").textContent).toBe(
-      language === "zh" ? "/design 暂不可运行；请先在下方启用 /review。" : "/design is unavailable until /review is enabled below.",
-    );
-    expect(commandMock.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
-
-    act(() => useAppStore.setState({
-      configState: { ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary,
-        playbooks: [...playbooks, configured("review", "@sublang/playbook/review/registry")],
-      } },
-    }));
-    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
-    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
-  });
-
-  test.each(["en", "zh"] as const)("custom same-id modules and unrelated packaged work receive no dependency hint (%s)", (language) => {
-    activateLanguage(language);
-    renderLibrary({ ...CONFIG_STATE, summary: { ...CONFIG_STATE.summary, playbooks: [
-      configured("code", "/project/custom/code.registry.ts"),
-      configured("decide", "./custom-decide.registry.ts"),
-      configured("inspect", "@sublang/playbook/inspect/registry"),
-    ] } });
-    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
-    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
-    expect(screen.queryByTestId("review-required-hint-inspect")).toBeNull();
-    expect(commandMock.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
-  });
-});
-
-describe("playbook-library-48: dev names the delivery built-ins it lacks", () => {
-  const devPlaybook = {
-    id: "dev",
-    from: "@sublang/playbook/dev/registry",
-    command: "dev",
-    intent: "plan a development request",
-    roles: { analyst: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
-  };
-  const deliveryPlaybook = (id: "branch" | "pr") => ({
-    id,
-    from: `@sublang/playbook/${id}/registry`,
-    command: id,
-    intent: `${id} intent`,
-    roles: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
-  });
-
-  test("dev without branch or pr carries the hint naming both", () => {
-    useAppStore.setState({
-      configState: {
-        ...CONFIG_STATE,
-        summary: { ...CONFIG_STATE.summary, playbooks: [devPlaybook] },
-      },
-    });
-    render(<LibrarySurface />);
-    const hint = screen.getByTestId("dev-delivery-hint");
-    expect(hint.textContent).toContain("/branch and /pr are enabled");
-    expect(hint.textContent).toContain("plain /dev request still runs");
-  });
-
-  test("dev with branch but not pr names only pr", () => {
-    useAppStore.setState({
-      configState: {
-        ...CONFIG_STATE,
-        summary: {
-          ...CONFIG_STATE.summary,
-          playbooks: [devPlaybook, deliveryPlaybook("branch")],
-        },
-      },
-    });
-    render(<LibrarySurface />);
-    expect(screen.getByTestId("dev-delivery-hint").textContent).toContain("/pr is enabled");
-  });
-
-  test("dev with both configured carries no hint", () => {
-    useAppStore.setState({
-      configState: {
-        ...CONFIG_STATE,
-        summary: {
-          ...CONFIG_STATE.summary,
-          playbooks: [devPlaybook, deliveryPlaybook("branch"), deliveryPlaybook("pr")],
-        },
-      },
-    });
-    render(<LibrarySurface />);
-    expect(screen.queryByTestId("dev-delivery-hint")).toBeNull();
-  });
-});
-
-describe("playbook-library-34/26: plain words on the list", () => {
-  test("a built-in is enabled, not added to a config", () => {
-    renderLibrary();
-    expect(screen.getByTestId("builtin-add-review").textContent).toBe("Enable");
-  });
-
-  test("removal asks with Remove and Keep, and Keep writes nothing", () => {
-    renderLibrary();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove /code from the config" }),
-    );
-    expect(screen.getByText("Remove this playbook from the config?")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-    expect(commandMock).not.toHaveBeenCalledWith(
-      "config.edit",
-      expect.objectContaining({ op: expect.objectContaining({ kind: "playbook.delete" }) }),
+    fireEvent.click(screen.getByTestId("playbook-enable-review"));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("playbook-error-review").textContent).toBe("config file is read-only"),
     );
   });
 
-  test("an empty list says how to get a playbook", () => {
-    useAppStore.setState({
-      connection: "open",
-      configState: {
-        ...CONFIG_STATE,
-        summary: { ...CONFIG_STATE.summary, playbooks: [] },
-      },
-      readiness: READINESS,
-      compileProgress: {},
-      activeCompile: undefined,
-      builtins: BUILTINS,
-      loadBuiltins: vi.fn(async () => {}),
-    });
-    render(<LibrarySurface />);
+  test("[playbook-library-26] Disable asks no confirm and writes the side's config", async () => {
+    await renderLibrary();
+    const disable = screen.getByTestId("playbook-disable-code");
+    expect(disable.textContent).toBe("Disable");
+    fireEvent.click(disable);
+    await vi.waitFor(() =>
+      expect(edits()).toEqual([{ repository: OWN_KEY, op: { kind: "playbook.delete", playbookId: "code" } }]),
+    );
+  });
+
+  test("[playbook-library-34] with no playbook enabled the list says so and points at enabling a built-in or authoring one", async () => {
+    await renderLibrary({ own: [REVIEW_NOWHERE] });
     expect(screen.getByTestId("playbooks-empty").textContent).toBe(
       "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
     );
   });
 });
 
+describe("playbook-library-2: invalid entries stand marked", () => {
+  test("a listed entry carries its failure, and one no environment exports lists with it", async () => {
+    await renderLibrary({
+      invalid: [
+        { config: "own", playbook: "code", reason: "duplicate command /code" },
+        { config: "own", playbook: "ghost", reason: "no environment of the session exports ghost" },
+        { config: "project", playbook: "elsewhere", reason: "not on this side" },
+      ],
+    });
+    expect(screen.getByTestId("playbook-invalid-code").textContent).toBe("Invalid: duplicate command /code");
+    const ghost = screen.getByTestId("playbook-card-ghost");
+    expect(within(ghost).getByTestId("playbook-invalid-ghost").textContent).toBe(
+      "Invalid: no environment of the session exports ghost",
+    );
+    // Another side's failure is that side's.
+    expect(screen.queryByTestId("playbook-card-elsewhere")).toBeNull();
+    fireEvent.click(within(ghost).getByTestId("playbook-disable-ghost"));
+    await vi.waitFor(() =>
+      expect(edits()).toEqual([{ repository: OWN_KEY, op: { kind: "playbook.delete", playbookId: "ghost" } }]),
+    );
+  });
+});
+
+describe("playbook-library-89/90: packaged work names its required review", () => {
+  test.each(["en", "zh"] as const)("code and decide name their effective commands until validated review is enabled (%s)", async (language) => {
+    activateLanguage(language);
+    await renderLibrary({
+      own: [configured("code", { command: "build" }), configured("decide", { command: "design" })],
+    });
+    expect(screen.getByTestId("review-required-hint-code").textContent).toBe(
+      language === "zh" ? "/build 暂不可运行；请先在下方启用 /review。" : "/build is unavailable until /review is enabled below.",
+    );
+    expect(screen.getByTestId("review-required-hint-decide").textContent).toBe(
+      language === "zh" ? "/design 暂不可运行；请先在下方启用 /review。" : "/design is unavailable until /review is enabled below.",
+    );
+    expect(edits()).toEqual([]);
+
+    // The list read again with review enabled: the hints go.
+    lists = {
+      project: [],
+      own: [configured("code", { command: "build" }), configured("decide", { command: "design" }), configured("review")],
+    };
+    await act(async () => {
+      await useAppStore.getState().loadPlaybookLists(PROJECT_ID);
+    });
+    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
+    expect(edits()).toEqual([]);
+  });
+
+  test.each(["en", "zh"] as const)("another spec package's same ids and unrelated built-ins receive no hint (%s)", async (language) => {
+    activateLanguage(language);
+    await renderLibrary({
+      own: [
+        configured("code", { package: "acme/flows", source: "registry" }),
+        configured("decide", { package: "acme/flows", source: "path" }),
+        configured("inspect"),
+      ],
+    });
+    expect(screen.queryByTestId("review-required-hint-code")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-decide")).toBeNull();
+    expect(screen.queryByTestId("review-required-hint-inspect")).toBeNull();
+    expect(edits()).toEqual([]);
+  });
+
+  test("a review that fails validation does not count as enabled", async () => {
+    await renderLibrary({
+      own: [configured("code"), configured("review")],
+      invalid: [{ config: "own", playbook: "review", reason: "role host is unresolved" }],
+    });
+    expect(screen.getByTestId("review-required-hint-code")).toBeTruthy();
+  });
+});
+
+describe("playbook-library-48/49: dev names the delivery built-ins it lacks", () => {
+  test("dev without branch or pr carries the hint naming both", async () => {
+    await renderLibrary({ own: [configured("dev", { intent: "plan a development request" })] });
+    const hint = screen.getByTestId("dev-delivery-hint");
+    expect(hint.textContent).toContain("/branch and /pr are enabled");
+    expect(hint.textContent).toContain("plain /dev request still runs");
+    // A hint, not an invalid mark.
+    expect(screen.queryByTestId("playbook-invalid-dev")).toBeNull();
+  });
+
+  test("dev with branch enabled in the project but not pr names only pr", async () => {
+    await renderLibrary({
+      own: [configured("dev")],
+      project: [available({ id: "branch", repository: PROJECT_ID, enabled: ["project"] })],
+    });
+    expect(screen.getByTestId("dev-delivery-hint").textContent).toContain("/pr is enabled");
+  });
+
+  test("dev with both enabled carries no hint", async () => {
+    await renderLibrary({ own: [configured("dev"), configured("branch"), configured("pr")] });
+    expect(screen.queryByTestId("dev-delivery-hint")).toBeNull();
+  });
+});
+
+describe("playbook-library-28/31: the config gate", () => {
+  const invalid: ConfigState = { status: "invalid", path: "/tmp/config.yaml", errors: ["playbooks must be an object"] };
+
+  test("an invalid own config replaces the surface with the gate, Settings a control where navigation is offered", async () => {
+    const onNavigate = vi.fn();
+    seed({ configState: invalid });
+    render(<LibrarySurface onNavigate={onNavigate} />);
+    expect(screen.getByText("The Captain can only run playbooks listed here.")).toBeTruthy();
+    const settings = screen.getByRole("button", { name: "Settings" });
+    fireEvent.click(settings);
+    expect(onNavigate).toHaveBeenCalledWith("Settings");
+    expect(screen.queryByTestId("playbooks-enabled")).toBeNull();
+    expect(screen.queryByTestId("register-form")).toBeNull();
+  });
+
+  test("a missing config without navigation names Settings as plain text", () => {
+    seed({ configState: { status: "missing", path: "/tmp/config.yaml" } });
+    render(<LibrarySurface />);
+    expect(screen.getByText(/Playbooks need a valid config/).textContent).toBe(
+      "Playbooks need a valid config — fix it in Settings.",
+    );
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+    expect(screen.queryByTestId("playbooks-enabled")).toBeNull();
+  });
+});
+
 /** The Gears artifact as the core serves it: the markdown plus the
- * parse the card draws as rows (PBLIB-24). */
+ * parse the card draws as rows (playbook-library-24). */
 const GEARS_ITEMS = {
   path: "specs/packages/code.md",
   key: "code",
@@ -639,7 +673,7 @@ const ARTIFACTS = {
  * commands on the default stub. */
 function withArtifacts(load: () => Promise<unknown>): void {
   const base = commandMock.getMockImplementation()!;
-  commandMock.mockImplementation(async (type: string, params?: unknown) =>
+  commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
     type === "playbook.artifacts" ? load() : base(type, params),
   );
 }
@@ -650,10 +684,10 @@ function artifactCalls(): number {
   ).length;
 }
 
-describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () => {
-  test("a press opens a stage, a second closes it, another swaps — on one request", async () => {
+describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a row", () => {
+  test("a press opens a stage, a second closes it, another swaps — on one request for that environment's artifact", async () => {
     withArtifacts(async () => ARTIFACTS);
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     expect(
       within(row)
@@ -670,6 +704,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
       within(row).getByRole("button", { name: "Source" }).getAttribute("aria-pressed"),
     ).toBe("true");
     // The first open asks, and says so until the answer lands.
+    expect(commandMock).toHaveBeenCalledWith("playbook.artifacts", { playbookId: "code", repository: OWN_KEY });
     expect(artifactCalls()).toBe(1);
     expect(screen.getByTestId("pipeline-code").textContent).toContain("loading…");
     await vi.waitFor(() =>
@@ -695,7 +730,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
 
   test("the Gears stage stands as the outline's rows, collapsed", async () => {
     withArtifacts(async () => ARTIFACTS);
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
     await vi.waitFor(() =>
@@ -723,7 +758,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     );
 
     // A settled hover previews the cited item at hand, the same card
-    // the outline raises (PBLIB-22).
+    // the outline raises.
     fireEvent.mouseEnter(screen.getByTestId("link-CODE-2-CODE-1"));
     await vi.waitFor(() =>
       expect(screen.getByTestId("citation-preview").textContent).toContain(
@@ -744,7 +779,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
 
   test("gears the parser could not read fall back to the markdown", async () => {
     withArtifacts(async () => ({ ...ARTIFACTS, gearsItems: undefined }));
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "Gears",
@@ -760,7 +795,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
 
   test("the State machine's stage names its states", async () => {
     withArtifacts(async () => ARTIFACTS);
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "State machine",
@@ -777,7 +812,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
 
   test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {
     withArtifacts(async () => ({ ...ARTIFACTS, gears: null, missing: ["gears"] }));
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     const gears = () =>
       within(row).getByRole("button", { name: "Gears" }) as HTMLButtonElement;
@@ -788,9 +823,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     await vi.waitFor(() => expect(gears().disabled).toBe(true));
     // Struck out as well as quiet: never colour alone (DR-010 §7).
     expect(gears().className).toContain("line-through");
-    expect(gears().title).toBe(
-      "Gears not found next to this playbook's registry",
-    );
+    expect(gears().title).toBe("Gears not found beside this playbook's module");
     // The absence is named in the open stage, not on the card.
     expect(screen.getByTestId("pipeline-code").textContent).toContain(
       "missing stages: Gears",
@@ -831,7 +864,7 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     try {
       useAppStore.setState({ frameHeights: {} });
       withArtifacts(async () => ARTIFACTS);
-      renderLibrary();
+      await renderLibrary({ own: [CODE_OWN] });
       const row = screen.getByTestId("stages-code");
       fireEvent.click(within(row).getByRole("button", { name: "Source" }));
       await vi.waitFor(() =>
@@ -891,9 +924,9 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
 
   test("a failed request leaves its message in the open stage", async () => {
     withArtifacts(async () => {
-      throw new Error("no registry beside /tmp/code");
+      throw new Error("no module beside /tmp/code");
     });
-    renderLibrary();
+    await renderLibrary({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "Source",
@@ -901,15 +934,15 @@ describe("PBLIB-22/23: a configured playbook wears its pipeline as a row", () =>
     );
     await vi.waitFor(() =>
       expect(screen.getByTestId("pipeline-code").textContent).toContain(
-        "no registry beside /tmp/code",
+        "no module beside /tmp/code",
       ),
     );
   });
 });
 
-describe("PBLIB-35: the example card", () => {
-  test("the row stands on the card and opens all four in-memory stages", () => {
-    renderLibrary();
+describe("playbook-library-35: the example card", () => {
+  test("the row stands on the card and opens all four in-memory stages", async () => {
+    await renderLibrary();
     const card = screen.getByTestId("example-card");
     expect(card.textContent).toContain("Example: Two-Agent Change-and-Review Workflow");
     expect(card.textContent).toContain("from the slc demo");
@@ -960,17 +993,15 @@ describe("PBLIB-35: the example card", () => {
     expect(card.textContent).not.toContain("from 'xstate'");
   });
 
+  test("the prefill is offered only with a project chosen", async () => {
+    await renderLibrary({ project: null }, { projects: [], currentProjectId: undefined });
+    const prefill = screen.getByTestId("example-prefill") as HTMLButtonElement;
+    expect(prefill.disabled).toBe(true);
+    expect(prefill.title).toBe("Add a project first");
+  });
 });
 
 describe("DR-015: repeated Academy seeding opens the existing project", () => {
-  beforeEach(() => {
-    // Store actions resolve the module-local client, not the mocked
-    // export — inject the fake through the seam.
-    setClientForTests({ command: commandMock } as unknown as Parameters<
-      typeof setClientForTests
-    >[0]);
-  });
-
   test("a conflict on the default path selects the registered example", async () => {
     const academy = {
       id: "p-academy",
