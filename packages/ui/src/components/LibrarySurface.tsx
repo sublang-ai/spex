@@ -26,7 +26,7 @@ import type {
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import { getClient, useAppStore } from "../state/store.js";
+import { draftNeedsProject, getClient, useAppStore } from "../state/store.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import {
   NEUTRAL_BLOCK,
@@ -586,7 +586,11 @@ function NewPlaybookField({
   onOpenExisting,
   autoFocus,
   onAutoFocused,
+  blockedReason,
 }: {
+  /** Why no draft can be made here, the field disabled meanwhile: an
+   * authoring session lives in a project's spex repository. */
+  blockedReason?: string;
   /** Configured playbook ids. */
   takenPlaybooks: ReadonlySet<string>;
   /** Built-in ids the catalog offers. */
@@ -614,7 +618,7 @@ function NewPlaybookField({
 
   async function submit(): Promise<void> {
     const id = value.trim();
-    if (!id || busy) return;
+    if (!id || busy || blockedReason) return;
     if (!DRAFT_ID_RULE.test(id)) {
       setError(draftIdRuleText());
       return;
@@ -672,6 +676,7 @@ function NewPlaybookField({
             onKeyDown={onKeyDown}
             placeholder={i18n._({ id: "e.g. triage", comment: "placeholder of the new-playbook id field; triage is an example id" })}
             spellCheck={false}
+            disabled={blockedReason !== undefined}
             aria-invalid={error !== undefined}
             aria-describedby="new-playbook-caption"
             className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950"
@@ -680,15 +685,16 @@ function NewPlaybookField({
         <button
           type="button"
           data-testid="new-playbook-button"
-          disabled={busy || value.trim().length === 0}
+          disabled={busy || value.trim().length === 0 || blockedReason !== undefined}
+          title={blockedReason}
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
           {busy ? i18n._({ id: "Opening…", comment: "a draft is being opened" }) : i18n._({ id: "New playbook", comment: "start a draft of one's own" })}
         </button>
       </div>
-      <span id="new-playbook-caption" className="text-xs text-neutral-500">
-        {draftIdCaption()}
+      <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
+        {blockedReason ?? draftIdCaption()}
       </span>
       {error ? (
         <span
@@ -738,6 +744,7 @@ export function LibrarySurface({
   const createDraft = useAppStore((state) => state.createDraft);
   const openDraft = useAppStore((state) => state.openDraft);
   const closeDraft = useAppStore((state) => state.closeDraft);
+  const hasProject = useAppStore((state) => state.projects.length > 0);
   const deleteDraft = useAppStore((state) => state.deleteDraft);
   const setDraftSourceMode = useAppStore((state) => state.setDraftSourceMode);
   const consumeNewPlaybookRequest = useAppStore((state) => state.consumeNewPlaybookRequest);
@@ -900,6 +907,7 @@ export function LibrarySurface({
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={focusNew}
       onAutoFocused={() => setFocusNew(false)}
+      blockedReason={hasProject ? undefined : draftNeedsProject()}
     />
   );
 

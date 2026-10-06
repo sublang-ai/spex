@@ -65,7 +65,7 @@ describe("forge-work-lists-1: label tags cap at two", () => {
 describe("forge-work-lists-1: the trailing cluster yields before the row widens", () => {
   test("the captured state is bounded and truncates", () => {
     const derived = {
-      intent: { id: "i1", projectId: "p1", text: "Address #7", rank: "1a", createdAt: 1 },
+      intent: { id: "i1", projectId: "me/demo-spex", text: "Address #7", createdAt: 1 },
       state: "interrupted",
       reason: "question",
     } as unknown as DerivedIntent;

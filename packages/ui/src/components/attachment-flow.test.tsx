@@ -145,14 +145,21 @@ test("run-view-159: removal during begin cancels a staging file created after th
 
 test("run-view-159: project intent staging and draft submission preserve ordered refs and explicit removal", async () => {
   const files: MediaAsset[] = [{ assetId: `sha256:${"a".repeat(64)}`, name: "chart.png", mimeType: "image/png", byteLength: 12 }];
-  useAppStore.setState({ projects: [{ id: "p1", path: "/project", name: "project", registeredAt: 0 }] });
-  await act(async () => useAppStore.getState().stageDispatch({ id: "i1", projectId: "p1", text: "", attachments: files, rank: "a", createdAt: 1 }));
-  expect(useAppStore.getState().attachmentDrafts["home:p1"].map((entry) => entry.asset)).toEqual(files);
+  const intentId = "0b6f7c1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e";
+  useAppStore.setState({
+    projects: [{ id: "me/project-spex", path: "/project", name: "project", registeredAt: 0, repository: { key: "me/project-spex", name: "project-spex", group: "me", own: true } }],
+    drafts: { d1: { id: "d1", projectId: "me/project-spex", createdAt: 0, touchedAt: 0, firstLine: null, activity: "idle", state: "draft", queued: [], player: null, agent: { adapter: "claude" }, ready: true, failures: 0 } },
+  });
+  await act(async () => useAppStore.getState().stageDispatch({ id: intentId, projectId: "me/project-spex", text: "", attachments: files, createdAt: 1 }));
+  const staged = useAppStore.getState().attachmentDrafts["home:me/project-spex"];
+  expect(staged.map((entry) => entry.asset)).toEqual(files);
+  // A stored intent's files live in its own directory (media-4).
+  expect(staged.map((entry) => entry.owner)).toEqual([{ kind: "intent", projectId: "me/project-spex", intentId }]);
   expect(useAppStore.getState().stagedIntents.home?.title).toBe("chart.png");
   await useAppStore.getState().sendDraft("d1", "  exact text  ", files);
-  expect(commands).toHaveBeenCalledWith("draft.send", { draftId: "d1", text: "  exact text  ", attachments: files });
-  await useAppStore.getState().editIntent("i1", "new", []);
-  expect(commands).toHaveBeenCalledWith("intent.edit", { intentId: "i1", text: "new", attachments: [] });
+  expect(commands).toHaveBeenCalledWith("draft.send", { projectId: "me/project-spex", draftId: "d1", text: "  exact text  ", attachments: files });
+  await useAppStore.getState().editIntent(intentId, "new", []);
+  expect(commands).toHaveBeenCalledWith("intent.edit", { intentId, text: "new", attachments: [] });
 });
 
 test("run-view-159: trusted reads use bounded opaque ranges and refuse mismatched content", async () => {

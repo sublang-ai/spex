@@ -354,7 +354,7 @@ export function DraftRegisterTab({
                       title={i18n._("{name} agent", { name: newId })}
                       direction="down"
                       initial={blockFor(newId)}
-                      context={{ kind: "draft", id: draft.id }}
+                      context={{ kind: "draft", projectId: draft.projectId, id: draft.id }}
                       readiness={readiness}
                       captain={captain}
                       anchorRef={gearRef}

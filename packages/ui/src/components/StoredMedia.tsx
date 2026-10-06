@@ -32,7 +32,10 @@ function useStoredAsset(asset: Pick<MediaAsset, "assetId"> & Partial<MediaAsset>
   const assetId = asset?.assetId;
   const byteLength = asset?.byteLength;
   const mimeType = asset?.mimeType;
-  const key = JSON.stringify([owner?.kind, owner?.id, assetId, byteLength, mimeType]);
+  // The owner names its directory by its fields (media-4): an intent's
+  // carries its project and id, every other owner an id of its own.
+  const ownerKey = owner ? JSON.stringify(owner) : "";
+  const key = JSON.stringify([ownerKey, assetId, byteLength, mimeType]);
   useEffect(() => {
     if (!enabled || !assetId) return;
     const abort = new AbortController();
@@ -43,7 +46,7 @@ function useStoredAsset(asset: Pick<MediaAsset, "assetId"> & Partial<MediaAsset>
       .then((blob) => { if (!abort.signal.aborted) setContent({ state: "ready", blob }); })
       .catch((error: Error) => { if (!abort.signal.aborted) setContent({ state: "unavailable", reason: error.message }); });
     return () => abort.abort();
-  }, [owner?.kind, owner?.id, assetId, byteLength, mimeType, key, enabled, attempt]);
+  }, [ownerKey, assetId, byteLength, mimeType, key, enabled, attempt]);
   return { content: loaded?.key === key ? loaded.content : { state: "loading" } as TrustedMediaContent, retry: () => setAttempt((value) => value + 1) };
 }
 

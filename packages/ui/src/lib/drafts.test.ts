@@ -21,6 +21,7 @@ const t = 1_700_000_000_000;
 function draft(overrides: Partial<DraftInfo>): DraftInfo {
   return {
     id: "triage",
+    projectId: "me/demo-spex",
     createdAt: t,
     touchedAt: t,
     firstLine: null,

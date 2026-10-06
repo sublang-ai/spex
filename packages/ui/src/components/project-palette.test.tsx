@@ -28,8 +28,8 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 const PROJECTS: ProjectInfo[] = [
-  { id: "p1", path: "/tmp/alpha", name: "alpha", registeredAt: 0 },
-  { id: "p2", path: "/tmp/beta", name: "beta", registeredAt: 1 },
+  { id: "me/alpha-spex", path: "/tmp/alpha", name: "alpha", registeredAt: 0, repository: { key: "me/alpha-spex", name: "alpha-spex", group: "me", own: true } },
+  { id: "me/beta-spex", path: "/tmp/beta", name: "beta", registeredAt: 1, repository: { key: "me/beta-spex", name: "beta-spex", group: "me", own: true } },
 ];
 
 function liveSession(id: string, projectId: string): SessionInfo {
@@ -73,7 +73,7 @@ function renderPalette(overrides: Partial<Parameters<typeof ProjectPalette>[0]> 
   render(
     <ProjectPalette
       projects={PROJECTS}
-      sessions={[liveSession("s1", "p2")]}
+      sessions={[liveSession("s1", "me/beta-spex")]}
       attention={
         new Map([
           [
@@ -87,7 +87,7 @@ function renderPalette(overrides: Partial<Parameters<typeof ProjectPalette>[0]> 
           ],
         ])
       }
-      currentProjectId="p1"
+      currentProjectId="me/alpha-spex"
       onPick={onPick}
       onAddPath={onAddPath}
       onCreatePath={vi.fn(async () => PROJECTS[1])}
@@ -105,7 +105,7 @@ describe("project palette keyboard contract (DR-011)", () => {
     expect(document.activeElement).toBe(search);
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
-    expect(onPick).toHaveBeenCalledWith("p2");
+    expect(onPick).toHaveBeenCalledWith("me/beta-spex");
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -123,8 +123,8 @@ describe("project palette keyboard contract (DR-011)", () => {
     fireEvent.change(screen.getByTestId("palette-search"), {
       target: { value: "bet" },
     });
-    expect(screen.queryByTestId("palette-project-p1")).toBeNull();
-    expect(screen.getByTestId("palette-project-p2")).toBeTruthy();
+    expect(screen.queryByTestId("palette-project-me/alpha-spex")).toBeNull();
+    expect(screen.getByTestId("palette-project-me/beta-spex")).toBeTruthy();
   });
 
   test("Escape closes from a control deep inside the dialog", () => {
@@ -161,7 +161,7 @@ describe("projects-22: with no project, the palette is an add flow", () => {
     fireEvent.keyDown(screen.getByTestId("palette-path"), { key: "Enter" });
     await vi.waitFor(() => {
       expect(openAcademyExample).toHaveBeenCalledWith(undefined);
-      expect(onPick).toHaveBeenCalledWith("p2");
+      expect(onPick).toHaveBeenCalledWith("me/beta-spex");
     });
   });
 
@@ -197,10 +197,10 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
 
     // The project with a live session reads its running count beside a
     // pulsing dot; the other reads none (projects-23).
-    const live = screen.getByTestId("palette-project-p2");
+    const live = screen.getByTestId("palette-project-me/beta-spex");
     expect(live.textContent).toContain("1 running");
     expect(live.querySelector(".animate-pulse")).not.toBeNull();
-    const quiet = screen.getByTestId("palette-project-p1");
+    const quiet = screen.getByTestId("palette-project-me/alpha-spex");
     expect(quiet.textContent).not.toContain("running");
     expect(quiet.querySelector(".animate-pulse")).toBeNull();
 
@@ -220,11 +220,11 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
 describe("palette rows carry live state", () => {
   test("a project with a parked question shows needs-you and running", () => {
     renderPalette();
-    const row = screen.getByTestId("palette-project-p2");
+    const row = screen.getByTestId("palette-project-me/beta-spex");
     expect(row.textContent).toContain("1 needs you");
     expect(row.textContent).toContain("1 running");
     expect(
-      screen.getByTestId("palette-project-p1").textContent,
+      screen.getByTestId("palette-project-me/alpha-spex").textContent,
     ).not.toContain("running");
   });
 });

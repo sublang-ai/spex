@@ -448,7 +448,7 @@ export function DraftConversation({
     entries.length === 0 && !draftView?.loading && !diagnostic && !turnRunning;
 
   return (
-    <MediaOwnerProvider owner={{ kind: "draft", id: draft.id }}>
+    <MediaOwnerProvider owner={{ kind: "draft", projectId: draft.projectId, id: draft.id }}>
     <section
       data-testid="draft-conversation"
       className="@container flex min-h-0 flex-1 flex-col gap-2"
@@ -462,7 +462,7 @@ export function DraftConversation({
             readiness={readiness}
             onPick={onPickAgent}
           />
-          <ConfiguredBrowserTools agent={draft.agent} context={{ kind: "draft", id: draft.id }} disabled={turnRunning} />
+          <ConfiguredBrowserTools agent={draft.agent} context={{ kind: "draft", projectId: draft.projectId, id: draft.id }} disabled={turnRunning} />
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {turnRunning ? (
               <>

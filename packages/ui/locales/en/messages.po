@@ -33,6 +33,11 @@ msgstr " · {count, plural, one {# session} other {# sessions}} ran in {path}"
 msgid " · {count} not added"
 msgstr " · {count} not added"
 
+#. follows a spex repository's name on a repair row: the group holding it
+#: src/components/SpaceSync.tsx
+msgid " · in {group}"
+msgstr " · in {group}"
+
 #. follows the project's name on a repair the reader declined
 #: src/components/SpaceSync.tsx
 msgid " · not added"
@@ -88,11 +93,6 @@ msgstr "… and {count} more"
 #: src/components/SpaceSync.tsx
 msgid "· checked {age}"
 msgstr "· checked {age}"
-
-#. follows the branch name in the header
-#: src/components/SpaceSurface.tsx
-msgid "· committed as Spex"
-msgstr "· committed as Spex"
 
 #. follows the record count on a session's record file
 #: src/components/SpaceExplorer.tsx
@@ -243,8 +243,8 @@ msgid "{count, plural, one {Changed # file without committing} other {Changed # 
 msgstr "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 
 #: src/components/SpaceSync.tsx
-msgid "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
-msgstr "{count, plural, one {Keep this device's version of the unit? The remote's version stays in Git history.} other {Keep this device's version of all # units? The remote's version stays in Git history.}}"
+msgid "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}"
+msgstr "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}"
 
 #: src/components/LibrarySurface.tsx
 msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
@@ -426,6 +426,10 @@ msgstr "{packages, plural, one {# package} other {# packages}} · {items} items"
 msgid "{path} — needs you"
 msgstr "{path} — needs you"
 
+#: src/components/SpaceSync.tsx
+msgid "{path} · forgotten on this device"
+msgstr "{path} · forgotten on this device"
+
 #: src/components/SpecView.tsx
 msgid "{path} is not in the tree"
 msgstr "{path} is not in the tree"
@@ -445,6 +449,10 @@ msgstr "{playbookId} state machine"
 #: src/components/MachineCard.tsx
 msgid "{playbookId} state machine, {state} active"
 msgstr "{playbookId} state machine, {state} active"
+
+#: src/components/ProjectsSurface.tsx
+msgid "{reason} Remove anyway?"
+msgstr "{reason} Remove anyway?"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
@@ -777,6 +785,10 @@ msgstr "Add a project"
 msgid "Add a project by path…"
 msgstr "Add a project by path…"
 
+#: src/state/store.ts
+msgid "Add a project first"
+msgstr "Add a project first"
+
 #: src/components/CaptainHome.tsx
 msgid "Add a project first ({keys})"
 msgstr "Add a project first ({keys})"
@@ -785,14 +797,6 @@ msgstr "Add a project first ({keys})"
 #: src/components/NavRail.tsx
 msgid "Add a project…"
 msgstr "Add a project…"
-
-#: src/components/SpaceSurface.tsx
-msgid "Add a remote first"
-msgstr "Add a remote first"
-
-#: src/components/SpaceSync.tsx
-msgid "Add a remote to share this space"
-msgstr "Add a remote to share this space"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
@@ -810,10 +814,6 @@ msgstr "Add player"
 msgid "Add project"
 msgstr "Add project"
 
-#: src/components/SpaceSurface.tsx
-msgid "Add remote"
-msgstr "Add remote"
-
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Add this to the project's Up next without sending it"
@@ -823,10 +823,6 @@ msgstr "Add this to the project's Up next without sending it"
 #: src/components/Composer.tsx
 msgid "Add to Up next"
 msgstr "Add to Up next"
-
-#: src/components/SpaceSync.tsx
-msgid "Added {name}, but {reason}"
-msgstr "Added {name}, but {reason}"
 
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
@@ -838,14 +834,6 @@ msgstr "Added to Up next — see the project's Overview."
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
 msgstr "Adding…"
-
-#: src/components/QueuedIntentPresentation.tsx
-msgid "after {title}"
-msgstr "after {title}"
-
-#: src/components/QueuedIntentPresentation.tsx
-msgid "after {title} ({project})"
-msgstr "after {title} ({project})"
 
 #. queued row standing: it runs once the current work ends
 #: src/components/QueuedIntentPresentation.tsx
@@ -918,6 +906,11 @@ msgstr "All clear across projects. Next up: <0>{title}</0> <1>({project})</1>"
 msgid "All clear. Next up: <0>{title}</0> <1>({project})</1>"
 msgstr "All clear. Next up: <0>{title}</0> <1>({project})</1>"
 
+#. choose the host's version for every conflict
+#: src/components/SpaceSync.tsx
+msgid "All host's"
+msgstr "All host's"
+
 #: src/components/SpaceSync.tsx
 msgid "All issues resolved."
 msgstr "All issues resolved."
@@ -930,11 +923,6 @@ msgstr "All mine"
 #: src/components/DashboardSurface.tsx
 msgid "All projects"
 msgstr "All projects"
-
-#. choose the remote's version for every conflict
-#: src/components/SpaceSync.tsx
-msgid "All remote"
-msgstr "All remote"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Allow this tool operation?"
@@ -961,9 +949,9 @@ msgstr "always"
 msgid "An agent failed"
 msgstr "An agent failed"
 
-#: src/components/SpaceSync.tsx
-msgid "Another machine's space already there? Join first."
-msgstr "Another machine's space already there? Join first."
+#: src/components/SpaceSurface.tsx
+msgid "Another operation is running"
+msgstr "Another operation is running"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1074,6 +1062,36 @@ msgstr "Attachment"
 msgid "Attachments"
 msgstr "Attachments"
 
+#. heading over a spex repository's changed authoring sessions
+#: src/lib/space.ts
+msgid "Authoring"
+msgstr "Authoring"
+
+#. catalog family: the files attached to one authoring session
+#: src/lib/space.ts
+msgid "authoring attachments"
+msgstr "authoring attachments"
+
+#. catalog family: one authoring session's record stream
+#: src/lib/space.ts
+msgid "authoring records"
+msgstr "authoring records"
+
+#. catalog family: one authoring session's files
+#: src/lib/space.ts
+msgid "authoring session"
+msgstr "authoring session"
+
+#. one unit's kind: an authoring session
+#: src/lib/space.ts
+msgid "Authoring session"
+msgstr "Authoring session"
+
+#. catalog family: the folder holding every authoring session
+#: src/lib/space.ts
+msgid "authoring sessions"
+msgstr "authoring sessions"
+
 #: src/components/AgentEditor.tsx
 msgid "auto (protected)"
 msgstr "auto (protected)"
@@ -1125,19 +1143,17 @@ msgstr "blocking"
 msgid "bound to no role yet"
 msgstr "bound to no role yet"
 
-#. {status} is the space's status word
-#: src/components/SpaceSurface.tsx
-msgid "branch {branch} · {status}"
-msgstr "branch {branch} · {status}"
-
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "Brings a file in as the source, then asks to adapt it"
 
 #: src/components/SpaceSurface.tsx
+msgid "Brings both histories into one and asks about anything that differs"
+msgstr "Brings both histories into one and asks about anything that differs"
+
 #: src/components/SpaceSync.tsx
-msgid "Brings both spaces into one and asks about anything that differs"
-msgstr "Brings both spaces into one and asks about anything that differs"
+msgid "Brought {received}; nothing sent"
+msgstr "Brought {received}; nothing sent"
 
 #: src/components/BrowserControl.tsx
 #: src/components/ConfiguredBrowserTools.tsx
@@ -1285,10 +1301,6 @@ msgstr "Captain is working…"
 msgid "Captain:"
 msgstr "Captain:"
 
-#: src/components/SpaceSurface.tsx
-msgid "Change remote"
-msgstr "Change remote"
-
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"
@@ -1320,7 +1332,7 @@ msgstr "Changes could not be attributed to the step"
 msgid "chat"
 msgstr "chat"
 
-#. sync step: checking the remote
+#. sync step: checking the host
 #: src/lib/space.ts
 msgid "Check"
 msgstr "Check"
@@ -1334,8 +1346,8 @@ msgid "Check browser"
 msgstr "Check browser"
 
 #: src/components/SpaceSync.tsx
-msgid "Check remote"
-msgstr "Check remote"
+msgid "Check host"
+msgstr "Check host"
 
 #: src/lib/useBrowserTools.ts
 msgid "Checking browser launch and screenshot…"
@@ -1350,10 +1362,10 @@ msgid "Checking browser support…"
 msgstr "Checking browser support…"
 
 #: src/lib/space.ts
-msgid "Checking remote…"
-msgstr "Checking remote…"
+msgid "Checking host…"
+msgstr "Checking host…"
 
-#. the Check remote control, while the check runs
+#. the Check host control, while the check runs
 #: src/components/CaptainHome.tsx
 #: src/components/SpaceSync.tsx
 msgid "Checking…"
@@ -1486,6 +1498,16 @@ msgstr "Close this intent as dropped — the turn keeps running"
 #: src/App.tsx
 msgid "Close this tab — the session stays in the sidebar"
 msgstr "Close this tab — the session stays in the sidebar"
+
+#. heading over the file naming where a project's code lives
+#: src/lib/space.ts
+msgid "Code"
+msgstr "Code"
+
+#. catalog family: the file naming where a project's code lives
+#: src/lib/space.ts
+msgid "code remote"
+msgstr "code remote"
 
 #: src/components/PlayerPane.tsx
 msgid "Collapse {player}"
@@ -1640,18 +1662,9 @@ msgstr "Config {status} →"
 msgid "config backup"
 msgstr "config backup"
 
-#. a file family that stays on this device
-#: src/lib/space.ts
-msgid "config backups and temporary files"
-msgstr "config backups and temporary files"
-
 #: src/components/SettingsSurface.tsx
 msgid "Config file invalid"
 msgstr "Config file invalid"
-
-#: src/components/SpaceSurface.tsx
-msgid "Configuration outside the space; not shared"
-msgstr "Configuration outside the space; not shared"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -1709,6 +1722,11 @@ msgstr "Connection restored."
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
+#. confirm: go on with the first sync
+#: src/components/SpaceSurface.tsx
+msgid "Continue"
+msgstr "Continue"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
@@ -1735,6 +1753,10 @@ msgstr "Copied {what}"
 #: src/components/SpecView.tsx
 msgid "Copied ✓"
 msgstr "Copied ✓"
+
+#: src/lib/space.ts
+msgid "copies installed from the lock; every device installs its own"
+msgstr "copies installed from the lock; every device installs its own"
 
 #: src/lib/space.ts
 msgid "copies made while writing"
@@ -1818,11 +1840,14 @@ msgstr "Couldn't mark it reviewed: {reason}"
 msgid "Couldn't read it: {reason}"
 msgstr "Couldn't read it: {reason}"
 
+#: src/components/SpaceExplorer.tsx
+msgid "Couldn't read the files: {reason}"
+msgstr "Couldn't read the files: {reason}"
+
 #: src/lib/failure-catalogue.ts
 msgid "Couldn't read the repository's state"
 msgstr "Couldn't read the repository's state"
 
-#: src/components/SpaceExplorer.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Couldn't read the space: {reason}"
 msgstr "Couldn't read the space: {reason}"
@@ -1861,6 +1886,11 @@ msgstr "Create a new repository at this path"
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "Created a starter config at <0>{path}</0>"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "credentials"
+msgstr "credentials"
 
 #. tag on the project row the workspace is on
 #: src/components/ProjectPalette.tsx
@@ -2059,10 +2089,6 @@ msgstr "Draft: {name}"
 msgid "Drafts"
 msgstr "Drafts"
 
-#: src/components/ProjectGroup.tsx
-msgid "Drag, Alt+↑/↓, or the row menu reorders"
-msgstr "Drag, Alt+↑/↓, or the row menu reorders"
-
 #. act: end the parked run
 #. act: end the parked run
 #. confirm: close the intent as dropped
@@ -2211,10 +2237,6 @@ msgstr "effort"
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "Effort options apply to the adapter; support for this model is unverified."
 
-#: src/components/SpaceSurface.tsx
-msgid "Empty remote: filled from this device · Existing space: joined, differences asked"
-msgstr "Empty remote: filled from this device · Existing space: joined, differences asked"
-
 #. add this built-in playbook to the config
 #: src/components/LibrarySurface.tsx
 msgid "Enable"
@@ -2253,6 +2275,11 @@ msgstr "Enter sends"
 msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter to send · Shift+Enter for a new line"
 
+#. heading over a spex repository's spec package requests and lock
+#: src/lib/space.ts
+msgid "Environment"
+msgstr "Environment"
+
 #. stands where a failed call named no reason
 #: src/components/PlayerPane.tsx
 msgid "error"
@@ -2261,6 +2288,14 @@ msgstr "error"
 #: src/components/DraftRegisterTab.tsx
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "Every role needs a player, and the command and intent their words"
+
+#: src/components/SpaceSurface.tsx
+msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
+msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
+
+#: src/components/SpaceSurface.tsx
+msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
+msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -2308,6 +2343,11 @@ msgstr "Expand image {name}"
 #: src/components/SpaceSurface.tsx
 msgid "Explore"
 msgstr "Explore"
+
+#. catalog family: skills exported from the installed spec packages
+#: src/lib/space.ts
+msgid "exported skills"
+msgstr "exported skills"
 
 #. item group: External Behavior, inside a phrase
 #: src/lib/spec-view-model.ts
@@ -2391,8 +2431,8 @@ msgid "Fast mode <0/> (unsupported)"
 msgstr "Fast mode <0/> (unsupported)"
 
 #: src/components/SpaceExplorer.tsx
-msgid "Files in the space"
-msgstr "Files in the space"
+msgid "Files in {name}"
+msgstr "Files in {name}"
 
 #: src/lib/media-client.ts
 msgid "Files must be 100 MiB or smaller."
@@ -2457,11 +2497,19 @@ msgstr "Fix the file in your editor; Spex reloads it live."
 msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
-#. a file family that stays on this device
-#. a file family that stays on this device
-#: src/lib/space.ts
-msgid "forge cache"
-msgstr "forge cache"
+#. confirm: forget a folder whose records are gone from this device
+#: src/components/SpaceSync.tsx
+msgid "Forget"
+msgstr "Forget"
+
+#. forget a working folder whose spex repository is missing
+#: src/components/SpaceSync.tsx
+msgid "Forget folder"
+msgstr "Forget folder"
+
+#: src/components/SpaceSync.tsx
+msgid "Forget this folder here? The folder stays on disk."
+msgstr "Forget this folder here? The folder stays on disk."
 
 #. label before the path a playbook was loaded from
 #: src/components/LibrarySurface.tsx
@@ -2502,13 +2550,13 @@ msgstr "from Settings (on)"
 msgid "from the compile before this change"
 msgstr "from the compile before this change"
 
+#: src/components/SpaceSync.tsx
+msgid "From the host ({count})"
+msgstr "From the host ({count})"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "from the last good compile"
 msgstr "from the last good compile"
-
-#: src/components/SpaceSync.tsx
-msgid "From the remote ({count})"
-msgstr "From the remote ({count})"
 
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -2533,20 +2581,12 @@ msgid "Git data — the repository's own files; not shown."
 msgstr "Git data — the repository's own files; not shown."
 
 #: src/components/SpaceSurface.tsx
-msgid "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
-msgstr "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name"
-
-#: src/components/SpaceSurface.tsx
 msgid "Git is not installed"
 msgstr "Git is not installed"
 
 #: src/components/SpaceSurface.tsx
 msgid "git@host:path or https://…"
 msgstr "git@host:path or https://…"
-
-#: src/lib/space.ts
-msgid "GitHub lists the app fetches again"
-msgstr "GitHub lists the app fetches again"
 
 #: src/components/SourcesTabs.tsx
 msgid "GitHub refresh failed — keeping the last data"
@@ -2568,6 +2608,11 @@ msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 #: src/components/SpecView.tsx
 msgid "Graph"
 msgstr "Graph"
+
+#. the list of the home's groups and their spex repositories
+#: src/components/SpaceSurface.tsx
+msgid "Groups"
+msgstr "Groups"
 
 #: src/components/CaptainHome.tsx
 msgid "Heads up — some agents aren't ready yet:"
@@ -2683,18 +2728,50 @@ msgstr "Install {command}"
 msgid "Install the missing command"
 msgstr "Install the missing command"
 
+#. catalog family: spec packages installed on this device from the lock
+#: src/lib/space.ts
+msgid "installed spec packages"
+msgstr "installed spec packages"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "installed spec packages and exported skills"
+msgstr "installed spec packages and exported skills"
+
 #: src/lib/useBrowserTools.ts
 msgid "Installing browser…"
 msgstr "Installing browser…"
 
+#. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
 #: src/components/Composer.tsx
+#: src/lib/space.ts
 msgid "intent"
 msgstr "intent"
+
+#. one unit's kind: an intent with its attachments
+#: src/lib/space.ts
+msgid "Intent"
+msgstr "Intent"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Intent (one line; the Captain routes free text with it)"
 msgstr "Intent (one line; the Captain routes free text with it)"
+
+#. catalog family: the files attached to one intent
+#: src/lib/space.ts
+msgid "intent attachments"
+msgstr "intent attachments"
+
+#. catalog family: the folder holding every intent's file
+#: src/lib/space.ts
+msgid "intents"
+msgstr "intents"
+
+#. heading over a spex repository's changed intents
+#: src/lib/space.ts
+msgid "Intents"
+msgstr "Intents"
 
 #: src/components/SettingsSurface.tsx
 msgid "Interface language"
@@ -2773,23 +2850,23 @@ msgstr "its endpoint"
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 
-#. confirm: join both spaces into one
-#. confirm: join both spaces into one
-#. confirm: join both spaces into one
-#. confirm: join both spaces into one
-#: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
+msgid "Its spex repository is not on this device."
+msgstr "Its spex repository is not on this device."
+
+#. confirm: join both histories into one
+#. confirm: join both histories into one
+#: src/components/SpaceSurface.tsx
 msgid "Join"
 msgstr "Join"
 
 #: src/components/SpaceSync.tsx
-msgid "Join both into one space, or check the remote URL."
-msgstr "Join both into one space, or check the remote URL."
+msgid "Join both histories into one to sync."
+msgstr "Join both histories into one to sync."
 
 #: src/components/SpaceSurface.tsx
-#: src/components/SpaceSync.tsx
-msgid "Join both spaces into one? Anything that differs will ask you to choose."
-msgstr "Join both spaces into one? Anything that differs will ask you to choose."
+msgid "Join both histories into one? Anything that differs will ask you to choose."
+msgstr "Join both histories into one? Anything that differs will ask you to choose."
 
 #. the Join control, while the join runs
 #: src/components/SpaceSurface.tsx
@@ -2809,6 +2886,7 @@ msgstr "Jumped to {id} — shown despite filter"
 msgid "just now"
 msgstr "just now"
 
+#. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
@@ -2836,10 +2914,6 @@ msgstr "Keep"
 #: src/components/SpaceSync.tsx
 msgid "Keep mine"
 msgstr "Keep mine"
-
-#: src/components/SpaceSurface.tsx
-msgid "Keep this space in Git"
-msgstr "Keep this space in Git"
 
 #: src/components/SettingsSurface.tsx
 msgid "Keyboard shortcuts"
@@ -2937,17 +3011,6 @@ msgstr "Loading…"
 msgid "Local changes ({count})"
 msgstr "Local changes ({count})"
 
-#. catalog family: the folder of files that stay on this device
-#: src/lib/space.ts
-msgid "local data"
-msgstr "local data"
-
-#. a file family that stays on this device
-#. a file family that stays on this device
-#: src/lib/space.ts
-msgid "local project paths"
-msgstr "local project paths"
-
 #: src/lib/drafts.ts
 msgid "Lowercase letters, digits, - or _, starting with a letter"
 msgstr "Lowercase letters, digits, - or _, starting with a letter"
@@ -2995,25 +3058,10 @@ msgstr "Media unavailable"
 msgid "Message the Captain…"
 msgstr "Message the Captain…"
 
-#. catalog family: original files an upgrade kept
-#: src/lib/space.ts
-msgid "migration inputs"
-msgstr "migration inputs"
-
-#. catalog family: what an upgrade recorded
-#: src/lib/space.ts
-msgid "migration receipts"
-msgstr "migration receipts"
-
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "migration receipts and inputs"
 msgstr "migration receipts and inputs"
-
-#. catalog family: the home's own migration state
-#: src/lib/space.ts
-msgid "migration record"
-msgstr "migration record"
 
 #: src/components/LibrarySurface.tsx
 msgid "missing stages: {stages}"
@@ -3042,26 +3090,21 @@ msgid "Models reported by the installed runtime."
 msgstr "Models reported by the installed runtime."
 
 #: src/components/ApprovalInbox.tsx
+#: src/components/BrowserControl.tsx
 msgid "More details"
 msgstr "More details"
-
-#. row menu item: one step later in the queue
-#: src/components/ProjectGroup.tsx
-msgid "Move down"
-msgstr "Move down"
 
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
-#. row menu item: one step earlier in the queue
-#: src/components/ProjectGroup.tsx
-msgid "Move up"
-msgstr "Move up"
-
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
 msgstr "Name the folder on this device."
+
+#: src/components/SpaceSurface.tsx
+msgid "Name where this spex repository's records are kept"
+msgstr "Name where this spex repository's records are kept"
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3101,6 +3144,7 @@ msgid "needs your verdict"
 msgstr "needs your verdict"
 
 #: src/components/SpaceSurface.tsx
+#: src/lib/space.ts
 msgid "Never synced"
 msgstr "Never synced"
 
@@ -3163,10 +3207,10 @@ msgstr "No adapters in use yet — assign agents to the Captain or a playbook ro
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "no automatic check for this adapter — verify sign-in yourself"
 
-#. stands where a branch name would; none is checked out
-#: src/lib/space.ts
-msgid "no branch"
-msgstr "no branch"
+#. a spex repository whose records name no code remote
+#: src/components/SpaceSurface.tsx
+msgid "No code"
+msgstr "No code"
 
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
@@ -3234,10 +3278,6 @@ msgstr "No projects yet — register a repository in the <0>Projects</0> to put 
 msgid "No reason was reported"
 msgstr "No reason was reported"
 
-#: src/components/SpaceSurface.tsx
-msgid "No remote"
-msgstr "No remote"
-
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
 msgid "No source"
@@ -3251,14 +3291,17 @@ msgstr "No source yet"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "No source yet — the agent writes <0>{path}</0> here as you talk."
 
+#: src/components/SpaceSurface.tsx
+msgid "No spex repositories here yet"
+msgstr "No spex repositories here yet"
+
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
 msgstr "No unfinished intent records."
 
-#. stands where a branch name would; none is checked out
 #: src/components/SpaceSurface.tsx
-msgid "none"
-msgstr "none"
+msgid "No working folder here"
+msgstr "No working folder here"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -3281,15 +3324,6 @@ msgstr "Normalized"
 #: src/components/LibrarySurface.tsx
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
 msgstr "Normalized text: the prose as workflow markdown, in slc's normalized form"
-
-#. the space's status, read in a title
-#: src/components/SpaceSurface.tsx
-msgid "not a repository"
-msgstr "not a repository"
-
-#: src/components/SpaceSurface.tsx
-msgid "Not a repository yet"
-msgstr "Not a repository yet"
 
 #. catalog family: a file Spex did not write
 #: src/lib/space.ts
@@ -3336,6 +3370,12 @@ msgstr "not found"
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "Not in this runtime's list. Check the model ID."
 
+#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "Not on this device"
+msgstr "Not on this device"
+
 #. the adapter needs something before it can run
 #: src/components/AgentChip.tsx
 msgid "not ready"
@@ -3345,6 +3385,10 @@ msgstr "not ready"
 #: src/components/CaptainHome.tsx
 msgid "not set"
 msgstr "not set"
+
+#: src/components/SpaceSurface.tsx
+msgid "Not signed in"
+msgstr "Not signed in"
 
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
@@ -3373,8 +3417,8 @@ msgid "Nothing is repeated"
 msgstr "Nothing is repeated"
 
 #: src/components/SpaceSync.tsx
-msgid "Nothing new on the remote"
-msgstr "Nothing new on the remote"
+msgid "Nothing new on the host"
+msgstr "Nothing new on the host"
 
 #: src/components/DashboardSurface.tsx
 msgid "Nothing owed — open it, or mark it reviewed."
@@ -3461,10 +3505,6 @@ msgstr "On (current)"
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
 
-#: src/components/SpaceSurface.tsx
-msgid "On {branch}; check out main in a terminal"
-msgstr "On {branch}; check out main in a terminal"
-
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
@@ -3473,6 +3513,10 @@ msgstr "One normative spec item per state behavior — the compiler's middle sta
 #: src/components/AuthoringWorkspace.tsx
 msgid "One spec item per state behavior, from the last compile"
 msgstr "One spec item per state behavior, from the last compile"
+
+#: src/lib/space.ts
+msgid "Only on this device"
+msgstr "Only on this device"
 
 #. open this draft's authoring workspace
 #: src/components/LibrarySurface.tsx
@@ -3585,14 +3629,9 @@ msgstr "Opens a draft named {id} with the normalized text ready to paste — not
 msgid "Optimize"
 msgstr "Optimize"
 
-#. the Git remote's name; leave as Git spells it
-#: src/components/SpaceSurface.tsx
-msgid "origin"
-msgstr "origin"
-
 #: src/lib/space.ts
-msgid "original files kept from an upgrade, some holding old tokens"
-msgstr "original files kept from an upgrade, some holding old tokens"
+msgid "original files kept from an upgrade"
+msgstr "original files kept from an upgrade"
 
 #. heading over units of no named kind
 #. heading over units of no named kind
@@ -3663,34 +3702,14 @@ msgstr "pin a value…"
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
 
-#. one unit's kind: a playbook source
-#: src/lib/space.ts
-msgid "Playbook"
-msgstr "Playbook"
-
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Playbook id"
 msgstr "Playbook id"
 
-#. catalog family: the folder holding the playbooks
-#: src/lib/space.ts
-msgid "playbook library"
-msgstr "playbook library"
-
-#. catalog family: a playbook's compiled files
-#: src/lib/space.ts
-msgid "playbook output"
-msgstr "playbook output"
-
 #: src/lib/media.ts
 msgid "Playbook runtime {session}"
 msgstr "Playbook runtime {session}"
-
-#. catalog family: a playbook's source files
-#: src/lib/space.ts
-msgid "playbook sources"
-msgstr "playbook sources"
 
 #. tooltip: which workflow the parked run belongs to
 #: src/components/ParkedRun.tsx
@@ -3702,7 +3721,6 @@ msgstr "playbook: {playbookId}"
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
-#: src/lib/space.ts
 msgid "Playbooks"
 msgstr "Playbooks"
 
@@ -3730,7 +3748,6 @@ msgstr "PR #{ref} ↗"
 msgid "Prefer your own?"
 msgstr "Prefer your own?"
 
-#. a file family that stays on this device
 #. a file family that stays on this device
 #: src/lib/space.ts
 msgid "preferences"
@@ -3775,34 +3792,13 @@ msgstr "Previous page"
 msgid "Previous tab in Projects"
 msgstr "Previous tab in Projects"
 
-#. one unit's kind: the project registrations
-#: src/lib/space.ts
-msgid "Project"
-msgstr "Project"
-
 #: src/components/ProjectPalette.tsx
 msgid "Project path"
 msgstr "Project path"
 
-#. catalog family: one project's queue of intents
-#: src/lib/space.ts
-msgid "project queue"
-msgstr "project queue"
-
-#. catalog family: the folder holding the projects' queues
-#: src/lib/space.ts
-msgid "project queues"
-msgstr "project queues"
-
-#. catalog family: the file listing the registered projects
-#: src/lib/space.ts
-msgid "project registry"
-msgstr "project registry"
-
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
-#: src/lib/space.ts
 msgid "Projects"
 msgstr "Projects"
 
@@ -3841,12 +3837,12 @@ msgstr "provider hints"
 msgid "PRs"
 msgstr "PRs"
 
-#. sync step: sending to the remote
+#. sync step: sending to the host
 #: src/lib/space.ts
 msgid "Push"
 msgstr "Push"
 
-#. sync step running: sending to the remote
+#. sync step running: sending to the host
 #: src/lib/space.ts
 msgid "Pushing…"
 msgstr "Pushing…"
@@ -3890,18 +3886,9 @@ msgstr "queued"
 msgid "Queued"
 msgstr "Queued"
 
-#. captured artifact's state: queued behind another intent
-#: src/components/ForgeItemRow.tsx
-msgid "queued — blocked"
-msgstr "queued — blocked"
-
 #: src/state/store.ts
 msgid "queued submission failed: {reason}"
 msgstr "queued submission failed: {reason}"
-
-#: src/lib/space.ts
-msgid "Queues"
-msgstr "Queues"
 
 #. capture control, busy: the queue write is in flight
 #. capture control, busy: the queue write is in flight
@@ -3938,6 +3925,15 @@ msgstr "read {age}"
 #: src/components/SpaceSurface.tsx
 msgid "Read {age}"
 msgstr "Read {age}"
+
+#. a spex repository's state: the host lets this account only read it
+#: src/lib/space.ts
+msgid "Read-only"
+msgstr "Read-only"
+
+#: src/lib/space.ts
+msgid "Read-only: {reason}"
+msgstr "Read-only: {reason}"
 
 #. no automatic check exists for this adapter
 #: src/components/AgentChip.tsx
@@ -4003,7 +3999,7 @@ msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
 
 #. re-read the space's state
-#. sync step: re-reading the space
+#. sync step: re-reading the spex repository
 #: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
 msgid "Refresh"
@@ -4034,7 +4030,7 @@ msgstr "Refresh specs"
 msgid "Refresh status and GitHub data"
 msgstr "Refresh status and GitHub data"
 
-#. sync step running: re-reading the space
+#. sync step running: re-reading the spex repository
 #: src/lib/space.ts
 msgid "Refreshing…"
 msgstr "Refreshing…"
@@ -4081,15 +4077,11 @@ msgstr "Reload from disk and lose unsaved changes?"
 msgid "Reload the page"
 msgstr "Reload the page"
 
-#. field label: the Git remote's URL
-#: src/components/SpaceSurface.tsx
-msgid "Remote"
-msgstr "Remote"
-
 #: src/components/SpaceSurface.tsx
 msgid "Remote URL"
 msgstr "Remote URL"
 
+#. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: take this playbook out of the config
 #. confirm: take this player out of the roster
@@ -4183,8 +4175,8 @@ msgid "Removing…"
 msgstr "Removing…"
 
 #: src/components/SpaceSync.tsx
-msgid "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
-msgstr "Replace {count, plural, one {# unit} other {# units}} with the remote's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
+msgstr "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 
 #: src/components/DraftSourceTab.tsx
 msgid "Replace the source with pasted text or a file"
@@ -4222,11 +4214,6 @@ msgstr "Requested tool approval: {tool}"
 #: src/state/reducer.ts
 msgid "Requested tool approval: {tool} — {reason}"
 msgstr "Requested tool approval: {tool} — {reason}"
-
-#. the field must be filled before the act runs
-#: src/components/SpaceSurface.tsx
-msgid "Required"
-msgstr "Required"
 
 #: src/components/ProjectGroup.tsx
 msgid "Resize History"
@@ -4534,6 +4521,11 @@ msgstr "sent to the agent"
 msgid "Session"
 msgstr "Session"
 
+#. catalog family: the files attached to one session's turns
+#: src/lib/space.ts
+msgid "session attachments"
+msgstr "session attachments"
+
 #. catalog family: the folder holding every session's files
 #: src/lib/space.ts
 msgid "session bundles"
@@ -4586,12 +4578,8 @@ msgid "Sessions and project views"
 msgstr "Sessions and project views"
 
 #: src/components/SpaceSurface.tsx
-msgid "Sessions directory outside the space; not shared"
-msgstr "Sessions directory outside the space; not shared"
-
-#: src/components/SpaceSurface.tsx
-msgid "Set this space up first"
-msgstr "Set this space up first"
+msgid "Set remote"
+msgstr "Set remote"
 
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
@@ -4602,20 +4590,10 @@ msgstr "set to {set}, runtime reports {model}"
 msgid "Set up browser"
 msgstr "Set up browser"
 
-#: src/components/SpaceSurface.tsx
-msgid "Set up space"
-msgstr "Set up space"
-
 #. one unit's kind: the settings file
 #: src/lib/space.ts
 msgid "Setting"
 msgstr "Setting"
-
-#. the setup control, while the setup runs
-#. the setup control, while the setup runs
-#: src/components/SpaceSurface.tsx
-msgid "Setting up…"
-msgstr "Setting up…"
 
 #. catalog family: the shared config the Settings surface edits
 #: src/components/NavRail.tsx
@@ -4717,6 +4695,10 @@ msgstr "Sign in again with that agent's CLI"
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
+#: src/components/SpaceSurface.tsx
+msgid "Signed in as {login} at {host}"
+msgstr "Signed in as {login} at {host}"
+
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 msgstr "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
@@ -4774,10 +4756,6 @@ msgid "Space"
 msgstr "Space"
 
 #: src/components/SpaceSurface.tsx
-msgid "Space is busy"
-msgstr "Space is busy"
-
-#: src/components/SpaceSurface.tsx
 msgid "Space views"
 msgstr "Space views"
 
@@ -4794,6 +4772,16 @@ msgstr "Spec items"
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"
 msgstr "Spec package citation graph"
+
+#. catalog family: the exact spec packages the environment resolved
+#: src/lib/space.ts
+msgid "spec package lock"
+msgstr "spec package lock"
+
+#. catalog family: the spec packages the environment asks for
+#: src/lib/space.ts
+msgid "spec package requests"
+msgstr "spec package requests"
 
 #. tab name: the project's spec packages
 #. the spec view's own heading
@@ -4835,6 +4823,7 @@ msgstr "Spex navigation"
 msgid "Squash or reset them yourself"
 msgstr "Squash or reset them yourself"
 
+#. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
@@ -5041,6 +5030,11 @@ msgstr "Synced"
 msgid "Synced · {sent} sent · {received} received"
 msgstr "Synced · {sent} sent · {received} received"
 
+#. a spex repository's row: when it last synced
+#: src/lib/space.ts
+msgid "Synced {age}"
+msgstr "Synced {age}"
+
 #: src/components/SpaceSync.tsx
 msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "Synced {age} · {sent} sent · {received} received"
@@ -5050,10 +5044,6 @@ msgstr "Synced {age} · {sent} sent · {received} received"
 msgid "Syncing…"
 msgstr "Syncing…"
 
-#: src/components/SpaceSurface.tsx
-msgid "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
-msgstr "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up."
-
 #: src/components/SettingsSurface.tsx
 msgid "System"
 msgstr "System"
@@ -5062,10 +5052,10 @@ msgstr "System"
 msgid "System follows your device"
 msgstr "System follows your device"
 
-#. conflict choice: take the remote's version
+#. conflict choice: take the host's version
 #: src/components/SpaceSync.tsx
-msgid "Take remote"
-msgstr "Take remote"
+msgid "Take host's"
+msgstr "Take host's"
 
 #: src/components/Composer.tsx
 msgid "Take the task out of the message"
@@ -5078,6 +5068,11 @@ msgstr "Take this task out of the queue — Undo puts it back"
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "Tell the agent what the playbook does, who does what, and when it is done"
+
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "temporary files"
+msgstr "temporary files"
 
 #. catalog family: a copy made while writing
 #: src/lib/space.ts
@@ -5209,6 +5204,14 @@ msgstr "The file returned inconsistent content."
 msgid "The file's conversation is unavailable."
 msgstr "The file's conversation is unavailable."
 
+#: src/components/SpaceSync.tsx
+msgid "The host holds no records yet; Sync will send these"
+msgstr "The host holds no records yet; Sync will send these"
+
+#: src/components/SpaceSync.tsx
+msgid "The host's version against the common ancestor"
+msgstr "The host's version against the common ancestor"
+
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
 msgstr "The last turn failed. Send a message to pick it up."
@@ -5245,14 +5248,6 @@ msgstr "The raw prose the example starts from"
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"
 msgstr "the reload failed"
-
-#: src/components/SpaceSync.tsx
-msgid "The remote against the common ancestor"
-msgstr "The remote against the common ancestor"
-
-#: src/components/SpaceSync.tsx
-msgid "The remote is empty; Sync will send this space"
-msgstr "The remote is empty; Sync will send this space"
 
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
@@ -5332,6 +5327,14 @@ msgstr "This conversation only"
 msgid "This device against the common ancestor"
 msgstr "This device against the common ancestor"
 
+#: src/lib/space.ts
+msgid "this device's sign-in to the Git host"
+msgstr "this device's sign-in to the Git host"
+
+#: src/state/store.ts
+msgid "This draft is no longer listed."
+msgstr "This draft is no longer listed."
+
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "This file changed on disk since you opened it."
@@ -5364,14 +5367,6 @@ msgstr "This record is not in the project's specs tree"
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"
 msgstr "This session has ended — the replay is read-only"
-
-#: src/components/SpaceSync.tsx
-msgid "This space has not met that remote yet."
-msgstr "This space has not met that remote yet."
-
-#: src/components/SpaceSync.tsx
-msgid "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal."
-msgstr "This space is on <0>{branch}</0>. The app syncs <1>main</1>; check it out in a terminal."
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "this stage was not found for this draft"
@@ -5494,14 +5489,28 @@ msgstr "Uncommitted changes you had were lost"
 msgid "Undo"
 msgstr "Undo"
 
-#. one unit's kind: a project's queue (the noun)
+#. one unit's kind: the file naming where the code lives
 #: src/lib/space.ts
-msgid "unit.queue"
-msgstr "Queue"
+msgid "unit.code"
+msgstr "Code"
+
+#. one unit's kind: the spec package requests and lock
+#: src/lib/space.ts
+msgid "unit.environment"
+msgstr "Environment"
 
 #: src/components/SpaceSurface.tsx
 msgid "Units this device changed, listed under Sync"
 msgstr "Units this device changed, listed under Sync"
+
+#. a spex repository's state: the host cannot be read for it
+#: src/lib/space.ts
+msgid "Unreachable"
+msgstr "Unreachable"
+
+#: src/lib/space.ts
+msgid "Unreachable: {reason}"
+msgstr "Unreachable: {reason}"
 
 #. attention row: a turn nobody has read
 #. session row: a turn nobody has read
@@ -5525,11 +5534,6 @@ msgstr "unrelated history"
 #: src/components/SpaceSync.tsx
 msgid "Unrelated history"
 msgstr "Unrelated history"
-
-#. mark on a branch the app cannot sync
-#: src/components/SpaceSurface.tsx
-msgid "unsupported"
-msgstr "unsupported"
 
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
@@ -5572,6 +5576,11 @@ msgstr "Updated {age} by you"
 #: src/components/ComposerAttachments.tsx
 msgid "Upload failed"
 msgstr "Upload failed"
+
+#. catalog family: files uploaded and not yet attached
+#: src/lib/space.ts
+msgid "upload staging"
+msgstr "upload staging"
 
 #: src/components/ComposerAttachments.tsx
 msgid "Uploading {name}"
@@ -5680,13 +5689,18 @@ msgstr "Waits for the reply — the agent switches on the next turn"
 msgid "Where a project lives is recorded on this device only; this never syncs."
 msgstr "Where a project lives is recorded on this device only; this never syncs."
 
+#. a file family that stays on this device
+#: src/lib/space.ts
+msgid "where projects live"
+msgstr "where projects live"
+
 #: src/lib/space.ts
 msgid "where you last stopped reading in each session"
 msgstr "where you last stopped reading in each session"
 
 #: src/lib/space.ts
-msgid "where your projects live on this machine"
-msgstr "where your projects live on this machine"
+msgid "where your working folders are on this machine, in the home file"
+msgstr "where your working folders are on this machine, in the home file"
 
 #: src/components/SpaceSync.tsx
 msgid "Which folder on this device is {name}?"

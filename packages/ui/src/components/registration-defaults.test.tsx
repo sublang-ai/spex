@@ -23,7 +23,7 @@ function renderForm(
   } = {},
 ) {
   const draft: DraftInfo = {
-    id: "delivery", createdAt: 0, touchedAt: 0, firstLine: "# Delivery",
+    id: "delivery", projectId: "me/demo-spex", createdAt: 0, touchedAt: 0, firstLine: "# Delivery",
     activity: "idle", state: "compiled", queued: [], player: null, agent,
     ready: true, failures: 0,
     compile: { at: 0, by: "boss", outcome: "ok", roles },
@@ -55,7 +55,7 @@ function renderForm(
       const input = submitted.mock.calls[0][0];
       // Assertion occurs outside the callback: the UI cannot catch a
       // validator failure and accidentally turn this test green.
-      const parsed = commandSchema.parse({ type: "draft.register", id: "fixture-request", draftId: draft.id, ...input });
+      const parsed = commandSchema.parse({ type: "draft.register", id: "fixture-request", projectId: draft.projectId, draftId: draft.id, ...input });
       expect(parsed.type).toBe("draft.register");
       return input;
     },

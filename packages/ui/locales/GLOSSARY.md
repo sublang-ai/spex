@@ -94,5 +94,9 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Finder | 访达 | macOS's own Chinese name |
 | token (a provider token) | 令牌 | `tok` as a usage unit stays Latin |
 | Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
-| Keep mine / Take remote / All mine / All remote | 保留本机 / 取远程版 / 全用本地 / 全用远程 | Space conflict choices |
-| Queue (the capture control) / queue (a unit kind) | 加入队列 / 队列 | two ids: the verb and the noun |
+| Keep mine / Take host's / All mine / All host's | 保留本机 / 取平台版 / 全用本地 / 全用平台版 | Space conflict choices |
+| Git host, the host | Git 托管平台, 托管平台 | where groups and spex repositories live; 平台 alone in a tight control ("检查平台") |
+| group | 群组 | a group on the Git host |
+| spex repository | spex 仓库 | one project's or group's records, `<name>-spex` |
+| authoring (session) | 编写（会话） | a playbook being written in a draft |
+| Queue (the capture control) | 加入队列 | |

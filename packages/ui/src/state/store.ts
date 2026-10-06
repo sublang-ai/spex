@@ -25,6 +25,7 @@ import type {
   LedgerState,
   ApprovalState,
   MediaAsset,
+  MediaUploadOwner,
   MessageContent,
   PlaybookArtifacts,
   ProjectInfo,
@@ -35,7 +36,7 @@ import type {
   SpaceChoice,
   SpaceEntry,
   SpaceReadResult,
-  SpaceState,
+  GroupsState,
   SpecTreeState,
   MachineGraph,
   TmuxPlayRecord,
@@ -232,9 +233,10 @@ export interface AppState extends AttachmentState {
   dashboardGroupsCollapsed: Record<string, boolean>;
   /** Bootstrap refresh failure — connected but app state missing. */
   refreshError?: string;
-  /** The Spex home as the core last described it (space-30, DR-057):
-   * replaced wholesale by every `space.state` and `space.get`. */
-  space?: SpaceState;
+  /** The home, its groups and their spex repositories as the core last
+   * described them (space-30, DR-103): replaced wholesale by every
+   * `space.state` and `space.get`. */
+  space?: GroupsState;
   /** The last `space.get` failure, shown on the surface. */
   spaceError?: string;
   /** When the surface last read the core's state (space-2). */
@@ -255,11 +257,9 @@ export interface AppState extends AttachmentState {
   loadSpace(): Promise<void>;
   setSpaceSplit(percent: number): void;
   setSpacePrivacyCollapsed(collapsed: boolean): void;
-  /** Initialize the home as a repository (space-4); the reply is the
-   * new state. */
-  spaceInit(remote?: string): Promise<void>;
-  /** Set or clear `origin` (space-5); the reply is the new state. */
-  spaceSetRemote(url: string | null): Promise<void>;
+  /** Set or clear a spex repository's remote (space-5), named by its
+   * key; the reply is the new state. */
+  spaceSetRemote(repository: string, url: string | null): Promise<void>;
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
@@ -267,16 +267,21 @@ export interface AppState extends AttachmentState {
    * (space-47), preserving its identity: the recorded directories ride
    * as aliases so every session under them resolves. */
   rebindProject(projectId: string, path: string, aliases: string[]): Promise<ProjectInfo>;
-  /** Check the remote (space-8): accepted at once, outcome as state. */
-  spaceFetch(): Promise<void>;
-  /** Sync (space-11, space-12), with choices (space-18) or as a join
-   * (space-13): accepted at once, outcome as state. */
-  spaceSync(input: { choices?: Record<string, SpaceChoice>; join?: boolean }): Promise<void>;
+  /** Check the host for one spex repository (space-8): accepted at
+   * once, outcome as state. */
+  spaceFetch(repository: string): Promise<void>;
+  /** Sync one spex repository (space-11, space-12), with choices
+   * (space-18), as a join (space-13), or with its first-push notice
+   * seen (space-57): accepted at once, outcome as state. */
+  spaceSync(
+    repository: string,
+    input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean },
+  ): Promise<void>;
   /** Stop the running transport step (space-16). */
-  spaceCancel(): Promise<boolean>;
-  spaceDiff(unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }>;
-  spaceTree(path?: string): Promise<{ path: string; entries: SpaceEntry[] }>;
-  spaceRead(path: string): Promise<SpaceReadResult>;
+  spaceCancel(repository: string): Promise<boolean>;
+  spaceDiff(repository: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }>;
+  spaceTree(repository: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }>;
+  spaceRead(repository: string, path: string): Promise<SpaceReadResult>;
 
   // Playbook drafts (DR-058). Drafts never enter the session folds:
   // they are the Library's, keyed by the draft's id throughout.
@@ -321,8 +326,10 @@ export interface AppState extends AttachmentState {
   revealPlaybook?: string;
 
   listDrafts(): Promise<void>;
-  /** Create a draft and open its workspace; the core refuses an id a
-   * configured playbook or built-in holds. */
+  /** Create a draft in the spex repository of the workspace's current
+   * project, else the first registered one, and open its workspace;
+   * the core refuses an id a configured playbook or built-in holds.
+   * With no project registered there is nowhere to keep it. */
   createDraft(draftId: string): Promise<DraftInfo>;
   /** Open a draft's workspace: subscribe, replay its records and
    * source, then stream (playbook-library-62). */
@@ -427,7 +434,10 @@ export interface AppState extends AttachmentState {
   refreshReadiness(): Promise<void>;
   registerProject(path: string): Promise<ProjectInfo>;
   createProject(path: string, scaffold: boolean): Promise<ProjectInfo>;
-  removeProject(projectId: string): Promise<void>;
+  /** Forget the working folder and delete its spex repository's clone
+   * (projects-9); a clone holding what has not reached the host is
+   * refused `conflict` naming the count until `confirm` is set. */
+  removeProject(projectId: string, confirm?: boolean): Promise<void>;
   loadProjectMeta(projectId: string, refresh?: boolean): Promise<void>;
   openSession(projectId: string): Promise<SessionInfo>;
   focusSession(sessionId: string): Promise<void>;
@@ -467,9 +477,7 @@ export interface AppState extends AttachmentState {
     text: string;
     attachments?: readonly MediaAsset[];
     source?: IntentSource;
-    at?: "head" | "tail";
   }): Promise<IntentInfo>;
-  moveIntent(intentId: string, afterIntentId: string | null): Promise<void>;
   /** Edit a queued intent's text (DR-035: from dispatch on, history). */
   editIntent(intentId: string, text: string, attachments?: readonly MediaAsset[]): Promise<void>;
   closeIntent(intentId: string, as: "done" | "dropped"): Promise<void>;
@@ -509,6 +517,18 @@ export interface AppState extends AttachmentState {
 }
 
 let client: SpexClient | undefined;
+
+/** Where a stored intent's attachments live: the intent's own
+ * directory beside its file (media-4). */
+export function intentMediaOwner(intent: IntentInfo): MediaUploadOwner {
+  return { kind: "intent", projectId: intent.projectId, intentId: intent.id };
+}
+
+/** Why a draft cannot be made: an authoring session lives in a
+ * project's spex repository, and none is registered. */
+export function draftNeedsProject(): string {
+  return i18n._("Add a project first");
+}
 
 const CURRENT_PROJECT_KEY = "spex.currentProject";
 const RAIL_COLLAPSED_KEY = "spex.railCollapsed";
@@ -1029,6 +1049,7 @@ export const useAppStore = create<AppState>((set, get) => {
     try {
       await getClient().subscribe({ kind: "draft", draftId });
       const reply = await getClient().command("draft.open", {
+        projectId: draftProject(draftId),
         draftId,
         afterSeq: current.view.lastSeq,
       });
@@ -1077,6 +1098,14 @@ export const useAppStore = create<AppState>((set, get) => {
     } finally {
       if (draftBackfilling.get(draftId) === pending) draftBackfilling.delete(draftId);
     }
+  }
+
+  /** The project whose spex repository holds a draft (storage-23):
+   * every draft command names it. */
+  function draftProject(draftId: string): string {
+    const projectId = get().drafts[draftId]?.projectId;
+    if (!projectId) throw new Error(i18n._("This draft is no longer listed."));
+    return projectId;
   }
 
   function setDraftError(draftId: string, message: string): void {
@@ -1199,11 +1228,15 @@ export const useAppStore = create<AppState>((set, get) => {
         set(updates);
         break;
       }
-      case "draft.removed":
+      case "draft.removed": {
         // Retired by registration or deleted, here or elsewhere: every
-        // trace goes, and an open workspace yields to the list.
-        forgetDraft(message.draftId);
+        // trace goes, and an open workspace yields to the list. Ids are
+        // unique within one spex repository only, so a removal names
+        // the project too.
+        const known = get().drafts[message.draftId];
+        if (!known || known.projectId === message.projectId) forgetDraft(message.draftId);
         break;
+      }
       case "draft.source": {
         // Who changed it: the agent while its turn runs, else the Boss.
         const by =
@@ -1391,16 +1424,8 @@ export const useAppStore = create<AppState>((set, get) => {
       safeStorageSet(SPACE_PRIVACY_KEY, collapsed ? "1" : "0");
     },
 
-    async spaceInit(remote?: string): Promise<void> {
-      const space = await getClient().command("space.init", {
-        ...(remote !== undefined ? { remote } : {}),
-      });
-      spaceReads += 1;
-      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
-    },
-
-    async spaceSetRemote(url: string | null): Promise<void> {
-      const space = await getClient().command("space.remote.set", { url });
+    async spaceSetRemote(repository: string, url: string | null): Promise<void> {
+      const space = await getClient().command("space.remote.set", { repository, url });
       spaceReads += 1;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
@@ -1425,32 +1450,35 @@ export const useAppStore = create<AppState>((set, get) => {
       return project;
     },
 
-    async spaceFetch(): Promise<void> {
+    async spaceFetch(repository: string): Promise<void> {
       // Accepted at once; the outcome is state (space-29, DR-010 §5).
-      await getClient().command("space.fetch", {});
+      await getClient().command("space.fetch", { repository });
     },
 
-    async spaceSync(input): Promise<void> {
+    async spaceSync(repository, input): Promise<void> {
       await getClient().command("space.sync", {
+        repository,
         ...(input.choices !== undefined ? { choices: input.choices } : {}),
         ...(input.join !== undefined ? { join: input.join } : {}),
+        ...(input.noticed !== undefined ? { noticed: input.noticed } : {}),
       });
     },
 
-    async spaceCancel(): Promise<boolean> {
-      const { stopped } = await getClient().command("space.cancel", {});
+    async spaceCancel(repository: string): Promise<boolean> {
+      const { stopped } = await getClient().command("space.cancel", { repository });
       return stopped;
     },
 
-    spaceDiff: (unit, path, side) =>
-      getClient().command("space.diff", { unit, path, side }),
+    spaceDiff: (repository, unit, path, side) =>
+      getClient().command("space.diff", { repository, unit, path, side }),
 
-    spaceTree: (path) =>
+    spaceTree: (repository, path) =>
       getClient().command("space.tree", {
+        repository,
         ...(path !== undefined ? { path } : {}),
       }),
 
-    spaceRead: (path) => getClient().command("space.read", { path }),
+    spaceRead: (repository, path) => getClient().command("space.read", { repository, path }),
 
     connect(url?: string): void {
       const target = url ?? defaultCoreUrl();
@@ -1831,8 +1859,11 @@ export const useAppStore = create<AppState>((set, get) => {
       return project;
     },
 
-    async removeProject(projectId: string): Promise<void> {
-      await getClient().command("project.remove", { projectId });
+    async removeProject(projectId: string, confirm?: boolean): Promise<void> {
+      await getClient().command("project.remove", {
+        projectId,
+        ...(confirm ? { confirm: true } : {}),
+      });
       set({ projects: await getClient().command("project.list", {}) });
     },
 
@@ -2112,11 +2143,6 @@ export const useAppStore = create<AppState>((set, get) => {
       return intent;
     },
 
-    async moveIntent(intentId, afterIntentId): Promise<void> {
-      await getClient().command("intent.move", { intentId, afterIntentId });
-      await get().loadLedger();
-    },
-
     async editIntent(intentId, text, attachments): Promise<void> {
       await getClient().command("intent.edit", { intentId, text, ...(attachments ? { attachments: [...attachments] } : {}) });
       await get().loadLedger();
@@ -2158,7 +2184,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (current) {
         await get().focusSession(current.id);
         get().setDraft(current.id, intent.text);
-        get().stageAttachmentAssets(`session:${current.id}`, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
+        get().stageAttachmentAssets(`session:${current.id}`, intentMediaOwner(intent), intent.attachments ?? []);
         set({
           stagedIntents: {
             ...get().stagedIntents,
@@ -2172,7 +2198,7 @@ export const useAppStore = create<AppState>((set, get) => {
       get().setCurrentProject(intent.projectId);
       get().setWorkspaceTab(intent.projectId, "start");
       get().setHomeDraft(intent.text);
-      get().stageAttachmentAssets(`home:${intent.projectId}`, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
+      get().stageAttachmentAssets(`home:${intent.projectId}`, intentMediaOwner(intent), intent.attachments ?? []);
       set({
         stagedIntents: {
           ...get().stagedIntents,
@@ -2295,7 +2321,13 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async createDraft(draftId: string): Promise<DraftInfo> {
-      const draft = await getClient().command("draft.create", { draftId });
+      const { currentProjectId, projects } = get();
+      const projectId =
+        (currentProjectId && projects.some((project) => project.id === currentProjectId)
+          ? currentProjectId
+          : undefined) ?? projects[0]?.id;
+      if (!projectId) throw new Error(draftNeedsProject());
+      const draft = await getClient().command("draft.create", { projectId, draftId });
       set({ drafts: { ...get().drafts, [draft.id]: draft } });
       await get().openDraft(draft.id);
       return draft;
@@ -2316,7 +2348,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async sendDraft(draftId: string, text: string, attachments?: readonly MediaAsset[]): Promise<{ queued: boolean }> {
       try {
-        const reply = await getClient().command("draft.send", { draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
+        const reply = await getClient().command("draft.send", { projectId: draftProject(draftId), draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
         get().clearDraftError(draftId);
         return { queued: reply.queued };
       } catch (cause) {
@@ -2327,7 +2359,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async abortDraft(draftId: string): Promise<void> {
       try {
-        await getClient().command("draft.abort", { draftId });
+        await getClient().command("draft.abort", { projectId: draftProject(draftId), draftId });
       } catch (cause) {
         setDraftError(
           draftId,
@@ -2340,6 +2372,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async writeDraftSource(draftId, input) {
       const reply = await getClient().command("draft.source.write", {
+        projectId: draftProject(draftId),
         draftId,
         ...(input.content !== undefined ? { content: input.content } : {}),
         ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
@@ -2366,6 +2399,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async refreshDraftSource(draftId: string): Promise<DraftSourceState | null> {
       const view = get().draftViews[draftId];
       const reply = await getClient().command("draft.open", {
+        projectId: draftProject(draftId),
         draftId,
         // Only the source is wanted: records after the last seq are
         // those the stream is already delivering.
@@ -2388,7 +2422,7 @@ export const useAppStore = create<AppState>((set, get) => {
       });
       try {
         // Compiles run for minutes: no client timeout (DR-010 §5).
-        await getClient().command("draft.compile", { draftId }, { timeoutMs: 0 });
+        await getClient().command("draft.compile", { projectId: draftProject(draftId), draftId }, { timeoutMs: 0 });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         // A failed phase and a cancel are told by the band from the
@@ -2414,6 +2448,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async registerDraft(draftId, input): Promise<void> {
       const configState = await getClient().command("draft.register", {
+        projectId: draftProject(draftId),
         draftId,
         command: input.command,
         intent: input.intent,
@@ -2428,18 +2463,18 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
-      const draft = await getClient().command("draft.player.set", { draftId, playerId });
+      const draft = await getClient().command("draft.player.set", { projectId: draftProject(draftId), draftId, playerId });
       set({ drafts: { ...get().drafts, [draftId]: draft } });
     },
 
     async deleteDraft(draftId: string): Promise<void> {
-      await getClient().command("draft.delete", { draftId });
+      await getClient().command("draft.delete", { projectId: draftProject(draftId), draftId });
       forgetDraft(draftId);
       void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
     },
 
     async loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts> {
-      const artifacts = await getClient().command("draft.artifacts", { draftId });
+      const artifacts = await getClient().command("draft.artifacts", { projectId: draftProject(draftId), draftId });
       set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
       return artifacts;
     },

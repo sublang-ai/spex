@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Explore tab (DR-057): the home as one read-only ARIA tree with a
-// single focus stop and arrow keys, every entry annotated from the
+// A spex repository's Explore tab (DR-057, DR-103): its clone as one
+// read-only ARIA tree with a single focus stop and arrow keys, every
+// entry annotated from the
 // catalog (space-23); a preview pane by type beside it (space-24); the
 // "Stays on this device" panel with one reason per ignored family
 // (space-25); reveal and copy for the selected entry (space-26). The
@@ -17,7 +18,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { SpaceEntry, SpaceReadResult, SpaceState } from "@sublang/spex-core/protocol";
+import type { RepositoryState, SpaceEntry, SpaceReadResult } from "@sublang/spex-core/protocol";
 
 import {
   SPACE_SPLIT_DEFAULT,
@@ -52,7 +53,6 @@ type Node =
       /** The session's own title; none reads as "untitled session",
        * phrased at render so a change of language reaches it. */
       title?: string;
-      projectName?: string;
       path: string;
       children: Node[];
     };
@@ -85,7 +85,6 @@ function nodesOf(entries: SpaceEntry[]): Node[] {
           id: `session:${sessionId}`,
           sessionId,
           title: entry.owner?.title?.trim() || undefined,
-          projectName: entry.owner?.name,
           path: entry.path.replace(/\/[^/]*$/, ""),
           children: [],
         };
@@ -417,12 +416,15 @@ function PreviewBody({
 }
 
 export function ExploreTab({
-  space,
+  repo,
+  root,
   connected,
   onOpenSession,
   onNote,
 }: {
-  space: SpaceState;
+  repo: RepositoryState;
+  /** The clone's absolute path, every entry's path relative to it. */
+  root: string;
   connected: boolean;
   onOpenSession(sessionId: string): void;
   onNote: Note;
@@ -444,20 +446,20 @@ export function ExploreTab({
 
   const loadRoot = useCallback(async () => {
     try {
-      const { entries } = await spaceTree();
+      const { entries } = await spaceTree(repo.key);
       setRoots(nodesOf(entries));
       setRootError(undefined);
     } catch (cause) {
       setRootError((cause as Error).message);
     }
-  }, [spaceTree]);
+  }, [spaceTree, repo.key]);
 
   // The root reads when the tab opens; a finished sync changed files,
   // so it reads again then (space-20) — never on a timer (space-2).
-  const done = space.sync.phase === "done" ? space.sync.at : undefined;
+  const done = repo.sync.phase === "done" ? repo.sync.at : undefined;
   useEffect(() => {
     void loadRoot();
-  }, [loadRoot, space.home, done]);
+  }, [loadRoot, root, done]);
 
   const loadChildren = useCallback(
     async (node: Extract<Node, { kind: "entry" }>) => {
@@ -465,7 +467,7 @@ export function ExploreTab({
         current ? updateNode(current, node.id, (n) => ({ ...n, loading: true, error: undefined }) as Node) : current,
       );
       try {
-        const { entries } = await spaceTree(node.entry.path);
+        const { entries } = await spaceTree(repo.key, node.entry.path);
         setRoots((current) =>
           current
             ? updateNode(current, node.id, (n) => ({ ...n, loading: false, children: nodesOf(entries) }) as Node)
@@ -479,7 +481,7 @@ export function ExploreTab({
         );
       }
     },
-    [spaceTree],
+    [spaceTree, repo.key],
   );
 
   const rows = roots ? flatten(roots, expanded) : [];
@@ -506,7 +508,7 @@ export function ExploreTab({
     if (row.node.kind === "entry" && row.node.entry.kind === "file" && row.node.entry.preview === "text") {
       const path = row.node.entry.path;
       setRead({ path });
-      spaceRead(path)
+      spaceRead(repo.key, path)
         .then((result) => setRead((current) => (current?.path === path ? { path, result } : current)))
         .catch((cause: Error) =>
           setRead((current) => (current?.path === path ? { path, error: cause.message } : current)),
@@ -579,13 +581,13 @@ export function ExploreTab({
       >
         <div className="flex min-h-48 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 @2xl:min-h-0 @2xl:w-[var(--space-split)] @2xl:flex-none">
           <div className="flex items-center gap-2 border-b border-neutral-200 px-2 py-1 text-xs text-neutral-500 dark:border-neutral-800">
-            <span className="truncate font-mono" title={space.home}>
-              {space.home}
+            <span className="truncate font-mono" title={root}>
+              {root}
             </span>
           </div>
           {rootError ? (
             <p role="alert" className="p-2 text-sm text-red-600 dark:text-red-400">
-              {i18n._("Couldn't read the space: {reason}", { reason: rootError })}
+              {i18n._("Couldn't read the files: {reason}", { reason: rootError })}
             </p>
           ) : !roots ? (
             <p className="p-2 text-sm text-neutral-500">
@@ -594,7 +596,7 @@ export function ExploreTab({
           ) : (
             <ul
               role="tree"
-              aria-label={i18n._("Files in the space")}
+              aria-label={i18n._("Files in {name}", { name: repo.name })}
               data-testid="space-tree"
               className="min-h-0 flex-1 overflow-y-auto p-1"
               onKeyDown={onTreeKeyDown}
@@ -646,13 +648,7 @@ export function ExploreTab({
                             ? `${node.entry.name}/`
                             : node.entry.name}
                     </span>
-                    {node.kind === "session" ? (
-                      node.projectName ? (
-                        <span className="hidden max-w-32 shrink-0 truncate text-xs text-neutral-500 @md:inline">
-                          {node.projectName}
-                        </span>
-                      ) : null
-                    ) : (
+                    {node.kind === "session" ? null : (
                       <>
                         <span className="hidden shrink-0 text-xs text-neutral-500 @md:inline">
                           {entryAnnotation(node.entry)}
@@ -687,7 +683,7 @@ export function ExploreTab({
           {selectedRow ? (
             <PreviewPane
               row={selectedRow}
-              home={space.home}
+              home={root}
               read={read}
               connected={connected}
               onOpenSession={onOpenSession}
@@ -726,7 +722,6 @@ function PreviewPane({
           path={node.path}
           home={home}
           annotation={i18n._({ id: "Session", comment: "one unit's kind: a session" })}
-          owner={node.projectName}
           onNote={onNote}
           controls={
             <button
@@ -749,12 +744,9 @@ function PreviewPane({
     );
   }
   const { entry } = node;
-  const owner =
-    entry.owner?.title && entry.owner?.name
-      ? `"${entry.owner.title}" — ${entry.owner.name}`
-      : entry.owner?.title
-        ? `"${entry.owner.title}"`
-        : entry.owner?.name;
+  // The session's or the intent's title, where the family belongs to
+  // one (space-23).
+  const owner = entry.owner?.title ? `"${entry.owner.title}"` : undefined;
   const size = entrySize(entry);
   return (
     <>

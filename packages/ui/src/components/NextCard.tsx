@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Captain home's next card (run-view-88): the project's head
-// unblocked intent with Start, and Remove beside it (run-view-114) —
-// the Up next row's one-click removal with its six-second Undo, which
-// re-queues the same text and provenance at the head. The card stays
-// while the Undo line stands, even once the queue behind it is empty.
+// The Captain home's next card (run-view-88): the project's oldest
+// queued intent with Start, and Remove beside it (run-view-114) — the
+// Up next row's one-click removal with its six-second Undo, which
+// re-queues the same text and provenance, taking its place by age
+// (dashboard-29). The card stays while the Undo line stands, even once
+// the queue behind it is empty.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type {
@@ -102,9 +103,16 @@ export function NextCard({
         text: intent.text,
         ...(intent.attachments ? { attachments: intent.attachments } : {}),
         source: intent.source,
-        at: "head",
       });
-      setRefocusIntentId(restored.id);
+      // The queue is ordered by age, so the restored intent is next
+      // only where nothing older is queued; focus follows the project's
+      // next row either way, never the page body.
+      const head = useAppStore
+        .getState()
+        .ledger?.intents.find(
+          (entry) => entry.intent.projectId === restored.projectId && entry.next,
+        );
+      setRefocusIntentId(head?.intent.id ?? restored.id);
     } catch (cause) {
       show(
         {

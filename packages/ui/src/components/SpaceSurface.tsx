@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface (DR-057): the Spex home at a glance in one header
-// (space-1) ending with the state's primary control — Initialize, Join
-// or Sync — over the Sync and Explore tabs. The surface renders the
-// core's state and runs no Git itself: every action is a command whose
-// outcome arrives as state (space-29), and the state is re-read only on
-// an event, never on a timer (space-2).
+// The Space surface (DR-057, DR-103): the home at a glance in one
+// header (space-1) over its groups, each listing its spex repositories
+// with where their code lives and the state each stands in (space-61).
+// Activating a repository's row opens its Sync and Explore tabs
+// beneath the list. The surface renders the core's state and runs no
+// Git itself: every action is a command naming the repository by its
+// key, whose outcome arrives as state (space-29), and the state is
+// re-read only on an event, never on a timer (space-2).
 
 import {
   useCallback,
@@ -16,7 +18,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { SpaceState } from "@sublang/spex-core/protocol";
+import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
@@ -25,16 +27,16 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
   STEP_NAMES,
+  clonePath,
   displayRemote,
-  noBranch,
+  repositoryStatePhrase,
   revealBridge,
   revealLabel,
   tildify,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { Rich } from "./Rich.js";
-import { SyncTab } from "./SpaceSync.js";
+import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 
 export interface SpaceSurfaceProps {
@@ -59,34 +61,35 @@ export const LINK =
  * refusals land here as well as in place. */
 export type Note = (text: string) => void;
 
+/** Every spex repository of the home, in the groups list's order. */
+export function allRepositories(groups: GroupsState): RepositoryState[] {
+  return groups.groups.flatMap((group) => group.repositories);
+}
+
 /** Why Sync is refused before its first step (space-11): the words
- * shown beside the disabled control, and — for the one refusal the
- * caption turns into a control — a name for it, so the caption knows
- * which refusal it has without matching a phrase that changes with
- * the language. Undefined when Sync may run. */
+ * shown beside the disabled control. Undefined when the surface knows
+ * no reason, the core deciding the rest at admission and its refusal
+ * shown in the same place. */
 export function syncRefusal(
-  space: SpaceState,
-): { text: string; kind?: "add-remote" } | undefined {
-  if (!space.git.ok) return { text: space.git.guidance };
-  const repo = space.repository;
-  if (!repo) return { text: i18n._("Set this space up first") };
-  if (!repo.remote) {
-    return { text: i18n._("Add a remote first"), kind: "add-remote" };
+  groups: GroupsState,
+  repo: RepositoryState,
+): string | undefined {
+  if (!groups.git.ok) return groups.git.guidance;
+  if (repo.state === "absent") return i18n._("Not on this device");
+  if (repo.branch?.mergePending) {
+    return i18n._("Finish or abort the merge in your terminal");
   }
-  if (repo.branch !== "main") {
-    return {
-      text: i18n._("On {branch}; check out main in a terminal", {
-        branch: repo.branch ?? noBranch(),
-      }),
-    };
-  }
-  if (repo.mergePending) {
-    return { text: i18n._("Finish or abort the merge in your terminal") };
-  }
-  const blocking = space.diagnostics.find((entry) => entry.blocking);
-  if (blocking) return { text: `${blocking.file}: ${blocking.reason}` };
-  if (space.sync.phase === "running" && space.sync.op !== "sync") {
-    return { text: i18n._("Space is busy") };
+  // A blocking diagnostic of this clone: its file lies beneath it.
+  const blocking = groups.diagnostics.find(
+    (entry) =>
+      entry.blocking &&
+      (entry.repair?.repository === repo.key ||
+        entry.file.includes(`workspace/${repo.key}/`) ||
+        entry.file.startsWith(`${repo.key}/`)),
+  );
+  if (blocking) return `${blocking.file}: ${blocking.reason}`;
+  if (repo.sync.phase === "running" && repo.sync.op !== "sync") {
+    return i18n._("Another operation is running");
   }
   return undefined;
 }
@@ -194,44 +197,49 @@ export function PathControls({
   );
 }
 
-/** The header's remote row (space-5): the URL with its user removed, or
- * "No remote", and an in-place editor with Save and Cancel — Escape
- * cancelling — whose save the field follows. */
+/** A spex repository's remote (space-5): the way a reader gives a
+ * clone a remote until the Git host sets it up (DR-103) — an in-place
+ * editor with Save and Cancel, Escape cancelling, an empty field
+ * removing it. The host's own URLs are never edited here. */
 function RemoteRow({
-  remote,
+  repository,
   disabled,
-  editing,
-  onEditing,
-  focusField,
 }: {
-  remote: string | null;
+  repository: string;
   disabled: boolean;
-  editing: boolean;
-  onEditing(editing: boolean): void;
-  /** A refusal pointed here (space-11): the field takes focus. */
-  focusField: number;
 }) {
   const spaceSetRemote = useAppStore((state) => state.spaceSetRemote);
-  const [draft, setDraft] = useState(remote ?? "");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
 
   useEffect(() => {
     if (editing) {
-      setDraft(remote ?? "");
+      setDraft("");
       setError(undefined);
       inputRef.current?.focus();
+    } else if (returnFocus.current) {
+      returnFocus.current = false;
+      editRef.current?.focus();
     }
-  }, [editing, remote, focusField]);
+  }, [editing]);
+
+  const close = () => {
+    returnFocus.current = true;
+    setEditing(false);
+  };
 
   const save = async () => {
     setSaving(true);
     setError(undefined);
     try {
       const url = draft.trim();
-      await spaceSetRemote(url === "" ? null : url);
-      onEditing(false);
+      await spaceSetRemote(repository, url === "" ? null : url);
+      close();
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -242,193 +250,67 @@ function RemoteRow({
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape") {
       event.stopPropagation();
-      onEditing(false);
+      close();
     } else if (event.key === "Enter") {
       event.preventDefault();
       void save();
     }
   };
 
+  if (!editing) {
+    return (
+      <button
+        ref={editRef}
+        type="button"
+        data-testid="space-remote-edit"
+        className={SECONDARY}
+        disabled={disabled}
+        title={i18n._("Name where this spex repository's records are kept")}
+        onClick={() => setEditing(true)}
+      >
+        {i18n._("Set remote")}
+      </button>
+    );
+  }
   return (
-    <div
-      data-testid="space-remote"
-      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+    <span
+      data-testid="space-remote-editor"
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-1"
+      onKeyDown={onKeyDown}
     >
-      {editing ? (
-        <span
-          data-testid="space-remote-editor"
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-1"
-          onKeyDown={onKeyDown}
-        >
-          <label className="sr-only" htmlFor="space-remote-input">
-            {i18n._("Remote URL")}
-          </label>
-          <input
-            id="space-remote-input"
-            ref={inputRef}
-            data-testid="space-remote-input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={i18n._("git@host:path or https://…")}
-            spellCheck={false}
-            disabled={saving}
-            className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-          <button
-            type="button"
-            className={SECONDARY}
-            disabled={saving || disabled}
-            onClick={() => void save()}
-          >
-            {saving
-              ? i18n._({ id: "Saving…", comment: "the Save control, while the save is in flight" })
-              : i18n._({ id: "Save", comment: "save the edited remote URL" })}
-          </button>
-          <button
-            type="button"
-            className={SECONDARY}
-            disabled={saving}
-            onClick={() => onEditing(false)}
-          >
-            {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-          </button>
-          {error ? (
-            <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-              {error}
-            </span>
-          ) : null}
-        </span>
-      ) : (
-        <>
-          {remote ? (
-            <span className="flex min-w-0 items-baseline gap-1 text-sm" title={remote}>
-              <span className="shrink-0 text-neutral-500">
-                {i18n._({ id: "origin", comment: "the Git remote's name; leave as Git spells it" })}
-              </span>
-              {/* The URL truncates in its own box (DR-041): the text
-                  lies directly in the truncating span. */}
-              <span className="min-w-0 truncate font-mono text-xs" data-testid="space-remote-url">
-                {displayRemote(remote)}
-              </span>
-            </span>
-          ) : (
-            <span className="text-sm text-neutral-500">{i18n._("No remote")}</span>
-          )}
-          <button
-            type="button"
-            data-testid="space-remote-edit"
-            className={SECONDARY}
-            disabled={disabled}
-            onClick={() => onEditing(true)}
-          >
-            {remote ? i18n._("Change remote") : i18n._("Add remote")}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** One setup control over one required remote field (space-3): a
- * space is set up by naming where it lives, the remote's own state
- * deciding whether it is filled or joined (space-6). The app makes no
- * repository without a remote, which could commit only once. */
-function SetupCard({
-  disabled,
-  setupLabel,
-  busy,
-  error,
-  onSetUp,
-  onExplore,
-}: {
-  disabled: boolean;
-  setupLabel: string;
-  busy: boolean;
-  error?: string;
-  onSetUp(remote: string): void;
-  onExplore(): void;
-}) {
-  const [remote, setRemote] = useState("");
-  const [required, setRequired] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <div
-      data-testid="space-setup"
-      className="flex w-full flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
-    >
-      <p className="font-medium">{i18n._("Keep this space in Git")}</p>
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">
-          {i18n._({ id: "Remote", comment: "field label: the Git remote's URL" })}
-        </span>
-        <input
-          ref={inputRef}
-          data-testid="space-setup-remote"
-          value={remote}
-          onChange={(event) => {
-            setRemote(event.target.value);
-            if (event.target.value.trim()) setRequired(false);
-          }}
-          aria-invalid={required || undefined}
-          aria-describedby={required ? "space-setup-required" : undefined}
-          placeholder={i18n._("git@host:path or https://…")}
-          spellCheck={false}
-          disabled={disabled || busy}
-          className={`min-w-0 flex-1 rounded border bg-white px-1.5 py-0.5 font-mono text-xs dark:bg-neutral-900 ${
-            required
-              ? "border-red-400 dark:border-red-700"
-              : "border-neutral-300 focus:border-brand-500 dark:border-neutral-700"
-          }`}
-        />
-        {required ? (
-          <span
-            id="space-setup-required"
-            role="alert"
-            className="text-xs text-red-600 dark:text-red-400"
-          >
-            {i18n._({ id: "Required", comment: "the field must be filled before the act runs" })}
-          </span>
-        ) : null}
+      <label className="sr-only" htmlFor="space-remote-input">
+        {i18n._("Remote URL")}
       </label>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="space-set-up"
-          className={PRIMARY}
-          disabled={disabled || busy}
-          onClick={() => {
-            if (!remote.trim()) {
-              setRequired(true);
-              inputRef.current?.focus();
-              return;
-            }
-            onSetUp(remote.trim());
-          }}
-        >
-          {setupLabel}
-        </button>
-        <span className="min-w-0 text-xs text-neutral-500">
-          {i18n._(
-            "Empty remote: filled from this device · Existing space: joined, differences asked",
-          )}
-        </span>
-      </div>
+      <input
+        id="space-remote-input"
+        ref={inputRef}
+        data-testid="space-remote-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder={i18n._("git@host:path or https://…")}
+        spellCheck={false}
+        disabled={saving}
+        className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs focus:border-brand-500 dark:border-neutral-700 dark:bg-neutral-900"
+      />
+      <button
+        type="button"
+        className={SECONDARY}
+        disabled={saving || disabled}
+        onClick={() => void save()}
+      >
+        {saving
+          ? i18n._({ id: "Saving…", comment: "the Save control, while the save is in flight" })
+          : i18n._({ id: "Save", comment: "save the edited remote URL" })}
+      </button>
+      <button type="button" className={SECONDARY} disabled={saving} onClick={close}>
+        {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+      </button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+        <span role="alert" className="text-xs text-red-600 dark:text-red-400">
           {error}
-        </p>
+        </span>
       ) : null}
-      <p className="text-xs text-neutral-500">
-        <Rich
-          text={i18n._(
-            "Syncs sessions, queues, projects, Settings and playbook sources — <0>see what stays</0>. Nothing is contacted until you set up.",
-          )}
-          components={[
-            <button type="button" className={LINK} onClick={onExplore} key="explore" />,
-          ]}
-        />
-      </p>
-    </div>
+    </span>
   );
 }
 
@@ -456,10 +338,10 @@ function Field({
   );
 }
 
-/** The repository dot carries the status palette (DR-010 §8): neutral
+/** A repository's dot carries the status palette (DR-010 §8): neutral
  * idle, emerald running, amber choices and unrelated, red stopped. */
-function statusDot(space: SpaceState): { className: string; word: string } {
-  const sync = space.sync;
+function statusDot(repo: RepositoryState): { className: string; word: string } {
+  const sync = repo.sync;
   if (sync.phase === "running") {
     return { className: "bg-emerald-500 animate-pulse", word: STEP_LINES[sync.step]() };
   }
@@ -482,12 +364,6 @@ function statusDot(space: SpaceState): { className: string; word: string } {
       }),
     };
   }
-  if (!space.repository) {
-    return {
-      className: "border border-neutral-400 bg-transparent",
-      word: i18n._({ id: "not a repository", comment: "the space's status, read in a title" }),
-    };
-  }
   return {
     className: "bg-neutral-400",
     word: i18n._({ id: "idle", comment: "the space's status: nothing is running" }),
@@ -495,33 +371,20 @@ function statusDot(space: SpaceState): { className: string; word: string } {
 }
 
 export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps) {
-  const space = useAppStore((state) => state.space);
+  const groups = useAppStore((state) => state.space);
   const spaceError = useAppStore((state) => state.spaceError);
   const spaceReadAt = useAppStore((state) => state.spaceReadAt);
   const spaceChangeSeq = useAppStore((state) => state.spaceChangeSeq);
   const connection = useAppStore((state) => state.connection);
   const loadSpace = useAppStore((state) => state.loadSpace);
-  const spaceInit = useAppStore((state) => state.spaceInit);
-  const spaceSync = useAppStore((state) => state.spaceSync);
   const connected = connection === "open";
   const now = useClock(true, 30_000);
 
-  const [tab, setTab] = useState<SpaceTab>("sync");
+  const [selected, setSelected] = useState<string>();
   const [issuesOpen, setIssuesOpen] = useState(false);
   // The reader's own Refresh (space-2), counted: it lets the issues
   // list lay itself out afresh (space-48, space-55).
   const [refreshes, setRefreshes] = useState(0);
-  const [remoteEditing, setRemoteEditing] = useState(false);
-  const [remoteFocus, setRemoteFocus] = useState(0);
-  const [busy, setBusy] = useState<"init" | "join" | "sync">();
-  // A long command's reply is only "accepted": its control stays busy
-  // until the machine's state moves — the running frame, or an outcome
-  // that landed first — so nothing re-enables between the reply and
-  // the state (DR-010 §3, space-29).
-  const [accepted, setAccepted] = useState<{ op: "join" | "sync"; key: string }>();
-  const [joinAccepted, setJoinAccepted] = useState(false);
-  const [joinConfirm, setJoinConfirm] = useState(false);
-  const [actionError, setActionError] = useState<{ where: "setup" | "primary"; message: string }>();
   const [note, setNote] = useState("");
 
   const onNote = useCallback<Note>((text) => setNote(text), []);
@@ -548,28 +411,12 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
     return () => clearTimeout(timer);
   }, [spaceChangeSeq, loadSpace]);
 
-  // A join reads "Joining…" until its sync ends (space-6): the flag
-  // clears on the first outcome after the run was seen — or on an
-  // outcome that landed before a running frame was drawn.
-  const running = space?.sync?.phase === "running";
-  const joinRunSeen = useRef(false);
-  useEffect(() => {
-    if (!joinAccepted) {
-      joinRunSeen.current = false;
-      return;
-    }
-    if (running) joinRunSeen.current = true;
-    else if (joinRunSeen.current || (space && space.sync.phase !== "idle")) {
-      setJoinAccepted(false);
-    }
-  }, [joinAccepted, running, space]);
+  const repo = groups ? allRepositories(groups).find((entry) => entry.key === selected) : undefined;
 
-  // The polite live region narrates the steps (DR-010 §7).
-  const sync = space?.sync;
+  // The polite live region narrates the open repository's steps
+  // (DR-010 §7).
+  const sync = repo?.sync;
   const syncKey = sync ? JSON.stringify(sync) : "";
-  useEffect(() => {
-    if (accepted && accepted.key !== syncKey) setAccepted(undefined);
-  }, [accepted, syncKey]);
   useEffect(() => {
     if (!sync) return;
     if (sync.phase === "running") setNote(STEP_LINES[sync.step]());
@@ -595,115 +442,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey]);
-
-  const initialize = async (remote: string) => {
-    setBusy("init");
-    setActionError(undefined);
-    try {
-      await spaceInit(remote || undefined);
-    } catch (cause) {
-      setActionError({ where: "setup", message: (cause as Error).message });
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  const join = async (remote: string) => {
-    const key = syncKey;
-    setBusy("join");
-    setActionError(undefined);
-    try {
-      await spaceInit(remote);
-      await spaceSync({ join: true });
-      setAccepted({ op: "join", key });
-      setJoinAccepted(true);
-    } catch (cause) {
-      setActionError({ where: "setup", message: (cause as Error).message });
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  const startSync = async (input: { join?: boolean } = {}) => {
-    const key = syncKey;
-    setBusy("sync");
-    setActionError(undefined);
-    try {
-      await spaceSync(input);
-      setAccepted({ op: input.join ? "join" : "sync", key });
-      if (input.join) setJoinAccepted(true);
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setActionError({ where: "primary", message });
-      setNote(message);
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  const onTabKey = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    event.preventDefault();
-    const next: SpaceTab = tab === "sync" ? "explore" : "sync";
-    setTab(next);
-    document.getElementById(`space-tab-${next}`)?.focus();
-  };
-
-  const tabButton = (which: SpaceTab, label: string) => (
-    <button
-      type="button"
-      role="tab"
-      id={`space-tab-${which}`}
-      data-testid={`space-tab-${which}`}
-      aria-selected={tab === which}
-      aria-controls={`space-panel-${which}`}
-      tabIndex={tab === which ? 0 : -1}
-      onClick={() => setTab(which)}
-      onKeyDown={onTabKey}
-      className={`min-h-7 rounded px-3 py-1 text-sm ${
-        tab === which
-          ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-          : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
-  const header = space ? (
-    <Header
-      space={space}
-      now={now}
-      connected={connected}
-      busy={busy}
-      accepted={accepted?.op}
-      joinAccepted={joinAccepted}
-      joinConfirm={joinConfirm}
-      onJoinConfirm={setJoinConfirm}
-      actionError={actionError}
-      issuesOpen={issuesOpen}
-      onIssuesOpen={(open) => {
-        setIssuesOpen(open);
-        setTab("sync");
-      }}
-      onShowSync={() => setTab("sync")}
-      onShowExplore={() => setTab("explore")}
-      remoteEditing={remoteEditing}
-      onRemoteEditing={setRemoteEditing}
-      remoteFocus={remoteFocus}
-      onFocusRemote={() => {
-        setRemoteEditing(true);
-        setRemoteFocus((count) => count + 1);
-      }}
-      onJoinSpace={(remote) => void join(remote)}
-      onSync={() => void startSync()}
-      onJoin={() => {
-        setJoinConfirm(false);
-        void startSync({ join: true });
-      }}
-      onNote={onNote}
-    />
-  ) : null;
 
   return (
     <section
@@ -741,49 +479,42 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
           {i18n._("Couldn't read the space: {reason}", { reason: spaceError })}
         </p>
       ) : null}
-      {header}
-      {space ? (
+      {groups ? (
         <>
-          <div
-            role="tablist"
-            aria-label={i18n._("Space views")}
-            className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
-          >
-            {tabButton(
-              "sync",
-              i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }),
-            )}
-            {tabButton(
-              "explore",
-              i18n._({ id: "Explore", comment: "tab: browse the files in the space" }),
-            )}
-          </div>
-          <div
-            role="tabpanel"
-            id={`space-panel-${tab}`}
-            aria-labelledby={`space-tab-${tab}`}
-            className="flex min-h-0 flex-1 flex-col gap-3"
-          >
-            {tab === "sync" ? (
-              <SyncTab
-                space={space}
-                now={now}
-                connected={connected}
-                issuesOpen={issuesOpen}
-                refreshes={refreshes}
-                onOpenSession={onOpenSession}
-                onOpenProject={onOpenProject}
-                onNote={onNote}
-              />
-            ) : (
-              <ExploreTab
-                space={space}
-                connected={connected}
-                onOpenSession={onOpenSession}
-                onNote={onNote}
-              />
-            )}
-          </div>
+          <HomeHeader
+            groups={groups}
+            connected={connected}
+            issuesOpen={issuesOpen}
+            onIssuesOpen={setIssuesOpen}
+            onNote={onNote}
+          />
+          <IssuesList
+            groups={groups}
+            connected={connected}
+            open={issuesOpen}
+            refreshes={refreshes}
+            onOpenProject={onOpenProject}
+            onNote={onNote}
+          />
+          {groups.git.ok ? (
+            <GroupsList
+              groups={groups}
+              now={now}
+              selected={selected}
+              onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
+            />
+          ) : null}
+          {repo && groups.git.ok ? (
+            <RepositoryPanel
+              key={repo.key}
+              groups={groups}
+              repo={repo}
+              now={now}
+              connected={connected}
+              onOpenSession={onOpenSession}
+              onNote={onNote}
+            />
+          ) : null}
         </>
       ) : !spaceError ? (
         <p className="text-sm text-neutral-500">{i18n._("Reading the space…")}</p>
@@ -792,139 +523,332 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   );
 }
 
-function Header({
-  space,
-  now,
+/** The home at a glance (space-1): its path, the account, Git's
+ * presence and the issues the core counts. */
+function HomeHeader({
+  groups,
   connected,
-  busy,
-  accepted,
-  joinAccepted,
-  joinConfirm,
-  onJoinConfirm,
-  actionError,
   issuesOpen,
   onIssuesOpen,
-  onShowSync,
-  onShowExplore,
-  remoteEditing,
-  onRemoteEditing,
-  remoteFocus,
-  onFocusRemote,
-  onJoinSpace,
-  onSync,
-  onJoin,
   onNote,
 }: {
-  space: SpaceState;
-  now: number;
+  groups: GroupsState;
   connected: boolean;
-  busy?: "init" | "join" | "sync";
-  /** A join or sync accepted, its first frame still on its way. */
-  accepted?: "join" | "sync";
-  joinAccepted: boolean;
-  joinConfirm: boolean;
-  onJoinConfirm(open: boolean): void;
-  actionError?: { where: "setup" | "primary"; message: string };
   issuesOpen: boolean;
   onIssuesOpen(open: boolean): void;
-  onShowSync(): void;
-  onShowExplore(): void;
-  remoteEditing: boolean;
-  onRemoteEditing(editing: boolean): void;
-  remoteFocus: number;
-  onFocusRemote(): void;
-  onJoinSpace(remote: string): void;
-  onSync(): void;
-  onJoin(): void;
   onNote: Note;
 }) {
-  const repo = space.repository;
-  const sync = space.sync;
-  const running = sync.phase === "running";
-  const disabled = !connected;
-  const dot = statusDot(space);
   // The core carries the count (space-1), so the header and the list
   // beneath it cannot drift: what the reader has not answered.
-  const issueCount = space.issues;
-  const unrelated = sync.phase === "unrelated" || repo?.unrelated === true;
+  const issueCount = groups.issues;
+  const host = groups.host.displayName ?? groups.host.url;
+  return (
+    <header
+      data-testid="space-header"
+      data-stale={connected ? undefined : "1"}
+      // Below @xs the fields stack; above it they flow in rows
+      // (space-28). While the core is unreachable the last known state
+      // stands, muted.
+      className={`flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 ${
+        connected ? "" : "opacity-70"
+      }`}
+    >
+      <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
+        <Field testId="space-path" title={groups.home} className="min-w-0 flex-1">
+          <span className="min-w-0 truncate font-mono text-sm">{tildify(groups.home)}</span>
+        </Field>
+        <PathControls path={groups.home} testId="space-path" onNote={onNote} />
+      </div>
+      {groups.git.ok ? (
+        <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
+          <Field testId="space-account" title={groups.host.url}>
+            {groups.account ? (
+              <span className="min-w-0 truncate">
+                {i18n._("Signed in as {login} at {host}", { login: groups.account.login, host })}
+              </span>
+            ) : (
+              <span className="text-neutral-500">{i18n._("Not signed in")}</span>
+            )}
+          </Field>
+          {groups.diagnostics.length > 0 ? (
+            <button
+              type="button"
+              data-testid="space-issues"
+              aria-expanded={issuesOpen}
+              // Amber and the warning glyph say attention is owed.
+              // With nothing unanswered none is, so the control
+              // stays reachable while reading as settled.
+              className={`flex items-center gap-1 text-sm hover:underline ${
+                issueCount > 0
+                  ? "text-amber-700 dark:text-amber-300"
+                  : "text-neutral-500"
+              }`}
+              onClick={() => onIssuesOpen(!issuesOpen)}
+            >
+              {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
+              {issueCount > 0
+                ? i18n._("{count, plural, one {# issue} other {# issues}}", {
+                    count: issueCount,
+                  })
+                : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div data-testid="space-no-git" className="text-sm">
+          <p className="font-medium">{i18n._("Git is not installed")}</p>
+          <p className="text-xs text-neutral-500">{groups.git.guidance}</p>
+        </div>
+      )}
+    </header>
+  );
+}
 
-  const joining = busy === "join" || accepted === "join" || (joinAccepted && running);
-  const pending = busy !== undefined || accepted !== undefined || running;
-  // One setup reads "Setting up…" from its init through its sync
-  // (space-6): the whole motion is one control's flight.
-  const setupLabel =
-    joining || busy === "init" || (running && sync.op === "init")
-      ? i18n._({ id: "Setting up…", comment: "the setup control, while the setup runs" })
-      : i18n._("Set up space");
+/** The groups list (space-1): each group with its full path and, under
+ * it, one row per spex repository — its name, its working folder here,
+ * where its code lives and the state it stands in (space-61). A row
+ * opens that repository's tabs beneath the list. */
+function GroupsList({
+  groups,
+  now,
+  selected,
+  onSelect,
+}: {
+  groups: GroupsState;
+  now: number;
+  selected?: string;
+  onSelect(key: string): void;
+}) {
+  return (
+    <section
+      data-testid="space-groups"
+      aria-label={i18n._({ id: "Groups", comment: "the list of the home's groups and their spex repositories" })}
+      className="flex flex-col gap-3"
+    >
+      {groups.groups.map((group) => (
+        <div key={group.fullPath} data-testid={`space-group-${group.fullPath}`} className="flex flex-col gap-1">
+          <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-medium">
+            <span className="min-w-0 truncate">{group.name}</span>
+            <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
+              {group.fullPath}
+            </span>
+          </h2>
+          {group.repositories.length === 0 ? (
+            <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
+          ) : (
+            <ul className="flex flex-col gap-0.5">
+              {group.repositories.map((repo) => (
+                <RepositoryRow
+                  key={repo.key}
+                  repo={repo}
+                  now={now}
+                  selected={repo.key === selected}
+                  onSelect={() => onSelect(repo.key)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
 
-  let primary: ReactNode = null;
-  if (!space.git.ok) {
-    primary = null;
-  } else if (!repo) {
-    primary = (
-      <SetupCard
-        disabled={disabled}
-        busy={pending}
-        setupLabel={setupLabel}
-        error={actionError?.where === "setup" ? actionError.message : undefined}
-        onSetUp={onJoinSpace}
-        onExplore={onShowExplore}
-      />
-    );
-  } else if (unrelated) {
-    primary = joinConfirm ? (
-      <span data-testid="space-join-confirm">
-        <InlineConfirm
-          question={i18n._("Join both spaces into one? Anything that differs will ask you to choose.")}
-          confirmLabel={i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
-          onConfirm={onJoin}
-          onCancel={() => onJoinConfirm(false)}
+/** One spex repository's row (space-1, space-61): the name owns the
+ * slack, the folder and code remote hide below @md (space-28). */
+function RepositoryRow({
+  repo,
+  now,
+  selected,
+  onSelect,
+}: {
+  repo: RepositoryState;
+  now: number;
+  selected: boolean;
+  onSelect(): void;
+}) {
+  const folder = repo.folder
+    ? tildify(repo.folder)
+    : repo.state === "absent"
+      ? i18n._("Not on this device")
+      : i18n._("No working folder here");
+  const code = repo.code
+    ? displayRemote(repo.code)
+    : i18n._({ id: "No code", comment: "a spex repository whose records name no code remote" });
+  const state = repositoryStatePhrase(repo, now);
+  const dot = statusDot(repo);
+  // The row is named by the repository alone, its folder, code and
+  // state describing it: a name that holds still while the state's
+  // age ticks on (DR-041).
+  const describe = (part: string) => `space-repo-${part}-${repo.key}`;
+  return (
+    <li className="@container min-w-0">
+      <button
+        type="button"
+        data-testid={`space-repo-${repo.key}`}
+        data-state={repo.state}
+        aria-label={repo.name}
+        aria-describedby={[describe("folder"), describe("code"), describe("state")].join(" ")}
+        aria-expanded={selected}
+        aria-controls={selected ? "space-repository" : undefined}
+        onClick={onSelect}
+        className={`flex w-full min-w-0 items-center gap-2 rounded px-2 py-1 text-left text-sm ${
+          selected
+            ? "bg-brand-50 text-brand-800 dark:bg-brand-950 dark:text-brand-200"
+            : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+        }`}
+      >
+        <span
+          aria-hidden
+          data-testid={`space-repo-dot-${repo.key}`}
+          title={dot.word}
+          className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot.className}`}
         />
-      </span>
-    ) : (
-      <span className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="space-primary"
-          className={PRIMARY}
-          disabled={disabled || pending}
-          // What Join does is the control's to say (DR-069), as the
-          // first-meeting card's Join says it; a running join's word
-          // says it already.
-          title={
-            joining
-              ? undefined
-              : i18n._("Brings both spaces into one and asks about anything that differs")
-          }
-          onClick={() => onJoinConfirm(true)}
+        <span className="min-w-0 flex-1 truncate font-medium" title={repo.key}>
+          {repo.name}
+        </span>
+        <span
+          id={describe("folder")}
+          data-testid={`space-repo-folder-${repo.key}`}
+          className="hidden min-w-0 max-w-[30%] truncate font-mono text-xs text-neutral-500 @md:inline"
+          title={repo.folder ?? undefined}
         >
-          {joining
-            ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
-            : i18n._({ id: "Join", comment: "confirm: join both spaces into one" })}
-        </button>
-        {actionError?.where === "primary" ? (
-          <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-            {actionError.message}
+          {folder}
+        </span>
+        <span
+          id={describe("code")}
+          data-testid={`space-repo-code-${repo.key}`}
+          className="hidden min-w-0 max-w-[30%] truncate font-mono text-xs text-neutral-500 @md:inline"
+          title={repo.code ?? undefined}
+        >
+          {code}
+        </span>
+        {repo.local.length > 0 ? (
+          <span className="shrink-0 text-xs text-neutral-500">
+            {i18n._("{count, plural, one {# change} other {# changes}}", { count: repo.local.length })}
           </span>
         ) : null}
+        <span
+          id={describe("state")}
+          data-testid={`space-repo-state-${repo.key}`}
+          className="min-w-0 max-w-[40%] shrink-0 truncate text-xs text-neutral-500"
+          title={repo.waiting ? repo.waiting.message : state}
+        >
+          {state}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** An opened spex repository (space-1): its state at a glance with the
+ * control its state offers, over its Sync and Explore tabs. */
+function RepositoryPanel({
+  groups,
+  repo,
+  now,
+  connected,
+  onOpenSession,
+  onNote,
+}: {
+  groups: GroupsState;
+  repo: RepositoryState;
+  now: number;
+  connected: boolean;
+  onOpenSession(sessionId: string): void;
+  onNote: Note;
+}) {
+  const spaceSync = useAppStore((state) => state.spaceSync);
+  const [tab, setTab] = useState<SpaceTab>("sync");
+  const [busy, setBusy] = useState<"join" | "sync">();
+  // A long command's reply is only "accepted": its control stays busy
+  // until the machine's state moves — the running frame, or an outcome
+  // that landed first — so nothing re-enables between the reply and
+  // the state (DR-010 §3, space-29).
+  const [accepted, setAccepted] = useState<{ op: "join" | "sync"; key: string }>();
+  const [confirm, setConfirm] = useState<"join" | "notice">();
+  const [actionError, setActionError] = useState<string>();
+
+  const sync = repo.sync;
+  const branch = repo.branch;
+  const running = sync.phase === "running";
+  const syncKey = JSON.stringify(sync);
+  useEffect(() => {
+    if (accepted && accepted.key !== syncKey) setAccepted(undefined);
+  }, [accepted, syncKey]);
+
+  const start = async (input: { join?: boolean; noticed?: boolean }) => {
+    const key = syncKey;
+    const op = input.join ? "join" : "sync";
+    setBusy(op);
+    setActionError(undefined);
+    try {
+      await spaceSync(repo.key, input);
+      setAccepted({ op, key });
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setActionError(message);
+      onNote(message);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const disabled = !connected;
+  const pending = busy !== undefined || accepted !== undefined || running;
+  const unrelated = sync.phase === "unrelated" || branch?.unrelated === true;
+  const refusal = syncRefusal(groups, repo);
+  // The first push to a repository others share says once what goes
+  // there (space-57); one whose only member is the account says nothing.
+  const needsNotice = !repo.noticed && (repo.members ?? 0) > 1;
+  const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
+  const syncing = busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
+
+  let primary: ReactNode;
+  if (confirm === "join") {
+    primary = (
+      <span data-testid="space-join-confirm">
+        <InlineConfirm
+          question={i18n._("Join both histories into one? Anything that differs will ask you to choose.")}
+          confirmLabel={i18n._({ id: "Join", comment: "confirm: join both histories into one" })}
+          onConfirm={() => {
+            setConfirm(undefined);
+            void start({ join: true });
+          }}
+          onCancel={() => setConfirm(undefined)}
+        />
+      </span>
+    );
+  } else if (confirm === "notice") {
+    primary = (
+      <span data-testid="space-notice-confirm">
+        <InlineConfirm
+          question={
+            repo.visibility === "public"
+              ? i18n._(
+                  "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
+                )
+              : i18n._(
+                  "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
+                )
+          }
+          confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
+          onConfirm={() => {
+            setConfirm(undefined);
+            void start({ noticed: true });
+          }}
+          onCancel={() => setConfirm(undefined)}
+        />
       </span>
     );
   } else {
-    const refusal = syncRefusal(space);
-    // A setup reads "Setting up…" from its init through its sync
-    // (space-6); a sync reads "Syncing…" from the click through its
-    // last frame. A Join begun from the card of space-45 reads its own.
-    const settingUp = i18n._({
-      id: "Setting up…",
-      comment: "the setup control, while the setup runs",
-    });
-    const label = joining
-      ? settingUp
-      : busy === "sync" || accepted === "sync" || (running && sync.op === "sync")
+    const label = unrelated
+      ? joining
+        ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
+        : i18n._({ id: "Join", comment: "confirm: join both histories into one" })
+      : syncing
         ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
-        : running && sync.op === "init"
-          ? settingUp
-          : i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" });
+        : i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" });
     primary = (
       <span className="flex min-w-0 flex-wrap items-center gap-2">
         <button
@@ -933,14 +857,20 @@ function Header({
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={disabled || refusal !== undefined || pending}
           aria-describedby={refusal || actionError ? "space-primary-caption" : undefined}
-          // What Sync does is the control's to say, not a card's
-          // (DR-069); a running control's word says it already.
+          // What the control does is its own to say (DR-069); a running
+          // control's word says it already.
           title={
-            joining || busy === "sync" || accepted === "sync" || running
+            pending
               ? undefined
-              : i18n._("Sends what is here and brings back anything new")
+              : unrelated
+                ? i18n._("Brings both histories into one and asks about anything that differs")
+                : i18n._("Sends what is here and brings back anything new")
           }
-          onClick={onSync}
+          onClick={() => {
+            if (unrelated) setConfirm("join");
+            else if (needsNotice) setConfirm("notice");
+            else void start({});
+          }}
         >
           {label}
         </button>
@@ -950,232 +880,198 @@ function Header({
             data-testid="space-primary-caption"
             className="min-w-0 text-xs text-neutral-500"
           >
-            {refusal.kind === "add-remote" ? (
-              <button type="button" className={LINK} onClick={onFocusRemote}>
-                {refusal.text}
-              </button>
-            ) : (
-              refusal.text
-            )}
+            {refusal}
           </span>
-        ) : actionError?.where === "primary" ? (
+        ) : actionError ? (
           <span
             id="space-primary-caption"
             role="alert"
             className="min-w-0 text-xs text-red-600 dark:text-red-400"
           >
-            {actionError.message}
+            {actionError}
           </span>
         ) : null}
       </span>
     );
   }
 
-  return (
-    <header
-      data-testid="space-header"
-      data-stale={connected ? undefined : "1"}
-      // Below @xs the fields stack with the primary control last and
-      // full-width; above it they flow in rows (space-28). While the
-      // core is unreachable the last known state stands, muted.
-      className={`flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 ${
-        connected ? "" : "opacity-70"
+  const onTabKey = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    const next: SpaceTab = tab === "sync" ? "explore" : "sync";
+    setTab(next);
+    document.getElementById(`space-tab-${next}`)?.focus();
+  };
+
+  const tabButton = (which: SpaceTab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      id={`space-tab-${which}`}
+      data-testid={`space-tab-${which}`}
+      aria-selected={tab === which}
+      aria-controls={`space-panel-${which}`}
+      tabIndex={tab === which ? 0 : -1}
+      onClick={() => setTab(which)}
+      onKeyDown={onTabKey}
+      className={`min-h-7 rounded px-3 py-1 text-sm ${
+        tab === which
+          ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+          : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
       }`}
     >
-      <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
-        <Field testId="space-path" title={space.home} className="min-w-0 flex-1">
-          <span className="min-w-0 truncate font-mono text-sm">{tildify(space.home)}</span>
-        </Field>
-        <PathControls path={space.home} testId="space-path" onNote={onNote} />
-      </div>
-      {space.git.ok ? (
-        <>
-          <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
-            <Field
-              testId="space-repository"
-              title={
-                repo
-                  ? i18n._({
-                      id: "branch {branch} · {status}",
-                      values: {
-                        branch:
-                          repo.branch ??
-                          i18n._({
-                            id: "none",
-                            comment: "stands where a branch name would; none is checked out",
-                          }),
-                        status: dot.word,
-                      },
-                      comment: "{status} is the space's status word",
-                    })
-                  : dot.word
-              }
-            >
-              <span
-                aria-hidden
-                data-testid="space-status-dot"
-                data-tone={dot.className.includes("emerald") ? "running" : dot.className.includes("amber") ? "attention" : dot.className.includes("red") ? "stopped" : "idle"}
-                className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot.className}`}
-              />
-              {repo ? (
-                <>
-                  <span className="font-mono text-sm">{repo.branch ?? noBranch()}</span>
-                  {repo.branch !== "main" ? (
-                    <span className="rounded-full border border-amber-400 px-1.5 text-xs text-amber-700 dark:text-amber-300">
-                      {i18n._({ id: "unsupported", comment: "mark on a branch the app cannot sync" })}
-                    </span>
-                  ) : null}
-                  {repo.identityFallback ? (
-                    <span
-                      className="text-xs text-neutral-500"
-                      title={i18n._(
-                        "Git has no committer identity on this machine, so the app commits as Spex at the machine's host name",
-                      )}
-                    >
-                      {i18n._({
-                        id: "· committed as Spex",
-                        comment: "follows the branch name in the header",
-                      })}
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                <span>{i18n._("Not a repository yet")}</span>
-              )}
-            </Field>
-            {repo ? (
-              <RemoteRow
-                remote={repo.remote}
-                disabled={disabled || running}
-                editing={remoteEditing}
-                onEditing={onRemoteEditing}
-                focusField={remoteFocus}
-              />
-            ) : null}
-          </div>
-          {repo ? (
-            <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
-              {repo.checkedAt !== null && !unrelated ? (
-                <Field
-                  testId="space-ahead-behind"
-                  title={i18n._(
-                    "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}",
-                    {
-                      ahead: repo.ahead ?? 0,
-                      behind: repo.behind ?? 0,
-                      at: absoluteTitle(repo.checkedAt),
-                    },
-                  )}
-                >
-                  {/* The words yield after the times (space-28): below
-                      28rem the numbers stand with the arrows, the words
-                      riding the accessible text. */}
-                  <span aria-hidden>↑</span>
-                  <span>
-                    {repo.ahead ?? 0}
-                    <span className="sr-only @md:not-sr-only">
-                      {i18n._({
-                        id: " ahead",
-                        comment: "follows the count of commits this device is ahead by",
-                      })}
-                    </span>
-                  </span>
-                  <span aria-hidden>↓</span>
-                  <span>
-                    {repo.behind ?? 0}
-                    <span className="sr-only @md:not-sr-only">
-                      {i18n._({
-                        id: " behind",
-                        comment: "follows the count of commits this device is behind by",
-                      })}
-                    </span>
-                  </span>
-                  <span className="hidden text-neutral-500 @2xl:inline">
-                    {i18n._("· checked {age}", { age: relativeAge(repo.checkedAt, now) })}
-                  </span>
-                </Field>
-              ) : null}
-              <Field
-                testId="space-last-sync"
-                title={space.lastSync ? absoluteTitle(space.lastSync.at) : undefined}
-              >
-                {space.lastSync ? (
-                  <span>
-                    {i18n._({ id: "Synced", comment: "header field: this space last synced" })}
-                    <span className="sr-only @2xl:not-sr-only">
-                      {" "}
-                      {relativeAge(space.lastSync.at, now)}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="text-neutral-500">{i18n._("Never synced")}</span>
-                )}
-              </Field>
-              <button
-                type="button"
-                data-testid="space-local-count"
-                // The count links into the Sync tab; its words fit the
-                // control budget and the whole phrase rides the name
-                // (space-28, DR-041).
-                aria-label={i18n._(
-                  "{count, plural, one {# local change} other {# local changes}}",
-                  { count: space.local.length },
-                )}
-                title={i18n._("Units this device changed, listed under Sync")}
-                className="text-sm hover:underline"
-                onClick={onShowSync}
-              >
-                {i18n._("{count, plural, one {# change} other {# changes}}", {
-                  count: space.local.length,
-                })}
-              </button>
-              {space.diagnostics.length > 0 ? (
-                <button
-                  type="button"
-                  data-testid="space-issues"
-                  aria-expanded={issuesOpen}
-                  // Amber and the warning glyph say attention is owed.
-                  // With nothing unanswered none is, so the control
-                  // stays reachable while reading as settled.
-                  className={`flex items-center gap-1 text-sm hover:underline ${
-                    issueCount > 0
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-neutral-500"
-                  }`}
-                  onClick={() => onIssuesOpen(!issuesOpen)}
-                >
-                  {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
-                  {issueCount > 0
-                    ? i18n._("{count, plural, one {# issue} other {# issues}}", {
-                        count: issueCount,
-                      })
-                    : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      ) : (
-        <div data-testid="space-no-git" className="text-sm">
-          <p className="font-medium">{i18n._("Git is not installed")}</p>
-          <p className="text-xs text-neutral-500">{space.git.guidance}</p>
+      {label}
+    </button>
+  );
+
+  const dot = statusDot(repo);
+  const root = clonePath(groups.home, repo.key);
+  return (
+    <section
+      id="space-repository"
+      data-testid="space-repository"
+      aria-label={repo.name}
+      className="flex min-h-0 flex-1 flex-col gap-3"
+    >
+      <div
+        data-testid="space-repository-header"
+        className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+      >
+        <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
+          <Field testId="space-repository-name" title={`${repo.key} · ${dot.word}`} className="min-w-0 flex-1">
+            <span
+              aria-hidden
+              data-testid="space-status-dot"
+              data-tone={dot.className.includes("emerald") ? "running" : dot.className.includes("amber") ? "attention" : dot.className.includes("red") ? "stopped" : "idle"}
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot.className}`}
+            />
+            <span className="min-w-0 truncate font-medium">{repo.name}</span>
+            <span className="min-w-0 truncate text-xs text-neutral-500">
+              {repositoryStatePhrase(repo, now)}
+            </span>
+          </Field>
+          <PathControls path={root} testId="space-clone-path" onNote={onNote} compact />
         </div>
-      )}
-      {space.outside.map((entry) => (
-        <Field
-          key={entry.what}
-          testId={`space-outside-${entry.what}`}
-          title={entry.path}
-          className="text-xs text-neutral-500"
-        >
-          {entry.what === "config"
-            ? i18n._("Configuration outside the space; not shared")
-            : i18n._("Sessions directory outside the space; not shared")}
-        </Field>
-      ))}
-      {primary ? (
-        <div className="flex min-w-0 flex-col @xs:flex-row @xs:justify-end">{primary}</div>
-      ) : null}
-    </header>
+        <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
+          {branch && branch.checkedAt !== null && !unrelated ? (
+            <Field
+              testId="space-ahead-behind"
+              title={i18n._(
+                "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}",
+                {
+                  ahead: branch.ahead ?? 0,
+                  behind: branch.behind ?? 0,
+                  at: absoluteTitle(branch.checkedAt),
+                },
+              )}
+            >
+              {/* The words yield after the times (space-28): below
+                  28rem the numbers stand with the arrows, the words
+                  riding the accessible text. */}
+              <span aria-hidden>↑</span>
+              <span>
+                {branch.ahead ?? 0}
+                <span className="sr-only @md:not-sr-only">
+                  {i18n._({
+                    id: " ahead",
+                    comment: "follows the count of commits this device is ahead by",
+                  })}
+                </span>
+              </span>
+              <span aria-hidden>↓</span>
+              <span>
+                {branch.behind ?? 0}
+                <span className="sr-only @md:not-sr-only">
+                  {i18n._({
+                    id: " behind",
+                    comment: "follows the count of commits this device is behind by",
+                  })}
+                </span>
+              </span>
+              <span className="hidden text-neutral-500 @2xl:inline">
+                {i18n._("· checked {age}", { age: relativeAge(branch.checkedAt, now) })}
+              </span>
+            </Field>
+          ) : null}
+          <Field
+            testId="space-last-sync"
+            title={repo.lastSync ? absoluteTitle(repo.lastSync.at) : undefined}
+          >
+            {repo.lastSync ? (
+              <span>
+                {i18n._({ id: "Synced", comment: "header field: this space last synced" })}
+                <span className="sr-only @2xl:not-sr-only">
+                  {" "}
+                  {relativeAge(repo.lastSync.at, now)}
+                </span>
+              </span>
+            ) : (
+              <span className="text-neutral-500">{i18n._("Never synced")}</span>
+            )}
+          </Field>
+          <button
+            type="button"
+            data-testid="space-local-count"
+            // The count links into the Sync tab; its words fit the
+            // control budget and the whole phrase rides the name
+            // (space-28, DR-041).
+            aria-label={i18n._(
+              "{count, plural, one {# local change} other {# local changes}}",
+              { count: repo.local.length },
+            )}
+            title={i18n._("Units this device changed, listed under Sync")}
+            className="text-sm hover:underline"
+            onClick={() => setTab("sync")}
+          >
+            {i18n._("{count, plural, one {# change} other {# changes}}", {
+              count: repo.local.length,
+            })}
+          </button>
+          <RemoteRow repository={repo.key} disabled={disabled || running} />
+        </div>
+        {repo.state !== "absent" ? (
+          <div className="flex min-w-0 flex-col @xs:flex-row @xs:justify-end">{primary}</div>
+        ) : null}
+      </div>
+      <div
+        role="tablist"
+        aria-label={i18n._("Space views")}
+        className="flex flex-wrap items-center gap-1 border-b border-neutral-200 pb-1 dark:border-neutral-800"
+      >
+        {tabButton(
+          "sync",
+          i18n._({ id: "Sync", comment: "tab and control: send and bring back changes" }),
+        )}
+        {tabButton(
+          "explore",
+          i18n._({ id: "Explore", comment: "tab: browse the files in the space" }),
+        )}
+      </div>
+      <div
+        role="tabpanel"
+        id={`space-panel-${tab}`}
+        aria-labelledby={`space-tab-${tab}`}
+        className="flex min-h-0 flex-1 flex-col gap-3"
+      >
+        {tab === "sync" ? (
+          <SyncTab
+            groups={groups}
+            repo={repo}
+            now={now}
+            connected={connected}
+            onOpenSession={onOpenSession}
+            onNote={onNote}
+          />
+        ) : (
+          <ExploreTab
+            repo={repo}
+            root={root}
+            connected={connected}
+            onOpenSession={onOpenSession}
+            onNote={onNote}
+          />
+        )}
+      </div>
+    </section>
   );
 }

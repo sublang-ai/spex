@@ -128,16 +128,40 @@ export function OverviewTab({
 
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // The second confirm (projects-9): the core refused the first with
+  // `conflict`, naming what has not reached the host; its words ride
+  // the question so the reader sees what would be lost.
+  const [unsent, setUnsent] = useState<string>();
   const removeRef = useRef<HTMLButtonElement>(null);
   const returnToRemove = useRef(false);
   // Keep — or a failed removal — hands focus back to the control the
   // confirm replaced, never to the page body (DR-010 §6).
   useEffect(() => {
-    if (!confirmRemove && returnToRemove.current) {
+    if (!confirmRemove && unsent === undefined && returnToRemove.current) {
       returnToRemove.current = false;
       removeRef.current?.focus();
     }
-  }, [confirmRemove, error]);
+  }, [confirmRemove, unsent, error]);
+
+  /** Remove, the second time with `confirm` (projects-9): a clone
+   * holding what has not reached the host is refused `conflict` the
+   * first time, and the second confirm asks again with the count. */
+  const remove = (confirm: boolean) => {
+    if (!project) return;
+    removeProject(project.id, confirm)
+      .then(() => {
+        onRemoved();
+        focusDashboardEntry();
+      })
+      .catch((cause: Error & { code?: string }) => {
+        if (!confirm && cause.code === "conflict") {
+          setUnsent(cause.message);
+          return;
+        }
+        returnToRemove.current = true;
+        setError(cause.message);
+      });
+  };
 
   const project = projects.find((entry) => entry.id === projectId);
   const meta = projectMeta[projectId];
@@ -194,7 +218,29 @@ export function OverviewTab({
         >
           <Icon name="refresh" />
         </button>
-        {confirmRemove ? (
+        {unsent !== undefined ? (
+          <span data-testid="remove-project-unsent">
+            <InlineConfirm
+              question={i18n._("{reason} Remove anyway?", { reason: unsent })}
+              confirmLabel={i18n._({
+                id: "Remove",
+                comment: "confirm: forget this project, leaving the repo on disk",
+              })}
+              cancelLabel={i18n._({
+                id: "Keep",
+                comment: "cancel a destructive confirm: leave things as they are",
+              })}
+              onConfirm={() => {
+                setUnsent(undefined);
+                remove(true);
+              }}
+              onCancel={() => {
+                returnToRemove.current = true;
+                setUnsent(undefined);
+              }}
+            />
+          </span>
+        ) : confirmRemove ? (
           // Removal forgets a project: the one confirm this tab keeps
           // (projects-9, DR-010 §4).
           <InlineConfirm
@@ -209,15 +255,8 @@ export function OverviewTab({
             })}
             onConfirm={() => {
               setConfirmRemove(false);
-              removeProject(project.id)
-                .then(() => {
-                  onRemoved();
-                  focusDashboardEntry();
-                })
-                .catch((cause: Error) => {
-                  returnToRemove.current = true;
-                  setError(cause.message);
-                });
+              setError(undefined);
+              remove(false);
             }}
             onCancel={() => {
               returnToRemove.current = true;

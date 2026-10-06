@@ -1301,7 +1301,6 @@ function makeIntent(over: Partial<IntentInfo> & { id: string }): IntentInfo {
   return {
     projectId: "p1",
     text: "Address #7: fix the login bug\nfull context for the run",
-    rank: "m",
     createdAt: 0,
     ...over,
   };
@@ -1783,13 +1782,8 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
 
   test("the resolved card trusts the published waiting row, not an earlier queued row", async () => {
     const earlier: DerivedIntent = {
-      intent: makeIntent({ id: "i-earlier", text: "Blocked-looking earlier row" }),
+      intent: makeIntent({ id: "i-earlier", text: "Unpublished earlier row" }),
       state: "queued",
-      blockedBy: {
-        intentId: "i-predecessor",
-        title: "Earlier prerequisite",
-        projectId: "p1",
-      },
     };
     const waiting: DerivedIntent = {
       ...QUEUED_NEXT,
@@ -1816,59 +1810,11 @@ describe("run-view-94/87: the delivery card and confirm-pulls-next", () => {
     );
     const card = screen.getByTestId("delivery-card-i1");
     expect(card.textContent).toContain("Published waiting row");
-    expect(card.textContent).not.toContain("Blocked-looking earlier row");
+    expect(card.textContent).not.toContain("Unpublished earlier row");
     expect(within(card).getByTestId("resolved-next-standing").textContent).toBe(
       "waiting — current work failed — Committed nothing",
     );
     expect(within(card).queryByTestId("upnext-start")).toBeNull();
-  });
-
-  test("an after-linked-only queue stays visible with its reason", async () => {
-    const blocked: DerivedIntent = {
-      intent: makeIntent({
-        id: "i-blocked",
-        text: "Ship the dependent release\nfull context",
-      }),
-      state: "queued",
-      blockedBy: {
-        intentId: "i-upstream",
-        title: "Publish the upstream release",
-        projectId: "p2",
-      },
-    };
-    seedLedger({ intents: [FINISHED, blocked], attention: [], badge: 1 });
-    useAppStore.setState({
-      projects: [
-        {
-          id: "p2",
-          name: "upstream",
-          path: "/tmp/upstream",
-          registeredAt: 0,
-        },
-      ],
-    });
-    servedLedger = { intents: [blocked], attention: [], badge: 0 };
-    renderRunWith(TURN_ONE);
-
-    fireEvent.click(screen.getByTestId("delivery-confirm"));
-    await vi.waitFor(() =>
-      expect(screen.getByTestId("delivery-card-i1").getAttribute("data-settled")).toBe(
-        "1",
-      ),
-    );
-    const card = screen.getByTestId("delivery-card-i1");
-    expect(card.textContent).toContain("Ship the dependent release");
-    expect(card.textContent).not.toContain("Up next:");
-    expect(within(card).getByTestId("resolved-next-queued").textContent).toBe(
-      "Queued",
-    );
-    const reason = within(card).getByTestId("resolved-next-blocked");
-    expect(reason.textContent).toBe(
-      "after Publish the upstream release (upstream)",
-    );
-    expect(reason.getAttribute("title")).toBe(reason.textContent);
-    expect(within(card).queryByTestId("upnext-start")).toBeNull();
-    expect(within(card).queryByTestId("upnext-add-input")).toBeNull();
   });
 
   test("an empty queue resolves into the inline add affordance", async () => {

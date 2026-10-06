@@ -130,7 +130,10 @@ export function AuthoringWorkspace({
   onBack: () => void;
 }) {
   const draft = useAppStore((state) => state.drafts[draftId]);
-  const media = useComposerAttachments(draftAttachmentKey(draftId), { kind: "draft", id: draftId });
+  const media = useComposerAttachments(
+    draftAttachmentKey(draftId),
+    draft ? { kind: "draft", projectId: draft.projectId, id: draftId } : undefined,
+  );
   const draftView = useAppStore((state) => state.draftViews[draftId]);
   const source = useAppStore((state) => state.draftSources[draftId]);
   const artifacts = useAppStore((state) => state.draftArtifacts[draftId]);

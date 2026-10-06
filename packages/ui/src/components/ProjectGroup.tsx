@@ -5,7 +5,7 @@
 // Now, Up next, and Sources, drawn by this one component wherever the
 // group appears — the Dashboard lists every project's, the Overview
 // tab pins one (projects-4, DR-038, DR-027). Every state here is
-// derived; the group writes only Boss acts (queue, move, close,
+// derived; the group writes only Boss acts (queue, edit, close,
 // remove) and the Dashboard's reader-owned disclosure preference.
 
 import {
@@ -13,7 +13,6 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
-  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import type {
@@ -28,7 +27,7 @@ import type {
   SpecTreeState,
 } from "@sublang/spex-core/protocol";
 
-import { useAppStore, type ProjectMeta } from "../state/store.js";
+import { intentMediaOwner, useAppStore, type ProjectMeta } from "../state/store.js";
 import type { SessionView } from "../state/reducer.js";
 import {
   ATTENTION_MARK_CLASS,
@@ -59,7 +58,6 @@ import { ResizableFrame } from "./ResizableFrame.js";
 import { Rich } from "./Rich.js";
 import {
   QueuedMark,
-  queueAfterLinkPhrase,
   QueueStandingPhrase,
 } from "./QueuedIntentPresentation.js";
 
@@ -71,7 +69,8 @@ export function firstLine(text: string): string {
   return text.split(/\r?\n/, 1)[0] ?? text;
 }
 
-/** A project's queue in served (rank) order. */
+/** A project's queue in the order the core serves it: oldest first
+ * (dashboard-29, core-service-107). */
 export function queueOf(
   intents: DerivedIntent[],
   projectId: string,
@@ -1028,30 +1027,8 @@ function ProvenanceAction({
   );
 }
 
-/** The drag affordance at the row's left (dashboard-29): six quiet
- * dots under a grab cursor; the row itself is what drags. */
-function Grip() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      className="h-4 w-3 shrink-0 cursor-grab text-neutral-300 group-hover:text-neutral-500 active:cursor-grabbing dark:text-neutral-600 dark:group-hover:text-neutral-400"
-    >
-      <circle cx="5.5" cy="3.5" r="1.4" />
-      <circle cx="10.5" cy="3.5" r="1.4" />
-      <circle cx="5.5" cy="8" r="1.4" />
-      <circle cx="10.5" cy="8" r="1.4" />
-      <circle cx="5.5" cy="12.5" r="1.4" />
-      <circle cx="10.5" cy="12.5" r="1.4" />
-    </svg>
-  );
-}
-
 function QueueRow({
   derived,
-  index,
-  queue,
   highlighted,
   menuOpen,
   projects,
@@ -1059,17 +1036,12 @@ function QueueRow({
   sessionKnown,
   onMenuToggle,
   onStart,
-  onMove,
   onEdit,
   onRemove,
   onOpenIntent,
   onOpenSession,
-  onDragStart,
-  onDropOn,
 }: {
   derived: DerivedIntent;
-  index: number;
-  queue: DerivedIntent[];
   highlighted: boolean;
   /** Whether this row's menu is the band's one open menu. */
   menuOpen: boolean;
@@ -1079,16 +1051,15 @@ function QueueRow({
   /** Whether a chat-sourced row's capturing session still exists. */
   sessionKnown: boolean;
   onMenuToggle: (open: boolean) => void;
+  /** Dispatch this row's intent: the next row's visible Start and any
+   * row's menu Start take the same act (dashboard-29). */
   onStart: () => void;
-  onMove: (afterIntentId: string | null) => void;
   onEdit: (text: string, attachments: readonly MediaAsset[]) => Promise<void>;
   /** Remove acts on the click; a keyboard-driven one hands focus to
    * the Undo line (dashboard-29). */
   onRemove: (byKeyboard: boolean) => Promise<void>;
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
   onOpenSession: (sessionId: string) => void;
-  onDragStart: () => void;
-  onDropOn: () => void;
 }) {
   const [editing, setEditing] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -1108,31 +1079,9 @@ function QueueRow({
   const ownerName =
     projects.find((project) => project.id === intent.projectId)?.name ??
     intent.projectId;
-  const blocked = derived.blockedBy;
-  // Presence is the core-published Next marker (core-service-107).
-  // A blocked row cannot be next; fail closed if a malformed reply
-  // ever combines the two.
-  const schedule = blocked ? undefined : derived.next;
-  const blockedPhrase = blocked
-    ? queueAfterLinkPhrase(blocked, intent.projectId, projects)
-    : undefined;
-
-  // One move vocabulary (dashboard-29): the menu's Move up/down and
-  // Alt+↑/↓ on the focused row take the same step.
-  const canMoveUp = index > 0;
-  const canMoveDown = index < queue.length - 1;
-  const moveUp = () => onMove(index >= 2 ? queue[index - 2].intent.id : null);
-  const moveDown = () => onMove(queue[index + 1].intent.id);
-  const onKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
-    if (!event.altKey) return;
-    if (event.key === "ArrowUp" && canMoveUp) {
-      event.preventDefault();
-      moveUp();
-    } else if (event.key === "ArrowDown" && canMoveDown) {
-      event.preventDefault();
-      moveDown();
-    }
-  };
+  // Presence is the core-published Next marker (core-service-107):
+  // the oldest queued row.
+  const schedule = derived.next;
 
   // Leaving the edit — saved or cancelled — puts focus back on the
   // row it replaced, never on the page body (DR-010 §6).
@@ -1195,45 +1144,24 @@ function QueueRow({
       data-testid={`upnext-row-${intent.id}`}
       data-intent-id={intent.id}
       data-next={schedule ? "true" : undefined}
-      data-blocked={blocked ? "true" : undefined}
       data-highlight={highlighted ? "true" : undefined}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDropOn();
-      }}
       tabIndex={0}
-      onKeyDown={onKeyDown}
-      title={i18n._("Drag, Alt+↑/↓, or the row menu reorders")}
       className={`@container group relative flex min-h-6 items-center gap-2 rounded px-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         highlighted ? "ring-2 ring-brand-400" : ""
       }`}
     >
-      <Grip />
       <div
         data-testid={`upnext-text-${intent.id}`}
         className="flex min-w-0 flex-1 flex-col @md:flex-row @md:items-baseline @md:gap-2"
       >
         <span
           data-testid={`upnext-title-${intent.id}`}
-          className={`min-w-0 truncate @md:flex-1 ${schedule ? "font-medium" : ""} ${
-            blocked ? "text-neutral-500" : ""
-          }`}
+          className={`min-w-0 truncate @md:flex-1 ${schedule ? "font-medium" : ""}`}
           title={intent.text}
         >
           {title}
         </span>
-        {blocked ? (
-          <span
-            className="min-w-0 truncate text-xs text-neutral-500 @md:max-w-[45%]"
-            data-testid={`upnext-blocked-${intent.id}`}
-            title={blockedPhrase}
-          >
-            {blockedPhrase}
-          </span>
-        ) : schedule ? (
+        {schedule ? (
           <QueueStandingPhrase
             schedule={schedule}
             testId={`upnext-standing-${intent.id}`}
@@ -1290,35 +1218,18 @@ function QueueRow({
           aria-label={i18n._("Actions for {title}", { title })}
           className="absolute right-0 top-full z-10 mt-0.5 flex min-w-44 flex-col rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
-          {/* A single-pointer alternative to dragging (WCAG 2.2 2.5.7). */}
+          {/* The queue has no order of its own to change: age orders
+              it, and any row may be started directly (dashboard-29). */}
           <MenuItem
-            data-testid={`upnext-moveup-action-${intent.id}`}
-            disabled={!canMoveUp}
-            aria-keyshortcuts="Alt+ArrowUp"
-            hint="Alt+↑"
+            data-testid={`upnext-start-action-${intent.id}`}
             onClick={() => {
               onMenuToggle(false);
-              moveUp();
+              onStart();
             }}
           >
             {i18n._({
-              id: "Move up",
-              comment: "row menu item: one step earlier in the queue",
-            })}
-          </MenuItem>
-          <MenuItem
-            data-testid={`upnext-movedown-action-${intent.id}`}
-            disabled={!canMoveDown}
-            aria-keyshortcuts="Alt+ArrowDown"
-            hint="Alt+↓"
-            onClick={() => {
-              onMenuToggle(false);
-              moveDown();
-            }}
-          >
-            {i18n._({
-              id: "Move down",
-              comment: "row menu item: one step later in the queue",
+              id: "Start",
+              comment: "queue row control: begin this queued intent",
             })}
           </MenuItem>
           <MenuItem
@@ -1328,7 +1239,7 @@ function QueueRow({
               const state = useAppStore.getState();
               const retained = state.attachmentDraftTexts[mediaKey];
               if (retained === undefined) {
-                state.stageAttachmentAssets(mediaKey, { kind: "project", id: intent.projectId }, intent.attachments ?? []);
+                state.stageAttachmentAssets(mediaKey, intentMediaOwner(intent), intent.attachments ?? []);
                 state.setAttachmentDraftText(mediaKey, intent.text);
               }
               setEditing(retained ?? intent.text);
@@ -1369,11 +1280,9 @@ function QueueRow({
 }
 
 /** A removal held for Undo (dashboard-29): the row's text and
- * provenance, and the row it followed, so Undo puts it back where it
- * was. */
+ * provenance, which Undo captures again. */
 interface Removal {
   intent: IntentInfo;
-  afterId: string | null;
   error?: string;
 }
 
@@ -1402,7 +1311,6 @@ function UpNextBand({
   onOpenSession: (sessionId: string) => void;
   onCapture: (input: CaptureInput) => Promise<IntentInfo>;
 }) {
-  const moveIntent = useAppStore((state) => state.moveIntent);
   const editIntent = useAppStore((state) => state.editIntent);
   const closeIntent = useAppStore((state) => state.closeIntent);
   const loadLedger = useAppStore((state) => state.loadLedger);
@@ -1417,7 +1325,6 @@ function UpNextBand({
   // One row menu open at a time (dashboard-29): the band holds whose.
   const [menuFor, setMenuFor] = useState<string>();
   const [focusRowId, setFocusRowId] = useState<string>();
-  const dragged = useRef<string | undefined>(undefined);
   const bandRef = useRef<HTMLDivElement>(null);
   // The six-second Undo line, taking focus only from a keyboard-driven
   // removal (dashboard-29).
@@ -1445,19 +1352,16 @@ function UpNextBand({
     setFocusRowId(undefined);
   }, [focusRowId, queue]);
 
-  const remove = async (index: number, byKeyboard: boolean) => {
-    const intent = queue[index].intent;
-    const afterId = index > 0 ? queue[index - 1].intent.id : null;
+  const remove = async (intent: IntentInfo, byKeyboard: boolean) => {
     try {
       // A queued intent has never run, so the core's drop leaves no
       // trace (core-service-46): the row's Remove.
       await closeIntent(intent.id, "dropped");
-      show({ intent, afterId }, { byKeyboard });
+      show({ intent }, { byKeyboard });
     } catch (cause) {
       show(
         {
           intent,
-          afterId,
           error: i18n._("Couldn't remove “{title}”: {reason}", {
             title: intentTitle(intent),
             reason: (cause as Error).message,
@@ -1470,28 +1374,22 @@ function UpNextBand({
 
   const undo = async () => {
     if (!removed || removed.error) return;
-    const { intent, afterId } = removed;
+    const { intent } = removed;
     dismiss();
     try {
+      // Captured again, it takes its place by age: the queue has no
+      // order of its own to restore (dashboard-29).
       const restored = await onCapture({
         projectId: project.id,
         text: intent.text,
         ...(intent.attachments ? { attachments: intent.attachments } : {}),
         source: intent.source,
       });
-      if (queue.length > 0) {
-        try {
-          await moveIntent(restored.id, afterId);
-        } catch {
-          // The row is back; its former place is best effort.
-        }
-      }
       setFocusRowId(restored.id);
     } catch (cause) {
       show(
         {
           intent,
-          afterId,
           error: i18n._("Couldn't undo: {reason}", {
             reason: (cause as Error).message,
           }),
@@ -1539,14 +1437,12 @@ function UpNextBand({
         </div>
       ) : null}
       <ul className="flex flex-col gap-0.5">
-        {queue.map((derived, index) => {
+        {queue.map((derived) => {
           const source = derived.intent.source;
           return (
             <QueueRow
               key={derived.intent.id}
               derived={derived}
-              index={index}
-              queue={queue}
               highlighted={derived.intent.id === highlightId}
               menuOpen={menuFor === derived.intent.id}
               projects={projects}
@@ -1570,28 +1466,10 @@ function UpNextBand({
                 )
               }
               onStart={() => void onStartIntent(derived.intent)}
-              onMove={(afterIntentId) =>
-                void moveIntent(derived.intent.id, afterIntentId)
-              }
               onEdit={(text, attachments) => editIntent(derived.intent.id, text, attachments)}
-              onRemove={(byKeyboard) => remove(index, byKeyboard)}
+              onRemove={(byKeyboard) => remove(derived.intent, byKeyboard)}
               onOpenIntent={onOpenIntent}
               onOpenSession={onOpenSession}
-              onDragStart={() => {
-                dragged.current = derived.intent.id;
-              }}
-              onDropOn={() => {
-                const from = dragged.current;
-                dragged.current = undefined;
-                if (!from || from === derived.intent.id) return;
-                // Dropping lands the dragged row at the target's place:
-                // after the row above the target, skipping itself.
-                const rest = queue.filter((entry) => entry.intent.id !== from);
-                const at = rest.findIndex(
-                  (entry) => entry.intent.id === derived.intent.id,
-                );
-                void moveIntent(from, at > 0 ? rest[at - 1].intent.id : null);
-              }}
             />
           );
         })}

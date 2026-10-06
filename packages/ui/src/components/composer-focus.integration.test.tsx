@@ -85,7 +85,7 @@ test("run-view-24: submission completion restores input when focus is unclaimed"
 test.each([false, true])("run-view-94: a busy Drop hands off temporary focus unless the reader moved it (%s)", async (selectLane) => {
   useAppStore.setState({
     ledger: {intents: [{state: "working", intent: {
-      id: "drop-intent", projectId: session.projectId, text: "Drop me midway", rank: "m", createdAt: 0,
+      id: "drop-intent", projectId: session.projectId, text: "Drop me midway", createdAt: 0,
       dispatched: {sessionId: session.id, turnId: 1, at: 1},
     }}], attention: [], badge: 0},
     closeIntent: async () => {useAppStore.setState({ledger: {intents: [], attention: [], badge: 0}});},

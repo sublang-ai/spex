@@ -33,7 +33,7 @@ async function dropWhileBusy() {
   setClientForTests({ command } as never);
   useAppStore.setState({ collapsedLanes: {}, stagedIntents: {}, ledger: {
     intents: [{ intent: { id: "drop-intent", projectId: session.projectId, text: "Drop me midway",
-      rank: "m", createdAt: 0, dispatched: { sessionId: session.id, turnId: 1, at: 0 } }, state: "working" }],
+      createdAt: 0, dispatched: { sessionId: session.id, turnId: 1, at: 0 } }, state: "working" }],
     attention: [], badge: 0,
   } });
   const view = applyRecords(initialSessionView(PLAYERS), [record(1, {

@@ -146,9 +146,20 @@ const SOURCE = {
   by: "agent" as const,
 };
 
+/** The project whose spex repository holds the drafts (storage-23). */
+const PROJECT_ID = "me/demo-spex";
+const PROJECT = {
+  id: PROJECT_ID,
+  path: "/work/demo",
+  name: "demo",
+  registeredAt: now - 30 * HOUR,
+  repository: { key: PROJECT_ID, name: "demo-spex", group: "me", own: true },
+};
+
 function draftInfo(overrides: Partial<DraftInfo> = {}): DraftInfo {
   return {
     id: "triage",
+    projectId: PROJECT_ID,
     createdAt: now - 10 * HOUR,
     touchedAt: now - 9 * HOUR,
     firstLine: "# Triage",
@@ -249,6 +260,8 @@ function seed(overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}) 
     newPlaybookRequested: false,
     revealPlaybook: undefined,
     frameHeights: {},
+    projects: [PROJECT],
+    currentProjectId: PROJECT_ID,
     ...overrides,
   });
 }
@@ -434,7 +447,7 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     fireEvent.change(input, { target: { value: "triage" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { draftId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: "triage" }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("authoring-workspace")).toBeTruthy());
     const header = screen.getByTestId("authoring-workspace").querySelector("header")!;
@@ -449,7 +462,42 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     fireEvent.keyDown(again, { key: "Enter" });
     await vi.waitFor(() => expect(screen.getByTestId("authoring-workspace").textContent).toContain("changelog"));
     expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
-    expect(commandMock).toHaveBeenCalledWith("draft.open", expect.objectContaining({ draftId: "changelog" }));
+    expect(commandMock).toHaveBeenCalledWith("draft.open", expect.objectContaining({ projectId: PROJECT_ID, draftId: "changelog" }));
+  });
+
+  test("a draft is made in the current project's spex repository, else the first registered one's", async () => {
+    const other = { ...PROJECT, id: "acme/tools-spex", name: "tools", repository: { key: "acme/tools-spex", name: "tools-spex", group: "acme", own: false } };
+    seed({ projects: [PROJECT, other], currentProjectId: "acme/tools-spex" });
+    render(<LibrarySurface />);
+    const input = screen.getByTestId("new-playbook-id");
+    fireEvent.change(input, { target: { value: "triage" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "triage" }),
+    );
+    cleanup();
+
+    commandMock.mockClear();
+    seed({ projects: [other, PROJECT], currentProjectId: undefined });
+    render(<LibrarySurface />);
+    const field = screen.getByTestId("new-playbook-id");
+    fireEvent.change(field, { target: { value: "intake" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "intake" }),
+    );
+  });
+
+  test("with no project registered the field stands disabled and says why", () => {
+    seed({ projects: [], currentProjectId: undefined });
+    render(<LibrarySurface />);
+    const input = screen.getByTestId("new-playbook-id") as HTMLInputElement;
+    const button = screen.getByTestId("new-playbook-button") as HTMLButtonElement;
+    expect(input.disabled).toBe(true);
+    expect(button.disabled).toBe(true);
+    expect(screen.getByTestId("new-playbook-caption").textContent).toBe("Add a project first");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
   });
 });
 
@@ -467,7 +515,7 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     fireEvent.click(screen.getByTestId("draft-delete-triage"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.delete", { draftId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage" }),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("draft-row-triage")).toBeNull());
   });
@@ -476,7 +524,7 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     renderWorkspace(draftInfo(), { view: foldView(THREAD) });
     expect(screen.getByTestId("authoring-workspace")).toBeTruthy();
     act(() => {
-      deliverServerMessageForTests({ type: "draft.removed", draftId: "triage" });
+      deliverServerMessageForTests({ type: "draft.removed", projectId: PROJECT_ID, draftId: "triage" });
     });
     expect(screen.queryByTestId("authoring-workspace")).toBeNull();
     expect(screen.queryByTestId("drafts-section")).toBeNull();
@@ -588,7 +636,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("tab-dot-source")).toBeTruthy();
     fireEvent.click(compile());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.compile", { draftId: "triage" }, { timeoutMs: 0 }),
+      expect(commandMock).toHaveBeenCalledWith("draft.compile", { projectId: PROJECT_ID, draftId: "triage" }, { timeoutMs: 0 }),
     );
 
     act(() => {
@@ -893,7 +941,7 @@ describe("playbook-library-54: the composer", () => {
     fireEvent.change(field, { target: { value: "Triage issues into labels" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.send", { draftId: "triage", text: "Triage issues into labels" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", text: "Triage issues into labels" }),
     );
     await vi.waitFor(() => expect(field.value).toBe(""));
   });
@@ -908,7 +956,7 @@ describe("playbook-library-54: the composer", () => {
     expect(queue.textContent).toContain("sends after the reply");
     fireEvent.click(screen.getByTestId("draft-abort"));
     expect(screen.getByTestId("draft-abort").textContent).toBe("Aborting…");
-    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.abort", { draftId: "triage" }));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, draftId: "triage" }));
     // A canceled turn leaves the queue standing.
     expect(screen.getByTestId("draft-queue").textContent).toContain("Also cite the label definitions");
   });
@@ -973,7 +1021,7 @@ describe("playbook-library-55: the agent picker", () => {
     expect(within(picker).getByLabelText("dev.reviewer: codex · gpt-6-astra (not ready)")).toBeTruthy();
     fireEvent.click(within(picker).getByTestId("agent-option-dev.reviewer"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.player.set", { draftId: "triage", playerId: "dev.reviewer" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.player.set", { projectId: PROJECT_ID, draftId: "triage", playerId: "dev.reviewer" }),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("agent-picker")).toBeNull());
     expect(screen.getByTestId("draft-agent").textContent).toContain("dev.reviewer");
@@ -999,6 +1047,7 @@ describe("playbook-library-56: the Source tab", () => {
     fireEvent.click(screen.getByTestId("editor-save"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("draft.source.write", {
+        projectId: PROJECT_ID,
         draftId: "triage",
         content: "# Triage\n\nRewritten.",
         baseVersion: "v1",
@@ -1024,7 +1073,7 @@ describe("playbook-library-56: the Source tab", () => {
     expect(within(strip).getByTestId("editor-reload")).toBeTruthy();
     fireEvent.click(within(strip).getByTestId("editor-overwrite"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", content: "# Triage\n\nMine." }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", content: "# Triage\n\nMine." }),
     );
   });
 
@@ -1067,7 +1116,7 @@ describe("playbook-library-56: the Source tab", () => {
     fireEvent.change(screen.getByTestId("paste-text"), { target: { value: "# Secaudit\n\nRoles:\n- Auditor" } });
     fireEvent.click(use());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", content: "# Secaudit\n\nRoles:\n- Auditor" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", content: "# Secaudit\n\nRoles:\n- Auditor" }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("source-view")).toBeTruthy());
     expect(screen.getByTestId("source-caption").textContent).toBe("Updated just now by you");
@@ -1077,7 +1126,7 @@ describe("playbook-library-56: the Source tab", () => {
     expect(screen.getByTestId("paste-caption").textContent).toBe("The file is copied in as the draft's source");
     fireEvent.click(use());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { draftId: "triage", sourcePath: "/tmp/skill.md" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", sourcePath: "/tmp/skill.md" }),
     );
   });
 
@@ -1250,6 +1299,7 @@ describe("playbook-library-61: the Register tab", () => {
     fireEvent.click(submit());
     await vi.waitFor(() => expect(submit().textContent).toBe("Registering…"));
     expect(commandMock).toHaveBeenCalledWith("draft.register", {
+      projectId: PROJECT_ID,
       draftId: "triage",
       command: "triage",
       intent: "Triage a new issue",
@@ -1328,7 +1378,7 @@ describe("playbook-library-35: the example opens a draft in paste mode", () => {
     expect(screen.getByTestId("example-prefill").textContent).toBe("Prefill");
     fireEvent.click(screen.getByTestId("example-prefill"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { draftId: SLC_DEMO.playbookId }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: SLC_DEMO.playbookId }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("source-paste")).toBeTruthy());
     expect((screen.getByTestId("paste-text") as HTMLTextAreaElement).value).toBe(SLC_DEMO.stages.normalized);
@@ -1351,7 +1401,7 @@ describe("playbook-library-62: restore on open", () => {
     render(<LibrarySurface />);
     fireEvent.click(screen.getByTestId("draft-open-triage"));
     await vi.waitFor(() => expect(screen.getByTestId("boss-bubble")).toBeTruthy());
-    expect(commandMock).toHaveBeenCalledWith("draft.open", { draftId: "triage", afterSeq: 0 });
+    expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: PROJECT_ID, draftId: "triage", afterSeq: 0 });
     expect(screen.getByTestId("source-markdown").textContent).toContain("Triage restored");
     // A restored source says only when it changed.
     expect(screen.getByTestId("source-caption").textContent).toBe("Updated 1h ago");
@@ -1380,8 +1430,8 @@ test("run-view-159: authoring queues an attachment-only message and clears only 
   const asset = { assetId: `sha256:${"c".repeat(64)}` as const, name: "flow.png", mimeType: "image/png", byteLength: 4 };
   renderWorkspace(draftInfo({ activity: "turn", queued: [{ text: "", attachments: [asset] }] }), { view: foldView(THREAD.slice(0, 5)) });
   expect(screen.getByTestId("draft-queue").textContent).toContain("flow.png");
-  act(() => useAppStore.getState().stageAttachmentAssets("draft:triage", { kind: "draft", id: "triage" }, [asset]));
+  act(() => useAppStore.getState().stageAttachmentAssets("draft:triage", { kind: "draft", projectId: PROJECT_ID, id: "triage" }, [asset]));
   fireEvent.click(screen.getByTestId("draft-send"));
-  await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.send", { draftId: "triage", text: "", attachments: [asset] }));
+  await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", text: "", attachments: [asset] }));
   await vi.waitFor(() => expect(useAppStore.getState().attachmentDrafts["draft:triage"]).toEqual([]));
 });

@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's words and groupings (DR-057): the home's path
-// in the reader's shorthand, a remote with no user in it, the kinds'
-// order and labels (space-7), the sync steps' names (space-12), the
-// catalog's sharing marks, each entry's family word, and the families
-// that stay on this device (space-23, space-25). Pure functions; the
-// surface renders them.
+// The Groups surface's words and groupings (DR-057, DR-103): the
+// home's path in the reader's shorthand, a remote with no user in it,
+// a spex repository's clone and the state its row reads (space-61),
+// the kinds' order and labels (space-7), the sync steps' names
+// (space-12), the catalog's sharing marks, each entry's family word,
+// and the families that stay on this device (space-23, space-25).
+// Pure functions; the surface renders them.
 //
 // Every word here is a message of the catalog (localization-4), so a
 // table of phrases holds thunks read at render — a table of strings
 // would freeze the language this module was imported in.
 
 import type {
+  RepositoryState,
   SpaceEntry,
   SpaceUnit,
   SpaceUnitKind,
@@ -20,6 +22,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { relativeAge } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
  * the full path rides the title. Only the two POSIX layouts the app
@@ -37,29 +40,62 @@ export function displayRemote(url: string): string {
   return embedded ? `${embedded[1]}${embedded[3]}` : url;
 }
 
-/** What stands where a branch name would, in a repository with no
- * branch checked out (space-1). */
-export function noBranch(): string {
-  return i18n._({ id: "no branch", comment: "stands where a branch name would; none is checked out" });
+/** A spex repository's clone: its key is its path under `workspace/`
+ * (storage-1). */
+export function clonePath(home: string, key: string): string {
+  return `${home.replace(/\/$/, "")}/workspace/${key}`;
+}
+
+/** What a spex repository's row reads for its state (space-61): a
+ * waiting step's phrase stands in place of the state's (space-64). */
+export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
+  if (repo.waiting) return repo.waiting.message;
+  switch (repo.state) {
+    case "local-only":
+      return i18n._("Only on this device");
+    case "reachable":
+      return repo.lastSync
+        ? i18n._({
+            id: "Synced {age}",
+            values: { age: relativeAge(repo.lastSync.at, now) },
+            comment: "a spex repository's row: when it last synced",
+          })
+        : i18n._("Never synced");
+    case "read-only":
+      return repo.reason
+        ? i18n._("Read-only: {reason}", { reason: repo.reason })
+        : i18n._({ id: "Read-only", comment: "a spex repository's state: the host lets this account only read it" });
+    case "unreachable":
+      return repo.reason
+        ? i18n._("Unreachable: {reason}", { reason: repo.reason })
+        : i18n._({ id: "Unreachable", comment: "a spex repository's state: the host cannot be read for it" });
+    case "absent":
+      return i18n._("Not on this device");
+    default:
+      // A state the page does not know: the raw value is data.
+      return repo.state;
+  }
 }
 
 /** The kinds in the order the lists group them (space-7). */
 export const KIND_ORDER: readonly SpaceUnitKind[] = [
   "session",
-  "queue",
-  "projects",
+  "intent",
+  "authoring",
+  "environment",
   "settings",
-  "playbook",
+  "code",
   "rules",
   "other",
 ];
 
 export const KIND_LABELS: Record<SpaceUnitKind, () => string> = {
   session: () => i18n._("Sessions"),
-  queue: () => i18n._("Queues"),
-  projects: () => i18n._("Projects"),
+  intent: () => i18n._({ id: "Intents", comment: "heading over a spex repository's changed intents" }),
+  authoring: () => i18n._({ id: "Authoring", comment: "heading over a spex repository's changed authoring sessions" }),
+  environment: () => i18n._({ id: "Environment", comment: "heading over a spex repository's spec package requests and lock" }),
   settings: () => i18n._("Settings"),
-  playbook: () => i18n._("Playbooks"),
+  code: () => i18n._({ id: "Code", comment: "heading over the file naming where a project's code lives" }),
   rules: () => i18n._("Sync rules"),
   other: () => i18n._({ id: "Other", comment: "heading over units of no named kind" }),
 };
@@ -68,11 +104,11 @@ export const KIND_LABELS: Record<SpaceUnitKind, () => string> = {
  * (space-17): the singular each language forms for itself. */
 export const KIND_SINGULAR: Record<SpaceUnitKind, () => string> = {
   session: () => i18n._({ id: "Session", comment: "one unit's kind: a session" }),
-  // Its own id: the noun, apart from the capture control's verb "Queue".
-  queue: () => i18n._({ id: "unit.queue", message: "Queue", comment: "one unit's kind: a project's queue (the noun)" }),
-  projects: () => i18n._({ id: "Project", comment: "one unit's kind: the project registrations" }),
+  intent: () => i18n._({ id: "Intent", comment: "one unit's kind: an intent with its attachments" }),
+  authoring: () => i18n._({ id: "Authoring session", comment: "one unit's kind: an authoring session" }),
+  environment: () => i18n._({ id: "unit.environment", message: "Environment", comment: "one unit's kind: the spec package requests and lock" }),
   settings: () => i18n._({ id: "Setting", comment: "one unit's kind: the settings file" }),
-  playbook: () => i18n._({ id: "Playbook", comment: "one unit's kind: a playbook source" }),
+  code: () => i18n._({ id: "unit.code", message: "Code", comment: "one unit's kind: the file naming where the code lives" }),
   rules: () => i18n._({ id: "Sync rule", comment: "one unit's kind: a sync rule file" }),
   other: () => i18n._({ id: "Other", comment: "heading over units of no named kind" }),
 };
@@ -100,21 +136,21 @@ export const STEP_ORDER: readonly SyncStep[] = [
 /** A step's name on the rail. */
 export const STEP_NAMES: Record<SyncStep, () => string> = {
   save: () => i18n._({ id: "Save", comment: "sync step: saving this device's changes" }),
-  check: () => i18n._({ id: "Check", comment: "sync step: checking the remote" }),
+  check: () => i18n._({ id: "Check", comment: "sync step: checking the host" }),
   compare: () => i18n._({ id: "Compare", comment: "sync step: comparing both sides" }),
   apply: () => i18n._({ id: "Apply", comment: "sync step: applying the chosen versions" }),
-  refresh: () => i18n._({ id: "Refresh", comment: "sync step: re-reading the space" }),
-  push: () => i18n._({ id: "Push", comment: "sync step: sending to the remote" }),
+  refresh: () => i18n._({ id: "Refresh", comment: "sync step: re-reading the spex repository" }),
+  push: () => i18n._({ id: "Push", comment: "sync step: sending to the host" }),
 };
 
 /** What the step line reads while a step runs (space-12). */
 export const STEP_LINES: Record<SyncStep, () => string> = {
   save: () => i18n._("Saving changes…"),
-  check: () => i18n._("Checking remote…"),
+  check: () => i18n._("Checking host…"),
   compare: () => i18n._({ id: "Comparing…", comment: "sync step running: comparing both sides" }),
   apply: () => i18n._({ id: "Applying…", comment: "sync step running: applying the chosen versions" }),
-  refresh: () => i18n._({ id: "Refreshing…", comment: "sync step running: re-reading the space" }),
-  push: () => i18n._({ id: "Pushing…", comment: "sync step running: sending to the remote" }),
+  refresh: () => i18n._({ id: "Refreshing…", comment: "sync step running: re-reading the spex repository" }),
+  push: () => i18n._({ id: "Pushing…", comment: "sync step running: sending to the host" }),
 };
 
 /** A byte count in the reader's units: "312 B", "4.1 KB", "2.3 MB". */
@@ -159,26 +195,27 @@ export const FAMILY_LABELS: Record<string, () => string> = {
   lease: () => i18n._({ id: "lease", comment: "catalog family: the lock naming the process writing now" }),
   "temporary write": () => i18n._({ id: "temporary write", comment: "catalog family: a copy made while writing" }),
   "config backup": () => i18n._({ id: "config backup", comment: "catalog family: a copy of the config kept before a write" }),
+  "sync repair marker": () => i18n._({ id: "sync repair marker", comment: "catalog family: the mark of a repair this device acknowledged" }),
   "session bundles": () => i18n._({ id: "session bundles", comment: "catalog family: the folder holding every session's files" }),
   "session manifest": () => i18n._({ id: "session manifest", comment: "catalog family: one session's manifest file" }),
   "session records": () => i18n._({ id: "session records", comment: "catalog family: one session's record stream" }),
+  "session attachments": () => i18n._({ id: "session attachments", comment: "catalog family: the files attached to one session's turns" }),
   "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
   "legacy session sidecar": () => i18n._({ id: "legacy session sidecar", comment: "catalog family: a session file an earlier release wrote" }),
-  "project queues": () => i18n._({ id: "project queues", comment: "catalog family: the folder holding the projects' queues" }),
-  "project queue": () => i18n._({ id: "project queue", comment: "catalog family: one project's queue of intents" }),
-  "project registry": () => i18n._({ id: "project registry", comment: "catalog family: the file listing the registered projects" }),
+  intents: () => i18n._({ id: "intents", comment: "catalog family: the folder holding every intent's file" }),
+  intent: () => i18n._({ id: "intent", comment: "catalog family: one intent's file" }),
+  "intent attachments": () => i18n._({ id: "intent attachments", comment: "catalog family: the files attached to one intent" }),
+  "authoring sessions": () => i18n._({ id: "authoring sessions", comment: "catalog family: the folder holding every authoring session" }),
+  "authoring session": () => i18n._({ id: "authoring session", comment: "catalog family: one authoring session's files" }),
+  "authoring records": () => i18n._({ id: "authoring records", comment: "catalog family: one authoring session's record stream" }),
+  "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "catalog family: the files attached to one authoring session" }),
+  "spec package requests": () => i18n._({ id: "spec package requests", comment: "catalog family: the spec packages the environment asks for" }),
+  "spec package lock": () => i18n._({ id: "spec package lock", comment: "catalog family: the exact spec packages the environment resolved" }),
+  "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
   Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
-  "playbook library": () => i18n._({ id: "playbook library", comment: "catalog family: the folder holding the playbooks" }),
-  "playbook sources": () => i18n._({ id: "playbook sources", comment: "catalog family: a playbook's source files" }),
-  "playbook output": () => i18n._({ id: "playbook output", comment: "catalog family: a playbook's compiled files" }),
-  "local data": () => i18n._({ id: "local data", comment: "catalog family: the folder of files that stay on this device" }),
-  "local project paths": () => i18n._({ id: "local project paths", comment: "a file family that stays on this device" }),
-  "sync repair marker": () => i18n._({ id: "sync repair marker", comment: "catalog family: the mark of a repair this device acknowledged" }),
-  "migration receipts": () => i18n._({ id: "migration receipts", comment: "catalog family: what an upgrade recorded" }),
-  "migration inputs": () => i18n._({ id: "migration inputs", comment: "catalog family: original files an upgrade kept" }),
-  preferences: () => i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
-  "forge cache": () => i18n._({ id: "forge cache", comment: "a file family that stays on this device" }),
-  "migration record": () => i18n._({ id: "migration record", comment: "catalog family: the home's own migration state" }),
+  "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),
+  "installed spec packages": () => i18n._({ id: "installed spec packages", comment: "catalog family: spec packages installed on this device from the lock" }),
+  "exported skills": () => i18n._({ id: "exported skills", comment: "catalog family: skills exported from the installed spec packages" }),
   "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),
   "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "catalog family: a folder Spex did not write" }),
   "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "catalog family: a file Spex did not write" }),
@@ -206,27 +243,34 @@ export function staysHere(): readonly { family: string; reason: string }[] {
       reason: i18n._("which process is writing right now"),
     },
     {
-      family: i18n._({ id: "local project paths", comment: "a file family that stays on this device" }),
-      reason: i18n._("where your projects live on this machine"),
+      family: i18n._({
+        id: "installed spec packages and exported skills",
+        comment: "a file family that stays on this device",
+      }),
+      reason: i18n._("copies installed from the lock; every device installs its own"),
+    },
+    {
+      family: i18n._({ id: "where projects live", comment: "a file family that stays on this device" }),
+      reason: i18n._("where your working folders are on this machine, in the home file"),
     },
     {
       family: i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
       reason: i18n._("where you last stopped reading in each session"),
     },
     {
-      family: i18n._({ id: "forge cache", comment: "a file family that stays on this device" }),
-      reason: i18n._("GitHub lists the app fetches again"),
+      family: i18n._({ id: "credentials", comment: "a file family that stays on this device" }),
+      reason: i18n._("this device's sign-in to the Git host"),
     },
     {
       family: i18n._({
         id: "migration receipts and inputs",
         comment: "a file family that stays on this device",
       }),
-      reason: i18n._("original files kept from an upgrade, some holding old tokens"),
+      reason: i18n._("original files kept from an upgrade"),
     },
     {
       family: i18n._({
-        id: "config backups and temporary files",
+        id: "temporary files",
         comment: "a file family that stays on this device",
       }),
       reason: i18n._("copies made while writing"),

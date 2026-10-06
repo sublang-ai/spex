@@ -399,7 +399,6 @@ const NEXT_INTENT: IntentInfo = {
   id: "i-next",
   projectId: "p1",
   text: "Address #12: harden the auth flow\nwith the full context below",
-  rank: "m",
   createdAt: 0,
   source: { kind: "issue", ref: "12" },
 };
@@ -508,7 +507,7 @@ describe("run-view-88: the Captain home names the queue's head", () => {
     expect(screen.getByTestId("quick-start")).toBeTruthy();
   });
 
-  test("Remove closes the head dropped on the click; Undo re-queues it at the head (run-view-114)", async () => {
+  test("Remove closes the head dropped on the click; Undo re-queues the same text and provenance (run-view-114)", async () => {
     const command = vi.fn(async (type: string) => {
       if (type === "ledger.get") return { intents: [], attention: [], badge: 0 };
       if (type === "intent.queue") return { ...NEXT_INTENT, id: "i-back" };
@@ -566,10 +565,14 @@ describe("run-view-88: the Captain home names the queue's head", () => {
         expect.objectContaining({
           projectId: "p1",
           text: NEXT_INTENT.text,
-          at: "head",
+          source: NEXT_INTENT.source,
         }),
       ),
     );
+    // The queue is ordered by age: the capture names no place in it.
+    const queued = (command.mock.calls as unknown as [string, Record<string, unknown>][])
+      .find(([type]) => type === "intent.queue");
+    expect(queued?.[1]).not.toHaveProperty("at");
     expect(screen.queryByTestId("next-removed")).toBeNull();
     // Served again, the restored intent's Start takes focus.
     view.rerender(
@@ -625,7 +628,6 @@ describe("run-view-88: the Captain home names the queue's head", () => {
         expect.objectContaining({
           text: NEXT_INTENT.text,
           source: NEXT_INTENT.source,
-          at: "head",
         }),
       ),
     );

@@ -14,7 +14,6 @@ import type {
   IntentInfo,
   IntentSource,
   IntentStats,
-  ProjectInfo,
 } from "@sublang/spex-core/protocol";
 
 import { duration } from "../lib/time.js";
@@ -23,7 +22,6 @@ import { i18n } from "../i18n.js";
 import { Rich } from "./Rich.js";
 import {
   QueuedMark,
-  queueAfterLinkPhrase,
   QueueStandingPhrase,
 } from "./QueuedIntentPresentation.js";
 
@@ -133,8 +131,6 @@ export function DeliveryCard({
   live,
   ownsConversation,
   next,
-  blocked,
-  projects,
   onClose,
   onStartNext,
   onQueueNext,
@@ -150,10 +146,6 @@ export function DeliveryCard({
   ownsConversation: boolean;
   /** The project's core-published next queued intent, for the pull. */
   next?: DerivedIntent;
-  /** The first ranked after-linked row when the project has no next. */
-  blocked?: DerivedIntent;
-  /** Registered projects resolve a foreign predecessor's display name. */
-  projects: readonly ProjectInfo[];
   onClose(as: "done" | "dropped"): Promise<void>;
   onStartNext(intent: IntentInfo): void | Promise<void>;
   onQueueNext(text: string): Promise<void>;
@@ -168,15 +160,6 @@ export function DeliveryCard({
     ? undefined
     : i18n._("This session has ended — the replay is read-only");
   const publishedNext = next?.next ? next : undefined;
-  const blockedQueued = !publishedNext && blocked?.blockedBy ? blocked : undefined;
-  const queued = publishedNext ?? blockedQueued;
-  const blockedPhrase = blockedQueued?.blockedBy
-    ? queueAfterLinkPhrase(
-        blockedQueued.blockedBy,
-        blockedQueued.intent.projectId,
-        projects,
-      )
-    : undefined;
 
   // A verdict rules on the intent, not on the session: it is legal on
   // any open intent and reads no runtime state, so it stays takeable
@@ -204,7 +187,7 @@ export function DeliveryCard({
           </span>
           <SourceChip source={derived.intent.source} />
         </div>
-        {queued ? (
+        {publishedNext ? (
           <div
             data-testid="resolved-next-row"
             className="@container flex items-center gap-2"
@@ -216,41 +199,29 @@ export function DeliveryCard({
               <span
                 data-testid="resolved-next-title"
                 className="min-w-0 truncate text-sm @md:flex-1"
-                title={queued.intent.text}
+                title={publishedNext.intent.text}
               >
-                {publishedNext ? (
-                  // One whole sentence with its emphasis inside it, so
-                  // no text is assembled from fragments (localization-4).
-                  <Rich
-                    text={i18n._("Up next: <0>{title}</0>", {
-                      title: intentTitle(queued.intent),
-                    })}
-                    components={[
-                      <span key="title" className="font-medium" />,
-                    ]}
-                  />
-                ) : (
-                  <span className="font-medium">{intentTitle(queued.intent)}</span>
-                )}
+                {/* One whole sentence with its emphasis inside it, so
+                    no text is assembled from fragments (localization-4). */}
+                <Rich
+                  text={i18n._("Up next: <0>{title}</0>", {
+                    title: intentTitle(publishedNext.intent),
+                  })}
+                  components={[
+                    <span key="title" className="font-medium" />,
+                  ]}
+                />
               </span>
-              {publishedNext?.next ? (
+              {publishedNext.next ? (
                 <QueueStandingPhrase
                   schedule={publishedNext.next}
                   testId="resolved-next-standing"
                   className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
                 />
-              ) : blockedPhrase ? (
-                <span
-                  data-testid="resolved-next-blocked"
-                  title={blockedPhrase}
-                  className="min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400 @md:max-w-[45%]"
-                >
-                  {blockedPhrase}
-                </span>
               ) : null}
             </div>
             <QueuedMark testId="resolved-next-queued" />
-            {publishedNext?.next?.manualStart ? (
+            {publishedNext.next?.manualStart ? (
               <button
                 type="button"
                 data-testid="upnext-start"
@@ -280,8 +251,8 @@ export function DeliveryCard({
             ) : null}
           </div>
         ) : (
-          // Only a truly empty queue becomes capture guidance. A queue
-          // with no eligible next shows its first after-linked row above.
+          // Only an empty queue becomes capture guidance: the core marks
+          // the oldest queued row next whenever one is queued.
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {

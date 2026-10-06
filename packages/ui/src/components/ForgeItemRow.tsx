@@ -22,15 +22,10 @@ import { i18n } from "../i18n.js";
 export function intentStateText(derived: DerivedIntent): string {
   switch (derived.state) {
     case "queued":
-      return derived.blockedBy
-        ? i18n._({
-            id: "queued — blocked",
-            comment: "captured artifact's state: queued behind another intent",
-          })
-        : i18n._({
-            id: "queued",
-            comment: "captured artifact's state: waiting in the queue",
-          });
+      return i18n._({
+        id: "queued",
+        comment: "captured artifact's state: waiting in the queue",
+      });
     case "working":
       return i18n._({
         id: "working",
