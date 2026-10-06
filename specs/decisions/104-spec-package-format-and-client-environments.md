@@ -7,9 +7,9 @@
 
 Accepted (2026-10-04).
 Revised on 2026-10-04: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
-Revised on 2026-10-05: an environment lives in a records folder under the home, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
+Revised on 2026-10-05: an environment lives in a spex repository, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
-It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a records folder under `~/.spex/workspace/`, your own group's included.
+It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a spex repository, cloned under `~/.spex/workspace/`, your own group's included.
 Amends ([DR-046](046-decision-record-evolution.md)):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): a compiled playbook is registered by requesting its spec package and naming the player for each role, not by writing a locator into the launcher config. The compile flow stands.
@@ -28,8 +28,8 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### Principle
 
 - A spec package is one GEARS contract with everything made from it: sources, the spec, skills, playbooks and applets. One name, one version.
-- An environment is what a records folder installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your own group's.
-- Spex installs verified files under the records folder's `packages/`, exports skills to agents, and exports playbooks to Playbook's launcher, the command that runs a session. It commits nothing with the code.
+- An environment is what a spex repository installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your own group's.
+- Spex installs verified files in the spex repository's clone, under `packages/`, exports skills to agents, and exports playbooks to Playbook's launcher, the command that runs a session. It commits nothing with the code.
 
 ### A spec package
 
@@ -90,11 +90,11 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### An environment
 
 - An environment resolves from its own `spex.yaml` and `spex.lock` and nothing else. Two devices with the same files install the same thing, a path source following each device's working folder.
-- A project's environment is in its records folder, so every member installs the same thing. Your own group's is yours alone and follows you to every device you sign in on.
+- A project's environment is in its spex repository, so every member installs the same thing. Your own group's is yours alone and follows you to every device you sign in on.
 - The Git host controls who reads a repository. The registry controls who publishes and downloads. Neither permission grants the other.
 - An environment holds one version of a spec package and one language of an artifact.
 
-| Path, in the records folder | Content | Synced |
+| Path, in the spex repository's clone | Content | Synced |
 | --- | --- | --- |
 | `spex.yaml` | Requests | Yes |
 | `spex.lock` | Resolution | Yes, as one sync unit with `spex.yaml` |
