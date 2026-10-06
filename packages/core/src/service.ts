@@ -891,7 +891,7 @@ export class CoreService {
       case "config.edit":
         return command.repository ?? this.store.home.own();
       case "compile.run":
-        return command.projectId ?? this.store.home.own();
+        return command.projectId;
       case "environment.request": case "environment.remove": case "environment.resolve": case "environment.install": case "environment.publish":
         return command.repository;
       case "draft.open": case "draft.artifacts":
@@ -2165,13 +2165,7 @@ export class CoreService {
           }));
         }
         // The one-shot compile writes the spec package under development
-        // in a project's working folder (environments-10).
-        if (command.projectId === undefined) {
-          throw new CoreError("invalid_request", i18n._({
-            id: "name the project whose working folder holds the playbook's spec package",
-            comment: "Refusal: a compile writes its spec package inside a project's working folder",
-          }));
-        }
+        // in the working folder of the project it names (environments-10).
         const project = this.store.getProject(command.projectId);
         if (!project) throw noProject(command.projectId);
         if (!isSkillName(command.playbookId)) throw invalidPlaybookId(command.playbookId);

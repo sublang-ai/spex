@@ -1047,8 +1047,9 @@ export const commandSchema = z.discriminatedUnion("type", [
      * roster — the Playbooks surface may mint one in place. */
     newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
     /** The project whose working folder holds the spec package under
-     * development, `spex-packages/<id>/` (environments-10). */
-    projectId: repositoryKeySchema.optional(),
+     * development, `spex-packages/<id>/` (environments-10): a compile
+     * always writes inside one, so it is always named. */
+    projectId: repositoryKeySchema,
     /** The spex repository to enable in — the project's, the default,
      * or your own group's (playbook-library-7, playbook-library-69). */
     repository: repositoryKeySchema.optional(),

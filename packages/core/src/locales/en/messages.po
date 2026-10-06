@@ -1316,11 +1316,6 @@ msgstr "migration output verification failed"
 msgid "Move that folder aside, then Retry."
 msgstr "Move that folder aside, then Retry."
 
-#. Refusal: a compile writes its spec package inside a project's working folder
-#: src/service.ts
-msgid "name the project whose working folder holds the playbook's spec package"
-msgstr "name the project whose working folder holds the playbook's spec package"
-
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts

@@ -580,6 +580,9 @@ export interface AppState extends AttachmentState {
     bindings: Record<string, string>;
     /** Lanes to create for bindings the roster does not yet hold. */
     newPlayers?: Record<string, AgentBlockInput>;
+    /** The project whose working folder holds the spec package; the
+     * current project by default (environments-10). */
+    projectId?: string;
   }): Promise<void>;
 }
 
@@ -595,6 +598,20 @@ export function intentMediaOwner(intent: IntentInfo): MediaUploadOwner {
  * project's spex repository, and none is registered. */
 export function draftNeedsProject(): string {
   return i18n._("Add a project first");
+}
+
+/** The project an authoring session or a compile writes in: the
+ * current one while it is registered, else the first. */
+export function workingProject(state: {
+  currentProjectId?: string;
+  projects: readonly { id: string }[];
+}): string | undefined {
+  const { currentProjectId, projects } = state;
+  return (
+    (currentProjectId && projects.some((project) => project.id === currentProjectId)
+      ? currentProjectId
+      : undefined) ?? projects[0]?.id
+  );
 }
 
 const CURRENT_PROJECT_KEY = "spex.currentProject";
@@ -2433,11 +2450,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async createDraft(draftId: string): Promise<DraftInfo> {
-      const { currentProjectId, projects } = get();
-      const projectId =
-        (currentProjectId && projects.some((project) => project.id === currentProjectId)
-          ? currentProjectId
-          : undefined) ?? projects[0]?.id;
+      const projectId = workingProject(get());
       if (!projectId) throw new Error(draftNeedsProject());
       const draft = await getClient().command("draft.create", { projectId, draftId });
       set({ drafts: { ...get().drafts, [draft.id]: draft } });
@@ -2742,6 +2755,10 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async runCompile(input): Promise<void> {
       const playbookId = input.playbookId;
+      // A compile writes its spec package inside a project's working
+      // folder (environments-10): the one named, else the current one.
+      const projectId = input.projectId ?? workingProject(get());
+      if (!projectId) throw new Error(draftNeedsProject());
       set({
         activeCompile: { playbookId, running: true },
         compileProgress: { ...get().compileProgress, [playbookId]: [] },
@@ -2758,7 +2775,7 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         // Compiles legitimately run for minutes: no client timeout
         // (DR-010 §5) — a dropped socket still rejects the call.
-        await getClient().command("compile.run", input, { timeoutMs: 0 });
+        await getClient().command("compile.run", { ...input, projectId }, { timeoutMs: 0 });
         appendLine(i18n._("✓ compiled and registered — see Configured playbooks"));
         set({ activeCompile: { playbookId, running: false, ok: true } });
       } catch (cause) {

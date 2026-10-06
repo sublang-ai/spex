@@ -1316,11 +1316,6 @@ msgstr "迁移输出校验失败"
 msgid "Move that folder aside, then Retry."
 msgstr "请将该文件夹移开，然后重试。"
 
-#. Refusal: a compile writes its spec package inside a project's working folder
-#: src/service.ts
-msgid "name the project whose working folder holds the playbook's spec package"
-msgstr "请指明哪个项目的工作文件夹存放这个规程的规约包"
-
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
