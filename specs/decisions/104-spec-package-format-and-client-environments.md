@@ -9,7 +9,7 @@ Accepted (2026-10-04).
 Revised on 2026-10-04: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
 Revised on 2026-10-05: an environment lives in a spex repository, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
-It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a spex repository, cloned under `~/.spex/workspace/`, your own group's included.
+It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a spex repository, your own group's included.
 Amends ([DR-046](046-decision-record-evolution.md)):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): a compiled playbook is registered by requesting its spec package and naming the player for each role, not by writing a locator into the launcher config. The compile flow stands.
@@ -20,7 +20,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - Spex artifacts form one pipeline. Source material, such as a description or an intent, becomes GEARS specs. GEARS specs become runnable playbooks and applications. Each phase is optional.
 - People install any subset of this, in the language they want, for one project or for themselves.
 - The Agent Skills specification [[1]] fixes a skill folder's layout. Playbooks and applications have native layouts. The format encloses these standards instead of restating them.
-- Mainstream package managers do four things we copy: requests are kept apart from the exact lock [[4]]; a dependency comes from a registry, a local path, or a Git repository at a commit [[5]]; what a package requires is installed with it, because a manager cannot guess undeclared needs [[10]]; one content-addressed store shares bytes between installs [[6]].
+- Mainstream package managers do four things we copy: requests are kept apart from the exact lock [[4]]; a dependency comes from a registry, a local path, or a Git repository at a commit [[5]]; what is required is installed with what requires it, because a manager cannot guess undeclared needs [[10]]; one content-addressed store shares bytes between installs [[6]].
 - Until now the home held a compiled playbook library and registered a playbook by writing a locator into the launcher config. Both become a request and installed files.
 
 ## Decision
@@ -193,7 +193,7 @@ Selection, within a solution:
 
 ### Considered and declined
 
-- One merged environment across projects, or a shared one for a team: a resolution nobody authored, and tools that differ by what a member can read. A project's environment is in the project, and every member installs the same thing.
+- One merged environment across projects, or a shared one for a team: a resolution nobody authored, and tools that differ by what a member can read. A project's environment is in its spex repository, and every member installs the same thing.
 - Editable spec packages under local UUIDs with committed snapshots: a second identity scheme and copies of bytes. A Git source at a commit does the job, as in Cargo and npm.
 - Spec groups `user`, `dev` and `test`, and a merged spec index: retired long ago; a spec is one file, and citations say what depends on what.
 - A `mode` on a dependency, saying whether it is part of this spec's own surface: nothing installs or runs differently, and citations already say what depends on what.
@@ -213,8 +213,8 @@ Selection, within a solution:
 - A project's tools are its own `spex.yaml` and `spex.lock`. Every member installs the same thing. The home's `playbooks/<id>/` library and its registration writes disappear.
 - A spec package under development is requested by `path` from the project that holds it, or by `git` from anywhere its repository can be read.
 - The Playbooks surface becomes a view over environments: what each installs, enable by naming players for roles, author in a project.
-- Spec packages change: `playbook-library` for the surface over environments, enabling by roles and authoring in a project; `storage` for the retired library folder and the store; `settings` for the filled `from` and the missing-player report; and a new package for requests, resolution and installing. They are updated under this record before the code follows.
-- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; a playbook's requirement installed with it and a missing one reported before running; the same lock replayed on two devices; a stale lock after changed requests; a path source missing on a device reported; a Git source at a commit; conflicting requirements named; a generated skill running the exact playbook in the project's folder; the built-in spec package working offline; compile, install, enable and launch in one flow.
+- Spec packages change: `playbook-library` for the surface over environments, enabling by roles and authoring in a project; `storage` for the retired library folder and the store; `settings` for the filled `from` and the missing-player report; and a new spec package for requests, resolution and installing. They are updated under this record before the code follows.
+- Acceptance checks: a whole spec file published and installed unchanged; a translation chosen by the environment's language and a fallback recorded; a playbook's requirement installed with it and a missing one reported before running; the same lock replayed on two devices; a stale lock after changed requests; a path source missing on a device reported; a Git source at a commit; conflicting requirements named; a generated skill running the exact playbook in the project's working folder; the built-in spec package working offline; compile, install, enable and launch in one flow.
 - spex.pub retires the materialization rules and the `mode` of its dependency record, and validates the one-file spec, the language folders, and the playbook and applet kinds.
 - Ask to Playbook: the built-in playbooks become a spec package.
 
