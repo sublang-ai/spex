@@ -44,12 +44,12 @@ msgid " · not added"
 msgstr " · not added"
 
 #. follows the count of commits this device is ahead by
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid " ahead"
 msgstr " ahead"
 
 #. follows the count of commits this device is behind by
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid " behind"
 msgstr " behind"
 
@@ -89,7 +89,6 @@ msgstr ", unsaved changes"
 msgid "… and {count} more"
 msgstr "… and {count} more"
 
-#: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "· checked {age}"
 msgstr "· checked {age}"
@@ -116,7 +115,7 @@ msgstr "{actor} · Turn {turn}"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 
@@ -163,7 +162,7 @@ msgstr "{command} timed out"
 msgid "{count, plural, one {, # time} other {, # times}}"
 msgstr "{count, plural, one {, # time} other {, # times}}"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# change} other {# changes}}"
 msgstr "{count, plural, one {# change} other {# changes}}"
 
@@ -191,13 +190,17 @@ msgstr "{count, plural, one {# issue} other {# issues}} left."
 msgid "{count, plural, one {# item} other {# items}} in total"
 msgstr "{count, plural, one {# item} other {# items}} in total"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# local change} other {# local changes}}"
 msgstr "{count, plural, one {# local change} other {# local changes}}"
 
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, one {# match} other {# matches}}"
+
+#: src/components/SpaceGroups.tsx
+msgid "{count, plural, one {# member} other {# members}}"
+msgstr "{count, plural, one {# member} other {# members}}"
 
 #: src/components/ProjectPalette.tsx
 msgid "{count, plural, one {# needs you} other {# need you}}"
@@ -308,6 +311,10 @@ msgstr "{head} — {said}"
 #: src/lib/failure-catalogue.ts
 msgid "{head} is no longer an ancestor"
 msgstr "{head} is no longer an ancestor"
+
+#: src/components/SpaceSignIn.tsx
+msgid "{host}'s sign-in page"
+msgstr "{host}'s sign-in page"
 
 #: src/lib/time.ts
 msgid "{hours}h"
@@ -494,8 +501,16 @@ msgstr "{span} ago"
 msgid "{stage} not found next to this playbook's registry"
 msgstr "{stage} not found next to this playbook's registry"
 
+#: src/components/SpaceGroups.tsx
+msgid "{state} · last synced {at}"
+msgstr "{state} · last synced {at}"
+
+#: src/components/SpaceGroups.tsx
+msgid "{state} · new sessions stay on this device"
+msgstr "{state} · new sessions stay on this device"
+
 #. {step} is the sync step's name
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{step} stopped"
 msgstr "{step} stopped"
 
@@ -810,6 +825,7 @@ msgstr "Add intent…"
 msgid "Add player"
 msgstr "Add player"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Add project"
 msgstr "Add project"
@@ -831,6 +847,8 @@ msgstr "Added to Up next — see the project's Overview."
 
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
+#. the Add project control, while the add is in flight
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
 msgstr "Adding…"
@@ -1147,9 +1165,17 @@ msgstr "bound to no role yet"
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "Brings a file in as the source, then asks to adapt it"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Brings back anything new; sends nothing"
+msgstr "Brings back anything new; sends nothing"
+
+#: src/components/SpaceGroups.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "Brings both histories into one and asks about anything that differs"
+
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to this device"
+msgstr "Brings it to this device"
 
 #: src/components/SpaceSync.tsx
 msgid "Brought {received}; nothing sent"
@@ -1167,6 +1193,10 @@ msgstr "Browser access follows the selected agent in Settings"
 #: src/components/BrowserControl.tsx
 msgid "Browser not prepared"
 msgstr "Browser not prepared"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Browser opened at {host}"
+msgstr "Browser opened at {host}"
 
 #: src/lib/media.ts
 msgid "Browser preparation · {actor}"
@@ -1235,6 +1265,8 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1243,7 +1275,8 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
@@ -1409,6 +1442,7 @@ msgstr "Choose a project"
 msgid "Choose effort…"
 msgstr "Choose effort…"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Choose folder…"
 msgstr "Choose folder…"
@@ -1723,9 +1757,13 @@ msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
 #. confirm: go on with the first sync
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Continue"
 msgstr "Continue"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Continue at {link}"
+msgstr "Continue at {link}"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -1744,6 +1782,7 @@ msgstr "copied"
 msgid "Copied"
 msgstr "Copied"
 
+#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecView.tsx
 msgid "Copied {what}"
@@ -1775,6 +1814,10 @@ msgstr "Copy"
 msgid "Copy {id}"
 msgstr "Copy {id}"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Copy code"
+msgstr "Copy code"
+
 #: src/components/SpecView.tsx
 msgid "Copy command {command}"
 msgstr "Copy command {command}"
@@ -1792,6 +1835,10 @@ msgstr "Copy failed"
 #: src/components/SpecView.tsx
 msgid "Copy failed for {what}"
 msgstr "Copy failed for {what}"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Copy is not available here; select the code to copy it."
+msgstr "Copy is not available here; select the code to copy it."
 
 #: src/components/SpaceSurface.tsx
 msgid "Copy is not available here; the path is shown to select."
@@ -2267,6 +2314,10 @@ msgstr "Enter a model ID, inherit, or use the provider default."
 msgid "Enter a model ID, take the configured value, or use the provider default."
 msgstr "Enter a model ID, take the configured value, or use the provider default."
 
+#: src/components/SpaceSignIn.tsx
+msgid "Enter it at {link}"
+msgstr "Enter it at {link}"
+
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter sends"
@@ -2289,11 +2340,11 @@ msgstr "error"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "Every role needs a player, and the command and intent their words"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 
@@ -2497,6 +2548,14 @@ msgstr "Fix the file in your editor; Spex reloads it live."
 msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
+#: src/components/SpaceGroups.tsx
+msgid "Folder for its code on this device"
+msgstr "Folder for its code on this device"
+
+#: src/components/SpaceGroups.tsx
+msgid "Folder its sessions run in on this device"
+msgstr "Folder its sessions run in on this device"
+
 #. confirm: forget a folder whose records are gone from this device
 #: src/components/SpaceSync.tsx
 msgid "Forget"
@@ -2584,10 +2643,6 @@ msgstr "Git data — the repository's own files; not shown."
 msgid "Git is not installed"
 msgstr "Git is not installed"
 
-#: src/components/SpaceSurface.tsx
-msgid "git@host:path or https://…"
-msgstr "git@host:path or https://…"
-
 #: src/components/SourcesTabs.tsx
 msgid "GitHub refresh failed — keeping the last data"
 msgstr "GitHub refresh failed — keeping the last data"
@@ -2609,7 +2664,6 @@ msgstr "Go to Dashboard, Projects, Playbooks, Groups, Settings"
 msgid "Graph"
 msgstr "Graph"
 
-#. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
 #: src/components/NavRail.tsx
@@ -2677,13 +2731,17 @@ msgstr "History — this session can't be continued"
 msgid "history, can't be continued"
 msgstr "history, can't be continued"
 
+#: src/components/SpaceSurface.tsx
+msgid "Host read {age}"
+msgstr "Host read {age}"
+
+#. a spex repository's status: nothing is running
 #. session row: no turn in flight
 #. session status: nothing is running
 #. the aliveness mark's own word: at rest
-#. the space's status: nothing is running
 #: src/components/NavRail.tsx
 #: src/components/RunningMark.tsx
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/lib/labels.ts
 msgid "idle"
 msgstr "idle"
@@ -2859,7 +2917,9 @@ msgstr "Its spex repository is not on this device."
 
 #. confirm: join both histories into one
 #. confirm: join both histories into one
-#: src/components/SpaceSurface.tsx
+#. confirm: join both histories into one
+#. confirm: join both histories into one
+#: src/components/SpaceGroups.tsx
 msgid "Join"
 msgstr "Join"
 
@@ -2867,12 +2927,14 @@ msgstr "Join"
 msgid "Join both histories into one to sync."
 msgstr "Join both histories into one to sync."
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "Join both histories into one? Anything that differs will ask you to choose."
 
 #. the Join control, while the join runs
-#: src/components/SpaceSurface.tsx
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "Joining…"
 
@@ -3056,6 +3118,21 @@ msgstr "May hold provider tokens — not shown"
 msgid "Media unavailable"
 msgstr "Media unavailable"
 
+#. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Members"
+msgstr "Members"
+
+#: src/components/SpaceGroups.tsx
+msgid "Members change on {host}"
+msgstr "Members change on {host}"
+
+#: src/components/SpaceGroups.tsx
+msgid "Members of {name}"
+msgstr "Members of {name}"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
@@ -3101,13 +3178,19 @@ msgstr "More details"
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
+#. the new spex repository's name
+#: src/components/SpaceGroups.tsx
+msgid "Name"
+msgstr "Name"
+
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
 msgstr "Name the folder on this device."
 
-#: src/components/SpaceSurface.tsx
-msgid "Name where this spex repository's records are kept"
-msgstr "Name where this spex repository's records are kept"
+#: src/components/SpaceGroups.tsx
+msgid "Name the new spex repository."
+msgstr "Name the new spex repository."
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3122,8 +3205,8 @@ msgstr "Needs attention"
 msgid "needs recovery"
 msgstr "needs recovery"
 
-#. the space's status, read in a title
-#: src/components/SpaceSurface.tsx
+#. a spex repository's status, read in a title
+#: src/components/SpaceGroups.tsx
 msgid "needs your choice"
 msgstr "needs your choice"
 
@@ -3146,7 +3229,6 @@ msgstr "needs your reply"
 msgid "needs your verdict"
 msgstr "needs your verdict"
 
-#: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
 msgid "Never synced"
 msgstr "Never synced"
@@ -3155,6 +3237,10 @@ msgstr "Never synced"
 #: src/components/SpaceSync.tsx
 msgid "new"
 msgstr "new"
+
+#: src/components/SpaceGroups.tsx
+msgid "New in a group"
+msgstr "New in a group"
 
 #. start a draft of one's own
 #. start a draft of one's own
@@ -3186,6 +3272,10 @@ msgstr "New session"
 msgid "New session in {project}"
 msgstr "New session in {project}"
 
+#: src/components/SpaceSurface.tsx
+msgid "New sessions stay on this device"
+msgstr "New sessions stay on this device"
+
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
 msgstr "Next page"
@@ -3211,7 +3301,7 @@ msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "no automatic check for this adapter — verify sign-in yourself"
 
 #. a spex repository whose records name no code remote
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "No code"
 msgstr "No code"
 
@@ -3294,17 +3384,13 @@ msgstr "No source yet"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "No source yet — the agent writes <0>{path}</0> here as you talk."
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "No spex repositories here yet"
 msgstr "No spex repositories here yet"
 
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
 msgstr "No unfinished intent records."
-
-#: src/components/SpaceSurface.tsx
-msgid "No working folder here"
-msgstr "No working folder here"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -3373,11 +3459,16 @@ msgstr "not found"
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "Not in this runtime's list. Check the model ID."
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
 msgid "Not on this device"
 msgstr "Not on this device"
+
+#: src/components/SpaceSurface.tsx
+msgid "Not read yet"
+msgstr "Not read yet"
 
 #. the adapter needs something before it can run
 #: src/components/AgentChip.tsx
@@ -3389,7 +3480,7 @@ msgstr "not ready"
 msgid "not set"
 msgstr "not set"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSignIn.tsx
 msgid "Not signed in"
 msgstr "Not signed in"
 
@@ -3507,6 +3598,10 @@ msgstr "On (current)"
 #: src/components/BindingEditor.tsx
 msgid "On (unsupported)"
 msgstr "On (unsupported)"
+
+#: src/components/SpaceGroups.tsx
+msgid "On the host for this code"
+msgstr "On the host for this code"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -3664,6 +3759,10 @@ msgstr "ownership unknown"
 msgid "Package"
 msgstr "Package"
 
+#: src/components/SpaceGroups.tsx
+msgid "Pairs it with its folder on this device"
+msgstr "Pairs it with its folder on this device"
+
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -3686,6 +3785,15 @@ msgstr "Path"
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
 msgstr "Permission mode"
+
+#. choose where on the Git host a project's records go
+#: src/components/SpaceGroups.tsx
+msgid "Pick a group"
+msgstr "Pick a group"
+
+#: src/components/SpaceGroups.tsx
+msgid "Pick a group for {name}"
+msgstr "Pick a group for {name}"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -3925,10 +4033,6 @@ msgstr "Re-run adapter readiness checks (e.g. after signing in)"
 msgid "read {age}"
 msgstr "read {age}"
 
-#: src/components/SpaceSurface.tsx
-msgid "Read {age}"
-msgstr "Read {age}"
-
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -3947,6 +4051,10 @@ msgstr "readiness unknown"
 msgid "reading {id}…"
 msgstr "reading {id}…"
 
+#: src/components/SpaceGroups.tsx
+msgid "Reading members…"
+msgstr "Reading members…"
+
 #: src/components/SpecView.tsx
 msgid "reading specs…"
 msgstr "reading specs…"
@@ -3964,6 +4072,15 @@ msgstr "reading…"
 #: src/components/SpaceExplorer.tsx
 msgid "Reading…"
 msgstr "Reading…"
+
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Reads the host again"
+msgstr "Reads the host again"
+
+#: src/components/SpaceSurface.tsx
+msgid "Reads the host again · last read {at}"
+msgstr "Reads the host again · last read {at}"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4001,7 +4118,7 @@ msgstr "records"
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
 
-#. re-read the space's state
+#. re-read the groups and the Git host
 #. sync step: re-reading the spex repository
 #: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
@@ -4079,10 +4196,6 @@ msgstr "Reload from disk and lose unsaved changes?"
 #: src/main.tsx
 msgid "Reload the page"
 msgstr "Reload the page"
-
-#: src/components/SpaceSurface.tsx
-msgid "Remote URL"
-msgstr "Remote URL"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
@@ -4279,6 +4392,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #. read the record again
 #. read the specs tree again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -4289,6 +4403,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -4314,7 +4429,9 @@ msgstr "Retry browser support check"
 
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "Retrying…"
@@ -4374,14 +4491,12 @@ msgstr "Same as Captain"
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
-#. save the edited remote URL
 #. sync step: saving this device's changes
 #. write the draft to the file
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
-#: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Save"
@@ -4412,11 +4527,9 @@ msgstr "Saving changes…"
 #. a save is in flight
 #. a save is in flight
 #. the Save control, while the save is in flight
-#. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
-#: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 msgid "Saving…"
 msgstr "Saving…"
@@ -4503,7 +4616,7 @@ msgstr "Sends after the reply · {keys}"
 msgid "Sends after the reply…"
 msgstr "Sends after the reply…"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Sends what is here and brings back anything new"
 msgstr "Sends what is here and brings back anything new"
 
@@ -4579,10 +4692,6 @@ msgstr "Sessions"
 #: src/App.tsx
 msgid "Sessions and project views"
 msgstr "Sessions and project views"
-
-#: src/components/SpaceSurface.tsx
-msgid "Set remote"
-msgstr "Set remote"
 
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
@@ -4690,21 +4799,70 @@ msgstr "shown despite filter"
 msgid "shown despite search"
 msgstr "shown despite search"
 
+#. sign in to the Git host
+#. sign in to the Git host
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in"
+msgstr "Sign in"
+
+#. the Sign in control after a sign-in failed
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in again"
+msgstr "Sign in again"
+
 #: src/lib/labels.ts
 msgid "Sign in again with that agent's CLI"
 msgstr "Sign in again with that agent's CLI"
+
+#: src/components/SpaceGroups.tsx
+msgid "Sign in first"
+msgstr "Sign in first"
 
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
-#: src/components/SpaceSurface.tsx
+#. sign this device out of the Git host
+#: src/components/SpaceSignIn.tsx
+msgid "Sign out"
+msgstr "Sign out"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Sign-in code"
+msgstr "Sign-in code"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signed in as {login}"
+msgstr "Signed in as {login}"
+
+#: src/components/SpaceSignIn.tsx
 msgid "Signed in as {login} at {host}"
 msgstr "Signed in as {login} at {host}"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 msgstr "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
+
+#. the Sign in control, while the sign-in runs
+#. the Sign in control, while the sign-in runs
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
+msgid "Signing in…"
+msgstr "Signing in…"
+
+#. the Sign out control, while signing out
+#: src/components/SpaceSignIn.tsx
+msgid "Signing out…"
+msgstr "Signing out…"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signs in to {host}"
+msgstr "Signs in to {host}"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signs this device out of {host}; every record stays here"
+msgstr "Signs this device out of {host}; every record stays here"
 
 #. graph legend: a node's size counts its items
 #: src/components/SpecGraph.tsx
@@ -4988,6 +5146,7 @@ msgstr "Switch to a project…"
 
 #. tab and control: send and bring back changes
 #. tab and control: send and bring back changes
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Sync"
 msgstr "Sync"
@@ -5015,11 +5174,6 @@ msgstr "Sync rules"
 msgid "Sync steps"
 msgstr "Sync steps"
 
-#. header field: this space last synced
-#: src/components/SpaceSurface.tsx
-msgid "Synced"
-msgstr "Synced"
-
 #: src/components/SpaceSurface.tsx
 msgid "Synced · {sent} sent · {received} received"
 msgstr "Synced · {sent} sent · {received} received"
@@ -5034,7 +5188,7 @@ msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "Synced {age} · {sent} sent · {received} received"
 
 #. the Sync control, while the sync runs
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Syncing…"
 msgstr "Syncing…"
 
@@ -5246,6 +5400,10 @@ msgstr "the reload failed"
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
 msgstr "the save failed"
+
+#: src/components/SpaceSignIn.tsx
+msgid "The sign-in did not start"
+msgstr "The sign-in did not start"
 
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -5493,10 +5651,6 @@ msgstr "Code"
 msgid "unit.environment"
 msgstr "Environment"
 
-#: src/components/SpaceSurface.tsx
-msgid "Units this device changed, listed under Sync"
-msgstr "Units this device changed, listed under Sync"
-
 #. a spex repository's state: the host cannot be read for it
 #: src/lib/space.ts
 msgid "Unreachable"
@@ -5519,8 +5673,8 @@ msgstr "unread turn"
 msgid "Unreadable draft — delete it, or repair the file and restart Spex"
 msgstr "Unreadable draft — delete it, or repair the file and restart Spex"
 
-#. the space's status, read in a title
-#: src/components/SpaceSurface.tsx
+#. a spex repository's status, read in a title
+#: src/components/SpaceGroups.tsx
 msgid "unrelated history"
 msgstr "unrelated history"
 
@@ -5790,9 +5944,13 @@ msgid "Your config file has errors — playbooks are unavailable."
 msgstr "Your config file has errors — playbooks are unavailable."
 
 #. the list of the home's groups and their spex repositories
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Your groups"
 msgstr "Your groups"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Your groups and each project's records shared with its members · nothing contacted until you sign in"
+msgstr "Your groups and each project's records shared with its members · nothing contacted until you sign in"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx

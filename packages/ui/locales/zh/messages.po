@@ -44,12 +44,12 @@ msgid " · not added"
 msgstr " · 未添加"
 
 #. follows the count of commits this device is ahead by
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid " ahead"
 msgstr " 领先"
 
 #. follows the count of commits this device is behind by
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid " behind"
 msgstr " 落后"
 
@@ -89,7 +89,6 @@ msgstr "，有未保存的更改"
 msgid "… and {count} more"
 msgstr "… 还有 {count} 项"
 
-#: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "· checked {age}"
 msgstr "· {age}检查过"
@@ -116,7 +115,7 @@ msgstr "{actor} · 第 {turn} 轮"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} 未就绪 — 请查看设置"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, other {# 个提交}} · {at} 检查过"
 
@@ -163,7 +162,7 @@ msgstr "{command} 超时"
 msgid "{count, plural, one {, # time} other {, # times}}"
 msgstr "{count, plural, other {，# 次}}"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# change} other {# changes}}"
 msgstr "{count, plural, other {# 项更改}}"
 
@@ -191,13 +190,17 @@ msgstr "{count, plural, other {剩余 # 个问题}}。"
 msgid "{count, plural, one {# item} other {# items}} in total"
 msgstr "共 {count, plural, other {# 个条目}}"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{count, plural, one {# local change} other {# local changes}}"
 msgstr "{count, plural, other {# 项本地更改}}"
 
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, other {# 个匹配}}"
+
+#: src/components/SpaceGroups.tsx
+msgid "{count, plural, one {# member} other {# members}}"
+msgstr "{count, plural, other {# 名成员}}"
 
 #: src/components/ProjectPalette.tsx
 msgid "{count, plural, one {# needs you} other {# need you}}"
@@ -308,6 +311,10 @@ msgstr "{head} — {said}"
 #: src/lib/failure-catalogue.ts
 msgid "{head} is no longer an ancestor"
 msgstr "{head} 已不再是祖先提交"
+
+#: src/components/SpaceSignIn.tsx
+msgid "{host}'s sign-in page"
+msgstr "{host} 的登录页面"
 
 #: src/lib/time.ts
 msgid "{hours}h"
@@ -494,8 +501,16 @@ msgstr "{span}前"
 msgid "{stage} not found next to this playbook's registry"
 msgstr "在该规程的注册表旁未找到 {stage}"
 
+#: src/components/SpaceGroups.tsx
+msgid "{state} · last synced {at}"
+msgstr "{state} · 上次同步于 {at}"
+
+#: src/components/SpaceGroups.tsx
+msgid "{state} · new sessions stay on this device"
+msgstr "{state} · 新会话留在此设备上"
+
 #. {step} is the sync step's name
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "{step} stopped"
 msgstr "{step}已停止"
 
@@ -810,6 +825,7 @@ msgstr "添加意图…"
 msgid "Add player"
 msgstr "添加 Player"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Add project"
 msgstr "添加项目"
@@ -831,6 +847,8 @@ msgstr "已加入“接下来” — 见项目概览。"
 
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
+#. the Add project control, while the add is in flight
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
 msgstr "添加中…"
@@ -1147,9 +1165,17 @@ msgstr "尚未绑定任何角色"
 msgid "Brings a file in as the source, then asks to adapt it"
 msgstr "把文件引入为源文，再请求改编它"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Brings back anything new; sends nothing"
+msgstr "只取回新的内容，不发出任何内容"
+
+#: src/components/SpaceGroups.tsx
 msgid "Brings both histories into one and asks about anything that differs"
 msgstr "把两段历史合为一段，并就有差异之处询问你"
+
+#: src/components/SpaceGroups.tsx
+msgid "Brings it to this device"
+msgstr "将它取到此设备上"
 
 #: src/components/SpaceSync.tsx
 msgid "Brought {received}; nothing sent"
@@ -1167,6 +1193,10 @@ msgstr "浏览器访问权限遵循“设置”中所选代理的配置"
 #: src/components/BrowserControl.tsx
 msgid "Browser not prepared"
 msgstr "浏览器尚未准备好"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Browser opened at {host}"
+msgstr "已在浏览器中打开 {host}"
 
 #: src/lib/media.ts
 msgid "Browser preparation · {actor}"
@@ -1235,6 +1265,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1243,7 +1275,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
@@ -1409,6 +1442,7 @@ msgstr "选择项目"
 msgid "Choose effort…"
 msgstr "选择推理强度…"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Choose folder…"
 msgstr "选择文件夹…"
@@ -1723,9 +1757,13 @@ msgid "Connection to the Spex core lost — reconnecting."
 msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 
 #. confirm: go on with the first sync
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Continue"
 msgstr "继续"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Continue at {link}"
+msgstr "请前往 {link} 继续"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -1744,6 +1782,7 @@ msgstr "已复制"
 msgid "Copied"
 msgstr "已复制"
 
+#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecView.tsx
 msgid "Copied {what}"
@@ -1775,6 +1814,10 @@ msgstr "复制"
 msgid "Copy {id}"
 msgstr "复制 {id}"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Copy code"
+msgstr "复制登录码"
+
 #: src/components/SpecView.tsx
 msgid "Copy command {command}"
 msgstr "复制命令 {command}"
@@ -1792,6 +1835,10 @@ msgstr "复制失败"
 #: src/components/SpecView.tsx
 msgid "Copy failed for {what}"
 msgstr "复制 {what} 失败"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Copy is not available here; select the code to copy it."
+msgstr "此处无法复制，请选中登录码后手动复制。"
 
 #: src/components/SpaceSurface.tsx
 msgid "Copy is not available here; the path is shown to select."
@@ -2267,6 +2314,10 @@ msgstr "输入模型 ID、继承，或使用服务商默认值。"
 msgid "Enter a model ID, take the configured value, or use the provider default."
 msgstr "输入模型 ID、采用已配置的值，或使用服务商默认值。"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Enter it at {link}"
+msgstr "请在 {link} 输入"
+
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter 发送"
@@ -2289,11 +2340,11 @@ msgstr "错误"
 msgid "Every role needs a player, and the command and intent their words"
 msgstr "每个角色都要有 Player，命令与意图都要填写"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public."
 msgstr "每个会话都会完整地发往那里——包括隐藏部分和附件——他人已下载的内容无法收回。此仓库是公开的，因此其中的记录也是公开的。"
 
@@ -2497,6 +2548,14 @@ msgstr "请在编辑器中修复该文件；Spex 会实时重新加载。"
 msgid "Fix the player in Settings"
 msgstr "在设置中修复 Player"
 
+#: src/components/SpaceGroups.tsx
+msgid "Folder for its code on this device"
+msgstr "此设备上存放其代码的文件夹"
+
+#: src/components/SpaceGroups.tsx
+msgid "Folder its sessions run in on this device"
+msgstr "此设备上运行其会话的文件夹"
+
 #. confirm: forget a folder whose records are gone from this device
 #: src/components/SpaceSync.tsx
 msgid "Forget"
@@ -2584,10 +2643,6 @@ msgstr "Git 数据 — 仓库自身的文件；不予显示。"
 msgid "Git is not installed"
 msgstr "未安装 Git"
 
-#: src/components/SpaceSurface.tsx
-msgid "git@host:path or https://…"
-msgstr "git@host:path 或 https://…"
-
 #: src/components/SourcesTabs.tsx
 msgid "GitHub refresh failed — keeping the last data"
 msgstr "GitHub 刷新失败 — 保留上次的数据"
@@ -2609,7 +2664,6 @@ msgstr "前往仪表盘、项目、规程、群组、设置"
 msgid "Graph"
 msgstr "图谱"
 
-#. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
 #: src/components/NavRail.tsx
@@ -2677,13 +2731,17 @@ msgstr "历史 — 此会话无法继续"
 msgid "history, can't be continued"
 msgstr "历史，无法继续"
 
+#: src/components/SpaceSurface.tsx
+msgid "Host read {age}"
+msgstr "{age}读取托管平台"
+
+#. a spex repository's status: nothing is running
 #. session row: no turn in flight
 #. session status: nothing is running
 #. the aliveness mark's own word: at rest
-#. the space's status: nothing is running
 #: src/components/NavRail.tsx
 #: src/components/RunningMark.tsx
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/lib/labels.ts
 msgid "idle"
 msgstr "空闲"
@@ -2859,7 +2917,9 @@ msgstr "它的 spex 仓库不在此设备上。"
 
 #. confirm: join both histories into one
 #. confirm: join both histories into one
-#: src/components/SpaceSurface.tsx
+#. confirm: join both histories into one
+#. confirm: join both histories into one
+#: src/components/SpaceGroups.tsx
 msgid "Join"
 msgstr "加入"
 
@@ -2867,12 +2927,14 @@ msgstr "加入"
 msgid "Join both histories into one to sync."
 msgstr "将两段历史合并为一段后即可同步。"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Join both histories into one? Anything that differs will ask you to choose."
 msgstr "将两段历史合并为一段？有差异的内容会让你选择。"
 
 #. the Join control, while the join runs
-#: src/components/SpaceSurface.tsx
+#. the Join control, while the join runs
+#. the Join control, while the join runs
+#: src/components/SpaceGroups.tsx
 msgid "Joining…"
 msgstr "加入中…"
 
@@ -3056,6 +3118,21 @@ msgstr "可能包含服务商令牌 — 不予显示"
 msgid "Media unavailable"
 msgstr "媒体不可用"
 
+#. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Members"
+msgstr "成员"
+
+#: src/components/SpaceGroups.tsx
+msgid "Members change on {host}"
+msgstr "在 {host} 上更改成员"
+
+#: src/components/SpaceGroups.tsx
+msgid "Members of {name}"
+msgstr "{name} 的成员"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Message the Captain…"
@@ -3101,13 +3178,19 @@ msgstr "更多详情"
 msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
 
+#. the new spex repository's name
+#: src/components/SpaceGroups.tsx
+msgid "Name"
+msgstr "名称"
+
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Name the folder on this device."
 msgstr "请填写本设备上的文件夹路径。"
 
-#: src/components/SpaceSurface.tsx
-msgid "Name where this spex repository's records are kept"
-msgstr "指定此 spex 仓库的记录存放位置"
+#: src/components/SpaceGroups.tsx
+msgid "Name the new spex repository."
+msgstr "请为新的 spex 仓库命名。"
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3122,8 +3205,8 @@ msgstr "需要关注"
 msgid "needs recovery"
 msgstr "需要恢复"
 
-#. the space's status, read in a title
-#: src/components/SpaceSurface.tsx
+#. a spex repository's status, read in a title
+#: src/components/SpaceGroups.tsx
 msgid "needs your choice"
 msgstr "需要你选择"
 
@@ -3146,7 +3229,6 @@ msgstr "需要你回复"
 msgid "needs your verdict"
 msgstr "需要你裁定"
 
-#: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
 msgid "Never synced"
 msgstr "从未同步"
@@ -3155,6 +3237,10 @@ msgstr "从未同步"
 #: src/components/SpaceSync.tsx
 msgid "new"
 msgstr "新增"
+
+#: src/components/SpaceGroups.tsx
+msgid "New in a group"
+msgstr "在群组中新建"
 
 #. start a draft of one's own
 #. start a draft of one's own
@@ -3186,6 +3272,10 @@ msgstr "新建会话"
 msgid "New session in {project}"
 msgstr "在 {project} 中新建会话"
 
+#: src/components/SpaceSurface.tsx
+msgid "New sessions stay on this device"
+msgstr "新会话留在此设备上"
+
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
 msgstr "下一页"
@@ -3211,7 +3301,7 @@ msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "此适配器无自动检查 — 请自行确认登录状态"
 
 #. a spex repository whose records name no code remote
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "No code"
 msgstr "无代码"
 
@@ -3294,17 +3384,13 @@ msgstr "还没有源文"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "还没有源文 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "No spex repositories here yet"
 msgstr "这里还没有 spex 仓库"
 
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
 msgstr "没有未完成的意图记录。"
-
-#: src/components/SpaceSurface.tsx
-msgid "No working folder here"
-msgstr "此处无工作文件夹"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -3373,11 +3459,16 @@ msgstr "未找到"
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "不在此运行时的列表中。请检查模型 ID。"
 
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
 msgid "Not on this device"
 msgstr "不在此设备上"
+
+#: src/components/SpaceSurface.tsx
+msgid "Not read yet"
+msgstr "尚未读取"
 
 #. the adapter needs something before it can run
 #: src/components/AgentChip.tsx
@@ -3389,7 +3480,7 @@ msgstr "未就绪"
 msgid "not set"
 msgstr "未设置"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceSignIn.tsx
 msgid "Not signed in"
 msgstr "未登录"
 
@@ -3507,6 +3598,10 @@ msgstr "开启（当前）"
 #: src/components/BindingEditor.tsx
 msgid "On (unsupported)"
 msgstr "开启（不支持）"
+
+#: src/components/SpaceGroups.tsx
+msgid "On the host for this code"
+msgstr "托管平台上对应此代码的仓库"
 
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
@@ -3664,6 +3759,10 @@ msgstr "归属未知"
 msgid "Package"
 msgstr "打包"
 
+#: src/components/SpaceGroups.tsx
+msgid "Pairs it with its folder on this device"
+msgstr "将它与此设备上的文件夹配对"
+
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -3686,6 +3785,15 @@ msgstr "路径"
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
 msgstr "权限模式"
+
+#. choose where on the Git host a project's records go
+#: src/components/SpaceGroups.tsx
+msgid "Pick a group"
+msgstr "选择群组"
+
+#: src/components/SpaceGroups.tsx
+msgid "Pick a group for {name}"
+msgstr "为 {name} 选择群组"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -3925,10 +4033,6 @@ msgstr "重新检查适配器就绪状态（例如登录之后）"
 msgid "read {age}"
 msgstr "{age}读取"
 
-#: src/components/SpaceSurface.tsx
-msgid "Read {age}"
-msgstr "{age}读取"
-
 #. a spex repository's state: the host lets this account only read it
 #: src/lib/space.ts
 msgid "Read-only"
@@ -3947,6 +4051,10 @@ msgstr "就绪状态未知"
 msgid "reading {id}…"
 msgstr "正在读取 {id}…"
 
+#: src/components/SpaceGroups.tsx
+msgid "Reading members…"
+msgstr "正在读取成员…"
+
 #: src/components/SpecView.tsx
 msgid "reading specs…"
 msgstr "正在读取规约…"
@@ -3964,6 +4072,15 @@ msgstr "读取中…"
 #: src/components/SpaceExplorer.tsx
 msgid "Reading…"
 msgstr "读取中…"
+
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Reads the host again"
+msgstr "重新读取托管平台"
+
+#: src/components/SpaceSurface.tsx
+msgid "Reads the host again · last read {at}"
+msgstr "重新读取托管平台 · 上次读取于 {at}"
 
 #. session status: ready to be told what to do
 #. the adapter is signed in and usable
@@ -4001,7 +4118,7 @@ msgstr "记录"
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
 
-#. re-read the space's state
+#. re-read the groups and the Git host
 #. sync step: re-reading the spex repository
 #: src/components/SpaceSurface.tsx
 #: src/lib/space.ts
@@ -4079,10 +4196,6 @@ msgstr "从磁盘重新加载并丢弃未保存的更改？"
 #: src/main.tsx
 msgid "Reload the page"
 msgstr "重新加载页面"
-
-#: src/components/SpaceSurface.tsx
-msgid "Remote URL"
-msgstr "远程仓库地址"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
@@ -4279,6 +4392,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #. read the record again
 #. read the specs tree again
 #. run the stopped step again
+#. run the stopped step again
 #. take the failed read again
 #. take the failed read again
 #. take the failed read again
@@ -4289,6 +4403,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/components/DashboardSurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/SpecView.tsx
@@ -4314,7 +4429,9 @@ msgstr "重试浏览器支持检查"
 
 #. a retry is in flight
 #. the Retry control, while the retry is in flight
+#. the Retry control, while the retry is in flight
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "重试中…"
@@ -4374,14 +4491,12 @@ msgstr "与 Captain 相同"
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
-#. save the edited remote URL
 #. sync step: saving this device's changes
 #. write the draft to the file
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
-#: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Save"
@@ -4412,11 +4527,9 @@ msgstr "正在保存更改…"
 #. a save is in flight
 #. a save is in flight
 #. the Save control, while the save is in flight
-#. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
-#: src/components/SpaceSurface.tsx
 #: src/components/SpecEditor.tsx
 msgid "Saving…"
 msgstr "保存中…"
@@ -4503,7 +4616,7 @@ msgstr "回复后发送 · {keys}"
 msgid "Sends after the reply…"
 msgstr "回复后发送…"
 
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Sends what is here and brings back anything new"
 msgstr "发出这里的内容，并取回新的内容"
 
@@ -4579,10 +4692,6 @@ msgstr "会话"
 #: src/App.tsx
 msgid "Sessions and project views"
 msgstr "会话与项目视图"
-
-#: src/components/SpaceSurface.tsx
-msgid "Set remote"
-msgstr "指定远程仓库"
 
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
@@ -4690,21 +4799,70 @@ msgstr "筛选外仍显示"
 msgid "shown despite search"
 msgstr "搜索外仍显示"
 
+#. sign in to the Git host
+#. sign in to the Git host
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in"
+msgstr "登录"
+
+#. the Sign in control after a sign-in failed
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in again"
+msgstr "重新登录"
+
 #: src/lib/labels.ts
 msgid "Sign in again with that agent's CLI"
 msgstr "用该智能体的 CLI 重新登录"
+
+#: src/components/SpaceGroups.tsx
+msgid "Sign in first"
+msgstr "请先登录"
 
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
-#: src/components/SpaceSurface.tsx
+#. sign this device out of the Git host
+#: src/components/SpaceSignIn.tsx
+msgid "Sign out"
+msgstr "退出登录"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Sign-in code"
+msgstr "登录码"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signed in as {login}"
+msgstr "已以 {login} 登录"
+
+#: src/components/SpaceSignIn.tsx
 msgid "Signed in as {login} at {host}"
 msgstr "已在 {host} 以 {login} 登录"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 msgstr "在终端登录后，重新检查即可识别；新导出的环境变量需重启 Spex。"
+
+#. the Sign in control, while the sign-in runs
+#. the Sign in control, while the sign-in runs
+#: src/components/SpaceGroups.tsx
+#: src/components/SpaceSignIn.tsx
+msgid "Signing in…"
+msgstr "登录中…"
+
+#. the Sign out control, while signing out
+#: src/components/SpaceSignIn.tsx
+msgid "Signing out…"
+msgstr "退出中…"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signs in to {host}"
+msgstr "登录 {host}"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Signs this device out of {host}; every record stays here"
+msgstr "让此设备退出 {host}；所有记录仍保留在此"
 
 #. graph legend: a node's size counts its items
 #: src/components/SpecGraph.tsx
@@ -4988,6 +5146,7 @@ msgstr "切换到项目…"
 
 #. tab and control: send and bring back changes
 #. tab and control: send and bring back changes
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Sync"
 msgstr "同步"
@@ -5015,11 +5174,6 @@ msgstr "同步规则"
 msgid "Sync steps"
 msgstr "同步步骤"
 
-#. header field: this space last synced
-#: src/components/SpaceSurface.tsx
-msgid "Synced"
-msgstr "已同步"
-
 #: src/components/SpaceSurface.tsx
 msgid "Synced · {sent} sent · {received} received"
 msgstr "已同步 · 发出 {sent} · 收到 {received}"
@@ -5034,7 +5188,7 @@ msgid "Synced {age} · {sent} sent · {received} received"
 msgstr "{age}同步 · 发出 {sent} · 收到 {received}"
 
 #. the Sync control, while the sync runs
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Syncing…"
 msgstr "同步中…"
 
@@ -5246,6 +5400,10 @@ msgstr "重新加载失败"
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
 msgstr "保存失败"
+
+#: src/components/SpaceSignIn.tsx
+msgid "The sign-in did not start"
+msgstr "登录未能开始"
 
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -5493,10 +5651,6 @@ msgstr "代码"
 msgid "unit.environment"
 msgstr "环境"
 
-#: src/components/SpaceSurface.tsx
-msgid "Units this device changed, listed under Sync"
-msgstr "本设备更改过的单元，列在同步下"
-
 #. a spex repository's state: the host cannot be read for it
 #: src/lib/space.ts
 msgid "Unreachable"
@@ -5519,8 +5673,8 @@ msgstr "未读轮次"
 msgid "Unreadable draft — delete it, or repair the file and restart Spex"
 msgstr "草稿无法读取 — 请删除，或修好文件后重启 Spex"
 
-#. the space's status, read in a title
-#: src/components/SpaceSurface.tsx
+#. a spex repository's status, read in a title
+#: src/components/SpaceGroups.tsx
 msgid "unrelated history"
 msgstr "历史互不相关"
 
@@ -5790,9 +5944,13 @@ msgid "Your config file has errors — playbooks are unavailable."
 msgstr "配置文件有错误 — 规程不可用。"
 
 #. the list of the home's groups and their spex repositories
-#: src/components/SpaceSurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Your groups"
 msgstr "你的群组"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Your groups and each project's records shared with its members · nothing contacted until you sign in"
+msgstr "你的群组，以及与成员共享的各项目记录 · 登录前不会联系任何服务"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx

@@ -259,9 +259,6 @@ export interface AppState extends AttachmentState {
   loadSpace(): Promise<void>;
   setSpaceSplit(percent: number): void;
   setSpacePrivacyCollapsed(collapsed: boolean): void;
-  /** Set or clear a spex repository's remote (space-5), named by its
-   * key; the reply is the new state. */
-  spaceSetRemote(repository: string, url: string | null): Promise<void>;
   /** Ask the core to read the Git host, then re-read the state
    * (space-2): the reader's Refresh. Signed out, the host is never
    * contacted and the state alone is re-read (space-3). */
@@ -1449,12 +1446,6 @@ export const useAppStore = create<AppState>((set, get) => {
     setSpacePrivacyCollapsed(collapsed: boolean): void {
       set({ spacePrivacyCollapsed: collapsed });
       safeStorageSet(SPACE_PRIVACY_KEY, collapsed ? "1" : "0");
-    },
-
-    async spaceSetRemote(repository: string, url: string | null): Promise<void> {
-      const space = await getClient().command("space.remote.set", { repository, url });
-      spaceReads += 1;
-      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
     async spaceRefresh(): Promise<void> {

@@ -1254,7 +1254,10 @@ export function SyncTab({
     busy === "check" || accepted?.where === "check" || (running && sync.op === "check")
       ? i18n._({ id: "Checking…", comment: "the Check host control, while the check runs" })
       : i18n._("Check host");
-  const checkDisabled = disabled || running || pending || branch?.mergePending === true;
+  // A repository only on this device has no host copy to check
+  // (space-29: `space.fetch` refuses a local-only one).
+  const checkDisabled =
+    disabled || running || pending || branch?.mergePending === true || repo.state === "local-only";
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
