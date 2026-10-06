@@ -7,7 +7,7 @@
 
 Accepted (2026-10-04).
 Revised on 2026-10-04: no settings repository for a team or a person; what a project needs is in the project; an intent is one file, and intents form a set.
-Revised on 2026-10-05: every record lives under `~/.spex/workspace/`, in a folder per group and project mirroring the Git host, each a clone of a spex repository Spex creates there; the code may be in any Git repository; a group's own sessions are a project without code; what you add for yourself is in your own group's folder; an intent is one file.
+Revised on 2026-10-05: every record lives under `~/.spex/workspace/`, in a folder per group and project mirroring the Git host, each a repository pushed to a spex repository Spex creates there; the code may be in any Git repository; a group's own sessions are a project without code; what you add for yourself is in your own group's folder; an intent is one file.
 Spec packages are decided by [DR-104](104-spec-package-format-and-client-environments.md); this record only places their files.
 spex.pub's own records map this record onto GitLab.com, which it wraps; it brokers the Git credential, so the only thing Spex reaches beyond spex.pub is the remote URL it hands over.
 Amends ([DR-046](046-decision-record-evolution.md)):
@@ -93,7 +93,7 @@ Spex never does these; it shows the state and links to the page.
 
 ```text
 ~/.spex/
-  workspace/<group>/<subgroup>/<project>/   a folder per group and project, mirroring the host; each a clone of its <name>-spex
+  workspace/<group>/<subgroup>/<project>/   a folder per group and project, mirroring the host; each a repository pushed to its <name>-spex
     spex.yaml, spex.lock                    what it needs (DR-104)
     config/playbook.config.yaml             its playbooks, and which player each role uses; your own group's also what each player runs on
     project.json                            the remote of the code, when there is code
