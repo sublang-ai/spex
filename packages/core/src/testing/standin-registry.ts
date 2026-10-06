@@ -60,7 +60,7 @@ interface Stored {
   suppressed: boolean;
 }
 
-export interface StandinScript {
+export interface StandinRegistryScript {
   /** Yank a version: caret and tilde stop picking it. */
   yank(name: string, version: string): void;
   /** Suppress a version as the operator: nothing picks or serves it. */
@@ -77,7 +77,7 @@ export interface StandinScript {
 
 export interface StandinRegistry {
   url: string;
-  script: StandinScript;
+  script: StandinRegistryScript;
   close(): Promise<void>;
 }
 
