@@ -136,7 +136,11 @@ function emitArtifacts() {
       "  command: '" + base + "',",
       "  intent: 'Stub Demo - a one-player workflow.',",
       "  artifactSchema: " + ARTIFACT_SCHEMA + ",",
+      // A runtime of its own, as Playbook's host requires of an entry a
+      // session's catalog loads (environments-24).
+      "  runtimeProfile: { kind: 'bespoke', artifactSchema: " + ARTIFACT_SCHEMA + " },",
       "  requiredRoleIds: [...REQUIRED_ROLE_IDS],",
+      "  concurrentRoleSets: [],",
       "  validateOptions(value) {",
       "    if (value === undefined) return {};",
       "    if (typeof value !== 'object' || value === null || Array.isArray(value)) {",
