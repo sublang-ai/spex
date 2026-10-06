@@ -130,29 +130,20 @@ export interface AppOptions {
   /** Substitute task-free model discovery; never start installed providers. */
   discoverAgentModels?: NonNullable<ServerShellOptions["core"]>["discoverAgentModels"];
   /**
-   * Write the configuration inside the Spex home, at
-   * `<dataDir>/config/playbook.config.yaml`, where the Space
-   * surface shares it (DR-057); the scratch default lies outside the
-   * home and reads "outside the space". Implied by `remote`.
+   * Write the configuration inside the Spex home, in your own group's
+   * spex repository at `workspace/<own>/<own>-spex/config/`, where it
+   * syncs with that repository (storage-1, DR-103); the scratch default
+   * lies outside the home. Implied by `remote` and `host`.
    */
   homeConfig?: boolean;
   /**
-   * A Git remote for the Space journeys (space-36, space-40 … space-44): `bare`
-   * creates a bare repository in the scratch root, exposed as
-   * `app.remotePath`, and leaves the home a plain directory; `peer`
-   * also initializes the home (with `project`, one titled session run
-   * through the core), pushes it, then clones the remote as a peer
-   * home that pushes a differing configuration, the same session
-   * changed and one queued intent — and changes the same session and
-   * Settings on this device too, so the next sync asks two choices;
-   * `seeded` leaves the home a plain directory while a peer home
-   * pushes a differing configuration, a titled session of the demo
-   * project and one queued intent, so Join a space asks one choice.
-   * Each sets the core's Git environment: an isolated Git
-   * configuration with no identity, and a sleeping `GIT_SSH_COMMAND`
-   * for `app.sleepingRemote()`.
+   * A bare Git repository in the scratch root, exposed as
+   * `app.remotePath`, that a spex repository may name as a path remote
+   * with no host (space-11) — the exploring journey's (space-42). It
+   * sets the core's Git environment: an isolated Git configuration with
+   * no identity. Journeys against a host use `host` instead.
    */
-  remote?: "bare" | "peer" | "seeded";
+  remote?: "bare";
   /**
    * A stand-in Git host (git-host-12) for the Groups journeys, started
    * before the shell with its URL in `SPEX_HOST_URL`, so the new home
@@ -533,14 +524,8 @@ export function git(cwd: string, ...args: string[]): string {
   }).trim();
 }
 
-/** The peer's differing configuration: the demo config with another
- * Captain model, so Settings is one whole-file choice (space-17). */
-export const PEER_CONFIG = DEMO_CONFIG.replace(
-  "captain:\n  adapter: claude\n  model: claude-opus-5-5",
-  "captain:\n  adapter: claude\n  model: claude-opus-5-peer",
-);
-/** The model this device sets before the daily sync, so Settings
- * differs on both sides. */
+/** The model this device sets in your own group's config before the
+ * daily sync (space-41). */
 export const LOCAL_MODEL = "claude-opus-5-local";
 /** The peer's prompt in the shared session (space-41). */
 export const PEER_TURN = "Tighten the expiry tests";
@@ -548,7 +533,7 @@ export const PEER_TURN = "Tighten the expiry tests";
 export const LOCAL_TURN = "Add the expiry test";
 /** The shared session's title: its first turn. */
 export const SESSION_TITLE = "Fix the login redirect";
-/** The peer's own session in a seeded remote (space-36). */
+/** The peer's own session in the project it pushed (space-36). */
 export const PEER_SESSION_TITLE = "Plan the release on the other laptop";
 
 // ---------------------------------------------------------------------------
@@ -598,8 +583,8 @@ export interface App {
     type: T,
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
   ): Promise<RepositoryState>;
-  /** The peer changes its working copy and pushes to `origin` as
-   * plain Git — the remote "moved" (with `remote`). */
+  /** The peer changes its working copy of `remotePath` and pushes there
+   * as plain Git — the host's copy "moved". */
   peerPush(mutate: (dir: string) => void | Promise<void>): Promise<string>;
   /**
    * The remote's `spex` moves under the next `times` pushes: an
@@ -612,12 +597,9 @@ export interface App {
    * not a race.
    */
   rejectPushes(times: number): void;
-  /** An `ssh://` remote whose transport never answers: the core's
-   * `GIT_SSH_COMMAND` is a sleeping script, so a check against this
-   * URL hangs until Stop or the transport limit (space-16). */
-  sleepingRemote(): string;
-  /** A draft's library directory, where the agent writes `<id>.md`
-   * (playbook-library-70). */
+  /** An authoring session's playbook artifact in its spec package under
+   * development, in the project's working folder, where the agent
+   * writes `<id>.md` (environments-10, playbook-library-70). */
   draftDir(id: string): string;
   /** Let a held stub compile of the draft past its first phase (with
    * `authoring.hold`): one token per run, consumed when the run reads
@@ -732,15 +714,11 @@ async function arrangeApp(
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
   // Both hosts use this explicit isolated Spex home.
 
-  // The Space journeys' Git environment (space-32, space-37): Git found
+  // The Groups journeys' Git environment (space-32, space-37): Git found
   // on the PATH, configured only through this environment — no identity,
-  // so the committer fallback engages — and an ssh transport that sleeps,
-  // for `sleepingRemote()`; file-path remotes never reach it.
-  const sleeper = join(scratch, "sleep-ssh.sh");
+  // so the committer fallback engages.
   let remotePath: string | undefined;
   if (options.remote) {
-    writeFileSync(sleeper, "#!/bin/sh\nexec sleep 300\n");
-    chmodSync(sleeper, 0o755);
     remotePath = join(scratch, "remote.git");
     git(scratch, "init", "-q", "--bare", "-b", "spex", remotePath);
   }
@@ -754,7 +732,6 @@ async function arrangeApp(
           HOME: home,
           GIT_CONFIG_GLOBAL: "/dev/null",
           GIT_CONFIG_NOSYSTEM: "1",
-          ...(options.remote ? { GIT_SSH_COMMAND: sleeper } : {}),
         }
       : {}),
     ...(host ? { SPEX_HOST_URL: host.url } : {}),
@@ -926,10 +903,6 @@ async function arrangeApp(
       );
       chmodSync(hook, 0o755);
     },
-    sleepingRemote() {
-      if (!remotePath) throw new Error("sleepingRemote needs a remote");
-      return "ssh://sleepy.invalid/space.git";
-    },
     async stop() {
       if (!running) return;
       const port = running.server.port;
@@ -987,8 +960,6 @@ async function arrangeApp(
     app.projectId = info.id;
   }
   if (options.signedIn) await signInCore(app);
-  if (options.remote === "peer") await arrangePeer(app);
-  else if (options.remote === "seeded") await seedRemote(app);
   return app;
 }
 
@@ -1055,75 +1026,6 @@ export async function settled(app: App): Promise<void> {
       { timeout: 30_000 },
     )
     .toBe(true);
-}
-
-/**
- * The two-laptop arrangement (space-41, space-43, space-44): this home
- * initialized and pushed with one titled session; the peer pushing a
- * differing configuration, a second turn in that session and one
- * queued intent; this device then running its own second turn and
- * changing Settings — two conflicts and one incoming queue.
- */
-async function arrangePeer(app: App): Promise<void> {
-  if (!app.projectId || !app.remotePath) {
-    throw new Error("remote: \"peer\" needs project: true");
-  }
-  const projectId = app.projectId;
-  const session = await app.core.command("session.create", { projectId });
-  app.sessionId = session.id;
-  await runTurn(app, session.id, SESSION_TITLE);
-  // The demo project's spex repository gets the bare remote (space-29).
-  await app.core.command("space.remote.set", { repository: projectId, url: app.remotePath });
-  const pushed = await app.settleSpace("space.sync", { repository: projectId });
-  if (pushed.sync.phase !== "done") {
-    throw new Error(`the first push ended ${JSON.stringify(pushed.sync)}`);
-  }
-  await app.peerPush(async (dir) => {
-    // A project's settings file names only playbooks and players
-    // (core-service-2): the peer binds review's reviewer differently.
-    mkdirSync(join(dir, "config"), { recursive: true });
-    writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
-    await appendHistorySession(join(dir, "sessions"), session.id, [
-      { type: "turn_started", turnId: 2, turn: { id: 2, prompt: PEER_TURN }, timestamp: Date.now() },
-      { type: "captain_reply", turnId: 2, timestamp: Date.now() + 1, text: "Done on the other laptop." },
-      { type: "turn_finished", turnId: 2, timestamp: Date.now() + 2 },
-    ]);
-    writeIntentFile(dir, "Queued on the other laptop");
-  });
-  await runTurn(app, session.id, LOCAL_TURN);
-  await app.core.command("config.edit", {
-    op: { kind: "captain.set", patch: { model: LOCAL_MODEL } },
-  });
-  // This device's own project settings differ too: one Settings choice.
-  const local = join(clonePath(app.dataDir, projectId), "config");
-  mkdirSync(local, { recursive: true });
-  writeFileSync(join(local, "playbook.config.yaml"), LOCAL_PROJECT_CONFIG);
-}
-
-/**
- * The second device's arrangement (space-36): the remote already holds
- * a peer's space — a differing configuration, a titled session of the
- * demo project and one queued intent, under the managed rules — while
- * this home stays a plain directory with its own configuration, so a
- * Join a space asks exactly one choice, Settings.
- */
-async function seedRemote(app: App): Promise<void> {
-  if (!app.projectId || !app.remotePath) {
-    throw new Error("remote: \"seeded\" needs project: true");
-  }
-  const dir = clonePeer(app);
-  mkdirSync(join(dir, "config"), { recursive: true });
-  writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
-  prepareStorageGitFiles(dir);
-  app.sessionId = await seedHistorySession(join(dir, "sessions"), app.projectDir, [
-    { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },
-    { type: "captain_reply", turnId: 1, timestamp: Date.now() + 1, text: "Planned on the other laptop." },
-    { type: "turn_finished", turnId: 1, timestamp: Date.now() + 2 },
-  ]);
-  writeIntentFile(dir, "Queued on the other laptop");
-  git(dir, "add", "-A", "--", ".");
-  git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer space");
-  git(dir, "push", "-q", "-u", "origin", "HEAD:spex");
 }
 
 // ---------------------------------------------------------------------------
