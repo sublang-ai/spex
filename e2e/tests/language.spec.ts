@@ -298,7 +298,7 @@ test.describe("the Chinese interface at the floor", () => {
       ["Dashboard", "dashboard", "dashboard-scroll"],
       ["Settings", "settings", "captain-section"],
       ["Space", "space", "space-header"],
-      ["Playbooks", "playbooks", "builtins-section"],
+      ["Playbooks", "playbooks", "playbooks-enabled"],
       ["Workspace", "projects", "captain-home"],
     ];
     for (const [surface, name, ready] of surfaces) {

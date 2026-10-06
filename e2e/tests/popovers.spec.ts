@@ -122,14 +122,14 @@ test.describe("the role editors on the Playbooks surface", () => {
     await open(page, app);
     await collapseRail(page);
     await nav(page, "Playbooks").click();
-    await expect(page.getByTestId("builtins-section")).toBeVisible();
+    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
 
     for (const width of [FLOOR, 480, 1280]) {
       await page.setViewportSize({ width, height: 800 });
 
       // The agent editor hangs from a 24px gear near the left of its
       // card, and asks for 384px (settings-33).
-      const gear = page.getByTestId(/^builtin-player-/).first();
+      const gear = page.getByTestId(/^enable-configure-/).first();
       await gear.click();
       const popover = page.getByTestId("agent-popover");
       await expect(popover).toBeVisible();

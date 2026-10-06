@@ -81,7 +81,7 @@ for (const theme of ["light", "dark"] as const) {
     found.push(...(await scan(page, "Specs")));
 
     await nav(page, "Playbooks").click();
-    await expect(page.getByTestId("builtins-section")).toBeVisible();
+    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
     found.push(...(await scan(page, "Playbooks")));
 
     // The authoring workspace, state by state (DR-058).
@@ -122,9 +122,9 @@ for (const theme of ["light", "dark"] as const) {
     await tabs.getByRole("tab", { name: "Machine", exact: true }).click();
     await expect(page.getByTestId("stage-states-draft-triage")).toBeVisible();
     found.push(...(await scan(page, "Workspace (Machine)")));
-    await tabs.getByRole("tab", { name: "Register", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
     await expect(page.getByTestId("register-form")).toBeVisible();
-    found.push(...(await scan(page, "Workspace (Register)")));
+    found.push(...(await scan(page, "Workspace (Enable)")));
     await tabs.getByRole("tab", { name: "Source", exact: true }).click();
     await page.getByTestId("source-edit").click();
     await expect(page.getByTestId("spec-editor")).toBeVisible();

@@ -55,7 +55,7 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await expect(page.getByTestId("attention-all-clear")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+3`);
-  await expect(page.getByTestId("builtins-section")).toBeVisible();
+  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+4`);
   await expect(page.getByTestId("space-surface")).toBeVisible();

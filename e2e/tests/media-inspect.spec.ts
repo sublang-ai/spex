@@ -10,25 +10,33 @@ test("playbook-library-34: existing homes explicitly enable Inspect and a browse
   expect(parse(before).playbooks.inspect).toBeUndefined();
   await open(page, app);
   await nav(page, "Playbooks").click();
-  const inspect = page.getByTestId("builtin-inspect");
+  // Your own group's side, where the roster and each player's agent
+  // live (playbook-library-1, playbook-library-34).
+  await page.getByTestId("side-own").click();
+  const inspect = page.getByTestId("playbooks-available").getByTestId("playbook-card-inspect");
   await expect(inspect).toBeVisible();
-  await inspect.getByRole("button", { name: "View source" }).click();
-  await expect(inspect).toContainText(/inspect/i);
+  await expect(inspect.getByTestId("playbook-enabled-inspect")).toHaveText("Not enabled");
+  // Browsing its source changes no config.
+  await inspect.getByTestId("stages-inspect").getByRole("button", { name: "Source", exact: true }).click();
+  await expect(page.getByTestId("pipeline-inspect")).toContainText(/inspect/i);
   expect(app.readConfig()).toBe(before);
-  await inspect.getByRole("button", { name: "Configure inspector" }).click();
-  const editor = inspect.getByTestId("agent-editor");
+  // The proposed player's agent is set before anything is written.
+  await expect(inspect.getByTestId("enable-player-inspect-inspector")).toHaveValue("dev.inspector");
+  await inspect.getByRole("button", { name: "Configure dev.inspector" }).click();
+  const editor = page.getByTestId("agent-editor");
   await editor.getByTestId("agent-adapter-codex").click();
   await editor.getByRole("checkbox", { name: "Browser", exact: true }).check();
   await editor.getByTestId("agent-save").click();
   expect(app.readConfig()).toBe(before);
-  await inspect.getByRole("button", { name: "Enable", exact: true }).click();
-  await expect(inspect).toHaveCount(0);
+  await inspect.getByRole("button", { name: "Enable /inspect" }).click();
+  await expect(page.getByTestId("playbooks-available").getByTestId("playbook-card-inspect")).toHaveCount(0);
   const config = parse(app.readConfig());
-  expect(config.playbooks.inspect).toEqual({ from: "@sublang/playbook/inspect/registry", roles: { inspector: "dev.inspector" } });
+  expect(config.playbooks.inspect).toEqual({ roles: { inspector: "dev.inspector" } });
   expect(config.players["dev.inspector"]).toMatchObject({ adapter: "codex", browser: true });
   expect(config.playbooks.code).toEqual(parse(before).playbooks.code);
   expect(config.captain).toEqual(parse(before).captain);
-  await expect(page.getByTestId("role-binding-inspect-inspector")).toContainText("dev.inspector");
-  await page.getByTestId("stages-inspect").getByRole("button", { name: "State machine", exact: true }).click();
+  const enabled = page.getByTestId("playbooks-enabled").getByTestId("playbook-card-inspect");
+  await expect(enabled.getByTestId("role-binding-inspect-inspector")).toHaveText("dev.inspector");
+  await enabled.getByTestId("stages-inspect").getByRole("button", { name: "State machine", exact: true }).click();
   await expect(page.getByTestId("pipeline-inspect")).toBeVisible();
 });

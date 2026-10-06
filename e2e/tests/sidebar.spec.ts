@@ -28,7 +28,7 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   await expect(selectedRows).toHaveCount(0);
 
   await nav(page, "Playbooks").click();
-  await expect(page.getByTestId("builtins-section")).toBeVisible();
+  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
   await expect(nav(page, "Playbooks")).toHaveAttribute("aria-current", "page");
   await expect(selectedRows).toHaveCount(0);
   await expect(projectRow).not.toHaveAttribute("aria-selected", "true");
@@ -41,8 +41,8 @@ test("run-view-122: the sidebar's selection follows the surface", async ({
   // The surface itself is remembered across launches (run-view-67):
   // reloading returns the reader where they stood, not to Projects.
   await nav(page, "Playbooks").click();
-  await expect(page.getByTestId("builtins-section")).toBeVisible();
+  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
   await page.reload();
   await expect(nav(page, "Playbooks")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("builtins-section")).toBeVisible();
+  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
 });

@@ -477,7 +477,7 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
     {
       name: "Playbooks",
       show: () => nav(page, "Playbooks").click(),
-      ready: () => expect(page.getByTestId("builtins-section")).toBeVisible(),
+      ready: () => expect(page.getByTestId("playbooks-enabled")).toBeVisible(),
     },
     {
       // The authoring workspace at rest after a compile: the thread
