@@ -61,7 +61,7 @@ class Client {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
     // The state-shaped replies carry the GroupsState shape (space-30).
-    if (type === "space.get" || type === "space.remote.set") assertGroupsState(reply.result as GroupsState);
+    if (type === "space.get" || type === "space.remote.set" || type === "space.signout") assertGroupsState(reply.result as GroupsState);
     return reply.result;
   }
   async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
