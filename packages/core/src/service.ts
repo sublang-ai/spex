@@ -70,7 +70,7 @@ import { i18n, speak } from "./i18n.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import type { TurnControlKind } from "./control-record.js";
-import { readStoredLanguage, Store } from "./store.js";
+import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
@@ -444,6 +444,9 @@ export class CoreService {
   private watcher?: FSWatcher;
   /** One watcher per clone's `sessions/` (storage-14). */
   private readonly sessionsWatchers = new Map<string, FSWatcher>();
+  /** One watcher per clone's config beside your own group's
+   * (core-service-2): its `config/`, or the clone until that appears. */
+  private readonly configWatchers = new Map<string, { dir: string; watcher: FSWatcher }>();
   private adoptTimer?: NodeJS.Timeout;
   private reloadTimer?: NodeJS.Timeout;
 
@@ -1186,6 +1189,68 @@ export class CoreService {
         }, 150);
       }));
     }
+    this.watchProjectConfigs();
+  }
+
+  /**
+   * One watcher per clone's `config/playbook.config.yaml` beside your
+   * own group's (core-service-2): a change reloads the composed state.
+   * A clone with no `config/` yet is watched for its appearing, then
+   * inside it; a clone that left, or moved, loses its own.
+   */
+  private watchProjectConfigs(): void {
+    if (this.options.watchConfig === false || this.stopping) return;
+    const own = resolve(this.configPath);
+    const wanted = new Map<string, SpexRepository>();
+    for (const repository of this.store.listRepositories()) {
+      if (repository.key !== this.store.home.own() && resolve(repository.configPath) !== own) wanted.set(repository.key, repository);
+    }
+    const target = (repository: SpexRepository): string | undefined => {
+      const configDir = dirname(repository.configPath);
+      if (existsSync(configDir)) return configDir;
+      return existsSync(repository.dir) ? repository.dir : undefined;
+    };
+    for (const [key, entry] of [...this.configWatchers]) {
+      const repository = wanted.get(key);
+      if (repository && target(repository) === entry.dir) continue;
+      entry.watcher.close();
+      this.configWatchers.delete(key);
+    }
+    for (const [key, repository] of wanted) {
+      if (this.configWatchers.has(key)) continue;
+      const dir = target(repository);
+      if (!dir) continue;
+      const configDir = dirname(repository.configPath);
+      const name = dir === configDir ? basename(repository.configPath) : basename(configDir);
+      try {
+        const watcher = watch(dir, (_eventType, filename) => {
+          // A sync's Apply through Refresh reloads once it is done
+          // (space-31).
+          if (this.watchersPaused.has(key)) return;
+          if (filename && filename !== name) return;
+          // `config/` appeared: the file inside it is watched from now.
+          if (dir !== configDir) this.watchProjectConfigs();
+          this.scheduleReload();
+        });
+        watcher.on("error", () => {
+          watcher.close();
+          if (this.configWatchers.get(key)?.watcher === watcher) this.configWatchers.delete(key);
+        });
+        this.configWatchers.set(key, { dir, watcher });
+      } catch {
+        // A folder that left between the check and the watch: the next
+        // change of the clones watches again.
+      }
+    }
+  }
+
+  /** A config file changed on disk: reload once the writes settle. */
+  private scheduleReload(): void {
+    if (this.reloadTimer) clearTimeout(this.reloadTimer);
+    this.reloadTimer = setTimeout(() => {
+      this.reloadTimer = undefined;
+      void this.reloadConfig();
+    }, 150);
   }
 
   /** The compiled-playbook library home (DR-005, DR-036): under the
@@ -1288,6 +1353,8 @@ export class CoreService {
     this.watcher?.close();
     for (const watcher of this.sessionsWatchers.values()) watcher.close();
     this.sessionsWatchers.clear();
+    for (const { watcher } of this.configWatchers.values()) watcher.close();
+    this.configWatchers.clear();
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
     if (this.adoptTimer) clearTimeout(this.adoptTimer);
     // A Space transport in flight is stopped; a local step finishes.
@@ -1561,11 +1628,7 @@ export class CoreService {
     this.watcher = watch(dir, (_eventType, filename) => {
       if (this.watchersPaused.has(this.store.home.own())) return;
       if (filename && filename !== file) return;
-      if (this.reloadTimer) clearTimeout(this.reloadTimer);
-      this.reloadTimer = setTimeout(() => {
-        this.reloadTimer = undefined;
-        void this.reloadConfig();
-      }, 150);
+      this.scheduleReload();
     });
   }
 

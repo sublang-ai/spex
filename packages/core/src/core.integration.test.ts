@@ -262,6 +262,8 @@ async function startHarness(
     compileSpawner?: import("./compile.js").LineSpawner;
     adapterRuntime?: import("./service.js").CoreServiceOptions["adapterRuntime"];
     discoverAgentModels?: import("./service.js").CoreServiceOptions["discoverAgentModels"];
+    /** Watch the config files and the clones as a running app does. */
+    watchConfig?: boolean;
   } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-core-it-");
@@ -309,7 +311,7 @@ async function startHarness(
     ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
     home: join(dir, "home"),
     own: OWN,
-    watchConfig: false,
+    watchConfig: options.watchConfig ?? false,
     ...(options.scaffoldCommand
       ? { scaffoldCommand: options.scaffoldCommand }
       : {}),
@@ -4939,4 +4941,38 @@ test("core-service-2: config.get with a project answers its composition, and the
   // A project the home does not hold is named not found.
   const unknown = await client.command("config.get", { projectId: `${OWN}/nowhere-spex` });
   assert.ok(!unknown.ok && unknown.error.code === "not_found");
+});
+
+test("core-service-2: a project's config file changed on disk reloads without a restart", async (t) => {
+  const harness = await startHarness(OWN_CODE_ONLY, { watchConfig: true });
+  const client = new Client(harness.service.port());
+  t.after(async () => { client.close(); await harness.service.stop(); rmSync(harness.dir, { recursive: true, force: true }); });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const configDir = join(clonePath(harness.dataDir, project.id), "config");
+  const projectConfig = join(configDir, "playbook.config.yaml");
+  assert.equal(existsSync(projectConfig), false, "a new project's clone holds no config of its own");
+  const announcedAfter = (seen: number, check: (state: import("./protocol.js").ConfigState) => boolean) =>
+    client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "config.state" &&
+      message.projects?.[project.id] !== undefined && check(message.projects[project.id]!), 10_000);
+
+  // The file arrives as a teammate's would, its folder with it.
+  let seen = client.messages.length;
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n");
+  await announcedAfter(seen, (state) => offered(state).includes("/review"));
+
+  // A player your own roster lacks is reported as the file changes
+  // (settings-46), with no restart.
+  seen = client.messages.length;
+  writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
+  const missing = await client.waitFor((message) => client.messages.indexOf(message) >= seen && message.type === "config.state" &&
+    message.state.status === "valid" && (message.state.missingPlayers ?? []).some((entry) => entry.player === "dev.auditor"), 10_000);
+  assert.ok(missing.type === "config.state" && missing.state.status === "valid");
+  assert.deepEqual(missing.state.missingPlayers, [{ player: "dev.auditor", repository: project.id, roles: [{ playbook: "review", role: "reviewer" }] }]);
+
+  // Disabled there again, the project offers yours alone.
+  seen = client.messages.length;
+  writeFileSync(projectConfig, "playbooks: {}\n");
+  await announcedAfter(seen, (state) => state.status === "valid" && !offered(state).includes("/review"));
 });

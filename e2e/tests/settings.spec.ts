@@ -183,16 +183,17 @@ test.describe("a player the project names", () => {
     page,
     app,
   }) => {
-    // The project's config binds review's reviewer to a player your
-    // own group's roster lacks, by name alone (core-service-2), as a
-    // teammate's file arrives: the core reads it when it next starts.
     const projectConfig = join(clonePath(app.dataDir, app.projectId!), "config", "playbook.config.yaml");
-    await app.stop();
-    mkdirSync(dirname(projectConfig), { recursive: true });
-    writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
-    await app.start();
     await open(page, app);
     await nav(page, "Settings").click();
+    await expect(page.getByTestId("players-section")).toBeVisible();
+
+    // The project's config binds review's reviewer to a player your
+    // own group's roster lacks, by name alone (core-service-2), as a
+    // teammate's file arrives while the core runs: it reloads on the
+    // change, with no restart.
+    mkdirSync(dirname(projectConfig), { recursive: true });
+    writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
 
     // The surface names the file it writes — your own group's — by its
     // spex repository, and points a project's bindings to Playbooks.
