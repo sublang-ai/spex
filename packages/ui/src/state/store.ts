@@ -14,11 +14,14 @@ import type {
   AgentBlockInput,
   AdapterName,
   AgentOptions,
-  BuiltinPlaybookInfo,
   ClosedIntent,
+  CommandResults,
   ConfigState,
   DraftInfo,
   DraftRecord,
+  EnvironmentRequest,
+  EnvironmentState,
+  PublishPreview,
   ForgeState,
   IntentInfo,
   IntentSource,
@@ -95,7 +98,7 @@ export interface DraftSourceMode {
   pastePath: string;
 }
 
-/** The Boss's own edits to the Register tab (playbook-library-61):
+/** The Boss's own edits to the Enable tab (playbook-library-61):
  * they take precedence over the agent's proposal and the derived
  * defaults, so a proposal landing later never overwrites them. */
 export interface DraftRegisterForm {
@@ -105,7 +108,22 @@ export interface DraftRegisterForm {
   players: Record<string, string>;
   /** The agent block each new lane carries, once edited. */
   newPlayers: Record<string, AgentBlockInput>;
+  /** The spex repository chosen to enable in; absent, the project
+   * (playbook-library-61). */
+  repository?: string;
 }
+
+/** Which spex repository the Playbooks surface shows: the chosen
+ * project's, or your own group's (playbook-library-1). */
+export type PlaybooksSide = "project" | "own";
+
+/** What `environment.playbooks` answered, and for which project. */
+export type PlaybookLists = CommandResults["environment.playbooks"] & {
+  projectId: string | null;
+};
+
+/** One spec package the registry's search found (playbook-library-92). */
+export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
 export interface ComposerState {
   /** Submissions waiting for the turn to end (RUN-8). A staged
@@ -168,8 +186,6 @@ export interface AppState extends AttachmentState {
   projectMeta: Record<string, ProjectMeta>;
   compileProgress: Record<string, string[]>;
   activeCompile?: CompileTracker;
-  /** Built-in playbook catalog (DR-015); undefined until first load. */
-  builtins?: BuiltinPlaybookInfo[];
   sessions: SessionInfo[];
   views: Record<string, SessionView>;
   composers: Record<string, ComposerState>;
@@ -322,8 +338,34 @@ export interface AppState extends AttachmentState {
    * Library focuses its id field on arrival (playbook-library-51). */
   newPlaybookRequested: boolean;
   /** A playbook the Library should bring into view on its next render —
-   * the one a registration just made (playbook-library-61). */
+   * the one an enabling just made (playbook-library-61). */
   revealPlaybook?: string;
+  /** Each spex repository's environment as last read or broadcast
+   * (playbook-library-92), by the repository's key. */
+  environments: Record<string, EnvironmentState>;
+  /** A failed environment read, by repository. */
+  environmentErrors: Record<string, string>;
+  /** The playbooks the chosen project's and your own group's
+   * environments export (playbook-library-1); undefined until read. */
+  playbookLists?: PlaybookLists;
+  /** The Playbooks surface's side (playbook-library-1). */
+  playbooksSide: PlaybooksSide;
+
+  setPlaybooksSide(side: PlaybooksSide): void;
+  /** Read what each environment exports, for this project's side and
+   * your own group's; the newest read wins. */
+  loadPlaybookLists(projectId: string | undefined): Promise<void>;
+  loadEnvironment(repository: string): Promise<void>;
+  /** Write a request into a spex repository's `spex.yaml`; resolving
+   * and installing report through `environment.state`. */
+  requestSpecPackage(repository: string, name: string, request: EnvironmentRequest): Promise<void>;
+  removeSpecPackage(repository: string, name: string): Promise<void>;
+  resolveEnvironment(repository: string): Promise<void>;
+  installEnvironment(repository: string): Promise<void>;
+  searchRegistry(query: string): Promise<RegistryResult[]>;
+  /** The inline summary Publish shows before it uploads anything. */
+  previewPublish(repository: string, path: string): Promise<PublishPreview>;
+  publishSpecPackage(repository: string, path: string): Promise<void>;
 
   listDrafts(): Promise<void>;
   /** Create a draft in the spex repository of the workspace's current
@@ -347,6 +389,9 @@ export interface AppState extends AttachmentState {
   refreshDraftSource(draftId: string): Promise<DraftSourceState | null>;
   compileDraft(draftId: string): Promise<void>;
   abortDraftCompile(draftId: string): Promise<void>;
+  /** Enable the compiled playbook in a spex repository's config — the
+   * project's by default — keeping the authoring session
+   * (playbook-library-61). */
   registerDraft(
     draftId: string,
     input: {
@@ -354,6 +399,7 @@ export interface AppState extends AttachmentState {
       intent: string;
       bindings: Record<string, string>;
       newPlayers?: Record<string, AgentBlockInput>;
+      repository?: string;
     },
   ): Promise<void>;
   setDraftPlayer(draftId: string, playerId: string | null): Promise<void>;
@@ -408,8 +454,6 @@ export interface AppState extends AttachmentState {
   /** Register a folder, silently git-initializing non-repos
    * (RUN-27); the palette and any surface share this one action. */
   addProjectByPath(path: string): Promise<ProjectInfo>;
-  /** Load (or refresh) the built-in playbook catalog (DR-015). */
-  loadBuiltins(): Promise<void>;
   /** Seed the Academy example project (DR-015) and make it current.
    * Paths pass through as typed — the core expands a leading ~. */
   openAcademyExample(path?: string): Promise<ProjectInfo>;
@@ -770,6 +814,10 @@ export function deliverServerMessageForTests(message: ServerMessage): void {
 /** The newest ledger read's number: only its reply applies. */
 let ledgerReads = 0;
 
+/** The newest playbook-list read's number: an older reply that a newer
+ * read overtook is discarded (playbook-library-1). */
+let playbookListReads = 0;
+
 /** Markers already sent, by session: the standing condition
  * (run-view-134) re-asserts on every fold push, and this keeps that
  * from re-sending the same marker while the fold catches up. A refused
@@ -1108,6 +1156,12 @@ export const useAppStore = create<AppState>((set, get) => {
     return projectId;
   }
 
+  /** Read the playbook lists again where they were read before. */
+  function reloadPlaybookLists(): void {
+    const lists = get().playbookLists;
+    if (lists) void get().loadPlaybookLists(lists.projectId ?? undefined).catch(() => {});
+  }
+
   function setDraftError(draftId: string, message: string): void {
     set({ draftErrors: { ...get().draftErrors, [draftId]: message } });
   }
@@ -1163,13 +1217,17 @@ export const useAppStore = create<AppState>((set, get) => {
       case "config.state":
         noteSpaceChange();
         set({ configState: message.state });
-        // Config edits flip catalog `configured` flags (DR-015):
-        // refresh an already-loaded catalog so the Library stays true.
-        if (get().builtins) {
-          void get()
-            .loadBuiltins()
-            .catch(() => {});
-        }
+        // An edit moves where playbooks are enabled (playbook-library-3):
+        // an already-read list reads again so the surface stays true.
+        reloadPlaybookLists();
+        break;
+      case "environment.state":
+        // The core's state replaces the last one wholesale
+        // (environments-17); what it exports may have moved with it.
+        set({
+          environments: { ...get().environments, [message.repository]: message.state },
+        });
+        reloadPlaybookLists();
         break;
       case "readiness.state":
         set({ readiness: message.entries });
@@ -1229,8 +1287,8 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       }
       case "draft.removed": {
-        // Retired by registration or deleted, here or elsewhere: every
-        // trace goes, and an open workspace yields to the list. Ids are
+        // Deleted, here or elsewhere: every trace goes, and an open
+        // workspace yields to the list. Ids are
         // unique within one spex repository only, so a removal names
         // the project too.
         const known = get().drafts[message.draftId];
@@ -1392,6 +1450,9 @@ export const useAppStore = create<AppState>((set, get) => {
     ),
     compileProgressAt: {},
     newPlaybookRequested: false,
+    environments: {},
+    environmentErrors: {},
+    playbooksSide: "project",
     spaceChangeSeq: 0,
     spaceSplit: readSpaceSplit(),
     spacePrivacyCollapsed: safeStorageGet(SPACE_PRIVACY_KEY) !== "0",
@@ -1519,6 +1580,12 @@ export const useAppStore = create<AppState>((set, get) => {
       void get().loadLedger();
       for (const project of projects) void get().loadProjectMeta(project.id);
       void get().listDrafts().catch(() => {});
+      // The core phrases an environment's staleness, failures and
+      // invalid entries: what was read is read again.
+      reloadPlaybookLists();
+      for (const repository of Object.keys(get().environments)) {
+        void get().loadEnvironment(repository).catch(() => {});
+      }
       for (const sessionId of Object.keys(get().views)) void refoldView(sessionId).catch(() => {});
     },
 
@@ -1710,11 +1777,6 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         throw cause;
       }
-    },
-
-    async loadBuiltins(): Promise<void> {
-      const { builtins } = await getClient().command("library.builtins", {});
-      set({ builtins });
     },
 
     async openAcademyExample(path?: string): Promise<ProjectInfo> {
@@ -2447,19 +2509,23 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async registerDraft(draftId, input): Promise<void> {
+      const projectId = draftProject(draftId);
       const configState = await getClient().command("draft.register", {
-        projectId: draftProject(draftId),
+        projectId,
         draftId,
         command: input.command,
         intent: input.intent,
         bindings: input.bindings,
         ...(input.newPlayers ? { newPlayers: input.newPlayers } : {}),
+        ...(input.repository ? { repository: input.repository } : {}),
       });
-      // The draft is retired: the playbook is configured, the record is
-      // gone, and the list opens with the new card in view.
-      set({ configState, revealPlaybook: draftId });
-      forgetDraft(draftId);
-      void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
+      // The session stays, to be worked on further and published; the
+      // list opens on the side enabled in, with the new card in view
+      // (playbook-library-61).
+      const side: PlaybooksSide =
+        input.repository && input.repository !== projectId ? "own" : "project";
+      set({ configState, revealPlaybook: draftId, playbooksSide: side, openDraftId: undefined });
+      void get().loadPlaybookLists(projectId).catch(() => {});
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
@@ -2546,6 +2612,82 @@ export const useAppStore = create<AppState>((set, get) => {
       const reveal = get().revealPlaybook;
       if (reveal !== undefined) set({ revealPlaybook: undefined });
       return reveal;
+    },
+
+    // -----------------------------------------------------------------
+    // Environments (playbook-library-1, playbook-library-92, DR-104)
+    // -----------------------------------------------------------------
+
+    setPlaybooksSide(side: PlaybooksSide): void {
+      set({ playbooksSide: side });
+    },
+
+    async loadPlaybookLists(projectId: string | undefined): Promise<void> {
+      const read = (playbookListReads += 1);
+      const lists = await getClient().command(
+        "environment.playbooks",
+        projectId ? { projectId } : {},
+      );
+      if (read !== playbookListReads) return;
+      set({ playbookLists: { ...lists, projectId: projectId ?? null } });
+    },
+
+    async loadEnvironment(repository: string): Promise<void> {
+      try {
+        const state = await getClient().command("environment.get", { repository });
+        const { [repository]: _dropped, ...errors } = get().environmentErrors;
+        set({
+          environments: { ...get().environments, [repository]: state },
+          environmentErrors: errors,
+        });
+      } catch (cause) {
+        set({
+          environmentErrors: {
+            ...get().environmentErrors,
+            [repository]: (cause as Error).message,
+          },
+        });
+        throw cause;
+      }
+    },
+
+    // Each change is accepted at once; resolving and installing report
+    // through environment.state (environments-15, DR-010 §5).
+    async requestSpecPackage(repository, name, request): Promise<void> {
+      await getClient().command("environment.request", { repository, name, request });
+    },
+
+    async removeSpecPackage(repository: string, name: string): Promise<void> {
+      await getClient().command("environment.remove", { repository, name });
+    },
+
+    async resolveEnvironment(repository: string): Promise<void> {
+      await getClient().command("environment.resolve", { repository });
+    },
+
+    async installEnvironment(repository: string): Promise<void> {
+      await getClient().command("environment.install", { repository });
+    },
+
+    async searchRegistry(query: string): Promise<RegistryResult[]> {
+      const { packages } = await getClient().command("environment.search", { query });
+      return packages;
+    },
+
+    async previewPublish(repository: string, path: string): Promise<PublishPreview> {
+      const reply = await getClient().command("environment.publish", {
+        repository,
+        path,
+        dryRun: true,
+      });
+      if (!reply.preview) {
+        throw new Error(i18n._("Spex could not read what this would publish."));
+      }
+      return reply.preview;
+    },
+
+    async publishSpecPackage(repository: string, path: string): Promise<void> {
+      await getClient().command("environment.publish", { repository, path });
     },
 
     async runCompile(input): Promise<void> {

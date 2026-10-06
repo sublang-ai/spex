@@ -48,7 +48,9 @@ export function patchPlayer(
 
 /** Bind a role to a lane, with that role's own tuning. `false` picks
  * the provider default; null clears the override so the role inherits
- * the player's (DR-032). */
+ * the player's (DR-032). `repository` names whose config the entry is
+ * in — a project's takes the player alone (playbook-library-4); absent,
+ * your own group's. */
 export function bindRole(
   playbookId: string,
   role: string,
@@ -60,6 +62,7 @@ export function bindRole(
     subagentEffort?: string | false | null;
     fastMode?: boolean | null;
   },
+  repository?: string,
 ): Promise<unknown> {
   // An untouched tuning is absent, not `undefined`: the op means
   // "preserve the existing value" when a key does not appear; null clears it.
@@ -76,6 +79,7 @@ export function bindRole(
       playerId: next.playerId,
       ...tuning,
     },
+    ...(repository ? { repository } : {}),
   });
 }
 

@@ -39,7 +39,7 @@ function draft(overrides: Partial<DraftInfo>): DraftInfo {
 describe("draft chips", () => {
   test("every state has its word, each within the 14-character budget", () => {
     const words = (
-      ["no-source", "draft", "compiling", "failed", "interrupted", "compiled", "changed"] as const
+      ["no-source", "draft", "compiling", "failed", "interrupted", "compiled", "changed", "enabled"] as const
     ).map((state) => draftChipWord(draft({ state })));
     expect(words).toEqual([
       "No source",
@@ -49,6 +49,7 @@ describe("draft chips", () => {
       "Interrupted",
       "Compiled",
       "Changed",
+      "Enabled",
     ]);
     expect(draftChipWord(draft({ sourceMissing: true }))).toBe("Source missing");
     for (const word of [...words, "Source missing"]) {
