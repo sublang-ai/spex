@@ -19,10 +19,13 @@ export * from "./agent-folders.js";
 export * from "./archive.js";
 export * from "./tar.js";
 export {
+  builtinLock,
   builtinPackage,
   builtinsRoot,
+  prepareBuiltinEnvironment,
   builtinRegistrySource,
   compositeRegistry,
+  ensureBuiltinRequest,
   seedBuiltinPackage,
   type BuiltinPackage,
   type BuiltinRelease,

@@ -37,8 +37,12 @@ export const BUILTIN_PACKAGE_NAME = "sublang/playbooks";
 /** The manifest an export leaves in each agent folder it writes. */
 export const EXPORTS_MANIFEST = ".spex-exports.json";
 
-const EXCLUDE_BEGIN = "# >>> spex exports (managed by Spex; do not edit)";
-const EXCLUDE_END = "# <<< spex exports";
+/** A managed block of a working folder's `info/exclude`: the exports,
+ * or the engine links a compile provisions (playbook-library-12). */
+export type ExcludeBlock = "exports" | "engine links";
+
+const excludeBegin = (block: ExcludeBlock): string => `# >>> spex ${block} (managed by Spex; do not edit)`;
+const excludeEnd = (block: ExcludeBlock): string => `# <<< spex ${block}`;
 
 export interface ExportOptions {
   cloneDir: string;
@@ -178,24 +182,50 @@ export function gitExcludeFile(workingFolder: string): string | null {
   return join(common, "info", "exclude");
 }
 
-/** Replace the managed block of a working folder's `info/exclude`. */
-export function writeExcludeBlock(workingFolder: string, entries: string[]): void {
+/** Replace a managed block of a working folder's `info/exclude`. */
+export function writeExcludeBlock(workingFolder: string, entries: string[], block: ExcludeBlock = "exports"): void {
   const file = gitExcludeFile(workingFolder);
   if (!file) return;
+  const begin = excludeBegin(block);
+  const end = excludeEnd(block);
   const text = existsSync(file) ? readFileSync(file, "utf8") : "";
   const lines = text.split("\n");
   const kept: string[] = [];
   let inside = false;
   for (const line of lines) {
-    if (line === EXCLUDE_BEGIN) { inside = true; continue; }
-    if (line === EXCLUDE_END) { inside = false; continue; }
+    if (line === begin) { inside = true; continue; }
+    if (line === end) { inside = false; continue; }
     if (!inside) kept.push(line);
   }
   while (kept.length > 0 && kept[kept.length - 1] === "") kept.pop();
-  const block = entries.length > 0 ? [EXCLUDE_BEGIN, ...entries, EXCLUDE_END] : [];
-  const out = [...kept, ...block].join("\n");
+  const managed = entries.length > 0 ? [begin, ...entries, end] : [];
+  const out = [...kept, ...managed].join("\n");
+  const next = out.length > 0 ? `${out}\n` : "";
+  if (next === text) return;
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, out.length > 0 ? `${out}\n` : "");
+  writeFileSync(file, next);
+}
+
+/**
+ * Remove what exports wrote into a working folder (environments-8): each
+ * agent folder's exported skills and their manifest, and the exports'
+ * block of the folder's `info/exclude`; a skill the reader placed stays.
+ * Called when the folder stops being paired with the spex repository.
+ */
+export function removeExports(workingFolder: string): string[] {
+  const removed: string[] = [];
+  for (const folders of Object.values(AGENT_FOLDERS)) {
+    const dir = join(workingFolder, ...folders.project.split("/"));
+    const manifest = join(dir, EXPORTS_MANIFEST);
+    if (!existsSync(manifest)) continue;
+    for (const name of readExportsManifest(dir)) {
+      rmSync(join(dir, name), { recursive: true, force: true });
+      removed.push(name);
+    }
+    rmSync(manifest, { force: true });
+  }
+  writeExcludeBlock(workingFolder, [], "exports");
+  return removed.sort();
 }
 
 function userFolder(userHome: string, folder: string): string {

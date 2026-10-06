@@ -8,16 +8,19 @@
 // registry source that needs no network. Several seeded versions stand
 // side by side, so a lock pinning an older one keeps installing it.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Document, isMap, parseDocument } from "yaml";
 
 import { writeApplicationBytes } from "../app-storage.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME } from "./exports.js";
-import { artifactLanguages, readRelease, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
+import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
+import { serializeLock, type Lock } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
+import { parseRequests, requestsDigest } from "./requests.js";
 import { compareVersions, isVersion } from "./semver.js";
 import type { ContentStore } from "./store.js";
 
@@ -235,6 +238,123 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
 
 function safeBuiltinPackage(): BuiltinPackage | null {
   try { return builtinPackage(); } catch { return null; }
+}
+
+/** A release folder's files, read synchronously as `readRelease` lists
+ * them: links refused, `.git` and `node_modules` folders skipped. */
+function listFilesSync(dir: string): ReleaseFile[] {
+  const files: ReleaseFile[] = [];
+  const walk = (relative: string): void => {
+    const absolute = relative ? join(dir, ...relative.split("/")) : dir;
+    for (const name of readdirSync(absolute).sort()) {
+      const path = relative ? `${relative}/${name}` : name;
+      const stat = lstatSync(join(absolute, name));
+      if (stat.isDirectory()) {
+        if (name === ".git" || name === "node_modules") continue;
+        walk(path);
+      } else if (stat.isFile()) {
+        if (name === ".DS_Store") continue;
+        const bytes = readFileSync(join(absolute, name));
+        files.push({ path, size: bytes.length, sha256: sha256Hex(bytes), executable: (stat.mode & 0o100) !== 0 });
+      } else {
+        throw new Error(`${pkgPathOf(dir, path)} is not a file`);
+      }
+    }
+  };
+  walk("");
+  return files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+function pkgPathOf(dir: string, path: string): string {
+  return join(dir, ...path.split("/"));
+}
+
+/**
+ * The lock an environment requesting only the built-in spec package
+ * resolves to, computed from the release this app ships without any
+ * source or network (environments-3, environments-6): every artifact in
+ * its original language, every file of theirs, each playbook exported
+ * under its id. A clone the store makes holds it from its first commit.
+ */
+export function builtinLock(pkg: BuiltinPackage, registryUrl: string, requestsText: string): Lock {
+  const { manifest, issues } = parseManifestText(readFileSync(join(pkg.dir, "meta.yaml"), "utf8"));
+  if (!manifest) throw new Error(issues.map((issue) => issue.message).join("; "));
+  const files = listFilesSync(pkg.dir);
+  const archive = packFiles(manifest.name, files.map((file) => ({ path: file.path, executable: file.executable, data: readFileSync(pkgPathOf(pkg.dir, file.path)) })));
+  const artifacts: Lock["packages"][string]["artifacts"] = {};
+  const exports: Record<string, string> = {};
+  const ids = Object.keys(manifest.artifacts).sort();
+  for (const id of ids) {
+    const artifact = manifest.artifacts[id]!;
+    artifacts[id] = { language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
+    if (artifact.kind === "playbook" || artifact.kind === "skill") exports[id] = id;
+  }
+  const selected = files.filter((file) => (ROOT_FILES as readonly string[]).includes(file.path)
+    || ids.some((id) => inArtifact(file.path, manifest.artifacts[id]!.kind, id, artifacts[id]!.language, manifest.name)));
+  return {
+    format: 1,
+    requests: requestsDigest(requestsText),
+    packages: {
+      [BUILTIN_PACKAGE_NAME]: {
+        source: { registry: registryUrl.replace(/\/+$/, ""), version: manifest.version, checksum: sha256Hex(archive) },
+        requiredBy: [],
+        artifacts,
+        files: selected.map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable })),
+        exports,
+      },
+    },
+  };
+}
+
+/**
+ * A new clone's environment (environments-11, storage-6): `spex.yaml`
+ * requesting the built-in spec package where it does not, and — where
+ * that is all it requests and no lock stands — its lock, so the clone's
+ * first commit holds both. Returns whether `spex.yaml` was written.
+ */
+export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage, registryUrl: string): boolean {
+  const wrote = ensureBuiltinRequest(cloneDir, pkg.version);
+  const lockFile = join(cloneDir, "spex.lock");
+  if (existsSync(lockFile)) return wrote;
+  const text = readFileSync(join(cloneDir, "spex.yaml"), "utf8");
+  let requested: string[];
+  try { requested = Object.keys(parseRequests(text).packages); } catch { return wrote; }
+  if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return wrote;
+  try {
+    writeApplicationBytes(lockFile, serializeLock(builtinLock(pkg, registryUrl, text)));
+  } catch (error) {
+    // The first resolve writes it instead.
+    console.error(`spex: ${cloneDir} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return wrote;
+}
+
+/**
+ * Request the built-in spec package at a caret requirement in a spex
+ * repository's `spex.yaml` where it is not requested (environments-11,
+ * storage-6): written synchronously, so a clone's first commit already
+ * holds it; comments and key order of an existing file are kept. A
+ * file that does not read is left as it is. Returns whether it wrote.
+ */
+export function ensureBuiltinRequest(cloneDir: string, version: string): boolean {
+  const file = join(cloneDir, "spex.yaml");
+  let text = "";
+  if (existsSync(file)) {
+    text = readFileSync(file, "utf8");
+    try {
+      if (parseRequests(text).packages[BUILTIN_PACKAGE_NAME]) return false;
+    } catch {
+      return false;
+    }
+  }
+  const doc = text.trim() === "" ? new Document({ format: 1, packages: {} }) : parseDocument(text);
+  if (!isMap(doc.get("packages", true))) doc.set("packages", doc.createNode({}));
+  doc.setIn(["packages", BUILTIN_PACKAGE_NAME], doc.createNode({ version: `^${version}` }));
+  const next = doc.toString({ lineWidth: 0 });
+  parseRequests(next);
+  mkdirSync(cloneDir, { recursive: true });
+  writeApplicationBytes(file, next);
+  return true;
 }
 
 /** A registry that answers `sublang/playbooks` from the built-in source

@@ -8,8 +8,9 @@
 // assets/builtins/<version>/. Each playbook is an artifact in `en`: its
 // text at playbooks/en/<id>/<id>.md and its shipped folder at
 // playbooks/en/<id>/<id>.playbook/, with the JavaScript, Markdown and
-// JSON files kept and the TypeScript sources, declarations and launcher
-// template left out. A package.json marks the folder's JavaScript as
+// JSON files kept, with each machine's `.fsm.ts` source the Playbooks
+// surface reads, and the other TypeScript sources, declarations and
+// launcher template left out. A package.json marks the folder's JavaScript as
 // ES modules, as Playbook's own package does. The copy is gitignored
 // and rebuilt at build and test, so it never drifts from the
 // dependency.
@@ -61,8 +62,11 @@ function copyPlaybookFolder(from, to) {
       copyPlaybookFolder(source, join(to, name));
       continue;
     }
-    if (LEFT_OUT.has(name) || name.endsWith(".d.ts") || name.endsWith(".ts")) continue;
-    if (!KEPT.has(extname(name))) continue;
+    // The machine's own source stays: the Playbooks surface reads the
+    // FSM stage and its graph from it (playbook-library-24, -36).
+    const machineSource = name.endsWith(".fsm.ts") && !name.endsWith(".d.ts");
+    if (!machineSource && (LEFT_OUT.has(name) || name.endsWith(".d.ts") || name.endsWith(".ts"))) continue;
+    if (!machineSource && !KEPT.has(extname(name))) continue;
     copyFile(source, join(to, name));
   }
 }
