@@ -1924,10 +1924,33 @@ export class Store {
   }
 
   /** Retire an intent (core-service-79): its file and attachments go,
-   * recoverable from the spex repository's history alone. */
+   * recoverable from the spex repository's history alone. Its turns pass
+   * to the preceding dispatch once its stamp is gone, so the session's
+   * viewed marker first advances past its last ended turn: work already
+   * ruled on summons no review. */
   removeIntent(id: string, _at?: number): void {
     const { intent, repository } = this.requireIntent(id);
+    const lastEnded = this.lastEndedTurnOf(intent);
     this.deleteIntentFiles(repository, intent);
+    if (lastEnded) {
+      const key = `viewed:${lastEnded.sessionId}`;
+      const viewed = this.getPref<number>(key) ?? -1;
+      if (lastEnded.turnId > viewed) this.setPref(key, lastEnded.turnId);
+    }
+  }
+
+  /** The last ended turn a dispatched intent attributes: from its
+   * dispatch turn up to the next dispatch of another intent in the
+   * session, or the session's end (DR-035). */
+  private lastEndedTurnOf(intent: IntentInfo): { sessionId: string; turnId: number } | undefined {
+    const bound = intent.dispatched;
+    if (!bound) return undefined;
+    const next = this.listSessionDispatches(bound.sessionId)
+      .find((dispatch) => dispatch.turnId > bound.turnId && dispatch.intentId !== intent.id);
+    const last = this.listTurns(bound.sessionId)
+      .filter((turn) => turn.turnId >= bound.turnId && (next === undefined || turn.turnId < next.turnId) && turn.endedAt !== null)
+      .at(-1);
+    return last ? { sessionId: bound.sessionId, turnId: last.turnId } : undefined;
   }
 
   private deleteIntentFiles(repository: SpexRepository, intent: IntentInfo): void {

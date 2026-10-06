@@ -1414,6 +1414,8 @@ test("core-service-79: a remove deletes a closed intent's file and attachments, 
   assert.ok(existsSync(join(intentsDir, `${ids.gone}.json`)));
 
   store.removeIntent(ids.gone, 5000);
+  // The session's viewed marker advanced past its last ended turn.
+  assert.equal(store.getPref(`viewed:${ids.s1}`), 2);
 
   // The file and its attachments go (storage-4) ...
   assert.ok(!existsSync(join(intentsDir, `${ids.gone}.json`)), "the intent's file is deleted");
@@ -1449,6 +1451,24 @@ test("core-service-79: a remove deletes a closed intent's file and attachments, 
   assert.deepEqual(stateOf(reread, ids.first).stats, { turns: 2, elapsedMs: 3000 });
   assert.equal(stateOf(reread, ids.kept).state, "queued");
   assert.deepEqual(readdirSync(intentsDir).sort(), [`${ids.kept}.json`, `${ids.first}.json`].sort());
+
+  // A later intent worked after the first's verdict and then removed:
+  // its turn passes to no open dispatch, so the viewed marker advances
+  // past its last ended turn first and work already ruled on summons no
+  // review.
+  const late = "73000000-0000-4000-8000-000000000005";
+  const laneOf = [lane(ids.s1, projectId, false)];
+  reopened.closeIntent(ids.first, "done", 5500);
+  queueIntent(reopened, projectId, late);
+  beginTurn(reopened, ids.s1, 3, "late work", 6000);
+  reopened.stampIntentDispatch(late, ids.s1, 3, 6000);
+  finishTurn(reopened, ids.s1, 3, 7000);
+  reopened.closeIntent(late, "done", 7500);
+  assert.ok(!fold(reopened, laneOf).attention.some((entry) => entry.sessionId === ids.s1), "a ruled turn raises nothing");
+  assert.equal(reopened.getPref(`viewed:${ids.s1}`), 2);
+  reopened.removeIntent(late, 8000);
+  assert.equal(reopened.getPref(`viewed:${ids.s1}`), 3);
+  assert.deepEqual(fold(reopened, laneOf).attention.filter((entry) => entry.sessionId === ids.s1), [], "no review returns");
   reopened.close();
 });
 
