@@ -122,7 +122,7 @@ function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) =>
 
 const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "signIn"];
 
-const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "state", "sync", "visibility", "waiting"];
+const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
