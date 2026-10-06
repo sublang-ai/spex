@@ -1,37 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's journeys (DR-057, DR-103): a project's spex
-// repository given a bare remote and synced for the first time
-// (space-40), the daily sync with conflicts chosen by keyboard, a host
-// that moves under the push, and Stop against a sleeping transport
-// (space-41), the explorer with its privacy panel and Copy path
-// (space-42), fit at every width in both sidebar states (space-43),
-// and axe in both themes (space-44). Every remote is a bare repository
-// in the scratch root on its `spex` branch and every transport a local
-// path or a sleeping script: hermetic, no network, no credentials.
+// The Groups surface's journeys (DR-103; DR-057 named it Space),
+// against the stand-in Git host (git-host-12): the first start and the
+// first sign-in by the device flow the served shell runs (space-40);
+// the daily sync with conflicts chosen by keyboard, a host that moves
+// under the push, Stop against a sleeping transport and the members
+// (space-41); the explorer with its privacy panel and Copy path
+// (space-42); fit at every width in both sidebar states (space-43);
+// axe in both themes (space-44); and a second device joining a project
+// a peer pushed (space-36). Every host is the in-process stand-in on
+// loopback, every peer plain Git on its bare repositories, and the
+// exploring journey's remote a bare path: hermetic, no network, no
+// credential of the machine's.
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
-  E2E_OWN,
+  HOST_GROUP,
+  HOST_LOGIN,
   LOCAL_MODEL,
   LOCAL_PROJECT_CONFIG,
-  clonePath,
   LOCAL_TURN,
+  PEER_MEMBER,
+  PEER_SESSION_TITLE,
   PEER_TURN,
   SESSION_TITLE,
+  arrangeHostPeer,
+  bareOf,
+  clonePath,
   expect,
   git,
   nav,
   open,
   runTurn,
+  seedHostProject,
   send,
   settled,
+  signInThroughPage,
   test,
   type App,
 } from "../src/harness";
@@ -46,13 +56,14 @@ import {
   setRail,
 } from "../src/fit";
 
-/** Git's own words never lead on the surface (space-27). */
-const GIT_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/(main|spex)/;
+/** Git's own words, and the words the surface never uses for the
+ * host's things, never lead on it (space-27). */
+const FORBIDDEN_WORDS = /\b(ours|theirs|HEAD|MERGE_HEAD)\b|origin\/spex|\b[Nn]amespace\b|\b[Ss]pace\b/;
 
-/** Note any Git word in the surface's visible text. */
+/** Note any forbidden word in the surface's visible text (space-27). */
 async function scanVocabulary(page: Page, where: string, found: string[]): Promise<void> {
   const text = await page.getByTestId("space-surface").innerText();
-  const hit = GIT_WORDS.exec(text);
+  const hit = FORBIDDEN_WORDS.exec(text);
   if (hit) found.push(`${where}: "${hit[0]}" in "${text.slice(Math.max(0, hit.index - 40), hit.index + 40)}"`);
 }
 
@@ -84,17 +95,8 @@ async function watch(page: Page, selector: string): Promise<() => Promise<string
     );
 }
 
-/** Give the opened repository a remote through its own editor (space-5). */
-async function setRemote(page: Page, url: string): Promise<void> {
-  const panel = page.getByTestId("space-repository");
-  await panel.getByTestId("space-remote-edit").click();
-  await panel.getByTestId("space-remote-input").fill(url);
-  await panel.getByTestId("space-remote-editor").getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByTestId("space-remote-editor")).toHaveCount(0);
-}
-
-/** Open the Space surface from the sidebar. */
-async function showSpace(page: Page): Promise<void> {
+/** Open the Groups surface from the sidebar. */
+async function showGroups(page: Page): Promise<void> {
   await nav(page, "Groups").click();
   await expect(page.getByTestId("space-surface")).toBeVisible();
   await expect(page.getByTestId("space-header")).toBeVisible();
@@ -130,97 +132,123 @@ function inStepOrder(seen: string[]): boolean {
   return true;
 }
 
-/** Your own group's spex repository in every journey home (storage-2). */
-const OWN_REPOSITORY = `${E2E_OWN}/${E2E_OWN}-spex`;
+/** A branch's commit in a repository, or "" while it has none. */
+function headOf(dir: string, branch: string): string {
+  try {
+    return git(dir, "rev-parse", "--verify", "-q", branch);
+  } catch {
+    return "";
+  }
+}
+
+/** The demo project's spex repository once picked into the team group. */
+const TEAM_KEY = `${HOST_GROUP}/demo-project-spex`;
+/** Your own group's spex repository once signed in (space-59). */
+const OWN_KEY = `${HOST_LOGIN}/${HOST_LOGIN}-spex`;
 
 // ---------------------------------------------------------------------------
-// space-40: the first sync of a project's spex repository
+// space-40: the first start and the first sign-in
 // ---------------------------------------------------------------------------
 
-// What awaits sign-in (space-3, space-4, space-58, space-65): the
-// account in the header, your own group's spex repository created and
-// pushed on the Git host, and "Pick a group" for a local-only project.
-// Until the host exists here, a project's repository reaches a remote
-// through Set remote (space-5) and syncs against it as any other.
-test.describe("first sync", () => {
-  test.use({ appOptions: { project: true, remote: "bare" } });
+test.describe("first start", () => {
+  test.use({ appOptions: { host: true } });
 
-  test("space-40: the groups list, Set remote, the first sync, and a session and an intent sent", async ({
+  test("space-40: not signed in, a project added, the device sign-in, a group picked, a session and an intent sent", async ({
     page,
     app,
   }) => {
-    test.setTimeout(120_000);
-    const key = app.projectId!;
-    const clone = clonePath(app.dataDir, key);
+    test.setTimeout(150_000);
+    const host = app.host!;
     await open(page, app);
-    await showSpace(page);
+    await showGroups(page);
     const header = page.getByTestId("space-header");
 
-    // The header reads the home and that nothing is signed in; the
-    // groups list holds your own group with its repositories, your own
-    // group's first, each local only (space-1, space-61).
-    await expect(header.getByTestId("space-account")).toHaveText("Not signed in");
-    const group = page.getByTestId(`space-group-${E2E_OWN}`);
-    await expect(group.getByRole("heading", { level: 2 })).toContainText(E2E_OWN);
-    await expect(group.locator('[data-testid^="space-repo-"][data-state]')).toHaveCount(2);
-    await expect(group.locator('[data-testid^="space-repo-"][data-state]').first()).toHaveAttribute(
-      "data-testid",
-      `space-repo-${OWN_REPOSITORY}`,
+    // Not signed in: Sign in is the header's one primary control, a
+    // phrase says what it brings, and your own group stands alone
+    // beneath (space-1, space-3).
+    await expect(header.getByTestId("space-account")).toContainText("Not signed in");
+    await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
+    await expect(header.locator("button.bg-brand-600")).toHaveCount(1);
+    await expect(header.locator("button.bg-brand-600")).toHaveAttribute("data-testid", "space-signin");
+    await expect(header.getByTestId("space-signin-caption")).toHaveText(
+      "Your groups and each project's records shared with its members · nothing contacted until you sign in",
     );
-    const row = page.getByTestId(`space-repo-${key}`);
-    await expect(row).toHaveAccessibleName("demo-project-spex");
-    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Only on this device");
-    await expect(page.getByTestId(`space-repo-folder-${key}`)).toContainText("demo-project");
-    await expect(page.getByTestId(`space-repo-code-${key}`)).toHaveText("No code");
-    await expect(page.getByTestId("space-repository")).toHaveCount(0);
+    const groups = page.getByTestId("space-groups");
+    await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(1);
+    await expect(groups.getByTestId("space-group-e2e")).toBeVisible();
+    await expect(groups.getByRole("group", { name: "e2e" }).getByRole("heading", { level: 2 })).toHaveText("e2e");
+    // Nothing was contacted.
+    expect(host.script.requests.filter((request) => request.path.startsWith("/api/"))).toEqual([]);
 
-    // The row opens the repository's tabs; Set remote names the bare
-    // remote, and the row turns reachable, never synced (space-5,
-    // space-61).
-    await openRepository(page, key);
-    const panel = page.getByTestId("space-repository");
-    await expect(panel.getByTestId("space-last-sync")).toHaveText("Never synced");
-    await setRemote(page, app.remotePath!);
-    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Never synced");
-    expect(git(clone, "remote", "get-url", "origin")).toBe(app.remotePath);
+    // A project added from the palette lists under your own group as
+    // "Only on this device", Sign in standing as its control while
+    // signed out (space-61).
+    seedDemoProject(app.projectDir);
+    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
+    await palette.getByTestId("palette-path").fill(app.projectDir);
+    await palette.getByTestId("palette-add").click();
+    await expect(palette).toBeHidden();
+    await showGroups(page);
+    const localKey = "e2e/demo-project-spex";
+    await expect(page.getByTestId(`space-row-${localKey}`)).toBeVisible();
+    await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("Only on this device");
+    await expect(page.getByTestId(`space-row-signin-${localKey}`)).toHaveText("Sign in");
 
-    // The first sync sends what the clone holds: the step line names
-    // each step in order, the control reads "Syncing…", and the done
-    // line counts what the empty host took (space-12).
-    const labels = await watch(page, '[data-testid="space-primary"]');
-    const stepLines = await watch(page, '[data-testid="space-step-line"]');
-    await expect(panel.getByTestId("space-primary")).toHaveText("Sync");
-    await panel.getByTestId("space-primary").click();
-    const done = panel.getByTestId("space-done-line");
-    await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
-    await expect(panel.getByTestId("space-primary")).toHaveText("Sync");
-    await expect(panel.getByTestId("space-primary")).toBeEnabled();
-    expect(await labels()).toEqual(["Sync", "Syncing…", "Sync"]);
-    const steps = await stepLines();
-    expect(steps, steps.join(" → ")).toContain("Pushing…");
-    expect(inStepOrder(steps), steps.join(" → ")).toBe(true);
-    await expect(panel.getByTestId("space-last-sync")).toHaveText(/^Synced just now$/);
-    await expect(panel.getByTestId("space-last-sync")).toHaveAttribute("title", /\d/);
-    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Synced just now");
-    expect(git(app.remotePath!, "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
+    // Sign in shows the user code and the verification link, reading
+    // "Signing in…" until the stand-in approves; then the header reads
+    // the account and your own group bears its login (space-3, space-4).
+    await signInThroughPage(page, app);
+    await expect(header.getByTestId("space-account")).toContainText(`Signed in as ${HOST_LOGIN} at Stand-in Git host`);
+    await expect(header.getByTestId("space-signout")).toHaveText("Sign out");
+    await expect(groups.getByTestId(`space-group-${HOST_LOGIN}`)).toBeVisible();
+    await expect(groups.getByTestId("space-group-e2e")).toHaveCount(0);
+    await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName(`${HOST_LOGIN}-spex`);
+    const projectKey = `${HOST_LOGIN}/demo-project-spex`;
+    await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("Only on this device");
+    // Your own group's spex repository stands on the host, pushed.
+    await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
+    await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
 
-    // Nothing moved on the second sync: the line reads "Everything is
-    // in sync" (space-12).
-    await panel.getByTestId("space-primary").click();
-    await expect(done).toHaveText("Everything is in sync");
+    // Pick a group offers the stand-in's groups; picking the team's
+    // turns the row reachable with a sync time, the stand-in holding
+    // `<name>-spex` on its `spex` branch (space-58, space-12).
+    await page.getByTestId(`space-row-pick-${projectKey}`).click();
+    const picker = page.getByTestId(`space-picker-${projectKey}`);
+    await expect(picker).toBeVisible();
+    for (const group of [HOST_LOGIN, HOST_GROUP, `${HOST_GROUP}/research`]) {
+      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(group);
+    }
+    await expect(picker.getByTestId(`space-pick-name-${projectKey}`)).toHaveValue("demo-project");
+    await picker.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
+    await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
+    const clone = clonePath(app.dataDir, TEAM_KEY);
+    expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
 
-    // A session run from the Captain home lists under local changes by
-    // its title; Open session opens its tab; Sync sends it, the host's
-    // spex holding both bundle files (space-7).
+    // A session run from the Captain home lists under the repository's
+    // local changes by its title; Open session opens its tab; Sync sends
+    // it, the host's `spex` holding both bundle files (space-7, space-12).
+    // The project's key moved with the sign-in and the pick (space-59,
+    // space-58); the page re-reads its projects on a reload, so the
+    // Captain home addresses the project where it now is.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
     await nav(page, "Projects").click();
+    await page
+      .getByRole("tree", { name: "Projects and sessions" })
+      .getByRole("treeitem", { name: "demo-project", exact: true })
+      .click();
     await expect(page.getByTestId("captain-home")).toContainText("demo-project");
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
     // The turn settles and the runtime is released after that line;
     // Sync is refused by name until then (space-11).
     await settled(app);
-    await showSpace(page);
-    await openRepository(page, key);
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
+    const panel = page.getByTestId("space-repository");
     const local = panel.getByTestId("space-local-list");
     const sessionRow = local.locator('[data-testid^="space-unit-mine-sessions/"]');
     await expect(sessionRow).toHaveCount(1);
@@ -230,29 +258,32 @@ test.describe("first sync", () => {
     await sessionRow.getByRole("button", { name: "Open session" }).click();
     await expect(page.getByRole("tab", { name: /fix the token refresh/i })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("captain-pane")).toContainText("Fix the token refresh in auth.ts");
-    await showSpace(page);
-    await openRepository(page, key);
-    await panel.getByTestId("space-primary").click();
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
+    const labels = await watch(page, `[data-testid="space-row-sync-${TEAM_KEY}"]`);
+    await page.getByTestId(`space-row-sync-${TEAM_KEY}`).click();
+    const done = panel.getByTestId("space-done-line");
     await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+    await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
+    expect(await labels()).toEqual(["Sync", "Syncing…", "Sync"]);
     await expect(panel.getByTestId("space-sync-tab")).toContainText("Nothing to send from this device");
-    const tracked = git(app.remotePath!, "ls-tree", "-r", "--name-only", "spex").split("\n");
+    const tracked = git(bareOf(host, TEAM_KEY), "ls-tree", "-r", "--name-only", "spex").split("\n");
     expect(tracked).toContain(`sessions/${sessionId}.json`);
     expect(tracked).toContain(`sessions/${sessionId}.records.jsonl`);
-    expect(tracked.some((path) => path.endsWith(".hints.json") || path.startsWith("local/") || path === "prefs.json")).toBe(false);
+    expect(tracked.some((path) => path.endsWith(".hints.json") || path.startsWith("local/"))).toBe(false);
 
-    // An intent queued while Space is shown lists under local changes
+    // An intent queued while Groups is shown lists under local changes
     // with Refresh never activated — the ledger's announcement re-reads
     // the state — and Refresh's caption reads the time of the read
     // (space-2, space-7).
-    await app.core.command("intent.queue", { projectId: key, text: "Queued while Space is shown" });
+    await app.core.command("intent.queue", { projectId: TEAM_KEY, text: "Queued while Groups is shown" });
     const intentRow = local.locator('[data-testid^="space-unit-mine-intents/"]');
     await expect(intentRow).toHaveCount(1);
-    await expect(intentRow).toContainText("Queued while Space is shown");
+    await expect(intentRow).toContainText("Queued while Groups is shown");
     await expect(intentRow).toHaveAttribute("data-change", "new");
-    await expect(panel.getByTestId("space-local-count")).toHaveAccessibleName("1 local change");
-    await page.getByTestId("space-refresh").click();
-    await expect(page.getByTestId("space-read-at")).toHaveText("Read just now");
-    await expect(page.getByTestId("space-read-at")).toHaveAttribute("title", /\d/);
+    await header.getByTestId("space-refresh").click();
+    await expect(header.getByTestId("space-read-at")).toHaveText("Host read just now");
+    await expect(header.getByTestId("space-refresh")).toHaveAttribute("title", /^Reads the host again · last read .*\d/);
   });
 });
 
@@ -261,27 +292,30 @@ test.describe("first sync", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("daily sync", () => {
-  test.use({ appOptions: { project: true, remote: "peer" } });
+  test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
-  test("space-41: Check host, choices by keyboard, the confirm, a host that moved, and Stop", async ({
+  test("space-41: Check host, choices by keyboard, the confirm, a host that moved, Stop, and the members", async ({
     page,
     app,
   }) => {
     test.setTimeout(180_000);
-    const key = app.projectId!;
-    const clone = clonePath(app.dataDir, key);
+    await arrangeHostPeer(app);
+    const host = app.host!;
+    const clone = clonePath(app.dataDir, TEAM_KEY);
     const sessionUnit = `sessions/${app.sessionId}`;
     const settingsUnit = "config/playbook.config.yaml";
     const words: string[] = [];
     await open(page, app);
-    await showSpace(page);
-    await openRepository(page, key);
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
     const panel = page.getByTestId("space-repository");
     const tab = panel.getByTestId("space-sync-tab");
+    const counts = page.getByTestId(`space-repo-counts-${TEAM_KEY}`);
+    const sync = page.getByTestId(`space-row-sync-${TEAM_KEY}`);
 
-    // Check host lists the peer's session, Settings and intent as
-    // incoming, the units changed on both sides marked, and the
-    // repository reads behind (space-8).
+    // Check host lists the peer's session and Settings as incoming, the
+    // units changed on both sides marked, and the row reads behind
+    // (space-8).
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");
     await tab.getByTestId("space-check").click();
     const incoming = tab.getByTestId("space-incoming-list");
@@ -295,17 +329,15 @@ test.describe("daily sync", () => {
     const incomingIntent = incoming.locator('[data-testid^="space-unit-remote-intents/"]');
     await expect(incomingIntent).toHaveCount(1);
     await expect(incomingIntent).toContainText("Queued on the other laptop");
-    await expect(incomingIntent).toHaveAttribute("data-change", "new");
-    await expect(panel.getByTestId("space-ahead-behind")).toContainText(/0 ahead/);
-    await expect(panel.getByTestId("space-ahead-behind")).toContainText(/1 behind/);
+    await expect(counts).toContainText("0 ahead");
+    await expect(counts).toContainText("1 behind");
     // A unit the host changed too is a choice, not a local unit
-    // (space-7): the local list and its count leave both out.
-    await expect(panel.getByTestId("space-local-count")).toHaveAccessibleName("0 local changes");
+    // (space-7): the local list leaves both out.
     await expect(tab.locator('[data-testid^="space-unit-mine-"]')).toHaveCount(0);
     await scanVocabulary(page, "after the check", words);
 
-    // A draft typed in the session before the apply must survive the
-    // history the sync replaces (run-view-124).
+    // A draft typed in the session before the apply survives the
+    // history the sync replaces.
     await page
       .getByRole("tree", { name: "Projects and sessions" })
       .getByRole("treeitem", { name: new RegExp(SESSION_TITLE, "i") })
@@ -315,12 +347,12 @@ test.describe("daily sync", () => {
     await expect(page.getByTestId("captain-pane")).toContainText(LOCAL_TURN);
     const draft = "Draft kept across the sync";
     await page.getByTestId("boss-composer").fill(draft);
-    await showSpace(page);
-    await openRepository(page, key);
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
 
     // Sync ends "Needs your choice" with Apply disabled reading
     // "0 of 2 chosen" (space-9, space-14, space-17).
-    await panel.getByTestId("space-primary").click();
+    await sync.click();
     const note = tab.getByTestId("space-choices-note");
     await expect(note.getByTestId("space-step-line")).toHaveText("Needs your choice");
     await expect(note).toContainText("Your changes are saved; nothing is pushed yet");
@@ -329,7 +361,10 @@ test.describe("daily sync", () => {
     await expect(picker.getByTestId("space-chosen")).toHaveText("0 of 2 chosen");
     await expect(picker.getByTestId("space-apply")).toBeDisabled();
     await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
-    await expect(panel.getByTestId("space-status-dot")).toHaveAttribute("data-tone", "attention");
+    // The incoming list stands above the picker (space-9).
+    const above = await tab.getByTestId("space-incoming-list").boundingBox();
+    const below = await picker.boundingBox();
+    expect(above!.y + above!.height).toBeLessThanOrEqual(below!.y + 1);
     await scanVocabulary(page, "needs your choice", words);
 
     // "Take host's" for the session and "Keep mine" for Settings, by
@@ -339,7 +374,6 @@ test.describe("daily sync", () => {
     const settingsGroup = picker.getByRole("radiogroup", { name: "Settings changed" });
     await expect(sessionGroup).toContainText(/Keep mine\s+updated/);
     await expect(sessionGroup).toContainText(/Take host's\s+updated/);
-    await expect(sessionGroup).toContainText("2 turns");
     await sessionGroup.getByRole("radio", { name: /Keep mine/ }).focus();
     await page.keyboard.press("ArrowDown");
     await expect(sessionGroup.getByRole("radio", { name: /Take host's/ })).toBeChecked();
@@ -351,14 +385,6 @@ test.describe("daily sync", () => {
     await expect(settingsGroup.getByRole("radio", { name: /Keep mine/ })).toBeChecked();
     await expect(picker.getByTestId("space-chosen")).toHaveText("2 of 2 chosen");
     await expect(picker.getByTestId("space-apply")).toBeEnabled();
-    // Settings carries a diff per side, the host's adding the peer's
-    // binding (space-10).
-    await settingsGroup.getByRole("button", { name: "View diff" }).last().click();
-    const diff = picker.getByTestId(`space-diff-remote-${settingsUnit}`);
-    await expect(diff).toContainText("The host's version against the common ancestor");
-    await expect(diff).toContainText(/^\+\s*reviewer: dev\.coder/m);
-    await settingsGroup.getByRole("button", { name: "Hide diff" }).click();
-    await expect(diff).toHaveCount(0);
 
     // Apply's confirm names one replaced unit with Cancel focused;
     // Escape keeps the choices; confirming ends synced (space-18).
@@ -377,18 +403,15 @@ test.describe("daily sync", () => {
     const done = tab.getByTestId("space-done-line");
     await expect(done).toHaveText(/^Synced just now · 1 sent · 2 received$/);
     await expect(tab.getByTestId("space-picker")).toHaveCount(0);
-    await expect(panel.getByTestId("space-ahead-behind")).toContainText(/0 ahead/);
-    await expect(panel.getByTestId("space-ahead-behind")).toContainText(/0 behind/);
+    await expect(counts).toContainText("0 ahead");
+    await expect(counts).toContainText("0 behind");
     await scanVocabulary(page, "synced", words);
-    expect(git(app.remotePath!, "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
-    // This device's Settings stood, the host's taking its version too
-    // (space-19).
-    expect(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8")).toBe(LOCAL_PROJECT_CONFIG);
-    expect(git(app.remotePath!, "show", `spex:${settingsUnit}`) + "\n").toBe(LOCAL_PROJECT_CONFIG);
+    expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
+    expect(readFileSync(join(clone, settingsUnit), "utf8")).toBe(LOCAL_PROJECT_CONFIG);
+    expect(git(bareOf(host, TEAM_KEY), "show", `spex:${settingsUnit}`) + "\n").toBe(LOCAL_PROJECT_CONFIG);
 
     // The session's tab shows the host's turns, the composer's draft
-    // kept; your own group's Settings were never part of this
-    // repository's sync (space-20).
+    // kept; Settings shows this device's configuration (space-20).
     await nav(page, "Projects").click();
     await expect(sessionTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("captain-pane")).toContainText(PEER_TURN);
@@ -398,51 +421,65 @@ test.describe("daily sync", () => {
     await expect(page.getByTestId("captain-section").getByTestId("agent-chip")).toContainText(LOCAL_MODEL);
     expect(readFileSync(app.configPath, "utf8")).toContain(`model: ${LOCAL_MODEL}`);
 
-    // The host's spex moves under the push: one automatic re-check,
-    // then "changed again" with the ahead count; a second Sync pushes
-    // (space-15).
-    await showSpace(page);
-    await openRepository(page, key);
-    // Something to send — an intent queued meanwhile, the arrange
-    // client standing in for the Boss — so the push runs and meets the
-    // moved host; a clone level with the host has nothing to push.
-    await app.core.command("intent.queue", { projectId: key, text: "Queued after the merge" });
-    await expect(panel.getByTestId("space-local-count")).toHaveAccessibleName("1 local change");
+    // The host's `spex` moves under the push: one automatic re-check,
+    // then "changed again" with the ahead count on the row; a second
+    // Sync pushes (space-15).
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
+    await app.core.command("intent.queue", { projectId: TEAM_KEY, text: "Queued after the merge" });
+    await expect(tab.locator('[data-testid^="space-unit-mine-intents/"]')).toHaveCount(1);
     app.rejectPushes(2);
-    await panel.getByTestId("space-primary").click();
+    await sync.click();
     const stopped = tab.getByTestId("space-stopped");
     await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Push stopped — The host changed again");
     await expect(stopped).toContainText(/Your changes are saved locally \([1-9]\d* commits? ahead\)/);
     await expect(stopped.getByTestId("space-retry")).toBeVisible();
-    await expect(panel.getByTestId("space-ahead-behind")).toContainText(/[1-9]\d* ahead/);
-    await expect(panel.getByTestId("space-status-dot")).toHaveAttribute("data-tone", "attention");
+    await expect(counts).toContainText(/[1-9]\d* ahead/);
     await scanVocabulary(page, "changed again", words);
-    await panel.getByTestId("space-primary").click();
+    await sync.click();
     await expect(done).toHaveText(/^Synced just now · 1 sent · 1 received$/);
     await expect(tab.getByTestId("space-stopped")).toHaveCount(0);
-    expect(git(app.remotePath!, "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
-    expect(git(app.remotePath!, "ls-tree", "-r", "--name-only", "spex").split("\n")).toContain("peer-note-2.txt");
+    expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
+    expect(git(bareOf(host, TEAM_KEY), "ls-tree", "-r", "--name-only", "spex").split("\n")).toContain("peer-note-2.txt");
 
     // Stop during a check against a sleeping transport ends the check
     // with its stopped state and Retry (space-15, space-16).
-    await setRemote(page, app.sleepingRemote());
-    expect(git(clone, "remote", "get-url", "origin")).toBe(app.sleepingRemote());
-    await expect(panel.getByTestId("space-ahead-behind")).toHaveCount(0);
+    host.script.sleepTransport(120_000);
     const checkLabels = await watch(page, '[data-testid="space-check"]');
+    const sent = host.script.requests.length;
     await tab.getByTestId("space-check").click();
     const rail = tab.getByTestId("space-rail");
     await expect(rail.getByTestId("space-step-line")).toHaveText("Checking host…");
-    await expect(rail.getByTestId("space-step-save")).toHaveCount(0);
+    // Stop once Git's own transport is in flight, sleeping at the host.
+    await expect
+      .poll(() => host.script.requests.slice(sent).some((request) => request.path.startsWith(`/git/${TEAM_KEY}.git/`)))
+      .toBe(true);
     await rail.getByTestId("space-stop").click();
-    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Check stopped — No answer from sleepy.invalid");
-    await expect(stopped).toContainText("Git runs without prompts");
+    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Check stopped — No answer from Stand-in Git host");
     await expect(stopped.getByTestId("space-retry")).toHaveText("Retry");
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");
     expect(await checkLabels()).toEqual(["Check host", "Checking…", "Check host"]);
     await expect(panel.getByTestId("space-status-dot")).toHaveAttribute("data-tone", "stopped");
+    host.script.sleepTransport(0);
     await scanVocabulary(page, "check stopped", words);
 
-    // No visible text on the surface names Git's sides (space-27).
+    // Members lists the stand-in's members with the host's role names
+    // and its members page (space-62).
+    const listed = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_KEY)!;
+    listed.members.push(PEER_MEMBER);
+    await page.getByTestId(`space-row-members-${TEAM_KEY}`).click();
+    const members = page.getByTestId(`space-members-${TEAM_KEY}`);
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Ada Lovelace");
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
+    await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
+    await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
+    const link = members.getByTestId(`space-members-link-${TEAM_KEY}`);
+    await expect(link).toHaveText("Members change on Stand-in Git host");
+    await expect(link).toHaveAttribute("href", `${host.url}/${TEAM_KEY}/-/project_members`);
+    await scanVocabulary(page, "members", words);
+
+    // No visible text on the surface names Git's sides or calls the
+    // host's things by another word (space-27).
     expect(words, words.join("\n")).toEqual([]);
   });
 });
@@ -452,6 +489,8 @@ test.describe("daily sync", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("exploring", () => {
+  // The demo project's spex repository synced once to a bare path, so
+  // its session's files are committed and read "Shared".
   test.use({ appOptions: { project: true, remote: "bare" } });
 
   test("space-42: the tree, the previews, what stays here, and Copy path", async ({
@@ -475,7 +514,7 @@ test.describe("exploring", () => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: app.origin });
 
     await open(page, app);
-    await showSpace(page);
+    await showGroups(page);
     await openRepository(page, key);
     await page.getByTestId("space-tab-explore").click();
     const explore = page.getByTestId("space-explore-tab");
@@ -485,7 +524,8 @@ test.describe("exploring", () => {
     await expect(explore).toContainText(join("workspace", ...key.split("/")));
 
     // The session's files group under one node titled by its first
-    // turn: the manifest Shared, the hints Stays here (space-23).
+    // turn: the manifest Shared, the hints Stays here, the records
+    // offering Open session (space-23).
     const sessionsDir = tree.getByTestId("space-node-sessions");
     await expect(sessionsDir).toContainText("sessions/");
     await sessionsDir.click();
@@ -511,6 +551,7 @@ test.describe("exploring", () => {
     await expect(intents).toContainText("intents");
     await expect(intents).toContainText("0 entries");
     await expect(intents).toContainText("Not yet shared");
+    await expect(intents).not.toContainText("Stays here");
     await expect(intents.locator("[data-sync]")).toHaveAttribute("data-sync", "pending");
 
     // The manifest previews as pretty-printed JSON; the records offer
@@ -561,7 +602,7 @@ test.describe("exploring", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await page.reload();
-    await showSpace(page);
+    await showGroups(page);
     await openRepository(page, key);
     await page.getByTestId("space-tab-explore").click();
     await expect(page.getByTestId("space-privacy-toggle")).toHaveAttribute("aria-expanded", "false");
@@ -583,21 +624,29 @@ test.describe("exploring", () => {
 });
 
 // ---------------------------------------------------------------------------
-// space-43: fit
+// space-43, space-44: the surface at its fullest
 // ---------------------------------------------------------------------------
 
-/** Every unit kind changed locally on top of the peer arrangement, and
+/**
+ * Local changes of every kind on top of the two-laptop arrangement, and
  * a sync ended in choices: the surface at its fullest (space-43,
- * space-44). */
+ * space-44) — a session of this device's own, queued intents, an
+ * authoring session, the environment's requests, the code remote, the
+ * sync rules and a stray file, beside the Settings and session choices.
+ */
 async function arrangeChoices(app: App): Promise<void> {
+  await arrangeHostPeer(app);
   const projectId = app.projectId!;
   const clone = clonePath(app.dataDir, projectId);
+  const own = await app.core.command("session.create", { projectId });
+  await runTurn(app, own.id, "Retire the legacy sessions");
   for (const text of ["Add a README badge", "Tighten the expiry tests", "Retire the legacy sessions"]) {
     await app.core.command("intent.queue", { projectId, text });
   }
-  const second = join(app.dataDir, "..", "second-project");
-  seedDemoProject(second);
-  await app.core.command("project.register", { path: second });
+  await app.core.command("draft.create", { projectId, draftId: "triage" });
+  appendFileSync(join(clone, "spex.yaml"), "# requested for the team\n");
+  const code = JSON.parse(readFileSync(join(clone, "project.json"), "utf8")) as Record<string, unknown>;
+  writeFileSync(join(clone, "project.json"), `${JSON.stringify({ ...code, remote: "git@example.com:acme/demo-project.git" }, null, 2)}\n`);
   appendFileSync(join(clone, ".gitignore"), "# authored\n/scratch/\n");
   writeFileSync(join(clone, "notes.txt"), "a stray note\n");
   const state = await app.settleSpace("space.sync", { repository: projectId });
@@ -607,7 +656,7 @@ async function arrangeChoices(app: App): Promise<void> {
 }
 
 test.describe("fit", () => {
-  test.use({ appOptions: { project: true, remote: "peer" } });
+  test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
   test("space-43: the groups list and the Sync and Explore tabs fit at every width, in both sidebar states", async ({
     page,
@@ -615,13 +664,18 @@ test.describe("fit", () => {
   }) => {
     test.setTimeout(300_000);
     await arrangeChoices(app);
-    page.on("pageerror", (error) => console.log(`[space fit] page error: ${error.message}`));
+    page.on("pageerror", (error) => console.log(`[groups fit] page error: ${error.message}`));
     await page.setViewportSize({ width: 1280, height: TALL });
     await open(page, app);
-    await showSpace(page);
-    await openRepository(page, app.projectId!);
+    await showGroups(page);
+    await openRepository(page, TEAM_KEY);
     const tab = page.getByTestId("space-sync-tab");
-    await expect(tab.getByTestId("space-picker")).toContainText(/Choose for \d+ conflicts/);
+    await expect(tab.getByTestId("space-picker")).toContainText("Choose for 2 conflicts");
+    // Every kind of local change stands listed (space-7).
+    const local = tab.getByTestId("space-local-list");
+    for (const kind of ["Sessions", "Intents", "Authoring", "Environment", "Code", "Sync rules", "Other"]) {
+      await expect(local.getByRole("heading", { name: kind, exact: true })).toBeVisible();
+    }
     // A diff open in the picker, so the diff canvas is measured too.
     const settingsGroup = tab.getByRole("radiogroup", { name: "Settings changed" });
     await settingsGroup.getByRole("button", { name: "View diff" }).first().click();
@@ -629,11 +683,13 @@ test.describe("fit", () => {
 
     const defects: string[] = [];
     const containers = [
-      '[role="radiogroup"]',
-      '[data-testid="space-picker"]',
       '[data-testid="space-header"]',
-      '[data-testid="space-repository-header"]',
       '[data-testid="space-groups"] h2',
+      '[data-testid^="space-row-"]',
+      '[data-testid^="space-unit-"]',
+      '[data-testid="space-picker"]',
+      '[role="radiogroup"]',
+      '[data-testid="space-repository-header"]',
     ];
     const views: { name: string; show: () => Promise<void>; ready: () => Promise<void> }[] = [
       {
@@ -641,12 +697,7 @@ test.describe("fit", () => {
         show: () => page.getByTestId("space-tab-sync").click(),
         ready: async () => {
           await expect(tab.getByTestId("space-picker")).toBeVisible();
-          await expect(page.getByTestId(`space-repo-${app.projectId}`)).toBeVisible();
-          // The ahead and behind numbers ride the field's accessible
-          // name where its words hide (space-28).
-          const field = page.getByTestId("space-ahead-behind");
-          await expect(field).toHaveText(/\d+ ahead/);
-          await expect(field).toHaveText(/\d+ behind/);
+          await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toBeVisible();
         },
       },
       {
@@ -655,8 +706,7 @@ test.describe("fit", () => {
           await page.getByTestId("space-tab-explore").click();
           const tree = page.getByRole("tree", { name: "Files in demo-project-spex" });
           await tree.getByTestId("space-node-sessions").click();
-          const node = tree.getByTestId(`space-node-session:${app.sessionId}`);
-          await node.click();
+          await tree.getByTestId(`space-node-session:${app.sessionId}`).click();
           await tree.getByTestId(`space-node-sessions/${app.sessionId}.json`).click();
           await expect(page.getByTestId("space-preview-text")).toContainText('"sessionId"');
           const privacy = page.getByTestId("space-privacy-toggle");
@@ -679,7 +729,7 @@ test.describe("fit", () => {
           for (const height of HEIGHTS) {
             await page.setViewportSize({ width, height });
             await view.ready();
-            const where = `Space ${view.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
+            const where = `Groups ${view.name} · sidebar ${railOpen ? "open" : "collapsed"} · ${width}×${height}`;
             const found = await measure(page, containers);
             record(where, found, defects);
             reference = compareNames(where, found, reference, defects);
@@ -691,12 +741,8 @@ test.describe("fit", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// space-44: accessibility
-// ---------------------------------------------------------------------------
-
 test.describe("accessibility", () => {
-  test.use({ appOptions: { project: true, remote: "peer" } });
+  test.use({ appOptions: { host: true, project: true, signedIn: true } });
 
   for (const theme of ["light", "dark"] as const) {
     test(`space-44: no serious or critical violation with the picker standing (${theme})`, async ({
@@ -707,7 +753,7 @@ test.describe("accessibility", () => {
       await arrangeChoices(app);
       await page.emulateMedia({ colorScheme: theme });
       await open(page, app);
-      await showSpace(page);
+      await showGroups(page);
       const scan = async (where: string): Promise<string[]> => {
         const results = await new AxeBuilder({ page })
           .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -721,21 +767,23 @@ test.describe("accessibility", () => {
       };
       const found: string[] = [];
 
-      // The groups list and each repository's row are named (space-1).
-      await expect(page.getByRole("region", { name: "Groups" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "demo-project-spex" })).toHaveAttribute("aria-expanded", "false");
-      found.push(...(await scan("Space · groups")));
-      await openRepository(page, app.projectId!);
+      // The groups list, each group and each repository's row are
+      // named (space-1).
+      await expect(page.getByRole("region", { name: "Your groups" })).toBeVisible();
+      await expect(page.getByRole("group", { name: HOST_GROUP, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "demo-project-spex", exact: true })).toHaveAttribute("aria-expanded", "false");
+      found.push(...(await scan("Groups · list")));
+      await openRepository(page, TEAM_KEY);
 
       // The picker's radio groups and the tabs are named (space-17).
       const tab = page.getByTestId("space-sync-tab");
       await expect(tab.getByTestId("space-picker")).toBeVisible();
       await expect(tab.getByRole("radiogroup", { name: SESSION_TITLE })).toBeVisible();
       await expect(tab.getByRole("radiogroup", { name: "Settings changed" })).toBeVisible();
-      await expect(page.getByRole("tablist", { name: "Space views" })).toBeVisible();
+      await expect(page.getByRole("tablist", { name: "Views of demo-project-spex" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Sync" })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("tab", { name: "Explore" })).toBeVisible();
-      found.push(...(await scan("Space · Sync")));
+      found.push(...(await scan("Groups · Sync")));
 
       // The tree is named (space-23).
       await page.getByTestId("space-tab-explore").click();
@@ -745,9 +793,86 @@ test.describe("accessibility", () => {
       await tree.getByTestId(`space-node-session:${app.sessionId}`).click();
       await tree.getByTestId(`space-node-sessions/${app.sessionId}.json`).click();
       await expect(page.getByTestId("space-preview-text")).toBeVisible();
-      found.push(...(await scan("Space · Explore")));
+      found.push(...(await scan("Groups · Explore")));
 
       expect(found, found.join("\n")).toEqual([]);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// space-36: a second device joins a project a peer pushed
+// ---------------------------------------------------------------------------
+
+test.describe("second device", () => {
+  test.use({ appOptions: { host: true } });
+
+  test("space-36: after sign-in a peer's project lists to Join; Join clones it and its code; a session synced lands beside the peer's", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(150_000);
+    const host = app.host!;
+    const { key, code } = await seedHostProject(app);
+    const peerSession = app.sessionId!;
+    const folder = join(app.home, "work", "demo-project");
+    await open(page, app);
+    await showGroups(page);
+    await signInThroughPage(page, app);
+
+    // After sign-in the group's row lists the project as "Not on this
+    // device" with Join (space-61).
+    const groupRows = page.getByTestId(`space-group-${HOST_GROUP}`);
+    await expect(groupRows.getByTestId(`space-row-${key}`)).toHaveAttribute("data-state", "absent");
+    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Not on this device");
+    const join_ = page.getByTestId(`space-row-join-${key}`);
+    await expect(join_).toHaveText("Join");
+
+    // Join clones the spex repository and, the code remote a path this
+    // machine serves, the code into the folder the page names; the row
+    // reads reachable and the project lists in the sidebar with the
+    // peer's session and intent (space-63, space-20).
+    await join_.click();
+    const editor = page.getByTestId(`space-join-${key}`);
+    await expect(editor).toContainText("Folder for its code on this device");
+    await editor.getByTestId(`space-join-${key}-path`).fill(folder);
+    await editor.getByRole("button", { name: "Join", exact: true }).click();
+    await expect(page.getByTestId(`space-row-${key}`)).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^(Synced just now|Never synced)$/);
+    expect(existsSync(join(clonePath(app.dataDir, key), "project.json"))).toBe(true);
+    expect(existsSync(join(folder, "README.md"))).toBe(true);
+    expect(git(folder, "remote", "get-url", "origin")).toBe(code);
+    // The page re-reads its projects on a reload: the joined project
+    // lists in the sidebar from then on.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
+    const tree = page.getByRole("tree", { name: "Projects and sessions" });
+    await expect(tree.getByRole("treeitem", { name: "demo-project", exact: true })).toBeVisible();
+    await tree.getByRole("treeitem", { name: "demo-project", exact: true }).click();
+    await expect(tree.getByRole("treeitem", { name: new RegExp(PEER_SESSION_TITLE, "i") })).toBeVisible();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await expect(page.getByText("Queued on the other laptop")).toBeVisible();
+
+    // A session run here and synced lands on the stand-in's `spex`
+    // beside the peer's (space-12); the repository's other member makes
+    // its first push say what goes there (space-57).
+    await page.getByRole("tab", { name: "Start another session" }).click();
+    await send(page, "Fix the token refresh in auth.ts");
+    await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
+    await settled(app);
+    await showGroups(page);
+    await openRepository(page, key);
+    const local = page.getByTestId("space-local-list");
+    const sessionRow = local.locator('[data-testid^="space-unit-mine-sessions/"]');
+    await expect(sessionRow).toContainText("Fix the token refresh in auth.ts");
+    const ownSession = (await sessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
+    await page.getByTestId(`space-row-sync-${key}`).click();
+    const notice = page.getByTestId("space-notice-confirm");
+    await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
+    await notice.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+    const tracked = git(bareOf(host, key), "ls-tree", "-r", "--name-only", "spex").split("\n");
+    expect(tracked).toContain(`sessions/${ownSession}.json`);
+    expect(tracked).toContain(`sessions/${peerSession}.json`);
+  });
 });

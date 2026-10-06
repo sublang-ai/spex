@@ -889,10 +889,13 @@ async function arrangeApp(
       return git(dir, "rev-parse", "HEAD");
     },
     rejectPushes(times) {
-      if (!remotePath) throw new Error("rejectPushes needs a remote");
+      // The bare repository the core pushes to: the scratch remote, or
+      // the stand-in's copy of the project (git-host-12).
+      const bare = app.remotePath;
+      if (!bare) throw new Error("rejectPushes needs a remote");
       const counter = join(scratch, "rejected-pushes");
       writeFileSync(counter, "0\n");
-      const hook = join(remotePath, "hooks", "update");
+      const hook = join(bare, "hooks", "update");
       // The hook runs inside the bare repository during the core's
       // push, before its ref moves: it advances spex by one real peer
       // commit — a note file over the current tree — and declines the
@@ -1262,8 +1265,10 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
   const key = `${HOST_GROUP}/demo-project-spex`;
   const dir = join(dirname(app.dataDir), "peer");
   git(dirname(app.dataDir), "clone", "-q", "--branch", "spex", repo.bare, dir);
+  // The team's settings name players alone (core-service-2): the ones
+  // the demo's run calls, which this home's own roster sets up.
   mkdirSync(join(dir, "config"), { recursive: true });
-  writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
+  writeFileSync(join(dir, "config", "playbook.config.yaml"), LOCAL_PROJECT_CONFIG);
   prepareStorageGitFiles(dir);
   app.sessionId = await seedHistorySession(join(dir, "sessions"), join(dirname(app.dataDir), "peer-code"), [
     { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },
