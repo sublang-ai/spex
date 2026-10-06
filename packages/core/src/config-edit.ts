@@ -223,12 +223,13 @@ export async function editConfigFile(
   path: string,
   op: ConfigEditOp,
   loadModule?: LoadModule,
+  options: { libraryDir?: string } = {},
 ): Promise<EditResult> {
   const text = readFileSync(path, "utf8");
   const candidate = applyConfigOp(text, op);
   try {
     const parsed = parseDocument(candidate).toJS() as unknown;
-    await composeConfig(parsed, loadModule, path);
+    await composeConfig(parsed, loadModule, path, options);
   } catch (error) {
     return {
       ok: false,

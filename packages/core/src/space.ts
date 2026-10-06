@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's core (DR-057): the home at a glance, Initialize
-// and Join, the remote, the three-way unit plan with human labels
-// (space-33, space-34), the one sync machine with its write gate
-// (space-31, space-21), the validated apply that never runs `git merge`
-// (space-19), the refresh that re-indexes the running core (space-20),
-// and the read-only explorer (space-35).
+// Groups' core (DR-103, DR-057): every spex repository on this device
+// with its sync machine — one per clone, any number at once (space-31) —
+// its three-way unit plan with human labels (space-33, space-34), its
+// write gate beneath the clone (space-21), the validated apply that
+// never runs `git merge` (space-19), the refresh that re-indexes the
+// running core (space-20), and the read-only explorer (space-35).
 
 import { randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, realpathSync, rmSync, statSync, type Dirent } from "node:fs";
+import { closeSync, existsSync, lstatSync, openSync, readSync, readdirSync, realpathSync, rmSync, statSync, type Dirent } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { UUID, parseRegistry, readJsonFile, StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { type StorageDiagnostic } from "./app-storage.js";
+import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
+import { splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import type {
+  GroupsState,
+  RepositoryState,
   SpaceChange,
   SpaceChoice,
   SpaceConflict,
@@ -22,7 +26,6 @@ import type {
   SpaceOp,
   SpaceReadResult,
   SpaceSide,
-  SpaceState,
   SpaceSyncPhase,
   SpaceUnit,
   SpaceUnitKind,
@@ -31,6 +34,7 @@ import type {
 import { CoreError } from "./session.js";
 import { classifyTransportFailure, displayRemote, GitMissingError, lastLines, SpaceGit, validateRemoteUrl, type GitFailure } from "./space-git.js";
 import {
+  APPLY_MARKER,
   applyStorageSelection,
   EMPTY_TREE,
   planStorageUnits,
@@ -38,55 +42,58 @@ import {
   prepareStorageGitFiles,
   readStorageTree,
   resolveStorageChoices,
+  SPEX_BRANCH,
   storageUnitName,
+  UPLOAD_STAGING,
   validateStorageTree,
   type StorageChoice,
   type StorageMergeUnit,
   type StorageTree,
   type StorageTrees,
 } from "./storage-git.js";
-import type { Store } from "./store.js";
+import { prefsFileOf, type SpexRepository, type Store } from "./store.js";
 import { foldTurnEvent } from "./stream-fold.js";
 
-/** What the core lends the Space engine: the home, its indexes, the
+/** What the core lends the Groups engine: the home, its indexes, the
  * admission facts only the service knows, and the hooks a refresh
  * needs to re-index the running core (space-20). */
 export interface SpaceHost {
   home: string;
-  configPath: string;
-  sessionsDir: () => string;
   env: NodeJS.ProcessEnv;
   store: Store;
+  /** The home's compiled-playbook library, for config validation. */
+  libraryDir: string;
   /** Migration, storage and session diagnostics (core-service-86). */
   diagnostics: () => StorageDiagnostic[];
   /** What the core found about the folders each repair names, and the
    * one it proposes (space-53): checked, never searched for. */
   checkRepairs: (diagnostics: StorageDiagnostic[]) => Promise<StorageDiagnostic[]>;
-  /** The named blocker of space-11 — a turn in flight, a session held
-   * elsewhere, a compile — or undefined when the core is quiet. */
-  blocker: () => Promise<string | undefined>;
-  broadcast: (state: SpaceState) => void;
-  pauseWatchers: () => void;
-  resumeWatchers: () => void;
+  /** The named blocker of space-11 beneath one clone — a turn in flight,
+   * a session held elsewhere, a compile — or undefined when it is quiet. */
+  blocker: (repository: string) => Promise<string | undefined>;
+  broadcast: (state: GroupsState) => void;
+  pauseWatchers: (repository: string) => void;
+  resumeWatchers: (repository: string) => void;
   reloadConfig: () => Promise<void>;
-  /** One full rescan of the sessions directory: history-replaced,
+  /** One full rescan of a clone's sessions: history-replaced,
    * session.state, session.removed and intents.changed as a foreign-host
    * rescan announces them (core-service-60, core-service-87). */
-  rescanSessions: () => Promise<void>;
+  rescanSessions: (repository: string) => Promise<void>;
   ledgerChanged: (projectIds: string[]) => void;
   /** Test seam (space-32): the transport limit; 120 s by default. */
   transportTimeoutMs?: number;
   /** Test seam: awaited before each step runs, so a suite can act
    * between steps deterministically. */
-  beforeStep?: (event: { op: SpaceOp; step: SyncStep }) => void | Promise<void>;
+  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
 }
 
-const KIND_ORDER: SpaceUnitKind[] = ["session", "queue", "projects", "settings", "playbook", "rules", "other"];
-const WITHHELD_FAMILIES = new Set(["provider hints", "migration inputs", "config backup"]);
+const KIND_ORDER: SpaceUnitKind[] = ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"];
+const WITHHELD_FAMILIES = new Set(["provider hints", "config backup"]);
 const READ_CAP_BYTES = 256 * 1024;
 const READ_CAP_LINES = 2_000;
 const DIFF_CAP_BYTES = 256 * 1024;
-const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|toml|ini|cfg|csv|gitignore|gitattributes)$/i;
+const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|toml|ini|cfg|csv|gitignore|gitattributes|lock)$/i;
+const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
 
 // The reader's own words are composed where they are read, never held
 // in a constant a module's first evaluation would freeze in whichever
@@ -98,13 +105,13 @@ const withheldReason = (): string => i18n._({
   comment: "Why the explorer offers no preview of a file that may hold a provider's secret",
 });
 
-/** The refusal every act meets before the home is a repository. */
+/** The refusal every act meets before a clone is a repository. */
 const initializeFirst = (): string => i18n._({
   id: "Initialize the repository first",
   comment: "Refusal: the home is not a Git repository yet",
 });
 
-/** The diagnostic a pending Git merge stands as (space-1). */
+/** The diagnostic a pending Git merge stands as (space-11). */
 const mergePendingReason = (): string => i18n._({
   id: "a Git merge is pending; finish or abort it in a terminal before syncing",
   comment: "A diagnostic's reason, read after the file it names",
@@ -127,10 +134,10 @@ type RepositoryInfo =
       branch: string | null;
       head: string | null;
       remote: string | null;
+      id: string | null;
       upstream: boolean;
-      originMain: string | null;
+      originSpex: string | null;
       mergePending: boolean;
-      identityFallback: boolean;
     };
 type ReadyRepository = Extract<RepositoryInfo, { root: true }> & { head: string; remote: string };
 
@@ -157,28 +164,33 @@ type CompareResult =
   | { outcome: "nothing"; counts: { sent: number; received: number } }
   | { outcome: "apply"; pending: Pending };
 
+/** A unit's kind, by its name (space-7, space-33). */
 export function spaceUnitKind(name: string): SpaceUnitKind {
   if (/^sessions\/[0-9a-f-]{36}$/.test(name)) return "session";
-  if (/^intents\/[0-9a-f-]{36}\.jsonl$/.test(name)) return "queue";
-  if (name === "projects.json") return "projects";
+  if (/^intents\/[0-9a-f-]{36}$/.test(name)) return "intent";
+  if (/^authoring\/[a-z0-9][a-z0-9_-]*$/.test(name)) return "authoring";
+  if (name === "environment") return "environment";
   if (name === "config/playbook.config.yaml") return "settings";
-  if (/^playbooks\/[^/]+$/.test(name)) return "playbook";
+  if (name === "project.json") return "code";
   if (name === ".gitignore" || name === ".gitattributes") return "rules";
   return "other";
 }
 
-/** The catalog family of a home path (space-35, storage-1). */
+/** The catalog family of a clone path (space-35, storage-1). */
 export function spaceFamily(rel: string, isDirectory: boolean): string {
   const parts = rel.split("/");
   const base = parts[parts.length - 1];
   if (parts[0] === ".git") return "Git data";
+  if (rel === APPLY_MARKER) return "sync repair marker";
   if (parts.length === 1 && /^\.lock/.test(base)) return "lease";
   if (parts[0] === "sessions" && parts.length === 2 && /^\.[0-9a-f-]{36}\.lock/.test(base)) return "lease";
-  if (/\.lock$|\.lock\./.test(base)) return "lease";
+  if (rel !== "spex.lock" && /\.lock$|\.lock\./.test(base)) return "lease";
   if (/\.tmp$/.test(base)) return "temporary write";
   if (/\.bak(?:\.|$)|\.backup(?:\.|$)/.test(base)) return "config backup";
   if (parts[0] === "sessions") {
     if (parts.length === 1) return "session bundles";
+    const assets = /^([0-9a-f-]{36})\.assets$/.exec(parts[1]);
+    if (assets && UUID.test(assets[1])) return "session attachments";
     if (parts.length === 2) {
       const manifest = /^([0-9a-f-]{36})\.json$/.exec(base);
       if (manifest && UUID.test(manifest[1])) return "session manifest";
@@ -191,48 +203,39 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
     }
   }
   if (parts[0] === "intents") {
-    if (parts.length === 1) return "project queues";
-    const queue = /^([0-9a-f-]{36})\.jsonl$/.exec(base);
-    if (parts.length === 2 && queue && UUID.test(queue[1])) return "project queue";
+    if (parts.length === 1) return "intents";
+    const assets = /^([0-9a-f-]{36})\.assets$/.exec(parts[1]);
+    if (assets && UUID.test(assets[1])) return "intent attachments";
+    const intent = /^([0-9a-f-]{36})\.json$/.exec(base);
+    if (parts.length === 2 && intent && UUID.test(intent[1])) return "intent";
   }
-  if (rel === "projects.json") return "project registry";
-  if (rel === "config") return "Settings";
-  if (rel === "config/playbook.config.yaml") return "Settings";
-  if (parts[0] === "playbooks") {
-    if (parts.length === 1) return "playbook library";
-    if (parts.length === 2) return "playbook sources";
-    const id = parts[1];
-    const file = parts[2];
-    if (file === `${id}.registry.ts` || file === `${id}.registry.mjs` || file === `${id}.fsm.bundle.mjs`) return "playbook output";
-    if (file === `${id}.md` || file === `${id}.ts` || file === `${id}.playbook`) return "playbook sources";
+  if (parts[0] === "authoring") {
+    if (parts.length === 1) return "authoring sessions";
+    const assets = /^(.+)\.assets$/.exec(parts[1]);
+    if (assets && AUTHORING_ID.test(assets[1])) return "authoring attachments";
+    if (parts.length === 2) {
+      const records = /^(.+)\.records\.jsonl$/.exec(base);
+      if (records && AUTHORING_ID.test(records[1])) return "authoring records";
+      const session = /^(.+)\.json$/.exec(base);
+      if (session && AUTHORING_ID.test(session[1])) return "authoring session";
+    }
   }
-  if (rel === "local") return "local data";
-  if (rel === "local/project-paths.json") return "local project paths";
-  if (rel === "local/space-apply.json") return "sync repair marker";
-  if (parts[0] === "local" && parts[1] === "migrations") {
-    if (parts.length <= 3) return "migration receipts";
-    if (parts[3] === "receipt.json") return "migration receipts";
-    if (parts[3] === "inputs") return "migration inputs";
-  }
-  if (rel === "prefs.json") return "preferences";
-  if (rel === "forge-cache.json") return "forge cache";
-  if (rel === "meta.json") return "migration record";
+  if (rel === "spex.yaml") return "spec package requests";
+  if (rel === "spex.lock") return "spec package lock";
+  if (parts[0] === "packages") return "installed spec packages";
+  if (parts[0] === "skills") return "exported skills";
+  if (parts[0] === UPLOAD_STAGING) return "upload staging";
+  if (rel === "config" || rel === "config/playbook.config.yaml") return "Settings";
+  if (rel === "project.json") return "code remote";
   if (rel === ".gitignore" || rel === ".gitattributes") return "sync rules";
   return isDirectory ? "Not a Spex folder" : "Not a Spex file";
 }
 
-/** Catalog families the home never shares, whatever Git says (storage-1, space-35). */
+/** Catalog families a clone never shares, whatever Git says (storage-1, space-35). */
 const LOCAL_FAMILIES = new Set([
   "lease", "temporary write", "config backup", "provider hints", "legacy session sidecar",
-  "local data", "local project paths", "sync repair marker", "migration receipts", "migration inputs",
-  "preferences", "forge cache", "migration record",
+  "sync repair marker", "installed spec packages", "exported skills", "upload staging",
 ]);
-
-/** Whether a path belongs to an ignored catalog family; before Initialize writes the managed
- * rules, `check-ignore` cannot answer and the family alone decides (space-35, storage-17). */
-function staysHere(rel: string, family: string): boolean {
-  return LOCAL_FAMILIES.has(family) || rel === "local" || rel.startsWith("local/");
-}
 
 function realPath(path: string): string {
   try { return realpathSync.native(path); } catch { return resolve(path); }
@@ -257,20 +260,6 @@ function turnCount(count: number): string {
 function deletedDetail(): string {
   return i18n._({ id: "deleted", comment: "A unit's detail: this side removed it" });
 }
-/** A queue one side rewrote rather than appended to (space-34). */
-function queueReplaced(): string {
-  return i18n._({ id: "queue replaced", comment: "A queue unit's detail: this side rewrote the queue instead of appending" });
-}
-/** A queue's acts, as a side's detail counts them (space-34). */
-function actCount(count: number): string {
-  return i18n._({
-    id: "{count, plural, one {# act} other {# acts}}",
-    values: { count },
-    comment: "A queue unit side's detail: how many acts this side adds",
-  });
-}
-function lines(text: string): string[] { const out = text.split("\n"); if (out[out.length - 1] === "") out.pop(); return out; }
-function sameLinesPrefix(prefix: string[], whole: string[]): boolean { return prefix.length <= whole.length && prefix.every((line, i) => whole[i] === line); }
 
 /** Cut text on complete lines under a byte cap and a line cap. */
 function capText(text: string, maxBytes: number, maxLines: number): { text: string; lines: number; truncated: boolean } {
@@ -310,43 +299,28 @@ function sessionSummary(records: Buffer | undefined): { title?: string; turns: n
   return { ...(title !== undefined ? { title } : {}), turns, ...(at !== undefined ? { at } : {}) };
 }
 
-function registryEntries(bytes: Buffer | undefined): Map<string, string> | undefined {
-  if (!bytes) return new Map();
-  try { return new Map(parseRegistry(JSON.parse(bytes.toString("utf8"))).map((p) => [p.id, p.name])); } catch { return undefined; }
+/** An intent's title from its file's bytes: the text's trimmed first
+ * line, or its attachment names where the text is blank (space-34). */
+export function intentFileTitle(bytes: Buffer | undefined): string | undefined {
+  if (!bytes) return undefined;
+  try {
+    const value = JSON.parse(bytes.toString("utf8")) as { text?: unknown; attachments?: { name?: unknown }[] };
+    const text = typeof value.text === "string" ? value.text.trim() : "";
+    const first = text.split("\n")[0]?.trim();
+    if (first) return first;
+    const names = (value.attachments ?? []).map((asset) => asset?.name).filter((name): name is string => typeof name === "string");
+    return names.length ? names.join(", ") : undefined;
+  } catch { return undefined; }
 }
-function registryLines(side: Map<string, string> | undefined, base: Map<string, string> | undefined): string[] {
-  const changed = (): string => i18n._({
-    id: "Projects changed",
-    comment: "The project registry's label where its change cannot be named",
-  });
-  if (!side || !base) return [changed()];
-  const out: string[] = [];
-  for (const [id, name] of side) {
-    const before = base.get(id);
-    if (before === undefined) {
-      out.push(i18n._({
-        id: "Registered \"{name}\"",
-        values: { name },
-        comment: "A project registry line: a project this side added, by its name",
-      }));
-    } else if (before !== name) {
-      out.push(i18n._({
-        id: "Renamed \"{before}\" to \"{name}\"",
-        values: { before, name },
-        comment: "A project registry line: a project this side renamed",
-      }));
-    }
-  }
-  for (const [id, name] of base) {
-    if (!side.has(id)) {
-      out.push(i18n._({
-        id: "Removed \"{name}\"",
-        values: { name },
-        comment: "A project registry line: a project this side removed, by its name",
-      }));
-    }
-  }
-  return out.length ? out : [changed()];
+
+/** An authoring session's title: its first queued entry's text (space-34). */
+function authoringTitle(bytes: Buffer | undefined): string | undefined {
+  if (!bytes) return undefined;
+  try {
+    const value = JSON.parse(bytes.toString("utf8")) as { queued?: { text?: unknown }[] };
+    const text = value.queued?.[0]?.text;
+    return typeof text === "string" && text.trim() ? text.trim().split("\n")[0] : undefined;
+  } catch { return undefined; }
 }
 
 /** What the header counts (space-1): a repair the reader has not
@@ -358,9 +332,10 @@ function countIssues(diagnostics: StorageDiagnostic[]): number {
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
-
-/** The marker an interrupted apply leaves, as a diagnostic names it. */
-const REPAIR_MARKER_FILE = "local/space-apply.json";
+/** A repository's last completed sync (space-22, storage-5). */
+const lastSyncPref = (key: string): string => `sync:${key}:last`;
+/** The privacy notice seen for a repository (storage-5, space-57). */
+const noticedPref = (key: string): string => `sync:${key}:noticed`;
 
 /** The explorer's refusals of a path outside what it browses (space-35). */
 const escapesTheHome = (): string => i18n._({
@@ -385,15 +360,21 @@ const unknownUnit = (unit: string): string => i18n._({
   values: { unit },
 });
 
-export class SpaceManager {
-  private readonly git: SpaceGit;
-  private phase: SpaceSyncPhase = { phase: "idle" };
+/** Units that count as something a removal would lose (projects-9):
+ * every record but what the clone regenerates. */
+const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "environment", "settings", "other"]);
+
+/** One spex repository's sync machine (space-31): at most one operation
+ * at a time on this clone, any number of clones at once. */
+class RepositorySync {
+  readonly git: SpaceGit;
+  phase: SpaceSyncPhase = { phase: "idle" };
   private checkedAt: number | null = null;
   private remoteEmpty = false;
   private unrelated = false;
   private lists: Lists = { local: [], incoming: [], conflicts: [] };
   private lastPlan?: LastPlan;
-  private cached?: SpaceState;
+  cached?: RepositoryState;
   private operation?: Promise<void>;
   private applied?: Applied;
   private holding?: { leases: { release(): Promise<unknown> }[]; umask: number };
@@ -401,10 +382,14 @@ export class SpaceManager {
    * its diagnostic is phrased where it is read (core-service-111). */
   private repairFailure?: string;
   private refreshProblem?: StorageDiagnostic;
+  private mergePending = false;
 
-  constructor(private readonly host: SpaceHost) {
-    this.git = new SpaceGit(host.home, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
+  constructor(private readonly host: SpaceHost, private readonly owner: SpaceManager, readonly repository: SpexRepository) {
+    this.git = new SpaceGit(repository.dir, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
   }
+
+  get key(): string { return this.repository.key; }
+  private get dir(): string { return this.repository.dir; }
 
   // -- the gate (space-21) ---------------------------------------------------
 
@@ -416,10 +401,7 @@ export class SpaceManager {
     if (this.phase.op === "sync") {
       return i18n._({ id: "Space is syncing; wait for it to finish", comment: "Refusal while the Space syncs" });
     }
-    if (this.phase.op === "check") {
-      return i18n._({ id: "Space is checking the remote; wait for it to finish", comment: "Refusal while the Space checks the remote" });
-    }
-    return i18n._({ id: "Space is initializing; wait for it to finish", comment: "Refusal while the Space initializes the home" });
+    return i18n._({ id: "Space is checking the host; wait for it to finish", comment: "Refusal while the Space checks the remote" });
   }
 
   private assertNotRunning(): void {
@@ -428,105 +410,58 @@ export class SpaceManager {
     }
   }
 
-  // -- state (space-1, space-29, space-30) -----------------------------------
-
-  async state(): Promise<SpaceState> {
-    if (this.phase.phase === "running" && this.cached) {
-      const live = this.diagnostics(this.cached.repository?.mergePending ?? false);
-      return { ...this.cached, sync: this.phase, diagnostics: live, issues: countIssues(live) };
-    }
-    return this.snapshot(true);
-  }
-
-  /** Only the reader's own act settles a repair (space-54): declining
-   * says this is not a project on this device, and is a preference,
-   * which never syncs. Rendering never writes here. */
-  async decline(repair: string, declined: boolean): Promise<SpaceState> {
-    const known = this.diagnostics(this.cached?.repository?.mergePending ?? false)
-      .some((entry) => entry.repair?.key === repair);
-    if (!known) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "no repair named {repair} stands",
-        values: { repair },
-        comment: "Refusal: the answer names a repair the core does not report; {repair} is its key",
-      }));
-    }
-    if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
-    else this.host.store.deletePref(repairPref(repair));
-    return this.state();
-  }
-
-  private diagnostics(mergePending: boolean): StorageDiagnostic[] {
-    // A repair carries only what the reader decided (space-54); a
-    // record naming no standing repair is pruned, except while a fold
-    // is untrustworthy — blocking damage, or a cached in-flight state.
-    const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
-      if (!entry.repair) return entry;
-      const stored = this.host.store.getPref<{ declined?: unknown }>(repairPref(entry.repair.key));
-      const declined = stored && typeof stored.declined === "number" ? stored.declined : undefined;
-      return declined === undefined ? entry : { ...entry, repair: { ...entry.repair, declined } };
-    };
-    const reported = [
-      ...this.host.diagnostics().map(mark),
-      ...(mergePending ? [{ file: ".git/MERGE_HEAD", reason: mergePendingReason(), blocking: false }] : []),
+  /** This clone's own diagnostics: a pending merge, a refresh's finding,
+   * an interrupted sync that could not be repaired. */
+  diagnostics(): StorageDiagnostic[] {
+    const rel = relative(this.host.home, this.dir);
+    return [
+      ...(this.mergePending ? [{ file: `${rel}/.git/MERGE_HEAD`, reason: mergePendingReason(), blocking: false }] : []),
       ...(this.refreshProblem ? [this.refreshProblem] : []),
-      // Phrased here, where it is read, from the failure's own text.
-      ...(this.repairFailure !== undefined ? [{ file: REPAIR_MARKER_FILE, reason: repairFailureReason(this.repairFailure), blocking: true }] : []),
+      ...(this.repairFailure !== undefined ? [{ file: `${rel}/${APPLY_MARKER}`, reason: repairFailureReason(this.repairFailure), blocking: true }] : []),
     ];
-    this.pruneAnswers(reported);
-    return reported;
-  }
-
-  /** An answer naming no repair the core still reports is discarded
-   * (space-54) — but never on a fold that cannot be trusted to be
-   * complete: blocking damage, or the cached state of an operation in
-   * flight, would drop a record the next honest fold still wants. */
-  private pruneAnswers(reported: StorageDiagnostic[]): void {
-    if (this.phase.phase === "running") return;
-    if (reported.some((entry) => entry.blocking)) return;
-    const standing = new Set(reported.map((entry) => entry.repair?.key).filter(Boolean) as string[]);
-    for (const key of this.host.store.prefKeys("space:repair:")) {
-      if (!standing.has(key.slice("space:repair:".length))) this.host.store.deletePref(key);
-    }
   }
 
   private async readRepository(): Promise<RepositoryInfo> {
     const version = await this.git.version();
     if (!version.ok) return { git: version, root: false };
+    if (!existsSync(join(this.dir, ".git"))) return { git: version, root: false };
     const top = await this.git.run(["rev-parse", "--show-toplevel"]);
-    if (top.code !== 0 || realPath(top.stdout.toString("utf8").trim()) !== realPath(this.host.home)) return { git: version, root: false };
+    if (top.code !== 0 || realPath(top.stdout.toString("utf8").trim()) !== realPath(this.dir)) return { git: version, root: false };
     const branch = await this.git.run(["symbolic-ref", "-q", "--short", "HEAD"]);
     const head = await this.git.run(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
     const remote = await this.git.run(["remote", "get-url", "origin"]);
-    const upstream = await this.git.succeeds(["config", "--get", "branch.main.remote"]);
-    const origin = await this.git.run(["rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}"]);
-    const gitDir = resolve(this.host.home, await this.git.ok(["rev-parse", "--git-dir"]));
+    const id = await this.git.run(["config", "--get", "spex.repositoryId"]);
+    const upstream = await this.git.succeeds(["config", "--get", `branch.${SPEX_BRANCH}.remote`]);
+    const origin = await this.git.run(["rev-parse", "-q", "--verify", `refs/remotes/origin/${SPEX_BRANCH}^{commit}`]);
+    const gitDir = resolve(this.dir, await this.git.ok(["rev-parse", "--git-dir"]));
     const mergePending = (await this.git.succeeds(["rev-parse", "-q", "--verify", "MERGE_HEAD"])) || existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
+    this.mergePending = mergePending;
     return {
       git: version,
       root: true,
       branch: branch.code === 0 ? branch.stdout.toString("utf8").trim() : null,
       head: head.code === 0 ? head.stdout.toString("utf8").trim() : null,
       remote: remote.code === 0 ? remote.stdout.toString("utf8").trim() : null,
+      id: id.code === 0 ? id.stdout.toString("utf8").trim() || null : null,
       upstream,
-      originMain: origin.code === 0 ? origin.stdout.toString("utf8").trim() : null,
+      originSpex: origin.code === 0 ? origin.stdout.toString("utf8").trim() : null,
       mergePending,
-      identityFallback: await this.git.identityFallback(),
     };
   }
 
-  /** The state, recomputing the lists from the working tree when asked
-   * (space-33: mine is the working tree outside a sync). */
-  private async snapshot(recompute: boolean): Promise<SpaceState> {
+  /** The repository's state, recomputing the lists from the working
+   * tree when asked (space-33: mine is the working tree outside a sync). */
+  async state(recompute: boolean): Promise<RepositoryState> {
+    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
     const repo = await this.readRepository();
     if (recompute && repo.root && repo.head !== null && this.phase.phase !== "choices") {
-      try { await this.computeWorkingLists(repo.head, repo.originMain); }
+      try { await this.computeWorkingLists(repo.head, repo.originSpex); }
       catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
     }
     let ahead: number | null = null;
     let behind: number | null = null;
-    if (repo.root && repo.head && repo.originMain && this.checkedAt !== null) {
-      const counts = await this.git.run(["rev-list", "--left-right", "--count", "HEAD...refs/remotes/origin/main"]);
+    if (repo.root && repo.head && repo.originSpex && this.checkedAt !== null) {
+      const counts = await this.git.run(["rev-list", "--left-right", "--count", `HEAD...refs/remotes/origin/${SPEX_BRANCH}`]);
       if (counts.code === 0) {
         const [left, right] = counts.stdout.toString("utf8").trim().split(/\s+/).map((n) => Number.parseInt(n, 10));
         if (Number.isFinite(left) && Number.isFinite(right)) { ahead = left; behind = right; }
@@ -536,49 +471,65 @@ export class SpaceManager {
       ahead = count.code === 0 ? Number.parseInt(count.stdout.toString("utf8").trim(), 10) : null;
       behind = 0;
     }
-    const outside: SpaceState["outside"] = [];
-    if (!inside(this.host.configPath, this.host.home)) outside.push({ what: "config", path: this.host.configPath });
-    const sessionsDir = this.host.sessionsDir();
-    if (!inside(sessionsDir, this.host.home)) outside.push({ what: "sessions", path: sessionsDir });
-    const stored = this.host.store.getPref<{ at?: unknown; sent?: unknown; received?: unknown }>("space:lastSync");
+    const store = this.host.store;
+    const stored = store.getPref<{ at?: unknown; sent?: unknown; received?: unknown }>(lastSyncPref(this.key));
     const lastSync = stored && typeof stored.at === "number" && typeof stored.sent === "number" && typeof stored.received === "number"
       ? { at: stored.at, sent: stored.sent, received: stored.received }
       : null;
-    const diagnostics = await this.host.checkRepairs(this.diagnostics(repo.root && repo.mergePending));
-    const state: SpaceState = {
-      home: resolve(this.host.home),
-      outside,
-      git: repo.git,
-      repository: repo.root ? {
-        branch: repo.branch,
-        remote: repo.remote === null ? null : displayRemote(repo.remote),
-        upstream: repo.upstream,
+    let code: string | null = null;
+    try {
+      const project = existsSync(this.repository.projectFile) ? readJsonFile(this.repository.projectFile) as { remote?: unknown } : undefined;
+      code = typeof project?.remote === "string" ? displayRemote(project.remote) : null;
+    } catch { code = null; }
+    const remote = repo.root ? repo.remote : null;
+    const state: RepositoryState = {
+      key: this.key,
+      name: splitKey(this.key).name,
+      id: repo.root ? repo.id : null,
+      own: this.key === store.home.own(),
+      code,
+      folder: store.home.folderOf(this.key)?.path ?? null,
+      state: remote === null ? "local-only" : "reachable",
+      reason: null,
+      waiting: null,
+      members: null,
+      visibility: null,
+      branch: repo.root ? {
         ahead,
         behind,
         checkedAt: this.checkedAt,
-        remoteEmpty: this.checkedAt !== null && this.remoteEmpty,
+        hostEmpty: this.checkedAt !== null && this.remoteEmpty,
         unrelated: this.unrelated,
         mergePending: repo.mergePending,
-        identityFallback: repo.identityFallback,
       } : null,
       local: this.lists.local,
       incoming: this.lists.incoming,
       conflicts: this.lists.conflicts,
       lastSync,
-      diagnostics,
-      // One number, so the header and the list cannot drift (space-1):
-      // what the reader has not answered, and everything unfolded.
-      issues: countIssues(diagnostics),
+      noticed: store.getPref<unknown>(noticedPref(this.key)) === true,
       sync: this.phase,
     };
     this.cached = state;
     return state;
   }
 
-  private async broadcast(recompute: boolean): Promise<SpaceState> {
-    const state = await this.snapshot(recompute);
-    this.host.broadcast(state);
-    return state;
+  private async broadcast(recompute: boolean): Promise<void> {
+    await this.state(recompute);
+    await this.owner.publish();
+  }
+
+  /** What a removal of this clone would lose (projects-9): its record
+   * units the host has not received. */
+  async pendingUnits(): Promise<number> {
+    const repo = await this.readRepository();
+    if (!repo.root || repo.head === null) return 0;
+    if (repo.remote === null) {
+      const mine = await this.workingTree();
+      const units = planStorageUnits({ ours: readStorageTree(this.dir, mine), theirs: new Map(), base: new Map() });
+      return units.filter((unit) => RECORD_KINDS.has(spaceUnitKind(unit.name))).length;
+    }
+    await this.computeWorkingLists(repo.head, repo.originSpex);
+    return [...this.lists.local, ...this.lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
   }
 
   // -- the plan (space-33) and its labels (space-34) ------------------------
@@ -592,19 +543,19 @@ export class SpaceManager {
     } finally { rmSync(index, { force: true }); }
   }
 
-  private async computeWorkingLists(head: string, originMain: string | null): Promise<void> {
+  private async computeWorkingLists(head: string, originSpex: string | null): Promise<void> {
     const mine = await this.workingTree();
     let theirs = head;
     let base = head;
     if (this.checkedAt !== null) {
       if (this.remoteEmpty) { theirs = EMPTY_TREE; base = EMPTY_TREE; }
-      else if (originMain) {
-        const merged = await this.git.run(["merge-base", "HEAD", "refs/remotes/origin/main"]);
-        if (merged.code === 0) { theirs = originMain; base = merged.stdout.toString("utf8").trim(); this.unrelated = false; }
+      else if (originSpex) {
+        const merged = await this.git.run(["merge-base", "HEAD", `refs/remotes/origin/${SPEX_BRANCH}`]);
+        if (merged.code === 0) { theirs = originSpex; base = merged.stdout.toString("utf8").trim(); this.unrelated = false; }
         else this.unrelated = true;
       }
     }
-    const trees: StorageTrees = { ours: readStorageTree(this.host.home, mine), theirs: readStorageTree(this.host.home, theirs), base: readStorageTree(this.host.home, base) };
+    const trees: StorageTrees = { ours: readStorageTree(this.dir, mine), theirs: readStorageTree(this.dir, theirs), base: readStorageTree(this.dir, base) };
     const units = planStorageUnits(trees);
     this.lastPlan = { ours: null, oursTree: mine, theirs, base, units };
     this.lists = await this.describe(units, trees, { ours: null, theirs, base });
@@ -650,17 +601,6 @@ export class SpaceManager {
     return !inBase && inSide ? "new" : inBase && !inSide ? "deleted" : "updated";
   }
 
-  private projectName(id: string, registry: Buffer | undefined): string {
-    const known = this.host.store.getProject(id)?.name;
-    if (known) return known;
-    const parsed = registryEntries(registry);
-    return parsed?.get(id) ?? i18n._({
-      id: "project {id}",
-      values: { id: id.slice(0, 8) },
-      comment: "A project no registry names, by the head of its identifier",
-    });
-  }
-
   private async describeUnit(
     unit: StorageMergeUnit,
     side: "ours" | "theirs",
@@ -676,54 +616,26 @@ export class SpaceManager {
       case "session": {
         const id = unit.name.slice("sessions/".length);
         const summary = sessionSummary(await blob(source.get(`${unit.name}.records.jsonl`)));
-        let cwd: string | undefined;
-        try {
-          const manifest = await blob(source.get(`${unit.name}.json`));
-          cwd = manifest ? (JSON.parse(manifest.toString("utf8")) as { cwd?: unknown }).cwd as string | undefined : undefined;
-        } catch { cwd = undefined; }
-        const project = typeof cwd === "string" ? this.host.store.getProjectByPath(cwd) : undefined;
-        const detail = [project ? undefined : cwd, turnCount(summary.turns)].filter((x): x is string => typeof x === "string").join(" · ");
         const untitled = i18n._({ id: "untitled session", comment: "A session unit's label where the session carries no title" });
-        return { ...common, label: summary.title ?? untitled, detail, sessionId: id, diff: false, ...(project ? { project: { id: project.id, name: project.name } } : {}) };
+        return { ...common, label: summary.title ?? untitled, detail: turnCount(summary.turns), sessionId: id, diff: false };
       }
-      case "queue": {
-        const projectId = unit.name.slice("intents/".length, -".jsonl".length);
-        const name = this.projectName(projectId, await blob(source.get("projects.json")));
-        const sideLines = change === "deleted" ? [] : lines(((await blob(trees[side].get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
-        const baseLines = lines(((await blob(trees.base.get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
-        const prefix = sameLinesPrefix(baseLines, sideLines);
-        const count = change === "deleted" ? 0 : prefix ? sideLines.length - baseLines.length : sideLines.length;
-        const detail = change === "deleted"
-          ? deletedDetail()
-          : prefix
-            ? i18n._({
-                id: "{count, plural, one {# act appended} other {# acts appended}}",
-                values: { count },
-                comment: "A queue unit's detail: how many acts this side adds to the end",
-              })
-            : queueReplaced();
-        const label = i18n._({
-          id: "{count, plural, one {# change in {name}'s queue} other {# changes in {name}'s queue}}",
-          values: { count, name },
-          comment: "A queue unit's label; {name} is the project whose queue changed",
-        });
-        return { ...common, label, detail, project: { id: projectId, name }, diff: false };
+      case "intent": {
+        const id = unit.name.slice("intents/".length);
+        const title = intentFileTitle(await blob(source.get(`${unit.name}.json`)));
+        return { ...common, label: title ?? id.slice(0, 8), intentId: id, diff: false };
       }
-      case "projects": {
-        const summary = registryLines(change === "deleted" ? new Map() : registryEntries(await blob(trees[side].get(unit.name))), registryEntries(await blob(trees.base.get(unit.name))));
-        return { ...common, label: summary.join("\n"), diff: false };
+      case "authoring": {
+        const title = authoringTitle(await blob(source.get(`${unit.name}.json`)));
+        return { ...common, label: title ?? i18n._({ id: "untitled authoring session", comment: "An authoring session unit's label where it carries no first message" }), diff: false };
+      }
+      case "environment": {
+        const changed = unit.paths.filter((p) => trees[side].get(p) !== trees.base.get(p));
+        return { ...common, label: i18n._({ id: "Spec packages changed", comment: "The environment unit's label: spex.yaml or spex.lock changed" }), detail: changed.join(", "), diff: true };
       }
       case "settings":
         return { ...common, label: i18n._({ id: "Settings changed", comment: "The settings unit's label" }), diff: true };
-      case "playbook": {
-        const changed = unit.paths.filter((p) => trees[side].get(p) !== trees.base.get(p)).map((p) => p.slice(unit.name.length + 1));
-        const label = i18n._({
-          id: "Playbook {name}",
-          values: { name: unit.name.slice("playbooks/".length) },
-          comment: "A playbook unit's label; {name} is the playbook's own id",
-        });
-        return { ...common, label, detail: changed.join(", "), diff: true };
-      }
+      case "code":
+        return { ...common, label: i18n._({ id: "Code remote changed", comment: "The project file's unit label: the remote of the code changed" }), diff: true };
       case "rules":
         return { ...common, label: i18n._({ id: "Sync rules updated", comment: "The sync-rules unit's label" }), diff: true };
       default:
@@ -745,14 +657,11 @@ export class SpaceManager {
         const summary = sessionSummary(await blob(trees[side].get(`${unit.name}.records.jsonl`)));
         return { change, ...(summary.at !== undefined ? { at: summary.at } : {}), detail: turnCount(summary.turns), diff: false };
       }
-      case "queue": {
-        const sideLines = lines(((await blob(trees[side].get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
-        const baseLines = lines(((await blob(trees.base.get(unit.name))) ?? Buffer.alloc(0)).toString("utf8"));
-        const prefix = sameLinesPrefix(baseLines, sideLines);
-        return { change, detail: prefix ? actCount(sideLines.length - baseLines.length) : queueReplaced(), diff: false };
+      case "intent":
+      case "authoring": {
+        const at = await this.changedAt(side === "ours" ? revs.ours : revs.theirs, unit.paths.filter((p) => trees[side].has(p)));
+        return { change, ...(at !== undefined ? { at } : {}), diff: false };
       }
-      case "projects":
-        return { change, detail: registryLines(registryEntries(await blob(trees[side].get(unit.name))), registryEntries(await blob(trees.base.get(unit.name)))).join("\n"), diff: false };
       default: {
         const at = await this.changedAt(side === "ours" ? revs.ours : revs.theirs, unit.paths.filter((p) => trees[side].has(p)));
         return { change, ...(at !== undefined ? { at } : {}), diff: true };
@@ -767,7 +676,7 @@ export class SpaceManager {
     if (rev === null) {
       let newest: number | undefined;
       for (const p of paths) {
-        try { newest = Math.max(newest ?? 0, statSync(join(this.host.home, p)).mtimeMs); } catch { /* deleted meanwhile */ }
+        try { newest = Math.max(newest ?? 0, statSync(join(this.dir, p)).mtimeMs); } catch { /* deleted meanwhile */ }
       }
       return newest === undefined ? undefined : Math.round(newest);
     }
@@ -775,7 +684,7 @@ export class SpaceManager {
     return run.code === 0 ? timeSeconds(run.stdout.toString("utf8")) : undefined;
   }
 
-  // -- setting up (space-4, space-5) -----------------------------------------
+  // -- the remote ------------------------------------------------------------
 
   private requireGit(repo: RepositoryInfo): void {
     if (!repo.git.ok) throw new CoreError("invalid_request", repo.git.guidance);
@@ -791,16 +700,16 @@ export class SpaceManager {
         comment: "Refusal: the home names no remote to sync with",
       }));
     }
-    if (repo.branch !== "main") {
+    if (repo.branch !== SPEX_BRANCH) {
       throw new CoreError("invalid_request", repo.branch
         ? i18n._({
-            id: "On {branch}; check out main in a terminal",
+            id: "On {branch}; check out spex in a terminal",
             values: { branch: repo.branch },
-            comment: "Refusal: the home sits on another branch; main is a branch's own name",
+            comment: "Refusal: the clone sits on another branch; spex is the branch's own name",
           })
         : i18n._({
-            id: "Not on a branch; check out main in a terminal",
-            comment: "Refusal: the home's HEAD names no branch; main is a branch's own name",
+            id: "Not on a branch; check out spex in a terminal",
+            comment: "Refusal: the clone's HEAD names no branch; spex is the branch's own name",
           }));
     }
     if (repo.mergePending) {
@@ -818,86 +727,9 @@ export class SpaceManager {
     return repo as ReadyRepository;
   }
 
-  async init(remote?: string): Promise<SpaceState> {
-    this.assertNotRunning();
-    const previous = this.phase;
-    this.phase = { phase: "running", op: "init", step: "save", since: Date.now(), cancelable: false };
-    const home = this.host.home;
-    try {
-      const blocker = await this.host.blocker();
-      if (blocker) throw new CoreError("busy", blocker);
-      const repo = await this.readRepository();
-      this.requireGit(repo);
-      if (repo.root) {
-        throw new CoreError("invalid_request", i18n._({
-          id: "The home is already a repository",
-          comment: "Refusal: Initialize was asked of a home Git already holds",
-        }));
-      }
-      if (remote !== undefined) {
-        const checked = validateRemoteUrl(remote);
-        if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
-      }
-      const blocking = this.host.diagnostics().find((d) => d.blocking);
-      if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
-      try { await validateStorageTree(home); }
-      catch (error) { throw new CoreError("invalid_request", error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error)); }
-      const migrations = join(home, "local", "migrations");
-      for (const id of existsSync(migrations) ? readdirSync(migrations) : []) {
-        const receipt = join(migrations, id, "receipt.json");
-        if (!existsSync(receipt)) continue;
-        let complete = false;
-        try { complete = (readJsonFile(receipt) as { complete?: unknown }).complete === true; } catch { complete = false; }
-        if (!complete) {
-          // The file names itself; the sentence after it is the core's.
-          throw new CoreError("invalid_request", `local/migrations/${id}/receipt.json: ${i18n._({
-            id: "the migration is incomplete; finish or remove it before initializing",
-            comment: "Refusal, read after the file it names",
-          })}`);
-        }
-      }
-      const hadGitDir = existsSync(join(home, ".git"));
-      const previousUmask = process.umask(0o077);
-      try {
-        const init = await this.git.run(["init", "-q", "-b", "main"]);
-        if (init.code !== 0) {
-          await this.git.ok(["init", "-q"]);
-          await this.git.ok(["symbolic-ref", "HEAD", "refs/heads/main"]);
-        }
-        try {
-          prepareStorageGitFiles(home, this.host.store.untrackedSessionPaths());
-          await this.git.ok(["add", "-A", "--", "."]);
-          const staged = (await this.git.ok(["diff", "--cached", "--name-only", "-z"])).split("\0").filter(Boolean);
-          const leak = staged.find((p) => !portable(p));
-          if (leak) {
-            throw new CoreError("invalid_request", i18n._({
-              id: "Refusing to share {leak}: it belongs to a family that stays on this device",
-              values: { leak },
-              comment: "Refusal: a staged file belongs to a family the home never shares; {leak} is its path",
-            }));
-          }
-          await this.git.ok([...(await this.git.committerArgs()), "commit", "-q", "-m", `Initialize Spex space on ${hostname()}`]);
-          if (remote !== undefined) await this.git.ok(["remote", "add", "origin", remote]);
-        } catch (error) {
-          if (!hadGitDir) rmSync(join(home, ".git"), { recursive: true, force: true });
-          throw error;
-        }
-      } finally { process.umask(previousUmask); }
-      this.checkedAt = null;
-      this.remoteEmpty = false;
-      this.unrelated = false;
-      this.lastPlan = undefined;
-      this.phase = { phase: "idle" };
-      return await this.broadcast(true);
-    } catch (error) {
-      this.phase = previous;
-      if (error instanceof CoreError) throw error;
-      if (error instanceof GitMissingError) throw new CoreError("invalid_request", error.message);
-      throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async setRemote(url: string | null): Promise<SpaceState> {
+  /** Give the clone a remote, or take it away (space-5): the way a
+   * reader or a test reaches a host this wave. */
+  async setRemote(url: string | null): Promise<void> {
     this.assertNotRunning();
     const repo = await this.readRepository();
     this.requireGit(repo);
@@ -912,14 +744,15 @@ export class SpaceManager {
     if (url !== repo.remote) {
       // A changed remote clears the last check and the last sync (space-5):
       // what the old remote held says nothing about the new one.
-      await this.git.run(["update-ref", "-d", "refs/remotes/origin/main"]);
+      await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
+      await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
       this.checkedAt = null;
-      this.host.store.deletePref("space:lastSync");
+      this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
       this.phase = { phase: "idle" };
     }
-    return this.broadcast(true);
+    await this.state(true);
   }
 
   // -- operations (space-31) -------------------------------------------------
@@ -951,7 +784,7 @@ export class SpaceManager {
   private async enter(op: SpaceOp, step: SyncStep, cancelable: boolean): Promise<void> {
     this.phase = { phase: "running", op, step, since: Date.now(), cancelable };
     await this.broadcast(false);
-    await this.host.beforeStep?.({ op, step });
+    await this.host.beforeStep?.({ op, step, repository: this.key });
   }
 
   async fetch(): Promise<{ accepted: true }> {
@@ -969,7 +802,7 @@ export class SpaceManager {
     return { accepted: true };
   }
 
-  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean }): Promise<{ accepted: true }> {
+  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
     this.assertNotRunning();
     const previous = this.phase;
     // The gate is set before the admission checks (space-21).
@@ -977,10 +810,10 @@ export class SpaceManager {
     let repo: ReadyRepository;
     const choices: Record<string, StorageChoice> = {};
     try {
-      const blocker = await this.host.blocker();
+      const blocker = await this.host.blocker(this.key);
       if (blocker) throw new CoreError("busy", blocker);
       repo = await this.requireReady();
-      const blocking = this.diagnostics(false).find((d) => d.blocking);
+      const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics()].find((d) => d.blocking);
       if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
       await this.repairIfMarked();
       if (input.choices && Object.keys(input.choices).length > 0) {
@@ -999,6 +832,7 @@ export class SpaceManager {
           choices[name] = choice === "mine" ? "ours" : "theirs";
         }
       }
+      if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
     } catch (error) {
       this.phase = previous;
       throw error;
@@ -1040,7 +874,7 @@ export class SpaceManager {
           await this.enter(op, "check", true);
           const remoteEmpty = await this.check(repo.remote);
           if (remoteEmpty) {
-            counts = { sent: planStorageUnits({ ours: readStorageTree(this.host.home, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
+            counts = { sent: planStorageUnits({ ours: readStorageTree(this.dir, "HEAD"), theirs: new Map(), base: new Map() }).length, received: 0 };
             next = "push";
           } else next = "compare";
           break;
@@ -1095,11 +929,11 @@ export class SpaceManager {
               throw new SpaceStopped("push", {
                 cause: "rejected",
                 message: i18n._({
-                  id: "The remote changed again",
-                  comment: "A stopped sync's message: the remote moved while this machine was sending",
+                  id: "The host changed again",
+                  comment: "A stopped sync's message: the host's branch moved while this machine was sending",
                 }),
                 guidance: i18n._({
-                  id: "Your merge is saved locally; Retry to send it once the remote settles.",
+                  id: "Your merge is saved locally; Retry to send it once the host settles.",
                   comment: "Guidance under a push the remote rejected twice",
                 }),
                 retry: true,
@@ -1111,7 +945,7 @@ export class SpaceManager {
           }
           upstream = true;
           const at = Date.now();
-          this.host.store.setPref("space:lastSync", { at, sent: counts.sent, received: counts.received });
+          this.host.store.setPref(lastSyncPref(this.key), { at, sent: counts.sent, received: counts.received });
           this.phase = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
           next = "done";
           break;
@@ -1123,9 +957,9 @@ export class SpaceManager {
   /** Step 1 — Save: refresh the rules, stage, refuse a leak, validate,
    * commit when anything is staged (space-12). */
   private async save(): Promise<string | null> {
-    const home = this.host.home;
+    const dir = this.dir;
     const stop = (message: string, guidance: string): SpaceStopped => new SpaceStopped("save", { cause: "validation", message, guidance, retry: false });
-    try { prepareStorageGitFiles(home, this.host.store.untrackedSessionPaths()); }
+    try { prepareStorageGitFiles(dir, this.host.store.untrackedSessionPaths(this.key)); }
     catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
       comment: "Guidance where the sync rules file could not be refreshed",
@@ -1147,7 +981,7 @@ export class SpaceManager {
         }),
       );
     }
-    try { await validateStorageTree(home); }
+    try { await validateStorageTree(dir, this.validation()); }
     catch (error) {
       await this.git.run(["reset", "-q"]);
       throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
@@ -1159,33 +993,30 @@ export class SpaceManager {
     const units = [...new Set(staged.map(storageUnitName))].sort();
     const commit = await this.git.run([...(await this.git.committerArgs()), "commit", "-q", "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
-      // The pattern reads Git's own English output, so it stays.
-      const identity = /tell me who you are|no email|no name/i.test(commit.stderr);
       throw new SpaceStopped("save", {
-        cause: identity ? "identity" : "git",
+        cause: "git",
         message: lastLines(commit.stderr) || i18n._({
           id: "Git could not commit",
           comment: "A stopped save's message where git failed and printed nothing",
         }),
-        guidance: identity
-          ? i18n._({
-              id: "Set user.name and user.email for Git on this machine, then Retry.",
-              comment: "Guidance where Git has no committer identity; the setting names stay as they are",
-            })
-          : i18n._({
-              id: "Retry; if it fails again, run git commit in the home from a terminal for detail.",
-              comment: "Guidance under a commit git failed; git commit is the command's own name",
-            }),
+        guidance: i18n._({
+          id: "Retry; if it fails again, run git commit in the home from a terminal for detail.",
+          comment: "Guidance under a commit git failed; git commit is the command's own name",
+        }),
         retry: true,
       });
     }
     return this.git.ok(["rev-parse", "HEAD"]);
   }
 
-  /** Step 2 — Check: fetch the remote's main without merging; true when
-   * the remote holds no main (space-8, space-12). */
+  private validation(): { own: boolean; libraryDir: string } {
+    return { own: this.key === this.host.store.home.own(), libraryDir: this.host.libraryDir };
+  }
+
+  /** Step 2 — Check: fetch the host's `spex` without merging; true when
+   * the host holds no `spex` (space-8, space-12). */
   private async check(remote: string): Promise<boolean> {
-    const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", "origin", "refs/heads/main"], { transport: true });
+    const heads = await this.git.run(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${SPEX_BRANCH}`], { transport: true });
     if (heads.code === 2) {
       this.remoteEmpty = true;
       this.unrelated = false;
@@ -1193,31 +1024,32 @@ export class SpaceManager {
       return true;
     }
     if (heads.code !== 0) throw new SpaceStopped("check", classifyTransportFailure(heads, remote));
-    const fetched = await this.git.run(["fetch", "-q", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"], { transport: true });
+    const fetched = await this.git.run(["fetch", "-q", "--no-tags", "origin", `+refs/heads/${SPEX_BRANCH}:refs/remotes/origin/${SPEX_BRANCH}`], { transport: true });
     if (fetched.code !== 0) throw new SpaceStopped("check", classifyTransportFailure(fetched, remote));
     this.remoteEmpty = false;
     this.checkedAt = Date.now();
     return false;
   }
 
-  /** Step 3 — Compare: the plan of HEAD against the remote's main over
+  /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
    * their ancestor, or the empty tree for a join (space-13, space-14). */
   private async compare(choices: Record<string, StorageChoice>, join: boolean): Promise<CompareResult> {
-    const home = this.host.home;
+    const dir = this.dir;
+    const originRef = `refs/remotes/origin/${SPEX_BRANCH}`;
     const head = await this.git.ok(["rev-parse", "HEAD"]);
-    const origin = await this.git.ok(["rev-parse", "refs/remotes/origin/main"]);
-    const merged = await this.git.run(["merge-base", "HEAD", "refs/remotes/origin/main"]);
+    const origin = await this.git.ok(["rev-parse", originRef]);
+    const merged = await this.git.run(["merge-base", "HEAD", originRef]);
     this.unrelated = merged.code !== 0;
     if (this.unrelated && !join) return { outcome: "unrelated" };
     const base = this.unrelated ? EMPTY_TREE : merged.stdout.toString("utf8").trim();
-    const trees: StorageTrees = { ours: readStorageTree(home, head), theirs: readStorageTree(home, origin), base: readStorageTree(home, base) };
+    const trees: StorageTrees = { ours: readStorageTree(dir, head), theirs: readStorageTree(dir, origin), base: readStorageTree(dir, base) };
     const units = planStorageUnits(trees);
     this.lastPlan = { ours: head, oursTree: head, theirs: origin, base, units };
     this.lists = await this.describe(units, trees, { ours: head, theirs: origin, base });
     const local = units.filter((u) => u.choice === "ours" && u.changed.ours && !u.changed.theirs);
     const incoming = units.filter((u) => u.choice === "theirs");
     const conflicts = units.filter((u) => u.choice === "conflict");
-    if (await this.git.succeeds(["merge-base", "--is-ancestor", "refs/remotes/origin/main", "HEAD"])) {
+    if (await this.git.succeeds(["merge-base", "--is-ancestor", originRef, "HEAD"])) {
       return { outcome: "nothing", counts: { sent: local.length, received: 0 } };
     }
     const mismatch = conflicts.some((c) => choices[c.name] === undefined)
@@ -1231,12 +1063,12 @@ export class SpaceManager {
     return { outcome: "apply", pending: { head, origin, base, units, resolved, counts } };
   }
 
-  private markerPath(): string { return join(this.host.home, "local", "space-apply.json"); }
+  private markerPath(): string { return join(this.dir, APPLY_MARKER); }
 
   private beginHolding(): void {
     if (this.holding) return;
     this.holding = { leases: [], umask: process.umask(0o077) };
-    this.host.pauseWatchers();
+    this.host.pauseWatchers(this.key);
   }
 
   private async releaseHoldings(): Promise<void> {
@@ -1246,7 +1078,7 @@ export class SpaceManager {
     const results = await Promise.allSettled(holding.leases.reverse().map((lease) => lease.release()));
     this.host.store.setManagedSessions(undefined);
     process.umask(holding.umask);
-    this.host.resumeWatchers();
+    this.host.resumeWatchers(this.key);
     for (const result of results) if (result.status === "rejected") console.error(`spex: session lease release failed: ${String(result.reason)}`);
   }
 
@@ -1254,7 +1086,7 @@ export class SpaceManager {
    * the sync naming its session. */
   private async acquireSessionLeases(units: StorageMergeUnit[], step: SyncStep): Promise<void> {
     const store = this.host.store;
-    const shared = store.sessionStore();
+    const shared = this.repository.store;
     await shared.prepare();
     const ids = new Set(units.filter((u) => spaceUnitKind(u.name) === "session").map((u) => u.name.slice("sessions/".length)));
     for (const file of existsSync(shared.sessionsDir) ? readdirSync(shared.sessionsDir) : []) {
@@ -1300,13 +1132,14 @@ export class SpaceManager {
     let result: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
       result = await applyStorageSelection(
-        this.host.home,
+        this.dir,
         { ours: pending.head, theirs: pending.origin, base: pending.base, unrelated: pending.base === EMPTY_TREE, units: pending.units },
         Object.fromEntries(pending.resolved),
         {
           holdsSessionLeases: true,
+          prefsFile: prefsFileOf(this.host.home),
+          validate: this.validation(),
           beforeWrite: () => {
-            mkdirSync(dirname(marker), { recursive: true, mode: 0o700 });
             const record: ApplyMarker = { v: 1, ours: pending.head, theirs: pending.origin, base: pending.base, choices: Object.fromEntries(pending.resolved), at: Date.now() };
             writeApplicationFile(marker, record);
           },
@@ -1331,8 +1164,8 @@ export class SpaceManager {
     this.applied = { headBefore: pending.head, headAfter, changedSessions: result.changedSessions, diagnostics: result.diagnostics };
   }
 
-  /** The merge commit from the staged selection, or main moved to the
-   * remote's commit where the selection equals its tree (space-19). */
+  /** The merge commit from the staged selection, or `spex` moved to the
+   * host's commit where the selection equals its tree (space-19). */
   private async commitSelection(head: string, origin: string, resolved: Map<string, StorageChoice>): Promise<string> {
     const tree = await this.git.ok(["write-tree"]);
     const fastForward = await this.git.succeeds(["merge-base", "--is-ancestor", head, origin]);
@@ -1341,10 +1174,10 @@ export class SpaceManager {
     if (!(fastForward && tree === originTree)) {
       const chosen = [...resolved].filter(([, side]) => side === "theirs").map(([name]) => `remote: ${name}`);
       const kept = [...resolved].filter(([, side]) => side === "ours").map(([name]) => `mine: ${name}`);
-      const message = `Merge remote main\n\n${[...chosen, ...kept].join("\n")}`;
+      const message = `Merge the host's spex\n\n${[...chosen, ...kept].join("\n")}`;
       commit = await this.git.ok([...(await this.git.committerArgs()), "commit-tree", tree, "-p", head, "-p", origin, "-m", message]);
     }
-    await this.git.ok(["update-ref", "refs/heads/main", commit, head]);
+    await this.git.ok(["update-ref", `refs/heads/${SPEX_BRANCH}`, commit, head]);
     return commit;
   }
 
@@ -1354,17 +1187,17 @@ export class SpaceManager {
     const applied = this.applied as Applied;
     const store = this.host.store;
     this.refreshProblem = undefined;
-    try { await validateStorageTree(this.host.home); }
+    try { await validateStorageTree(this.dir, this.validation()); }
     catch (error) {
       this.refreshProblem = error instanceof StorageFormatError
         ? { file: error.file, reason: error.reason, blocking: true }
-        : { file: this.host.home, reason: error instanceof Error ? error.message : String(error), blocking: true };
+        : { file: this.dir, reason: error instanceof Error ? error.message : String(error), blocking: true };
     }
     store.reload();
     const configChanged = !(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"]));
-    if (configChanged && inside(this.host.configPath, this.host.home)) await this.host.reloadConfig();
-    await this.host.rescanSessions();
-    this.host.ledgerChanged(store.listProjects().map((project) => project.id));
+    if (configChanged) await this.host.reloadConfig();
+    await this.host.rescanSessions(this.key);
+    this.host.ledgerChanged([this.key]);
     await this.releaseHoldings();
     this.unrelated = false;
     this.applied = undefined;
@@ -1373,15 +1206,16 @@ export class SpaceManager {
     await this.broadcast(true);
   }
 
-  /** Step 6 — Push main to origin, setting the upstream once (space-12). */
+  /** Step 6 — Push `spex` to the host, setting the upstream once (space-12). */
   private async push(remote: string, upstream: boolean): Promise<"ok" | "nothing" | "rejected"> {
     const head = await this.git.ok(["rev-parse", "HEAD"]);
-    const origin = await this.git.run(["rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}"]);
+    const origin = await this.git.run(["rev-parse", "-q", "--verify", `refs/remotes/origin/${SPEX_BRANCH}^{commit}`]);
     if (upstream && origin.code === 0 && origin.stdout.toString("utf8").trim() === head) return "nothing";
-    const run = await this.git.run(upstream ? ["push", "-q", "origin", "main"] : ["push", "-q", "-u", "origin", "main"], { transport: true });
+    const run = await this.git.run(upstream ? ["push", "-q", "origin", SPEX_BRANCH] : ["push", "-q", "-u", "origin", SPEX_BRANCH], { transport: true });
     if (run.code === 0) {
-      // The remote now holds main: later plans compare against it.
+      // The host now holds `spex`: later plans compare against it.
       this.remoteEmpty = false;
+      await this.git.run(["update-ref", `refs/remotes/origin/${SPEX_BRANCH}`, head]);
       return "ok";
     }
     const failure = classifyTransportFailure(run, remote);
@@ -1392,7 +1226,7 @@ export class SpaceManager {
   // -- repair (space-31) -----------------------------------------------------
 
   /** An interrupted apply is repaired from its marker before the core
-   * reopens the home; a failure stands as a blocking issue. */
+   * reopens the clone; a failure stands as a blocking issue. */
   async repairAtStartup(): Promise<void> {
     if (!existsSync(this.markerPath())) return;
     try {
@@ -1409,15 +1243,15 @@ export class SpaceManager {
       await this.repair();
       this.repairFailure = undefined;
       this.host.store.reload();
-      await this.host.rescanSessions();
+      await this.host.rescanSessions(this.key);
     } catch (error) {
       this.repairFailure = error instanceof Error ? error.message : String(error);
-      throw new CoreError("invalid_request", `${REPAIR_MARKER_FILE}: ${repairFailureReason(this.repairFailure)}`);
+      throw new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
     }
   }
 
   private async repair(): Promise<void> {
-    const home = this.host.home;
+    const dir = this.dir;
     const marker = readJsonFile(this.markerPath()) as Partial<ApplyMarker>;
     if (marker.v !== 1 || typeof marker.ours !== "string" || typeof marker.theirs !== "string" || typeof marker.base !== "string" || typeof marker.choices !== "object" || marker.choices === null) {
       // Both failures below reach the reader as the cause inside the
@@ -1433,22 +1267,24 @@ export class SpaceManager {
     if (head !== marker.ours) {
       // The ref update landed before the marker was removed — a merge
       // commit whose parents are the recorded sides, or a fast-forward
-      // onto the remote's commit: nothing is re-applied.
+      // onto the host's commit: nothing is re-applied.
       const parents = (await this.git.ok(["log", "-1", "--format=%P", "HEAD"])).split(/\s+/).filter(Boolean);
       const landed = head === marker.theirs || (parents.includes(marker.ours) && parents.includes(marker.theirs));
       if (landed) { rmSync(this.markerPath(), { force: true }); return; }
       throw new Error(i18n._({
-        id: "main moved since the interrupted sync; resolve it in a terminal",
-        comment: "Why an interrupted sync's repair failed; main is the branch's own name",
+        id: "spex moved since the interrupted sync; resolve it in a terminal",
+        comment: "Why an interrupted sync's repair failed; spex is the branch's own name",
       }));
     }
-    const trees: StorageTrees = { ours: readStorageTree(home, marker.ours), theirs: readStorageTree(home, marker.theirs), base: readStorageTree(home, marker.base) };
+    const trees: StorageTrees = { ours: readStorageTree(dir, marker.ours), theirs: readStorageTree(dir, marker.theirs), base: readStorageTree(dir, marker.base) };
     const units = planStorageUnits(trees);
     const choices = marker.choices as Record<string, StorageChoice>;
     this.beginHolding();
     try {
       await this.acquireSessionLeases(units, "apply");
-      await applyStorageSelection(home, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, { holdsSessionLeases: true });
+      await applyStorageSelection(dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
+        holdsSessionLeases: true, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
+      });
       await this.commitSelection(marker.ours, marker.theirs, resolveStorageChoices(units, choices));
       rmSync(this.markerPath(), { force: true });
     } finally { await this.releaseHoldings(); }
@@ -1457,15 +1293,15 @@ export class SpaceManager {
   // -- diff (space-10) -------------------------------------------------------
 
   async diff(unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
-    if (!this.lastPlan) await this.snapshot(true);
+    if (!this.lastPlan) await this.state(true);
     const plan = this.lastPlan;
     if (!plan) throw new CoreError("invalid_request", initializeFirst());
     const found = plan.units.find((u) => u.name === unit);
     if (!found) throw new CoreError("invalid_request", unknownUnit(unit));
     const kind = spaceUnitKind(unit);
-    if (kind === "session" || kind === "queue") {
+    if (kind === "session" || kind === "intent" || kind === "authoring") {
       throw new CoreError("invalid_request", i18n._({
-        id: "a session or queue offers no text diff",
+        id: "a session, an intent or an authoring session offers no text diff",
         comment: "Refusal: a diff was asked of a unit that is read as a summary, not as text",
       }));
     }
@@ -1478,7 +1314,7 @@ export class SpaceManager {
     }
     if (side === "remote" && this.checkedAt === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "Check the remote first",
+        id: "Check the host first",
         comment: "Refusal: the remote's side was asked for before the remote was checked",
       }));
     }
@@ -1496,10 +1332,10 @@ export class SpaceManager {
 
   // -- explorer (space-35) ---------------------------------------------------
 
-  /** Resolve a home-relative path without following symlinks, confined
-   * to the home's real path. */
+  /** Resolve a clone-relative path without following symlinks, confined
+   * to the clone's real path. */
   private confine(rel: string | undefined, forRead: boolean): { rel: string; abs: string } {
-    const home = realPath(this.host.home);
+    const root = realPath(this.dir);
     const given = rel ?? "";
     if (given.includes("\0") || isAbsolute(given)) {
       throw new CoreError("invalid_request", i18n._({
@@ -1515,7 +1351,7 @@ export class SpaceManager {
         comment: "Refusal: the explorer offers no view of the repository's own files",
       }));
     }
-    let current = home;
+    let current = root;
     for (const part of parts) {
       current = join(current, part);
       let stat;
@@ -1527,7 +1363,7 @@ export class SpaceManager {
         }));
       }
     }
-    if (!inside(current, home)) throw new CoreError("invalid_request", escapesTheHome());
+    if (!inside(current, root)) throw new CoreError("invalid_request", escapesTheHome());
     return { rel: parts.join("/"), abs: current };
   }
 
@@ -1573,16 +1409,16 @@ export class SpaceManager {
     return { path: rel, entries };
   }
 
-  private entry(parent: string, dirent: Dirent, marks: Awaited<ReturnType<SpaceManager["sharingMarks"]>>): SpaceEntry {
+  private entry(parent: string, dirent: Dirent, marks: Awaited<ReturnType<RepositorySync["sharingMarks"]>>): SpaceEntry {
     const rel = parent ? `${parent}/${dirent.name}` : dirent.name;
-    const abs = join(realPath(this.host.home), rel);
+    const abs = join(realPath(this.dir), rel);
     if (rel === ".git") return { name: dirent.name, path: rel, kind: "git", family: "Git data", sync: "git", preview: "none" };
     if (dirent.isSymbolicLink()) return { name: dirent.name, path: rel, kind: "file", family: "Not a Spex file", sync: "local", preview: "none" };
     const directory = dirent.isDirectory();
     const family = spaceFamily(rel, directory);
     const under = (set: Set<string>): boolean => { for (const item of set) if (item === rel || item.startsWith(`${rel}/`)) return true; return false; };
     let sync: SpaceEntry["sync"];
-    if (staysHere(rel, family)) sync = "local";
+    if (LOCAL_FAMILIES.has(family)) sync = "local";
     else if (!marks.repo) sync = "pending";
     else if (marks.ignored.has(rel)) sync = "local";
     // A directory of a tracked kind holding nothing committed — an empty
@@ -1590,7 +1426,7 @@ export class SpaceManager {
     // ignored families alone (space-23).
     else if (directory) sync = under(marks.tracked) && !under(marks.status) ? "shared" : "pending";
     else sync = marks.status.has(rel) ? "pending" : marks.tracked.has(rel) ? "shared" : "pending";
-    const owner = this.owner(rel);
+    const owner = this.ownerOf(rel);
     if (directory) {
       let count: number | undefined;
       try { count = readdirSync(abs).length; } catch { count = undefined; }
@@ -1603,17 +1439,17 @@ export class SpaceManager {
     return { name: dirent.name, path: rel, kind: "file", family, sync, ...(size !== undefined ? { size } : {}), ...(mtime !== undefined ? { mtime } : {}), ...(owner ? { owner } : {}), preview };
   }
 
-  private owner(rel: string): SpaceEntry["owner"] | undefined {
-    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|records\.jsonl|hints\.json|spex\.json)$/.exec(rel);
+  private ownerOf(rel: string): SpaceEntry["owner"] | undefined {
+    const session = /^sessions\/([0-9a-f-]{36})\.(?:json|records\.jsonl|hints\.json|spex\.json|assets)$/.exec(rel);
     if (session && UUID.test(session[1])) {
       const info = this.host.store.describeSession(session[1]);
-      const project = info ? this.host.store.getProject(info.projectId) : undefined;
-      return { sessionId: session[1], ...(info?.title ? { title: info.title } : {}), ...(info ? { projectId: info.projectId } : {}), ...(project ? { name: project.name } : {}) };
+      return { sessionId: session[1], ...(info?.title ? { title: info.title } : {}) };
     }
-    const queue = /^intents\/([0-9a-f-]{36})\.jsonl$/.exec(rel);
-    if (queue && UUID.test(queue[1])) {
-      const project = this.host.store.getProject(queue[1]);
-      return { projectId: queue[1], ...(project ? { name: project.name } : {}) };
+    const intent = /^intents\/([0-9a-f-]{36})\.(?:json|assets)$/.exec(rel);
+    if (intent && UUID.test(intent[1])) {
+      const info = this.host.store.getIntent(intent[1]);
+      const title = info ? info.text.trim().split("\n")[0]?.trim() || info.attachments?.map((asset) => asset.name).filter(Boolean).join(", ") : undefined;
+      return { intentId: intent[1], ...(title ? { title } : {}) };
     }
     return undefined;
   }
@@ -1661,3 +1497,189 @@ export class SpaceManager {
   }
 }
 
+/** Every spex repository's machine and the Groups state they make. */
+export class SpaceManager {
+  private readonly machines = new Map<string, RepositorySync>();
+  /** Runs Git for the questions no one clone answers. */
+  private readonly probe: SpaceGit;
+  private publishing?: Promise<void>;
+  private republish = false;
+
+  constructor(private readonly host: SpaceHost) {
+    this.probe = new SpaceGit(host.home, host.env);
+  }
+
+  /** The machine of one spex repository, made on first use. */
+  private machine(key: string): RepositorySync {
+    const repository = this.host.store.repository(key);
+    if (!repository) {
+      throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device",
+        comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+    }
+    let machine = this.machines.get(key);
+    if (!machine || machine.repository.dir !== repository.dir) {
+      machine = new RepositorySync(this.host, this, repository);
+      this.machines.set(key, machine);
+    }
+    return machine;
+  }
+
+  /** The busy message while an operation runs on this clone (space-21);
+   * other clones stay writable. */
+  busyFor(key: string | undefined): string | undefined {
+    return key === undefined ? undefined : this.machines.get(key)?.busy();
+  }
+
+  /** Whether any clone's operation runs. */
+  busy(): string | undefined {
+    for (const machine of this.machines.values()) {
+      const busy = machine.busy();
+      if (busy) return busy;
+    }
+    return undefined;
+  }
+
+  /** The store's, session and migration diagnostics, each repair marked
+   * with what this device's reader answered (space-54). */
+  storageDiagnostics(): StorageDiagnostic[] {
+    const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
+      if (!entry.repair) return entry;
+      const stored = this.host.store.getPref<{ declined?: unknown }>(repairPref(entry.repair.key));
+      const declined = stored && typeof stored.declined === "number" ? stored.declined : undefined;
+      return declined === undefined ? entry : { ...entry, repair: { ...entry.repair, declined } };
+    };
+    return this.host.diagnostics().map(mark);
+  }
+
+  private diagnostics(): StorageDiagnostic[] {
+    const reported = [
+      ...this.storageDiagnostics(),
+      ...[...this.machines.values()].flatMap((machine) => machine.diagnostics()),
+    ];
+    this.pruneAnswers(reported);
+    return reported;
+  }
+
+  /** An answer naming no repair the core still reports is discarded
+   * (space-54) — but never on a fold that cannot be trusted to be
+   * complete: blocking damage, or an operation in flight, would drop a
+   * record the next honest fold still wants. */
+  private pruneAnswers(reported: StorageDiagnostic[]): void {
+    if (this.busy()) return;
+    if (reported.some((entry) => entry.blocking)) return;
+    const standing = new Set(reported.map((entry) => entry.repair?.key).filter(Boolean) as string[]);
+    for (const key of this.host.store.prefKeys("space:repair:")) {
+      if (!standing.has(key.slice("space:repair:".length))) this.host.store.deletePref(key);
+    }
+  }
+
+  /** Only the reader's own act settles a repair (space-54): declining
+   * says this is not a project on this device, and is a preference,
+   * which never syncs. Rendering never writes here. */
+  async decline(repair: string, declined: boolean): Promise<GroupsState> {
+    const known = this.diagnostics().some((entry) => entry.repair?.key === repair);
+    if (!known) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "no repair named {repair} stands",
+        values: { repair },
+        comment: "Refusal: the answer names a repair the core does not report; {repair} is its key",
+      }));
+    }
+    if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
+    else this.host.store.deletePref(repairPref(repair));
+    return this.state();
+  }
+
+  /** The Groups state (space-30), every repository recomputed. */
+  async state(): Promise<GroupsState> {
+    return this.assemble(true);
+  }
+
+  private async assemble(recompute: boolean): Promise<GroupsState> {
+    const store = this.host.store;
+    const repositories: RepositoryState[] = [];
+    for (const repository of store.listRepositories()) {
+      const machine = this.machine(repository.key);
+      repositories.push(recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase });
+    }
+    for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
+    const own = store.home.own();
+    repositories.sort((a, b) => Number(b.key === own) - Number(a.key === own) || a.key.localeCompare(b.key));
+    const diagnostics = await this.host.checkRepairs(this.diagnostics());
+    const host = store.home.host;
+    return {
+      home: resolve(this.host.home),
+      git: await this.probe.version(),
+      host: { url: host.url, displayName: null },
+      account: null,
+      signIn: { phase: "idle" },
+      readAt: null,
+      groups: [{
+        id: null,
+        fullPath: store.home.ownName,
+        name: store.home.ownName,
+        url: null,
+        own: true,
+        repositories,
+      }],
+      diagnostics,
+      // One number, so the header and the list cannot drift (space-1):
+      // what the reader has not answered, and everything unfolded.
+      issues: countIssues(diagnostics),
+    };
+  }
+
+  /** Broadcast the state after one machine moved, from each machine's
+   * last reading; transitions in a burst coalesce into one. */
+  async publish(): Promise<void> {
+    if (this.publishing) { this.republish = true; return this.publishing; }
+    this.publishing = (async () => {
+      try {
+        do {
+          this.republish = false;
+          this.host.broadcast(await this.assemble(false));
+        } while (this.republish);
+      } finally { this.publishing = undefined; }
+    })();
+    return this.publishing;
+  }
+
+  async setRemote(key: string, url: string | null): Promise<GroupsState> {
+    await this.machine(key).setRemote(url);
+    const state = await this.state();
+    this.host.broadcast(state);
+    return state;
+  }
+
+  fetch(key: string): Promise<{ accepted: true }> { return this.machine(key).fetch(); }
+
+  sync(key: string, input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
+    return this.machine(key).sync(input);
+  }
+
+  cancel(key: string): boolean { return this.machine(key).cancel(); }
+
+  diff(key: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
+    return this.machine(key).diff(unit, path, side);
+  }
+
+  tree(key: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }> { return this.machine(key).tree(path); }
+
+  read(key: string, path: string): Promise<SpaceReadResult> { return this.machine(key).read(path); }
+
+  /** What removing a project would lose (projects-9). */
+  pendingUnits(key: string): Promise<number> {
+    return this.host.store.repository(key) ? this.machine(key).pendingUnits() : Promise.resolve(0);
+  }
+
+  /** An interrupted apply in any clone is repaired from its marker before
+   * the core reopens it (space-31). */
+  async repairAtStartup(): Promise<void> {
+    for (const repository of this.host.store.listRepositories()) await this.machine(repository.key).repairAtStartup();
+  }
+
+  /** Cancel every transport and wait for the operations (shutdown). */
+  async stop(): Promise<void> {
+    await Promise.all([...this.machines.values()].map((machine) => machine.stop()));
+  }
+}

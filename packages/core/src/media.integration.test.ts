@@ -20,6 +20,9 @@ import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { MEDIA_CHUNK_BYTES, type Command, type CommandResults, type MediaAsset, type MediaOwner, type ReplyMessage, type ServerMessage } from "./protocol.js";
 
+/** A project's spex repository clone under a scratch home (storage-1). */
+const clonePath = (dataDir: string, key: string): string => join(dataDir, "workspace", ...key.split("/"));
+
 class MediaClient {
   private readonly pending = new Map<string, (reply: ReplyMessage) => void>();
   private readonly socket: WebSocket;
@@ -94,7 +97,7 @@ async function sessionFixture(worker = false, untilAborted = false) {
     untilAborted,
   } });
   const options = {
-    dataDir: join(dir, "home"), configPath, watchConfig: false, env: {}, home: dir,
+    dataDir: join(dir, "home"), configPath, watchConfig: false, env: {}, home: dir, own: "tester",
     token: "media-test", adapterImports: imports, adapterRuntime: () => ({ usable: true }),
     ...(worker ? { captainFactory: async () => createScriptedCaptain(async (turn, context) => {
       await context.callPlayer("dev.coder", `browser-fixture:${turn.prompt}`);
@@ -130,14 +133,11 @@ test("space-37: pending attachment validation excludes sync until queue and edit
     await client.command("media.begin", {owner, uploadId, name: "guarded.txt", mimeType: "text/plain", byteLength: 4});
     await client.command("media.chunk", {uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
     const {asset} = await client.command("media.finish", {uploadId});
+    // The project's own spex repository syncs with a bare remote on `spex`.
+    const clone = clonePath(f.options.dataDir, project.id);
     const remote = join(f.dir, "remote.git");
-    git(f.dir, "init", "--quiet", "--bare", "--initial-branch=main", remote);
-    git(f.options.dataDir, "init", "--quiet", "--initial-branch=main");
-    git(f.options.dataDir, "config", "user.name", "Media Fixture");
-    git(f.options.dataDir, "config", "user.email", "media@example.invalid");
-    git(f.options.dataDir, "config", "commit.gpgsign", "false");
-    git(f.options.dataDir, "commit", "--quiet", "--allow-empty", "-m", "Fixture baseline");
-    await client.command("space.remote.set", {url: remote});
+    git(f.dir, "init", "--quiet", "--bare", "--initial-branch=spex", remote);
+    await client.command("space.remote.set", {repository: project.id, url: remote});
     let intentId = "";
     for (const operation of ["queue", "edit"] as const) {
       let entered!: () => void;
@@ -145,10 +145,15 @@ test("space-37: pending attachment validation excludes sync until queue and edit
       const barrier = new Promise<void>((resolve) => { release = resolve; });
       let pause = true;
       // Keep the real core, asset digest verification, and Space admission.
-      // Hold only the native reader close to expose the command's async gap.
+      // Hold only the native reader close to expose the command's async gap:
+      // a queue validates the staged bytes, an edit checks the intent's own
+      // directory still holds them (media-4).
+      const held = (value: Parameters<typeof ownerStore>[0], write: boolean) => operation === "queue"
+        ? value.kind === "project" && value.id === owner.id && !write
+        : value.kind === "intent" && value.intentId === intentId;
       media.ownerStore = (value, write = false) => {
         const store = ownerStore(value, write);
-        return value.kind === owner.kind && value.id === owner.id && !write ? {...store,
+        return held(value, write) ? {...store,
           openAsset: async (...args: Parameters<typeof store.openAsset>) => {
             const reader = await store.openAsset(...args);
             return {...reader, close: async () => {
@@ -158,28 +163,30 @@ test("space-37: pending attachment validation excludes sync until queue and edit
           },
         } : store;
       };
-      const head = git(f.options.dataDir, "rev-parse", "HEAD");
+      const head = git(clone, "rev-parse", "HEAD");
       const submitted = operation === "queue"
-        ? client.command("intent.queue", {projectId: project.id, text: "", attachments: [asset], at: "tail"})
+        ? client.command("intent.queue", {projectId: project.id, text: "", attachments: [asset]})
         : client.command("intent.edit", {intentId, text: "Review these bytes", attachments: [asset]});
       admission = submitted;
       await validating;
-      await assert.rejects(client.command("space.sync", {}), /busy: Wait for the media upload to finish/);
-      assert.equal(git(f.options.dataDir, "rev-parse", "HEAD"), head, "refusal precedes Git mutation");
+      await assert.rejects(client.command("space.sync", {repository: project.id}), /busy: Wait for the media upload to finish/);
+      assert.equal(git(clone, "rev-parse", "HEAD"), head, "refusal precedes Git mutation");
       release();
       const intent = await submitted;
       intentId = intent.id;
       assert.deepEqual(intent.attachments, [asset]);
       assert.equal(intent.text, operation === "queue" ? "" : "Review these bytes");
       media.ownerStore = ownerStore;
-      assert.deepEqual(await readAll(client, owner, asset), Buffer.from("kept"));
+      assert.deepEqual(await readAll(client, {kind: "intent", projectId: project.id, intentId}, asset), Buffer.from("kept"));
       const after = client.messages.length;
-      await client.command("space.sync", {});
+      assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
+      const phaseOf = (message: ServerMessage) => message.type === "space.state"
+        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
+        : undefined;
       const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after
-        && message.type === "space.state" && ["done", "stopped"].includes(message.state.sync.phase));
-      assert.ok(settled.type === "space.state");
-      assert.equal(settled.state.sync.phase, "done", JSON.stringify(settled.state.sync));
-      assert.equal(git(remote, "rev-parse", "main"), git(f.options.dataDir, "rev-parse", "HEAD"));
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
+      assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
+      assert.equal(git(remote, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
       assert.equal(f.stats.runs.length, 0);
     }
   } finally {
@@ -195,19 +202,22 @@ test("space-37: pending attachment validation excludes sync until queue and edit
 test("media-18: deleting and recreating a draft invalidates completed and incomplete upload retries", {timeout: 30_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
-  const owner = {kind: "draft" as const, id: "retired-media"};
+  let owner = {kind: "draft" as const, projectId: "", id: "retired-media"};
   const request = () => ({owner, uploadId: randomUUID(), name: "kept.txt", mimeType: "text/plain", byteLength: 4});
-  const completed = request(), incomplete = request();
   try {
-    await client.command("draft.create", {draftId: owner.id});
+    // An authoring session lives in its project's spex repository (storage-23).
+    const project = await client.command("project.register", {path: f.project});
+    owner = {...owner, projectId: project.id};
+    const completed = request(), incomplete = request();
+    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
     for (const upload of [completed, incomplete]) {
       await client.command("media.begin", upload);
       await client.command("media.chunk", {uploadId: upload.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
     }
     const prior = await client.command("media.finish", {uploadId: completed.uploadId});
     await client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1});
-    await client.command("draft.delete", {draftId: owner.id});
-    await client.command("draft.create", {draftId: owner.id});
+    await client.command("draft.delete", {projectId: project.id, draftId: owner.id});
+    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
     for (const upload of [completed, incomplete]) {
       await assert.rejects(client.command("media.begin", upload), /canceled|expired/);
       await assert.rejects(client.command("media.finish", {uploadId: upload.uploadId}), /canceled|expired/);
@@ -363,7 +373,8 @@ test("media-13: file-only session copies before acknowledgement, reopens exact b
     // Read immediately after the acknowledgement, without waiting for the
     // agent or turn settlement. Shared storage already owns the whole file.
     assert.deepEqual(await readAll(client, sessionOwner, asset), bytes);
-    assert.deepEqual(Buffer.from(await createSessionStore({ sessionsDir: join(fixture.options.dataDir, "sessions") }).readAsset(session.id, asset)), bytes);
+    // The session lives in its project's spex repository (storage-1).
+    assert.deepEqual(Buffer.from(await createSessionStore({ sessionsDir: join(clonePath(fixture.options.dataDir, project.id), "sessions") }).readAsset(session.id, asset)), bytes);
     await client.waitFor((event) => event.type === "session.state" && event.session.id === session.id && event.session.turns === 1 && !event.session.live);
     const summary = (await client.command("session.list", {})).find((entry) => entry.id === session.id)!;
     assert.equal(summary.title, asset.name);
@@ -405,7 +416,7 @@ test("media-19: an empty-text submission naming an attachment-only intent hands 
     await client.command("media.begin", { uploadId, owner: { kind: "project", id: project.id }, name: "queued screen.png", mimeType: "image/png", byteLength: bytes.length });
     await client.command("media.chunk", { uploadId, offset: 0, data: bytes.toString("base64") });
     const { asset } = await client.command("media.finish", { uploadId });
-    const queued = await client.command("intent.queue", { projectId: project.id, text: "", attachments: [asset], at: "tail" });
+    const queued = await client.command("intent.queue", { projectId: project.id, text: "", attachments: [asset] });
     const session = await client.command("session.create", { projectId: project.id });
     const sessionOwner = { kind: "session" as const, id: session.id };
     await client.command("subscribe", { channel: { kind: "session", sessionId: session.id } });
@@ -423,7 +434,7 @@ test("media-19: an empty-text submission naming an attachment-only intent hands 
     assert.equal(dispatched.intent.dispatched?.sessionId, session.id);
 
     // Text and resolved files both empty: refused once resolved, with no turn.
-    const plain = await client.command("intent.queue", { projectId: project.id, text: "Write the release notes", at: "tail" });
+    const plain = await client.command("intent.queue", { projectId: project.id, text: "Write the release notes" });
     await assert.rejects(client.command("turn.submit", { sessionId: session.id, text: "", intentId: plain.id }), /invalid_request: Text or an attachment is required/);
     const summary = (await client.command("session.list", {})).find((entry) => entry.id === session.id)!;
     assert.equal(summary.turns, 1);
@@ -445,7 +456,7 @@ test("core-service-77: rejected attachment admission releases only the runtime i
   try {
     const project = await client.command("project.register", { path: fixture.project });
     const session = await client.command("session.create", { projectId: project.id });
-    const shared = createSessionStore({ sessionsDir: join(fixture.options.dataDir, "sessions") });
+    const shared = createSessionStore({ sessionsDir: join(clonePath(fixture.options.dataDir, project.id), "sessions") });
     const missing: MediaAsset = { assetId: `sha256:${"a".repeat(64)}`, byteLength: 1, mimeType: "image/png", name: "missing.png" };
     const rejectSubmission = () => assert.rejects(client.command("turn.submit", {
       sessionId: session.id, text: "", attachments: [missing],
@@ -548,7 +559,7 @@ test("authenticated media bytes survive client reconnect and core restart with e
   const project = join(dir, "project");
   await mkdir(project);
   execFileSync("git", ["init", "--quiet", project]);
-  const options = { dataDir, configPath: join(dir, "config.yaml"), watchConfig: false, env: {}, home: dir, token: "media-test" };
+  const options = { dataDir, configPath: join(dir, "config.yaml"), watchConfig: false, env: {}, home: dir, own: "tester", token: "media-test" };
   let service = await CoreService.start(options);
   let client = new MediaClient(service.port());
   try {
@@ -565,8 +576,10 @@ test("authenticated media bytes survive client reconnect and core restart with e
     const result = await client.command("media.finish", { uploadId: request.uploadId });
     const hash = createHash("sha256").update(bytes).digest("hex");
     assert.equal(result.asset.assetId, `sha256:${hash}`);
-    assert.deepEqual(await readFile(join(dataDir, "intents", `${owner.id}.assets`, hash)), bytes);
-    await assert.rejects(client.command("media.read", { owner: { kind: "project", id: randomUUID() }, assetId: result.asset.assetId, offset: 0, length: 1 }), /no project/i);
+    // A project's staged bytes sit in its spex repository's ignored staging owner (media-4).
+    const staged = join(clonePath(dataDir, owner.id), ".spex-uploads", hash);
+    assert.deepEqual(await readFile(staged), bytes);
+    await assert.rejects(client.command("media.read", { owner: { kind: "project", id: "tester/elsewhere-spex" }, assetId: result.asset.assetId, offset: 0, length: 1 }), /no project/i);
     const first = await client.command("media.read", { owner, assetId: result.asset.assetId, offset: 0, length: MEDIA_CHUNK_BYTES });
     assert.equal(first.eof, false);
     assert.deepEqual(Buffer.from(first.data, "base64"), bytes.subarray(0, MEDIA_CHUNK_BYTES));
@@ -579,7 +592,7 @@ test("authenticated media bytes survive client reconnect and core restart with e
     assert.deepEqual(Buffer.from(second.data, "base64"), bytes.subarray(MEDIA_CHUNK_BYTES));
     assert.equal(second.asset.name, request.name);
     await client.command("media.read", { owner, assetId: result.asset.assetId, offset: 0, length: 1 });
-    await writeFile(join(dataDir, "intents", `${owner.id}.assets`, hash), Buffer.alloc(bytes.length), {mode: 0o600});
+    await writeFile(staged, Buffer.alloc(bytes.length), {mode: 0o600});
     await assert.rejects(client.command("media.read", { owner, assetId: result.asset.assetId, offset: 1, length: 1 }), /changed|digest|integrity/i);
   } finally {
     client.close();

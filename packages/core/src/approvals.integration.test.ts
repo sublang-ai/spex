@@ -76,7 +76,7 @@ async function fixture(expiresInMs = 600_000, approvalPatch: Partial<NonNullable
   await first.ready;
   const registered = await first.command("project.register", {path: project});
   const session = await first.command("session.create", {projectId: registered.id});
-  return {dir, project, first, client, stats, session,
+  return {dir, project, projectId: registered.id, first, client, stats, session,
     async restart() { for (const client of clients) client.close(); await service.stop(); service = await CoreService.start(options); return client(); },
     async stop() { for (const client of clients) client.close(); await service.stop(); await rm(dir, {recursive: true, force: true}); }};
 }
@@ -161,8 +161,8 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
   try {
     await f.first.command("turn.submit", {sessionId: f.session.id, text: "session"});
     for (const draftId of ["one", "two"]) {
-      await f.first.command("draft.create", {draftId});
-      await f.first.command("draft.send", {draftId, text: "approval-fixture"});
+      await f.first.command("draft.create", {projectId: f.projectId, draftId});
+      await f.first.command("draft.send", {projectId: f.projectId, draftId, text: "approval-fixture"});
     }
     const state = await f.first.pending(3);
     assert.equal(new Set(state.pending.map((request) => request.id)).size, 3);
@@ -171,7 +171,7 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
     const one = state.pending.find((request) => request.owner.kind === "draft" && request.owner.id === "one")!;
     await f.first.answer(state, one, "deny");
     assert.equal((await f.first.pending(2)).pending.some((request) => request.id === one.id), false);
-    await f.first.command("draft.abort", {draftId: "two"});
+    await f.first.command("draft.abort", {projectId: f.projectId, draftId: "two"});
     assert.equal((await f.first.pending()).pending[0].owner.kind, "session");
     const restarted = await f.restart();
     assert.deepEqual((await restarted.pending(0)).pending, []);

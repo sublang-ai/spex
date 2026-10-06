@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -45,13 +45,37 @@ export const mediaAssetSchema = z.object({
 }).strict();
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
+/** A spex repository's key: its clone's path under `workspace/`, the
+ * name ending in `-spex` (storage-1, projects-10). A project is named
+ * by its spex repository's key. */
+export const REPOSITORY_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*-spex$/;
+export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
+/** A canonical lowercase UUID, the identity of an intent (storage-4). */
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The owners of application media (media-4): a spex repository's
+ * staging owner, an intent's own directory beside its file, an
+ * authoring session's beside its file, and a Playbook session. */
 export const mediaOwnerSchema = z.discriminatedUnion("kind", [
-  z.object({kind: z.literal("project"), id: z.string().uuid()}).strict(),
-  z.object({kind: z.literal("draft"), id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
+  z.object({kind: z.literal("project"), id: repositoryKeySchema}).strict(),
+  z.object({kind: z.literal("intent"), projectId: repositoryKeySchema, intentId: z.string().regex(UUID_PATTERN)}).strict(),
+  z.object({kind: z.literal("draft"), projectId: repositoryKeySchema, id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
   z.object({kind: z.literal("session"), id: z.string().min(1)}).strict(),
 ]);
 export type MediaOwner = z.infer<typeof mediaOwnerSchema>;
 export type MediaUploadOwner = Exclude<MediaOwner, {kind: "session"}>;
+/** One string naming an owner, for maps and gates. */
+export function mediaOwnerKey(owner: MediaOwner): string {
+  switch (owner.kind) {
+    case "project": return `project:${owner.id}`;
+    case "intent": return `intent:${owner.projectId}:${owner.intentId}`;
+    case "draft": return `draft:${owner.projectId}:${owner.id}`;
+    case "session": return `session:${owner.id}`;
+  }
+}
+/** The spex repository an application owner lives in. */
+export function mediaOwnerRepository(owner: MediaOwner): string | undefined {
+  return owner.kind === "project" ? owner.id : owner.kind === "session" ? undefined : owner.projectId;
+}
 export const mediaAttachmentsSchema = z.array(mediaAssetSchema).max(MEDIA_MAX_TURN_FILES)
   .refine((files) => files.reduce((total, file) => total + file.byteLength, 0) <= MEDIA_MAX_TURN_BYTES);
 export interface MessageContent { text: string; attachments?: readonly MediaAsset[] }
@@ -247,11 +271,19 @@ export type ConfigState =
   | { status: "invalid"; path: string; errors: string[] }
   | { status: "missing"; path: string };
 
+/** A project: a working folder paired with a spex repository
+ * (storage-6, projects-10). */
 export interface ProjectInfo {
+  /** The spex repository's key, e.g. `alice/a-spex`. */
   id: string;
+  /** The working folder on this device. */
   path: string;
   name: string;
   registeredAt: number;
+  /** The spex repository holding the project's records: its key, its
+   * name (`<name>-spex`), its group's path, and whether that group is
+   * your own. */
+  repository: { key: string; name: string; group: string; own: boolean };
 }
 
 /** Playbook's closed failure-code list, re-exported here unchanged
@@ -514,8 +546,16 @@ export interface IntentSource {
   labels?: string[];
 }
 
-/** One stored intent: a staged Boss turn plus its acts (DR-035).
- * There is no stored state — everything visible derives. */
+/** The signed-in account that captured an intent (storage-4). */
+export interface IntentAuthor {
+  login: string;
+  displayName: string | null;
+}
+
+/** One stored intent: a staged Boss turn, one file of its project's
+ * spex repository (DR-035, DR-103). There is no stored state, no rank
+ * and no link — everything visible derives, and the queue is ordered
+ * by age. */
 export interface IntentInfo {
   id: string;
   projectId: string;
@@ -523,10 +563,9 @@ export interface IntentInfo {
   text: string;
   attachments?: readonly MediaAsset[];
   source?: IntentSource;
-  /** Lexicographic order key; position is priority. */
-  rank: string;
-  /** Single optional predecessor, any project. */
-  afterId?: string;
+  /** Who captured it, where the home was signed in. */
+  author?: IntentAuthor;
+  /** The capture time, which orders the queue (core-service-107). */
   createdAt: number;
   /** Stamped when the dispatched turn starts; re-written by a later
    * dispatch. An aborted dispatch releases by derivation — the stamp
@@ -554,7 +593,7 @@ export interface IntentStats {
 
 /** Why a project's next queued intent is or is not manually startable
  * (DR-077). Presence on a derived row also identifies that row as the
- * project's first queued, unblocked intent. */
+ * project's oldest queued intent (core-service-107). */
 export type QueueStanding =
   | "after-current-work"
   | "failure-park"
@@ -576,11 +615,9 @@ export interface DerivedIntent {
   state: IntentState;
   /** Present once dispatched (working/interrupted/finished). */
   stats?: IntentStats;
-  /** Present while the after-link's target is still open. */
-  blockedBy?: { intentId: string; title: string; projectId: string };
   /** Why an interrupted intent stands stopped on the Boss. */
   reason?: "question" | "failure";
-  /** Present on exactly the project's first queued, unblocked row. */
+  /** Present on exactly the project's oldest queued row. */
   next?: QueueSchedule;
 }
 
@@ -787,7 +824,10 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("agent.options"), id, adapter: adapterNameSchema }),
   z.object({ type: z.literal("project.list"), id }),
   z.object({ type: z.literal("project.register"), id, path: z.string().min(1) }),
-  z.object({ type: z.literal("project.remove"), id, projectId: z.string().min(1) }),
+  /** Forget the working folder and delete its spex repository's clone
+   * (projects-9); a clone holding what has not reached the host is
+   * refused `conflict` with the count until `confirm` is set. */
+  z.object({ type: z.literal("project.remove"), id, projectId: z.string().min(1), confirm: z.boolean().optional() }),
   z.object({
     type: z.literal("project.create"),
     id,
@@ -807,7 +847,9 @@ export const commandSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("session.list"), id }),
   z.object({ type: z.literal("session.create"), id, projectId: z.string().min(1) }),
-  z.object({ type: z.literal("project.rebind"), id, projectId: z.string().uuid(), path: z.string().min(1), aliases: z.array(z.string()).optional(), revision: z.string().min(1).optional() }).strict(),
+  /** Pair a working folder with a spex repository (storage-22): the
+   * supplied aliases replace the alias list, omitted ones keep it. */
+  z.object({ type: z.literal("project.rebind"), id, projectId: repositoryKeySchema, path: z.string().min(1), aliases: z.array(z.string()).optional() }).strict(),
   z.object({ type: z.literal("storage.diagnostics"), id }).strict(),
   z.object({ type: z.literal("session.dispose"), id, sessionId: z.string().min(1) }),
   z.object({ type: z.literal("session.restore"), id, sessionId: z.string().min(1) }).strict(),
@@ -925,8 +967,6 @@ export const commandSchema = z.discriminatedUnion("type", [
         labels: z.array(z.string()).optional(),
       })
       .optional(),
-    afterIntentId: z.string().min(1).optional(),
-    at: z.enum(["head", "tail"]).optional(),
   }),
   z.object({
     type: z.literal("intent.edit"),
@@ -934,20 +974,6 @@ export const commandSchema = z.discriminatedUnion("type", [
     intentId: z.string().min(1),
     text: z.string(),
     attachments: mediaAttachmentsSchema.optional(),
-  }),
-  z.object({
-    type: z.literal("intent.move"),
-    id,
-    intentId: z.string().min(1),
-    /** The open intent to sit after; null moves to the head. */
-    afterIntentId: z.string().min(1).nullable(),
-  }),
-  z.object({
-    type: z.literal("intent.link"),
-    id,
-    intentId: z.string().min(1),
-    /** The open predecessor to wait behind; null clears the link. */
-    afterIntentId: z.string().min(1).nullable(),
   }),
   z.object({
     type: z.literal("intent.close"),
@@ -984,41 +1010,48 @@ export const commandSchema = z.discriminatedUnion("type", [
   // none is stored.
   z.object({ type: z.literal("language.get"), id }).strict(),
   z.object({ type: z.literal("language.set"), id, language: languageChoiceSchema }).strict(),
-  // The Space surface (space-29, DR-057): the core performs every Git
-  // operation; long commands reply `accepted` at once and report their
-  // outcome as `space.state`.
+  // Groups (space-29, DR-103): the core performs every Git operation,
+  // one spex repository at a time, `repository` naming it by its key;
+  // long commands reply `accepted` at once and report their outcome as
+  // `space.state`.
   z.object({ type: z.literal("space.get"), id }).strict(),
-  z.object({ type: z.literal("space.init"), id, remote: z.string().optional() }).strict(),
-  z.object({ type: z.literal("space.remote.set"), id, url: z.string().nullable() }).strict(),
-  z.object({ type: z.literal("space.fetch"), id }).strict(),
+  /** The way a test or a reader gives a clone a remote until the Git
+   * host sets it up (DR-103); null removes it. */
+  z.object({ type: z.literal("space.remote.set"), id, repository: repositoryKeySchema, url: z.string().nullable() }).strict(),
+  z.object({ type: z.literal("space.fetch"), id, repository: repositoryKeySchema }).strict(),
   z
     .object({
       type: z.literal("space.sync"),
       id,
+      repository: repositoryKeySchema,
       choices: z.record(z.string().min(1), spaceChoiceSchema).optional(),
       join: z.boolean().optional(),
+      noticed: z.boolean().optional(),
     })
     .strict(),
-  z.object({ type: z.literal("space.cancel"), id }).strict(),
+  z.object({ type: z.literal("space.cancel"), id, repository: repositoryKeySchema }).strict(),
   z
     .object({
       type: z.literal("space.diff"),
       id,
+      repository: repositoryKeySchema,
       unit: z.string().min(1),
       path: z.string().min(1),
       side: spaceChoiceSchema,
     })
     .strict(),
-  z.object({ type: z.literal("space.tree"), id, path: z.string().optional() }).strict(),
-  z.object({ type: z.literal("space.read"), id, path: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
+  z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
-  // Playbook drafts (DR-058, core-service-96): one activity per draft,
-  // Boss messages queue while a turn or compile runs.
+  // Authoring sessions (DR-058, core-service-96): each in the spex
+  // repository of the project `projectId` names; one activity per
+  // session, Boss messages queue while a turn or compile runs.
   z.object({ type: z.literal("draft.list"), id }),
-  z.object({ type: z.literal("draft.create"), id, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.create"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
   z.object({
     type: z.literal("draft.open"),
     id,
+    projectId: repositoryKeySchema,
     draftId: draftIdSchema,
     /** Serve stored records after this sequence; absent serves all. */
     afterSeq: z.number().int().nonnegative().optional(),
@@ -1026,14 +1059,16 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("draft.send"),
     id,
+    projectId: repositoryKeySchema,
     draftId: draftIdSchema,
     text: z.string(),
     attachments: mediaAttachmentsSchema.optional(),
   }),
-  z.object({ type: z.literal("draft.abort"), id, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.abort"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
   z.object({
     type: z.literal("draft.source.write"),
     id,
+    projectId: repositoryKeySchema,
     draftId: draftIdSchema,
     /** In-app markdown text, or a picked file's path — one of the two. */
     content: z.string().optional(),
@@ -1042,10 +1077,11 @@ export const commandSchema = z.discriminatedUnion("type", [
      * mismatch is a conflict, and no token writes unconditionally. */
     baseVersion: z.string().min(1).optional(),
   }),
-  z.object({ type: z.literal("draft.compile"), id, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.compile"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
   z.object({
     type: z.literal("draft.register"),
     id,
+    projectId: repositoryKeySchema,
     draftId: draftIdSchema,
     command: z.string().min(1),
     intent: z.string().min(1),
@@ -1057,12 +1093,13 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("draft.player.set"),
     id,
+    projectId: repositoryKeySchema,
     draftId: draftIdSchema,
     /** The roster player answering this draft; null = the Captain's block. */
     playerId: playerIdSchema.nullable(),
   }),
-  z.object({ type: z.literal("draft.delete"), id, draftId: draftIdSchema }),
-  z.object({ type: z.literal("draft.artifacts"), id, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.delete"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.artifacts"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -1123,8 +1160,6 @@ export interface CommandResults {
   "specs.write": { version: string; mtime: number };
   "intent.queue": IntentInfo;
   "intent.edit": IntentInfo;
-  "intent.move": IntentInfo;
-  "intent.link": IntentInfo;
   "intent.close": IntentInfo;
   /** The intent is gone from every read, so nothing comes back. */
   "intent.remove": null;
@@ -1135,9 +1170,8 @@ export interface CommandResults {
   "language.get": { language: Language | null };
   /** The choice after the write, as `language.state` carries it. */
   "language.set": { language: Language | null };
-  "space.get": SpaceState;
-  "space.init": SpaceState;
-  "space.remote.set": SpaceState;
+  "space.get": GroupsState;
+  "space.remote.set": GroupsState;
   "space.fetch": { accepted: true };
   "space.sync": { accepted: true };
   /** `false` when no transport child was running. */
@@ -1145,7 +1179,7 @@ export interface CommandResults {
   "space.diff": { patch: string; truncated: boolean };
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
-  "space.repair.decline": SpaceState;
+  "space.repair.decline": GroupsState;
   "draft.list": DraftInfo[];
   "draft.create": DraftInfo;
   "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
@@ -1227,6 +1261,9 @@ export interface DraftProposal {
 
 export interface DraftInfo {
   id: string;
+  /** The project whose spex repository holds this authoring session
+   * (storage-23), named by its key. */
+  projectId: string;
   createdAt: number;
   touchedAt: number;
   /** The source's first line, null with no source. */
@@ -1376,14 +1413,21 @@ export interface BuiltinPlaybookInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Space (space-30, DR-057)
+// Groups (space-30, DR-103)
 // ---------------------------------------------------------------------------
 
-/** What a folder on this device would repair (space-46). */
+/** What a folder on this device would repair (space-46): a spex
+ * repository no working folder here pairs, or a working folder whose
+ * clone is missing. */
 export interface DiagnosticRepair {
-  kind: "project" | "directory";
-  projectId?: string;
-  projectName?: string;
+  kind: "repository" | "folder";
+  /** The spex repository's key: the unpaired clone's, or the one the
+   * folder's pair names. */
+  repository?: string;
+  /** The spex repository's name and its group, for an unpaired clone. */
+  name?: string;
+  group?: string;
+  /** The working directories its sessions record, or the folder. */
   directories: string[];
   sessions: number;
   /** Stable over the facts it names (space-54): the checked findings
@@ -1416,8 +1460,9 @@ export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "pus
 
 export type SyncCause =
   | "unreachable"
-  | "unauthorized"
-  | "not-found"
+  | "reauth"
+  | "refused"
+  | "gone"
   | "timeout"
   | "stopped"
   | "rejected"
@@ -1425,35 +1470,34 @@ export type SyncCause =
   | "lease"
   | "writer"
   | "unrelated"
-  | "identity"
   | "git";
 
-export type SpaceOp = "sync" | "check" | "init";
+export type SpaceOp = "sync" | "check" | "join" | "move";
 
 export type SpaceChange = "new" | "updated" | "deleted";
 
 export type SpaceUnitKind =
   | "session"
-  | "queue"
-  | "projects"
+  | "intent"
+  | "authoring"
+  | "environment"
   | "settings"
-  | "playbook"
+  | "code"
   | "rules"
   | "other";
 
-/** One whole-unit selection subject: a session bundle, a
- * `playbooks/<id>/` directory, or one other tracked file. */
+/** One whole-unit selection subject of a spex repository (storage-11). */
 export interface SpaceUnit {
-  /** "sessions/<id>" | "intents/<pid>.jsonl" | "projects.json" |
-   * "config/playbook.config.yaml" | "playbooks/<id>" | ".gitignore" |
-   * path. */
+  /** "sessions/<id>" | "intents/<id>" | "authoring/<id>" |
+   * "environment" | "config/playbook.config.yaml" | "project.json" |
+   * ".gitignore" | path. */
   unit: string;
   kind: SpaceUnitKind;
   label: string;
   detail?: string;
   change: SpaceChange;
-  project?: { id: string; name?: string };
   sessionId?: string;
+  intentId?: string;
   paths: string[];
   /** Whether `space.diff` can show this unit. */
   diff: boolean;
@@ -1494,36 +1538,69 @@ export type SpaceSyncPhase =
     }
   | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 
-export interface SpaceState {
-  home: string;
-  outside: { what: "config" | "sessions"; path: string }[];
-  git: { ok: true; version: string } | { ok: false; guidance: string };
-  repository: null | {
-    branch: string | null;
-    remote: string | null;
-    upstream: boolean;
+/** One spex repository as the Groups surface reads it (space-30, space-61). */
+export interface RepositoryState {
+  key: string;
+  /** `<name>-spex`, the clone's folder name. */
+  name: string;
+  /** The Git host's permanent id for it, where known. */
+  id: string | null;
+  /** Your own group's spex repository. */
+  own: boolean;
+  /** The code's remote its `project.json` names, or null. */
+  code: string | null;
+  /** The working folder paired with it on this device, or null. */
+  folder: string | null;
+  state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
+  /** The host's words for read-only or unreachable. */
+  reason: string | null;
+  waiting: { step: "create" | "branch"; group: string; message: string } | null;
+  members: number | null;
+  visibility: string | null;
+  branch: {
     ahead: number | null;
     behind: number | null;
     checkedAt: number | null;
-    remoteEmpty: boolean;
+    hostEmpty: boolean;
     unrelated: boolean;
     mergePending: boolean;
-    identityFallback: boolean;
-  };
+  } | null;
   local: SpaceUnit[];
   incoming: SpaceUnit[];
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
+  noticed: boolean;
+  sync: SpaceSyncPhase;
+}
+
+/** The home, its groups and their spex repositories (space-30). */
+export interface GroupsState {
+  home: string;
+  git: { ok: true; version: string } | { ok: false; guidance: string };
+  host: { url: string; displayName: string | null };
+  account: { id: string; login: string; displayName: string | null } | null;
+  signIn:
+    | { phase: "idle" }
+    | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
+    | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
+  readAt: number | null;
+  groups: {
+    id: string | null;
+    fullPath: string;
+    name: string;
+    url: string | null;
+    own: boolean;
+    repositories: RepositoryState[];
+  }[];
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.
    * Carried as one number so header and list cannot disagree. */
   issues: number;
-  sync: SpaceSyncPhase;
 }
 
-/** One entry of a `space.tree` level, annotated from the catalog
- * (space-23, space-35). */
+/** One entry of a `space.tree` level of a clone, annotated from the
+ * catalog (space-23, space-35). */
 export interface SpaceEntry {
   name: string;
   path: string;
@@ -1533,7 +1610,7 @@ export interface SpaceEntry {
   size?: number;
   count?: number;
   mtime?: number;
-  owner?: { sessionId?: string; title?: string; projectId?: string; name?: string };
+  owner?: { sessionId?: string; intentId?: string; title?: string };
   preview: "text" | "withheld" | "binary" | "none";
 }
 
@@ -1633,12 +1710,12 @@ export interface LanguageStateMessage {
   language: Language | null;
 }
 
-/** The Space machine moved, or `space.init`, `space.remote.set` or a
- * sync's Refresh step landed (space-29): broadcast to every client,
- * the state replacing the last one wholesale. */
+/** A repository's machine moved, or `space.remote.set` or a sync's
+ * Refresh step landed (space-29): broadcast to every client, the
+ * state replacing the last one wholesale. */
 export interface SpaceStateMessage {
   type: "space.state";
-  state: SpaceState;
+  state: GroupsState;
 }
 
 /** One authoring record, to the subscribers of the draft's channel. */
@@ -1670,6 +1747,7 @@ export interface DraftSourceMessage {
  * broadcast to every client, which drops every trace of it. */
 export interface DraftRemovedMessage {
   type: "draft.removed";
+  projectId: string;
   draftId: string;
 }
 

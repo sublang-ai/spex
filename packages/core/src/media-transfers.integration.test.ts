@@ -28,7 +28,7 @@ async function fixture() {
     },
   });
   const request = (byteLength = 6): UploadRequest => ({
-    uploadId: randomUUID(), owner: { kind: "project", id: randomUUID() },
+    uploadId: randomUUID(), owner: { kind: "project", id: `tester/p-${randomUUID()}-spex` },
     name: "user selection.png", mimeType: "image/png", byteLength,
   });
   return {
@@ -66,7 +66,7 @@ test("conflicting IDs, chunks, malformed bytes and overflows do not corrupt a tr
     const request = f.request();
     await f.transfers.begin(request);
     await assert.rejects(f.transfers.begin({ ...request, name: "different.png" }), MediaTransferError);
-    await assert.rejects(f.transfers.begin({ ...request, owner: { kind: "draft", id: "different" } }), MediaTransferError);
+    await assert.rejects(f.transfers.begin({ ...request, owner: { kind: "draft", projectId: "tester/proj-spex", id: "different" } }), MediaTransferError);
     await f.transfers.chunk(request.uploadId, 0, base64("abc"));
     for (const [offset, data] of [
       [0, base64("bad")], [2, base64("cde")], [4, base64("d")],

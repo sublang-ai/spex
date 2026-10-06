@@ -6,10 +6,11 @@
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 
@@ -190,6 +191,10 @@ interface Harness {
   dir: string;
   dataDir: string;
   configPath: string;
+  /** The project whose spex repository holds the authoring sessions. */
+  projectId: string;
+  /** That spex repository's clone (storage-1). */
+  clone: string;
   /** Every spawn but a `--version` probe — the stub slc — with its env. */
   slcCalls: { argv: string[]; env?: NodeJS.ProcessEnv }[];
 }
@@ -206,6 +211,27 @@ function probeSpawner(slcCalls: Harness["slcCalls"]): LineSpawner {
     if (!probe) slcCalls.push({ argv: [command, ...args], env });
     return defaultSpawner(command, args, cwd, onLine, signal, env);
   };
+}
+
+/** Pair the harness's working folder once; a restart finds it paired. */
+async function pairedProject(port: number, path: string): Promise<string> {
+  const client = new Client(port);
+  await client.open();
+  try {
+    const listed = (await client.expectOk("project.list", {})).find((project) => realpathSync(project.path) === realpathSync(path));
+    return listed?.id ?? (await client.expectOk("project.register", { path })).id;
+  } finally {
+    client.close();
+  }
+}
+
+/** A git-initialized working folder beside the home. */
+function workingFolder(path: string): string {
+  if (!existsSync(path)) {
+    mkdirSync(path, { recursive: true });
+    execFileSync("git", ["init", "--quiet", path]);
+  }
+  return path;
 }
 
 async function startHarness(options: { script: FakeScript; slc: string; dir?: string }): Promise<Harness> {
@@ -225,10 +251,25 @@ async function startHarness(options: { script: FakeScript; slc: string; dir?: st
     adapterRuntime: () => ({ usable: true }),
     env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
     home: join(dir, "home"),
+    own: "tester",
     watchConfig: false,
     compileSpawner: probeSpawner(slcCalls),
   });
-  return { service, stats, dir, dataDir, configPath, slcCalls };
+  // An authoring session belongs to a project paired on this device
+  // (core-service-96): the harness pairs one working folder.
+  const projectId = await pairedProject(service.port(), workingFolder(join(dir, "project")));
+  const clone = join(dataDir, "workspace", ...projectId.split("/"));
+  return { service, stats, dir, dataDir, configPath, projectId, clone, slcCalls };
+}
+
+/** An authoring session's files in its project's spex repository
+ * (storage-23). */
+function authoringFiles(clone: string, id: string): { record: string; records: string; assets: string } {
+  return {
+    record: join(clone, "authoring", `${id}.json`),
+    records: join(clone, "authoring", `${id}.records.jsonl`),
+    assets: join(clone, "authoring", `${id}.assets`),
+  };
 }
 
 const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
@@ -239,27 +280,36 @@ const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
 
 test("playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol", async () => {
   const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
-  const { stats, dataDir, configPath } = harness;
+  const { stats, dataDir, configPath, projectId, clone } = harness;
+  const files = authoringFiles(clone, "triage");
   const client = new Client(harness.service.port());
   await client.open();
   const configBefore = readFileSync(configPath, "utf8");
   const draftDir = join(dataDir, "playbooks", "triage");
 
   // The channel exists once the draft does (core-service-96).
-  const created = await client.expectOk("draft.create", { draftId: "triage" });
+  const created = await client.expectOk("draft.create", { projectId, draftId: "triage" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
   assert.equal(created.state, "no-source");
   assert.equal(created.activity, "idle");
   assert.equal(created.player, null);
   assert.equal(created.agent.adapter, "claude");
+  assert.equal(created.projectId, projectId);
   assert.ok(existsSync(draftDir), "the library directory is made");
-  assert.ok(existsSync(join(dataDir, "local", "drafts", "triage", "draft.json")), "the record is made");
+  // storage-23: the record lands in the project's spex repository.
+  const record = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "package", "queued", "touchedAt"]);
+  assert.equal(record.format, 1);
+  assert.equal(record.id, "triage");
+  assert.equal(record.package, "spex-packages/triage");
+  assert.deepEqual(record.queued, []);
+  assert.equal(record.failures, 0);
   // An id a configured playbook, a built-in, or a draft holds is refused.
-  await client.expectError("draft.create", { draftId: "code" }, "invalid_request");
-  await client.expectError("draft.create", { draftId: "decide" }, "invalid_request");
-  await client.expectError("draft.create", { draftId: "triage" }, "conflict");
+  await client.expectError("draft.create", { projectId, draftId: "code" }, "invalid_request");
+  await client.expectError("draft.create", { projectId, draftId: "decide" }, "invalid_request");
+  await client.expectError("draft.create", { projectId, draftId: "triage" }, "conflict");
 
-  const sent = await client.expectOk("draft.send", { draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+  const sent = await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
   assert.deepEqual(sent, { accepted: true, queued: false });
   await until(() => {
     const draft = client.latest("triage");
@@ -341,16 +391,17 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     players: { Triager: "dev.triager", Verifier: "dev.coder" },
   });
 
-  const artifacts = await client.expectOk("draft.artifacts", { draftId: "triage" });
+  const artifacts = await client.expectOk("draft.artifacts", { projectId, draftId: "triage" });
   assert.ok(artifacts.gears && artifacts.fsm, "the compiled stages serve");
   assert.ok(artifacts.stateIds?.includes("ready"));
 
   // playbook-library-69/70: registration writes the new player, then
   // the entry keyed by the derived roles; the draft retires.
   const uploadId = randomUUID();
-  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", id: "triage"}, name: "registration.txt", mimeType: "text/plain", byteLength: 0});
+  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", projectId, id: "triage"}, name: "registration.txt", mimeType: "text/plain", byteLength: 0});
   await client.expectOk("media.finish", {uploadId});
   const state = await client.expectOk("draft.register", {
+    projectId,
     draftId: "triage",
     command: "triage",
     intent: "Label new issues",
@@ -372,10 +423,10 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.match(wrapper, /command: "triage"/);
   assert.match(wrapper, /intent: "Label new issues"/);
   assert.deepEqual(await client.expectOk("draft.list", {}), []);
-  await client.waitFor((m) => m.type === "draft.removed" && m.draftId === "triage");
-  assert.ok(!existsSync(join(dataDir, "local", "drafts", "triage")), "the record is gone");
+  await client.waitFor((m) => m.type === "draft.removed" && m.draftId === "triage" && m.projectId === projectId);
+  for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
   assert.ok(existsSync(join(draftDir, "triage.md")), "the directory stays with the playbook");
-  await client.expectError("draft.open", { draftId: "triage" }, "not_found");
+  await client.expectError("draft.open", { projectId, draftId: "triage" }, "not_found");
 
   client.close();
   await harness.service.stop();
@@ -394,19 +445,19 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
       { delayMs: 800 },
     ),
   });
-  const { stats, configPath, dataDir } = harness;
+  const { stats, configPath, projectId, clone } = harness;
   const client = new Client(harness.service.port());
   await client.open();
   const configBefore = readFileSync(configPath, "utf8");
-  await client.expectOk("draft.create", { draftId: "triage" });
+  await client.expectOk("draft.create", { projectId, draftId: "triage" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
-  await client.expectOk("draft.source.write", { draftId: "triage", content: SOURCE });
+  await client.expectOk("draft.source.write", { projectId, draftId: "triage", content: SOURCE });
   const failedCompiles = () => {
     const all = client.states("triage").filter((d) => d.compile?.outcome === "failed").map((d) => d.compile!);
     return all.filter((c, index) => index === 0 || c.at !== all[index - 1].at);
   };
 
-  const boss = await client.expectError("draft.compile", { draftId: "triage" }, "invalid_request");
+  const boss = await client.expectError("draft.compile", { projectId, draftId: "triage" }, "invalid_request");
   assert.match(boss.message, /gears2fsm/);
   // Relay 1 → compile 2 (fails) → relay 2 → compile 3 (clarifies) → stop.
   await until(() => {
@@ -422,7 +473,7 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
   // What became of each failure travels as a fact beside its line,
   // in the broadcast state and in the persisted record alike.
   assert.deepEqual(distinct.map((c) => c.relay), ["sent", "sent", "stopped"]);
-  const stored = JSON.parse(readFileSync(join(dataDir, "local", "drafts", "triage", "draft.json"), "utf8")) as { compile: { relay?: string } };
+  const stored = JSON.parse(readFileSync(authoringFiles(clone, "triage").record, "utf8")) as { compile: { relay?: string } };
   assert.equal(stored.compile.relay, "stopped");
   assert.match(distinct[0].output ?? "", /✗ gears2fsm failed at/);
   assert.match(distinct[0].output ?? "", /result 'labeled' declared twice/);
@@ -452,10 +503,10 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
 
   // A Boss message resets the count: its compile clarifies (relayed,
   // with the questions), the next fails (relayed as a preface).
-  const reset = await client.expectOk("draft.send", { draftId: "triage", text: "Ask me what you need, then compile again." });
+  const reset = await client.expectOk("draft.send", { projectId, draftId: "triage", text: "Ask me what you need, then compile again." });
   assert.equal(reset.queued, false);
   await until(() => client.statusLines("triage").filter((l) => l.startsWith("◇ Compiling")).length >= 5, 120_000, "the fifth compile");
-  const queued = await client.expectOk("draft.send", { draftId: "triage", text: "Also cite the label definitions." });
+  const queued = await client.expectOk("draft.send", { projectId, draftId: "triage", text: "Also cite the label definitions." });
   assert.equal(queued.queued, true);
   assert.deepEqual(client.latest("triage")?.queued, [{text: "Also cite the label definitions."}]);
   await until(() => {
@@ -499,48 +550,49 @@ const IN_FLIGHT: FakeScript = { fallback: { deltas: ["working"], result: "", unt
 
 test("playbook-library-74: one activity per draft — messages queue, the rest is busy, aborts end cleanly", async () => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
+  const { projectId } = harness;
   const client = new Client(harness.service.port());
   await client.open();
-  await client.expectOk("draft.create", { draftId: "matrix" });
+  await client.expectOk("draft.create", { projectId, draftId: "matrix" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "matrix" } });
 
   // During a turn.
-  assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "start" }), { accepted: true, queued: false });
+  assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "start" }), { accepted: true, queued: false });
   await until(() => client.latest("matrix")?.activity === "turn", 10_000, "the turn");
   const uploadId = randomUUID();
-  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", id: "matrix"}, name: "retained.txt", mimeType: "text/plain", byteLength: 0});
+  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", projectId, id: "matrix"}, name: "retained.txt", mimeType: "text/plain", byteLength: 0});
   const completedUpload = await client.expectOk("media.finish", {uploadId});
-  assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "second" }), { accepted: true, queued: true });
+  assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "second" }), { accepted: true, queued: true });
   assert.deepEqual(client.latest("matrix")?.queued, [{text: "second"}]);
-  await client.expectError("draft.compile", { draftId: "matrix" }, "busy");
-  await client.expectError("draft.delete", { draftId: "matrix" }, "busy");
+  await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
+  await client.expectError("draft.delete", { projectId, draftId: "matrix" }, "busy");
   assert.deepEqual(await client.expectOk("media.finish", {uploadId}), completedUpload, "refused deletion preserves the valid completed retry");
-  await client.expectError("draft.register", { draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
-  await client.expectError("draft.source.write", { draftId: "matrix", content: "# Matrix\n" }, "busy");
-  await client.expectError("draft.player.set", { draftId: "matrix", playerId: "dev.coder" }, "busy");
-  assert.deepEqual(await client.expectOk("draft.abort", { draftId: "matrix" }), { aborted: true });
+  await client.expectError("draft.register", { projectId, draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
+  await client.expectError("draft.source.write", { projectId, draftId: "matrix", content: "# Matrix\n" }, "busy");
+  await client.expectError("draft.player.set", { projectId, draftId: "matrix", playerId: "dev.coder" }, "busy");
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
   await until(() => client.records("matrix").some((m) => m.record.type === "turn_aborted" && m.record.turnId === 1), 10_000, "turn 1 aborted");
   // The queue stood and dispatches once the draft is idle.
   await until(() => client.turnStarts("matrix").includes("second"), 10_000, "the queued message");
   assert.deepEqual(client.latest("matrix")?.queued, []);
-  assert.deepEqual(await client.expectOk("draft.abort", { draftId: "matrix" }), { aborted: true });
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
   await until(() => client.records("matrix").some((m) => m.record.type === "turn_aborted" && m.record.turnId === 2), 10_000, "turn 2 aborted");
   await until(() => client.latest("matrix")?.activity === "idle", 10_000, "idle");
-  assert.deepEqual(await client.expectOk("draft.abort", { draftId: "matrix" }), { aborted: false });
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
 
   // During a compile.
-  await client.expectOk("draft.source.write", { draftId: "matrix", content: "# Matrix\n\nRoles:\n\n- Helper\n" });
-  const compiling = client.command("draft.compile", { draftId: "matrix" });
+  await client.expectOk("draft.source.write", { projectId, draftId: "matrix", content: "# Matrix\n\nRoles:\n\n- Helper\n" });
+  const compiling = client.command("draft.compile", { projectId, draftId: "matrix" });
   await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "matrix" && m.line.startsWith("→ gears2fsm"), 20_000);
   assert.equal(client.latest("matrix")?.activity, "compiling");
   assert.equal(client.latest("matrix")?.state, "compiling");
-  assert.deepEqual(await client.expectOk("draft.send", { draftId: "matrix", text: "third" }), { accepted: true, queued: true });
-  await client.expectError("draft.compile", { draftId: "matrix" }, "busy");
-  await client.expectError("draft.source.write", { draftId: "matrix", content: "# Again\n" }, "busy");
-  await client.expectError("draft.register", { draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
-  await client.expectError("draft.delete", { draftId: "matrix" }, "busy");
+  assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "third" }), { accepted: true, queued: true });
+  await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
+  await client.expectError("draft.source.write", { projectId, draftId: "matrix", content: "# Again\n" }, "busy");
+  await client.expectError("draft.register", { projectId, draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
+  await client.expectError("draft.delete", { projectId, draftId: "matrix" }, "busy");
   await client.expectError("compile.run", { playbookId: "matrix", sourceText: "# X\n", roles: ["helper"], command: "matrix", intent: "x", bindings: { helper: "dev.coder" } }, "busy");
-  assert.deepEqual(await client.expectOk("draft.abort", { draftId: "matrix" }), { aborted: false });
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
   await client.expectOk("compile.abort", { playbookId: "matrix" });
   const reply = await compiling;
   assert.ok(!reply.ok && reply.error.code === "aborted");
@@ -552,7 +604,7 @@ test("playbook-library-74: one activity per draft — messages queue, the rest i
   await until(() => client.turnStarts("matrix").includes("third"), 10_000, "the queued message after the compile");
   assert.ok(!client.turnStarts("matrix").some((p) => p.startsWith("Spex:")), "nothing relayed");
   assert.equal(client.latest("matrix")?.state, "draft");
-  await client.expectOk("draft.abort", { draftId: "matrix" });
+  await client.expectOk("draft.abort", { projectId, draftId: "matrix" });
   await until(() => client.latest("matrix")?.activity === "idle", 10_000, "idle again");
 
   client.close();
@@ -572,18 +624,20 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
     fallback: { deltas: ["Noted."], result: "Noted." },
   };
   const first = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']") });
-  const { dir, dataDir } = first;
+  const { dir, dataDir, projectId, clone } = first;
+  const files = authoringFiles(clone, "persist");
+  const prefsFile = join(dataDir, "local", "prefs.json");
   const client = new Client(first.service.port());
   await client.open();
-  await client.expectOk("draft.create", { draftId: "persist" });
+  await client.expectOk("draft.create", { projectId, draftId: "persist" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
 
   const idle = async (c: Client, n: number) => until(() => c.latest("persist")?.activity === "idle" && c.records("persist").filter((m) => m.record.type === "turn_finished").length >= n, 20_000, `turn ${n}`);
-  await client.expectOk("draft.send", { draftId: "persist", text: "hello" });
+  await client.expectOk("draft.send", { projectId, draftId: "persist", text: "hello" });
   await idle(client, 1);
-  await client.expectOk("draft.send", { draftId: "persist", text: "reject" });
+  await client.expectOk("draft.send", { projectId, draftId: "persist", text: "reject" });
   await idle(client, 2);
-  await client.expectOk("draft.send", { draftId: "persist", text: "again" });
+  await client.expectOk("draft.send", { projectId, draftId: "persist", text: "again" });
   await idle(client, 3);
   const runs = first.stats.runs;
   assert.equal(runs.length, 4);
@@ -600,14 +654,14 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.equal(client.records("persist").filter((m) => m.record.type === "turn_started").length, 3);
 
   // A compile in flight when the core stops.
-  await client.expectOk("draft.source.write", { draftId: "persist", content: "# Persist\n\nRoles:\n\n- Helper\n" });
-  const compiling = client.command("draft.compile", { draftId: "persist" });
+  await client.expectOk("draft.source.write", { projectId, draftId: "persist", content: "# Persist\n\nRoles:\n\n- Helper\n" });
+  const compiling = client.command("draft.compile", { projectId, draftId: "persist" });
   await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "persist" && m.line.startsWith("→ gears2fsm"), 20_000);
   const seqBefore = client.records("persist").at(-1)?.seq ?? 0;
   client.close();
   await first.service.stop();
   await compiling.catch(() => undefined);
-  const stored = JSON.parse(readFileSync(join(dataDir, "local", "drafts", "persist", "draft.json"), "utf8")) as { compile: { outcome: string } };
+  const stored = JSON.parse(readFileSync(files.record, "utf8")) as { compile: { outcome: string } };
   assert.equal(stored.compile.outcome, "running", "the stop leaves the compile as it was");
 
   // playbook-library-70: the restart reads it as interrupted, relays nothing.
@@ -615,7 +669,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const client2 = new Client(second.service.port());
   await client2.open();
   await client2.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
-  const opened = await client2.expectOk("draft.open", { draftId: "persist" });
+  const opened = await client2.expectOk("draft.open", { projectId, draftId: "persist" });
   assert.equal(opened.draft.state, "interrupted");
   assert.equal(opened.draft.compile?.outcome, "interrupted");
   assert.equal(opened.draft.activity, "idle");
@@ -629,7 +683,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
 
   // playbook-library-65: the next turn reseeds with no resume. The new
   // client subscribed after the restart, so it streams only new records.
-  await client2.expectOk("draft.send", { draftId: "persist", text: "back" });
+  await client2.expectOk("draft.send", { projectId, draftId: "persist", text: "back" });
   await idle(client2, 1);
   const back = second.stats.runs[0];
   assert.equal(back.resume, undefined);
@@ -641,37 +695,37 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.equal(back.model, "claude-test");
 
   // The agent switch: the preference, the block, and a reseed.
-  const switched = await client2.expectOk("draft.player.set", { draftId: "persist", playerId: "dev.reviewer" });
+  const switched = await client2.expectOk("draft.player.set", { projectId, draftId: "persist", playerId: "dev.reviewer" });
   assert.equal(switched.player, "dev.reviewer");
   assert.equal(switched.agent.adapter, "codex");
   assert.equal(switched.agent.model, "codex-test");
-  const prefs = JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")) as { prefs: Record<string, unknown> };
-  assert.equal(prefs.prefs["draft:persist:player"], "dev.reviewer");
+  const prefs = JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> };
+  assert.equal(prefs.prefs["authoring:persist:player"], "dev.reviewer");
   assert.ok(client2.statusLines("persist").includes("◇ Now answering: dev.reviewer — the conversation so far was replayed to it"));
-  await client2.expectError("draft.player.set", { draftId: "persist", playerId: "dev.nobody" }, "invalid_request");
-  await client2.expectOk("draft.send", { draftId: "persist", text: "switch" });
+  await client2.expectError("draft.player.set", { projectId, draftId: "persist", playerId: "dev.nobody" }, "invalid_request");
+  await client2.expectOk("draft.send", { projectId, draftId: "persist", text: "switch" });
   await idle(client2, 2);
   const onReviewer = second.stats.runs[1];
   assert.equal(onReviewer.resume, undefined, "a switched agent starts fresh");
   assert.equal(onReviewer.model, "codex-test");
   assert.match(onReviewer.prompt, /Conversation so far:/);
   assert.match(onReviewer.prompt, /answering as dev\.reviewer/);
-  const unswitched = await client2.expectOk("draft.player.set", { draftId: "persist", playerId: null });
+  const unswitched = await client2.expectOk("draft.player.set", { projectId, draftId: "persist", playerId: null });
   assert.equal(unswitched.player, null);
-  assert.equal(JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")).prefs["draft:persist:player"], undefined);
+  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs["authoring:persist:player"], undefined);
 
   // playbook-library-70: a transcript damaged behind the core's back
   // blocks the draft alone — it opens with its source and a diagnostic,
   // its records withheld, and refuses a message; nothing appends after
   // the damage, and nothing runs.
-  await client2.expectOk("draft.player.set", { draftId: "persist", playerId: "dev.reviewer" });
+  await client2.expectOk("draft.player.set", { projectId, draftId: "persist", playerId: "dev.reviewer" });
   client2.close();
   await second.service.stop();
-  appendFileSync(join(dataDir, "local", "drafts", "persist", "records.jsonl"), '{"seq":999,"record":{"type":"junk"}}\n{not json');
+  appendFileSync(files.records, '{"seq":999,"record":{"type":"junk"}}\n{not json');
   const third = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client3 = new Client(third.service.port());
   await client3.open();
-  const damaged = await client3.expectOk("draft.open", { draftId: "persist" });
+  const damaged = await client3.expectOk("draft.open", { projectId, draftId: "persist" });
   assert.match(damaged.draft.diagnostic ?? "", /records\.jsonl: damaged transcript after record \d+$/);
   assert.deepEqual(damaged.records, [], "the records are withheld");
   assert.equal(damaged.source?.markdown, "# Persist\n\nRoles:\n\n- Helper\n", "the source stands");
@@ -682,22 +736,22 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const listed = await client3.expectOk("draft.list", {});
   assert.equal(listed.length, 1);
   assert.ok(listed[0].diagnostic, "the list carries the diagnostic");
-  const refused = await client3.expectError("draft.send", { draftId: "persist", text: "hello?" }, "invalid_request");
+  const refused = await client3.expectError("draft.send", { projectId, draftId: "persist", text: "hello?" }, "invalid_request");
   assert.match(refused.message, /damaged transcript/);
-  await client3.expectError("draft.compile", { draftId: "persist" }, "invalid_request");
-  await client3.expectError("draft.source.write", { draftId: "persist", content: "# Again\n" }, "invalid_request");
+  await client3.expectError("draft.compile", { projectId, draftId: "persist" }, "invalid_request");
+  await client3.expectError("draft.source.write", { projectId, draftId: "persist", content: "# Again\n" }, "invalid_request");
   assert.equal(third.stats.runs.length, 0, "nothing ran on a damaged draft");
-  const transcript = readFileSync(join(dataDir, "local", "drafts", "persist", "records.jsonl"), "utf8");
+  const transcript = readFileSync(files.records, "utf8");
   assert.ok(transcript.endsWith("{not json"), "nothing was appended after the damage");
 
   // playbook-library-70: delete removes the record, the preference, and the directory.
-  assert.equal(await client3.expectOk("draft.delete", { draftId: "persist" }), null);
-  await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist");
-  assert.ok(!existsSync(join(dataDir, "local", "drafts", "persist")), "the record is gone");
+  assert.equal(await client3.expectOk("draft.delete", { projectId, draftId: "persist" }), null);
+  await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist" && m.projectId === projectId);
+  for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
   assert.ok(!existsSync(join(dataDir, "playbooks", "persist")), "the library directory is gone");
-  assert.equal(JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")).prefs["draft:persist:player"], undefined);
+  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs["authoring:persist:player"], undefined);
   assert.deepEqual(await client3.expectOk("draft.list", {}), []);
-  await client3.expectError("draft.open", { draftId: "persist" }, "not_found");
+  await client3.expectError("draft.open", { projectId, draftId: "persist" }, "not_found");
 
   client3.close();
   await third.service.stop();
@@ -755,17 +809,18 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
     fallback: { deltas: ["Noted."], result: "Noted." },
   };
   const harness = await startHarness({ script, slc: stubSlcSource("['Triager', 'Verifier']") });
+  const { projectId } = harness;
   const client = new Client(harness.service.port());
   await client.open();
-  await client.expectOk("draft.create", { draftId: "triage" });
+  await client.expectOk("draft.create", { projectId, draftId: "triage" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
-  await client.expectOk("draft.source.write", { draftId: "triage", content: SOURCE });
-  const compiled = await client.expectOk("draft.compile", { draftId: "triage" });
+  await client.expectOk("draft.source.write", { projectId, draftId: "triage", content: SOURCE });
+  const compiled = await client.expectOk("draft.compile", { projectId, draftId: "triage" });
   assert.deepEqual(compiled, { ok: true, roles: ["Triager", "Verifier"] });
   // The success turn runs (the fallback answers it) before the matrix.
   await until(() => client.latest("triage")?.activity === "idle" && harness.stats.runs.length === 1, 60_000, "the success turn");
 
-  await client.expectOk("draft.send", { draftId: "triage", text: "matrix" });
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "matrix" });
   await until(() => client.latest("triage")?.activity === "idle" && harness.stats.runs.length === 2, 60_000, "the matrix turn");
   await sleep(200);
   const draft = client.latest("triage");
@@ -782,7 +837,7 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
   assert.equal(client.statusLines("triage").filter((l) => l.startsWith("◇ Compiling")).length, 1, "the nested compile block acted as nothing");
   assert.equal(draft.activity, "idle");
 
-  await client.expectOk("draft.send", { draftId: "triage", text: "next" });
+  await client.expectOk("draft.send", { projectId, draftId: "triage", text: "next" });
   await until(() => harness.stats.runs.length === 3 && client.latest("triage")?.activity === "idle", 60_000, "the next turn");
   const next = harness.stats.runs[2].prompt;
   assert.match(next, /^Spex could not read 2 spex blocks in your last reply/);
@@ -801,65 +856,76 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
 
 test("core-service-97: draft commands refuse by code, stream on the draft channel only, and publish every transition", async () => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
+  const { projectId, clone } = harness;
   const a = new Client(harness.service.port());
   const b = new Client(harness.service.port());
   await a.open();
   await b.open();
+  const other = (await a.expectOk("project.register", { path: workingFolder(join(harness.dir, "other")) })).id;
 
   // not_found for an unknown draft, on every command — the channel
   // subscription included.
   await a.expectError("subscribe", { channel: { kind: "draft", draftId: "ghost" } }, "not_found");
-  await a.expectError("draft.open", { draftId: "ghost" }, "not_found");
-  await a.expectError("draft.send", { draftId: "ghost", text: "x" }, "not_found");
-  await a.expectError("draft.abort", { draftId: "ghost" }, "not_found");
-  await a.expectError("draft.source.write", { draftId: "ghost", content: "x" }, "not_found");
-  await a.expectError("draft.compile", { draftId: "ghost" }, "not_found");
-  await a.expectError("draft.register", { draftId: "ghost", command: "g", intent: "g", bindings: {} }, "not_found");
-  await a.expectError("draft.player.set", { draftId: "ghost", playerId: null }, "not_found");
-  await a.expectError("draft.delete", { draftId: "ghost" }, "not_found");
-  await a.expectError("draft.artifacts", { draftId: "ghost" }, "not_found");
-  // invalid_request for a reserved id.
-  await a.expectError("draft.create", { draftId: "review" }, "invalid_request");
-  await a.expectError("draft.create", { draftId: "dev" }, "invalid_request");
+  await a.expectError("draft.open", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.send", { projectId, draftId: "ghost", text: "x" }, "not_found");
+  await a.expectError("draft.abort", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.source.write", { projectId, draftId: "ghost", content: "x" }, "not_found");
+  await a.expectError("draft.compile", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.register", { projectId, draftId: "ghost", command: "g", intent: "g", bindings: {} }, "not_found");
+  await a.expectError("draft.player.set", { projectId, draftId: "ghost", playerId: null }, "not_found");
+  await a.expectError("draft.delete", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.artifacts", { projectId, draftId: "ghost" }, "not_found");
+  // invalid_request for a reserved id, and for a project with no
+  // working folder on this device.
+  await a.expectError("draft.create", { projectId, draftId: "review" }, "invalid_request");
+  await a.expectError("draft.create", { projectId, draftId: "dev" }, "invalid_request");
+  await a.expectError("draft.create", { projectId: "tester/elsewhere-spex", draftId: "iso" }, "invalid_request");
 
-  await a.expectOk("draft.create", { draftId: "iso" });
+  await a.expectOk("draft.create", { projectId, draftId: "iso" });
+  // The session's files land in the project's clone (storage-23); its
+  // id is the home's, so another project neither takes it nor reaches it.
+  assert.ok(existsSync(authoringFiles(clone, "iso").record), "the record is in the project's clone");
+  await a.expectError("draft.create", { projectId: other, draftId: "iso" }, "invalid_request");
+  await a.expectError("draft.open", { projectId: other, draftId: "iso" }, "not_found");
   await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "iso" } });
   await b.waitFor((m) => m.type === "draft.state" && m.draft.id === "iso");
 
   // A malformed draft command is rejected with no state change.
   const statesBefore = a.states("iso").length;
-  a.sendRaw(JSON.stringify({ type: "draft.send", id: "bad-1", draftId: "Not Valid", text: "x" }));
+  a.sendRaw(JSON.stringify({ type: "draft.send", id: "bad-1", projectId, draftId: "Not Valid", text: "x" }));
   const rejected = await a.waitFor((m) => m.type === "reply" && m.id === "bad-1");
   assert.ok(rejected.type === "reply" && !rejected.ok && rejected.error.code === "invalid_message");
-  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", draftId: "iso" }));
+  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", projectId, draftId: "iso" }));
   const noSource = await a.waitFor((m) => m.type === "reply" && m.id === "bad-2");
   assert.ok(noSource.type === "reply" && !noSource.ok && noSource.error.code === "invalid_request");
   await sleep(50);
   assert.equal(a.states("iso").length, statesBefore);
 
   // invalid_request before a successful compile; conflict on a stale version.
-  await a.expectError("draft.register", { draftId: "iso", command: "iso", intent: "x", bindings: {} }, "invalid_request");
-  await a.expectError("draft.source.write", { draftId: "iso", content: "   " }, "invalid_request");
-  const written = await a.expectOk("draft.source.write", { draftId: "iso", content: "# Iso\n\nRoles:\n\n- Helper\n" });
+  await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "invalid_request");
+  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "   " }, "invalid_request");
+  const written = await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso\n\nRoles:\n\n- Helper\n" });
   assert.equal(written.version.length, 16);
-  await a.expectError("draft.source.write", { draftId: "iso", content: "# Iso 2\n", baseVersion: "0000000000000000" }, "conflict");
-  const again = await a.expectOk("draft.source.write", { draftId: "iso", content: "# Iso 2\n\nRoles:\n\n- Helper\n", baseVersion: written.version });
+  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "# Iso 2\n", baseVersion: "0000000000000000" }, "conflict");
+  const again = await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso 2\n\nRoles:\n\n- Helper\n", baseVersion: written.version });
   assert.notEqual(again.version, written.version);
   assert.ok(a.messages.some((m) => m.type === "draft.source" && m.draftId === "iso" && m.markdown.startsWith("# Iso 2")));
 
   // The activity table during a turn; records reach the subscriber only.
-  await a.expectOk("draft.send", { draftId: "iso", text: "go" });
+  await a.expectOk("draft.send", { projectId, draftId: "iso", text: "go" });
   await until(() => a.records("iso").some((m) => m.record.type === "player_prompt"), 10_000, "the prompt record");
-  assert.deepEqual(await a.expectOk("draft.send", { draftId: "iso", text: "queued" }), { accepted: true, queued: true });
-  await a.expectError("draft.compile", { draftId: "iso" }, "busy");
-  await a.expectError("draft.source.write", { draftId: "iso", content: "# x\n" }, "busy");
-  await a.expectError("draft.register", { draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
-  await a.expectError("draft.delete", { draftId: "iso" }, "busy");
-  assert.deepEqual(await a.expectOk("draft.abort", { draftId: "iso" }), { aborted: true });
+  assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "queued" }), { accepted: true, queued: true });
+  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
+  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "# x\n" }, "busy");
+  await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
+  await a.expectError("draft.delete", { projectId, draftId: "iso" }, "busy");
+  assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
   await until(() => a.turnStarts("iso").includes("queued"), 10_000, "the queued turn");
-  assert.deepEqual(await a.expectOk("draft.abort", { draftId: "iso" }), { aborted: true });
+  assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
   await until(() => a.latest("iso")?.activity === "idle", 10_000, "idle");
   assert.ok(a.records("iso").length > 0);
+  const stored = readFileSync(authoringFiles(clone, "iso").records, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { seq: number });
+  assert.deepEqual(stored.map((line) => line.seq), a.records("iso").map((m) => m.seq), "the transcript lands in the project's clone");
   assert.equal(b.records("iso").length, 0, "records reach the draft channel's subscribers only");
   assert.ok(b.states("iso").length > 0, "state reaches every client");
   const seqs = a.records("iso").map((m) => m.seq);
@@ -867,19 +933,19 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   assert.ok(!a.messages.some((m) => m.type === "record"), "draft records never ride the session channel");
 
   // The activity table during a compile.
-  const compiling = a.command("draft.compile", { draftId: "iso" });
+  const compiling = a.command("draft.compile", { projectId, draftId: "iso" });
   await a.waitFor((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.line.startsWith("→ gears2fsm"), 20_000);
-  assert.deepEqual(await a.expectOk("draft.send", { draftId: "iso", text: "later" }), { accepted: true, queued: true });
-  await a.expectError("draft.compile", { draftId: "iso" }, "busy");
-  await a.expectError("draft.source.write", { draftId: "iso", content: "# x\n" }, "busy");
-  await a.expectError("draft.register", { draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
-  await a.expectError("draft.delete", { draftId: "iso" }, "busy");
-  assert.deepEqual(await a.expectOk("draft.abort", { draftId: "iso" }), { aborted: false });
+  assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "later" }), { accepted: true, queued: true });
+  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
+  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "# x\n" }, "busy");
+  await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
+  await a.expectError("draft.delete", { projectId, draftId: "iso" }, "busy");
+  assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: false });
   await a.expectOk("compile.abort", { playbookId: "iso" });
   const reply = await compiling;
   assert.ok(!reply.ok && reply.error.code === "aborted");
   await until(() => a.turnStarts("iso").includes("later"), 10_000, "the message queued during the compile");
-  await a.expectOk("draft.abort", { draftId: "iso" });
+  await a.expectOk("draft.abort", { projectId, draftId: "iso" });
   await until(() => a.latest("iso")?.activity === "idle", 10_000, "idle at the end");
 
   // draft.state followed every transition.
@@ -909,14 +975,16 @@ test("draft media preserves file-only input, native bytes, owned output and text
   let client = new Client(harness.service.port());
   try {
     await client.open();
-    await client.expectOk("draft.create", {draftId: "visual"});
+    const {projectId, clone} = harness;
+    const files = authoringFiles(clone, "visual");
+    await client.expectOk("draft.create", {projectId, draftId: "visual"});
     await client.expectOk("subscribe", {channel: {kind: "draft", draftId: "visual"}});
-    const owner = {kind: "draft" as const, id: "visual"};
+    const owner = {kind: "draft" as const, projectId, id: "visual"};
     const uploadId = randomUUID();
     await client.expectOk("media.begin", {owner, uploadId, name: "selected.png", mimeType: "image/png", byteLength: image.length});
     await client.expectOk("media.chunk", {uploadId, offset: 0, data: image.toString("base64")});
     const {asset} = await client.expectOk("media.finish", {uploadId});
-    await client.expectOk("draft.send", {draftId: "visual", text: "", attachments: [asset]});
+    await client.expectOk("draft.send", {projectId, draftId: "visual", text: "", attachments: [asset]});
     await until(() => client.records("visual").some(({record}) => record.type === "turn_finished"), 10_000);
     const native = harness.stats.runs[0].attachments;
     assert.equal(native?.length, 1);
@@ -925,7 +993,10 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const start = client.records("visual").find(({record}) => record.type === "turn_started")!.record;
     assert.equal(start.type, "turn_started");
     if (start.type === "turn_started") { assert.equal(start.turn.prompt, ""); assert.deepEqual(start.turn.attachments, [asset]); }
-    const transcript = readFileSync(join(harness.dataDir, "local", "drafts", "visual", "records.jsonl"), "utf8");
+    // media-4: the input and the captured output are kept beside the session's file.
+    assert.deepEqual(readFileSync(join(files.assets, createHash("sha256").update(image).digest("hex"))), image);
+    assert.deepEqual(readFileSync(join(files.assets, createHash("sha256").update(output).digest("hex"))), output);
+    const transcript = readFileSync(files.records, "utf8");
     assert.ok(!transcript.includes(output.toString("base64")));
     assert.ok(!transcript.includes(largeTool.observations));
     const media = client.records("visual").find(({record}) => record.type === "player_event" && record.event.type === "media")!.record;
@@ -933,7 +1004,7 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const mediaId = media.event.payload.source.uri.slice("playbook-asset:".length) as typeof asset.assetId;
     const captured = await client.expectOk("media.read", {owner, assetId: mediaId, offset: 0, length: 65536});
     assert.deepEqual(Buffer.from(captured.data, "base64"), output);
-    await client.expectOk("draft.send", {draftId: "visual", text: "Thanks"});
+    await client.expectOk("draft.send", {projectId, draftId: "visual", text: "Thanks"});
     await until(() => harness.stats.runs.length === 2 && client.latest("visual")?.activity === "idle", 10_000);
     assert.equal(harness.stats.runs[1].attachments, undefined);
     client.close();
@@ -942,7 +1013,7 @@ test("draft media preserves file-only input, native bytes, owned output and text
     harness.service = next.service;
     client = new Client(next.service.port());
     await client.open();
-    const reopened = await client.expectOk("draft.open", {draftId: "visual"});
+    const reopened = await client.expectOk("draft.open", {projectId, draftId: "visual"});
     assert.ok(JSON.stringify(reopened).includes(asset.assetId));
     const retained = await client.expectOk("media.read", {owner, assetId: asset.assetId, offset: 0, length: 65536});
     assert.deepEqual(Buffer.from(retained.data, "base64"), image);

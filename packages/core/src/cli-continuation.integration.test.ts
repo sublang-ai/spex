@@ -58,14 +58,15 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
   await mkdir(dataDir, { recursive: true, mode: 0o700 });
   await mkdir(cwd);
   await exec("git", ["init", "-q", cwd]);
-  const configPath = join(dataDir, "config", "playbook.config.yaml");
-  await mkdir(dirname(configPath), { mode: 0o700 });
+  // A config file directly under the home's config/ is the former layout
+  // (storage-9), so the core's sits beside the home.
+  const configPath = join(scratch, "spex.config.yaml");
   await writeFile(configPath, CONFIG, { mode: 0o600 });
   let service: CoreService | undefined;
   let socket: WebSocket | undefined;
   try {
     service = await CoreService.start({
-      dataDir, configPath, token: "test", home, env: { SPEX_HOME: dataDir }, watchConfig: false,
+      dataDir, configPath, token: "test", home, own: "tester", env: { SPEX_HOME: dataDir }, watchConfig: false,
       adapterRuntime: () => ({ usable: true }),
       adapterImports: fakeAdapterImports({
         rules: [{ match: "Select exactly one action from the closed set", response: {
@@ -113,7 +114,9 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     await service.stop();
     service = undefined;
 
-    const store = createSessionStore({ sessionsDir: join(dataDir, "sessions") });
+    // The session lives in its project's spex repository (storage-6).
+    const sessionsDir = join(dataDir, "workspace", ...project.id.split("/"), "sessions");
+    const store = createSessionStore({ sessionsDir });
     const before = await store.read(session.id);
     assert.equal(before.state, "settled");
     assert.equal(before.snapshot.sequences.turn, 1);
@@ -131,10 +134,15 @@ test("core-service-77: the real CLI continues a Spex-created session", { timeout
     const preload = join(scratch, "preload.mjs");
     await writeFile(preload, "import {register} from 'node:module';register('./loader.mjs',import.meta.url);\n");
     const providerLog = join(scratch, "provider.jsonl");
+    // The CLI knows no spex repositories: its own config's `sessions` key
+    // points it at the project clone's session store.
+    const cliHome = join(scratch, "cli-home");
+    await mkdir(join(cliHome, "config"), { recursive: true, mode: 0o700 });
+    await writeFile(join(cliHome, "config", "playbook.config.yaml"), `sessions: ${sessionsDir}\n${CONFIG}`, { mode: 0o600 });
     const cli = join(dirname(fileURLToPath(import.meta.resolve("@sublang/playbook/code/registry"))), "bin", "playbook.js");
     const result = await exec(process.execPath, ["--import", preload, cli, "run", "--continue", "--json", "Continue in the terminal."], {
       cwd, timeout: 30_000,
-      env: { PATH: process.env.PATH, HOME: home, SPEX_HOME: dataDir,
+      env: { PATH: process.env.PATH, HOME: home, SPEX_HOME: cliHome,
         ANTHROPIC_API_KEY: "fixture", SPEX_TEST_PROVIDER_LOG: providerLog },
     });
     // execFile rejects every non-zero exit, so this is executable-level

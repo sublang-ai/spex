@@ -249,14 +249,15 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
       retry: true,
     };
   }
-  if (/Permission denied|Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 40[13]|HTTP (?:401|403)/i.test(text)) {
+  const refused = /Permission denied|protected branch|pre-receive hook declined|You are not allowed|returned error: 403|HTTP 403/i.test(text);
+  if (refused || /Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 401|HTTP 401/i.test(text)) {
     // The act that gives access is the remote form's (space-50), and an
     // SSH form alone can stop on a host key it has never seen. Each
     // guidance is one whole sentence carrying the act, never a frame
     // assembled around a fragment (DR-079).
     const act = remoteAccessOpening(remote);
     return {
-      cause: "unauthorized",
+      cause: refused ? "refused" : "reauth",
       message: i18n._({
         id: "{host} refused this machine's access",
         values: { host },
@@ -283,7 +284,7 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
     // the access one named as this remote's form gives it (space-50).
     const act = remoteAccess(remote);
     return {
-      cause: "not-found",
+      cause: "gone",
       message: i18n._({
         id: "No repository this machine can see at {target}",
         values: { target: remote ? displayRemote(remote) : host },
@@ -307,11 +308,11 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
     return {
       cause: "rejected",
       message: i18n._({
-        id: "The remote changed again",
-        comment: "A stopped transfer's message: the remote moved while this machine was sending",
+        id: "The host changed again",
+        comment: "A stopped transfer's message: the host's branch moved while this machine was sending",
       }),
       guidance: i18n._({
-        id: "Sync again to merge what the remote received meanwhile.",
+        id: "Sync again to merge what the host received meanwhile.",
         comment: "Guidance where the remote rejected the push",
       }),
       retry: true,

@@ -24,8 +24,10 @@ import {
   seedConfig,
   summarizeConfig,
   templatePath,
+  validateProjectConfig,
   type LoadModule,
 } from "./config.js";
+import { defaultOwnName, Home } from "./home.js";
 import { executionConfig } from "./session.js";
 import { speak } from "./i18n.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -268,7 +270,7 @@ test("captain must resolve an adapter", async () => {
 test("from must be a module specifier and import failures carry the cause", async () => {
   const top = baseConfig();
   const code = codeBlock(top);
-  delete code.from;
+  code.from = "";
   await expectError(top, /^playbooks\.code\.from must be a module specifier$/);
   code.from = "@nope/missing";
   await expectError(
@@ -796,19 +798,66 @@ test("seedConfig creates once and never overwrites", () => {
 });
 
 test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
-  // The launcher resolves the same root, so both hosts open one file.
-  assert.equal(
-    resolveConfigPath({ SPEX_HOME: "/x" }, "/home/u"),
-    join("/x", "config", "playbook.config.yaml"),
-  );
-  assert.equal(
-    resolveConfigPath({}, "/home/u"),
-    join("/home/u", ".spex", "config", "playbook.config.yaml"),
-  );
+  // Your own group's config sits in its spex repository's clone
+  // (storage-1, DR-103), named after this device's user before the home
+  // has its file.
+  const own = defaultOwnName();
+  const inClone = (root: string): string => join(root, "workspace", own, `${own}-spex`, "config", "playbook.config.yaml");
+  assert.equal(resolveConfigPath({ SPEX_HOME: "/x" }, "/home/u"), inClone("/x"));
+  assert.equal(resolveConfigPath({}, "/home/u"), inClone(join("/home/u", ".spex")));
   // A blank override is not a root; the home fallback still applies.
-  assert.equal(
-    resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"),
-    join("/home/u", ".spex", "config", "playbook.config.yaml"),
+  assert.equal(resolveConfigPath({ SPEX_HOME: "  " }, "/home/u"), inClone(join("/home/u", ".spex")));
+  // A written home names your own group itself.
+  const root = scratchDir("spex-config-path-");
+  const home = Home.create(root, { own: "alice" }); home.save();
+  assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));
+});
+
+test("storage-7: a from-less entry is a built-in or the library's, never a guess", async () => {
+  const top = baseConfig();
+  delete codeBlock(top).from;
+  const requested: string[] = [];
+  const recording: LoadModule = async (specifier) => { requested.push(specifier); return stubLoader(specifier); };
+  const composed = await composeConfig(top, recording);
+  assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
+  assert.ok(requested.includes("@sublang/playbook/code/registry"));
+  // An id nothing installed provides is unavailable, by its kind.
+  const unknown = baseConfig();
+  (unknown.playbooks as Record<string, unknown>).triage = { roles: { triager: String(codeRoles(unknown).coder) } };
+  await assert.rejects(composeConfig(unknown, stubLoader), (error: Error) => {
+    assert.ok(error instanceof RegistryError);
+    assert.equal(error.kind, "unavailable");
+    assert.match(error.message, /playbooks\.triage names no module/);
+    return true;
+  });
+});
+
+test("core-service-2: a project's file layers on yours, naming players only", async () => {
+  const own = baseConfig();
+  const coder = String(codeRoles(own).coder);
+  const players = Object.keys(roster(own));
+  const other = players.find((id) => id !== coder) ?? coder;
+  // The project's file binds the code role to another of your players.
+  const project = { playbooks: { code: { roles: { coder: other } } } };
+  const composed = await composeConfig(own, stubLoader, undefined, { project: { top: project, path: "/p/config/playbook.config.yaml" } });
+  assert.equal(composed.captainOptions.playbooks.code.roles.coder.playerId, other);
+  // Its playbooks join yours: review stays enabled.
+  assert.ok(composed.playbooks.some((playbook) => playbook.id === "review"));
+  // Forbidden entries are config errors naming the entry.
+  for (const [bad, entry] of [
+    [{ captain: { adapter: "claude" } }, "captain"],
+    [{ players: {} }, "players"],
+    [{ playbooks: { code: { from: "@sublang/playbook/code/registry" } } }, "playbooks.code.from"],
+    [{ playbooks: { code: { model: "x" } } }, "playbooks.code.model"],
+    [{ playbooks: { code: { roles: { coder: { player: coder, model: "x" } } } } }, "playbooks.code.roles.coder"],
+  ] as const) {
+    assert.throws(() => validateProjectConfig(bad, "/p/config/playbook.config.yaml"), new RegExp(`${entry.replace(/\./g, "\\.")} is not allowed in a project's settings`));
+    await assert.rejects(composeConfig(own, stubLoader, undefined, { project: { top: bad, path: "/p" } }), new RegExp(entry.replace(/\./g, "\\.")));
+  }
+  // A player the project names and yours lacks fails composition, named.
+  await assert.rejects(
+    composeConfig(own, stubLoader, undefined, { project: { top: { playbooks: { code: { roles: { coder: "team.missing" } } } }, path: "/p" } }),
+    /absent session player "team\.missing"/,
   );
 });
 

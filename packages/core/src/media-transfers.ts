@@ -4,7 +4,7 @@
 import { open, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { i18n } from "./i18n.js";
-import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, type MediaAsset, type MediaUploadOwner, type MediaUploadState } from "./protocol.js";
+import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, type MediaAsset, type MediaUploadOwner, type MediaUploadState } from "./protocol.js";
 
 export interface UploadRequest {
   uploadId: string;
@@ -56,6 +56,11 @@ export class MediaTransfers {
     this.now = options.now ?? Date.now;
     this.timer = setInterval(() => { void this.expire().catch(() => {}); }, 60_000);
     this.timer.unref();
+  }
+
+  /** The owner an upload in flight publishes into, for the write gate. */
+  ownerOf(uploadId: string): MediaUploadOwner | undefined {
+    return this.uploads.get(uploadId)?.request.owner;
   }
 
   async begin(request: UploadRequest): Promise<MediaUploadState> {
@@ -169,7 +174,7 @@ export class MediaTransfers {
    * without invalidating them, so a refused removal leaves them resumable. */
   async settleOwner(owner: MediaUploadOwner): Promise<void> {
     await Promise.all([...this.uploads.values()]
-      .filter(({request}) => request.owner.kind === owner.kind && request.owner.id === owner.id)
+      .filter(({request}) => mediaOwnerKey(request.owner) === mediaOwnerKey(owner))
       .map((upload) => upload.tail));
   }
 
@@ -177,7 +182,7 @@ export class MediaTransfers {
    * starts. Invalidation is synchronous; the returned promise drains any
    * transfer still queued and removes its staging. */
   async retireOwner(owner: MediaUploadOwner): Promise<void> {
-    const retiring = [...this.uploads.values()].filter(({request}) => request.owner.kind === owner.kind && request.owner.id === owner.id);
+    const retiring = [...this.uploads.values()].filter(({request}) => mediaOwnerKey(request.owner) === mediaOwnerKey(owner));
     for (const upload of retiring) {
       // Keep the invalidated identity only for its existing retry window.
       // After expiry a begin starts from zero, never the removed asset.
@@ -254,7 +259,7 @@ export class MediaTransfers {
 
 
 function sameRequest(left: UploadRequest, right: UploadRequest): boolean {
-  return left.uploadId === right.uploadId && left.owner.kind === right.owner.kind && left.owner.id === right.owner.id &&
+  return left.uploadId === right.uploadId && mediaOwnerKey(left.owner) === mediaOwnerKey(right.owner) &&
     left.name === right.name && left.mimeType === right.mimeType && left.byteLength === right.byteLength;
 }
 

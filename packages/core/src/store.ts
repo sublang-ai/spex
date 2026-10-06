@@ -2,30 +2,38 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Application files belong to Spex; session files and mutations belong
-// to Playbook. These maps are rebuilt projections for UI and intent folds.
+// to Playbook. The home pairs working folders with spex repositories,
+// one clone each under `workspace/` with its own session store
+// (storage-1, storage-14, DR-103). These maps are rebuilt projections
+// for UI and intent folds.
 
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
-import { isAbsolute, join, relative } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { execFileSync } from "node:child_process";
 import {
-  ApplicationRegistry, foldIntentActs, parseIntentLog, parsePrefs, parseRegistry, repairKey,
-  readJsonFile, StorageFormatError, validateIntentRelations, validateIntentDispatches,
-  type IntentAct, type RebindProjectOptions, type StorageDiagnostic,
+  intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
+  type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
+import { readJsonFile, StorageFormatError, writeApplicationFile } from "./files.js";
+import { Home, repositoryNameFor, splitKey } from "./home.js";
+import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { initializeClone } from "./storage-git.js";
+import { seedConfig } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
 import { isLanguage, type Language } from "./language.js";
@@ -88,18 +96,44 @@ export class StateRootHeldError extends Error {
 }
 
 export interface StoreOptions {
-  /** State root directory; unset runs the store in memory only. */
+  /** The Spex home; unset runs the store on a scratch home removed at close. */
   dir?: string;
-  /** Sessions directory; defaults to `<dir>/sessions`. */
-  sessionsDir?: string;
   /** A legacy SQLite store to import once (CORE-64): skipped when the
    * `<store>.imported` marker beside it says a root already did. */
   legacyDbPath?: string;
+  /** The environment Git and the host URL are read from. */
+  env?: NodeJS.ProcessEnv;
+  /** Your own group's folder name for a new home; this device's user
+   * name by default (storage-2). */
+  own?: string;
+  /** The home's compiled-playbook library, for the migration's checks. */
+  libraryDir?: string;
+  /** Publish a config a former location holds at your own group's
+   * config path before the starter is seeded there (core-service-66). */
+  relocateConfig?: (configPath: string) => void;
+  /** Internal: Store.open runs the migration the constructor defers. */
+  deferMigration?: boolean;
+}
+
+/** One spex repository's clone and the files it holds (storage-1). */
+export interface SpexRepository {
+  key: string;
+  dir: string;
+  sessionsDir: string;
+  intentsDir: string;
+  authoringDir: string;
+  configPath: string;
+  projectFile: string;
+  /** Playbook's shared session store over this clone's `sessions/`. */
+  store: SharedSessionStore;
 }
 
 interface SessionMeta {
   id: string;
+  /** The key of the spex repository holding the session (storage-6). */
   projectId: string;
+  /** The working directory its manifest records. */
+  cwd?: string;
   createdAt: number;
   endedAt: number | null;
   live: boolean;
@@ -135,7 +169,6 @@ interface StoreMeta {
   version: number;
   importedLegacy?: string[];
 }
-
 
 function isHidden(record: TmuxPlayRecord): boolean {
   return (
@@ -204,27 +237,19 @@ function sessionInfo(
   };
 }
 
-/** One diagnostic two scans share, phrased where it is composed. */
-const duplicateQueue = (intentId: string): string =>
-  i18n._({
-    id: "duplicate queue {intentId}",
-    comment: "Storage diagnostic: two act logs queue the same intent",
-    values: { intentId },
-  });
-
 const agentSettingsKey = (sessionId: string): string => `session:${sessionId}:agents`;
 const parkedRunKey = (sessionId: string): string => `session:${sessionId}:parked`;
 /** The home's one interface language (storage-5). */
 const LANGUAGE_PREF = "language";
 
 /**
- * The interface language `<dir>/prefs.json` stores, read before any
+ * The interface language `<dir>/local/prefs.json` stores, read before any
  * store opens so the load's own diagnostics already speak it
  * (core-service-111). A missing, unreadable or unknown value reads as
  * none: the store's load reports a damaged file itself.
  */
 export function readStoredLanguage(dir: string): Language | null {
-  const prefsFile = join(dir, "prefs.json");
+  const prefsFile = prefsFileOf(dir);
   try {
     if (!existsSync(prefsFile)) return null;
     const stored = parsePrefs(readJsonFile(prefsFile), prefsFile)[LANGUAGE_PREF];
@@ -357,28 +382,61 @@ function usageTotals(entries: UsageEntry[]): UsageTotals {
   return { ...totals, costSources: [...sources].sort() };
 }
 
+/** The home's preference file (storage-5). */
+export function prefsFileOf(dir: string): string { return join(dir, "local", "prefs.json"); }
+
+/** The rebuildable forge cache, on this device alone (storage-1). */
+function forgeCacheFileOf(dir: string): string { return join(dir, "local", "forge-cache.json"); }
+
+/** A clone's record, the files it holds named once (storage-1). */
+export function spexRepository(key: string, dir: string): SpexRepository {
+  const sessionsDir = join(dir, "sessions");
+  return {
+    key,
+    dir,
+    sessionsDir,
+    intentsDir: join(dir, "intents"),
+    authoringDir: join(dir, "authoring"),
+    configPath: join(dir, "config", "playbook.config.yaml"),
+    projectFile: join(dir, "project.json"),
+    store: createSessionStore({ sessionsDir }),
+  };
+}
+
+const unpairedReason = (name: string): string =>
+  i18n._({ id: "{name} has no folder on this device", comment: "Repair row: the project is registered, but nothing here holds it",
+    values: { name } });
+const missingCloneReason = (path: string): string =>
+  i18n._({ id: "the spex repository of {path} is missing on this device",
+    comment: "Repair row: a working folder is paired with a spex repository whose clone is gone", values: { path } });
 
 export class Store {
-  private readonly dir?: string;
-  private readonly sessionsDir?: string;
-  private lockDir?: string;
+  /** The home this store serves. */
+  readonly dir: string;
+  private readonly scratch: boolean;
+  private readonly env: NodeJS.ProcessEnv;
+  private readonly options: StoreOptions;
+  private leaseDir?: string;
   private leaseToken = "";
+  private migrationPending = false;
+  /** Whether this open seeded the starter into your own group's clone. */
+  seededConfig = false;
 
   private meta: StoreMeta = { version: META_VERSION };
+  private homeFile!: Home;
+  private homeProblem?: StorageDiagnostic;
+  private readonly repositories = new Map<string, SpexRepository>();
   private readonly projects = new Map<string, ProjectInfo>();
-  private application = new ApplicationRegistry();
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
   private readonly intents = new Map<string, IntentInfo>();
-  /** Intents a remove act retired (DR-038): their acts stay in the
-   * log, and every read passes them by. */
-  private readonly removedIntents = new Set<string>();
-  private shared?: SharedSessionStore;
-  private temporarySessions?: string;
+  private readonly intentProblems = new Map<string, StorageDiagnostic>();
+  private readonly projectFileProblems = new Map<string, StorageDiagnostic>();
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
   private readonly untrackedSessions = new Set<string>();
   private readonly localSessions = new Set<string>();
-  private readonly intentProblems = new Map<string, StorageDiagnostic>();
+  /** Which spex repository holds each session (storage-6). */
+  private readonly sessionLocations = new Map<string, string>();
   private prefsProblem?: StorageDiagnostic;
   private cacheProblem?: StorageDiagnostic;
   private readonly sessions = new Map<string, SessionMeta>();
@@ -387,15 +445,11 @@ export class Store {
   private readonly usage = new Map<string, UsageEntry[]>();
 
   constructor(options: StoreOptions = {}) {
-    this.dir = options.dir;
-    if (!this.dir) return;
+    this.options = options;
+    this.env = options.env ?? process.env;
+    this.scratch = !options.dir;
+    this.dir = resolve(options.dir ?? mkdtempSync(join(tmpdir(), "spex-memory-home-")));
     mkdirSync(this.dir, { recursive: true });
-    this.sessionsDir = options.sessionsDir ?? join(this.dir, "sessions");
-    // Sessions are private, and the playbook store refuses a sessions
-    // directory that is not 0700 — so a config pointing both hosts at
-    // this one works rather than failing at the CLI's first launch.
-    mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 });
-    mkdirSync(join(this.dir, "intents"), { recursive: true });
     this.acquireRootLease();
     try {
       this.meta = existsSync(this.metaFile()) ? readJsonFile(this.metaFile()) as StoreMeta : { version: 0 };
@@ -406,15 +460,44 @@ export class Store {
           comment: "Storage diagnostic: the state root's own metadata file cannot be read",
         }));
       }
-      this.importLegacy(options.legacyDbPath);
+      // A legacy store imports into the former layout, which the groups
+      // migration then carries into spex repositories (storage-9).
+      const imported = this.importLegacy(options.legacyDbPath);
       this.meta.version = META_VERSION;
       writeAtomic(this.metaFile(), JSON.stringify(this.meta));
-      this.application = new ApplicationRegistry(this.dir, true);
-      this.load();
+      if (imported || needsGroupsMigration(this.dir)) {
+        // English, deliberately: a caller's programming failure.
+        if (!options.deferMigration) throw new Error(`${this.dir} holds the former layout; open it with Store.open to migrate`);
+        this.migrationPending = true;
+        return;
+      }
+      this.openHome();
     } catch (error) {
       this.releaseRootLease();
+      if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
       throw error;
     }
+  }
+
+  /** Open a home, migrating the former layout once under the home lease
+   * before any writer is admitted (storage-9, core-service-15). */
+  static async open(options: StoreOptions = {}): Promise<Store> {
+    const store = new Store({ ...options, deferMigration: true });
+    if (store.migrationPending) {
+      try {
+        await migrateFormerHome(store.dir, {
+          env: store.env,
+          ...(options.own ? { own: options.own } : {}),
+          libraryDir: options.libraryDir ?? join(store.dir, "playbooks"),
+        });
+        store.migrationPending = false;
+        store.openHome();
+      } catch (error) {
+        store.close();
+        throw error;
+      }
+    }
+    return store;
   }
 
   // -- root lease (CORE-61) -------------------------------------------------
@@ -432,13 +515,13 @@ export class Store {
   }
 
   private acquireRootLease(): void {
-    const dir = this.dir as string;
-    const lock = join(dir, ".lock");
+    const dir = this.dir;
+    const lock = join(dir, ".lease");
     this.leaseToken = randomUUID();
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      // Stage-then-rename: the lock is published atomically with its
-      // owner file inside, so a reader never sees an ownerless lock.
-      const stage = join(dir, `.lock.stage.${this.leaseToken}`);
+      // Stage-then-rename: the lease is published atomically with its
+      // owner file inside, so a reader never sees an ownerless lease.
+      const stage = join(dir, `.lease.stage.${this.leaseToken}`);
       try {
         mkdirSync(stage);
         writeFileSync(
@@ -451,13 +534,21 @@ export class Store {
           }),
         );
         renameSync(stage, lock);
-        this.lockDir = lock;
+        this.leaseDir = lock;
+        // A core of the former layout holds `.lock`: while it lives, it
+        // is the writer, and this one refuses (storage-9).
+        const former = this.readLeaseOwner(join(dir, ".lock"));
+        if (former && (former.hostname !== hostname() || processAlive(former.pid))) {
+          this.releaseRootLease();
+          throw new StateRootHeldError(former, dir);
+        }
         return;
-      } catch {
+      } catch (error) {
+        if (error instanceof StateRootHeldError) throw error;
         rmSync(stage, { recursive: true, force: true });
         const owner = this.readLeaseOwner(lock);
         if (!owner) {
-          // A published lock always carries its owner; an unreadable
+          // A published lease always carries its owner; an unreadable
           // one is fail-closed — deleting it is the operator's call.
           throw new Error(
             i18n._({
@@ -474,7 +565,7 @@ export class Store {
         if (processAlive(owner.pid)) throw new StateRootHeldError(owner, dir);
         // Same host, dead pid: retire by rename-aside, which only one
         // contender can win — the loser just loops and re-reads.
-        const retired = join(dir, `.lock.retired.${owner.token ?? randomUUID()}`);
+        const retired = join(dir, `.lease.retired.${owner.token ?? randomUUID()}`);
         try {
           renameSync(lock, retired);
           rmSync(retired, { recursive: true, force: true });
@@ -491,119 +582,205 @@ export class Store {
   }
 
   private releaseRootLease(): void {
-    if (!this.lockDir) return;
+    if (!this.leaseDir) return;
     // Release only a lease this instance still owns: a stale loser
-    // must never delete the winner's lock.
-    const owner = this.readLeaseOwner(this.lockDir);
+    // must never delete the winner's lease.
+    const owner = this.readLeaseOwner(this.leaseDir);
     if (owner?.token === this.leaseToken) {
-      rmSync(this.lockDir, { recursive: true, force: true });
+      rmSync(this.leaseDir, { recursive: true, force: true });
     }
-    this.lockDir = undefined;
+    this.leaseDir = undefined;
   }
 
-  // -- files ----------------------------------------------------------------
+  // -- the home (storage-2) -------------------------------------------------
 
   private metaFile(): string {
-    return join(this.dir as string, "meta.json");
+    return join(this.dir, "meta.json");
   }
 
-  private sidecarFile(sessionId: string): string {
-    return join(this.sessionsDir as string, `${sessionId}.spex.json`);
+  /** The home file this store serves. */
+  get home(): Home { return this.homeFile; }
+
+  /** Read or create `home.yaml`, make sure your own group's spex
+   * repository stands, and index every clone under `workspace/`. */
+  private openHome(): void {
+    if (Home.exists(this.dir)) {
+      try { this.homeFile = Home.load(this.dir); }
+      catch (error) {
+        if (!(error instanceof StorageFormatError)) throw error;
+        // Startup stays available on a damaged home file; every write
+        // that needs it refuses with its cause (storage-12).
+        this.homeProblem = { file: error.file, reason: error.reason, blocking: true };
+        this.homeFile = Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env });
+      }
+    } else {
+      this.homeFile = Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env });
+      this.homeFile.save();
+    }
+    mkdirSync(join(this.dir, "local"), { recursive: true, mode: 0o700 });
+    this.ensureOwnRepository();
+    this.discoverRepositories();
+    this.loadApplication();
   }
 
-  private recordsFile(sessionId: string): string {
-    return join(this.sessionsDir as string, `${sessionId}.records.jsonl`);
+  /** Your own group's clone always stands, its config seeded from the
+   * starter and its `spex` branch begun with one commit (storage-6). */
+  private ensureOwnRepository(): void {
+    const dir = this.homeFile.clonePath(this.homeFile.own());
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const config = join(dir, "config", "playbook.config.yaml");
+    // A config at a former location moves in first, so the starter
+    // never shadows it (core-service-66).
+    this.options.relocateConfig?.(config);
+    // The starter is the playbook CLI's own (core-service-3); where it
+    // cannot be read, the core reports the missing config itself.
+    try { this.seededConfig = seedConfig(config); } catch { /* reported as a missing config */ }
+    this.initializeRepository(dir);
   }
 
-  private intentsFile(projectId: string): string {
-    return join(this.dir ?? "", "intents", `${projectId}.jsonl`);
+  /** A clone becomes a repository on its `spex` branch with one commit;
+   * where Git cannot run, it stays a plain folder until it can. */
+  private initializeRepository(dir: string): void {
+    try { initializeClone(dir, { env: this.env }); }
+    catch (error) { console.error(`spex: ${dir} is not a repository yet: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
-  // Every file kind carries its version marker (core-service-15):
-  // whole files as a `v` wrapper, JSONL files as a `v` on each line.
-  private saveProjects(): void {
-    this.application.save();
+  /** Every clone under `workspace/`: a folder named `<name>-spex` inside
+   * plain group folders mirroring the Git host (storage-1). */
+  private discoverRepositories(): void {
+    const found = new Map<string, string>();
+    const walk = (dir: string, depth: number): void => {
+      if (depth > 8 || !existsSync(dir)) return;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        const path = join(dir, entry.name);
+        const key = this.homeFile.keyOf(path);
+        if (key) found.set(key, path);
+        else walk(path, depth + 1);
+      }
+    };
+    walk(this.homeFile.workspace, 0);
+    for (const key of [...this.repositories.keys()]) if (!found.has(key)) this.repositories.delete(key);
+    for (const [key, dir] of found) {
+      if (this.repositories.has(key)) continue;
+      const repository = spexRepository(key, dir);
+      // Sessions are private, and Playbook's store refuses a sessions
+      // directory that is not 0700.
+      mkdirSync(repository.sessionsDir, { recursive: true, mode: 0o700 });
+      this.repositories.set(key, repository);
+    }
+    this.refreshProjects();
   }
 
   private refreshProjects(): void {
     this.projects.clear();
-    for (const id of this.application.identities.keys()) {
-      const project = this.application.project(id);
-      if (project) this.projects.set(id, project);
+    for (const folder of this.homeFile.folders()) {
+      const repository = this.repositories.get(folder.repository);
+      if (!repository) continue;
+      this.projects.set(folder.repository, this.projectInfo(repository, folder.path));
     }
   }
 
+  private readProjectFile(repository: SpexRepository): ProjectFile | undefined {
+    if (!existsSync(repository.projectFile)) return undefined;
+    try {
+      const file = parseProjectFile(readJsonFile(repository.projectFile), repository.projectFile);
+      this.projectFileProblems.delete(repository.key);
+      return file;
+    } catch (error) {
+      if (!(error instanceof StorageFormatError)) throw error;
+      this.projectFileProblems.set(repository.key, { file: error.file, reason: error.reason, blocking: false });
+      return undefined;
+    }
+  }
+
+  private projectInfo(repository: SpexRepository, path: string): ProjectInfo {
+    const { group, name } = splitKey(repository.key);
+    let registeredAt = 0;
+    try { const stat = statSync(repository.dir); registeredAt = Math.round(stat.birthtimeMs || stat.ctimeMs); } catch { registeredAt = 0; }
+    return {
+      id: repository.key,
+      path,
+      name: this.readProjectFile(repository)?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
+      registeredAt,
+      repository: { key: repository.key, name, group, own: group === this.homeFile.ownName },
+    };
+  }
+
+  /** Every clone this home holds. */
+  listRepositories(): SpexRepository[] {
+    return [...this.repositories.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  repository(key: string): SpexRepository | undefined { return this.repositories.get(key); }
+
+  /** Your own group's spex repository. */
+  ownRepository(): SpexRepository {
+    const own = this.repositories.get(this.homeFile.own());
+    if (!own) {
+      const dir = this.homeFile.clonePath(this.homeFile.own());
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      this.discoverRepositories();
+    }
+    return this.repositories.get(this.homeFile.own()) as SpexRepository;
+  }
+
+  private requireRepository(key: string): SpexRepository {
+    const repository = this.repositories.get(key);
+    if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no spex repository {key} on this device",
+      comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+    return repository;
+  }
+
+  private saveHome(): void {
+    if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
+    this.homeFile.save();
+  }
+
   private savePrefs(): void {
-    if (!this.dir || this.prefsProblem) return;
+    if (this.prefsProblem) return;
     writeAtomic(
-      join(this.dir, "prefs.json"),
-      JSON.stringify({ v: 1, prefs: Object.fromEntries(this.prefs) }),
+      prefsFileOf(this.dir),
+      JSON.stringify({ format: 1, prefs: Object.fromEntries(this.prefs) }),
     );
   }
 
   private saveForgeCache(): void {
-    if (!this.dir) return;
     writeAtomic(
-      join(this.dir, "forge-cache.json"),
-      JSON.stringify({ v: 1, entries: Object.fromEntries(this.forgeCache) }),
+      forgeCacheFileOf(this.dir),
+      JSON.stringify({ format: 1, entries: Object.fromEntries(this.forgeCache) }),
     );
     this.cacheProblem = undefined;
   }
 
-  private appendIntentAct(projectId: string, act: IntentAct): void {
-    if (!this.dir) return;
-    const file = this.intentsFile(projectId);
-    if (existsSync(file)) {
-      const contents = readFileSync(file, "utf8");
-      if (contents && !contents.endsWith("\n")) throw new StorageFormatError(file, i18n._({
-        id: "incomplete final act; restore or remove the incomplete tail before writing",
-        comment: "Storage diagnostic: an act log ends mid-line, so nothing may be appended",
-      }));
-    }
-    parseIntentLog(`${JSON.stringify({ v: 1, ...act })}\n`, projectId, file);
-    appendFileSync(
-      file,
-      `${JSON.stringify({ v: 1, ...act })}\n`,
-    );
-  }
-
   // -- load (the restart fold, CORE-10/52) ----------------------------------
-
-  private load(): void {
-    this.loadApplication();
-    this.loadSidecars();
-  }
 
   /**
    * Re-read every application file from disk (space-20): an in-app sync
-   * replaced the registry, intent logs, preferences or cache under this
-   * running store, so the indexes rebuild from the same loaders the
-   * restart fold uses; sessions re-index through their own rescan.
+   * replaced intents, preferences or project files under this running
+   * store, so the indexes rebuild from the same loaders the restart fold
+   * uses; sessions re-index through their own rescan.
    */
   reload(): void {
-    if (!this.dir) return;
-    this.application = new ApplicationRegistry(this.dir, true);
     this.prefs.clear();
     this.prefsProblem = undefined;
     this.forgeCache.clear();
     this.cacheProblem = undefined;
     this.intents.clear();
-    this.removedIntents.clear();
     this.intentProblems.clear();
+    this.discoverRepositories();
     this.loadApplication();
   }
 
   private loadApplication(): void {
-    const dir = this.dir as string;
-    this.refreshProjects();
-    const prefsFile = join(dir, "prefs.json");
+    const prefsFile = prefsFileOf(this.dir);
     try {
       for (const [key, value] of Object.entries(existsSync(prefsFile) ? parsePrefs(readJsonFile(prefsFile), prefsFile) : {})) this.prefs.set(key, value);
     } catch (error) {
       if (!(error instanceof StorageFormatError)) throw error;
       this.prefsProblem = {file:error.file, reason:error.reason, blocking:true};
     }
-    const cacheFile = join(dir, "forge-cache.json");
+    const cacheFile = forgeCacheFileOf(this.dir);
     try {
       for (const [projectId, entry] of Object.entries(
         readJson<{ entries: Record<string, { at: number; state: ForgeState }> }>(cacheFile)?.entries ?? {},
@@ -615,111 +792,120 @@ export class Store {
         values: { cause: String(error) },
       }), blocking:false};
     }
-    for (const file of readdirSync(join(dir, "intents"))) {
-      if (!file.endsWith(".jsonl")) continue;
-      const filename = join(dir, "intents", file);
-      const projectId = file.slice(0, -6);
-      try {
-        const folded = foldIntentActs(parseIntentLog(readFileSync(filename, "utf8"), projectId, filename), filename);
-        for (const [id, intent] of folded.intents) {
-          const prior = this.intents.get(id);
-          if (prior) {
-            this.intentProblems.set(prior.projectId, {file:this.intentsFile(prior.projectId), reason:duplicateQueue(id), blocking:true});
-            throw new StorageFormatError(filename, duplicateQueue(id));
-          }
-        }
-        for (const [id, intent] of folded.intents) this.intents.set(id, intent);
-        for (const id of folded.removed) this.removedIntents.add(id);
-      } catch (error) {
-        if (!(error instanceof StorageFormatError)) throw error;
-        this.intentProblems.set(projectId, {file:error.file, reason:error.reason, blocking:true});
+    for (const repository of this.repositories.values()) this.loadIntents(repository);
+  }
+
+  /** One clone's intents: every readable file, and a diagnostic per file
+   * that will not read, its intent listed nowhere (storage-4). */
+  private loadIntents(repository: SpexRepository): void {
+    for (const [id, intent] of [...this.intents]) if (intent.projectId === repository.key) this.intents.delete(id);
+    for (const [file] of [...this.intentProblems]) if (file.startsWith(`${repository.intentsDir}/`)) this.intentProblems.delete(file);
+    const { intents, problems } = readIntentFiles(repository.intentsDir);
+    for (const problem of problems) this.intentProblems.set(problem.file, problem);
+    for (const file of intents) {
+      if (this.intents.has(file.id)) {
+        const path = join(repository.intentsDir, `${file.id}.json`);
+        this.intentProblems.set(path, { file: path, reason: i18n._({
+          id: "duplicate queue {intentId}",
+          comment: "Storage diagnostic: two acts queue the same intent",
+          values: { intentId: file.id },
+        }), blocking: false });
+        continue;
       }
+      this.intents.set(file.id, intentInfoOf(file, repository.key));
     }
   }
 
-  private loadSidecars(): void {
-    const sessionsDir = this.sessionsDir as string;
-    for (const file of readdirSync(sessionsDir)) {
-      if (!file.endsWith(".spex.json")) continue;
-      let meta: SessionMeta | undefined;
-      try { meta = readJson<SessionMeta>(join(sessionsDir, file)); }
-      catch { continue; } // Shared migration reports and preserves this sidecar.
-      if (!meta || typeof meta !== "object" || Array.isArray(meta) || meta.id !== file.slice(0, -".spex.json".length) ||
-          typeof meta.projectId !== "string" || !Array.isArray(meta.players) || !Array.isArray(meta.initialVisible)) continue;
-      this.sessions.set(meta.id, meta);
-      const { records: stored, incompleteAfterSeq } = readRecordsPrefix(this.recordsFile(meta.id), true);
-      if (incompleteAfterSeq !== undefined) {
-        meta.streamIncompleteAfterSeq = Math.min(meta.streamIncompleteAfterSeq ?? incompleteAfterSeq, incompleteAfterSeq);
-        // Keep the raw damaged stream for inspection. The existing
-        // continuation gate refuses it instead of appending onto damage.
-      }
-      this.records.set(meta.id, stored);
-      // Turns, titles, usage, and active time are never separately stored: the
-      // stream is the truth and the restart folds it (core-service-10).
-      for (const entry of stored) {
-        this.foldRecord(meta.id, entry.record);
+  // -- sessions, one shared store per clone (storage-14) --------------------
+
+  /** Your own group's session store: where the XDG import lands
+   * (storage-18) and what a session-less caller reads. */
+  sessionStore(key = this.homeFile.own()): SharedSessionStore {
+    return (this.repositories.get(key) ?? this.ownRepository()).store;
+  }
+
+  /** The session store of the clone holding a session. */
+  sessionStoreFor(sessionId: string): SharedSessionStore {
+    const key = this.sessionLocations.get(sessionId);
+    return this.sessionStore(key);
+  }
+
+  /** The key of the spex repository holding a session. */
+  sessionRepository(sessionId: string): string | undefined {
+    return this.sessionLocations.get(sessionId);
+  }
+
+  /** Migrate each clone's legacy session files through Playbook and
+   * index every session (core-service-60). */
+  async initializeSessions(): Promise<void> {
+    for (const repository of this.repositories.values()) {
+      const shared = repository.store;
+      await shared.prepare();
+      const sessionsDir = repository.sessionsDir;
+      const cwd = this.homeFile.folderOf(repository.key)?.path;
+      for (const filename of readdirSync(sessionsDir)) {
+        const sidecar = filename.endsWith(".spex.json");
+        if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
+        const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
+        const sourcePath = join(sessionsDir, filename);
+        try {
+          const source = readJson<Record<string, unknown>>(sourcePath);
+          if (!source || (!sidecar && source.schemaVersion === 7)) continue;
+          if (sidecar) this.loadSidecar(repository, id, source);
+          await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
+        } catch (error) {
+          this.sessionLocations.set(id, repository.key);
+          this.untrackedSessions.add(id);
+          this.sessionProblems.set(id, {file:sourcePath, reason:String(error), blocking:false});
+        }
       }
     }
+    await this.adoptForeignSessions();
+  }
+
+  /** A legacy import's staged session, read before Playbook converts it. */
+  private loadSidecar(repository: SpexRepository, id: string, source: Record<string, unknown>): void {
+    const meta = source as unknown as SessionMeta;
+    if (meta.id !== id || !Array.isArray(meta.players) || !Array.isArray(meta.initialVisible)) return;
+    this.sessionLocations.set(id, repository.key);
+    this.sessions.set(id, { ...meta, projectId: repository.key, live: false });
+    const { records: stored, incompleteAfterSeq } = readRecordsPrefix(join(repository.sessionsDir, `${id}.records.jsonl`), true);
+    const loaded = this.sessions.get(id)!;
+    if (incompleteAfterSeq !== undefined) loaded.streamIncompleteAfterSeq = Math.min(loaded.streamIncompleteAfterSeq ?? incompleteAfterSeq, incompleteAfterSeq);
+    this.records.set(id, stored);
+    for (const entry of stored) this.foldRecord(id, entry.record);
   }
 
   /**
-   * Adopt every session another host wrote into the shared session
-   * store's directory (core-service-60): a playbook captain-session
-   * record `<id>.json` names the working directory, and the replay
-   * stream `<id>.records.jsonl` beside it carries the history. A
-   * session binds to the registered project whose path is that working
-   * directory. Foreign sessions refresh from the readable prefix;
-   * sessions this core owns are never replaced. Returns changes only,
-   * with new records to stream where the prior history is a prefix.
+   * Adopt every session another host wrote into a clone's shared session
+   * store (core-service-60): a session is its clone's project's, whatever
+   * its working directory (storage-6). Foreign sessions refresh from the
+   * readable prefix; sessions this core owns are never replaced. Returns
+   * changes only, with new records to stream where the prior history is
+   * a prefix.
    */
-  sessionStore(sessionsDir = this.shared?.sessionsDir ?? this.sessionsDir): SharedSessionStore {
-    sessionsDir ??= this.temporarySessions ??= mkdtempSync(join(tmpdir(), "spex-memory-sessions-"));
-    if (!this.shared || this.shared.sessionsDir !== sessionsDir) {
-      this.shared = createSessionStore({ sessionsDir });
-    }
-    return this.shared;
-  }
-
-  async initializeSessions(sessionsDir = this.sessionsDir): Promise<void> {
-    if (!sessionsDir) return;
-    const shared = this.sessionStore(sessionsDir);
-    await shared.prepare();
-    for (const filename of readdirSync(sessionsDir)) {
-      const sidecar = filename.endsWith(".spex.json");
-      if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
-      const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
-      const sourcePath = join(sessionsDir, filename);
-      try {
-        const source = readJson<Record<string, unknown>>(sourcePath);
-        if (!source || (!sidecar && source.schemaVersion === 7)) continue;
-        const cwd = sidecar && typeof source.projectId === "string"
-          ? this.getProject(source.projectId)?.path : undefined;
-        await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
-      } catch (error) {
-        this.untrackedSessions.add(id);
-        this.sessionProblems.set(id, {file:sourcePath, reason:String(error), blocking:false});
-      }
-    }
-    await this.adoptForeignSessions(sessionsDir);
-  }
-
-  async adoptForeignSessions(sessionsDir: string): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[]> {
-    if (!existsSync(sessionsDir)) return [];
-    const shared = this.sessionStore(sessionsDir);
+  async adoptForeignSessions(key?: string): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[]> {
     const changed: { id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string }[] = [];
-    for (const filename of readdirSync(sessionsDir)) {
-      if (!/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
-      const id = filename.slice(0, -5);
-      if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
-      const update = await this.refreshSession(id, false);
-      if (update) changed.push(update);
+    for (const repository of key ? [this.requireRepository(key)] : this.repositories.values()) {
+      if (!existsSync(repository.sessionsDir)) continue;
+      for (const filename of readdirSync(repository.sessionsDir)) {
+        if (!/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
+        const id = filename.slice(0, -5);
+        if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
+        this.sessionLocations.set(id, repository.key);
+        const update = await this.refreshSession(id, false);
+        if (update) changed.push(update);
+      }
     }
     return changed;
   }
 
   async refreshSession(id: string, live?: boolean): Promise<{ id: string; appended: StoredRecord[]; replaced?: boolean; unlistedProjectId?: string } | undefined> {
     if (live === false && this.localSessions.has(id)) return;
-    const shared = this.sessionStore();
+    const key = this.sessionLocations.get(id) ?? this.homeFile.own();
+    const repository = this.repositories.get(key);
+    if (!repository) return;
+    const shared = repository.store;
     let manifest: SessionManifest;
     let stored: StoredRecord[];
     let continuable = false;
@@ -777,23 +963,6 @@ export class Store {
       }),blocking:manifest.schemaVersion === 7});
       return;
     }
-    const project = this.getProjectByPath(manifest.cwd);
-    if (!project) {
-      this.sessionProblems.set(id, problem ?? {file:join(shared.sessionsDir, `${id}.json`), reason:i18n._({
-        id: "No project binding for {cwd}",
-        comment: "Session diagnostic: no project on this device holds the session's folder",
-        values: { cwd: manifest.cwd },
-      }), blocking:false, repair:{kind:"directory", directories:[manifest.cwd], sessions:1, key:repairKey(undefined,[manifest.cwd])}});
-      const prior = this.sessions.get(id);
-      if (prior) {
-        this.sessions.delete(id);
-        this.records.delete(id);
-        this.turns.delete(id);
-        this.usage.delete(id);
-        return { id, appended: [], unlistedProjectId: prior.projectId };
-      }
-      return;
-    }
     let players: SessionInfo["players"] = [];
     let initialVisible: string[] = [];
     let hasContext = false;
@@ -819,7 +988,7 @@ export class Store {
     const writer = live || this.managedSessions.has(id) ? "idle" : await shared.readLeaseState(id);
     if (live === false && this.localSessions.has(id)) return;
     const meta: SessionMeta = {
-      id, projectId: project.id,
+      id, projectId: repository.key, cwd: manifest.cwd,
       createdAt: Date.parse(manifest.createdAt) || stored.find(({record}) => hasPresentationHeader(record))?.record.timestamp || 0,
       endedAt: live ? null : Date.parse(manifest.updatedAt) || stored.reduce((last, entry) => Math.max(last, Number(entry.record.timestamp) || 0), 0),
       live: live ?? prior?.live ?? false,
@@ -849,7 +1018,7 @@ export class Store {
    * the service's scanner still owes its subscribers (core-service-73). */
   async refreshSessionOwnership(id: string): Promise<void> {
     if (this.localSessions.has(id) || this.managedSessions.has(id)) return;
-    const writer = await this.sessionStore().readLeaseState(id);
+    const writer = await this.sessionStoreFor(id).readLeaseState(id);
     const current = this.sessions.get(id);
     if (!current || current.live || this.localSessions.has(id) || this.managedSessions.has(id)) return;
     const { externalWriter: _priorWriter, ...unchanged } = current;
@@ -860,15 +1029,22 @@ export class Store {
     return [...this.sessionProblems.values()];
   }
 
-  untrackedSessionPaths(): string[] {
-    if (!this.dir || !this.shared) return [];
-    const directory = relative(this.dir, this.shared.sessionsDir);
+  /** The session files of one clone Playbook has yet to accept, relative
+   * to the clone, so its rules keep them out of Git (storage-17). */
+  untrackedSessionPaths(key: string): string[] {
+    const repository = this.repositories.get(key);
+    if (!repository) return [];
+    const directory = relative(repository.dir, repository.sessionsDir);
     if (directory.startsWith("..") || isAbsolute(directory)) return [];
-    return [...this.untrackedSessions].flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`)]);
+    return [...this.untrackedSessions]
+      .filter((id) => this.sessionLocations.get(id) === key)
+      .flatMap((id) => [join(directory, `${id}.json`), join(directory, `${id}.records.jsonl`)]);
   }
 
-  /** Reserve local admission before any asynchronous host/scan work. */
-  setLocalSession(id: string, owned: boolean): void {
+  /** Reserve local admission before any asynchronous host/scan work; a
+   * new session names the clone it is written into. */
+  setLocalSession(id: string, owned: boolean, key?: string): void {
+    if (key) this.sessionLocations.set(id, key);
     if (owned) this.localSessions.add(id); else this.localSessions.delete(id);
   }
 
@@ -880,7 +1056,9 @@ export class Store {
   }
   private managedSessions: ReadonlySet<string> = new Set();
 
-  assertProjectsWritable(): void { this.application.assertWritable(); }
+  assertProjectsWritable(): void {
+    if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
+  }
 
   /** Whether the ledger's own acts can be written for this project
    * (dashboard-54): a verdict closing an intent goes through
@@ -901,14 +1079,11 @@ export class Store {
     this.assertProjectsWritable();
     const sessionProblem = scope.sessionId ? this.sessionProblems.get(scope.sessionId) : undefined;
     if (sessionProblem?.blocking) throw new StorageFormatError(sessionProblem.file, sessionProblem.reason);
-    const projectId = scope.projectId ?? (scope.sessionId ? this.sessions.get(scope.sessionId)?.projectId : undefined);
-    const problem = projectId ? this.projectProblems().get(projectId) : undefined;
-    if (problem) throw new StorageFormatError(problem.file, problem.reason);
   }
 
   /**
-   * Forget every foreign session whose record left the shared session
-   * store while this core runs (core-service-76): the CLI's own
+   * Forget every foreign session whose record left its clone's shared
+   * session store while this core runs (core-service-76): the CLI's own
    * removal, or a deletion from elsewhere. Returns what was dropped,
    * with its project so the removal can be announced.
    */
@@ -942,18 +1117,20 @@ export class Store {
 
   // -- legacy import (CORE-64) ----------------------------------------------
 
-  private importLegacy(legacyDbPath: string | undefined): void {
-    if (!legacyDbPath || !existsSync(legacyDbPath)) return;
+  /** Whether rows were imported into the former layout, which the
+   * migration then carries into the groups layout. */
+  private importLegacy(legacyDbPath: string | undefined): boolean {
+    if (!legacyDbPath || !existsSync(legacyDbPath)) return false;
     if (this.meta.importedLegacy?.includes(legacyDbPath)) {
       // This root imported it before the file carried a mark: stamp
       // it now, so a root created later on this machine skips it.
       this.markLegacyImported(legacyDbPath);
-      return;
+      return false;
     }
     // The file's own mark is what a brand-new root reads: another root
     // on this machine already took these rows, and the old app that
     // wrote them never runs again.
-    if (existsSync(legacyImportMarker(legacyDbPath))) return;
+    if (existsSync(legacyImportMarker(legacyDbPath))) return false;
     try {
       this.runLegacyImport(legacyDbPath);
       this.meta.importedLegacy = [
@@ -961,6 +1138,7 @@ export class Store {
         legacyDbPath,
       ];
       this.markLegacyImported(legacyDbPath);
+      return true;
     } catch (error) {
       // An unreadable legacy store must not brick every startup: the
       // import stays unmarked (a repaired file imports on a later
@@ -972,6 +1150,7 @@ export class Store {
         `spex: legacy store ${legacyDbPath} could not be imported (${message}); ` +
           "continuing without it",
       );
+      return false;
     }
   }
 
@@ -992,6 +1171,8 @@ export class Store {
     }
   }
 
+  /** The legacy rows, written in the former layout the groups migration
+   * then carries into spex repositories (storage-9). */
   private runLegacyImport(legacyDbPath: string): void {
     // better-sqlite3's only remaining use: reading the store a
     // pre-DR-036 release left behind, which stays in place untouched.
@@ -1013,33 +1194,40 @@ export class Store {
           return [];
         }
       };
-      const dir = this.dir as string;
+      const dir = this.dir;
       // The import merges into whatever the root already holds — a
       // second shell's legacy store must never clobber the first's
       // imported state or anything written since.
-      const current = readJson<{ v: number; projects: ProjectInfo[] }>(join(dir, "projects.json"));
-      const portable = current?.v === 2 ? new ApplicationRegistry(dir) : undefined;
+      const registryFile = join(dir, "projects.json");
+      const pathsFile = join(dir, "local", "project-paths.json");
+      const current = readJson<{ v: number; projects: { id: string; name: string; registeredAt: number; path?: string }[] }>(registryFile);
       if (current && current.v !== 1 && current.v !== 2) throw new StorageFormatError("projects.json", i18n._({
         id: "unsupported registry version",
         comment: "Storage diagnostic: the project registry was written by a later Spex",
       }));
-      const existingProjects = portable ? [...portable.identities.keys()].map((id) => portable.project(id)).filter((project): project is ProjectInfo => project !== undefined) : current?.projects ?? [];
-      const takenIds = new Set(portable ? portable.identities.keys() : existingProjects.map((project) => project.id));
-      const takenPaths = new Set(existingProjects.map((project) => project.path));
-      const mergedProjects = [...existingProjects];
+      const projects = [...(current?.projects ?? [])];
+      const bindings = current?.v === 2
+        ? [...(readJson<{ v: 1; bindings: { id: string; path: string; aliases: string[] }[] }>(pathsFile)?.bindings ?? [])]
+        : [];
+      const takenIds = new Set(projects.map((project) => project.id));
+      const takenPaths = new Set([...projects.map((project) => project.path), ...bindings.map((binding) => binding.path)].filter(Boolean));
       for (const row of rows("SELECT id, path, name, registered_at FROM projects")) {
-        if (takenIds.has(row.id as string) || takenPaths.has(row.path as string)) {
-          continue;
+        if (takenIds.has(row.id as string) || takenPaths.has(row.path as string)) continue;
+        if (current?.v === 2) {
+          projects.push({ id: row.id as string, name: row.name as string, registeredAt: row.registered_at as number });
+          bindings.push({ id: row.id as string, path: row.path as string, aliases: [] });
+        } else {
+          projects.push({ id: row.id as string, path: row.path as string, name: row.name as string, registeredAt: row.registered_at as number });
         }
-        const imported = { id: row.id as string, path: row.path as string, name: row.name as string, registeredAt: row.registered_at as number };
-        if (portable) portable.bind({ id: imported.id, name: imported.name, registeredAt: imported.registeredAt }, imported.path);
-        else mergedProjects.push(imported);
-        takenIds.add(imported.id); takenPaths.add(imported.path);
+        takenIds.add(row.id as string); takenPaths.add(row.path as string);
       }
-      if (!portable) writeAtomic(
-        join(dir, "projects.json"),
-        JSON.stringify({ v: 1, projects: mergedProjects }),
-      );
+      if (current?.v === 2) {
+        mkdirSync(join(dir, "local"), { recursive: true, mode: 0o700 });
+        writeAtomic(pathsFile, JSON.stringify({ v: 1, bindings }));
+        writeAtomic(registryFile, JSON.stringify({ v: 2, projects }));
+      } else if (projects.length > 0) {
+        writeAtomic(registryFile, JSON.stringify({ v: 1, projects }));
+      }
       const prefs: Record<string, unknown> = {};
       for (const row of rows("SELECT key, value_json FROM prefs")) {
         prefs[row.key as string] = JSON.parse(row.value_json as string);
@@ -1054,6 +1242,7 @@ export class Store {
         join(dir, "prefs.json"),
         JSON.stringify({ v: 1, prefs }),
       );
+      mkdirSync(join(dir, "intents"), { recursive: true });
       for (const row of rows("SELECT * FROM intents ORDER BY created_at, id")) {
         const source: IntentSource | undefined =
           row.source_kind != null && row.source_ref != null
@@ -1063,7 +1252,7 @@ export class Store {
                 ...(row.source_url != null ? { url: row.source_url as string } : {}),
               }
             : undefined;
-        const intent: IntentInfo = {
+        const intent = {
           id: row.id as string,
           projectId: row.project_id as string,
           text: row.text as string,
@@ -1085,16 +1274,19 @@ export class Store {
             ? { closedAs: row.closed_as as "done" | "dropped" }
             : {}),
         };
-        const existingLog = this.intentsFile(intent.projectId);
-        const alreadyQueued = existsSync(existingLog) && parseIntentLog(readFileSync(existingLog, "utf8"), intent.projectId, existingLog).some((act) => act.act === "queue" && act.intent.id === intent.id);
-        if (!alreadyQueued) this.appendIntentAct(intent.projectId, { act: "queue", intent });
+        const log = join(dir, "intents", `${intent.projectId}.jsonl`);
+        const existing = existsSync(log) ? readFileSync(log, "utf8") : "";
+        if (existing.split("\n").some((line) => line.includes(`"id":"${intent.id}"`) && line.includes(`"act":"queue"`))) continue;
+        appendFileSync(log, `${JSON.stringify({ v: 1, act: "queue", intent })}\n`);
       }
+      const sessionsDir = join(dir, "sessions");
+      mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
       for (const row of rows(
         "SELECT id, project_id, created_at, ended_at, players_json, initial_visible_json FROM sessions",
       )) {
         // A session the root already holds is never overwritten: the
         // file state is newer than any legacy copy of it.
-        if (existsSync(this.sidecarFile(row.id as string)) || existsSync(join(this.sessionsDir!, `${row.id}.json`))) continue;
+        if (existsSync(join(sessionsDir, `${row.id}.spex.json`)) || existsSync(join(sessionsDir, `${row.id}.json`))) continue;
         const meta: SessionMeta = {
           id: row.id as string,
           projectId: row.project_id as string,
@@ -1130,10 +1322,10 @@ export class Store {
           };
           lines.push(JSON.stringify({ v: 1, ...stored }));
         }
-        writeAtomic(this.recordsFile(meta.id), lines.length ? `${lines.join("\n")}\n` : "");
+        writeAtomic(join(sessionsDir, `${meta.id}.records.jsonl`), lines.length ? `${lines.join("\n")}\n` : "");
         // Stage legacy metadata for Playbook's conversion, publishing it
         // after the complete replay so interrupted imports can retry.
-        writeAtomic(this.sidecarFile(meta.id), JSON.stringify({v:1, ...meta}));
+        writeAtomic(join(sessionsDir, `${meta.id}.spex.json`), JSON.stringify({v:1, ...meta}));
       }
     } finally {
       db.close();
@@ -1141,103 +1333,121 @@ export class Store {
   }
 
   close(): void {
-    if (this.temporarySessions) rmSync(this.temporarySessions, {recursive: true, force:true});
     this.releaseRootLease();
+    if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
   }
 
-  // -- projects -------------------------------------------------------------
+  // -- projects (projects-10, storage-6) ------------------------------------
 
-  registerProject(path: string, name: string, at: number): ProjectInfo {
-    const project = this.application.register(path, name, at);
-    this.refreshProjects();
-    return project;
-  }
-
-  rebindProject(options: RebindProjectOptions): ProjectInfo {
-    let identity = this.application.identities.get(options.id);
-    if (options.revision !== undefined) {
-      // English, deliberately (core-service-111): a memory-only core
-      // offers no restore, so this names a programming failure.
-      if (!this.dir) throw new Error("restoring a project requires a disk store");
-      const revision = execFileSync("git", ["-C", this.dir, "rev-parse", "--verify", `${options.revision}^{commit}`], { encoding: "utf8" }).trim();
-      const ancestor = execFileSync("git", ["-C", this.dir, "merge-base", revision, "HEAD"], { encoding: "utf8" }).trim();
-      if (ancestor !== revision) throw new Error(i18n._({
-        id: "project restoration requires an ancestor of the current branch",
-        comment: "Refusal: the revision chosen to restore a project is not in this history",
-      }));
-      const bytes = execFileSync("git", ["-C", this.dir, "show", `${revision}:projects.json`], { encoding: "utf8" });
-      identity = parseRegistry(JSON.parse(bytes)).find((project) => project.id === options.id);
+  /** Pair a working folder with a new local spex repository in your own
+   * group, or select the pair it already has (storage-6). */
+  registerProject(path: string, name: string, _at?: number): ProjectInfo {
+    this.assertProjectsWritable();
+    const normalized = resolve(path);
+    const paired = this.homeFile.keyForFolder(normalized);
+    if (paired && this.projects.has(paired)) return this.projects.get(paired)!;
+    if (paired) throw new StorageFormatError(Home.file(this.dir), i18n._({ id: "path {path} needs explicit rebinding",
+      comment: "Refusal: the folder is recorded for a project already, so Add cannot claim it", values: { path: normalized } }));
+    const base = repositoryNameFor(name || basename(normalized)).slice(0, -"-spex".length);
+    let key = `${this.homeFile.ownName}/${base}-spex`;
+    for (let n = 2; this.repositories.has(key) || existsSync(this.homeFile.clonePath(key)) || this.homeFile.folderOf(key); n += 1) {
+      key = `${this.homeFile.ownName}/${base}-${n}-spex`;
     }
-    if (!identity) throw new Error(i18n._({
-      id: "project {projectId} is absent; select its registry revision to restore it",
-      comment: "Refusal: the registry holds no such project at the revision read",
-      values: { projectId: options.id },
-    }));
-    const project = this.application.bind(identity, options.path, options.aliases);
+    const dir = this.homeFile.clonePath(key);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeApplicationFile(join(dir, "project.json"), { format: 1, name: name || basename(normalized), remote: folderRemote(normalized, this.env) });
+    this.initializeRepository(dir);
+    this.homeFile.pair(normalized, key);
+    this.saveHome();
+    this.discoverRepositories();
+    return this.projects.get(key)!;
+  }
+
+  /** Pair a folder with an existing clone (storage-22): the supplied
+   * aliases replace the list, omitted ones keep it. */
+  rebindProject(options: { id: string; path: string; aliases?: string[] }): ProjectInfo {
+    this.assertProjectsWritable();
+    const repository = this.requireRepository(options.id);
+    const normalized = resolve(options.path);
+    const other = this.homeFile.keyForFolder(normalized);
+    if (other && other !== repository.key) throw new StorageFormatError(Home.file(this.dir), i18n._({ id: "path or alias already belongs to another project",
+      comment: "Refusal: another project holds the folder this binding names" }));
+    try { this.homeFile.pair(normalized, repository.key, options.aliases); }
+    catch (error) {
+      if (error instanceof StorageFormatError) throw new StorageFormatError(Home.file(this.dir), i18n._({ id: "path or alias already belongs to another project",
+        comment: "Refusal: another project holds the folder this binding names" }));
+      throw error;
+    }
+    this.saveHome();
     this.refreshProjects();
-    return project;
+    return this.projects.get(repository.key)!;
+  }
+
+  /** Forget the pair and delete the clone (projects-9, projects-10); the
+   * working folder stays as it is. */
+  removeProject(key: string): boolean {
+    this.assertProjectsWritable();
+    const folder = this.homeFile.folderOf(key);
+    const repository = this.repositories.get(key);
+    if (!folder && !repository) return false;
+    if (folder) { this.homeFile.unpair(key); this.saveHome(); }
+    if (repository && key !== this.homeFile.own()) {
+      for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
+      for (const [id, intent] of [...this.intents]) if (intent.projectId === key) this.intents.delete(id);
+      rmSync(repository.dir, { recursive: true, force: true });
+      this.repositories.delete(key);
+    }
+    this.refreshProjects();
+    return true;
   }
 
   storageDiagnostics(): StorageDiagnostic[] {
-    const reports = [...this.application.diagnostics(), ...this.projectProblems().values(), ...(this.prefsProblem ? [this.prefsProblem] : []), ...(this.cacheProblem ? [this.cacheProblem] : [])];
-    const absent = new Set([...this.intents.values()].filter((intent) => !this.application.identities.has(intent.projectId)).map((intent) => intent.projectId));
-    for (const id of absent) reports.push({ file: `intents/${id}.jsonl`, reason: i18n._({
-      id: "unregistered project {projectId}",
-      comment: "Storage diagnostic: a file names a project the registry does not hold",
-      values: { projectId: id },
-    }), blocking: false });
+    const reports: StorageDiagnostic[] = [
+      ...(this.homeProblem ? [this.homeProblem] : []),
+      ...this.intentProblems.values(),
+      ...this.projectFileProblems.values(),
+      ...(this.prefsProblem ? [this.prefsProblem] : []),
+      ...(this.cacheProblem ? [this.cacheProblem] : []),
+    ];
+    const paired = new Set(this.homeFile.folders().map((folder) => folder.repository));
+    for (const repository of this.repositories.values()) {
+      if (paired.has(repository.key)) continue;
+      const held = [...this.sessions.values()].filter((meta) => meta.projectId === repository.key);
+      // Your own group's clone needs a folder only once it holds sessions.
+      if (repository.key === this.homeFile.own() && held.length === 0) continue;
+      const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
+      const { group, name } = splitKey(repository.key);
+      const label = this.readProjectFile(repository)?.name ?? name;
+      reports.push({
+        file: relative(this.dir, repository.dir),
+        reason: unpairedReason(label),
+        blocking: false,
+        repair: { kind: "repository", repository: repository.key, name, group, directories, sessions: held.length, key: repairKey(repository.key, directories) },
+      });
+    }
+    for (const folder of this.homeFile.folders()) {
+      if (this.repositories.has(folder.repository)) continue;
+      reports.push({
+        file: "home.yaml",
+        reason: missingCloneReason(folder.path),
+        blocking: false,
+        repair: { kind: "folder", repository: folder.repository, directories: [folder.path], sessions: 0, key: repairKey(folder.repository, [folder.path]) },
+      });
+    }
     return reports;
-  }
-
-  private projectProblems(intents = this.intents, removed = this.removedIntents): Map<string, StorageDiagnostic> {
-    const problems = new Map(this.intentProblems);
-    const sessions = new Map([...this.sessions.values()].map((session) => [session.id, {
-      projectId: session.projectId, turns: new Set(this.turns.get(session.id)?.keys() ?? []),
-    }]));
-    for (const projectId of new Set([...intents.values()].map((intent) => intent.projectId))) {
-      try {
-        validateIntentRelations(intents, removed, this.intentsFile(projectId), projectId);
-        validateIntentDispatches(intents, sessions, projectId);
-      } catch (error) {
-        if (!(error instanceof StorageFormatError)) throw error;
-        problems.set(projectId, {file:error.file, reason:error.reason, blocking:true});
-      }
-    }
-    // A queue cannot trust a predecessor whose own project's log is invalid.
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const intent of intents.values()) {
-        const predecessor = intent.afterId ? intents.get(intent.afterId) : undefined;
-        const problem = predecessor ? problems.get(predecessor.projectId) : undefined;
-        if (!removed.has(intent.id) && intent.closedAt === undefined && problem && !problems.has(intent.projectId)) {
-          problems.set(intent.projectId, {file:this.intentsFile(intent.projectId), reason:i18n._({
-            id: "depends on invalid {file}: {reason}",
-            comment:
-              "Storage diagnostic; `reason` is the other file's own diagnostic, relayed",
-            values: { file: problem.file, reason: problem.reason },
-          }), blocking:true});
-          changed = true;
-        }
-      }
-    }
-    return problems;
   }
 
   validateStorage(): StorageDiagnostic[] { return this.storageDiagnostics(); }
 
   listProjects(): ProjectInfo[] {
-    return [...this.projects.values()].sort((a, b) => a.registeredAt - b.registeredAt);
+    return [...this.projects.values()].sort((a, b) => a.registeredAt - b.registeredAt || a.id.localeCompare(b.id));
   }
 
   getProject(id: string): ProjectInfo | undefined { return this.projects.get(id); }
 
-  getProjectByPath(path: string): ProjectInfo | undefined { return this.application.resolvePath(path); }
-
-  removeProject(id: string): boolean {
-    const removed = this.application.remove(id);
-    if (removed) this.refreshProjects();
-    return removed;
+  getProjectByPath(path: string): ProjectInfo | undefined {
+    const key = this.homeFile.keyForFolder(path);
+    return key ? this.projects.get(key) : undefined;
   }
 
   // -- sessions -------------------------------------------------------------
@@ -1246,14 +1456,15 @@ export class Store {
     const meta: SessionMeta = {
       id: session.id,
       projectId: session.projectId,
+      cwd: session.projectPath,
       createdAt: session.createdAt,
       endedAt: session.endedAt,
       live: session.live,
       players: session.players,
       initialVisible: session.initialVisible,
     };
+    this.sessionLocations.set(session.id, session.projectId);
     this.sessions.set(meta.id, meta);
-
   }
 
   endSession(id: string, endedAt: number): void {
@@ -1261,7 +1472,6 @@ export class Store {
     if (!meta) return;
     meta.live = false;
     meta.endedAt = endedAt;
-
   }
 
   /** A message continued the ended session (core-service-73): live
@@ -1273,8 +1483,10 @@ export class Store {
     meta.live = true;
     meta.endedAt = null;
     meta.players = players;
-
   }
+
+  /** The working directory a session's manifest records (core-service-73). */
+  sessionCwd(id: string): string | undefined { return this.sessions.get(id)?.cwd; }
 
   /** Shared lease and manifest-last deletion, followed by index cleanup. */
   async deleteSession(id: string): Promise<void> {
@@ -1282,7 +1494,7 @@ export class Store {
       id: "wait for the running turn to finish, or abort it, before deleting",
       comment: "Refusal: the session being deleted has a turn in flight",
     }));
-    if (this.shared || this.sessionsDir) await this.sessionStore().delete(id);
+    await this.sessionStoreFor(id).delete(id);
     this.dropSession(id);
   }
 
@@ -1558,29 +1770,42 @@ export class Store {
     return usageTotals(this.usage.get(sessionId) ?? []);
   }
 
-  // -- intents (DR-035, the act log of CORE-52) -----------------------------
+  // -- intents, one file each (storage-4, core-service-52) ------------------
 
-  private commitIntentAct(projectId: string, act: IntentAct): void {
-    this.assertWritable({projectId});
-    const next = new Map([...this.intents].map(([id, intent]) => [id, structuredClone(intent)]));
-    const removed = new Set(this.removedIntents);
-    foldIntentActs([act], `intents/${projectId}.jsonl`, next, removed);
-    const problem = this.projectProblems(next, removed).get(projectId);
-    if (problem) throw new StorageFormatError(problem.file, problem.reason);
-    this.appendIntentAct(projectId, act);
-    this.intents.clear(); for (const [id, intent] of next) this.intents.set(id, intent);
-    this.removedIntents.clear(); for (const id of removed) this.removedIntents.add(id);
+  private requireIntent(id: string): { intent: IntentInfo; repository: SpexRepository } {
+    const intent = this.intents.get(id);
+    if (!intent) throw new StorageFormatError(join("intents", `${id}.json`), i18n._({
+      id: "no intent {intentId}", comment: "Refusal: no intent of this id is in the ledger", values: { intentId: id } }));
+    return { intent, repository: this.requireRepository(intent.projectId) };
   }
 
+  /** Rewrite one intent's file whole (storage-4). */
+  private writeIntent(repository: SpexRepository, intent: IntentInfo): void {
+    this.assertWritable({ projectId: intent.projectId });
+    writeIntentFile(repository.intentsDir, intentFileOf(intent));
+    this.intents.set(intent.id, intentInfoOf(intentFileOf(intent), repository.key));
+  }
+
+  /** The directory beside an intent's file holding its attachments. */
+  intentAssetsDir(id: string, projectId?: string): string {
+    const key = projectId ?? this.intents.get(id)?.projectId;
+    if (!key) throw new StorageFormatError(join("intents", `${id}.assets`), i18n._({
+      id: "no intent {intentId}", comment: "Refusal: no intent of this id is in the ledger", values: { intentId: id } }));
+    return join(this.requireRepository(key).intentsDir, `${id}.assets`);
+  }
+
+  /** Store a new intent as one file of its project's spex repository
+   * (core-service-42). */
   addIntent(intent: IntentInfo): void {
-    this.commitIntentAct(intent.projectId, { act: "queue", intent });
+    const repository = this.requireRepository(intent.projectId);
+    if (this.intents.has(intent.id)) throw new StorageFormatError(join(repository.intentsDir, `${intent.id}.json`), i18n._({
+      id: "duplicate queue {intentId}", comment: "Storage diagnostic: two acts queue the same intent", values: { intentId: intent.id } }));
+    this.writeIntent(repository, structuredClone(intent));
   }
 
   getIntent(id: string): IntentInfo | undefined {
-    const intent = this.removedIntents.has(id)
-      ? undefined
-      : this.intents.get(id);
-    return intent ? { ...intent } : undefined;
+    const intent = this.intents.get(id);
+    return intent ? structuredClone(intent) : undefined;
   }
 
   /** The open intent holding a source artifact, if any (DR-035). */
@@ -1593,33 +1818,22 @@ export class Store {
       if (
         intent.projectId === projectId &&
         intent.closedAt === undefined &&
-        !this.removedIntents.has(intent.id) &&
         intent.source?.kind === kind &&
         intent.source.ref === ref
       ) {
-        return { ...intent };
+        return structuredClone(intent);
       }
     }
     return undefined;
   }
 
-  /** Every open intent across projects, in project rank order. */
+  /** Every open intent of a project on this device, oldest first by
+   * capture time, then by id (core-service-107). */
   listOpenIntents(): IntentInfo[] {
     return [...this.intents.values()]
-      .filter(
-        (intent) =>
-          intent.closedAt === undefined && !this.removedIntents.has(intent.id) && this.projects.has(intent.projectId),
-      )
-      .sort((a, b) =>
-        a.projectId === b.projectId
-          ? a.rank < b.rank
-            ? -1
-            : 1
-          : a.projectId < b.projectId
-            ? -1
-            : 1,
-      )
-      .map((intent) => ({ ...intent }));
+      .filter((intent) => intent.closedAt === undefined && this.projects.has(intent.projectId))
+      .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((intent) => structuredClone(intent));
   }
 
   /** One History page: closed intents newest first (DR-035), those
@@ -1636,7 +1850,6 @@ export class Store {
         (intent): intent is IntentInfo & { closedAt: number } =>
           intent.projectId === projectId &&
           intent.closedAt !== undefined &&
-          !this.removedIntents.has(intent.id) &&
           include(intent),
       )
       .filter(
@@ -1653,12 +1866,12 @@ export class Store {
           : b.closedAt - a.closedAt,
       )
       .slice(0, limit)
-      .map((intent) => ({ ...intent }));
+      .map((intent) => structuredClone(intent));
   }
 
   /** Every dispatch stamped into a session — open and closed intents
    * alike, because a closed dispatch still bounds its neighbours' turn
-   * ranges (DR-035). */
+   * ranges (DR-035). A removed intent's no longer does (core-service-79). */
   listSessionDispatches(
     sessionId: string,
   ): { intentId: string; turnId: number; open: boolean; closedAt?: number }[] {
@@ -1677,22 +1890,16 @@ export class Store {
       }));
   }
 
-  setIntentText(id: string, text: string, attachments?: IntentInfo["attachments"]): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "edit", id, text, ...(attachments !== undefined ? {attachments} : {}) });
-  }
-
-  setIntentRank(id: string, rank: string): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "move", id, rank });
-  }
-
-  setIntentLink(id: string, afterId: string | null): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "link", id, afterId });
+  /** Replace a queued intent's text and any supplied attachments
+   * (core-service-43); the file is rewritten whole. */
+  editIntent(id: string, text: string, attachments?: IntentInfo["attachments"]): void {
+    const { intent, repository } = this.requireIntent(id);
+    const next: IntentInfo = { ...structuredClone(intent), text };
+    if (attachments !== undefined) {
+      if (attachments.length) next.attachments = structuredClone(attachments);
+      else delete next.attachments;
+    }
+    this.writeIntent(repository, next);
   }
 
   /** The dispatch binding, stamped when the turn starts and re-written
@@ -1703,26 +1910,31 @@ export class Store {
     turnId: number,
     at: number,
   ): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "dispatch", id, sessionId, turnId, at });
+    const { intent, repository } = this.requireIntent(id);
+    this.writeIntent(repository, { ...structuredClone(intent), dispatched: { sessionId, turnId, at } });
   }
 
-  /** The remove act (core-service-79, DR-038): a closed intent retires
-   * from every read — History, the queue, the source binding,
-   * attention — while its acts stay in the append-only log and its
-   * dispatch keeps bounding its neighbours' turn ranges, so no other
-   * intent's derived state moves. */
-  removeIntent(id: string, at: number): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "remove", id, at });
+  /** Record a verdict on the intent's file (core-service-46); with
+   * `remove`, a drop before any work deletes the file and its
+   * attachments, so no read sees it (core-service-52, DR-038). */
+  closeIntent(id: string, as: "done" | "dropped", at: number, remove = false): void {
+    const { intent, repository } = this.requireIntent(id);
+    if (remove) { this.deleteIntentFiles(repository, intent); return; }
+    this.writeIntent(repository, { ...structuredClone(intent), closedAt: at, closedAs: as });
   }
 
-  closeIntent(id: string, as: "done" | "dropped", at: number): void {
-    const intent = this.intents.get(id);
-    if (!intent) return;
-    this.commitIntentAct(intent.projectId, { act: "close", id, as, at });
+  /** Retire an intent (core-service-79): its file and attachments go,
+   * recoverable from the spex repository's history alone. */
+  removeIntent(id: string, _at?: number): void {
+    const { intent, repository } = this.requireIntent(id);
+    this.deleteIntentFiles(repository, intent);
+  }
+
+  private deleteIntentFiles(repository: SpexRepository, intent: IntentInfo): void {
+    this.assertWritable({ projectId: intent.projectId });
+    rmSync(join(repository.intentsDir, `${intent.id}.assets`), { recursive: true, force: true });
+    rmSync(join(repository.intentsDir, `${intent.id}.json`), { force: true });
+    this.intents.delete(intent.id);
   }
 
   // -- prefs ----------------------------------------------------------------

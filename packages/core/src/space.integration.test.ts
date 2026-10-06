@@ -1,308 +1,348 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Core coverage of the Space surface (space-37, space-38, space-39):
-// real cores with substitute agents on scratch homes whose configuration
-// lies inside them, a bare repository standing in for origin, an
-// isolated Git configuration through the core's environment, a sleeping
-// GIT_SSH_COMMAND for the transport limit and Stop, and two homes
-// syncing through one remote — hermetic, no network, no credentials.
+// Core coverage of the Groups surface (space-37, space-38, space-39,
+// space-51): real cores with substitute agents on scratch homes whose
+// configuration lies in your own group's spex repository, each sync on
+// one spex repository's clone, a bare repository standing in for the
+// host's copy, an isolated Git configuration through the core's
+// environment, a sleeping GIT_SSH_COMMAND for the transport limit and
+// Stop, and two homes syncing one spex repository through one remote —
+// hermetic, no network, no credentials, no Git host.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { seedHistorySession } from "./testing/demo.js";
-import { prepareStorageGitFiles } from "./storage-git.js";
+import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
+import { Home } from "./home.js";
 import type { Command } from "./protocol.js";
-import { createSpaceHarness } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
+type Started = Awaited<ReturnType<typeof startHome>>;
+
+/** Add a working folder: it pairs with a local spex repository in your
+ * own group (storage-6); returns its key and its clone. */
+async function addFolder(home: Started, path: string): Promise<{ key: string; clone: string }> {
+  const project = await home.client.expectOk("project.register", { path });
+  return { key: project.id, clone: clonePath(home.dataDir, project.id) };
+}
+
+/** A Git working folder bearing another folder's name, so the second
+ * home's spex repository takes the same key and `project.json`. */
+function sameNameFolder(original: string, side: string): string {
+  const dir = join(mkdtempSync(join(scratch, `${side}-`)), basename(original));
+  mkdirSync(dir);
+  git(dir, "init", "-q");
+  return dir;
+}
+
+function gitFolder(name: string): string {
+  const dir = join(mkdtempSync(join(scratch, `${name}-`)), name);
+  mkdirSync(dir);
+  git(dir, "init", "-q");
+  return dir;
+}
+
+const prefsOf = (dataDir: string): Record<string, unknown> =>
+  (JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
+
 // ---------------------------------------------------------------------------
-// space-37: setup and the first sync
+// space-37: your own group, its repositories, and the first sync
 // ---------------------------------------------------------------------------
 
-test("space-37: a fresh home reads no repository, and the git guidance without git", async (t) => {
-  const home = await startHome("fresh");
+test("space-37: a fresh home lists your own group alone with its own repository, and the git guidance without git", async (t) => {
+  const home = await startHome("fresh", { project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
-  assert.equal(state.repository, null);
   assert.ok(state.git.ok);
   assert.equal(state.home, home.dataDir);
-  assert.deepEqual(state.outside, []);
-  assert.equal(state.lastSync, null);
-  assert.equal(state.sync.phase, "idle");
+  assert.equal(state.account, null);
+  assert.deepEqual(state.signIn, { phase: "idle" });
+  assert.equal(state.readAt, null);
+  assert.equal(state.groups.length, 1, "your own group alone");
+  const [group] = state.groups;
+  assert.deepEqual({ id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: group.own }, { id: null, fullPath: OWN, name: OWN, url: null, own: true });
+  assert.deepEqual(group.repositories.map((repository) => repository.key), [OWN_KEY]);
+  const own = group.repositories[0];
+  assert.equal(own.name, `${OWN}-spex`);
+  assert.equal(own.own, true);
+  assert.equal(own.state, "local-only");
+  assert.equal(own.code, null);
+  assert.equal(own.folder, null);
+  assert.equal(own.lastSync, null);
+  assert.equal(own.sync.phase, "idle");
+  assert.equal(own.branch?.checkedAt, null);
+  assert.equal(own.branch?.mergePending, false);
+  assert.equal(git(ownClone(home.dataDir), "symbolic-ref", "--short", "HEAD"), "spex");
+  assert.ok(git(ownClone(home.dataDir), "ls-files").split("\n").includes("config/playbook.config.yaml"));
   const empty = mkdtempSync(join(scratch, "nogit-"));
-  const bare = await startHome("nogit", { env: { PATH: empty } });
+  const bare = await startHome("nogit", { env: { PATH: empty }, project: false });
   t.after(() => bare.stop());
   const without = await bare.client.expectOk("space.get", {});
   assert.equal(without.git.ok, false);
   assert.match((without.git as { guidance: string }).guidance, /Git is not installed/);
-  assert.equal(without.repository, null);
+  assert.equal(repositoryOf(without, OWN_KEY).branch, null, "no repository without git");
 });
 
-test("space-37: space.init refuses a blocking diagnostic and an incomplete migration, creating nothing", async (t) => {
-  const damaged = mkdtempSync(join(scratch, "damaged-"));
-  mkdirSync(join(damaged, "intents"), { recursive: true });
-  const projectId = randomUUID();
-  writeFileSync(join(damaged, "intents", `${projectId}.jsonl`), "{not json\n");
-  const home = await startHome("damaged", { dataDir: damaged });
-  t.after(() => home.stop());
-  const refusal = await home.client.expectError("space.init", {}, "invalid_request", new RegExp(`${projectId}\\.jsonl`));
-  assert.ok(refusal.length > 0);
-  assert.equal(existsSync(join(damaged, ".git")), false);
-
-  const partial = mkdtempSync(join(scratch, "partial-"));
-  const receiptDir = join(partial, "local", "migrations", randomUUID());
-  mkdirSync(join(receiptDir, "inputs"), { recursive: true });
-  writeFileSync(join(receiptDir, "inputs", "0"), "{}");
-  writeFileSync(join(receiptDir, "receipt.json"), JSON.stringify({ v: 1, id: basename(receiptDir), inputs: [{ path: join(partial, "x.json"), sha256: "00" }], complete: false }));
-  const second = await startHome("partial", { dataDir: partial });
-  t.after(() => second.stop());
-  await second.client.expectError("space.init", {}, "invalid_request", /receipt\.json/);
-  assert.equal(existsSync(join(partial, ".git")), false);
-});
-
-test("space-37: a clean init commits only portable files with the managed rules and the fallback identity", async (t) => {
+test("space-37: a working folder added pairs with a local-only spex repository whose commits hold only portable files", async (t) => {
   const home = await startHome("init");
   t.after(() => home.stop());
   const project = await home.client.expectOk("project.register", { path: home.projectDir });
-  const sessionId = await runTurn(home, project.id, "First work");
-  writeFileSync(join(home.dataDir, "sessions", `${sessionId}.hints.json`), "{}");
+  const key = project.id;
+  const clone = clonePath(home.dataDir, key);
+  assert.equal(key, `${OWN}/${basename(home.projectDir)}-spex`);
+  assert.deepEqual(project.repository, { key, name: `${basename(home.projectDir)}-spex`, group: OWN, own: true });
+  const state = await home.client.expectOk("space.get", {});
+  assert.deepEqual(state.groups.map((group) => group.fullPath), [OWN]);
+  assert.deepEqual(state.groups[0].repositories.map((repository) => repository.key), [OWN_KEY, key], "your own group's repository first");
+  const row = repositoryOf(state, key);
+  assert.equal(row.state, "local-only");
+  assert.equal(row.own, false);
+  assert.equal(row.folder, home.projectDir);
+  assert.equal(row.code, null, "the folder has no remote of its own");
+  assert.equal(row.sync.phase, "idle");
+  // Its clone begins on `spex` with one commit of the managed rules and
+  // project.json, under the fallback identity (space-32, storage-17).
+  assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
+  assert.equal(git(clone, "rev-list", "--count", "HEAD"), "1");
+  assert.deepEqual(git(clone, "ls-files").split("\n"), [".gitattributes", ".gitignore", "project.json"]);
+  assert.deepEqual(JSON.parse(readFileSync(join(clone, "project.json"), "utf8")), { format: 1, name: basename(home.projectDir), remote: null });
+  assert.match(readFileSync(join(clone, ".gitignore"), "utf8"), /# BEGIN Spex managed storage rules/);
+  assert.equal(git(clone, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${hostname()}>`);
+  // A turn, provider hints and a viewed marker: the sync commits the
+  // session and nothing that stays on this device (space-12).
+  const sessionId = await runTurn(home, key, "First work");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the session lives in its project's clone");
+  writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "{}");
   await home.client.expectOk("session.viewed", { sessionId, turnId: 1 });
-  const from = home.client.mark();
-  const state = await home.client.expectOk("space.init", {});
-  assert.equal(state.repository?.branch, "main");
-  assert.equal(state.repository?.remote, null);
-  assert.equal(state.repository?.identityFallback, true);
-  assert.equal(state.lastSync, null);
-  assert.equal(state.sync.phase, "idle");
-  await home.client.waitSpace(from, (s) => s.repository?.branch === "main");
-  const tracked = git(home.dataDir, "ls-files").split("\n");
-  assert.ok(tracked.includes(".gitignore") && tracked.includes(".gitattributes"));
-  assert.ok(tracked.includes("config/playbook.config.yaml"));
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  const done = await home.client.settle("space.sync", { repository: key });
+  assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
+  const tracked = git(clone, "ls-files").split("\n");
   assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.records.jsonl`));
-  for (const file of tracked) {
-    assert.doesNotMatch(file, /^local\/|^prefs\.json$|^meta\.json$|\.hints\.json$|\.lock/, `must not track ${file}`);
-  }
-  assert.match(readFileSync(join(home.dataDir, ".gitignore"), "utf8"), /# BEGIN Spex managed storage rules/);
-  assert.equal(git(home.dataDir, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${execFileSync("hostname", { encoding: "utf8" }).trim()}>`);
-  assert.equal(git(home.dataDir, "rev-list", "--count", "HEAD"), "1");
-  await home.client.expectError("space.init", {}, "invalid_request", /already a repository/);
+  for (const file of tracked) assert.doesNotMatch(file, /\.hints\.json$|\.lock|^\.spex-/, `must not track ${file}`);
+  assert.equal(prefsOf(home.dataDir)[`viewed:${sessionId}`], 1, "the viewed marker stays in this device's preferences");
+  assert.match(git(clone, "log", "-1", "--format=%s"), /^Sync from /);
+  assert.equal(git(clone, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${hostname()}>`);
 });
 
-test("space-37: the remote row accepts the bare path, refuses malformed and credentialed URLs, and clears the check", async (t) => {
+test("space-37: setting a remote turns a repository reachable, refuses malformed and credentialed URLs, and clears the check", async (t) => {
   const home = await startHome("remote");
   t.after(() => home.stop());
-  await home.client.expectError("space.remote.set", { url: "/tmp/x" }, "invalid_request", /Initialize the repository first/);
-  await home.client.expectOk("space.init", {});
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /Add a remote first/);
+  await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /no spex repository/);
   const bare = bareRepo();
-  const set = await home.client.expectOk("space.remote.set", { url: bare });
-  assert.equal(set.repository?.remote, bare);
-  assert.equal(git(home.dataDir, "remote", "get-url", "origin"), bare);
+  const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal(repositoryOf(set, key).state, "reachable");
+  assert.equal(repositoryOf(set, OWN_KEY).state, "local-only", "only that repository");
+  assert.equal(git(clone, "remote", "get-url", "origin"), bare);
   for (const [url, pattern] of [["", /malformed/], ["  ", /malformed/], ["git@example.com:a b.git", /malformed/], ["https://user:secret@example.com/x.git", /credential/]] as const) {
-    await home.client.expectError("space.remote.set", { url }, "invalid_request", pattern);
-    assert.equal(git(home.dataDir, "remote", "get-url", "origin"), bare, `origin unchanged after ${JSON.stringify(url)}`);
+    await home.client.expectError("space.remote.set", { repository: key, url }, "invalid_request", pattern);
+    assert.equal(git(clone, "remote", "get-url", "origin"), bare, `origin unchanged after ${JSON.stringify(url)}`);
   }
-  const checked = await home.client.settle("space.fetch", {});
+  const checked = await home.client.settle("space.fetch", { repository: key });
   assert.equal(checked.sync.phase, "idle");
-  assert.equal(typeof checked.repository?.checkedAt, "number");
-  assert.equal(checked.repository?.remoteEmpty, true);
+  assert.equal(typeof checked.branch?.checkedAt, "number");
+  assert.equal(checked.branch?.hostEmpty, true);
   const other = bareRepo();
-  const changed = await home.client.expectOk("space.remote.set", { url: other });
-  assert.equal(changed.repository?.checkedAt, null);
-  assert.equal(changed.repository?.ahead, null);
-  assert.equal(changed.repository?.remote, other);
-  const cleared = await home.client.expectOk("space.remote.set", { url: null });
-  assert.equal(cleared.repository?.remote, null);
-  await home.client.expectError("space.sync", {}, "invalid_request", /Add a remote first/);
+  const changed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: other }), key);
+  assert.equal(changed.branch?.checkedAt, null);
+  assert.equal(changed.branch?.ahead, null);
+  assert.equal(git(clone, "remote", "get-url", "origin"), other);
+  const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
+  assert.equal(cleared.state, "local-only");
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Add a remote first/);
 });
 
-test("space-37: the first sync pushes main to the empty remote, sets the upstream and records space:lastSync", async (t) => {
+test("space-37: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:last", async (t) => {
   const home = await startHome("first-push");
   t.after(() => home.stop());
-  const project = await home.client.expectOk("project.register", { path: home.projectDir });
-  await runTurn(home, project.id, "Push me");
-  await home.client.expectOk("space.init", {});
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await runTurn(home, key, "Push me");
   const bare = bareRepo();
-  await home.client.expectOk("space.remote.set", { url: bare });
-  const done = await home.client.settle("space.sync", {});
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const done = await home.client.settle("space.sync", { repository: key });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
   assert.ok(done.sync.phase === "done" && done.sync.pushed);
   assert.ok(done.sync.phase === "done" && done.sync.sent > 0);
-  assert.equal(git(bare, "rev-parse", "main"), git(home.dataDir, "rev-parse", "main"));
-  assert.equal(git(home.dataDir, "config", "--get", "branch.main.remote"), "origin");
-  assert.equal(done.repository?.upstream, true);
-  assert.equal(done.repository?.ahead, 0);
-  assert.equal(done.repository?.behind, 0);
-  const prefs = JSON.parse(readFileSync(join(home.dataDir, "prefs.json"), "utf8")) as { prefs: Record<string, { at: number; sent: number; received: number }> };
-  assert.equal(typeof prefs.prefs["space:lastSync"].at, "number");
-  assert.equal(prefs.prefs["space:lastSync"].sent, done.sync.sent);
-  assert.deepEqual(done.lastSync, prefs.prefs["space:lastSync"]);
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
+  assert.equal(git(clone, "config", "--get", "branch.spex.remote"), "origin");
+  assert.equal(done.branch?.ahead, 0);
+  assert.equal(done.branch?.behind, 0);
+  const last = prefsOf(home.dataDir)[`sync:${key}:last`] as { at: number; sent: number; received: number };
+  assert.equal(typeof last.at, "number");
+  assert.equal(last.sent, done.sync.phase === "done" ? done.sync.sent : -1);
+  assert.deepEqual(done.lastSync, last);
   assert.deepEqual(done.local, []);
-  const again = await home.client.settle("space.sync", {});
+  assert.equal(prefsOf(home.dataDir)[`sync:${OWN_KEY}:last`], undefined, "only the synced repository records a sync");
+  assert.equal(git(clone, "status", "--porcelain"), "", "nothing of the sync stands uncommitted");
+  const again = await home.client.settle("space.sync", { repository: key });
   assert.ok(again.sync.phase === "done" && !again.sync.pushed && again.sync.sent === 0 && again.sync.received === 0, JSON.stringify(again.sync));
-  // A restarted core holds no check but still reports the last sync,
-  // so this remote reads as met (space-45); a changed remote clears
-  // both (space-5).
+  // A restarted core holds no check but still reports the last sync; a
+  // changed remote clears both.
   await home.stop();
   const restarted = await startHome("first-push-restart", { dataDir: home.dataDir, project: false });
   t.after(() => restarted.stop());
-  const reread = await restarted.client.expectOk("space.get", {});
-  assert.equal(reread.repository?.checkedAt, null);
+  const reread = await restarted.client.repository(key);
+  assert.equal(reread.branch?.checkedAt, null);
   assert.deepEqual(reread.lastSync, again.lastSync);
-  const moved = await restarted.client.expectOk("space.remote.set", { url: bareRepo() });
-  assert.equal(moved.repository?.checkedAt, null);
+  assert.equal(reread.state, "reachable");
+  const moved = repositoryOf(await restarted.client.expectOk("space.remote.set", { repository: key, url: bareRepo() }), key);
+  assert.equal(moved.branch?.checkedAt, null);
   assert.equal(moved.lastSync, null);
-  const kept = JSON.parse(readFileSync(join(home.dataDir, "prefs.json"), "utf8")) as { prefs: Record<string, unknown> };
-  assert.equal(kept.prefs["space:lastSync"], undefined);
-  // A fresh home's Join against an empty remote — init with the remote,
-  // then a joining sync — completes as a first push (space-6).
+  assert.equal(prefsOf(home.dataDir)[`sync:${key}:last`], undefined);
+  // A fresh home's joining sync against an empty host completes as a first push.
   const joiner = await startHome("joiner");
   t.after(() => joiner.stop());
+  const joined = await addFolder(joiner, joiner.projectDir);
   const empty = bareRepo();
-  const initialized = await joiner.client.expectOk("space.init", { remote: empty });
-  assert.equal(initialized.repository?.remote, empty);
-  assert.equal(initialized.repository?.checkedAt, null);
-  const first = await joiner.client.settle("space.sync", { join: true });
+  await joiner.client.expectOk("space.remote.set", { repository: joined.key, url: empty });
+  const first = await joiner.client.settle("space.sync", { repository: joined.key, join: true });
   assert.ok(first.sync.phase === "done" && first.sync.pushed && first.sync.sent > 0 && first.sync.received === 0, JSON.stringify(first.sync));
-  assert.equal(first.repository?.remoteEmpty, false);
-  assert.equal(git(empty, "rev-parse", "main"), git(joiner.dataDir, "rev-parse", "main"));
+  assert.equal(first.branch?.hostEmpty, false);
+  assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));
 });
 
-test("space-37: a turn in flight, an out-of-band lease and a running compile refuse space.sync and space.init by name", async (t) => {
+test("space-37: a turn in flight, an out-of-band lease and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
   const home = await startHome("blockers", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
   t.after(() => home.stop());
-  const project = await home.client.expectOk("project.register", { path: home.projectDir });
-  const sessionId = await runTurn(home, project.id, "Settle first");
-  await home.client.expectOk("space.init", {});
-  const bare = bareRepo();
-  await home.client.expectOk("space.remote.set", { url: bare });
-  await home.client.settle("space.sync", {});
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const other = await addFolder(home, gitFolder("blockers-other"));
+  const sessionId = await runTurn(home, key, "Settle first");
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  await home.client.expectOk("space.remote.set", { repository: other.key, url: bareRepo() });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const proceeds = async (repository: string, why: string): Promise<void> => {
+    const synced = await home.client.settle("space.sync", { repository });
+    assert.equal(synced.sync.phase, "done", `${why}: ${JSON.stringify(synced.sync)}`);
+  };
   // A turn in flight.
   await home.client.expectOk("turn.submit", { sessionId, text: "slow: keep going" });
   await home.client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && m.session.turnActive === true);
-  await home.client.expectError("space.sync", {}, "busy", /Wait for “Settle first” in/);
-  await home.client.expectError("space.init", {}, "busy", /Wait for “Settle first” in/);
+  await home.client.expectError("space.sync", { repository: key }, "busy", /Wait for “Settle first” in/);
+  await proceeds(other.key, "another repository's sync never waits for this one's turn");
   await home.client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.live && (m.session.turns ?? 0) >= 2, 20_000);
   // A management lease taken out of band.
-  const shared = createSessionStore({ sessionsDir: join(home.dataDir, "sessions") });
+  const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
   await shared.prepare();
   const lease = await shared.acquireManagement(sessionId);
   try {
-    await home.client.expectError("space.sync", {}, "busy", /“Settle first” (is in use elsewhere|ownership cannot be verified)/);
-    await home.client.expectError("space.init", {}, "busy", /“Settle first”/);
+    await home.client.expectError("space.sync", { repository: key }, "busy", /“Settle first” (is in use elsewhere|ownership cannot be verified)/);
+    await proceeds(other.key, "a lease in one clone holds no other");
   } finally { await lease.release(); }
-  // A running compile.
+  // A running compile belongs to your own group's repository.
   const compile = home.client.command("compile.run", COMPILE_INPUT);
   await home.client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
-  await home.client.expectError("space.sync", {}, "busy", /demo is compiling/);
-  await home.client.expectError("space.init", {}, "busy", /demo is compiling/);
+  await home.client.expectError("space.sync", { repository: OWN_KEY }, "busy", /demo is compiling/);
+  await proceeds(key, "a compile holds only its own repository");
   await home.client.expectOk("compile.abort", { playbookId: "demo" });
   await compile;
-  const settled = await home.client.settle("space.sync", {});
+  const settled = await home.client.settle("space.sync", { repository: key });
   assert.equal(settled.sync.phase, "done");
 });
 
-test("space-37: while a check runs, home-writing commands are refused naming the sync, and Stop ends the child", async (t) => {
+test("space-37: while a check runs, writes beneath that clone are refused naming the sync, another repository's are admitted, and Stop ends the child", async (t) => {
   const { script, pidFile } = sleepingSsh();
-  const home = await startHome("gate", { env: { GIT_SSH_COMMAND: script, SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner(), spaceTransportTimeoutMs: 60_000 } });
+  const home = await startHome("gate", { env: { GIT_SSH_COMMAND: script }, extra: { spaceTransportTimeoutMs: 60_000 } });
   t.after(() => home.stop());
-  const project = await home.client.expectOk("project.register", { path: home.projectDir });
-  const sessionId = await runTurn(home, project.id, "Gate me");
-  await home.client.expectOk("space.init", {});
-  await home.client.expectOk("space.remote.set", { url: "ssh://localhost/x" });
-  const before = git(home.dataDir, "rev-parse", "HEAD");
-  await home.client.expectOk("intent.queue", { projectId: project.id, text: "Saved by the sync" });
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const other = await addFolder(home, gitFolder("gate-other"));
+  const sessionId = await runTurn(home, key, "Gate me");
+  const otherSession = await runTurn(home, other.key, "Elsewhere");
+  await home.client.expectOk("space.remote.set", { repository: key, url: "ssh://localhost/x" });
+  const before = git(clone, "rev-parse", "HEAD");
+  await home.client.expectOk("intent.queue", { projectId: key, text: "Saved by the sync" });
   const from = home.client.mark();
-  await home.client.expectOk("space.sync", {});
-  const running = await home.client.waitSpace(from, (s) => s.sync.phase === "running" && s.sync.step === "check");
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  const running = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check");
   assert.ok(running.sync.phase === "running" && running.sync.cancelable);
   for (const [type, fields] of [
     ["turn.submit", { sessionId, text: "blocked" }],
-    ["intent.queue", { projectId: project.id, text: "blocked" }],
-    ["config.edit", { op: { kind: "captain.set", patch: { model: "blocked" } } }],
-    ["project.register", { path: home.projectDir }],
-    ["compile.run", COMPILE_INPUT],
-    ["session.create", { projectId: project.id }],
+    ["session.create", { projectId: key }],
+    ["session.viewed", { sessionId, turnId: 1 }],
+    ["intent.queue", { projectId: key, text: "blocked" }],
+    ["project.rebind", { projectId: key, path: home.projectDir }],
   ] as const) {
     const reply = await home.client.command(type as Command["type"], fields as never);
     assert.ok(!reply.ok && reply.error.code === "busy", `${type} must be refused busy: ${JSON.stringify(reply)}`);
     assert.match(reply.error.message, /Space is syncing/);
   }
-  await home.client.expectError("space.sync", {}, "busy", /Space is busy/);
-  await home.client.expectError("space.fetch", {}, "busy", /Space is busy/);
+  await home.client.expectError("space.sync", { repository: key }, "busy", /Space is busy/);
+  await home.client.expectError("space.fetch", { repository: key }, "busy", /Space is busy/);
+  // Other spex repositories stay writable (space-21).
+  await home.client.expectOk("intent.queue", { projectId: other.key, text: "elsewhere" });
+  await runTurn(home, other.key, "Admitted elsewhere", otherSession);
+  await home.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-edited" } } });
   const pid = await sleeperPid(pidFile);
-  const stopped = await home.client.expectOk("space.cancel", {});
-  assert.deepEqual(stopped, { stopped: true });
-  const after = await home.client.waitSpace(from, (s) => s.sync.phase === "stopped");
+  assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
+  const after = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "stopped");
   assert.ok(after.sync.phase === "stopped" && after.sync.step === "check" && after.sync.cause === "stopped", JSON.stringify(after.sync));
   assert.ok(after.sync.phase === "stopped" && after.sync.retry);
-  assert.notEqual(git(home.dataDir, "rev-parse", "HEAD"), before, "the Save commit stands");
-  assert.match(git(home.dataDir, "log", "-1", "--format=%s"), /^Sync from /);
+  assert.notEqual(git(clone, "rev-parse", "HEAD"), before, "the Save commit stands");
+  assert.match(git(clone, "log", "-1", "--format=%s"), /^Sync from /);
   for (let i = 0; i < 100; i += 1) {
     try { process.kill(pid, 0); await sleep(50); } catch { break; }
   }
   assert.throws(() => process.kill(pid, 0), "the sleeping child is gone");
-  assert.deepEqual(await home.client.expectOk("space.cancel", {}), { stopped: false });
+  assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: false });
   // The gate is lifted: writes go through again.
-  await home.client.expectOk("intent.queue", { projectId: project.id, text: "after the stop" });
+  await home.client.expectOk("intent.queue", { projectId: key, text: "after the stop" });
 });
 
-test("space-37: a MERGE_HEAD planted before start reads as a pending merge and refuses the sync", async (t) => {
-  const dataDir = mkdtempSync(join(scratch, "merge-"));
-  mkdirSync(join(dataDir, "config"), { recursive: true });
-  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
-  git(dataDir, "init", "-q", "-b", "main");
-  prepareStorageGitFiles(dataDir);
-  git(dataDir, "add", "-A", "--", ".");
-  git(dataDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed");
-  writeFileSync(join(dataDir, ".git", "MERGE_HEAD"), `${git(dataDir, "rev-parse", "HEAD")}\n`);
-  const home = await startHome("merge", { dataDir });
+test("space-37: a MERGE_HEAD planted in a clone reads as a pending merge and refuses its sync", async (t) => {
+  const first = await startHome("merge");
+  const { key, clone } = await addFolder(first, first.projectDir);
+  await first.stop();
+  writeFileSync(join(clone, ".git", "MERGE_HEAD"), `${git(clone, "rev-parse", "HEAD")}\n`);
+  const home = await startHome("merge-again", { dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
-  assert.equal(state.repository?.mergePending, true);
-  assert.ok(state.diagnostics.some((d) => d.file === ".git/MERGE_HEAD" && /merge is pending/.test(d.reason) && !d.blocking));
-  await home.client.expectOk("space.remote.set", { url: bareRepo() });
-  await home.client.expectError("space.sync", {}, "invalid_request", /Finish or abort the merge/);
-  await home.client.expectError("space.fetch", {}, "invalid_request", /Finish or abort the merge/);
+  assert.equal(repositoryOf(state, key).branch?.mergePending, true);
+  assert.equal(repositoryOf(state, OWN_KEY).branch?.mergePending, false);
+  assert.ok(state.diagnostics.some((d) => d.file === `workspace/${key}/.git/MERGE_HEAD` && /merge is pending/.test(d.reason) && !d.blocking), JSON.stringify(state.diagnostics));
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /Finish or abort the merge/);
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /Finish or abort the merge/);
 });
 
 // ---------------------------------------------------------------------------
-// space-38: the sync loop over two homes
+// space-38: the sync loop of one spex repository over two homes
 // ---------------------------------------------------------------------------
 
-test("space-38: a join asks about Settings, both sessions land, and the other home's session lists after binding", async (t) => {
-  const bare = bareRepo();
+test("space-38: your own group's repository joins with one Settings choice, and a project's session lands on the joining home", async (t) => {
+  const bareOwn = bareRepo();
+  const bareProject = bareRepo();
   const a = await startHome("a");
   t.after(() => a.stop());
   const identity = join(scratch, "b-gitconfig");
   writeFileSync(identity, "[user]\n\tname = Home B\n\temail = b@example.test\n[commit]\n\tgpgsign = true\n");
   const b = await startHome("b", { model: "claude-test-b", env: { GIT_CONFIG_GLOBAL: identity }, project: false });
   t.after(() => b.stop());
-  const projectA = await a.client.expectOk("project.register", { path: a.projectDir });
-  const sessionA = await runTurn(a, projectA.id, "Fix the login redirect");
-  await a.client.expectOk("space.init", {});
-  await a.client.expectOk("space.remote.set", { url: bare });
-  const pushed = await a.client.settle("space.sync", {});
-  assert.equal(pushed.sync.phase, "done");
-  // B: its own configuration and session, unrelated to A's history.
-  const sessionB = await seedHistorySession(join(b.dataDir, "sessions"), join(scratch, "elsewhere"), turnRecords("B's own work", 1));
-  const initB = await b.client.expectOk("space.init", { remote: bare });
-  assert.equal(initB.repository?.remote, bare);
-  assert.equal(initB.repository?.identityFallback, false);
-  assert.equal(git(b.dataDir, "log", "-1", "--format=%cn"), "Home B");
-  const unrelated = await b.client.settle("space.sync", {});
+  // A pushes a project's spex repository with a session, and its own group's.
+  const { key } = await addFolder(a, a.projectDir);
+  const sessionA = await runTurn(a, key, "Fix the login redirect");
+  await a.client.expectOk("space.remote.set", { repository: key, url: bareProject });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await a.client.expectOk("space.remote.set", { repository: OWN_KEY, url: bareOwn });
+  assert.equal((await a.client.settle("space.sync", { repository: OWN_KEY })).sync.phase, "done");
+  // B's own group's repository, begun under B's own identity with signing
+  // turned off, holds a different configuration and an unrelated history.
+  assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%cn"), "Home B");
+  await b.client.expectOk("space.remote.set", { repository: OWN_KEY, url: bareOwn });
+  const unrelated = await b.client.settle("space.sync", { repository: OWN_KEY });
   assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
-  assert.equal(unrelated.repository?.unrelated, true);
+  assert.equal(unrelated.branch?.unrelated, true);
   assert.deepEqual(unrelated.incoming, []);
-  const choices = await b.client.settle("space.sync", { join: true });
+  const choices = await b.client.settle("space.sync", { repository: OWN_KEY, join: true });
   assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
   assert.equal(choices.conflicts.length, 1);
   const conflict = choices.conflicts[0];
@@ -313,279 +353,289 @@ test("space-38: a join asks about Settings, both sessions land, and the other ho
   assert.equal(conflict.remote.change, "new");
   assert.ok(conflict.mine.diff && conflict.remote.diff);
   assert.ok(typeof conflict.mine.at === "number" && typeof conflict.remote.at === "number");
-  assert.ok(choices.incoming.some((u) => u.kind === "session" && u.sessionId === sessionA && u.label === "Fix the login redirect"));
-  await b.client.expectError("space.sync", { choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
-  await b.client.expectError("space.sync", { choices: { [`sessions/${sessionA}`]: "mine" }, join: true }, "invalid_request", /no divergent change/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, choices: { ".gitignore": "mine" }, join: true }, "invalid_request", /no divergent change/);
   const mineBytes = readFileSync(b.configPath);
-  const joined = await b.client.settle("space.sync", { choices: { "config/playbook.config.yaml": "mine" }, join: true });
+  const joined = await b.client.settle("space.sync", { repository: OWN_KEY, choices: { "config/playbook.config.yaml": "mine" }, join: true });
   assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
-  assert.ok(joined.sync.phase === "done" && joined.sync.pushed && joined.sync.received >= 1);
+  assert.ok(joined.sync.phase === "done" && joined.sync.pushed);
   assert.deepEqual(readFileSync(b.configPath), mineBytes, "Keep mine leaves this home's file");
-  assert.equal(joined.repository?.unrelated, false);
-  assert.equal(existsSync(join(b.dataDir, "sessions", `${sessionA}.json`)), true);
-  assert.equal(existsSync(join(b.dataDir, "sessions", `${sessionA}.records.jsonl`)), true);
-  assert.equal(git(b.dataDir, "log", "-1", "--format=%P").split(" ").length, 2, "one merge commit with two parents");
-  assert.equal(git(bare, "rev-parse", "main"), git(b.dataDir, "rev-parse", "main"));
-  // space-46: the diagnostics fold to one repair per project, named by
-  // the registered name and carrying the directories a rebind resolves.
-  const repair = joined.diagnostics.find((d) => d.repair?.projectId === projectA.id);
-  assert.ok(repair, JSON.stringify(joined.diagnostics));
-  assert.equal(repair.repair?.projectName, projectA.name);
-  assert.ok(!repair.reason.includes(projectA.id), "a repair names the project, never its identifier");
-  assert.ok((repair.repair?.directories ?? []).includes(a.projectDir), JSON.stringify(repair));
-  assert.equal(repair.repair?.sessions, 1);
-  assert.ok(repair.repair?.key.length, "a repair carries its own key (space-54)");
-  assert.equal(repair.repair?.declined, undefined, "unanswered, so it counts (space-54)");
-  // space-53: the core checked the folder the repair names — here it
-  // stands, a work tree no project on B binds — and proposes that one,
-  // reporting every path it checked and searching for none.
-  const checked = repair.repair?.checked ?? [];
-  assert.ok(checked.some((c) => c.path === a.projectDir && c.here && c.repo), JSON.stringify(checked));
-  assert.equal(repair.repair?.proposal?.path, a.projectDir);
-  assert.equal(repair.repair?.proposal?.from, "recorded");
-  assert.ok(checked.every((c) => c.path === a.projectDir || repair.repair!.directories.includes(c.path)
-    || c.path.endsWith(a.projectDir.split("/").pop()!)), "only paths the repair names or the shared parent");
-  assert.ok(!(await b.client.expectOk("session.list", {})).some((s) => s.id === sessionA), "unresolved until bound");
-  // B binds A's project to a local checkout with A's path as the alias.
-  const checkout = join(scratch, "b-checkout");
-  mkdirSync(checkout);
-  git(checkout, "init", "-q");
-  // space-54: only the reader's act settles a repair, and it is this
-  // device's alone — a preference, never a tracked file.
-  const before = await b.client.expectOk("space.get", {});
-  assert.equal(before.issues, before.diagnostics.length, "an unanswered repair counts");
-  const declined = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
-  assert.equal(declined.diagnostics.find((d) => d.repair?.projectId === projectA.id)?.repair?.declined !== undefined, true);
-  assert.equal(declined.issues, before.issues - 1, "a repair not added counts no more");
-  assert.equal(git(b.dataDir, "status", "--porcelain"), "", "the record is a preference, so it never syncs");
-  const restored = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: false });
-  assert.equal(restored.issues, before.issues, "brought back, it counts again");
-  await b.client.expectError("space.repair.decline", { repair: "no-such-repair", declined: true }, "invalid_request");
-  // space-54: an answer naming no repair the core still reports is
-  // discarded, so records cannot accumulate behind the reader.
-  const declined2 = await b.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
-  assert.ok(declined2.diagnostics.some((d) => d.repair?.declined !== undefined));
-  const bound = await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
-  assert.equal(bound.id, projectA.id);
-  assert.ok(
-    !(await b.client.expectOk("space.get", {})).diagnostics.some((d) => d.repair?.projectId === projectA.id),
-    "one rebind resolves the project and every session recorded under it",
-  );
+  assert.equal(joined.branch?.unrelated, false);
+  assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%P").split(" ").length, 2, "one merge commit with two parents");
+  assert.equal(git(bareOwn, "rev-parse", "spex"), git(ownClone(b.dataDir), "rev-parse", "spex"));
+  assert.equal(git(ownClone(b.dataDir), "log", "-1", "--format=%cn"), "Home B");
+  // B adds a folder of the same name: its local spex repository joins the
+  // one A pushed, and A's session lists with its history (space-20).
+  const bFolder = sameNameFolder(a.projectDir, "b");
+  const { key: bKey, clone: bClone } = await addFolder(b, bFolder);
+  assert.equal(bKey, key);
+  const sessionB = await runTurn(b, key, "B's own work");
+  await b.client.expectOk("space.remote.set", { repository: key, url: bareProject });
+  const from = b.client.mark();
+  await joinRemote(b, key);
+  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.json`)), true);
+  assert.equal(existsSync(join(bClone, "sessions", `${sessionA}.records.jsonl`)), true);
   const listed = (await b.client.expectOk("session.list", {})).find((s) => s.id === sessionA);
   assert.equal(listed?.title, "Fix the login redirect");
-  assert.equal(listed?.projectId, projectA.id);
+  assert.equal(listed?.projectId, key);
   const history = await b.client.expectOk("history.get", { sessionId: sessionA });
   assert.ok(history.records.some((r) => r.record.type === "turn_started"));
-  await b.client.waitFor((m) => m.type === "intents.changed" && m.projectIds.includes(projectA.id));
-  // A receives B's session and B's registry stays A's; then Settings diverge again and "Take remote" replaces A's file.
-  const back = await a.client.settle("space.sync", {});
+  await b.client.waitFor((m) => b.client.messages.indexOf(m) >= from && m.type === "intents.changed" && m.projectIds.includes(key));
+  // A receives B's session.
+  const back = await a.client.settle("space.sync", { repository: key });
   assert.equal(back.sync.phase, "done", JSON.stringify(back.sync));
-  assert.equal(existsSync(join(a.dataDir, "sessions", `${sessionB}.json`)), true);
+  assert.equal(existsSync(join(clonePath(a.dataDir, key), "sessions", `${sessionB}.json`)), true);
+  assert.ok((await a.client.expectOk("session.list", {})).some((s) => s.id === sessionB && s.projectId === key));
+  // A takes B's kept configuration as a fast-forward; then Settings
+  // diverge again: "Take host's" replaces the file whole and the
+  // configuration reloads.
+  const forwarded = await a.client.settle("space.sync", { repository: OWN_KEY });
+  assert.ok(forwarded.sync.phase === "done" && forwarded.sync.received === 1 && forwarded.sync.sent === 0, JSON.stringify(forwarded.sync));
+  assert.deepEqual(readFileSync(a.configPath), mineBytes, "A now holds the configuration B kept");
   await a.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-a2" } } });
-  assert.equal((await a.client.settle("space.sync", {})).sync.phase, "done");
+  assert.equal((await a.client.settle("space.sync", { repository: OWN_KEY })).sync.phase, "done");
   await b.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-b2" } } });
-  const diverged = await b.client.settle("space.sync", {});
+  const diverged = await b.client.settle("space.sync", { repository: OWN_KEY });
   assert.equal(diverged.sync.phase, "choices");
   assert.deepEqual(diverged.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.equal(diverged.conflicts[0].mine.change, "updated");
-  const mine = await b.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
+  const mine = await b.client.expectOk("space.diff", { repository: OWN_KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
   assert.match(mine.patch, /\+.*claude-test-b2/);
-  const remote = await b.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
+  const remote = await b.client.expectOk("space.diff", { repository: OWN_KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
   assert.match(remote.patch, /\+.*claude-test-a2/);
-  const taken = await b.client.settle("space.sync", { choices: { "config/playbook.config.yaml": "remote" } });
+  const taken = await b.client.settle("space.sync", { repository: OWN_KEY, choices: { "config/playbook.config.yaml": "remote" } });
   assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
-  assert.match(readFileSync(b.configPath, "utf8"), /claude-test-a2/, "Take remote replaces the file");
+  assert.match(readFileSync(b.configPath, "utf8"), /claude-test-a2/, "Take host's replaces the file");
   const configState = await b.client.expectOk("config.get", {});
   assert.ok(configState.status === "valid" && configState.summary.captain.model === "claude-test-a2", "the configuration reloaded");
 });
 
-test("space-38: the same session changed on both homes is one choice; remote replaces the bundle and clears local marks; delete versus modify", async (t) => {
+test("space-38: an intent added on each home lists on the other with no choice asked, the older first; one edited on both is one choice taken whole", async (t) => {
+  const bare = bareRepo();
+  const a = await startHome("intents-a");
+  t.after(() => a.stop());
+  const b = await startHome("intents-b", { project: false });
+  t.after(() => b.stop());
+  const { key, clone: aClone } = await addFolder(a, a.projectDir);
+  await a.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const { clone: bClone } = await addFolder(b, sameNameFolder(a.projectDir, "intents-b"));
+  await b.client.expectOk("space.remote.set", { repository: key, url: bare });
+  await joinRemote(b, key);
+  const older = await a.client.expectOk("intent.queue", { projectId: key, text: "Ship the parser" });
+  await sleep(5);
+  const newer = await b.client.expectOk("intent.queue", { projectId: key, text: "Document the parser" });
+  assert.ok(older.createdAt < newer.createdAt);
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const merged = await b.client.settle("space.sync", { repository: key });
+  assert.ok(merged.sync.phase === "done" && merged.sync.received === 1 && merged.sync.sent === 1, JSON.stringify(merged.sync));
+  assert.deepEqual(merged.conflicts, [], "adding an intent never conflicts");
+  const back = await a.client.settle("space.sync", { repository: key });
+  assert.ok(back.sync.phase === "done" && back.sync.received === 1, JSON.stringify(back.sync));
+  for (const home of [a, b]) {
+    const queue = (await home.client.expectOk("ledger.get", {})).intents.filter((row) => row.intent.projectId === key && row.state === "queued");
+    assert.deepEqual(queue.map((row) => row.intent.id), [older.id, newer.id], "the older reads first");
+    assert.ok(queue[0].next && !queue[1].next, "the oldest queued intent is next");
+  }
+  // The same intent edited on both homes is one choice, replaced whole.
+  await a.client.expectOk("intent.edit", { intentId: newer.id, text: "Document the parser for users" });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await b.client.expectOk("intent.edit", { intentId: newer.id, text: "Document the parser in the README" });
+  const choices = await b.client.settle("space.sync", { repository: key });
+  assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
+  assert.deepEqual(choices.conflicts.map((c) => c.unit.unit), [`intents/${newer.id}`]);
+  const row = choices.conflicts[0];
+  assert.equal(row.unit.kind, "intent");
+  assert.equal(row.unit.intentId, newer.id);
+  assert.equal(row.unit.label, "Document the parser in the README");
+  assert.equal(row.mine.change, "updated");
+  assert.equal(row.remote.change, "updated");
+  assert.ok(!row.mine.diff && !row.remote.diff);
+  await b.client.expectError("space.diff", { repository: key, unit: `intents/${newer.id}`, path: `intents/${newer.id}.json`, side: "mine" }, "invalid_request", /no text diff/);
+  const taken = await b.client.settle("space.sync", { repository: key, choices: { [`intents/${newer.id}`]: "remote" } });
+  assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
+  assert.deepEqual(readFileSync(join(bClone, "intents", `${newer.id}.json`)), readFileSync(join(aClone, "intents", `${newer.id}.json`)));
+  const ledger = (await b.client.expectOk("ledger.get", {})).intents.find((entry) => entry.intent.id === newer.id);
+  assert.equal(ledger?.intent.text, "Document the parser for users");
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  assert.equal(git(bare, "rev-parse", "spex"), git(aClone, "rev-parse", "spex"));
+});
+
+test("space-38: the same session changed on both homes is one choice; the host's replaces the bundle and clears local marks; delete versus modify", async (t) => {
   const bare = bareRepo();
   const a = await startHome("a2");
   t.after(() => a.stop());
   const b = await startHome("b2", { project: false });
   t.after(() => b.stop());
-  const projectA = await a.client.expectOk("project.register", { path: a.projectDir });
-  const shared = await runTurn(a, projectA.id, "Shared session");
-  const doomed = await runTurn(a, projectA.id, "Doomed session");
-  await a.client.expectOk("space.init", {});
-  await a.client.expectOk("space.remote.set", { url: bare });
-  assert.equal((await a.client.settle("space.sync", {})).sync.phase, "done");
-  await b.client.expectOk("space.init", { remote: bare });
-  await joinRemote(b);
-  const checkout = join(scratch, "b2-checkout");
-  mkdirSync(checkout);
-  git(checkout, "init", "-q");
-  await b.client.expectOk("project.rebind", { projectId: projectA.id, path: checkout, aliases: [a.projectDir] });
+  const { key, clone: aClone } = await addFolder(a, a.projectDir);
+  const shared = await runTurn(a, key, "Shared session");
+  const doomed = await runTurn(a, key, "Doomed session");
+  await a.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const bFolder = sameNameFolder(a.projectDir, "b2");
+  const { clone: bClone } = await addFolder(b, bFolder);
+  await b.client.expectOk("space.remote.set", { repository: key, url: bare });
+  await joinRemote(b, key);
   assert.ok((await b.client.expectOk("session.list", {})).some((s) => s.id === shared));
   // Both change the shared session: A runs a turn; B appends its own and marks it viewed with hints.
-  await runTurn(a, projectA.id, "A's second turn", shared);
-  assert.equal((await a.client.settle("space.sync", {})).sync.phase, "done");
-  await seedHistorySession(join(b.dataDir, "sessions"), a.projectDir, turnRecords("B's second turn", 2), shared);
-  await b.client.expectOk("project.register", { path: checkout });
+  await runTurn(a, key, "A's second turn", shared);
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await appendHistorySession(join(bClone, "sessions"), shared, turnRecords("B's second turn", 2));
+  await b.client.expectOk("project.register", { path: bFolder });
   await b.client.waitFor((m) => m.type === "session.state" && m.session.id === shared && (m.session.turns ?? 0) === 2, 20_000);
-  writeFileSync(join(b.dataDir, "sessions", `${shared}.hints.json`), "{}");
+  writeFileSync(join(bClone, "sessions", `${shared}.hints.json`), "{}");
   await b.client.expectOk("session.viewed", { sessionId: shared, turnId: 1 });
-  const listedBefore = await b.client.expectOk("space.get", {});
+  const listedBefore = await b.client.repository(key);
   assert.ok(listedBefore.local.some((u) => u.sessionId === shared && u.change === "updated" && u.detail?.includes("2 turns")), JSON.stringify(listedBefore.local));
-  const choices = await b.client.settle("space.sync", {});
+  const choices = await b.client.settle("space.sync", { repository: key });
   assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
   assert.deepEqual(choices.conflicts.map((c) => c.unit.unit), [`sessions/${shared}`]);
   const row = choices.conflicts[0];
   assert.equal(row.unit.label, "Shared session");
-  assert.equal(row.unit.project?.id, projectA.id);
+  assert.equal(row.unit.sessionId, shared);
   assert.equal(row.mine.detail, "2 turns");
   assert.equal(row.remote.detail, "2 turns");
   assert.ok(typeof row.mine.at === "number" && typeof row.remote.at === "number");
-  await b.client.expectError("space.diff", { unit: `sessions/${shared}`, path: `sessions/${shared}.json`, side: "mine" }, "invalid_request", /no text diff/);
+  await b.client.expectError("space.diff", { repository: key, unit: `sessions/${shared}`, path: `sessions/${shared}.json`, side: "mine" }, "invalid_request", /no text diff/);
   const from = b.client.mark();
-  const done = await b.client.settle("space.sync", { choices: { [`sessions/${shared}`]: "remote" } });
+  const done = await b.client.settle("space.sync", { repository: key, choices: { [`sessions/${shared}`]: "remote" } });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
-  assert.deepEqual(readFileSync(join(b.dataDir, "sessions", `${shared}.json`)), readFileSync(join(a.dataDir, "sessions", `${shared}.json`)));
-  assert.deepEqual(readFileSync(join(b.dataDir, "sessions", `${shared}.records.jsonl`)), readFileSync(join(a.dataDir, "sessions", `${shared}.records.jsonl`)));
-  assert.equal(existsSync(join(b.dataDir, "sessions", `${shared}.hints.json`)), false, "hints cleared");
-  const prefs = JSON.parse(readFileSync(join(b.dataDir, "prefs.json"), "utf8")) as { prefs: Record<string, unknown> };
-  assert.equal(prefs.prefs[`viewed:${shared}`], undefined, "viewed marker cleared");
+  assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.json`)), readFileSync(join(aClone, "sessions", `${shared}.json`)));
+  assert.deepEqual(readFileSync(join(bClone, "sessions", `${shared}.records.jsonl`)), readFileSync(join(aClone, "sessions", `${shared}.records.jsonl`)));
+  assert.equal(existsSync(join(bClone, "sessions", `${shared}.hints.json`)), false, "hints cleared");
+  assert.equal(prefsOf(b.dataDir)[`viewed:${shared}`], undefined, "viewed marker cleared");
   const messages = b.client.messages.slice(from);
   const replaced = messages.findIndex((m) => m.type === "session.history-replaced" && m.sessionId === shared);
-  const summary = messages.findIndex((m) => m.type === "session.state" && m.session.id === shared);
+  const summary = messages.findIndex((m, i) => i > replaced && m.type === "session.state" && m.session.id === shared);
   assert.ok(replaced >= 0 && summary > replaced, "history-replaced before the summary");
   const served = await b.client.expectOk("history.get", { sessionId: shared });
   assert.ok(served.records.some((r) => r.record.type === "turn_started" && (r.record as { turn?: { prompt?: string } }).turn?.prompt === "A's second turn"));
-  assert.ok(!(await b.client.expectOk("session.list", {})).some((s) => s.title === "B's second turn"));
-  assert.equal(existsSync(join(b.dataDir, ".git", "MERGE_HEAD")), false);
+  assert.ok(!served.records.some((r) => r.record.type === "turn_started" && (r.record as { turn?: { prompt?: string } }).turn?.prompt === "B's second turn"));
+  assert.equal(existsSync(join(bClone, ".git", "MERGE_HEAD")), false);
   // Delete versus modify: B deletes the doomed session, A modifies it; A takes the deleting side.
   await b.client.expectOk("session.delete", { sessionId: doomed });
-  assert.equal((await b.client.settle("space.sync", {})).sync.phase, "done");
-  await runTurn(a, projectA.id, "Still working on it", doomed);
-  const conflict = await a.client.settle("space.sync", {});
+  assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await runTurn(a, key, "Still working on it", doomed);
+  const conflict = await a.client.settle("space.sync", { repository: key });
   assert.equal(conflict.sync.phase, "choices", JSON.stringify(conflict.sync));
   const deleting = conflict.conflicts.find((c) => c.unit.unit === `sessions/${doomed}`);
   assert.equal(deleting?.remote.change, "deleted");
   assert.equal(deleting?.remote.detail, "deleted");
   assert.equal(deleting?.mine.change, "updated");
-  const gone = await a.client.settle("space.sync", { choices: { [`sessions/${doomed}`]: "remote" } });
+  const gone = await a.client.settle("space.sync", { repository: key, choices: { [`sessions/${doomed}`]: "remote" } });
   assert.equal(gone.sync.phase, "done", JSON.stringify(gone.sync));
-  assert.equal(existsSync(join(a.dataDir, "sessions", `${doomed}.json`)), false);
-  assert.equal(existsSync(join(a.dataDir, "sessions", `${doomed}.records.jsonl`)), false);
+  assert.equal(existsSync(join(aClone, "sessions", `${doomed}.json`)), false);
+  assert.equal(existsSync(join(aClone, "sessions", `${doomed}.records.jsonl`)), false);
   assert.ok(!(await a.client.expectOk("session.list", {})).some((s) => s.id === doomed));
   assert.ok(a.client.messages.some((m) => m.type === "session.removed" && m.sessionId === doomed));
 });
 
-
 test("space-38: a marker with a half-written selection is repaired at startup into the recorded commit", async (t) => {
-  const dataDir = mkdtempSync(join(scratch, "repair-"));
-  mkdirSync(join(dataDir, "config"), { recursive: true });
-  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
-  mkdirSync(join(dataDir, "intents"));
-  git(dataDir, "init", "-q", "-b", "main");
-  prepareStorageGitFiles(dataDir);
-  const cwd = join(scratch, "repair-project");
-  mkdirSync(cwd, { recursive: true });
-  const sessionId = await seedHistorySession(join(dataDir, "sessions"), cwd, turnRecords("Base turn", 1));
-  git(dataDir, "add", "-A", "--", ".");
-  git(dataDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base");
-  const base = git(dataDir, "rev-parse", "HEAD");
+  const first = await startHome("repair");
+  const { key, clone } = await addFolder(first, first.projectDir);
+  await first.stop();
+  const dataDir = first.dataDir;
+  const cwd = first.projectDir;
+  const sessionId = await seedHistorySession(join(clone, "sessions"), cwd, turnRecords("Base turn", 1));
+  git(clone, "add", "-A", "--", ".");
+  git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base");
+  const base = git(clone, "rev-parse", "HEAD");
   const remote = bareRepo();
-  git(dataDir, "remote", "add", "origin", remote);
-  git(dataDir, "push", "-q", "-u", "origin", "main");
+  git(clone, "remote", "add", "origin", remote);
+  git(clone, "push", "-q", "-u", "origin", "spex");
   const theirsDir = peerClone(remote);
-  const shared = createSessionStore({ sessionsDir: join(theirsDir, "sessions") });
-  await shared.prepare();
+  await createSessionStore({ sessionsDir: join(theirsDir, "sessions") }).prepare();
   await seedHistorySession(join(theirsDir, "sessions"), cwd, turnRecords("Their second turn", 2), sessionId);
   git(theirsDir, "add", "-A", "--", ".");
   git(theirsDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "theirs");
-  git(theirsDir, "push", "-q", "origin", "HEAD:main");
-  git(dataDir, "fetch", "-q", "origin");
-  const theirs = git(dataDir, "rev-parse", "refs/remotes/origin/main");
-  writeFileSync(join(dataDir, "intents", `${randomUUID()}.jsonl`), "");
-  writeFileSync(join(dataDir, "notes.txt"), "ours\n");
-  git(dataDir, "add", "-A", "--", ".");
-  git(dataDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "ours");
-  const ours = git(dataDir, "rev-parse", "HEAD");
+  git(theirsDir, "push", "-q", "origin", "HEAD:spex");
+  git(clone, "fetch", "-q", "origin");
+  const theirs = git(clone, "rev-parse", "refs/remotes/origin/spex");
+  const intentId = randomUUID();
+  mkdirSync(join(clone, "intents"), { recursive: true });
+  writeFileSync(join(clone, "intents", `${intentId}.json`), JSON.stringify({ format: 1, id: intentId, text: "Ours", createdAt: 1 }));
+  writeFileSync(join(clone, "notes.txt"), "ours\n");
+  git(clone, "add", "-A", "--", ".");
+  git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "ours");
+  const ours = git(clone, "rev-parse", "HEAD");
   // The interrupted apply: the replay landed, the manifest did not, the marker stands.
-  writeFileSync(join(dataDir, "sessions", `${sessionId}.records.jsonl`), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
-  mkdirSync(join(dataDir, "local"), { recursive: true });
-  writeFileSync(join(dataDir, "local", "space-apply.json"), JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
-  const home = await startHome("repair", { dataDir });
+  const marker = join(clone, ".spex-apply.json");
+  writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
+  writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
+  const home = await startHome("repair-start", { dataDir, project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
-  assert.ok(!state.diagnostics.some((d) => d.file === "local/space-apply.json"), JSON.stringify(state.diagnostics));
-  assert.equal(existsSync(join(dataDir, "local", "space-apply.json")), false);
-  const head = git(dataDir, "rev-parse", "HEAD");
+  assert.ok(!state.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(state.diagnostics));
+  assert.equal(existsSync(marker), false);
+  const head = git(clone, "rev-parse", "HEAD");
   assert.notEqual(head, ours);
-  assert.deepEqual(git(dataDir, "log", "-1", "--format=%P").split(" "), [ours, theirs]);
-  assert.deepEqual(readFileSync(join(dataDir, "sessions", `${sessionId}.json`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.json`)));
-  assert.equal(git(dataDir, "show", "HEAD:notes.txt"), "ours");
-  assert.equal(git(dataDir, "status", "--porcelain"), "");
-  assert.equal(state.repository?.branch, "main");
-  const listed = (await home.client.expectOk("session.list", {})).length;
-  assert.equal(listed, 0, "the session's project is unbound on this home");
-  assert.ok(state.diagnostics.some((d) => d.file.includes(sessionId)));
+  assert.deepEqual(git(clone, "log", "-1", "--format=%P").split(" "), [ours, theirs]);
+  assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.json`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.json`)));
+  assert.equal(git(clone, "show", "HEAD:notes.txt"), "ours");
+  assert.equal(git(clone, "status", "--porcelain"), "");
+  assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
+  const listed = (await home.client.expectOk("session.list", {})).find((s) => s.id === sessionId);
+  assert.equal(listed?.turns, 2, "the clone's project lists the repaired session");
+  assert.equal(listed?.projectId, key);
   // A marker left standing after its merge commit landed is cleared
-  // with nothing re-applied: main stays on the landed commit.
+  // with nothing re-applied: spex stays on the landed commit.
   await home.stop();
-  writeFileSync(join(dataDir, "local", "space-apply.json"), JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
-  const again = await startHome("repair-again", { dataDir });
+  writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
+  const again = await startHome("repair-again", { dataDir, project: false });
   t.after(() => again.stop());
   const cleared = await again.client.expectOk("space.get", {});
-  assert.ok(!cleared.diagnostics.some((d) => d.file === "local/space-apply.json"), JSON.stringify(cleared.diagnostics));
-  assert.equal(existsSync(join(dataDir, "local", "space-apply.json")), false);
-  assert.equal(git(dataDir, "rev-parse", "HEAD"), head);
+  assert.ok(!cleared.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(cleared.diagnostics));
+  assert.equal(existsSync(marker), false);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
 });
 
-test("space-38: a marker left after a landed fast-forward is cleared at startup with main on the remote's commit", async (t) => {
-  const dataDir = mkdtempSync(join(scratch, "repair-ff-"));
-  mkdirSync(join(dataDir, "config"), { recursive: true });
-  writeFileSync(join(dataDir, "config", "playbook.config.yaml"), config("claude-test"));
-  git(dataDir, "init", "-q", "-b", "main");
-  prepareStorageGitFiles(dataDir);
-  git(dataDir, "add", "-A", "--", ".");
-  git(dataDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base");
-  const base = git(dataDir, "rev-parse", "HEAD");
+test("space-38: a marker left after a landed fast-forward is cleared at startup with spex on the host's commit", async (t) => {
+  const first = await startHome("repair-ff");
+  const { clone } = await addFolder(first, first.projectDir);
+  await first.stop();
+  const base = git(clone, "rev-parse", "HEAD");
   const remote = bareRepo();
-  git(dataDir, "remote", "add", "origin", remote);
-  git(dataDir, "push", "-q", "-u", "origin", "main");
+  git(clone, "remote", "add", "origin", remote);
+  git(clone, "push", "-q", "-u", "origin", "spex");
   const peer = peerClone(remote);
   const theirs = await peerPush(peer, (dir) => writeFileSync(join(dir, "notes.txt"), "theirs\n"));
-  // The fast-forward landed — main moved to the remote's commit and the
+  // The fast-forward landed — spex moved to the host's commit and the
   // tree followed — but the marker was never removed.
-  git(dataDir, "fetch", "-q", "origin");
-  git(dataDir, "reset", "-q", "--hard", "refs/remotes/origin/main");
-  assert.equal(git(dataDir, "rev-parse", "HEAD"), theirs);
-  mkdirSync(join(dataDir, "local"), { recursive: true });
-  writeFileSync(join(dataDir, "local", "space-apply.json"), JSON.stringify({ v: 1, ours: base, theirs, base, choices: {}, at: Date.now() }));
-  const home = await startHome("repair-ff", { dataDir });
+  git(clone, "fetch", "-q", "origin");
+  git(clone, "reset", "-q", "--hard", "refs/remotes/origin/spex");
+  assert.equal(git(clone, "rev-parse", "HEAD"), theirs);
+  const marker = join(clone, ".spex-apply.json");
+  writeFileSync(marker, JSON.stringify({ v: 1, ours: base, theirs, base, choices: {}, at: Date.now() }));
+  const home = await startHome("repair-ff-start", { dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
-  assert.ok(!state.diagnostics.some((d) => d.file === "local/space-apply.json"), JSON.stringify(state.diagnostics));
-  assert.equal(existsSync(join(dataDir, "local", "space-apply.json")), false);
-  assert.equal(git(dataDir, "rev-parse", "HEAD"), theirs);
-  assert.equal(git(dataDir, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
-  assert.equal(git(dataDir, "status", "--porcelain"), "");
-  assert.equal(readFileSync(join(dataDir, "notes.txt"), "utf8"), "theirs\n");
+  assert.ok(!state.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(state.diagnostics));
+  assert.equal(existsSync(marker), false);
+  assert.equal(git(clone, "rev-parse", "HEAD"), theirs);
+  assert.equal(git(clone, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
+  assert.equal(git(clone, "status", "--porcelain"), "");
+  assert.equal(readFileSync(join(clone, "notes.txt"), "utf8"), "theirs\n");
 });
 
 test("space-38: a missing repository, an unreachable host and a sleeping transport stop with their causes", async (t) => {
   const { script } = sleepingSsh();
   const home = await startHome("transport", { env: { GIT_SSH_COMMAND: script }, extra: { spaceTransportTimeoutMs: 500 } });
   t.after(() => home.stop());
-  await home.client.expectOk("space.init", {});
+  const { key } = await addFolder(home, home.projectDir);
   const expectStop = async (url: string, cause: string, message: RegExp, retry: boolean): Promise<void> => {
-    await home.client.expectOk("space.remote.set", { url });
-    const stopped = await home.client.settle("space.fetch", {});
+    await home.client.expectOk("space.remote.set", { repository: key, url });
+    const stopped = await home.client.settle("space.fetch", { repository: key });
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.op === "check" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
     assert.equal(stopped.sync.phase === "stopped" ? stopped.sync.cause : "", cause, JSON.stringify(stopped.sync));
     assert.match(stopped.sync.phase === "stopped" ? stopped.sync.message : "", message);
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.guidance.length > 0);
     assert.equal(stopped.sync.phase === "stopped" && stopped.sync.retry, retry);
   };
-  // space-52: the host answers alike for absent and for unreadable, so
-  // the report names both causes, claims neither, and keeps Retry.
-  await expectStop(join(scratch, "nonexistent", "path"), "not-found", /No repository this machine can see at/, true);
-  const localStop = await home.client.expectOk("space.get", {});
-  // space-50: the act that gives access is the remote form's, named in
-  // the guidance itself — a local path has a folder to read, no account.
+  // The host answers alike for absent and for unreadable, so the report
+  // names both causes, claims neither, and keeps Retry.
+  await expectStop(join(scratch, "nonexistent", "path"), "gone", /No repository this machine can see at/, true);
+  const localStop = await home.client.repository(key);
+  // A local path has a folder to read, no account (space-50).
   assert.ok(
     localStop.sync.phase === "stopped" && /Check the path,.*make sure this user can read the folder/.test(localStop.sync.guidance),
     JSON.stringify(localStop.sync),
@@ -596,23 +646,23 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   // The unreachable case runs the machine's ssh with BatchMode, as the core sets it where none is given.
   const plain = await startHome("transport-plain");
   t.after(() => plain.stop());
-  await plain.client.expectOk("space.init", {});
-  await plain.client.expectOk("space.remote.set", { url: "ssh://127.0.0.1:1/x" });
-  const refusedHost = await plain.client.settle("space.fetch", {});
+  const { key: plainKey } = await addFolder(plain, plain.projectDir);
+  await plain.client.expectOk("space.remote.set", { repository: plainKey, url: "ssh://127.0.0.1:1/x" });
+  const refusedHost = await plain.client.settle("space.fetch", { repository: plainKey });
   assert.ok(refusedHost.sync.phase === "stopped" && refusedHost.sync.cause === "unreachable", JSON.stringify(refusedHost.sync));
   assert.match(refusedHost.sync.phase === "stopped" ? refusedHost.sync.message : "", /Could not reach 127\.0\.0\.1/);
-  const synced = await plain.client.settle("space.sync", {});
+  const synced = await plain.client.settle("space.sync", { repository: plainKey });
   assert.ok(synced.sync.phase === "stopped" && synced.sync.op === "sync" && synced.sync.step === "check" && synced.sync.cause === "unreachable", JSON.stringify(synced.sync));
-  // space-5: nothing stands before the host on http(s), with or without
-  // a colon, so a bare token never reaches .git/config or the screen.
+  // Nothing stands before the host on http(s), with or without a colon,
+  // so a bare token never reaches .git/config or the screen (space-5).
   for (const url of ["https://user:secret@example.com/x.git", "https://ghp_0123456789abcdef@example.com/x.git"]) {
-    await plain.client.expectError("space.remote.set", { url }, "invalid_request", /stores no credential/);
+    await plain.client.expectError("space.remote.set", { repository: plainKey, url }, "invalid_request", /stores no credential/);
   }
   // An SSH form's user is the transport's own, not a credential; a
   // network failure turns on no identity, so its guidance names no act
   // of access (space-50).
-  await plain.client.expectOk("space.remote.set", { url: "ssh://git@127.0.0.1:1/x" });
-  const sshStop = await plain.client.settle("space.fetch", {});
+  await plain.client.expectOk("space.remote.set", { repository: plainKey, url: "ssh://git@127.0.0.1:1/x" });
+  const sshStop = await plain.client.settle("space.fetch", { repository: plainKey });
   assert.ok(sshStop.sync.phase === "stopped" && sshStop.sync.cause === "unreachable", JSON.stringify(sshStop.sync));
   assert.ok(!/SSH key|gh auth|sign this machine in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
 });
@@ -621,103 +671,124 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
 // space-39: listings and the explorer
 // ---------------------------------------------------------------------------
 
-test("space-39: local changes of every kind list in order, incoming units after a peer pushes, diffs, and the explorer", async (t) => {
+const PROJECT_CONFIG = "playbooks:\n  code:\n    roles:\n      coder: dev.coder\n";
+const PEER_CONFIG = "playbooks:\n  review:\n    roles:\n      reviewer: dev.reviewer\n";
+
+test("space-39: local changes of every unit kind list in order, incoming units after a peer pushes, diffs, and the explorer", async (t) => {
   const bare = bareRepo();
   const home = await startHome("explorer");
   t.after(() => home.stop());
-  const project = await home.client.expectOk("project.register", { path: home.projectDir });
-  await home.client.expectOk("space.init", {});
-  await home.client.expectOk("space.remote.set", { url: bare });
-  assert.equal((await home.client.settle("space.sync", {})).sync.phase, "done");
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const name = basename(home.projectDir);
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
   // A directory of a tracked kind holding nothing yet — intents/ before the
   // first queued intent — is not yet shared, never "Stays here" (space-23).
-  mkdirSync(join(home.dataDir, "intents"), { recursive: true });
-  const vacantQueues = (await home.client.expectOk("space.tree", {})).entries.find((e) => e.path === "intents");
-  assert.equal(vacantQueues?.kind, "dir");
-  assert.equal(vacantQueues?.family, "project queues");
-  assert.equal(vacantQueues?.count, 0);
-  assert.equal(vacantQueues?.sync, "pending");
-  const name = basename(home.projectDir);
-  // Local changes of every kind.
-  const sessionId = await runTurn(home, project.id, "Fix the login redirect");
-  for (const text of ["one", "two", "three"]) await home.client.expectOk("intent.queue", { projectId: project.id, text });
-  const secondDir = join(scratch, "explorer-second");
-  mkdirSync(secondDir);
-  git(secondDir, "init", "-q");
-  await home.client.expectOk("project.register", { path: secondDir });
-  await home.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-edited" } } });
-  mkdirSync(join(home.dataDir, "playbooks", "demo"), { recursive: true });
-  writeFileSync(join(home.dataDir, "playbooks", "demo", "demo.md"), "# Demo\n");
-  writeFileSync(join(home.dataDir, ".gitignore"), `${readFileSync(join(home.dataDir, ".gitignore"), "utf8")}# authored\n/scratch/\n`);
-  const local = (await home.client.expectOk("space.get", {})).local;
-  assert.deepEqual(local.map((u) => u.kind), ["session", "queue", "projects", "settings", "playbook", "rules"], JSON.stringify(local));
-  const [session, queue, projects, settings, playbook, rules] = local;
+  mkdirSync(join(clone, "intents"), { recursive: true });
+  const vacantIntents = (await home.client.expectOk("space.tree", { repository: key })).entries.find((e) => e.path === "intents");
+  assert.equal(vacantIntents?.kind, "dir");
+  assert.equal(vacantIntents?.family, "intents");
+  assert.equal(vacantIntents?.count, 0);
+  assert.equal(vacantIntents?.sync, "pending");
+  assert.deepEqual(repositoryOf(await home.client.expectOk("space.get", {}), key).local, []);
+  // Local changes of every unit kind.
+  const sessionId = await runTurn(home, key, "Fix the login redirect");
+  const intent = await home.client.expectOk("intent.queue", { projectId: key, text: "Ship the parser\nwith its tests" });
+  mkdirSync(join(clone, "authoring"), { recursive: true });
+  writeFileSync(join(clone, "authoring", "triage.json"), JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 2, package: "spex-packages/triage", queued: [{ text: "Draft a triage workflow" }], failures: 0 }));
+  writeFileSync(join(clone, "authoring", "triage.records.jsonl"), "");
+  writeFileSync(join(clone, "spex.yaml"), "format: 1\nrequests:\n  - builtin\n");
+  writeFileSync(join(clone, "spex.lock"), "format: 1\n");
+  mkdirSync(join(clone, "config"), { recursive: true });
+  writeFileSync(join(clone, "config", "playbook.config.yaml"), PROJECT_CONFIG);
+  writeFileSync(join(clone, "project.json"), JSON.stringify({ format: 1, name, remote: "git@example.com:acme/app.git" }));
+  writeFileSync(join(clone, ".gitignore"), `${readFileSync(join(clone, ".gitignore"), "utf8")}# authored\n/scratch/\n`);
+  writeFileSync(join(clone, "notes.txt"), "stray\n");
+  const listed = await home.client.repository(key);
+  assert.equal(listed.code, "git@example.com:acme/app.git", "the row reads where the code lives");
+  const local = listed.local;
+  assert.deepEqual(local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other"], JSON.stringify(local));
+  const [session, queued, authoring, environment, settings, code, rules, other] = local;
   assert.equal(session.label, "Fix the login redirect");
   assert.equal(session.change, "new");
   assert.equal(session.sessionId, sessionId);
-  assert.equal(session.project?.name, name);
   assert.match(session.detail ?? "", /1 turn/);
   assert.equal(session.diff, false);
-  assert.equal(queue.label, `3 changes in ${name}'s queue`);
-  assert.equal(queue.change, "new");
-  assert.equal(projects.label, 'Registered "explorer-second"');
+  assert.equal(queued.label, "Ship the parser", "an intent by its text's first line");
+  assert.equal(queued.intentId, intent.id);
+  assert.equal(queued.change, "new");
+  assert.equal(queued.diff, false);
+  assert.equal(authoring.label, "Draft a triage workflow");
+  assert.equal(authoring.unit, "authoring/triage");
+  assert.equal(authoring.diff, false);
+  assert.equal(environment.label, "Spec packages changed");
+  assert.equal(environment.unit, "environment");
+  assert.equal(environment.detail, "spex.lock, spex.yaml");
+  assert.equal(environment.diff, true);
   assert.equal(settings.label, "Settings changed");
-  assert.equal(settings.change, "updated");
+  assert.equal(settings.change, "new");
   assert.equal(settings.diff, true);
-  assert.equal(playbook.label, "Playbook demo");
-  assert.equal(playbook.detail, "demo.md");
+  assert.equal(code.label, "Code remote changed");
+  assert.equal(code.change, "updated");
   assert.equal(rules.label, "Sync rules updated");
   assert.equal(rules.unit, ".gitignore");
-  // A peer pushes: a differing configuration, a new session and a queue.
+  assert.equal(other.label, "notes.txt");
+  assert.equal(other.change, "new");
+  // A peer pushes: a differing configuration, a new session and an intent.
   const peer = peerClone(bare);
   const peerSession = randomUUID();
-  const second = (await home.client.expectOk("project.list", {})).find((p) => p.path === secondDir);
-  assert.ok(second);
+  const peerIntent = randomUUID();
   await peerPush(peer, async (dir) => {
-    writeFileSync(join(dir, "config", "playbook.config.yaml"), config("claude-test-peer"));
+    mkdirSync(join(dir, "config"), { recursive: true });
+    writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_CONFIG);
+    mkdirSync(join(dir, "sessions"), { recursive: true, mode: 0o700 });
     await seedHistorySession(join(dir, "sessions"), home.projectDir, turnRecords("Peer's session", 1), peerSession);
     mkdirSync(join(dir, "intents"), { recursive: true });
-    writeFileSync(join(dir, "intents", `${second.id}.jsonl`), ["a", "b"].map((text) => JSON.stringify({ v: 1, act: "queue", intent: { id: randomUUID(), projectId: second.id, text, rank: text, createdAt: 1 } })).join("\n") + "\n");
+    writeFileSync(join(dir, "intents", `${peerIntent}.json`), JSON.stringify({ format: 1, id: peerIntent, text: "Review the parser", createdAt: 1 }));
   });
-  const checked = await home.client.settle("space.fetch", {});
+  const checked = await home.client.settle("space.fetch", { repository: key });
   assert.equal(checked.sync.phase, "idle", JSON.stringify(checked.sync));
-  assert.equal(checked.repository?.ahead, 0);
-  assert.equal(checked.repository?.behind, 1);
-  assert.equal(checked.repository?.remoteEmpty, false);
-  assert.deepEqual(checked.incoming.map((u) => u.kind), ["session", "queue"], JSON.stringify(checked.incoming));
+  assert.equal(checked.branch?.ahead, 0);
+  assert.equal(checked.branch?.behind, 1);
+  assert.equal(checked.branch?.hostEmpty, false);
+  assert.deepEqual(checked.incoming.map((u) => u.kind), ["session", "intent"], JSON.stringify(checked.incoming));
   assert.equal(checked.incoming[0].label, "Peer's session");
   assert.equal(checked.incoming[0].change, "new");
-  assert.equal(checked.incoming[0].project?.name, name);
-  assert.equal(checked.incoming[1].label, "2 changes in explorer-second's queue");
+  assert.equal(checked.incoming[1].label, "Review the parser");
+  assert.equal(checked.incoming[1].intentId, peerIntent);
   assert.deepEqual(checked.conflicts.map((c) => c.unit.unit), ["config/playbook.config.yaml"]);
   assert.ok(checked.conflicts[0].mine.diff && checked.conflicts[0].remote.diff);
-  assert.deepEqual(checked.local.map((u) => u.kind), ["session", "queue", "projects", "playbook", "rules"]);
-  const mine = await home.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
-  assert.match(mine.patch, /^\+.*claude-test-edited/m);
+  assert.deepEqual(checked.local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "code", "rules", "other"]);
+  const mine = await home.client.expectOk("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" });
+  assert.match(mine.patch, /^\+.*coder: dev\.coder/m);
   assert.equal(mine.truncated, false);
-  const remote = await home.client.expectOk("space.diff", { unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
-  assert.match(remote.patch, /^\+.*claude-test-peer/m);
-  const fresh = await home.client.expectOk("space.diff", { unit: "playbooks/demo", path: "playbooks/demo/demo.md", side: "mine" });
-  assert.match(fresh.patch, /^\+# Demo$/m, "a new file diffs against the ancestor");
-  await home.client.expectError("space.diff", { unit: `sessions/${sessionId}`, path: `sessions/${sessionId}.json`, side: "mine" }, "invalid_request", /no text diff/);
-  await home.client.expectError("space.diff", { unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /unknown path/);
+  const remote = await home.client.expectOk("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote" });
+  assert.match(remote.patch, /^\+.*reviewer: dev\.reviewer/m);
+  const requests = await home.client.expectOk("space.diff", { repository: key, unit: "environment", path: "spex.yaml", side: "mine" });
+  assert.match(requests.patch, /^\+requests:$/m, "a new file diffs against the ancestor");
+  const codeDiff = await home.client.expectOk("space.diff", { repository: key, unit: "project.json", path: "project.json", side: "mine" });
+  assert.match(codeDiff.patch, /^\+.*acme\/app\.git/m);
+  await home.client.expectError("space.diff", { repository: key, unit: `sessions/${sessionId}`, path: `sessions/${sessionId}.json`, side: "mine" }, "invalid_request", /no text diff/);
+  await home.client.expectError("space.diff", { repository: key, unit: `intents/${intent.id}`, path: `intents/${intent.id}.json`, side: "mine" }, "invalid_request", /no text diff/);
+  await home.client.expectError("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /unknown path/);
+  await home.client.expectError("space.diff", { repository: key, unit: "nope", path: "nope", side: "mine" }, "invalid_request", /unknown unit/);
   const empty = bareRepo();
-  await home.client.expectOk("space.remote.set", { url: empty });
-  const vacant = await home.client.settle("space.fetch", {});
-  assert.equal(vacant.repository?.remoteEmpty, true);
+  await home.client.expectOk("space.remote.set", { repository: key, url: empty });
+  const vacant = await home.client.settle("space.fetch", { repository: key });
+  assert.equal(vacant.branch?.hostEmpty, true);
   assert.deepEqual(vacant.incoming, []);
   assert.deepEqual(vacant.conflicts, []);
   assert.ok(vacant.local.every((u) => u.change === "new"));
-  await home.client.expectOk("space.remote.set", { url: bare });
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
   // The explorer.
-  writeFileSync(join(home.dataDir, "notes.txt"), "stray\n");
-  symlinkSync(home.projectDir, join(home.dataDir, "link"));
-  const migration = join(home.dataDir, "local", "migrations", "x", "inputs");
-  mkdirSync(migration, { recursive: true });
-  writeFileSync(join(migration, "0"), "{\"token\":\"secret\"}");
-  writeFileSync(join(home.dataDir, "sessions", `${sessionId}.hints.json`), "{}");
-  writeFileSync(join(home.dataDir, "big.log"), Array.from({ length: 3_500 }, (_, i) => `line ${String(i).padStart(6, "0")} ${"x".repeat(80)}`).join("\n") + "\n");
-  const root = await home.client.expectOk("space.tree", {});
+  mkdirSync(join(clone, "packages", "builtin"), { recursive: true });
+  writeFileSync(join(clone, "packages", "builtin", "spex.yaml"), "format: 1\n");
+  mkdirSync(join(clone, "intents", `${intent.id}.assets`), { recursive: true });
+  symlinkSync(home.projectDir, join(clone, "link"));
+  writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "{}");
+  writeFileSync(join(clone, "README.md"), "# Demo\n");
+  writeFileSync(join(clone, "big.log"), Array.from({ length: 3_500 }, (_, i) => `line ${String(i).padStart(6, "0")} ${"x".repeat(80)}`).join("\n") + "\n");
+  const root = await home.client.expectOk("space.tree", { repository: key });
   assert.equal(root.path, "");
   const entry = (path: string) => { const found = root.entries.find((e) => e.path === path); assert.ok(found, `missing ${path} in ${root.entries.map((e) => e.path).join(", ")}`); return found; };
   assert.equal(entry(".git").kind, "git");
@@ -727,31 +798,35 @@ test("space-39: local changes of every kind list in order, incoming units after 
   assert.equal(entry("sessions").kind, "dir");
   assert.equal(entry("sessions").family, "session bundles");
   assert.ok((entry("sessions").count ?? 0) >= 3);
+  assert.equal(entry("intents").family, "intents");
+  assert.equal(entry("authoring").family, "authoring sessions");
+  assert.equal(entry("packages").family, "installed spec packages");
+  assert.equal(entry("packages").sync, "local", "installed spec packages stay here");
+  assert.equal(entry("config").family, "Settings");
+  assert.equal(entry("spex.yaml").family, "spec package requests");
+  assert.equal(entry("spex.yaml").sync, "pending");
+  assert.equal(entry("spex.lock").family, "spec package lock");
+  assert.equal(entry("project.json").family, "code remote");
+  assert.equal(entry("project.json").sync, "pending", "changed since the last commit");
+  assert.equal(entry(".gitignore").family, "sync rules");
+  assert.equal(entry(".gitattributes").sync, "shared");
   assert.equal(entry("notes.txt").family, "Not a Spex file");
   assert.equal(entry("notes.txt").sync, "pending");
   assert.equal(entry("link").kind, "file");
   assert.equal(entry("link").preview, "none");
-  assert.equal(entry("prefs.json").family, "preferences");
-  assert.equal(entry("prefs.json").sync, "local");
-  assert.equal(entry("projects.json").family, "project registry");
-  assert.equal(entry("projects.json").sync, "pending");
-  assert.equal(entry(".gitignore").family, "sync rules");
-  assert.equal(entry(".gitattributes").sync, "shared");
-  assert.equal(entry("config").family, "Settings");
-  assert.equal(entry("local").sync, "local");
   assert.equal(entry("big.log").preview, "text");
   assert.ok(root.entries.findIndex((e) => e.kind !== "dir" && e.kind !== "git") > root.entries.findIndex((e) => e.kind === "dir"), "directories first");
-  await home.client.expectError("space.tree", { path: "link" }, "invalid_request", /symbolic link/);
-  await home.client.expectError("space.tree", { path: "link/README.md" }, "invalid_request", /symbolic link/);
-  await home.client.expectError("space.tree", { path: "../" }, "invalid_request", /escapes/);
-  await home.client.expectError("space.tree", { path: ".git" }, "invalid_request", /Git data/);
-  await home.client.expectError("space.tree", { path: "nope" }, "not_found");
-  const sessions = await home.client.expectOk("space.tree", { path: "sessions" });
+  await home.client.expectError("space.tree", { repository: key, path: "link" }, "invalid_request", /symbolic link/);
+  await home.client.expectError("space.tree", { repository: key, path: "link/README.md" }, "invalid_request", /symbolic link/);
+  await home.client.expectError("space.tree", { repository: key, path: "../" }, "invalid_request", /escapes/);
+  await home.client.expectError("space.tree", { repository: key, path: ".git" }, "invalid_request", /Git data/);
+  await home.client.expectError("space.tree", { repository: key, path: "nope" }, "not_found");
+  const sessions = await home.client.expectOk("space.tree", { repository: key, path: "sessions" });
   const manifest = sessions.entries.find((e) => e.name === `${sessionId}.json`);
   assert.equal(manifest?.family, "session manifest");
-  assert.equal(manifest?.sync, "pending");
+  assert.equal(manifest?.sync, "pending", "not committed since the session began");
   assert.equal(manifest?.preview, "text");
-  assert.deepEqual(manifest?.owner, { sessionId, title: "Fix the login redirect", projectId: project.id, name });
+  assert.deepEqual(manifest?.owner, { sessionId, title: "Fix the login redirect" });
   const hints = sessions.entries.find((e) => e.name === `${sessionId}.hints.json`);
   assert.equal(hints?.family, "provider hints");
   assert.equal(hints?.sync, "local");
@@ -759,65 +834,94 @@ test("space-39: local changes of every kind list in order, incoming units after 
   const records = sessions.entries.find((e) => e.name === `${sessionId}.records.jsonl`);
   assert.equal(records?.family, "session records");
   assert.ok((records?.size ?? 0) > 0 && typeof records?.mtime === "number");
-  const queues = await home.client.expectOk("space.tree", { path: "intents" });
-  const log = queues.entries.find((e) => e.name === `${project.id}.jsonl`);
-  assert.equal(log?.family, "project queue");
-  assert.deepEqual(log?.owner, { projectId: project.id, name });
-  const inputs = await home.client.expectOk("space.tree", { path: "local/migrations/x/inputs" });
-  assert.equal(inputs.entries[0]?.family, "migration inputs");
-  assert.equal(inputs.entries[0]?.preview, "withheld");
-  const pretty = await home.client.expectOk("space.read", { path: `sessions/${sessionId}.json` });
+  const intents = await home.client.expectOk("space.tree", { repository: key, path: "intents" });
+  const intentEntry = intents.entries.find((e) => e.name === `${intent.id}.json`);
+  assert.equal(intentEntry?.family, "intent");
+  assert.equal(intentEntry?.sync, "pending");
+  assert.deepEqual(intentEntry?.owner, { intentId: intent.id, title: "Ship the parser" });
+  const attachments = intents.entries.find((e) => e.name === `${intent.id}.assets`);
+  assert.equal(attachments?.family, "intent attachments");
+  assert.deepEqual(attachments?.owner, { intentId: intent.id, title: "Ship the parser" });
+  const drafts = await home.client.expectOk("space.tree", { repository: key, path: "authoring" });
+  assert.equal(drafts.entries.find((e) => e.name === "triage.json")?.family, "authoring session");
+  assert.equal(drafts.entries.find((e) => e.name === "triage.records.jsonl")?.family, "authoring records");
+  const installed = await home.client.expectOk("space.tree", { repository: key, path: "packages" });
+  assert.equal(installed.entries[0]?.family, "installed spec packages");
+  assert.equal(installed.entries[0]?.sync, "local");
+  const pretty = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.json` });
   assert.ok(pretty.kind === "text" && pretty.text.startsWith("{\n  \"") && !pretty.truncated);
-  const yaml = await home.client.expectOk("space.read", { path: "config/playbook.config.yaml" });
-  assert.ok(yaml.kind === "text" && yaml.text.includes("captain:"));
-  const markdown = await home.client.expectOk("space.read", { path: "playbooks/demo/demo.md" });
+  const yaml = await home.client.expectOk("space.read", { repository: key, path: "config/playbook.config.yaml" });
+  assert.ok(yaml.kind === "text" && yaml.text === PROJECT_CONFIG);
+  const markdown = await home.client.expectOk("space.read", { repository: key, path: "README.md" });
   assert.ok(markdown.kind === "text" && markdown.text === "# Demo\n" && markdown.lines === 1);
-  const stream = await home.client.expectOk("space.read", { path: `sessions/${sessionId}.records.jsonl` });
+  const stream = await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.records.jsonl` });
   assert.ok(stream.kind === "text" && stream.lines >= 2 && stream.text.split("\n")[0].startsWith("{"));
-  const cut = await home.client.expectOk("space.read", { path: "big.log" });
+  const cut = await home.client.expectOk("space.read", { repository: key, path: "big.log" });
   assert.ok(cut.kind === "text" && cut.truncated && cut.lines <= 2_000 && cut.text.endsWith("\n") && Buffer.byteLength(cut.text) <= 256 * 1024);
   assert.ok(cut.kind === "text" && cut.text.split("\n").every((line) => line === "" || /^line \d{6} x{80}$/.test(line)), "cut on a complete line");
-  assert.deepEqual(await home.client.expectOk("space.read", { path: `sessions/${sessionId}.hints.json` }), { kind: "withheld", reason: "May hold provider tokens — not shown" });
-  assert.equal((await home.client.expectOk("space.read", { path: "local/migrations/x/inputs/0" })).kind, "withheld");
-  await home.client.expectError("space.read", { path: "../etc/passwd" }, "invalid_request", /escapes/);
-  await home.client.expectError("space.read", { path: ".git/HEAD" }, "invalid_request", /Git data/);
-  await home.client.expectError("space.read", { path: "sessions" }, "invalid_request", /not a file/);
-  await home.client.expectError("space.read", { path: "link" }, "invalid_request", /symbolic link/);
-  await home.client.expectError("space.read", { path: "absent.txt" }, "not_found");
-  // Before a repository exists the managed rules are unwritten, so the catalog's
-  // families alone decide the sharing mark (space-23, space-35).
-  const plainHome = await startHome("explorer-plain");
-  t.after(() => plainHome.stop());
-  const plainProject = await plainHome.client.expectOk("project.register", { path: plainHome.projectDir });
-  await plainHome.client.expectOk("intent.queue", { projectId: plainProject.id, text: "one" });
-  const plainSession = randomUUID();
-  mkdirSync(join(plainHome.dataDir, "sessions"), { recursive: true });
-  await seedHistorySession(join(plainHome.dataDir, "sessions"), plainHome.projectDir, turnRecords("Before the repository", 1), plainSession);
-  mkdirSync(join(plainHome.dataDir, ".lock"), { recursive: true });
-  mkdirSync(join(plainHome.dataDir, "local"), { recursive: true });
-  writeFileSync(join(plainHome.dataDir, "sessions", `${plainSession}.hints.json`), "{}");
-  writeFileSync(join(plainHome.dataDir, "prefs.json"), "{}");
-  writeFileSync(join(plainHome.dataDir, "meta.json"), "{}");
-  writeFileSync(join(plainHome.dataDir, "forge-cache.json"), "{}");
-  const plainState = await plainHome.client.expectOk("space.get", {});
-  assert.ok(!plainState.repository, "the home is not a repository yet");
-  const plainRoot = await plainHome.client.expectOk("space.tree", {});
-  const plainEntry = (path: string) => { const found = plainRoot.entries.find((e) => e.path === path); assert.ok(found, `missing ${path} in ${plainRoot.entries.map((e) => e.path).join(", ")}`); return found; };
-  assert.equal(plainEntry(".lock").family, "lease");
-  assert.equal(plainEntry(".lock").sync, "local");
-  assert.equal(plainEntry("local").sync, "local");
-  assert.equal(plainEntry("prefs.json").sync, "local");
-  assert.equal(plainEntry("meta.json").sync, "local");
-  assert.equal(plainEntry("forge-cache.json").sync, "local");
-  assert.equal(plainEntry("projects.json").sync, "pending");
-  assert.equal(plainEntry("config").sync, "pending");
-  const plainSessions = await plainHome.client.expectOk("space.tree", { path: "sessions" });
-  const plainHints = plainSessions.entries.find((e) => e.name === `${plainSession}.hints.json`);
-  assert.equal(plainHints?.family, "provider hints");
-  assert.equal(plainHints?.sync, "local");
-  assert.equal(plainSessions.entries.find((e) => e.name === `${plainSession}.json`)?.sync, "pending");
-  const plainQueues = await plainHome.client.expectOk("space.tree", { path: "intents" });
-  assert.equal(plainQueues.entries.find((e) => e.name === `${plainProject.id}.jsonl`)?.sync, "pending");
-  const plainConfig = await plainHome.client.expectOk("space.tree", { path: "config" });
-  assert.equal(plainConfig.entries.find((e) => e.name === "playbook.config.yaml")?.sync, "pending");
+  assert.deepEqual(await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.hints.json` }), { kind: "withheld", reason: "May hold provider tokens — not shown" });
+  await home.client.expectError("space.read", { repository: key, path: "../etc/passwd" }, "invalid_request", /escapes/);
+  await home.client.expectError("space.read", { repository: key, path: ".git/HEAD" }, "invalid_request", /Git data/);
+  await home.client.expectError("space.read", { repository: key, path: "sessions" }, "invalid_request", /not a file/);
+  await home.client.expectError("space.read", { repository: key, path: "link" }, "invalid_request", /symbolic link/);
+  await home.client.expectError("space.read", { repository: key, path: "absent.txt" }, "not_found");
+});
+
+// ---------------------------------------------------------------------------
+// space-51: a clone no folder pairs, and the repair the reader answers
+// ---------------------------------------------------------------------------
+
+test("space-51: a clone no folder pairs folds to one repair the reader answers, and a rebind with its recorded folder as an alias resolves it", async (t) => {
+  const first = await startHome("repairs");
+  const { key } = await addFolder(first, first.projectDir);
+  const sessionId = await runTurn(first, key, "Work before the move");
+  await first.stop();
+  // The folder's pair is forgotten on this device; its clone stays.
+  const unpaired = Home.load(first.dataDir); unpaired.unpair(key); unpaired.save();
+  const home = await startHome("repairs-again", { dataDir: first.dataDir, project: false });
+  t.after(() => home.stop());
+  const state = await home.client.expectOk("space.get", {});
+  const repair = state.diagnostics.find((d) => d.repair?.repository === key);
+  assert.ok(repair, JSON.stringify(state.diagnostics));
+  assert.equal(repair.repair?.kind, "repository");
+  assert.equal(repair.repair?.name, `${basename(first.projectDir)}-spex`);
+  assert.equal(repair.repair?.group, OWN);
+  assert.deepEqual(repair.repair?.directories, [first.projectDir]);
+  assert.equal(repair.repair?.sessions, 1);
+  assert.ok(repair.repair?.key.length, "a repair carries its own key (space-54)");
+  assert.equal(repair.repair?.declined, undefined, "unanswered, so it counts");
+  assert.equal(repositoryOf(state, key).folder, null);
+  // The core checked the folder the repair names — here a work tree no
+  // pair claims — and proposes it, searching for none (space-53).
+  const checked = repair.repair?.checked ?? [];
+  assert.ok(checked.some((c) => c.path === first.projectDir && c.here && c.repo && !c.claimedBy), JSON.stringify(checked));
+  assert.deepEqual(repair.repair?.proposal, { path: first.projectDir, from: "recorded" });
+  assert.ok(checked.every((c) => repair.repair!.directories.includes(c.path)), "only paths the repair names");
+  assert.ok(!(await home.client.expectOk("session.list", {})).some((s) => s.id === sessionId), "unlisted until paired");
+  // Only the reader's act settles a repair, and it is this device's alone.
+  const before = await home.client.expectOk("space.get", {});
+  assert.equal(before.issues, before.diagnostics.length, "an unanswered repair counts");
+  const status = git(clonePath(home.dataDir, key), "status", "--porcelain");
+  const declined = await home.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
+  assert.notEqual(declined.diagnostics.find((d) => d.repair?.repository === key)?.repair?.declined, undefined);
+  assert.equal(declined.issues, before.issues - 1, "a repair not added counts no more");
+  assert.equal(typeof prefsOf(home.dataDir)[`space:repair:${repair.repair!.key}`], "object", "the answer is a preference");
+  assert.equal(git(clonePath(home.dataDir, key), "status", "--porcelain"), status, "and never a tracked file");
+  const restored = await home.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: false });
+  assert.equal(restored.issues, before.issues, "brought back, it counts again");
+  await home.client.expectError("space.repair.decline", { repair: "no-such-repair", declined: true }, "invalid_request");
+  // A rebind to a chosen folder carrying the recorded one as an alias
+  // pairs the spex repository; every session recorded there lists again.
+  const checkout = gitFolder("repairs-checkout");
+  const bound = await home.client.expectOk("project.rebind", { projectId: key, path: checkout, aliases: [first.projectDir] });
+  assert.equal(bound.id, key);
+  assert.equal(bound.path, checkout);
+  const after = await home.client.expectOk("space.get", {});
+  assert.ok(!after.diagnostics.some((d) => d.repair?.repository === key), "one rebind resolves the repair");
+  assert.equal(repositoryOf(after, key).folder, checkout);
+  const listed = (await home.client.expectOk("session.list", {})).find((s) => s.id === sessionId);
+  assert.equal(listed?.title, "Work before the move");
+  assert.equal(listed?.projectId, key);
+  const history = await home.client.expectOk("history.get", { sessionId });
+  assert.ok(history.records.some((r) => r.record.type === "turn_started"));
 });

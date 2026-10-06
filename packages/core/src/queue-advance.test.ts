@@ -15,7 +15,7 @@ import { createSessionStore } from "@sublang/playbook/session-store";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain, type CaptainTurnScript } from "./testing/scripted-captain.js";
-import type { Command, CommandResults, LedgerState, ServerMessage, TmuxPlayRecord } from "./protocol.js";
+import type { Command, CommandResults, IntentInfo, LedgerState, ServerMessage, TmuxPlayRecord } from "./protocol.js";
 
 const VALID_CONFIG = `
 captain:
@@ -62,6 +62,20 @@ class Client {
 
   close(): void {
     this.socket.close();
+  }
+
+  private lastCaptured = 0;
+
+  /** `intent.queue` a moment after the previous capture: the queue is
+   * ordered by capture time (core-service-42), so no two captures here
+   * share a millisecond and the order is the order queued. */
+  async queue(
+    fields: Omit<Extract<Command, { type: "intent.queue" }>, "type" | "id">,
+  ): Promise<IntentInfo> {
+    while (Date.now() <= this.lastCaptured) await sleep(1);
+    const intent = await this.expectOk("intent.queue", fields);
+    this.lastCaptured = intent.createdAt;
+    return intent;
   }
 
   async command<T extends Command["type"]>(
@@ -150,7 +164,7 @@ async function harness(t: TestContext, script: CaptainTurnScript) {
     adapterImports: fakeAdapterImports({}).imports,
     adapterRuntime: () => ({ usable: true }),
     captainFactory: async () => createScriptedCaptain(script),
-    env: {}, home: join(dir, "home"), watchConfig: false,
+    env: {}, home: join(dir, "home"), own: "tester", watchConfig: false,
   };
   const beforeStop: (() => void)[] = [];
   let service = await CoreService.start(options);
@@ -282,19 +296,19 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
       await context.emitReply("Done");
     });
     const { client, project, session } = h;
-    const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First work" });
-    const blocked = await client.expectOk("intent.queue", {
-      projectId: project.id, text: "Explicitly waits for Confirm", afterIntentId: first.id,
-    });
+    const first = await client.queue({ projectId: project.id, text: "First work" });
+    // In the automatic case the row that is next at dispatch is let go,
+    // and its successor captured, while the turn is active.
     const displaced = mode === "automatic"
-      ? await client.expectOk("intent.queue", { projectId: project.id, text: "Previously next" }) : undefined;
-    const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next work\nwith all details" });
-    let nextText = next.text;
+      ? await client.queue({ projectId: project.id, text: "Previously next" }) : undefined;
+    let next: IntentInfo | undefined = displaced
+      ? undefined
+      : await client.queue({ projectId: project.id, text: "Next work\nwith all details" });
     const otherDir = join(h.dir, "other");
     mkdirSync(otherDir);
     execFileSync("git", ["init", "-q", otherDir]);
     const other = await client.expectOk("project.register", { path: otherDir });
-    const foreign = await client.expectOk("intent.queue", { projectId: other.id, text: "Other project" });
+    const foreign = await client.queue({ projectId: other.id, text: "Other project" });
 
     const store = h.service["store"];
     const sessions = h.service["sessions"];
@@ -315,8 +329,9 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
     assert.equal(sessions.getLive(session.id), undefined, "runtime disposal alone must not advance");
     // The release/selection seam is still occupied. The ledger must not
     // expose a manual Start while the one automatic handoff is pending.
-    expectNext(await client.expectOk("ledger.get", {}), displaced?.id ?? next.id, "after-current-work", false);
+    expectNext(await client.expectOk("ledger.get", {}), displaced?.id ?? next!.id, "after-current-work", false);
     await client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-tuned" } } });
+    let nextText = next?.text ?? "";
     if (mode === "automatic") {
       // A permission record is telemetry, not a queue hold. Append it only
       // after the runtime stream is complete so its sequence cannot race it.
@@ -327,12 +342,18 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
         turnId: 1,
         timestamp: Date.now(),
       } as unknown as TmuxPlayRecord, "coder");
+      // Queue changes during the active turn decide the selection: the
+      // older row is let go, and work captured now is the oldest left,
+      // its latest text the one that runs (core-service-95).
+      await client.expectOk("intent.close", { intentId: displaced!.id, as: "dropped" });
+      next = await client.queue({ projectId: project.id, text: "Next work\nwith all details" });
       nextText = "Revised queued work\nwith the latest details";
       await client.expectOk("intent.edit", { intentId: next.id, text: nextText });
-      await client.expectOk("intent.move", { intentId: next.id, afterIntentId: blocked.id });
     }
+    const queued = next!;
     const before = await client.expectOk("ledger.get", {});
-    assert.equal(entry(before, next.id).intent.dispatched, undefined);
+    expectNext(before, queued.id, "after-current-work", false);
+    assert.equal(entry(before, queued.id).intent.dispatched, undefined);
     assert.deepEqual(prompts, [first.text]);
 
     if (mode === "done during settlement" || mode === "drop during settlement") {
@@ -340,9 +361,6 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
         intentId: first.id,
         as: mode === "done during settlement" ? "done" : "dropped",
       });
-      // Keep the explicitly linked follower blocked on an unrelated open
-      // predecessor so this case still selects the same unblocked next row.
-      await client.expectOk("intent.link", { intentId: blocked.id, afterIntentId: foreign.id });
     }
     let pending: ReturnType<Client["command"]> | undefined;
     if (mode === "manual race") {
@@ -350,7 +368,7 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
       const wait = sessions.settled.bind(sessions);
       sessions.settled = async (id) => { entering.resolve(); await wait(id); };
       h.beforeStop.push(() => { sessions.settled = wait; });
-      pending = client.command("turn.submit", { sessionId: session.id, text: next.text, intentId: next.id });
+      pending = client.command("turn.submit", { sessionId: session.id, text: queued.text, intentId: queued.id });
       await entering.promise;
     }
     release.resolve();
@@ -358,14 +376,15 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
       const reply = await pending;
       assert.ok(reply.ok || ["busy", "conflict"].includes(reply.error.code), JSON.stringify(reply));
     }
-    const after = await client.ledgerUntil((ledger) => entry(ledger, next.id).state === "finished", "the next intent to finish");
+    const after = await client.ledgerUntil((ledger) => entry(ledger, queued.id).state === "finished", "the next intent to finish");
     await settled(h, 2);
-    assert.deepEqual(prompts, [first.text, nextText], "the latest queued text and rank select exactly one dispatch");
-    if (displaced) assert.equal(entry(after, displaced.id).intent.dispatched, undefined);
+    assert.deepEqual(prompts, [first.text, nextText], "the latest queued text and age select exactly one dispatch");
+    // Let go before any work, the displaced row left no trace to dispatch.
+    if (displaced) assert.equal(h.service["store"].getIntent(displaced.id), undefined);
     assert.equal(starts(client).length, 2);
-    assert.equal(entry(after, next.id).intent.dispatched?.sessionId, session.id);
-    assert.equal(entry(after, next.id).intent.dispatched?.turnId, 2);
-    assert.equal(typeof entry(after, next.id).intent.dispatched?.at, "number");
+    assert.equal(entry(after, queued.id).intent.dispatched?.sessionId, session.id);
+    assert.equal(entry(after, queued.id).intent.dispatched?.turnId, 2);
+    assert.equal(typeof entry(after, queued.id).intent.dispatched?.at, "number");
     if (mode === "done during settlement" || mode === "drop during settlement") {
       const history = await client.expectOk("ledger.history", { projectId: project.id });
       assert.ok(history.intents.some((row) => row.intent.id === first.id &&
@@ -375,9 +394,7 @@ for (const mode of ["automatic", "manual race", "done during settlement", "drop 
       assert.equal(entry(after, first.id).intent.closedAt, undefined);
       assert.ok(after.attention.some((row) => row.intentId === first.id && row.band === "finished" && row.turnId === 1));
     }
-    assert.equal(entry(after, blocked.id).blockedBy?.intentId,
-      mode === "done during settlement" || mode === "drop during settlement" ? foreign.id : first.id);
-    assert.equal(entry(after, blocked.id).intent.dispatched, undefined);
+    // Another project's queue is never this conversation's successor.
     assert.equal(entry(after, foreign.id).intent.dispatched, undefined);
     const current = h.service["store"].listSessions().find((row) => row.id === session.id);
     assert.equal(current?.turns, 2);
@@ -577,23 +594,18 @@ test("queue advance: a restore reports an interrupted follow-up and starts no su
     await context.emitReply("Done");
   });
   const { client, project, session } = h;
-  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First intent" });
-  // Held behind another project's row through the first settlement, so
-  // only the later turn could hand it on.
-  const otherDir = join(h.dir, "other");
-  mkdirSync(otherDir);
-  execFileSync("git", ["init", "-q", otherDir]);
-  const other = await client.expectOk("project.register", { path: otherDir });
-  const foreign = await client.expectOk("intent.queue", { projectId: other.id, text: "Other project" });
-  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Next intent", afterIntentId: foreign.id });
+  const first = await client.queue({ projectId: project.id, text: "First intent" });
   await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
   await settled(h);
+  // Captured only after the first settlement, so only the later turn
+  // could hand it on.
+  const next = await client.queue({ projectId: project.id, text: "Next intent" });
   assert.equal(entry(await client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
-  await client.expectOk("intent.close", { intentId: foreign.id, as: "dropped" });
 
   // A follow-up the writer lost after marking it: the released runtime
-  // leaves the lease free, and the shared store says what a crash would.
-  const shared = createSessionStore({ sessionsDir: join(h.dir, "state", "sessions") });
+  // leaves the lease free, and the shared store — the project's clone's
+  // sessions — says what a crash would.
+  const shared = createSessionStore({ sessionsDir: h.service["store"].repository(project.id)!.sessionsDir });
   const lease = await shared.acquire(session.id);
   try {
     const prior = await lease.read();
@@ -695,26 +707,29 @@ test("queue advance: an aborted follow-up cannot inherit an older finish", { tim
 });
 
 for (const verdict of ["done", "dropped"] as const) {
-  test(`queue advance: ${verdict} after settlement unlocks but does not dispatch`, { timeout: 20_000 }, async (t) => {
+  test(`queue advance: ${verdict} after settlement and a later removal do not dispatch`, { timeout: 20_000 }, async (t) => {
     const prompts: string[] = [];
     const h = await harness(t, async (turn, context) => {
       prompts.push(turn.prompt);
       await context.emitReply("Done");
     });
-    const first = await h.client.expectOk("intent.queue", { projectId: h.project.id, text: "First intent" });
-    const blocked = await h.client.expectOk("intent.queue", {
-      projectId: h.project.id,
-      text: "Wait for verdict",
-      afterIntentId: first.id,
-    });
+    const first = await h.client.queue({ projectId: h.project.id, text: "First intent" });
     await h.client.expectOk("turn.submit", { sessionId: h.session.id, text: first.text, intentId: first.id });
     await settled(h);
-    assert.equal(entry(await h.client.expectOk("ledger.get", {}), blocked.id).intent.dispatched, undefined);
+    // Captured after the settlement, so no handoff ever selected it.
+    const waiting = await h.client.queue({ projectId: h.project.id, text: "Wait for the Boss" });
     await h.client.expectOk("intent.close", { intentId: first.id, as: verdict });
-    const after = await h.client.expectOk("ledger.get", {});
-    expectNext(after, blocked.id, "manual-ready", true);
-    assert.equal(entry(after, blocked.id).blockedBy, undefined);
-    assert.equal(entry(after, blocked.id).intent.dispatched, undefined);
+    await Promise.all([...h.service["advancing"]]);
+    let after = await h.client.expectOk("ledger.get", {});
+    expectNext(after, waiting.id, "manual-ready", true);
+    assert.equal(entry(after, waiting.id).intent.dispatched, undefined);
+    // Worked before its verdict, the closed intent is History, and
+    // removing it initiates nothing either (core-service-94).
+    await h.client.expectOk("intent.remove", { intentId: first.id });
+    await Promise.all([...h.service["advancing"]]);
+    after = await h.client.expectOk("ledger.get", {});
+    expectNext(after, waiting.id, "manual-ready", true);
+    assert.equal(entry(after, waiting.id).intent.dispatched, undefined);
     assert.deepEqual(prompts, [first.text]);
     assert.equal(starts(h.client).length, 1);
   });
@@ -727,18 +742,17 @@ test("queue advance: queue edits, verdict, subsequent plain chat, and restart ne
     await context.emitReply("Done");
   });
   const { project, session } = h;
-  const first = await h.client.expectOk("intent.queue", { projectId: project.id, text: "First work" });
-  const next = await h.client.expectOk("intent.queue", {
-    projectId: project.id, text: "Wait for Confirm", afterIntentId: first.id,
-  });
+  const first = await h.client.queue({ projectId: project.id, text: "First work" });
   await h.client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
   await settled(h);
+  // Captured after the settlement: no handoff ever selected it.
+  const next = await h.client.queue({ projectId: project.id, text: "Wait for Confirm" });
   assert.equal(entry(await h.client.expectOk("ledger.get", {}), next.id).intent.dispatched, undefined);
   await h.client.expectOk("intent.close", { intentId: first.id, as: "done" });
   await h.client.expectOk("intent.edit", { intentId: next.id, text: "Edited after confirmation" });
-  await h.client.expectOk("intent.move", { intentId: next.id, afterIntentId: null });
-  const added = await h.client.expectOk("intent.queue", { projectId: project.id, text: "Added after settlement" });
+  const added = await h.client.queue({ projectId: project.id, text: "Added after settlement" });
   let ledger = await h.client.expectOk("ledger.get", {});
+  expectNext(ledger, next.id, "manual-ready", true);
   for (const id of [next.id, added.id]) {
     assert.equal(entry(ledger, id).state, "queued");
     assert.equal(entry(ledger, id).intent.dispatched, undefined);
@@ -825,15 +839,9 @@ test("queue advance: invalid configuration refuses admission and repairing it do
   assert.equal(entry(await client.expectOk("ledger.get", {}), next.id).intent.dispatched?.turnId, 2);
 });
 
-test("queue advance: capture and reorder cancel rather than replace an authorized successor", { timeout: 20_000 }, async (t) => {
-  const prompts: string[] = [];
-  const h = await harness(t, async (turn, context) => {
-    prompts.push(turn.prompt);
-    await context.emitReply("Done");
-  });
-  const { client, project, session } = h;
-  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First work" });
-  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Must stay queued" });
+/** Hold the automatic handoff right after it authorized its successor and
+ * opened the continued runtime, until the test releases it. */
+function holdAfterAuthorization(h: Harness) {
   const continued = h.service["continueSession"].bind(h.service);
   const opened = deferred();
   const release = deferred();
@@ -843,31 +851,119 @@ test("queue advance: capture and reorder cancel rather than replace an authorize
     opened.resolve();
     await release.promise;
   };
+  return { opened: opened.promise, release: release.resolve };
+}
+
+/** A sync lands an intent another device captured: its file arrives in
+ * the project's clone, and the store re-reads the clone as a sync's
+ * refresh does (space-20). */
+function arriveThroughSync(h: Harness, createdAt: number): IntentInfo {
+  const store = h.service["store"];
+  const id = randomUUID();
+  const file = { format: 1, id, text: "Captured elsewhere, earlier", createdAt };
+  writeFileSync(join(store.repository(h.project.id)!.intentsDir, `${id}.json`), `${JSON.stringify(file, null, 2)}\n`);
+  store.reload();
+  const intent = store.getIntent(id);
+  assert.ok(intent, "the synced intent reads back");
+  return intent;
+}
+
+test("queue advance: a capture and an edit after authorization keep the successor, with its latest text", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.queue({ projectId: project.id, text: "First work" });
+  const next = await client.queue({ projectId: project.id, text: "Authorized next" });
+  const held = holdAfterAuthorization(h);
   await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
-  await opened.promise;
+  await held.opened;
   assert.ok(h.service["sessions"].getLive(session.id), "automatic admission opened the continued runtime");
   expectNext(await client.expectOk("ledger.get", {}), next.id, "after-current-work", false);
+  // A capture is younger than the authorized row, so next stays next;
+  // the edit is what the dispatch carries (core-service-94).
   const nextText = "Updated after authorization";
   await client.expectOk("intent.edit", { intentId: next.id, text: nextText });
-  const inserted = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Inserted before the authorized row",
-  });
-  await client.expectOk("intent.move", { intentId: inserted.id, afterIntentId: null });
+  const captured = await client.queue({ projectId: project.id, text: "Captured after authorization" });
   const pending = await client.expectOk("ledger.get", {});
-  expectNext(pending, inserted.id, "after-current-work", false);
+  expectNext(pending, next.id, "after-current-work", false);
+  assert.equal(entry(pending, captured.id).next, undefined);
+  held.release();
+  // The capture then waits its turn by age: the successor's settlement
+  // hands it on in turn.
+  const after = await client.ledgerUntil(
+    (ledger) => entry(ledger, captured.id).state === "finished",
+    "the authorized successor and then the capture",
+  );
+  await settled(h, 3);
+  assert.equal(entry(after, next.id).intent.dispatched?.turnId, 2);
+  assert.equal(entry(after, captured.id).intent.dispatched?.turnId, 3);
+  assert.deepEqual(prompts, [first.text, nextText, captured.text]);
+  assert.equal(starts(client).length, 3);
+});
+
+test("queue advance: an older intent arriving through a sync after authorization cancels rather than substitutes work", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.queue({ projectId: project.id, text: "First work" });
+  const next = await client.queue({ projectId: project.id, text: "Must stay queued" });
+  const held = holdAfterAuthorization(h);
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await held.opened;
+  assert.ok(h.service["sessions"].getLive(session.id), "automatic admission opened the continued runtime");
+  expectNext(await client.expectOk("ledger.get", {}), next.id, "after-current-work", false);
+  await client.expectOk("intent.edit", { intentId: next.id, text: "Updated after authorization" });
+  // Captured on another device before the authorized row: by age, it is
+  // now next (core-service-42, core-service-107).
+  const synced = arriveThroughSync(h, next.createdAt - 60_000);
+  const pending = await client.expectOk("ledger.get", {});
+  expectNext(pending, synced.id, "after-current-work", false);
   assert.equal(entry(pending, next.id).next, undefined);
   await client.expectOk("intent.close", { intentId: first.id, as: "dropped" });
-  release.resolve();
+  held.release();
   await Promise.all([...h.service["advancing"]]);
   const after = await client.expectOk("ledger.get", {});
-  expectNext(after, inserted.id, "manual-ready", true);
+  expectNext(after, synced.id, "manual-ready", true);
   assert.equal(entry(after, next.id).intent.dispatched, undefined);
-  assert.equal(entry(after, inserted.id).intent.dispatched, undefined);
+  assert.equal(entry(after, synced.id).intent.dispatched, undefined);
   assert.deepEqual(prompts, [first.text]);
   assert.equal(starts(client).length, 1);
   assert.equal(h.service["sessions"].getLive(session.id), undefined);
   assert.equal(h.service["sessions"].listSessions().find((row) => row.id === session.id)?.live, false);
+});
+
+test("queue advance: closing the authorized successor cancels rather than substitutes work", { timeout: 20_000 }, async (t) => {
+  const prompts: string[] = [];
+  const h = await harness(t, async (turn, context) => {
+    prompts.push(turn.prompt);
+    await context.emitReply("Done");
+  });
+  const { client, project, session } = h;
+  const first = await client.queue({ projectId: project.id, text: "First work" });
+  const next = await client.queue({ projectId: project.id, text: "Authorized next" });
+  const later = await client.queue({ projectId: project.id, text: "Next by age once the successor goes" });
+  const held = holdAfterAuthorization(h);
+  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
+  await held.opened;
+  // Let go before any work, the successor leaves the queue, and the
+  // younger row becomes next (core-service-46, core-service-107).
+  await client.expectOk("intent.close", { intentId: next.id, as: "dropped" });
+  expectNext(await client.expectOk("ledger.get", {}), later.id, "after-current-work", false);
+  held.release();
+  await Promise.all([...h.service["advancing"]]);
+  const after = await client.expectOk("ledger.get", {});
+  expectNext(after, later.id, "manual-ready", true);
+  assert.equal(entry(after, later.id).intent.dispatched, undefined);
+  assert.equal(h.service["store"].getIntent(next.id), undefined);
+  assert.deepEqual(prompts, [first.text]);
+  assert.equal(starts(client).length, 1);
+  assert.equal(h.service["sessions"].getLive(session.id), undefined);
 });
 
 test("queue advance: a settled-owner verdict and removal do not cancel its authorized successor", { timeout: 20_000 }, async (t) => {
@@ -877,38 +973,17 @@ test("queue advance: a settled-owner verdict and removal do not cancel its autho
     await context.emitReply("Done");
   });
   const { client, project, session } = h;
-  const first = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "First work",
-  });
-  const released = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Released by the verdict",
-    afterIntentId: first.id,
-  });
-  const authorized = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Already authorized",
-  });
-  const continued = h.service["continueSession"].bind(h.service);
-  const opened = deferred();
-  const release = deferred();
-  h.beforeStop.push(() => {
-    release.resolve();
-    h.service["continueSession"] = continued;
-  });
-  h.service["continueSession"] = async (id) => {
-    await continued(id);
-    opened.resolve();
-    await release.promise;
-  };
+  const first = await client.queue({ projectId: project.id, text: "First work" });
+  const authorized = await client.queue({ projectId: project.id, text: "Already authorized" });
+  const later = await client.queue({ projectId: project.id, text: "Next by age after it" });
+  const held = holdAfterAuthorization(h);
 
   await client.expectOk("turn.submit", {
     sessionId: session.id,
     text: first.text,
     intentId: first.id,
   });
-  await opened.promise;
+  await held.opened;
   expectNext(
     await client.expectOk("ledger.get", {}),
     authorized.id,
@@ -918,40 +993,39 @@ test("queue advance: a settled-owner verdict and removal do not cancel its autho
   await client.expectOk("intent.close", { intentId: first.id, as: "done" });
   await client.expectOk("intent.remove", { intentId: first.id });
   const pending = await client.expectOk("ledger.get", {});
-  expectNext(pending, released.id, "after-current-work", false);
-  assert.equal(entry(pending, authorized.id).next, undefined);
+  expectNext(pending, authorized.id, "after-current-work", false);
+  assert.equal(entry(pending, later.id).next, undefined);
 
-  release.resolve();
+  held.release();
   const after = await client.ledgerUntil(
-    (ledger) => entry(ledger, released.id).state === "finished",
-    "the authorized row and then the verdict-released row",
+    (ledger) => entry(ledger, later.id).state === "finished",
+    "the authorized row and then the next by age",
   );
   await settled(h, 3);
   assert.equal(entry(after, authorized.id).intent.dispatched?.turnId, 2);
-  assert.equal(entry(after, released.id).intent.dispatched?.turnId, 3);
-  assert.deepEqual(prompts, [first.text, authorized.text, released.text]);
+  assert.equal(entry(after, later.id).intent.dispatched?.turnId, 3);
+  assert.deepEqual(prompts, [first.text, authorized.text, later.text]);
   assert.equal(starts(client).length, 3);
 });
 
-test("queue advance: a verdict before authorization does not select the row it releases", { timeout: 20_000 }, async (t) => {
+test("queue advance: a verdict and removal before authorization do not cancel the successor", { timeout: 20_000 }, async (t) => {
   const prompts: string[] = [];
   const h = await harness(t, async (turn, context) => {
     prompts.push(turn.prompt);
     await context.emitReply("Done");
   });
   const { client, project, session } = h;
-  const first = await client.expectOk("intent.queue", {
+  const first = await client.queue({
     projectId: project.id,
     text: "First work",
   });
-  const verdictReleased = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Released by the verdict",
-    afterIntentId: first.id,
-  });
-  const successor = await client.expectOk("intent.queue", {
+  const successor = await client.queue({
     projectId: project.id,
     text: "Successor independent of the verdict",
+  });
+  const later = await client.queue({
+    projectId: project.id,
+    text: "Next by age after it",
   });
   const store = h.service["store"];
   const sessions = h.service["sessions"];
@@ -980,51 +1054,17 @@ test("queue advance: a verdict before authorization does not select the row it r
   await client.expectOk("intent.close", { intentId: first.id, as: "done" });
   await client.expectOk("intent.remove", { intentId: first.id });
   const pending = await client.expectOk("ledger.get", {});
-  expectNext(pending, verdictReleased.id, "after-current-work", false);
-  assert.equal(entry(pending, successor.id).next, undefined);
+  expectNext(pending, successor.id, "after-current-work", false);
+  assert.equal(entry(pending, later.id).next, undefined);
 
   releaseSettlement.resolve();
   const after = await client.ledgerUntil(
-    (ledger) => entry(ledger, verdictReleased.id).state === "finished",
-    "the independent successor and then the verdict-released row",
+    (ledger) => entry(ledger, later.id).state === "finished",
+    "the independent successor and then the next by age",
   );
   await settled(h, 3);
   assert.equal(entry(after, successor.id).intent.dispatched?.turnId, 2);
-  assert.equal(entry(after, verdictReleased.id).intent.dispatched?.turnId, 3);
-  assert.deepEqual(prompts, [first.text, successor.text, verdictReleased.text]);
+  assert.equal(entry(after, later.id).intent.dispatched?.turnId, 3);
+  assert.deepEqual(prompts, [first.text, successor.text, later.text]);
   assert.equal(starts(client).length, 3);
-});
-
-test("queue advance: an after-link added after authorization cancels that dispatch", { timeout: 20_000 }, async (t) => {
-  const prompts: string[] = [];
-  const h = await harness(t, async (turn, context) => {
-    prompts.push(turn.prompt);
-    await context.emitReply("Done");
-  });
-  const { client, project, session } = h;
-  const first = await client.expectOk("intent.queue", { projectId: project.id, text: "First work" });
-  const next = await client.expectOk("intent.queue", { projectId: project.id, text: "Authorized next" });
-  const blocker = await client.expectOk("intent.queue", { projectId: project.id, text: "Open predecessor" });
-  const continued = h.service["continueSession"].bind(h.service);
-  const opened = deferred();
-  const release = deferred();
-  h.beforeStop.push(() => { release.resolve(); h.service["continueSession"] = continued; });
-  h.service["continueSession"] = async (id) => {
-    await continued(id);
-    opened.resolve();
-    await release.promise;
-  };
-  await client.expectOk("turn.submit", { sessionId: session.id, text: first.text, intentId: first.id });
-  await opened.promise;
-  await client.expectOk("intent.link", { intentId: next.id, afterIntentId: blocker.id });
-  release.resolve();
-  await Promise.all([...h.service["advancing"]]);
-  const after = await client.expectOk("ledger.get", {});
-  assert.equal(entry(after, next.id).blockedBy?.intentId, blocker.id);
-  assert.equal(entry(after, next.id).intent.dispatched, undefined);
-  expectNext(after, blocker.id, "manual-ready", true);
-  assert.equal(entry(after, blocker.id).intent.dispatched, undefined);
-  assert.deepEqual(prompts, [first.text]);
-  assert.equal(starts(client).length, 1);
-  assert.equal(h.service["sessions"].getLive(session.id), undefined);
 });

@@ -42,6 +42,7 @@ import {
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
+import { defaultOwnName, Home } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
@@ -52,6 +53,92 @@ import type {
 } from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
+
+/** Registry specifiers of the built-ins shipped by @sublang/playbook:
+ * the playbooks the built-in spec package provides (DR-104). */
+export const BUILTIN_FROMS: Readonly<Record<string, string>> = {
+  code: "@sublang/playbook/code/registry",
+  review: "@sublang/playbook/review/registry",
+  decide: "@sublang/playbook/decide/registry",
+  dev: "@sublang/playbook/dev/registry",
+  branch: "@sublang/playbook/branch/registry",
+  pr: "@sublang/playbook/pr/registry",
+  inspect: "@sublang/playbook/inspect/registry",
+};
+
+/** The module a `from`-less playbook entry resolves to until the
+ * environment's lock names it (storage-7): a built-in, or a playbook the
+ * home's compiled library holds. */
+export function providedFrom(id: string, libraryDir?: string): string | undefined {
+  if (Object.hasOwn(BUILTIN_FROMS, id)) return BUILTIN_FROMS[id];
+  if (!libraryDir) return undefined;
+  const local = join(libraryDir, id, `${id}.registry.mjs`);
+  return existsSync(local) ? local : undefined;
+}
+
+/** What composition is told beyond the file (core-service-2). */
+export interface ComposeOptions {
+  /** The home's compiled-playbook library, for a `from`-less entry. */
+  libraryDir?: string;
+  /** A project's or another group's own file, added on top of yours. */
+  project?: { top: unknown; path: string };
+}
+
+/** Fields a project's file may not hold: what each player runs on is
+ * yours alone (core-service-2, DR-103). */
+const MODEL_FIELDS = ["model", "effort", "fastMode", "subagentModel", "subagentEffort", "adapter"];
+
+const notInProjectFile = (entry: string): Error =>
+  new Error(i18n._({
+    id: "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses",
+    comment: "Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path",
+    values: { entry },
+  }));
+
+/**
+ * Check a project's or another group's own file (core-service-2): only
+ * `playbooks.<id>` entries, each naming its roles' players by name, with
+ * an option slice — never a captain, players, a model field or a `from`.
+ */
+export function validateProjectConfig(top: unknown, _path: string): void {
+  if (top === null || top === undefined) return;
+  if (!isPlainObject(top)) {
+    throw new Error(i18n._({ id: "config must be a YAML mapping", comment: "Config error: the file's top level is not a mapping" }));
+  }
+  for (const key of Object.keys(top)) if (key !== "playbooks") throw notInProjectFile(key);
+  if (top.playbooks === undefined || top.playbooks === null) return;
+  if (!isPlainObject(top.playbooks)) {
+    throw new Error(i18n._({ id: "playbooks must be an object", comment: "Config error; `playbooks` is the config file's own field name" }));
+  }
+  for (const [id, block] of Object.entries(top.playbooks)) {
+    if (!isPlainObject(block)) {
+      throw new Error(i18n._({ id: "playbooks.{id} must be an object",
+        comment: "Config error; `playbooks` is the config file's own field name and the id its key", values: { id } }));
+    }
+    if (Object.hasOwn(block, "from")) throw notInProjectFile(`playbooks.${id}.from`);
+    for (const field of MODEL_FIELDS) if (Object.hasOwn(block, field)) throw notInProjectFile(`playbooks.${id}.${field}`);
+    if (block.roles === undefined) continue;
+    if (!isPlainObject(block.roles)) {
+      throw new Error(i18n._({ id: "playbooks.{id}.roles must be an object",
+        comment: "Config error; `playbooks.<id>.roles` is the config file's own field name", values: { id } }));
+    }
+    for (const [role, value] of Object.entries(block.roles)) {
+      if (typeof value !== "string" || !PLAYER_ID_PATTERN.test(value)) throw notInProjectFile(`playbooks.${id}.roles.${role}`);
+    }
+  }
+}
+
+/** Your own group's file with a project's added on top: the project's
+ * playbooks join yours, its roles and options over your entry's. */
+function layerProjectConfig(own: Record<string, unknown>, project: unknown): Record<string, unknown> {
+  if (!isPlainObject(project) || !isPlainObject(project.playbooks)) return own;
+  const playbooks: Record<string, unknown> = isPlainObject(own.playbooks) ? { ...own.playbooks } : {};
+  for (const [id, entry] of Object.entries(project.playbooks)) {
+    const base = isPlainObject(playbooks[id]) ? playbooks[id] as Record<string, unknown> : {};
+    playbooks[id] = { ...base, ...(entry as Record<string, unknown>) };
+  }
+  return { ...own, playbooks };
+}
 
 /** Marker export stamped into Spex-generated registry bundles
  * (DR-014); composition refuses file-path registries without it. */
@@ -388,7 +475,16 @@ export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   home: string = env.HOME ?? homedir(),
 ): string {
-  return join(resolveRoot(env, home), "config", "playbook.config.yaml");
+  return ownConfigPath(resolveRoot(env, home), env);
+}
+
+/** Your own group's config inside its spex repository's clone
+ * (storage-1, DR-103): the name `home.yaml` records, or this device's
+ * user name for a home not yet written. */
+export function ownConfigPath(root: string, env: NodeJS.ProcessEnv = process.env): string {
+  let own = defaultOwnName(env);
+  try { if (Home.exists(root)) own = Home.load(root).ownName; } catch { /* a damaged home reads as a new one */ }
+  return join(root, "workspace", own, `${own}-spex`, "config", "playbook.config.yaml");
 }
 
 /**
@@ -551,6 +647,9 @@ function isInside(root: string, path: string): boolean {
 export function relocateLegacyConfig(
   configPath: string,
   formerPath: string,
+  /** The home the canonical file belongs to; a former file inside it is
+   * moved, not copied. */
+  homeRoot: string = dirname(dirname(configPath)),
 ): boolean {
   if (existsSync(configPath) || formerPath === configPath) return false;
   let source: ReturnType<typeof lstatSync>;
@@ -602,7 +701,7 @@ export function relocateLegacyConfig(
   }
   // The home holds one config, so Git records a move and not a copy;
   // the XDG file belongs to no home and stays where it is.
-  if (isInside(dirname(dirname(configPath)), formerPath)) {
+  if (isInside(homeRoot, formerPath)) {
     rmSync(formerPath, { force: true });
     try {
       rmdirSync(dirname(formerPath));
@@ -1156,11 +1255,12 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
 }
 
 export async function composeConfig(
-  top: unknown,
+  ownTop: unknown,
   loadModule: LoadModule = (specifier) => import(isAbsolute(specifier) ? pathToFileURL(specifier).href : specifier),
   configPath?: string,
+  options: ComposeOptions = {},
 ): Promise<ComposedConfig> {
-  if (!isPlainObject(top)) {
+  if (!isPlainObject(ownTop)) {
     throw new Error(
       i18n._({
         id: "config must be a YAML mapping",
@@ -1168,6 +1268,10 @@ export async function composeConfig(
       }),
     );
   }
+  // A session's configuration is yours with the project's on top
+  // (core-service-2); the project's file is checked before it layers.
+  if (options.project) validateProjectConfig(options.project.top, options.project.path);
+  const top = options.project ? layerProjectConfig(ownTop, options.project.top) : ownTop;
 
   if (top.profiles !== undefined) {
     // The load path migrates profiles-era files (DR-019); a map
@@ -1299,18 +1403,36 @@ export async function composeConfig(
     }
     const block = blockValue;
     const configuredFrom = block.from;
-    if (typeof configuredFrom !== "string" || configuredFrom.length === 0) {
-      throw new Error(
-        i18n._({
-          id: "playbooks.{id}.from must be a module specifier",
-          comment:
-            "Config error; `playbooks.<id>.from` is the config file's own field name",
-          values: { id },
-        }),
-      );
+    let from: string;
+    if (configuredFrom === undefined) {
+      // A playbook named without a module is one the environment
+      // provides (storage-7); until its lock names one, a built-in or
+      // the home's compiled library does.
+      const provided = providedFrom(id, options.libraryDir);
+      if (!provided) {
+        throw new RegistryError(
+          "unavailable",
+          i18n._({
+            id: "playbooks.{id} names no module, and no installed playbook provides it",
+            comment: "Config error: an enabled playbook carries no `from` and nothing installed provides it",
+            values: { id },
+          }),
+        );
+      }
+      from = provided;
+    } else {
+      if (typeof configuredFrom !== "string" || configuredFrom.length === 0) {
+        throw new Error(
+          i18n._({
+            id: "playbooks.{id}.from must be a module specifier",
+            comment:
+              "Config error; `playbooks.<id>.from` is the config file's own field name",
+            values: { id },
+          }),
+        );
+      }
+      from = configPath ? resolveConfigModule(configuredFrom, configPath) : configuredFrom;
     }
-
-    const from = configPath ? resolveConfigModule(configuredFrom, configPath) : configuredFrom;
     let moduleValue: unknown;
     try {
       moduleValue = await loadModule(from);
@@ -1676,7 +1798,7 @@ export async function loadConfig(
       await rebuildManagedRegistry(options.libraryDir, id);
     }
   }
-  const composed = await composeConfig(raw, loadModule, path);
+  const composed = await composeConfig(raw, loadModule, path, { ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });
   return { path, raw, composed };
 }
 

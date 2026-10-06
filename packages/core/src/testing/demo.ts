@@ -76,13 +76,15 @@ export function seedDemoProject(projectDir: string): void {
  * of one ended session and closed done, written into the state root
  * the core will serve — a History longer than one intent page with
  * nothing run. The project registers by its path, so the core's own
- * registration after boot finds this one. */
+ * registration after boot finds this one; its sessions and intents live
+ * in its spex repository (storage-6). Returns the project's key. */
 export async function seedDemoHistory(
   dataDir: string,
   projectDir: string,
   count: number,
-): Promise<void> {
-  const store = new Store({ dir: dataDir });
+  own?: string,
+): Promise<string> {
+  const store = await Store.open({ dir: dataDir, ...(own ? { own } : {}) });
   try {
     const project = store.registerProject(projectDir, "demo-project", 1);
     const sessionId = randomUUID();
@@ -93,13 +95,14 @@ export async function seedDemoHistory(
       const id = demoHistoryIntentId(i);
       const text = `Seeded done work ${i}`;
       const at = base + i * minute;
-      store.addIntent({ id, projectId: project.id, text, rank: `${String(i).padStart(3, "0")}i`, createdAt: at - 30_000 });
+      store.addIntent({ id, projectId: project.id, text, createdAt: at - 30_000 });
       records.push({ type: "turn_started", turnId: i, turn: { id: i, prompt: text }, timestamp: at - 20_000 });
       records.push({ type: "turn_finished", turnId: i, timestamp: at - 10_000 });
       store.stampIntentDispatch(id, sessionId, i, at - 20_000);
       store.closeIntent(id, "done", at);
     }
-    await seedHistorySession(join(dataDir, "sessions"), projectDir, records, sessionId);
+    await seedHistorySession(store.repository(project.id)!.sessionsDir, projectDir, records, sessionId);
+    return project.id;
   } finally { store.close(); }
 }
 

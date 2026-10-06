@@ -451,7 +451,7 @@ export class SessionManager {
     let removed = false;
     let refused = false;
     try {
-      const restored = await discardSessionUncertain(this.store.sessionStore(), sessionId);
+      const restored = await discardSessionUncertain(this.store.sessionStoreFor(sessionId), sessionId);
       removed = !restored;
       if (!restored) this.store.forgetSession(sessionId);
       else await this.store.refreshSession(sessionId, false);
@@ -521,7 +521,7 @@ export class SessionManager {
               values: { name, project: project.name },
             }));
       }
-      this.store.setLocalSession(sessionId, true);
+      this.store.setLocalSession(sessionId, true, project.id);
       ownsLocalReservation = true;
       // A continued session takes the current config projected onto its
       // stored members, and drift is named before the runtime opens —
@@ -540,7 +540,7 @@ export class SessionManager {
       const initialVisible = composed ? composed.initialVisible.filter((id) => !members || members.playerIds.includes(id)) : undefined;
       const fixture = composed && this.options.captainFactory ? await this.options.captainFactory(composed, sessionId) : undefined;
       controller = await openSessionHost({
-        store: this.store.sessionStore(), sessionId, mode, cwd: project.path,
+        store: this.store.sessionStore(project.id), sessionId, mode, cwd: project.path,
         ...(this.options.approvalHandler ? {approvalHandler: this.options.approvalHandler(sessionId)} : {}),
         ...(config ? {config} : {}), loadModule: this.loadModule,
         ...(graphs ? {graphs} : {}),
@@ -606,7 +606,7 @@ export class SessionManager {
   /** The stored structural projection of a schema-7 checkpoint, when it has one. */
   async storedStructure(sessionId: string): Promise<SessionStructuralProjection | undefined> {
     try {
-      const manifest = await this.store.sessionStore().readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
+      const manifest = await this.store.sessionStoreFor(sessionId).readManifest(sessionId) as {schemaVersion?: unknown; structuralProjection?: SessionStructuralProjection};
       return manifest.schemaVersion === 7 ? manifest.structuralProjection : undefined;
     } catch { return undefined; }
   }
@@ -735,7 +735,7 @@ export class SessionManager {
       const pending = pendingRestore(this.store.getRecords(session.id));
       if (!pending) continue;
       try {
-        const lease = await this.store.sessionStore().acquire(session.id);
+        const lease = await this.store.sessionStoreFor(session.id).acquire(session.id);
         try {
           const settled = await lease.read();
           if (settled?.state !== "settled") continue;

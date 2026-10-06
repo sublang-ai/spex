@@ -9,19 +9,8 @@
 import { readFileSync } from "node:fs";
 
 import { packagedSourcePath, stripLeadingComments } from "./artifacts.js";
-import { isValidRegistryEntry, type LoadModule } from "./config.js";
+import { BUILTIN_FROMS, isValidRegistryEntry, type LoadModule } from "./config.js";
 import type { BuiltinPlaybookInfo } from "./protocol.js";
-
-/** Registry specifiers of the built-ins shipped by @sublang/playbook. */
-const BUILTIN_FROMS: Record<string, string> = {
-  code: "@sublang/playbook/code/registry",
-  review: "@sublang/playbook/review/registry",
-  decide: "@sublang/playbook/decide/registry",
-  dev: "@sublang/playbook/dev/registry",
-  branch: "@sublang/playbook/branch/registry",
-  pr: "@sublang/playbook/pr/registry",
-  inspect: "@sublang/playbook/inspect/registry",
-};
 
 /** The built-ins' ids: a draft never takes one (playbook-library-70). */
 export const BUILTIN_IDS: readonly string[] = Object.keys(BUILTIN_FROMS);

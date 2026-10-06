@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Real Space integration fixtures; each file owns its scratch and cores.
+// Real Groups integration fixtures; each file owns its scratch and cores.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -14,7 +14,23 @@ import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import type { LineSpawner } from "../compile.js";
-import type { Command, CommandResults, ServerMessage, SpaceState, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+import type { Command, CommandResults, GroupsState, RepositoryState, ServerMessage, SpaceStateMessage, SyncStep, SpaceOp } from "../protocol.js";
+
+/** Every scratch home's own group: a name no device user collides with. */
+export const OWN = "tester";
+export const OWN_KEY = `${OWN}/${OWN}-spex`;
+
+/** One repository's state out of the Groups state. */
+export function repositoryOf(state: GroupsState, key: string): RepositoryState {
+  for (const group of state.groups) {
+    const found = group.repositories.find((repository) => repository.key === key);
+    if (found) return found;
+  }
+  throw new Error(`no repository ${key} in ${JSON.stringify(state.groups.map((group) => group.repositories.map((repository) => repository.key)))}`);
+}
+
+const describe = (state: GroupsState): string =>
+  JSON.stringify(state.groups.flatMap((group) => group.repositories.map((repository) => `${repository.key}:${JSON.stringify(repository.sync)}`)));
 
 class Client {
   private readonly socket: WebSocket;
@@ -43,8 +59,8 @@ class Client {
   async expectOk<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
-    // The state-shaped replies carry the SpaceState shape (space-30).
-    if (type === "space.get" || type === "space.init" || type === "space.remote.set") assertSpaceState(reply.result as SpaceState);
+    // The state-shaped replies carry the GroupsState shape (space-30).
+    if (type === "space.get" || type === "space.remote.set") assertGroupsState(reply.result as GroupsState);
     return reply.result;
   }
   async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<string> {
@@ -59,60 +75,81 @@ class Client {
     for (;;) {
       const found = this.messages.find(check);
       if (found) return found;
-      if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting; got ${JSON.stringify(this.messages.slice(-12).map((m) => m.type === "space.state" ? `space.state:${JSON.stringify(m.state.sync)}` : m.type))}`);
+      if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting; got ${JSON.stringify(this.messages.slice(-12).map((m) => m.type === "space.state" ? `space.state:${describe(m.state)}` : m.type))}`);
       await sleep(10);
     }
   }
   /** The first space.state message at or after `from` matching `check`. */
-  async waitSpace(from: number, check: (state: SpaceState) => boolean, timeoutMs = 20_000): Promise<SpaceState> {
+  async waitSpace(from: number, check: (state: GroupsState) => boolean, timeoutMs = 20_000): Promise<GroupsState> {
     const start = Date.now();
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
         const message = this.messages[i];
         if (message.type !== "space.state") continue;
-        assertSpaceState(message.state);
+        assertGroupsState(message.state);
         if (check(message.state)) return message.state;
       }
       if (Date.now() - start > timeoutMs) {
-        const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => JSON.stringify(m.state.sync));
+        const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => describe(m.state));
         throw new Error(`timeout waiting for space state; saw ${seen.join(" | ")}`);
       }
       await sleep(10);
     }
   }
-  /** Run a long Space command — it replies accepted at once (space-29) —
-   * and wait until the machine leaves running. */
-  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<SpaceState> {
+  /** The first state at or after `from` where one repository matches. */
+  async waitRepository(from: number, key: string, check: (repository: RepositoryState) => boolean, timeoutMs = 20_000): Promise<RepositoryState> {
+    const state = await this.waitSpace(from, (candidate) => {
+      try { return check(repositoryOf(candidate, key)); } catch { return false; }
+    }, timeoutMs);
+    return repositoryOf(state, key);
+  }
+  /** Run a long command on one repository — it replies accepted at once
+   * (space-29) — and wait until that repository's machine leaves
+   * running. */
+  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<RepositoryState> {
     const from = this.messages.length;
     assert.deepEqual(await this.expectOk(type, fields), { accepted: true });
-    return this.waitSpace(from, (state) => state.sync.phase !== "running");
+    return this.waitRepository(from, (fields as { repository: string }).repository, (repository) => repository.sync.phase !== "running");
+  }
+  /** One repository's state, read afresh. */
+  async repository(key: string): Promise<RepositoryState> {
+    return repositoryOf(await this.expectOk("space.get", {}), key);
   }
   mark(): number { return this.messages.length; }
 }
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-const SPACE_KEYS = ["conflicts", "diagnostics", "git", "home", "incoming", "issues", "lastSync", "local", "outside", "repository", "sync"];
+const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "signIn"];
 
-const REPOSITORY_KEYS = ["ahead", "behind", "branch", "checkedAt", "identityFallback", "mergePending", "remote", "remoteEmpty", "unrelated", "upstream"];
+const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "state", "sync", "visibility", "waiting"];
+
+const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
 const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
 
 const CHANGES = new Set(["new", "updated", "deleted"]);
 
-/** Every reply and broadcast carries the SpaceState shape (space-30). */
-function assertSpaceState(state: SpaceState): void {
-  assert.deepEqual(Object.keys(state).sort(), SPACE_KEYS);
-  assert.ok(PHASES.has(state.sync.phase), `phase ${JSON.stringify(state.sync)}`);
-  assert.ok(typeof state.home === "string" && Array.isArray(state.outside) && Array.isArray(state.diagnostics));
-  if (state.repository !== null) assert.deepEqual(Object.keys(state.repository).sort(), REPOSITORY_KEYS);
-  for (const unit of [...state.local, ...state.incoming, ...state.conflicts.map((c) => c.unit)]) {
-    assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
+/** Every reply and broadcast carries the GroupsState shape (space-30). */
+export function assertGroupsState(state: GroupsState): void {
+  assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
+  assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.groups));
+  for (const group of state.groups) {
+    assert.deepEqual(Object.keys(group).sort(), ["fullPath", "id", "name", "own", "repositories", "url"]);
+    for (const repository of group.repositories) {
+      assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
+      assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
+      assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
+      if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+      for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
+        assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
+      }
+      for (const conflict of repository.conflicts) {
+        assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
+      }
+      if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
+    }
   }
-  for (const conflict of state.conflicts) {
-    assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
-  }
-  if (state.lastSync !== null) assert.deepEqual(Object.keys(state.lastSync).sort(), ["at", "received", "sent"]);
 }
 
 interface Home {
@@ -121,8 +158,18 @@ interface Home {
   dataDir: string;
   projectDir: string;
   configPath: string;
-  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep }) => void | Promise<void> };
+  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void> };
   stop(): Promise<void>;
+}
+
+/** Your own group's clone in a scratch home. */
+export function ownClone(dataDir: string): string {
+  return join(dataDir, "workspace", OWN, `${OWN}-spex`);
+}
+
+/** A project's clone in a scratch home. */
+export function clonePath(dataDir: string, key: string): string {
+  return join(dataDir, "workspace", ...key.split("/"));
 }
 
 export function createSpaceHarness() {
@@ -149,7 +196,7 @@ playbooks:
   const git = (cwd: string, ...args: string[]): string => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: peerEnv, stdio: ["ignore", "pipe", "pipe"] }).trim();
 
   /** The core's environment: PATH, a scratch HOME, and Git configured only
-   * through it — no identity by default, so the fallback engages (space-4). */
+   * through it — no identity by default, so the fallback engages (space-32). */
   function coreEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
     return {
       PATH: process.env.PATH ?? "",
@@ -165,7 +212,7 @@ playbooks:
 
   function bareRepo(): string {
     const dir = mkdtempSync(join(scratch, "bare-"));
-    git(dir, "init", "-q", "--bare", "-b", "main");
+    git(dir, "init", "-q", "--bare", "-b", "spex");
     return dir;
   }
 
@@ -189,14 +236,15 @@ playbooks:
     throw new Error(`the sleeping transport never started (${pidFile})`);
   }
 
-  /** Join a freshly initialized home to the remote: the first sync ends
-   * unrelated, the join asks for any conflict, "mine" answers each. */
-  async function joinRemote(home: Home): Promise<SpaceState> {
-    const unrelated = await home.client.settle("space.sync", {});
+  /** Join a clone to a remote whose history it does not share: the first
+   * sync ends unrelated, the join asks for any conflict, "mine" answers
+   * each. */
+  async function joinRemote(home: Home, repository: string): Promise<RepositoryState> {
+    const unrelated = await home.client.settle("space.sync", { repository });
     assert.equal(unrelated.sync.phase, "unrelated", JSON.stringify(unrelated.sync));
-    let joined = await home.client.settle("space.sync", { join: true });
+    let joined = await home.client.settle("space.sync", { repository, join: true });
     if (joined.sync.phase === "choices") {
-      joined = await home.client.settle("space.sync", { join: true, choices: Object.fromEntries(joined.conflicts.map((c) => [c.unit.unit, "mine" as const])) });
+      joined = await home.client.settle("space.sync", { repository, join: true, choices: Object.fromEntries(joined.conflicts.map((c) => [c.unit.unit, "mine" as const])) });
     }
     assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
     return joined;
@@ -225,11 +273,12 @@ playbooks:
     newPlayers: { "dev.helper": { adapter: "claude" as const } },
   };
 
-  /** A real core on a scratch home whose configuration lies inside it. */
+  /** A real core on a scratch home whose configuration lies in your own
+   * group's spex repository. */
   async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
-    const configPath = join(dataDir, "config", "playbook.config.yaml");
-    if (!existsSync(configPath)) { mkdirSync(join(dataDir, "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
+    const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
+    if (!existsSync(configPath)) { mkdirSync(join(ownClone(dataDir), "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
     const projectDir = join(scratch, `${name}-project-${randomUUID().slice(0, 8)}`);
     if (options.project !== false) { mkdirSync(projectDir); git(projectDir, "init", "-q"); }
     const { imports } = fakeAdapterImports({
@@ -248,8 +297,8 @@ playbooks:
     const hooks: Home["hooks"] = {};
     const service = await CoreService.start({
       token: "test",
-      configPath,
       dataDir,
+      own: OWN,
       adapterImports: imports,
       adapterRuntime: () => ({ usable: true }),
       captainFactory: async () => captain,
@@ -288,12 +337,12 @@ playbooks:
     return id;
   }
 
-  /** Every home file except Git data and lease coordination, as path → bytes. */
+  /** Every file of a directory except Git data and lease coordination, as path → bytes. */
   function snapshot(dir: string): Map<string, Buffer> {
     const out = new Map<string, Buffer>();
     const walk = (current: string): void => {
       for (const entry of readdirSync(current, { withFileTypes: true })) {
-        if (entry.name === ".git" || /^\.lock|\.lock(?:\.|$)/.test(entry.name)) continue;
+        if (entry.name === ".git" || /^\.lock|^\.lease|\.lock(?:\.|$)/.test(entry.name)) continue;
         const full = join(current, entry.name);
         if (entry.isDirectory()) walk(full);
         else if (entry.isFile()) out.set(relative(dir, full), readFileSync(full));
@@ -303,19 +352,20 @@ playbooks:
     return out;
   }
 
-  /** A peer working copy of the bare remote, committing as plain Git. */
+  /** A peer working copy of the bare remote's `spex` branch, committing
+   * as plain Git. */
   function peerClone(bare: string): string {
     const dir = mkdtempSync(join(scratch, "peer-"));
-    git(dir, "clone", "-q", bare, ".");
+    git(dir, "clone", "-q", "--branch", "spex", bare, ".");
     return dir;
   }
   async function peerPush(dir: string, mutate: (dir: string) => void | Promise<void>): Promise<string> {
     git(dir, "fetch", "-q", "origin");
-    git(dir, "reset", "-q", "--hard", "origin/main");
+    git(dir, "reset", "-q", "--hard", "origin/spex");
     await mutate(dir);
     git(dir, "add", "-A", "--", ".");
     git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer change");
-    git(dir, "push", "-q", "origin", "HEAD:main");
+    git(dir, "push", "-q", "origin", "HEAD:spex");
     return git(dir, "rev-parse", "HEAD");
   }
 

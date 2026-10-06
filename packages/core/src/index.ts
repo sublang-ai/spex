@@ -5,7 +5,8 @@ export const CORE_NAME = "@sublang/spex-core";
 
 export * from "./protocol.js";
 export * from "./config.js";
-export { Store } from "./store.js";
+export { Store, type SpexRepository } from "./store.js";
+export { Home, defaultOwnName, hostUrlFor, type HomeFile } from "./home.js";
 export {
   SessionManager,
   CoreError,

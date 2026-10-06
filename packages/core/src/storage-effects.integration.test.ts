@@ -11,12 +11,20 @@ import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
 import { createTmuxPlayRuntime } from "@sublang/cligent/tmux-play";
-import { ApplicationRegistry } from "./app-storage.js";
-import { prepareStorageGitFiles, selectStorageMerge } from "./storage-git.js";
+import { Home } from "./home.js";
+import { Store } from "./store.js";
+import { selectStorageMerge } from "./storage-git.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 
+/** The test's own Git: no user or system configuration, a fixed identity. */
+const gitEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1",
+  GIT_AUTHOR_NAME: "Storage Test", GIT_AUTHOR_EMAIL: "storage@example.test",
+  GIT_COMMITTER_NAME: "Storage Test", GIT_COMMITTER_EMAIL: "storage@example.test",
+};
 const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-C", cwd, ...args], {
-  encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  encoding: "utf8", env: gitEnv, stdio: ["ignore", "pipe", "pipe"],
 }).trim();
 
 // Seed durable boundaries through Playbook's real repository authority. Production
@@ -30,18 +38,16 @@ test("storage-16: Git selection reconciles an omitted repository receipt before 
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, "home");
   const project = join(root, "project");
-  for (const dir of [home, project]) {
-    mkdirSync(dir);
-    git(dir, "init", "-b", "main");
-    git(dir, "config", "user.name", "Storage Test");
-    git(dir, "config", "user.email", "storage@example.test");
-    git(dir, "config", "commit.gpgsign", "false");
-  }
+  mkdirSync(project);
+  git(project, "init", "-q", "-b", "main");
   writeFileSync(join(project, "work.txt"), "baseline\n");
   git(project, "add", ".");
-  git(project, "commit", "-m", "baseline");
-  new ApplicationRegistry(home).register(project, "Project", 1);
-  prepareStorageGitFiles(home);
+  git(project, "commit", "-q", "-m", "baseline");
+  // The project's records live in its spex repository's clone, on `spex`.
+  const registry = new Store({ dir: home, own: "tester", env: gitEnv });
+  let key: string;
+  try { key = registry.registerProject(project, "Project").id; } finally { registry.close(); }
+  const clone = Home.load(home).clonePath(key);
   const configPath = join(root, "playbook.config.yaml");
   writeFileSync(configPath, `captain:
   adapter: claude
@@ -56,16 +62,16 @@ playbooks:
 `);
   const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath }));
   const { imports } = fakeAdapterImports({ fallback: { result: "Done" } });
-  const sessionsDir = join(home, "sessions");
+  const sessionsDir = join(clone, "sessions");
   const store = createSessionStore({ sessionsDir });
   const host = await openSessionHost({ store, mode: "new", cwd: project, config, adapterImports: imports });
   const id = host.sessionId;
   try { await host.handleBossTurn("Establish the session"); } finally { await host.dispose(); }
   const manifest = join(sessionsDir, `${id}.json`);
   const replay = join(sessionsDir, `${id}.records.jsonl`);
-  const commit = (message: string) => { git(home, "add", "."); git(home, "commit", "-m", message); };
+  const commit = (message: string) => { git(clone, "add", "."); git(clone, "commit", "-q", "-m", message); };
   commit("base");
-  git(home, "branch", "other");
+  git(clone, "branch", "other");
 
   const lease = await store.acquire(id);
   const settled = await lease.read();
@@ -101,7 +107,7 @@ playbooks:
   const selectedReplay = readFileSync(replay);
   commit("retain an incomplete effect boundary");
 
-  git(home, "checkout", "other");
+  git(clone, "checkout", "-q", "other");
   writeFileSync(manifest, selectedManifest);
   writeFileSync(replay, selectedReplay);
   await store.prepare();
@@ -122,7 +128,7 @@ playbooks:
     const pending = mirror.boundaries[0];
     writeFileSync(join(project, "work.txt"), "completed once\n");
     git(project, "add", ".");
-    git(project, "commit", "-m", "perform the external action");
+    git(project, "commit", "-q", "-m", "perform the external action");
     const after = await capabilities.code.repository.observe();
     const physicalReceipt = await classifyRepositoryReceipt(pending.baseline, after, {
       allowedDispositions: pending.dispositions,
@@ -137,9 +143,9 @@ playbooks:
   commit("record the completed effect");
   const completedHead = git(project, "rev-parse", "HEAD");
 
-  git(home, "checkout", "main");
-  try { git(home, "merge", "--no-commit", "--no-ff", "other"); } catch { /* explicit selection follows */ }
-  await selectStorageMerge(home, { [`sessions/${id}`]: "ours" });
+  git(clone, "checkout", "-q", "spex");
+  try { git(clone, "merge", "--no-commit", "--no-ff", "other"); } catch { /* explicit selection follows */ }
+  await selectStorageMerge(home, key, { [`sessions/${id}`]: "ours" });
   assert.deepEqual(readFileSync(manifest), selectedManifest);
   assert.equal(JSON.parse(readFileSync(manifest, "utf8")).effectLedger.boundaries[0].physicalReceipt, undefined);
   // Playbook 17 restores and reports the interrupted turn rather than

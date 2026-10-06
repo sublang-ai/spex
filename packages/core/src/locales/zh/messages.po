@@ -17,8 +17,8 @@ msgstr ""
 #. Separates names listed in one message
 #. Separates names listed in one message
 #. Separates names listed in one message
-#: src/app-storage.ts
 #: src/config.ts
+#: src/files.ts
 #: src/service.ts
 msgid ", "
 msgstr "、"
@@ -43,7 +43,7 @@ msgid "; missing {roles}"
 msgstr "；缺少角色 {roles}"
 
 #. Clause naming the fields a record may also carry
-#: src/app-storage.ts
+#: src/files.ts
 msgid "; optional {fields}"
 msgstr "；可选字段 {fields}"
 
@@ -89,20 +89,10 @@ msgstr "{act}。然后重试。"
 msgid "{command} failed: {output}"
 msgstr "{command} 失败：{output}"
 
-#. A queue unit's detail: how many acts this side adds to the end
-#: src/space.ts
-msgid "{count, plural, one {# act appended} other {# acts appended}}"
-msgstr "{count, plural, other {追加 # 条动作}}"
-
-#. A queue unit side's detail: how many acts this side adds
-#: src/space.ts
-msgid "{count, plural, one {# act} other {# acts}}"
-msgstr "{count, plural, other {# 条动作}}"
-
-#. A queue unit's label; {name} is the project whose queue changed
-#: src/space.ts
-msgid "{count, plural, one {# change in {name}'s queue} other {# changes in {name}'s queue}}"
-msgstr "{count, plural, other {{name} 的队列有 # 处更改}}"
+#. Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent
+#: src/service.ts
+msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
+msgstr "{count, plural, other {# 条记录}}尚未送达托管平台，移除将丢失这些记录；仍要移除请再次确认"
 
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
@@ -124,10 +114,10 @@ msgstr "{described} — 安装方式：npm install -g {spec}{steps}"
 msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
 msgstr "{diagnostic}；删除草稿，或修复文件后重启 Spex"
 
-#. Repair row: sessions name a folder no registered project holds
-#: src/app-storage.ts
-msgid "{directory} has no project on this device"
-msgstr "{directory} 在本设备上没有对应的项目"
+#. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
+#: src/config.ts
+msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
+msgstr "项目的设置中不允许 {entry}：项目设置只列出所启用的规程及每个角色使用的参与者"
 
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
@@ -137,7 +127,9 @@ msgid "{file} changed on disk since it was read"
 msgstr "{file} 在读取之后已在磁盘上更改"
 
 #. A storage fault as one line: the file, then the reason — itself a message
-#: src/app-storage.ts
+#. A storage fault as one line: the file, then the reason — itself a message
+#: src/files.ts
+#: src/service.ts
 msgid "{file}: {reason}"
 msgstr "{file}：{reason}"
 
@@ -152,7 +144,9 @@ msgid "{host} refused this machine's access"
 msgstr "{host} 拒绝了本机的访问"
 
 #. Refusal: the id offered for a new draft is taken by a playbook already
+#. Refusal: the id offered for a new draft is taken by a playbook already
 #: src/authoring.ts
+#: src/service.ts
 msgid "{id} is already a configured playbook or a built-in; pick another id"
 msgstr "{id} 已被配置中的规程或内置规程占用；请换一个 id"
 
@@ -162,7 +156,7 @@ msgid "{label} has no divergent change"
 msgstr "{label} 两端没有分歧的更改"
 
 #. Repair row: the project is registered, but nothing here holds it
-#: src/app-storage.ts
+#: src/store.ts
 msgid "{name} has no folder on this device"
 msgstr "{name} 在本设备上没有文件夹"
 
@@ -385,6 +379,11 @@ msgstr "{path}.subagentModel 必须是非空字符串"
 msgid "{playbookId} is compiling"
 msgstr "{playbookId} 正在编译"
 
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#: src/service.ts
+msgid "{projectId} has no working folder on this device"
+msgstr "{projectId} 在本设备上没有工作文件夹"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -514,8 +513,8 @@ msgstr "{project} 中有会话正在启动 — 请稍候"
 
 #. Refusal: a diff was asked of a unit that is read as a summary, not as text
 #: src/space.ts
-msgid "a session or queue offers no text diff"
-msgstr "会话和队列不提供文本差异"
+msgid "a session, an intent or an authoring session offers no text diff"
+msgstr "会话、意图和编写会话不提供文本差异"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -532,11 +531,6 @@ msgstr "此会话已有一轮正在运行。"
 #: src/service.ts
 msgid "a turn is being submitted in this session"
 msgstr "此会话中已有一轮正在提交"
-
-#. Storage diagnostic: an act follows the intent's removal
-#: src/app-storage.ts
-msgid "act targets removed intent {intentId}"
-msgstr "动作指向已移除的意图 {intentId}"
 
 #. Storage diagnostic: an act names an intent no queue act created
 #: src/app-storage.ts
@@ -558,20 +552,10 @@ msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 
-#. Storage diagnostic: two projects claim one folder
-#: src/app-storage.ts
-msgid "ambiguous project path {path}"
-msgstr "项目路径 {path} 有歧义"
-
-#. Refusal: a row was linked after itself
-#: src/service.ts
-msgid "an intent cannot wait on itself"
-msgstr "意图不能等待自身"
-
-#. Refusal: a move named a row in another project's queue
-#: src/service.ts
-msgid "an intent reorders only within its own project"
-msgstr "意图只能在其所属项目的队列内重新排序"
+#. Migration diagnostic: a stored intent references an attachment whose bytes are gone
+#: src/migrate-home.ts
+msgid "an attachment the intent names is missing"
+msgstr "意图引用的附件缺失"
 
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
@@ -587,6 +571,11 @@ msgstr "已有未结意图占用此来源：“{title}”"
 #: src/space.ts
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
 msgstr "另一个进程正在写入空间；请等待它完成，然后重试。"
+
+#. Storage diagnostic: an intent's attachment folder stands without the intent's file
+#: src/storage-git.ts
+msgid "attachments without their intent"
+msgstr "附件缺少所属的意图"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
@@ -618,6 +607,11 @@ msgstr "无法读取文件：{message}"
 msgid "captain must resolve an adapter"
 msgstr "captain 必须解析出一个适配器"
 
+#. Refusal: the remote's side was asked for before the remote was checked
+#: src/space.ts
+msgid "Check the host first"
+msgstr "请先检查托管平台"
+
 #. Guidance where the remote's host could not be reached
 #: src/space-git.ts
 msgid "Check the network or the remote URL, then try again."
@@ -628,11 +622,6 @@ msgstr "请检查网络或远程仓库 URL，然后重试。"
 msgid "Check the path, create the repository if it is not there yet, or {act}. Then Retry."
 msgstr "请检查路径，若仓库尚不存在请先创建，或者{act}。然后重试。"
 
-#. Refusal: the remote's side was asked for before the remote was checked
-#: src/space.ts
-msgid "Check the remote first"
-msgstr "请先检查远程仓库"
-
 #. Guidance where the remote holds no repository this machine can see; {act} is the act that gives this machine access
 #: src/space-git.ts
 msgid "Check the URL, create the repository if it is not there yet, or {act}. Then Retry."
@@ -642,6 +631,11 @@ msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后
 #: src/space.ts
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
+
+#. The project file's unit label: the remote of the code changed
+#: src/space.ts
+msgid "Code remote changed"
+msgstr "代码远程仓库有更改"
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -704,6 +698,7 @@ msgid "config is not valid"
 msgstr "配置无效"
 
 #. Config error: the file's top level is not a mapping
+#. Config error: the file's top level is not a mapping
 #: src/config.ts
 msgid "config must be a YAML mapping"
 msgstr "配置必须是 YAML 映射"
@@ -723,16 +718,6 @@ msgstr "记录 {seq} 之后的对话记录已损坏；该草稿除“删除”�
 msgid "deleted"
 msgstr "已删除"
 
-#. Storage diagnostic: the queue's waiting chain loops
-#: src/app-storage.ts
-msgid "dependency cycle at {intentId}"
-msgstr "{intentId} 处存在依赖循环"
-
-#. Storage diagnostic; `reason` is the other file's own diagnostic, relayed
-#: src/store.ts
-msgid "depends on invalid {file}: {reason}"
-msgstr "依赖无效的 {file}：{reason}"
-
 #. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
 msgid "draft {id} already exists; open it"
@@ -740,8 +725,8 @@ msgstr "草稿 {id} 已存在；请直接打开"
 
 #. Diagnostic for a damaged draft file: the id it names is not the one its folder does
 #: src/drafts.ts
-msgid "draft id disagrees with its directory"
-msgstr "草稿 id 与其所在目录不一致"
+msgid "draft id disagrees with its file name"
+msgstr "草稿 id 与其文件名不一致"
 
 #. Refusal: the selected authoring draft does not exist
 #: src/service.ts
@@ -758,13 +743,8 @@ msgstr "项目 {projectId} 绑定重复"
 msgid "duplicate effective command \"{command}\""
 msgstr "生效命令“{command}”重复"
 
-#. Storage diagnostic: two open intents claim one queue position
-#: src/app-storage.ts
-msgid "duplicate open rank {rank}"
-msgstr "未结意图的队列位置 {rank} 重复"
-
 #. Storage diagnostic: two open intents hold one issue or pull request
-#: src/app-storage.ts
+#: src/storage-git.ts
 msgid "duplicate open source {source}"
 msgstr "未结意图的来源 {source} 重复"
 
@@ -778,7 +758,8 @@ msgstr "规程 id“{playbookId}”重复"
 msgid "duplicate project {projectId}"
 msgstr "项目 {projectId} 重复"
 
-#. Storage diagnostic: two act logs queue the same intent
+#. Storage diagnostic: two acts queue the same intent
+#. Storage diagnostic: two acts queue the same intent
 #. Storage diagnostic: two acts queue the same intent
 #: src/app-storage.ts
 #: src/store.ts
@@ -795,15 +776,12 @@ msgstr "记录 id {id} 重复：{first} 与 {second}"
 msgid "edit rejected"
 msgstr "编辑被拒绝"
 
-#. Migration diagnostic: the project registry's top level is not an object
-#: src/app-storage.ts
-msgid "expected a registry object"
-msgstr "应为注册表对象"
-
 #. Diagnostic for a damaged file: its top level is not an object
+#. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
 #: src/app-storage.ts
 #: src/drafts.ts
+#: src/files.ts
 msgid "expected an object"
 msgstr "应为对象"
 
@@ -818,19 +796,26 @@ msgid "expected fields {required}; optional {optional}"
 msgstr "应包含字段 {required}；可选字段 {optional}"
 
 #. Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message
-#: src/app-storage.ts
+#: src/files.ts
 msgid "expected fields {required}{optional}"
 msgstr "应包含字段 {required}{optional}"
 
-#. Storage diagnostic: an act log's filename is no project id
+#. Storage diagnostic: an intent file's name is no intent id
+#. Storage diagnostic: an intent file's name is no intent id
 #: src/app-storage.ts
-msgid "filename must be a project UUID"
-msgstr "文件名必须是项目 UUID"
+#: src/storage-git.ts
+msgid "filename must be an intent UUID"
+msgstr "文件名必须是意图的 UUID"
 
 #. Refusal: a Git merge is pending in the home
 #: src/space.ts
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
+
+#. Storage diagnostic: one folder appears in two pairs
+#: src/home.ts
+msgid "folder {path} is paired twice"
+msgstr "文件夹 {path} 被配对了两次"
 
 #. A stopped save's message where git failed and printed nothing
 #: src/space.ts
@@ -907,16 +892,6 @@ msgstr "在终端运行 gh auth status 查看本机使用的 GitHub 账户，运
 msgid "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
 msgstr "在终端运行 gh auth status 查看本机使用的 GitHub 账户，运行 gh auth login 更换账户"
 
-#. Storage diagnostic: an intent carries a close time without its verdict, or the other way round
-#: src/app-storage.ts
-msgid "incomplete closed intent"
-msgstr "已结束的意图记录不完整"
-
-#. Storage diagnostic: an act log ends mid-line, so nothing may be appended
-#: src/store.ts
-msgid "incomplete final act; restore or remove the incomplete tail before writing"
-msgstr "末尾动作不完整；写入前请恢复或移除这段不完整的内容"
-
 #. Refusal: the home is not a Git repository yet
 #: src/space.ts
 msgid "Initialize the repository first"
@@ -927,7 +902,6 @@ msgstr "请先初始化仓库"
 msgid "Install Node >= 23.6 first; slc runs on it."
 msgstr "请先安装 Node >= 23.6；slc 依赖它运行。"
 
-#. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
 #: src/app-storage.ts
 msgid "invalid attachment references"
@@ -984,7 +958,7 @@ msgid "invalid dispatch"
 msgstr "派发记录无效"
 
 #. Storage diagnostic: an intent names a turn its session never ran
-#: src/app-storage.ts
+#: src/storage-git.ts
 msgid "invalid dispatch for {intentId}"
 msgstr "{intentId} 的派发记录无效"
 
@@ -993,20 +967,20 @@ msgstr "{intentId} 的派发记录无效"
 msgid "invalid failure count"
 msgstr "失败次数无效"
 
+#. Storage diagnostic: home.yaml's own fields are malformed
+#: src/home.ts
+msgid "invalid home file"
+msgstr "主目录文件无效"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
 msgstr "意图 ID 无效"
 
 #. Migration diagnostic: the file to migrate is not readable JSON
-#: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "invalid JSON"
 msgstr "JSON 无效"
-
-#. Migration diagnostic: a project's recorded folder is no absolute local path
-#: src/app-storage.ts
-msgid "invalid legacy project path"
-msgstr "旧版项目路径无效"
 
 #. Media storage failure
 #: src/media.ts
@@ -1019,19 +993,19 @@ msgid "invalid migration receipt or input"
 msgstr "迁移回执或输入无效"
 
 #. Migration diagnostic: the kept original no longer matches its receipt
-#: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "invalid migration receipt or retained input"
 msgstr "迁移回执或保留的原始输入无效"
-
-#. Storage diagnostic: the intent an act waits on is no valid id
-#: src/app-storage.ts
-msgid "invalid predecessor"
-msgstr "前置意图无效"
 
 #. Storage diagnostic: a project's folder or its recorded aliases are malformed
 #: src/app-storage.ts
 msgid "invalid project binding"
 msgstr "项目绑定无效"
+
+#. Storage diagnostic: project.json's name or remote is malformed
+#: src/app-storage.ts
+msgid "invalid project file"
+msgstr "项目文件无效"
 
 #. Storage diagnostic: a project's id, name or registration time is malformed
 #: src/app-storage.ts
@@ -1053,11 +1027,6 @@ msgstr "排队消息无效"
 msgid "invalid queued intent"
 msgstr "排队意图无效"
 
-#. Storage diagnostic: a move act carries no queue position
-#: src/app-storage.ts
-msgid "invalid rank"
-msgstr "队列位置无效"
-
 #. Storage diagnostic: the issue or pull request an intent came from is malformed
 #: src/app-storage.ts
 msgid "invalid source"
@@ -1068,15 +1037,10 @@ msgstr "来源无效"
 msgid "invalid source digest"
 msgstr "源文摘要无效"
 
-#. Storage diagnostic: an edit act carries no text
-#: src/app-storage.ts
-msgid "invalid text"
-msgstr "文本无效"
-
-#. Storage diagnostic: an act carries no readable time
-#: src/app-storage.ts
-msgid "invalid timestamp"
-msgstr "时间戳无效"
+#. Diagnostic for a damaged authoring file: the path of its spec package will not read
+#: src/drafts.ts
+msgid "invalid spec package path"
+msgstr "规约包路径无效"
 
 #. Diagnostic for a damaged draft file: its recorded times will not read
 #: src/drafts.ts
@@ -1098,6 +1062,11 @@ msgstr "上传 ID 或文件长度无效。"
 #: src/app-storage.ts
 msgid "invalid viewed marker {key}"
 msgstr "已读标记 {key} 无效"
+
+#. Storage diagnostic: a working folder or its spex repository's key is malformed
+#: src/home.ts
+msgid "invalid working folder pair"
+msgstr "工作文件夹配对无效"
 
 #. Guidance under a save that refused to share a file
 #: src/space.ts
@@ -1134,11 +1103,6 @@ msgstr "链接"
 msgid "Machine"
 msgstr "状态机"
 
-#. Why an interrupted sync's repair failed; main is the branch's own name
-#: src/space.ts
-msgid "main moved since the interrupted sync; resolve it in a terminal"
-msgstr "自这次中断的同步以来 main 已变动；请在终端中处理"
-
 #. The act that gives access to a local-path remote, inside a sentence
 #: src/space-git.ts
 msgid "make sure this user can read the folder"
@@ -1167,7 +1131,9 @@ msgid "Media storage has stopped."
 msgstr "媒体存储服务已停止。"
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
+#. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "migration destination diverged; preserved unchanged"
 msgstr "迁移目标已变动；已原样保留"
 
@@ -1175,11 +1141,6 @@ msgstr "迁移目标已变动；已原样保留"
 #: src/app-storage.ts
 msgid "migration output verification failed"
 msgstr "迁移输出校验失败"
-
-#. Storage diagnostic: an intent waits on one the log never queued
-#: src/app-storage.ts
-msgid "missing predecessor {intentId}"
-msgstr "缺少前序意图 {intentId}"
 
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -1197,6 +1158,8 @@ msgid "no configured playbook {playbookId}"
 msgstr "配置中没有规程 {playbookId}"
 
 #. Refusal: no playbook draft of this id is open
+#. Refusal: no playbook draft of this id is open
+#: src/drafts.ts
 #: src/service.ts
 msgid "no draft {draftId}"
 msgstr "没有草稿 {draftId}"
@@ -1222,7 +1185,10 @@ msgid "No GitHub origin remote. Add one (git remote add origin …) to see issue
 msgstr "没有 GitHub origin 远程仓库。添加一个（git remote add origin …）即可查看 Issue 与 PR。"
 
 #. Refusal: no intent of this id is in the ledger
+#. Refusal: no intent of this id is in the ledger
+#. Refusal: no intent of this id is in the ledger
 #: src/service.ts
+#: src/store.ts
 msgid "no intent {intentId}"
 msgstr "没有意图 {intentId}"
 
@@ -1240,11 +1206,6 @@ msgstr "无人"
 #: src/service.ts
 msgid "no project {projectId}"
 msgstr "没有项目 {projectId}"
-
-#. Session diagnostic: no project on this device holds the session's folder
-#: src/store.ts
-msgid "No project binding for {cwd}"
-msgstr "{cwd} 没有绑定项目"
 
 #. Refusal: the answer names a repair the core does not report; {repair} is its key
 #: src/space.ts
@@ -1278,15 +1239,22 @@ msgstr "尚无源文"
 msgid "no spec file at specs/{path}"
 msgstr "specs/{path} 处没有规约文件"
 
+#. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
+#: src/space.ts
+#: src/store.ts
+msgid "no spex repository {key} on this device"
+msgstr "本设备上没有 spex 仓库 {key}"
+
 #. compile phase: slc normalizes the source
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "规范化"
 
-#. Refusal: the home's HEAD names no branch; main is a branch's own name
+#. Refusal: the clone's HEAD names no branch; spex is the branch's own name
 #: src/space.ts
-msgid "Not on a branch; check out main in a terminal"
-msgstr "当前不在任何分支上；请在终端中切换到 main"
+msgid "Not on a branch; check out spex in a terminal"
+msgstr "当前不在任何分支上；请在终端中切换到 spex"
 
 #. Guidance where a file under the home failed validation before the save
 #: src/space.ts
@@ -1298,10 +1266,10 @@ msgstr "未保存任何内容。请修复或移除该文件，然后重新同步
 msgid "Nothing was saved. Fix the sync rules file, then sync again."
 msgstr "未保存任何内容。请修复同步规则文件，然后重新同步。"
 
-#. Refusal: the home sits on another branch; main is a branch's own name
+#. Refusal: the clone sits on another branch; spex is the branch's own name
 #: src/space.ts
-msgid "On {branch}; check out main in a terminal"
-msgstr "当前在 {branch} 分支上；请在终端中切换到 main"
+msgid "On {branch}; check out spex in a terminal"
+msgstr "当前在 {branch} 分支上；请在终端中切换到 spex"
 
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
@@ -1334,7 +1302,7 @@ msgid "parse failed: {message}"
 msgstr "解析失败：{message}"
 
 #. Refusal: the folder is recorded for a project already, so Add cannot claim it
-#: src/app-storage.ts
+#: src/store.ts
 msgid "path {path} needs explicit rebinding"
 msgstr "路径 {path} 需要显式重新绑定"
 
@@ -1349,7 +1317,8 @@ msgid "path must be relative to specs/"
 msgstr "路径必须相对于 specs/"
 
 #. Refusal: another project holds the folder this binding names
-#: src/app-storage.ts
+#. Refusal: another project holds the folder this binding names
+#: src/store.ts
 msgid "path or alias already belongs to another project"
 msgstr "该路径或别名已属于其他项目"
 
@@ -1357,11 +1326,6 @@ msgstr "该路径或别名已属于其他项目"
 #: src/specs.ts
 msgid "path resolves outside the project"
 msgstr "路径解析后位于项目之外"
-
-#. A playbook unit's label; {name} is the playbook's own id
-#: src/space.ts
-msgid "Playbook {name}"
-msgstr "规程 {name}"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -1384,6 +1348,7 @@ msgid "playbook {playbookId}'s {role} role now binds {player} instead of {before
 msgstr "规程 {playbookId} 的 {role} 角色现在绑定 {player}，而非 {before}"
 
 #. Config error; `playbooks` is the config file's own field name
+#. Config error; `playbooks` is the config file's own field name
 #: src/config.ts
 msgid "playbooks must be an object"
 msgstr "playbooks 必须是一个对象"
@@ -1399,9 +1364,15 @@ msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 msgstr "playbooks.{id} 的键必须等于模块清单中的 id“{manifestId}”"
 
 #. Config error; `playbooks` is the config file's own field name and the id its key
+#. Config error; `playbooks` is the config file's own field name and the id its key
 #: src/config.ts
 msgid "playbooks.{id} must be an object"
 msgstr "playbooks.{id} 必须是一个对象"
+
+#. Config error: an enabled playbook carries no `from` and nothing installed provides it
+#: src/config.ts
+msgid "playbooks.{id} names no module, and no installed playbook provides it"
+msgstr "playbooks.{id} 未指明模块，也没有已安装的规程提供它"
 
 #. Config error; `captain` is the reserved role id and `tmux-play` the runtime's name
 #: src/config.ts
@@ -1438,6 +1409,7 @@ msgstr "playbooks.{id}.from 必须是一个模块标识符"
 msgid "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session"
 msgstr "playbooks.{id}.players 已在显式会话 Player 的大版本中移除：请在顶层 players 中定义稳定的 id，并在 playbooks.<id>.roles 下显式绑定；自动迁移会替你决定哪些既有对话共用一个会话"
 
+#. Config error; `playbooks.<id>.roles` is the config file's own field name
 #. Config error; `playbooks.<id>.roles` is the config file's own field name
 #: src/config.ts
 msgid "playbooks.{id}.roles must be an object"
@@ -1498,16 +1470,6 @@ msgstr "前缀"
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
 msgstr "profiles 已废弃（playbook 3.0）：智能体的设置改为内联携带"
 
-#. A project no registry names, by the head of its identifier
-#: src/space.ts
-msgid "project {id}"
-msgstr "项目 {id}"
-
-#. Refusal: the registry holds no such project at the revision read
-#: src/store.ts
-msgid "project {projectId} is absent; select its registry revision to restore it"
-msgstr "项目 {projectId} 不存在；请选择其注册表的修订版本以恢复它"
-
 #. Refusal: the project's own folder is not on this device
 #: src/specs.ts
 msgid "project directory is missing"
@@ -1518,50 +1480,15 @@ msgstr "项目目录不存在"
 msgid "Project is unavailable."
 msgstr "项目不可用。"
 
-#. Refusal: the revision chosen to restore a project is not in this history
-#: src/store.ts
-msgid "project restoration requires an ancestor of the current branch"
-msgstr "恢复项目需要选择当前分支的祖先提交"
-
-#. The project registry's label where its change cannot be named
-#: src/space.ts
-msgid "Projects changed"
-msgstr "项目有更改"
-
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
 msgstr "已保存文件的长度与上传声明不符。"
 
-#. A queue unit's detail: this side rewrote the queue instead of appending
-#: src/space.ts
-msgid "queue replaced"
-msgstr "队列被整体替换"
-
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
 msgstr "拒绝共享 {leak}"
-
-#. Refusal: a staged file belongs to a family the home never shares; {leak} is its path
-#: src/space.ts
-msgid "Refusing to share {leak}: it belongs to a family that stays on this device"
-msgstr "拒绝共享 {leak}：它属于仅留在本设备的文件类别"
-
-#. A project registry line: a project this side added, by its name
-#: src/space.ts
-msgid "Registered \"{name}\""
-msgstr "已注册“{name}”"
-
-#. A project registry line: a project this side removed, by its name
-#: src/space.ts
-msgid "Removed \"{name}\""
-msgstr "已移除“{name}”"
-
-#. A project registry line: a project this side renamed
-#: src/space.ts
-msgid "Renamed \"{before}\" to \"{name}\""
-msgstr "已将“{before}”重命名为“{name}”"
 
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
@@ -1633,11 +1560,6 @@ msgstr "无法验证会话归属"
 msgid "session working directory is missing or invalid"
 msgstr "会话的工作目录缺失或无效"
 
-#. Guidance where Git has no committer identity; the setting names stay as they are
-#: src/space.ts
-msgid "Set user.name and user.email for Git on this machine, then Retry."
-msgstr "请在本机为 Git 设置 user.name 和 user.email，然后重试。"
-
 #. The settings unit's label
 #: src/space.ts
 msgid "Settings changed"
@@ -1684,13 +1606,8 @@ msgstr "空间忙碌中"
 
 #. Refusal while the Space checks the remote
 #: src/space.ts
-msgid "Space is checking the remote; wait for it to finish"
-msgstr "空间正在检查远程仓库；请等待其完成"
-
-#. Refusal while the Space initializes the home
-#: src/space.ts
-msgid "Space is initializing; wait for it to finish"
-msgstr "空间正在初始化；请等待其完成"
+msgid "Space is checking the host; wait for it to finish"
+msgstr "空间正在检查托管平台；请等待其完成"
 
 #. Refusal while the Space syncs
 #: src/space.ts
@@ -1702,10 +1619,25 @@ msgstr "空间正在同步；请等待其完成"
 msgid "Spec items"
 msgstr "规约条目"
 
+#. The environment unit's label: spex.yaml or spex.lock changed
+#: src/space.ts
+msgid "Spec packages changed"
+msgstr "规约包有更改"
+
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
 msgstr "Spex 桌面端与服务端需要支持私有 POSIX 文件权限的 macOS 或 Linux。在 Windows 上，请使用 scaffold 命令行，或在浏览器中连接到 Spex 服务器。"
+
+#. Why an interrupted sync's repair failed; spex is the branch's own name
+#: src/space.ts
+msgid "spex moved since the interrupted sync; resolve it in a terminal"
+msgstr "自这次中断的同步以来 spex 已变动；请在终端中处理"
+
+#. Storage diagnostic: one spex repository appears in two pairs
+#: src/home.ts
+msgid "spex repository {key} is paired twice"
+msgstr "spex 仓库 {key} 被配对了两次"
 
 #. Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening
 #: src/authoring.ts
@@ -1734,8 +1666,8 @@ msgstr "无法获取状态根目录 {dir} 的租约"
 
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
-msgid "Sync again to merge what the remote received meanwhile."
-msgstr "请再次同步，以合并远程仓库这期间收到的内容。"
+msgid "Sync again to merge what the host received meanwhile."
+msgstr "请再次同步，以合并托管平台这期间收到的内容。"
 
 #. The sync-rules unit's label
 #: src/space.ts
@@ -1743,14 +1675,10 @@ msgid "Sync rules updated"
 msgstr "同步规则已更新"
 
 #. Attachment transfer or storage diagnostic
+#. Attachment transfer or storage diagnostic
 #: src/service.ts
 msgid "Text or an attachment is required."
 msgstr "请输入文字或添加附件。"
-
-#. Refusal: the queue's waiting chain would loop
-#: src/service.ts
-msgid "that link would close a waiting cycle"
-msgstr "该关联会让等待链形成循环"
 
 #. Refusal: a summons is marked read only once its turn ended
 #: src/service.ts
@@ -1822,25 +1750,22 @@ msgstr "配置无效；请先在设置中修复，智能体才能作答"
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
 
-#. Refusal: this core keeps no state on disk, so it has no Space
-#: src/service.ts
-msgid "the core runs without a state root; Space needs one"
-msgstr "该核心未使用状态根目录；空间需要一个"
-
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
 msgstr "文件尚未上传完成。"
 
-#. Refusal: Initialize was asked of a home Git already holds
-#: src/space.ts
-msgid "The home is already a repository"
-msgstr "空间目录已经是一个仓库"
-
 #. Refusal: the home itself is no folder
 #: src/space.ts
 msgid "the home is not a folder"
 msgstr "空间目录不是一个文件夹"
+
+#. A stopped sync's message: the host's branch moved while this machine was sending
+#. A stopped transfer's message: the host's branch moved while this machine was sending
+#: src/space-git.ts
+#: src/space.ts
+msgid "The host changed again"
+msgstr "托管平台再次发生变化"
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts
@@ -1856,16 +1781,6 @@ msgstr "该意图已结束"
 #: src/service.ts
 msgid "the intent is already dispatched"
 msgstr "该意图已派发"
-
-#. Refusal: an earlier row must close first; the title is the reader's own text
-#: src/service.ts
-msgid "the intent waits on \"{title}\""
-msgstr "该意图在等待“{title}”"
-
-#. Refusal, read after the file it names
-#: src/space.ts
-msgid "the migration is incomplete; finish or remove it before initializing"
-msgstr "迁移尚未完成；请先完成或移除它，再进行初始化"
 
 #. Live tool approval refusal
 #: src/approvals.ts
@@ -1897,13 +1812,6 @@ msgstr "该项目"
 msgid "the remote"
 msgstr "远程仓库"
 
-#. A stopped sync's message: the remote moved while this machine was sending
-#. A stopped transfer's message: the remote moved while this machine was sending
-#: src/space-git.ts
-#: src/space.ts
-msgid "The remote changed again"
-msgstr "远程仓库再次发生变化"
-
 #. Refusal of a remote URL
 #: src/space-git.ts
 msgid "The remote URL is malformed: it must be one word with no spaces or control characters."
@@ -1930,6 +1838,7 @@ msgid "the run is still parked, so the intent stays open"
 msgstr "该运行仍处于搁置状态，因此意图保持未结束"
 
 #. Refusal: the session is held, so it cannot be discarded now
+#. Refusal: the session is held, so it cannot be discarded now
 #: src/session.ts
 msgid "the session is active"
 msgstr "该会话正在使用中"
@@ -1953,6 +1862,11 @@ msgstr "源文为空；未写入任何内容"
 #: src/space.ts
 msgid "The space changed twice while syncing"
 msgstr "同步期间空间被改动了两次"
+
+#. Repair row: a working folder is paired with a spex repository whose clone is gone
+#: src/store.ts
+msgid "the spex repository of {path} is missing on this device"
+msgstr "{path} 的 spex 仓库在本设备上缺失"
 
 #. Live tool approval refusal
 #. Live tool approval refusal
@@ -2040,6 +1954,11 @@ msgstr "此会话不再提供“{actionId}”来结束其运行。"
 msgid "This session offers no way to end its run."
 msgstr "此会话没有可用来结束其运行的方式。"
 
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
+#: src/service.ts
+msgid "this session ran in {cwd}; continue it on the device whose folder it ran in"
+msgstr "该会话运行于 {cwd}；请在其运行文件夹所在的设备上继续"
+
 #. Live tool approval refusal
 #: src/approvals.ts
 msgid "This tool approval has expired."
@@ -2056,7 +1975,10 @@ msgid "This upload has already completed."
 msgstr "此文件已上传完成。"
 
 #. Media transfer refusal
+#. Media transfer refusal
+#. Media transfer refusal
 #: src/media-transfers.ts
+#: src/media.ts
 msgid "This upload is unavailable. Retry the file upload."
 msgstr "此次上传不可用，请重新上传文件。"
 
@@ -2096,22 +2018,15 @@ msgstr "未知单元 {unit}"
 msgid "Unreadable cache; refresh to rebuild: {cause}"
 msgstr "缓存无法读取；刷新可重建：{cause}"
 
-#. Storage diagnostic: a file names a project the registry does not hold
-#. Storage diagnostic: a file names a project the registry does not hold
-#: src/app-storage.ts
-#: src/store.ts
-msgid "unregistered project {projectId}"
-msgstr "未注册的项目 {projectId}"
-
 #. Storage diagnostic: an act's kind or version is not one this Spex reads
 #: src/app-storage.ts
 msgid "unsupported act/version"
 msgstr "不支持的动作类型或版本"
 
-#. Diagnostic for a draft file this Spex cannot read
-#: src/drafts.ts
-msgid "unsupported draft version"
-msgstr "不支持的草稿版本"
+#. Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is
+#: src/files.ts
+msgid "unsupported format {format}; preserved unchanged"
+msgstr "不支持的格式 {format}；已原样保留"
 
 #. Storage diagnostic: the state root's own metadata file cannot be read
 #: src/store.ts
@@ -2123,6 +2038,8 @@ msgstr "不支持的迁移元数据；已原样保留原始内容"
 msgid "unsupported path-map version or bindings array"
 msgstr "不支持的路径映射版本或 bindings 数组"
 
+#. Storage diagnostic: the preferences file is not one this Spex reads
+#. Storage diagnostic: the preferences file is not one this Spex reads
 #. Storage diagnostic: the preferences file is not one this Spex reads
 #: src/app-storage.ts
 msgid "unsupported preference version or prefs object"
@@ -2138,10 +2055,10 @@ msgstr "不支持的注册表版本"
 msgid "unsupported registry version or projects array"
 msgstr "不支持的注册表版本或 projects 数组"
 
-#. Migration diagnostic: the registry's version is not one this Spex migrates
-#: src/app-storage.ts
-msgid "unsupported registry version; preserved unchanged"
-msgstr "不支持的注册表版本；已原样保留"
+#. An authoring session unit's label where it carries no first message
+#: src/space.ts
+msgid "untitled authoring session"
+msgstr "未命名编写会话"
 
 #. A session unit's label where the session carries no title
 #: src/space.ts
@@ -2177,6 +2094,11 @@ msgstr "请等待媒体文件上传完成。"
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before rebinding"
 msgstr "请先等待该项目正在进行的轮次结束或将其中止，再重新绑定"
+
+#. Refusal: a turn is running in the project being removed
+#: src/service.ts
+msgid "wait for the project's running turn to finish, or abort it, before removing it"
+msgstr "请先等待该项目正在进行的轮次结束或将其中止，再移除项目"
 
 #. Refusal: the draft's agent is answering, so its agent cannot change now
 #: src/authoring.ts
@@ -2217,5 +2139,5 @@ msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式�
 
 #. Guidance under a push the remote rejected twice
 #: src/space.ts
-msgid "Your merge is saved locally; Retry to send it once the remote settles."
-msgstr "合并已保存在本地；待远程仓库稳定后重试即可发送。"
+msgid "Your merge is saved locally; Retry to send it once the host settles."
+msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"

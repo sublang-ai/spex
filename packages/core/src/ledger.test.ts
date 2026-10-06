@@ -2,19 +2,20 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Integration coverage for the intent ledger (DR-035, core-service-42
-// ..59): the stored intents table, the one derivation fold, and the
+// ..59): the stored intent files, the one derivation fold, and the
 // protocol commands, driven end to end where a session is needed and
 // against the store directly where the fold's contract is over stored
 // state alone — restart-identical, arrival-order-independent.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { dirname, join } from "node:path";
 import { WebSocket } from "ws";
 
-import { Store } from "./store.js";
+import { prefsFileOf, Store } from "./store.js";
 import { foldLedger, type LiveLane } from "./ledger.js";
 import { BOSS_ABORT_REASON, controlRecord } from "./control-record.js";
 import { CoreService } from "./service.js";
@@ -22,14 +23,15 @@ import { parseSpecTree } from "./specs.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { demoHistoryIntentId, seedHistorySession } from "./testing/demo.js";
-import type {
-  Command,
-  CommandResults,
-  DerivedIntent,
-  IntentInfo,
-  LedgerState,
-  ServerMessage,
-  TmuxPlayRecord,
+import {
+  UUID_PATTERN,
+  type Command,
+  type CommandResults,
+  type DerivedIntent,
+  type IntentInfo,
+  type LedgerState,
+  type ServerMessage,
+  type TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -40,16 +42,28 @@ import { scratchDir } from "./testing/scratch.js";
 // ---------------------------------------------------------------------------
 
 const NOW = 10_000_000;
+const OWN = "tester";
+
+/** Intent and session ids are canonical lowercase UUIDs (storage-4); the
+ * tests name them ("A", "s1"), and each name maps to one fixed UUID —
+ * its bytes in the last group, so equal-length names keep their order.
+ * A UUID passes through unchanged. */
+function uid(name: string): string {
+  if (UUID_PATTERN.test(name)) return name;
+  const hex = Buffer.from(name, "utf8").toString("hex");
+  assert.ok(hex.length <= 12, `test name ${name} is too long for a UUID`);
+  return `00000000-0000-4000-8000-${hex.padStart(12, "0")}`;
+}
 
 function newProjectStore(path?: string): { store: Store; projectId: string } {
-  const store = new Store(path ? { dir: path } : {});
+  const store = new Store(path ? { dir: path, own: OWN } : { own: OWN });
   const project = store.registerProject("/tmp/ledger-proj", "ledger-proj", 1);
   return { store, projectId: project.id };
 }
 
 function addSession(store: Store, projectId: string, id: string): void {
   store.createSession({
-    id,
+    id: uid(id),
     projectId,
     projectPath: "/tmp/ledger-proj",
     createdAt: 100,
@@ -62,23 +76,35 @@ function addSession(store: Store, projectId: string, id: string): void {
   });
 }
 
+/** The capture clock: each queued intent is younger than the last, so the
+ * queue's age order is the order a test queues in (core-service-107). */
+let captured = 10;
+
 function queueIntent(
   store: Store,
   projectId: string,
   id: string,
-  rank: string,
   extra: Partial<IntentInfo> = {},
 ): IntentInfo {
   const intent: IntentInfo = {
-    id,
+    id: uid(id),
     projectId,
     text: `Intent ${id}\nthe staged Boss turn`,
-    rank,
-    createdAt: 10,
+    createdAt: (captured += 1),
     ...extra,
   };
   store.addIntent(intent);
   return intent;
+}
+
+function stamp(
+  store: Store,
+  intentId: string,
+  sessionId: string,
+  turnId: number,
+  at: number,
+): void {
+  store.stampIntentDispatch(uid(intentId), uid(sessionId), turnId, at);
 }
 
 function append(
@@ -88,8 +114,8 @@ function append(
   role?: string,
 ): void {
   store.appendRecord(
-    sessionId,
-    store.maxSeq(sessionId) + 1,
+    uid(sessionId),
+    store.maxSeq(uid(sessionId)) + 1,
     record as unknown as TmuxPlayRecord,
     role,
   );
@@ -102,7 +128,7 @@ function beginTurn(
   prompt: string,
   at: number,
 ): void {
-  store.startTurn(sessionId, turnId, prompt, at);
+  store.startTurn(uid(sessionId), turnId, prompt, at);
   append(store, sessionId, {
     type: "turn_started",
     turnId,
@@ -112,7 +138,7 @@ function beginTurn(
 }
 
 function finishTurn(store: Store, sessionId: string, turnId: number, at: number): void {
-  store.endTurn(sessionId, turnId, "finished", at);
+  store.endTurn(uid(sessionId), turnId, "finished", at);
   append(store, sessionId, { type: "turn_finished", turnId, timestamp: at });
 }
 
@@ -123,7 +149,7 @@ function abortStoredTurn(
   at: number,
   reason?: string,
 ): void {
-  store.endTurn(sessionId, turnId, "aborted", at);
+  store.endTurn(uid(sessionId), turnId, "aborted", at);
   append(store, sessionId, {
     type: "turn_aborted",
     turnId,
@@ -133,7 +159,7 @@ function abortStoredTurn(
 }
 
 function lane(sessionId: string, projectId: string, turnActive: boolean): LiveLane {
-  return { sessionId, projectId, turnActive };
+  return { sessionId: uid(sessionId), projectId, turnActive };
 }
 
 function fold(store: Store, lanes: LiveLane[]): LedgerState {
@@ -141,7 +167,7 @@ function fold(store: Store, lanes: LiveLane[]): LedgerState {
 }
 
 function stateOf(ledger: LedgerState, intentId: string): DerivedIntent {
-  const found = ledger.intents.find((entry) => entry.intent.id === intentId);
+  const found = ledger.intents.find((entry) => entry.intent.id === uid(intentId));
   assert.ok(found, `intent ${intentId} missing from the fold`);
   return found;
 }
@@ -162,9 +188,20 @@ function markControl(
   at: number,
 ): void {
   store.appendRecord(
-    sessionId,
-    store.maxSeq(sessionId) + 1,
+    uid(sessionId),
+    store.maxSeq(uid(sessionId)) + 1,
     controlRecord(turnId, kind, at),
+  );
+}
+
+/** Write one session's stored records into its project's clone, as the
+ * running core would have, so a reopened store rebuilds its turns. */
+async function persistSession(store: Store, projectId: string, sessionId: string): Promise<void> {
+  await seedHistorySession(
+    store.repository(projectId)!.sessionsDir,
+    "/tmp/ledger-proj",
+    store.getRecords(uid(sessionId), { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>),
+    uid(sessionId),
   );
 }
 
@@ -172,31 +209,44 @@ function markControl(
 // Queue scheduling standing (core-service-49/95/107)
 // ---------------------------------------------------------------------------
 
-test("core-service-107: only the first queued unblocked row is next", () => {
+test("core-service-107: only the oldest queued row is next, by capture time then id", () => {
   const { store, projectId } = newProjectStore();
-  const predecessorProject = store.registerProject(
-    "/tmp/ledger-predecessor",
-    "ledger-predecessor",
+  const otherProject = store.registerProject(
+    "/tmp/ledger-other",
+    "ledger-other",
     2,
   );
-  const predecessor = queueIntent(store, predecessorProject.id, "P", "a");
-  queueIntent(store, projectId, "A", "a", { afterId: predecessor.id });
-  queueIntent(store, projectId, "B", "b");
-  queueIntent(store, projectId, "C", "c");
+  // Another project's older intent heads its own queue, never this one.
+  queueIntent(store, otherProject.id, "P");
+  addSession(store, projectId, "s1");
+  // The oldest open intent here is dispatched and finished: not queued.
+  queueIntent(store, projectId, "A");
+  beginTurn(store, "s1", 1, "deliver A", 1000);
+  stamp(store, "A", "s1", 1, 1000);
+  finishTurn(store, "s1", 1, 2000);
+  queueIntent(store, projectId, "B");
+  // Captured in the same millisecond: the lower id is the older row.
+  const tie = captured + 1;
+  queueIntent(store, projectId, "D", { createdAt: tie });
+  queueIntent(store, projectId, "C", { createdAt: tie });
 
   const ledger = fold(store, []);
   const rows = ledger.intents.filter(
     (entry) => entry.intent.projectId === projectId,
   );
-  assert.equal(stateOf(ledger, "A").blockedBy?.intentId, predecessor.id);
+  assert.deepEqual(
+    rows.map((entry) => [entry.intent.id, entry.state]),
+    [[uid("A"), "finished"], [uid("B"), "queued"], [uid("C"), "queued"], [uid("D"), "queued"]],
+  );
   assert.deepEqual(
     rows.filter((entry) => entry.next).map((entry) => entry.intent.id),
-    ["B"],
+    [uid("B")],
   );
   assert.deepEqual(nextOf(ledger, projectId).next, {
     standing: "manual-ready",
     manualStart: true,
   });
+  assert.equal(nextOf(ledger, otherProject.id).intent.id, uid("P"));
   assert.equal(stateOf(ledger, "C").next, undefined);
   store.close();
 });
@@ -210,7 +260,7 @@ test("core-service-107: the six scheduling standings derive from the ordered lan
     const { store, projectId } = newProjectStore();
     const sessionId = "s1";
     addSession(store, projectId, sessionId);
-    queueIntent(store, projectId, "N", "a");
+    queueIntent(store, projectId, "N");
     prepare(store, projectId, sessionId);
     const lanes = withLane
       ? [{ ...lane(sessionId, projectId, false), ...activity }]
@@ -335,7 +385,7 @@ test("core-service-107: the six scheduling standings derive from the ordered lan
 test("core-service-107: failure park wins over question and stopped with its cause", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "N", "a");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "several outcomes", 1000);
   const cause = { code: "commit-residual", evidence: { observed: "mixed" } };
   append(store, "s1", {
@@ -386,7 +436,7 @@ test("core-service-107: failure park wins over question and stopped with its cau
 test("core-service-107: when one failed run leaves, another park and its cause survive", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "N", "a");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "two runs fail", 1000);
   const first = { code: "commit-residual", evidence: { run: "first" } };
   const survivor = { code: "receipt-missing", evidence: { run: "second" } };
@@ -438,7 +488,7 @@ test("core-service-107: when one failed run leaves, another park and its cause s
 test("core-service-49/107: a failure never inherits an earlier failure's cause", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "N", "a");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "fail twice", 1000);
   const oldCause = { code: "commit-residual", evidence: { run: "old" } };
   append(store, "s1", {
@@ -465,7 +515,7 @@ test("core-service-49/107: a failure never inherits an earlier failure's cause",
 test("core-service-49/107: duplicate and aggregate evidence cannot create a phantom failure park", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "N", "a");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "two parked failures", 1000);
   const oldCause = { code: "commit-residual", evidence: { run: "old" } };
   append(store, "s1", {
@@ -575,7 +625,7 @@ test("core-service-49/107: duplicate and aggregate evidence cannot create a phan
 test("core-service-107: a durable ending marker makes a finished turn stopped", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "N", "a");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "Stop /code", 1000);
   finishTurn(store, "s1", 1, 1500);
   markControl(store, "s1", 1, "ending", 1600);
@@ -595,11 +645,11 @@ test("core-service-107: a durable ending marker makes a finished turn stopped", 
 test("DR-035: dispatch derives working, a finish delivers, a follow-up reopens work", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "A", "i");
+  queueIntent(store, projectId, "A");
 
   // The dispatch stamp binds when the submitted turn starts.
   beginTurn(store, "s1", 1, "ship the ledger", 1000);
-  store.stampIntentDispatch("A", "s1", 1, 1000);
+  stamp(store, "A", "s1", 1, 1000);
   const busy = [lane("s1", projectId, true)];
   const idle = [lane("s1", projectId, false)];
 
@@ -618,10 +668,10 @@ test("DR-035: dispatch derives working, a finish delivers, a follow-up reopens w
     {
       band: "finished",
       kind: "finish",
-      intentId: "A",
+      intentId: uid("A"),
       title: "Intent A",
       projectId,
-      sessionId: "s1",
+      sessionId: uid("s1"),
       turnId: 1,
       since: 3000,
       stats: { turns: 1, elapsedMs: 2000 },
@@ -645,31 +695,32 @@ test("DR-035: dispatch derives working, a finish delivers, a follow-up reopens w
   store.close();
 });
 
-test("DR-035: an aborted dispatch turn or a dead session releases the intent, stamps and rank kept", () => {
+test("DR-035: an aborted dispatch turn or a dead session releases the intent, stamps and place by age kept", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
   addSession(store, projectId, "s2");
 
   // Dispatch turn ends aborted: released by derivation.
-  queueIntent(store, projectId, "A", "i");
+  queueIntent(store, projectId, "A");
   beginTurn(store, "s1", 1, "go", 1000);
-  store.stampIntentDispatch("A", "s1", 1, 1000);
+  stamp(store, "A", "s1", 1, 1000);
   abortStoredTurn(store, "s1", 1, 2000);
 
   // Session died before the dispatch turn finished: released too.
-  queueIntent(store, projectId, "B", "r");
+  queueIntent(store, projectId, "B");
   beginTurn(store, "s2", 1, "go", 3000);
-  store.stampIntentDispatch("B", "s2", 1, 3000);
+  stamp(store, "B", "s2", 1, 3000);
 
   const ledger = fold(store, [lane("s1", projectId, false)]);
   const a = stateOf(ledger, "A");
   assert.equal(a.state, "queued");
-  assert.equal(a.intent.rank, "i", "the queue position keeps its rank");
   assert.ok(a.intent.dispatched, "the stamps remain as history");
   const b = stateOf(ledger, "B");
   assert.equal(b.state, "queued");
-  assert.equal(b.intent.rank, "r");
   assert.ok(b.intent.dispatched);
+  // Each keeps its place by age: the older release is next (core-service-47).
+  assert.deepEqual(ledger.intents.map((entry) => entry.intent.id), [uid("A"), uid("B")]);
+  assert.equal(nextOf(ledger, projectId).intent.id, uid("A"));
   assert.equal(ledger.badge, 0, "a released dispatch summons nobody");
   store.close();
 });
@@ -681,9 +732,9 @@ test("DR-035: an aborted dispatch turn or a dead session releases the intent, st
 test("DR-035: a parked awaitBossReply derives interrupted question in band one", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "Q", "i");
+  queueIntent(store, projectId, "Q");
   beginTurn(store, "s1", 1, "ask around", 1000);
-  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  stamp(store, "Q", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -699,7 +750,7 @@ test("DR-035: a parked awaitBossReply derives interrupted question in band one",
   assert.equal(q.reason, "question");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.since]),
-    [["interrupted", "question", "Q", 1500]],
+    [["interrupted", "question", uid("Q"), 1500]],
   );
   store.close();
 });
@@ -707,9 +758,9 @@ test("DR-035: a parked awaitBossReply derives interrupted question in band one",
 test("DR-066: a permission request raises no entry — nothing answers one", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "P", "i");
+  queueIntent(store, projectId, "P");
   beginTurn(store, "s1", 1, "build it", 1000);
-  store.stampIntentDispatch("P", "s1", 1, 1000);
+  stamp(store, "P", "s1", 1, 1000);
   append(store, "s1", {
     type: "player_event",
     playerId: "dev.coder",
@@ -793,7 +844,7 @@ test("DR-066: a session's own failure honours the parked rule its intent-owned t
   store.close();
 });
 
-test("DR-066: a project whose store refuses its acts raises no summons", () => {
+test("DR-066: a project whose store refuses its acts raises no summons", async () => {
   const dir = scratchDir("spex-ledger-blocked-");
   const { store, projectId } = newProjectStore(dir);
   addSession(store, projectId, "s1");
@@ -805,12 +856,26 @@ test("DR-066: a project whose store refuses its acts raises no summons", () => {
     ["review"],
     "a healthy project summons",
   );
+  await persistSession(store, projectId, "s1");
   store.close();
 
-  // Damaged preferences fold every marker to -1 while refusing every
-  // write, so the summons would stand with no act able to clear it.
-  writeFileSync(join(dir, "prefs.json"), "{bad JSON}");
+  // The same stored session summons after a restart while the store
+  // can answer it ...
+  const healthy = new Store({ dir });
+  await healthy.initializeSessions();
+  assert.deepEqual(
+    fold(healthy, live).attention.map((entry) => entry.kind),
+    ["review"],
+    "the stored turn summons on its own",
+  );
+  healthy.close();
+
+  // ... but damaged preferences fold every marker to -1 while refusing
+  // every write, so the summons would stand with no act able to clear it.
+  mkdirSync(dirname(prefsFileOf(dir)), { recursive: true });
+  writeFileSync(prefsFileOf(dir), "{bad JSON}");
   const reopened = new Store({ dir });
+  await reopened.initializeSessions();
   const blocked = foldLedger({
     store: reopened,
     lanes: live,
@@ -828,9 +893,9 @@ test("DR-066: a project whose store refuses its acts raises no summons", () => {
 test("DR-035: a runtime_error derives interrupted failure, cleared by a later turn start", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "F", "i");
+  queueIntent(store, projectId, "F");
   beginTurn(store, "s1", 1, "try it", 1000);
-  store.stampIntentDispatch("F", "s1", 1, 1000);
+  stamp(store, "F", "s1", 1, 1000);
   append(store, "s1", {
     type: "runtime_error",
     turnId: 1,
@@ -845,7 +910,7 @@ test("DR-035: a runtime_error derives interrupted failure, cleared by a later tu
   assert.equal(f.reason, "failure");
   assert.deepEqual(
     failed.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.since]),
-    [["interrupted", "failure", "F", 1500]],
+    [["interrupted", "failure", uid("F"), 1500]],
   );
 
   // The Boss's next turn in the session acknowledges the failure.
@@ -859,9 +924,9 @@ test("DR-035: a runtime_error derives interrupted failure, cleared by a later tu
 test("DR-062: a parked failure stands through a later turn, and the run's end clears it", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "P", "i");
+  queueIntent(store, projectId, "P");
   beginTurn(store, "s1", 1, "run it", 1000);
-  store.stampIntentDispatch("P", "s1", 1, 1000);
+  stamp(store, "P", "s1", 1, 1000);
   // The run parks in its failure state. A real stream reports it twice —
   // the per-run trace that names which machine moved, and the shell's own
   // state topic — so the fixture carries both.
@@ -1012,9 +1077,9 @@ test("core-service-106: a cause the runtime never stated is left unstated", () =
 test("DR-035: failure outranks the question and the permission", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "X", "i");
+  queueIntent(store, projectId, "X");
   beginTurn(store, "s1", 1, "everything at once", 1000);
-  store.stampIntentDispatch("X", "s1", 1, 1000);
+  stamp(store, "X", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -1051,15 +1116,15 @@ test("DR-035: interrupted precedes finished, longest waiting first within each b
   addSession(store, projectId, "s3");
 
   // Finished earliest of all — still band two.
-  queueIntent(store, projectId, "A", "3");
+  queueIntent(store, projectId, "A");
   beginTurn(store, "s1", 1, "done early", 400);
-  store.stampIntentDispatch("A", "s1", 1, 400);
+  stamp(store, "A", "s1", 1, 400);
   finishTurn(store, "s1", 1, 500);
 
   // Interrupted question since 800.
-  queueIntent(store, projectId, "B", "5");
+  queueIntent(store, projectId, "B");
   beginTurn(store, "s2", 1, "ask", 600);
-  store.stampIntentDispatch("B", "s2", 1, 600);
+  stamp(store, "B", "s2", 1, 600);
   append(store, "s2", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -1070,9 +1135,9 @@ test("DR-035: interrupted precedes finished, longest waiting first within each b
   finishTurn(store, "s2", 1, 900);
 
   // Interrupted failure since 1500 — later onset, same band.
-  queueIntent(store, projectId, "C", "i");
+  queueIntent(store, projectId, "C");
   beginTurn(store, "s3", 1, "fail", 1000);
-  store.stampIntentDispatch("C", "s3", 1, 1000);
+  stamp(store, "C", "s3", 1, 1000);
   append(store, "s3", {
     type: "runtime_error",
     turnId: 1,
@@ -1089,9 +1154,9 @@ test("DR-035: interrupted precedes finished, longest waiting first within each b
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.band, entry.kind, entry.intentId, entry.since]),
     [
-      ["interrupted", "question", "B", 800],
-      ["interrupted", "failure", "C", 1500],
-      ["finished", "finish", "A", 500],
+      ["interrupted", "question", uid("B"), 800],
+      ["interrupted", "failure", uid("C"), 1500],
+      ["finished", "finish", uid("A"), 500],
     ],
   );
   assert.equal(ledger.badge, 3);
@@ -1107,15 +1172,15 @@ test("DR-035: a later dispatch bounds the earlier intent's turn range, and each 
   addSession(store, projectId, "s1");
 
   // A owns turns 1-2; B's dispatch at turn 3 ends A's range.
-  queueIntent(store, projectId, "A", "i");
+  queueIntent(store, projectId, "A");
   beginTurn(store, "s1", 1, "first", 1000);
-  store.stampIntentDispatch("A", "s1", 1, 1000);
+  stamp(store, "A", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
   beginTurn(store, "s1", 2, "follow-up", 3000);
   finishTurn(store, "s1", 2, 4000);
-  queueIntent(store, projectId, "B", "r");
+  queueIntent(store, projectId, "B");
   beginTurn(store, "s1", 3, "second", 5000);
-  store.stampIntentDispatch("B", "s1", 3, 5000);
+  stamp(store, "B", "s1", 3, 5000);
   finishTurn(store, "s1", 3, 6000);
 
   // Reviewer-role prompts: two inside A's range, one inside B's, and a
@@ -1137,8 +1202,8 @@ test("DR-035: a later dispatch bounds the earlier intent's turn range, and each 
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.intentId, entry.turnId, entry.since]),
     [
-      ["A", 2, 4000],
-      ["B", 3, 6000],
+      [uid("A"), 2, 4000],
+      [uid("B"), 3, 6000],
     ],
   );
   store.close();
@@ -1147,9 +1212,9 @@ test("DR-035: a later dispatch bounds the earlier intent's turn range, and each 
 test("DR-035: an aborted follow-up does not unseat a standing finish", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "C", "i");
+  queueIntent(store, projectId, "C");
   beginTurn(store, "s1", 1, "deliver", 1000);
-  store.stampIntentDispatch("C", "s1", 1, 1000);
+  stamp(store, "C", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
   beginTurn(store, "s1", 2, "never mind", 3000);
   abortStoredTurn(store, "s1", 2, 3500);
@@ -1171,9 +1236,9 @@ test("DR-035: an aborted follow-up does not unseat a standing finish", () => {
 test("DR-035: a ruled turn never re-summons — plain chat after the verdict does", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "A", "i");
+  queueIntent(store, projectId, "A");
   beginTurn(store, "s1", 1, "Intent A", 1000);
-  store.stampIntentDispatch("A", "s1", 1, 1000);
+  stamp(store, "A", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
   const lanes = [lane("s1", projectId, false)];
 
@@ -1185,7 +1250,7 @@ test("DR-035: a ruled turn never re-summons — plain chat after the verdict doe
   );
 
   // The verdict settles the turn: no stand-in resurrects it.
-  store.closeIntent("A", "done", 2500);
+  store.closeIntent(uid("A"), "done", 2500);
   const ruled = fold(store, lanes);
   assert.deepEqual(ruled.attention, []);
   assert.equal(ruled.badge, 0);
@@ -1227,7 +1292,7 @@ test("DR-035: an un-ledgered finished turn stands in for review until the viewed
       kind: "review",
       title: "review me",
       projectId,
-      sessionId: "s1",
+      sessionId: uid("s1"),
       turnId: 1,
       since: 2000,
     },
@@ -1235,7 +1300,7 @@ test("DR-035: an un-ledgered finished turn stands in for review until the viewed
   assert.equal(before.badge, 1);
 
   // The persisted viewed marker clears the stand-in.
-  store.setPref("viewed:s1", 1);
+  store.setPref(`viewed:${uid("s1")}`, 1);
   const viewed = fold(store, lanes);
   assert.deepEqual(viewed.attention, []);
   assert.equal(viewed.badge, 0);
@@ -1255,14 +1320,14 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   addSession(store, projectId, ids.s1);
   addSession(store, projectId, ids.s2);
 
-  queueIntent(store, projectId, ids.closed, "3");
+  queueIntent(store, projectId, ids.closed);
   store.closeIntent(ids.closed, "dropped", 500);
-  queueIntent(store, projectId, ids.queued, "5");
-  queueIntent(store, projectId, ids.finished, "i");
+  queueIntent(store, projectId, ids.queued);
+  queueIntent(store, projectId, ids.finished);
   beginTurn(store, ids.s1, 1, "deliver", 1000);
   store.stampIntentDispatch(ids.finished, ids.s1, 1, 1000);
   finishTurn(store, ids.s1, 1, 2000);
-  queueIntent(store, projectId, ids.working, "r");
+  queueIntent(store, projectId, ids.working);
   beginTurn(store, ids.s2, 1, "mid-flight", 3000);
   store.stampIntentDispatch(ids.working, ids.s2, 1, 3000);
 
@@ -1274,17 +1339,17 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
     !before.intents.some((entry) => entry.intent.id === ids.closed),
     "a closed intent never re-enters the open fold",
   );
-  await seedHistorySession(join(path, "sessions"), "/tmp/ledger-proj", store.getRecords(ids.s1, { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>), ids.s1);
-  await seedHistorySession(join(path, "sessions"), "/tmp/ledger-proj", store.getRecords(ids.s2, { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>), ids.s2);
+  await persistSession(store, projectId, ids.s1);
+  await persistSession(store, projectId, ids.s2);
   store.close();
 
-  // Restart: same file, no live lanes.
+  // Restart: same files, no live lanes.
   const reopened = new Store({ dir: path });
   await reopened.initializeSessions();
   const after = fold(reopened, []);
   const queued = stateOf(after, ids.queued);
   assert.equal(queued.state, "queued");
-  assert.equal(queued.intent.rank, "5");
+  assert.deepEqual(queued.intent, stateOf(before, ids.queued).intent);
   // Finished persists: it derives from ended turns, not from a lane.
   assert.deepEqual(
     stateOf(after, ids.finished),
@@ -1293,35 +1358,46 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   );
   assert.deepEqual(after.attention, before.attention);
   // The mid-turn dispatch releases: its session died before the turn
-  // finished. Stamps and rank stay.
+  // finished. Its stamps stay, and it keeps its place by age behind
+  // the older queued intent, which stays next.
   const released = stateOf(after, ids.working);
   assert.equal(released.state, "queued");
-  assert.equal(released.intent.rank, "r");
   assert.ok(released.intent.dispatched);
-  // The closed row is kept, never deleted.
+  assert.deepEqual(
+    after.intents.map((entry) => entry.intent.id),
+    [ids.queued, ids.finished, ids.working],
+  );
+  assert.equal(nextOf(after, projectId).intent.id, ids.queued);
+  // The closed intent's file is kept and read back closed.
   assert.equal(reopened.getIntent(ids.closed)?.closedAs, "dropped");
   reopened.close();
 });
 
-test("core-service-79: a remove act retires a closed intent from every read, its acts kept and its neighbours unmoved", async () => {
-  const ids = { s1: "73000000-0000-4000-8000-000000000001", gone: "73000000-0000-4000-8000-000000000002", kept: "73000000-0000-4000-8000-000000000003" };
+test("core-service-79: a remove deletes a closed intent's file and attachments, retiring it from every read, its turns going to the preceding dispatch", async () => {
+  const ids = { s1: "73000000-0000-4000-8000-000000000001", gone: "73000000-0000-4000-8000-000000000002", kept: "73000000-0000-4000-8000-000000000003", first: "73000000-0000-4000-8000-000000000004" };
   const dir = scratchDir("spex-ledger-remove-");
   const path = join(dir, "state");
   const { store, projectId } = newProjectStore(path);
+  const intentsDir = store.repository(projectId)!.intentsDir;
   addSession(store, projectId, ids.s1);
 
-  // One worked, confirmed intent, a plain chat turn ruled by its
-  // verdict, and a queued bystander.
-  queueIntent(store, projectId, ids.gone, "3", {
+  // An earlier dispatched intent still awaiting its verdict, then a
+  // worked, confirmed intent with an attachment of its own, and a
+  // queued bystander.
+  queueIntent(store, projectId, ids.first);
+  beginTurn(store, ids.s1, 1, "the first delivery", 1000);
+  store.stampIntentDispatch(ids.first, ids.s1, 1, 1000);
+  finishTurn(store, ids.s1, 1, 2000);
+  queueIntent(store, projectId, ids.gone, {
     source: { kind: "issue", ref: "9" },
   });
-  beginTurn(store, ids.s1, 1, "hello hello hello", 1000);
-  store.stampIntentDispatch(ids.gone, ids.s1, 1, 1000);
-  finishTurn(store, ids.s1, 1, 2000);
-  beginTurn(store, ids.s1, 2, "and a word after", 2200);
-  finishTurn(store, ids.s1, 2, 2300);
-  store.closeIntent(ids.gone, "done", 2500);
-  queueIntent(store, projectId, ids.kept, "5");
+  mkdirSync(store.intentAssetsDir(ids.gone), { recursive: true });
+  writeFileSync(join(store.intentAssetsDir(ids.gone), "evidence.txt"), "kept with the intent");
+  beginTurn(store, ids.s1, 2, "hello hello hello", 3000);
+  store.stampIntentDispatch(ids.gone, ids.s1, 2, 3000);
+  finishTurn(store, ids.s1, 2, 4000);
+  store.closeIntent(ids.gone, "done", 4500);
+  queueIntent(store, projectId, ids.kept);
 
   const lanes = [lane(ids.s1, projectId, false)];
   const before = fold(store, lanes);
@@ -1329,12 +1405,21 @@ test("core-service-79: a remove act retires a closed intent from every read, its
     store.listClosedIntents(projectId, 20).map((intent) => intent.id),
     [ids.gone],
   );
-  assert.deepEqual(before.attention, [], "the chat turn is ruled, so it waits on nobody");
+  // The removed intent's dispatch bounds the first one's range today.
+  assert.deepEqual(stateOf(before, ids.first).stats, { turns: 1, elapsedMs: 1000 });
+  assert.deepEqual(
+    before.attention.map((entry) => [entry.kind, entry.intentId, entry.turnId, entry.since]),
+    [["finish", ids.first, 1, 2000]],
+  );
+  assert.ok(existsSync(join(intentsDir, `${ids.gone}.json`)));
 
   store.removeIntent(ids.gone, 5000);
 
-  // Absent from every read: the History page, the source binding, and
-  // the fold's own rows.
+  // The file and its attachments go (storage-4) ...
+  assert.ok(!existsSync(join(intentsDir, `${ids.gone}.json`)), "the intent's file is deleted");
+  assert.ok(!existsSync(join(intentsDir, `${ids.gone}.assets`)), "its attachments go with it");
+  // ... so it is absent from every read: the History page, the source
+  // binding, and the fold's own rows.
   assert.equal(store.getIntent(ids.gone), undefined);
   assert.deepEqual(store.listClosedIntents(projectId, 20), []);
   assert.equal(store.openIntentBySource(projectId, "issue", "9"), undefined);
@@ -1343,28 +1428,27 @@ test("core-service-79: a remove act retires a closed intent from every read, its
     !after.intents.some((entry) => entry.intent.id === ids.gone),
     "a removed intent lists in no band",
   );
-  // Nothing else moves: the removed dispatch still bounds its
-  // neighbours' turn ranges, so the ruled chat turn never re-summons.
-  assert.deepEqual(after.attention, before.attention);
+  // Its stamp no longer bounds its neighbours' turn ranges: the
+  // preceding dispatched intent owns the removed one's turns.
+  assert.equal(stateOf(after, ids.first).state, "finished");
+  assert.deepEqual(stateOf(after, ids.first).stats, { turns: 2, elapsedMs: 3000 });
+  assert.deepEqual(
+    after.attention.map((entry) => [entry.kind, entry.intentId, entry.turnId, entry.since]),
+    [["finish", ids.first, 2, 4000]],
+  );
   assert.equal(stateOf(after, ids.kept).state, "queued");
-  await seedHistorySession(join(path, "sessions"), "/tmp/ledger-proj", store.getRecords(ids.s1, { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>), ids.s1);
+  await persistSession(store, projectId, ids.s1);
   store.close();
 
-  // Restart: the act log still holds every act of the removed intent,
-  // and the reopened store reads it as absent all the same.
-  const log = readFileSync(join(path, "intents", `${projectId}.jsonl`), "utf8");
-  const acts = log
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as { act: string; id?: string })
-    .filter((act) => act.id === ids.gone || act.act === "queue")
-    .map((act) => act.act);
-  assert.deepEqual(acts, ["queue", "dispatch", "close", "queue", "remove"]);
+  // Restart: the reopened store reads it as absent all the same.
   const reopened = new Store({ dir: path });
   await reopened.initializeSessions();
   assert.equal(reopened.getIntent(ids.gone), undefined);
   assert.deepEqual(reopened.listClosedIntents(projectId, 20), []);
-  assert.equal(stateOf(fold(reopened, []), ids.kept).state, "queued");
+  const reread = fold(reopened, []);
+  assert.deepEqual(stateOf(reread, ids.first).stats, { turns: 2, elapsedMs: 3000 });
+  assert.equal(stateOf(reread, ids.kept).state, "queued");
+  assert.deepEqual(readdirSync(intentsDir).sort(), [`${ids.kept}.json`, `${ids.first}.json`].sort());
   reopened.close();
 });
 
@@ -1456,6 +1540,20 @@ class Client {
 
   close(): void {
     this.socket.close();
+  }
+
+  private lastCaptured = 0;
+
+  /** `intent.queue` a moment after the previous capture: the queue is
+   * ordered by capture time (core-service-42), so no two captures here
+   * share a millisecond and the order is the order queued. */
+  async queue(
+    fields: Omit<Extract<Command, { type: "intent.queue" }>, "type" | "id">,
+  ): Promise<IntentInfo> {
+    while (Date.now() <= this.lastCaptured) await sleep(1);
+    const intent = await this.expectOk("intent.queue", fields);
+    this.lastCaptured = intent.createdAt;
+    return intent;
   }
 
   async command<T extends Command["type"]>(
@@ -1564,6 +1662,12 @@ async function startHarness(
         match: "slow:",
         response: { deltas: ["working"], result: "slow done", delayMs: 400 },
       },
+      // Long enough that the turn's start and finish broadcasts never
+      // share one debounce window (core-service-53).
+      {
+        match: "hold:",
+        response: { deltas: ["working"], result: "held done", delayMs: 1500 },
+      },
     ],
     fallback: { deltas: ["hello ", "world"], result: "hello world" },
   });
@@ -1585,6 +1689,7 @@ async function startHarness(
     captainFactory: async () => captain,
     env: {},
     home: join(dir, "home"),
+    own: OWN,
     watchConfig: false,
   };
   let service = await CoreService.start(serviceOptions);
@@ -1600,18 +1705,27 @@ async function startHarness(
   };
 }
 
-/** The one project's queue, in rank order, as intent ids. */
+/** The one project's open intents, oldest first, as intent ids. */
 function queueIds(ledger: LedgerState, projectId: string): string[] {
   return ledger.intents
     .filter((entry) => entry.intent.projectId === projectId)
     .map((entry) => entry.intent.id);
 }
 
+/** The storage-4 field set an intent file may hold, and nothing else. */
+const INTENT_FILE_FIELDS = new Set([
+  "format", "id", "text", "attachments", "source", "author", "createdAt", "dispatched", "closed",
+]);
+
+function readIntentFile(intentsDir: string, id: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(intentsDir, `${id}.json`), "utf8")) as Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------------------
-// core-service-42..46/55/56: queue, move, link, and close mechanics
+// core-service-42..46/55: queue order, dedup, and close mechanics
 // ---------------------------------------------------------------------------
 
-test("core-service-42..46: intent commands hold position, dedup, link, and close guards", async () => {
+test("core-service-42..46: intent commands keep age order, dedup, and close guards", async () => {
   const harness = await startHarness();
   const client = new Client(harness.service.port());
   await client.open();
@@ -1619,35 +1733,27 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
     path: harness.projectDir,
   });
 
-  // Positions: tail by default, head on request.
-  const a = await client.expectOk("intent.queue", {
+  // An intent holds no place of its own: the queue is oldest first.
+  const a = await client.queue({
     projectId: project.id,
     text: "Alpha intent\nthe full staged text",
   });
-  const b = await client.expectOk("intent.queue", {
+  const b = await client.queue({
     projectId: project.id,
     text: "Beta intent",
   });
-  const c = await client.expectOk("intent.queue", {
+  const c = await client.queue({
     projectId: project.id,
     text: "Gamma intent",
-    at: "head",
   });
-  let ledger = await client.expectOk("ledger.get", {});
-  assert.deepEqual(queueIds(ledger, project.id), [c.id, a.id, b.id]);
+  const ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(queueIds(ledger, project.id), [a.id, b.id, c.id]);
+  assert.equal(nextOf(ledger, project.id).intent.id, a.id);
 
   // Every write announces itself (core-service-51, debounced).
   await client.waitFor(
     (m) => m.type === "intents.changed" && m.projectIds.includes(project.id),
   );
-
-  // Moves: after a named intent, or to the head on null.
-  await client.expectOk("intent.move", { intentId: b.id, afterIntentId: c.id });
-  ledger = await client.expectOk("ledger.get", {});
-  assert.deepEqual(queueIds(ledger, project.id), [c.id, b.id, a.id]);
-  await client.expectOk("intent.move", { intentId: a.id, afterIntentId: null });
-  ledger = await client.expectOk("ledger.get", {});
-  assert.deepEqual(queueIds(ledger, project.id), [a.id, c.id, b.id]);
 
   // Source dedup: one open intent per issue/PR/record artifact.
   const issue = await client.expectOk("intent.queue", {
@@ -1710,45 +1816,11 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
     text: "Beta intent, sharpened",
   });
   assert.equal(edited.text, "Beta intent, sharpened");
+  assert.equal(edited.createdAt, b.createdAt, "an edit keeps the intent's place by age");
 
-  // Link guards: blocked marking, cycle, self, and closed targets.
-  await client.expectOk("intent.link", { intentId: c.id, afterIntentId: a.id });
-  ledger = await client.expectOk("ledger.get", {});
-  const blocked = ledger.intents.find((entry) => entry.intent.id === c.id);
-  assert.deepEqual(blocked?.blockedBy, {
-    intentId: a.id,
-    title: "Alpha intent",
-    projectId: project.id,
-  });
-  const cycle = await client.command("intent.link", {
-    intentId: a.id,
-    afterIntentId: c.id,
-  });
-  assert.ok(!cycle.ok && cycle.error.code === "conflict");
-  assert.match(cycle.error.message, /cycle/);
-  const self = await client.command("intent.link", {
-    intentId: a.id,
-    afterIntentId: a.id,
-  });
-  assert.ok(!self.ok && self.error.code === "invalid_request");
-
-  // Closing the predecessor lifts the block by derivation.
-  await client.expectOk("intent.close", { intentId: a.id, as: "dropped" });
-  ledger = await client.expectOk("ledger.get", {});
-  const lifted = ledger.intents.find((entry) => entry.intent.id === c.id);
-  assert.equal(lifted?.state, "queued");
-  assert.equal(lifted?.blockedBy, undefined);
-
-  // A link to a closed intent is rejected.
-  const closedTarget = await client.command("intent.link", {
-    intentId: b.id,
-    afterIntentId: a.id,
-  });
-  assert.ok(!closedTarget.ok && closedTarget.error.code === "conflict");
-  assert.match(closedTarget.error.message, /closed/);
-
-  // done requires a finished intent; dropped is legal on any open one;
-  // a second close is rejected (core-service-46).
+  // done requires a finished intent; dropped is legal on any open one
+  // (core-service-46). Dropped before any work, the intent is gone, so
+  // a second close finds nothing to close.
   const doneEarly = await client.command("intent.close", {
     intentId: c.id,
     as: "done",
@@ -1759,7 +1831,11 @@ test("core-service-42..46: intent commands hold position, dedup, link, and close
     intentId: c.id,
     as: "dropped",
   });
-  assert.ok(!reClose.ok && reClose.error.code === "conflict");
+  assert.ok(!reClose.ok && reClose.error.code === "not_found");
+  // The oldest of what remains is next (core-service-107).
+  const afterDrop = await client.expectOk("ledger.get", {});
+  assert.equal(nextOf(afterDrop, project.id).intent.id, a.id);
+  assert.ok(!queueIds(afterDrop, project.id).includes(c.id));
 
   // Closing the holder releases the source artifact (core-service-55).
   await client.expectOk("intent.close", { intentId: issue.id, as: "dropped" });
@@ -2154,6 +2230,213 @@ for (const outcome of ["finished", "aborted"] as const) {
   }
 }
 
+test("core-service-53: an intent lives as one file of its spex repository through queue, edit, dispatch, finish, close, and remove", { timeout: 30_000 }, async () => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  await client.open();
+  const project = await client.expectOk("project.register", {
+    path: harness.projectDir,
+  });
+  const session = await client.expectOk("session.create", {
+    projectId: project.id,
+  });
+  await client.expectOk("subscribe", {
+    channel: { kind: "session", sessionId: session.id },
+  });
+  // The project's spex repository is its clone under the home's
+  // workspace; its intents are files there (DR-103).
+  const intentsDir = harness.service["store"].repository(project.id)!.intentsDir;
+  assert.equal(intentsDir, join(harness.dataDir, "workspace", ...project.id.split("/"), "intents"));
+
+  /** Run one act, then wait for the `intents.changed` naming the project
+   * that follows it (core-service-51). Waiting out the debounce first
+   * leaves no earlier broadcast pending to answer for this one. */
+  const announced = async <T>(act: () => Promise<T>): Promise<T> => {
+    await sleep(250);
+    const mark = client.messages.length;
+    const result = await act();
+    await client.waitFor((m) =>
+      client.messages.indexOf(m) >= mark &&
+      m.type === "intents.changed" &&
+      m.projectIds.includes(project.id)
+    );
+    return result;
+  };
+
+  // Two intents captured a moment apart: each is one file holding
+  // exactly storage-4's fields, and the queue reads them oldest first
+  // with the oldest next (core-service-42, core-service-49, core-service-52).
+  const first = await announced(() => client.queue({
+    projectId: project.id,
+    text: "Ship the ledger\nwith its fold",
+  }));
+  const second = await announced(() => client.queue({
+    projectId: project.id,
+    text: "Polish the ledger",
+  }));
+  assert.ok(first.createdAt < second.createdAt);
+  for (const intent of [first, second]) {
+    assert.match(intent.id, UUID_PATTERN);
+    assert.deepEqual(readIntentFile(intentsDir, intent.id), {
+      format: 1,
+      id: intent.id,
+      text: intent.text,
+      createdAt: intent.createdAt,
+    });
+  }
+  assert.deepEqual(readdirSync(intentsDir).sort(), [`${first.id}.json`, `${second.id}.json`].sort());
+  let ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(queueIds(ledger, project.id), [first.id, second.id]);
+  assert.equal(nextOf(ledger, project.id).intent.id, first.id);
+
+  // An edit lands while the intent is queued, rewriting its file whole
+  // (core-service-43).
+  const edited = await announced(() => client.expectOk("intent.edit", {
+    intentId: first.id,
+    text: "Ship the ledger\nwith its fold, sharpened",
+  }));
+  assert.equal(edited.text, "Ship the ledger\nwith its fold, sharpened");
+  assert.deepEqual(readIntentFile(intentsDir, first.id), {
+    format: 1,
+    id: first.id,
+    text: edited.text,
+    createdAt: first.createdAt,
+  });
+
+  // Dropped while still queued, before any work: its file goes with it,
+  // and no History page will list it (core-service-46, core-service-50).
+  const dropped = await announced(() => client.expectOk("intent.close", {
+    intentId: second.id,
+    as: "dropped",
+  }));
+  assert.equal(dropped.closedAs, "dropped");
+  assert.ok(!existsSync(join(intentsDir, `${second.id}.json`)));
+  ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(queueIds(ledger, project.id), [first.id]);
+
+  // Dispatch: the turn's start stamps the file and is announced
+  // (core-service-47, core-service-51).
+  await sleep(250);
+  const beforeStart = client.messages.length;
+  await client.expectOk("turn.submit", {
+    sessionId: session.id,
+    text: "hold: ship it",
+    intentId: first.id,
+  });
+  const started = await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_started",
+  );
+  const startedTurnId =
+    started.type === "record"
+      ? (started.record as unknown as { turn: { id: number } }).turn.id
+      : -1;
+  await client.waitFor((m) =>
+    client.messages.indexOf(m) >= beforeStart &&
+    m.type === "intents.changed" &&
+    m.projectIds.includes(project.id)
+  );
+  const stamped = readIntentFile(intentsDir, first.id).dispatched as
+    { sessionId: string; turnId: number; at: number } | undefined;
+  assert.equal(stamped?.sessionId, session.id);
+  assert.equal(stamped?.turnId, startedTurnId);
+  assert.equal(typeof stamped?.at, "number");
+  ledger = await client.expectOk("ledger.get", {});
+  assert.equal(stateOf(ledger, first.id).state, "working");
+
+  // From its dispatch on, the text is history, and done waits for the
+  // finish (core-service-43, core-service-46).
+  const editDispatched = await client.command("intent.edit", {
+    intentId: first.id,
+    text: "rewrite history",
+  });
+  assert.ok(!editDispatched.ok && editDispatched.error.code === "conflict");
+  const doneEarly = await client.command("intent.close", {
+    intentId: first.id,
+    as: "done",
+  });
+  assert.ok(!doneEarly.ok && doneEarly.error.code === "conflict");
+  assert.equal(readIntentFile(intentsDir, first.id).text, edited.text);
+  assert.equal(readIntentFile(intentsDir, first.id).closed, undefined);
+
+  // The finish is announced too.
+  const finished = await client.waitFor(
+    (m) => m.type === "record" && m.record.type === "turn_finished",
+  );
+  const afterFinish = client.messages.indexOf(finished);
+  await client.waitFor((m) =>
+    client.messages.indexOf(m) > afterFinish &&
+    m.type === "intents.changed" &&
+    m.projectIds.includes(project.id)
+  );
+  await client.ledgerUntil(
+    (state) => state.intents.find((entry) => entry.intent.id === first.id)?.state === "finished",
+    "the dispatched intent to finish",
+  );
+  await settledTurns(client, harness, session.id, 1);
+  await Promise.all([...harness.service["advancing"]]);
+
+  // done after the finish: the verdict is written on the file, History
+  // lists the done intent but never the one dropped before work, and a
+  // second close is refused (core-service-46, core-service-50).
+  const done = await announced(() => client.expectOk("intent.close", {
+    intentId: first.id,
+    as: "done",
+  }));
+  assert.equal(done.closedAs, "done");
+  const closedFile = readIntentFile(intentsDir, first.id);
+  assert.deepEqual(closedFile.closed, { as: "done", at: done.closedAt });
+  for (const key of Object.keys(closedFile)) assert.ok(INTENT_FILE_FIELDS.has(key), key);
+  let history = await client.expectOk("ledger.history", { projectId: project.id });
+  assert.deepEqual(
+    history.intents.map((row) => [row.intent.id, row.intent.closedAs]),
+    [[first.id, "done"]],
+  );
+  const reClose = await client.command("intent.close", {
+    intentId: first.id,
+    as: "dropped",
+  });
+  assert.ok(!reClose.ok && reClose.error.code === "conflict");
+
+  // A later intent worked in the same conversation, still open.
+  const open = await announced(() => client.queue({
+    projectId: project.id,
+    text: "Still awaiting its verdict",
+  }));
+  await client.expectOk("turn.submit", {
+    sessionId: session.id,
+    text: open.text,
+    intentId: open.id,
+  });
+  await client.ledgerUntil(
+    (state) => state.intents.find((entry) => entry.intent.id === open.id)?.state === "finished",
+    "the later intent to finish",
+  );
+  await settledTurns(client, harness, session.id, 2);
+  await Promise.all([...harness.service["advancing"]]);
+
+  // Removing an open intent is refused; removing the done one deletes
+  // its file, takes it out of every History page, and leaves the rest
+  // of the ledger as it was; an unknown or already-removed one is
+  // refused not_found (core-service-79).
+  const openRemove = await client.command("intent.remove", { intentId: open.id });
+  assert.ok(!openRemove.ok && openRemove.error.code === "conflict");
+  assert.match(openRemove.error.message, /closed/);
+  const beforeRemove = await client.expectOk("ledger.get", {});
+  await announced(() => client.expectOk("intent.remove", { intentId: first.id }));
+  assert.ok(!existsSync(join(intentsDir, `${first.id}.json`)));
+  history = await client.expectOk("ledger.history", { projectId: project.id });
+  assert.deepEqual(history.intents, []);
+  assert.deepEqual(await client.expectOk("ledger.get", {}), beforeRemove);
+  const twice = await client.command("intent.remove", { intentId: first.id });
+  assert.ok(!twice.ok && twice.error.code === "not_found");
+  const unknown = await client.command("intent.remove", { intentId: randomUUID() });
+  assert.ok(!unknown.ok && unknown.error.code === "not_found");
+  assert.deepEqual(readdirSync(intentsDir), [`${open.id}.json`]);
+
+  client.close();
+  await harness.service.stop();
+});
+
 test("core-service-57: submission validates the intent, the turn start stamps it, and an abort re-queues it", async () => {
   const harness = await startHarness();
   const client = new Client(harness.service.port());
@@ -2167,36 +2450,16 @@ test("core-service-57: submission validates the intent, the turn start stamps it
   await client.expectOk("subscribe", {
     channel: { kind: "session", sessionId: session.id },
   });
+  const turnStarts = () => client.messages.filter(
+    (m) => m.type === "record" && m.record.type === "turn_started",
+  ).length;
 
-  const i1 = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Run the build",
-  });
-  const i2 = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Follow the build",
-  });
-  const i3 = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Bystander",
-  });
-  await client.expectOk("intent.link", { intentId: i2.id, afterIntentId: i1.id });
-
-  // A blocked intent is rejected at submission and starts no turn.
-  const blockedSubmit = await client.command("turn.submit", {
-    sessionId: session.id,
-    text: "x",
-    intentId: i2.id,
-  });
-  assert.ok(!blockedSubmit.ok && blockedSubmit.error.code === "conflict");
-  assert.match(blockedSubmit.error.message, /waits on/);
-
-  // Another project's intent is rejected too.
+  // Another project's intent is rejected at submission and starts no turn.
   const otherDir = join(harness.dir, "other");
   mkdirSync(otherDir);
   execFileSync("git", ["init", "-q", otherDir]);
   const other = await client.expectOk("project.register", { path: otherDir });
-  const foreign = await client.expectOk("intent.queue", {
+  const foreign = await client.queue({
     projectId: other.id,
     text: "Foreign intent",
   });
@@ -2207,10 +2470,14 @@ test("core-service-57: submission validates the intent, the turn start stamps it
   });
   assert.ok(!foreignSubmit.ok && foreignSubmit.error.code === "invalid_request");
 
-  // Neither rejection started a turn: the real dispatch is accepted.
+  // The rejection started no turn: the real dispatch is accepted.
+  const i1 = await client.queue({
+    projectId: project.id,
+    text: "Run the build",
+  });
   await client.expectOk("turn.submit", {
     sessionId: session.id,
-    text: "slow: run",
+    text: "hold: run",
     intentId: i1.id,
   });
   const started = await client.waitFor(
@@ -2220,75 +2487,69 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     started.type === "record"
       ? (started.record as unknown as { turn: { id: number } }).turn.id
       : -1;
+  assert.equal(turnStarts(), 1);
 
-  // Busy while the turn is active: nothing stamps on the bystander.
+  // Busy while the turn is active: nothing stamps on the bystander,
+  // which stays queued (core-service-5).
+  const bystander = await client.queue({
+    projectId: project.id,
+    text: "Bystander",
+  });
   const busySubmit = await client.command("turn.submit", {
     sessionId: session.id,
     text: "y",
-    intentId: i3.id,
+    intentId: bystander.id,
   });
   assert.ok(!busySubmit.ok && busySubmit.error.code === "busy");
-  // Keep this stamping-focused test from offering automatic work at the
-  // first settlement. Closing i1 later lifts both links by derivation,
-  // and that verdict itself starts nothing (DR-077).
-  await client.expectOk("intent.link", { intentId: i3.id, afterIntentId: i1.id });
 
-  // The started turn stamped the dispatch: working, and no longer
-  // editable (core-service-43).
+  // The started turn stamped the dispatch: session, turn, and time.
   let ledger = await client.expectOk("ledger.get", {});
-  const working = ledger.intents.find((entry) => entry.intent.id === i1.id);
-  assert.equal(working?.state, "working");
+  const working = stateOf(ledger, i1.id);
+  assert.equal(working.state, "working");
   assert.deepEqual(
     {
-      sessionId: working?.intent.dispatched?.sessionId,
-      turnId: working?.intent.dispatched?.turnId,
+      sessionId: working.intent.dispatched?.sessionId,
+      turnId: working.intent.dispatched?.turnId,
     },
     { sessionId: session.id, turnId: startedTurnId },
   );
-  const editDispatched = await client.command("intent.edit", {
-    intentId: i1.id,
-    text: "rewrite history",
-  });
-  assert.ok(!editDispatched.ok && editDispatched.error.code === "conflict");
-  const doneWhileWorking = await client.command("intent.close", {
-    intentId: i1.id,
-    as: "done",
-  });
-  assert.ok(!doneWhileWorking.ok && doneWhileWorking.error.code === "conflict");
+  assert.equal(typeof working.intent.dispatched?.at, "number");
+  const idle = stateOf(ledger, bystander.id);
+  assert.equal(idle.state, "queued");
+  assert.equal(idle.intent.dispatched, undefined);
+  // Keep this stamping-focused test from offering automatic work at the
+  // first settlement (core-service-94): the bystander is let go while
+  // still queued, which leaves no trace of it.
+  await client.expectOk("intent.close", { intentId: bystander.id, as: "dropped" });
 
-  // The finish delivers: finished with a band-two entry, and the
-  // untouched bystander stays queued with no stamp.
-  await client.waitFor(
-    (m) => m.type === "record" && m.record.type === "turn_finished",
-  );
-  ledger = await client.ledgerUntil(
-    (state) =>
-      state.intents.find((entry) => entry.intent.id === i1.id)?.state ===
-      "finished",
+  await client.ledgerUntil(
+    (state) => stateOf(state, i1.id).state === "finished",
     "the dispatched intent to finish",
   );
-  const finishEntry = ledger.attention.find((entry) => entry.intentId === i1.id);
-  assert.equal(finishEntry?.band, "finished");
-  assert.equal(finishEntry?.kind, "finish");
-  const bystander = ledger.intents.find((entry) => entry.intent.id === i3.id);
-  assert.equal(bystander?.state, "queued");
-  assert.equal(bystander?.intent.dispatched, undefined);
-
-  // The shared checkpoint and its one automatic handoff decision must
-  // settle before this later verdict; the verdict itself starts nothing.
   await settledTurns(client, harness, session.id, 1);
   await Promise.all([...harness.service["advancing"]]);
+  assert.equal(turnStarts(), 1);
 
-  // The verdict lands, releasing the follower for dispatch.
+  // A closed intent is rejected at submission and starts no turn.
   await client.expectOk("intent.close", { intentId: i1.id, as: "done" });
-  ledger = await client.expectOk("ledger.get", {});
-  const follower = ledger.intents.find((entry) => entry.intent.id === i2.id);
-  assert.equal(follower?.state, "queued");
-  assert.equal(follower?.blockedBy, undefined);
-  const followerRank = follower?.intent.rank;
+  const closedSubmit = await client.command("turn.submit", {
+    sessionId: session.id,
+    text: "once more",
+    intentId: i1.id,
+  });
+  assert.ok(!closedSubmit.ok && closedSubmit.error.code === "conflict");
+  assert.equal(turnStarts(), 1);
 
   // An aborted dispatch turn keeps its stamps while the next fold
-  // re-derives the intent as queued at its kept rank, editable again.
+  // re-derives the intent as queued at its place by age, editable again.
+  const i2 = await client.queue({
+    projectId: project.id,
+    text: "Follow the build",
+  });
+  const i3 = await client.queue({
+    projectId: project.id,
+    text: "Younger work",
+  });
   await client.expectOk("turn.submit", {
     sessionId: session.id,
     text: "slow: follow",
@@ -2304,97 +2565,29 @@ test("core-service-57: submission validates the intent, the turn start stamps it
     (m) => m.type === "record" && m.record.type === "turn_aborted",
   );
   ledger = await client.ledgerUntil(
-    (state) =>
-      state.intents.find((entry) => entry.intent.id === i2.id)?.state ===
-      "queued",
+    (state) => stateOf(state, i2.id).state === "queued",
     "the aborted dispatch to release",
   );
-  const released = ledger.intents.find((entry) => entry.intent.id === i2.id);
-  assert.ok(released?.intent.dispatched, "the stamps remain as history");
-  assert.equal(released?.intent.rank, followerRank, "the rank keeps its place");
+  const released = stateOf(ledger, i2.id);
+  assert.equal(released.intent.dispatched?.sessionId, session.id, "the stamps remain as history");
+  assert.equal(released.intent.dispatched?.turnId, 2);
+  assert.deepEqual(queueIds(ledger, project.id), [i2.id, i3.id]);
+  assert.equal(nextOf(ledger, project.id).intent.id, i2.id, "the release keeps its place by age");
   await client.expectOk("intent.edit", {
     intentId: i2.id,
     text: "Follow the build, retried",
   });
 
   // Playbook settles an abort at its saved progress (core-service-6,
-  // DR-088): the conversation continues, and no recovery is owed.
+  // DR-088): the conversation continues, no recovery is owed, and the
+  // aborted dispatch hands nothing on (core-service-94).
   await settledTurns(client, harness, session.id, 2);
+  await Promise.all([...harness.service["advancing"]]);
   const continued = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
   assert.equal(continued?.recovery, undefined);
   assert.equal(continued?.continuable, true);
-  // Keep the released follower behind the bystander so this fixture's
-  // later finished turn does not start unrelated work automatically.
-  await client.expectOk("intent.link", { intentId: i2.id, afterIntentId: i3.id });
-
-  // History is done work (core-service-50, DR-038): the done intent
-  // lists; the bystander, worked then dropped, lists under its
-  // verdict; an intent dropped before any turn of it ran leaves no
-  // trace.
-  await client.expectOk("turn.submit", {
-    sessionId: session.id,
-    text: "wrap up",
-    intentId: i3.id,
-  });
-  await client.waitFor(
-    (m) => m.type === "record" && m.record.type === "turn_finished",
-    2,
-  );
-  await client.ledgerUntil(
-    (state) =>
-      state.intents.find((entry) => entry.intent.id === i3.id)?.state ===
-      "finished",
-    "the bystander to finish",
-  );
-  await client.expectOk("intent.close", { intentId: i3.id, as: "dropped" });
-  const neverRun = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Queued and taken back out",
-  });
-  await client.expectOk("intent.close", { intentId: neverRun.id, as: "dropped" });
-  const history = await client.expectOk("ledger.history", { projectId: project.id });
-  assert.deepEqual(
-    history.intents.map((row) => [row.intent.id, row.intent.closedAs]),
-    [
-      [i3.id, "dropped"],
-      [i1.id, "done"],
-    ],
-  );
-  assert.equal(history.more, false);
-
-  // Removing takes the closed row out of History and leaves the rest
-  // of the ledger as it was (core-service-79); an open intent, an
-  // unknown one, and one already removed all refuse.
-  const beforeRemove = await client.expectOk("ledger.get", {});
-  const changes = client.messages.filter(
-    (m) => m.type === "intents.changed",
-  ).length;
-  await client.expectOk("intent.remove", { intentId: i1.id });
-  await client.waitFor(
-    (m) => m.type === "intents.changed" && m.projectIds.includes(project.id),
-    changes + 1,
-  );
-  const afterRemove = await client.expectOk("ledger.history", {
-    projectId: project.id,
-  });
-  assert.deepEqual(
-    afterRemove.intents.map((row) => row.intent.id),
-    [i3.id],
-  );
-  const rowStates = (state: LedgerState) =>
-    state.intents.map((entry) => [entry.intent.id, entry.state]);
-  const stillOpen = await client.expectOk("ledger.get", {});
-  assert.deepEqual(rowStates(stillOpen), rowStates(beforeRemove));
-  assert.equal(stillOpen.badge, beforeRemove.badge);
-  const openRemove = await client.command("intent.remove", { intentId: i2.id });
-  assert.ok(!openRemove.ok && openRemove.error.code === "conflict");
-  assert.match(openRemove.error.message, /closed/);
-  const unknownRemove = await client.command("intent.remove", {
-    intentId: "no-such-intent",
-  });
-  assert.ok(!unknownRemove.ok && unknownRemove.error.code === "not_found");
-  const twice = await client.command("intent.remove", { intentId: i1.id });
-  assert.ok(!twice.ok && twice.error.code === "not_found");
+  assert.equal(turnStarts(), 2);
+  assert.equal(stateOf(await client.expectOk("ledger.get", {}), i3.id).intent.dispatched, undefined);
 
   client.close();
   await harness.service.stop();
@@ -2409,7 +2602,7 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
   // closed rows, wherever they came from.
   const dir = scratchDir("spex-ledger-hist-");
   const dataDir = join(dir, "state");
-  const seeded = new Store({ dir: dataDir });
+  const seeded = new Store({ dir: dataDir, own: OWN });
   const project = seeded.registerProject("/tmp/ledger-hist-proj", "hist", 1);
   // Half close done, half were worked — one finished turn each — then
   // dropped: both are history (DR-038).
@@ -2420,7 +2613,6 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
       id,
       projectId: project.id,
       text: `Closed intent ${i}`,
-      rank: String(i).padStart(3, "0") + "i",
       createdAt: i,
     });
     if (i % 2 === 1) {
@@ -2430,7 +2622,7 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
     }
     seeded.closeIntent(id, i % 2 === 0 ? "done" : "dropped", 1000 + i);
   }
-  await seedHistorySession(join(dataDir, "sessions"), project.path, seeded.getRecords("73000000-0000-4000-8000-000000000010", { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>), "73000000-0000-4000-8000-000000000010");
+  await seedHistorySession(seeded.repository(project.id)!.sessionsDir, project.path, seeded.getRecords("73000000-0000-4000-8000-000000000010", { includeHidden: true }).map((entry) => entry.record as unknown as Record<string, unknown>), "73000000-0000-4000-8000-000000000010");
   seeded.close();
 
   const harness = await startHarness({ dataDir });
@@ -2579,67 +2771,142 @@ test("core-service-59: session.viewed clears the un-ledgered turn's review stand
 });
 
 // ---------------------------------------------------------------------------
-// core-service-54: restart identity over the protocol, and the act log
+// core-service-54/56: restart identity over the protocol, the intent
+// files, and an intent arriving through a sync
 // ---------------------------------------------------------------------------
 
-test("core-service-54: ledger.get replies identically after a service restart, and the act log holds acts only", async () => {
+test("core-service-54: ledger.get replies identically after a service restart, and no intent file holds a state or status field", { timeout: 30_000 }, async () => {
   const harness = await startHarness();
-  const client = new Client(harness.service.port());
+  let client = new Client(harness.service.port());
   await client.open();
   const project = await client.expectOk("project.register", {
     path: harness.projectDir,
   });
-  const kept = await client.expectOk("intent.queue", {
+  const session = await client.expectOk("session.create", {
     projectId: project.id,
-    text: "Keep me queued",
   });
+  await client.expectOk("subscribe", {
+    channel: { kind: "session", sessionId: session.id },
+  });
+  const finishedTurn = async (intent: IntentInfo, turns: number) => {
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: intent.text,
+      intentId: intent.id,
+    });
+    await client.ledgerUntil(
+      (state) => state.intents.find((entry) => entry.intent.id === intent.id)?.state === "finished",
+      `${intent.text} to finish`,
+    );
+    await settledTurns(client, harness, session.id, turns);
+    await Promise.all([...harness.service["advancing"]]);
+  };
+
+  // A completed run: one intent worked and confirmed, one worked and
+  // finished awaiting its verdict, one queued and edited, and one
+  // dropped before any work. Each is queued only once the turn before
+  // it settled, so nothing hands on automatically.
+  const confirmed = await client.queue({ projectId: project.id, text: "Confirmed work" });
+  await finishedTurn(confirmed, 1);
+  const delivered = await client.queue({ projectId: project.id, text: "Delivered work" });
+  await finishedTurn(delivered, 2);
+  await client.expectOk("intent.close", { intentId: confirmed.id, as: "done" });
+  const kept = await client.queue({ projectId: project.id, text: "Keep me queued" });
   await client.expectOk("intent.edit", { intentId: kept.id, text: "Kept, edited" });
-  const closed = await client.expectOk("intent.queue", {
-    projectId: project.id,
-    text: "Close me",
-  });
+  const closed = await client.queue({ projectId: project.id, text: "Close me" });
   await client.expectOk("intent.close", { intentId: closed.id, as: "dropped" });
   const before = await client.expectOk("ledger.get", {});
+  assert.equal(stateOf(before, delivered.id).state, "finished");
+  assert.equal(stateOf(before, kept.id).state, "queued");
+  assert.equal(nextOf(before, project.id).intent.id, kept.id);
+  assert.deepEqual(queueIds(before, project.id), [delivered.id, kept.id]);
+  const history = await client.expectOk("ledger.history", { projectId: project.id });
+  assert.deepEqual(history.intents.map((row) => row.intent.id), [confirmed.id]);
+
+  client.close();
+  await harness.restart();
+  client = new Client(harness.service.port());
+  await client.open();
+  assert.deepEqual(await client.expectOk("ledger.get", {}), before);
+  assert.deepEqual(await client.expectOk("ledger.history", { projectId: project.id }), history);
+
+  // Each intent is one file of provenance and stamps only: exactly
+  // storage-4's fields, no state or status anywhere (core-service-52).
+  const intentsDir = harness.service["store"].repository(project.id)!.intentsDir;
+  const files = readdirSync(intentsDir).filter((name) => name.endsWith(".json")).sort();
+  assert.deepEqual(files, [confirmed.id, delivered.id, kept.id].map((id) => `${id}.json`).sort());
+  for (const name of files) {
+    const file = JSON.parse(readFileSync(join(intentsDir, name), "utf8")) as Record<string, unknown>;
+    assert.equal(file.format, 1);
+    for (const key of Object.keys(file)) assert.ok(INTENT_FILE_FIELDS.has(key), `${name} holds ${key}`);
+    for (const part of [file, file.dispatched, file.closed]) {
+      if (part && typeof part === "object") {
+        assert.ok(!("state" in part) && !("status" in part), `${name} stores no state`);
+      }
+    }
+  }
+  assert.ok(readIntentFile(intentsDir, delivered.id).dispatched, "the dispatch stamp is kept");
+  assert.deepEqual(
+    (readIntentFile(intentsDir, confirmed.id).closed as { as: string }).as,
+    "done",
+  );
   client.close();
   await harness.service.stop();
+});
 
-  const restarted = await CoreService.start({
-    token: "test",
-    configPath: join(harness.dir, "playbook.config.yaml"),
-    dataDir: harness.dataDir,
-    env: {},
-    home: join(harness.dir, "home"),
-    watchConfig: false,
+test("core-service-56: an intent arriving through a sync with an older capture time heads the queue", async () => {
+  const harness = await startHarness();
+  let client = new Client(harness.service.port());
+  await client.open();
+  const project = await client.expectOk("project.register", {
+    path: harness.projectDir,
   });
-  const client2 = new Client(restarted.port());
-  await client2.open();
-  assert.deepEqual(await client2.expectOk("ledger.get", {}), before);
+  const first = await client.queue({ projectId: project.id, text: "Captured first" });
+  const second = await client.queue({ projectId: project.id, text: "Captured second" });
+  let ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(queueIds(ledger, project.id), [first.id, second.id]);
+  assert.equal(nextOf(ledger, project.id).intent.id, first.id);
 
-  // The persisted act log is acts and provenance only: no state or
-  // status field anywhere (core-service-52).
-  const acts = readFileSync(
-    join(harness.dataDir, "intents", `${project.id}.jsonl`),
-    "utf8",
-  )
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-  assert.ok(acts.length >= 4, "queue, edit, queue, close all appended");
-  for (const act of acts) {
-    assert.ok(!("state" in act) && !("status" in act));
-    const intent = act.intent as Record<string, unknown> | undefined;
-    if (intent) assert.ok(!("state" in intent) && !("status" in intent));
-  }
-  client2.close();
-  await restarted.stop();
+  // A sync lands a third intent captured earlier on another device: its
+  // file arrives in the clone's intents/ exactly as the other device
+  // wrote it, and the core reads it on its next start.
+  const intentsDir = harness.service["store"].repository(project.id)!.intentsDir;
+  const third = {
+    format: 1,
+    id: randomUUID(),
+    text: "Captured elsewhere, earlier",
+    createdAt: first.createdAt - 60_000,
+  };
+  writeFileSync(join(intentsDir, `${third.id}.json`), `${JSON.stringify(third, null, 2)}\n`);
+  client.close();
+  await harness.restart();
+  client = new Client(harness.service.port());
+  await client.open();
+
+  // Its place is its age: first in the queue, and next (core-service-42,
+  // core-service-49, core-service-107).
+  ledger = await client.expectOk("ledger.get", {});
+  assert.deepEqual(queueIds(ledger, project.id), [third.id, first.id, second.id]);
+  assert.deepEqual(
+    ledger.intents
+      .filter((entry) => entry.intent.projectId === project.id)
+      .map((entry) => entry.state),
+    ["queued", "queued", "queued"],
+  );
+  const next = nextOf(ledger, project.id);
+  assert.equal(next.intent.id, third.id);
+  assert.equal(next.intent.text, third.text);
+  assert.deepEqual(next.next, { standing: "manual-ready", manualStart: true });
+  client.close();
+  await harness.service.stop();
 });
 
 test("dashboard-10: the Captain's own machine reporting after a park leaves the question standing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "Q", "i");
+  queueIntent(store, projectId, "Q");
   beginTurn(store, "s1", 1, "plan it", 1000);
-  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  stamp(store, "Q", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -2668,7 +2935,7 @@ test("dashboard-10: the Captain's own machine reporting after a park leaves the 
   assert.equal(stateOf(ledger, "Q").reason, "question");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId]),
-    [["question", "Q"]],
+    [["question", uid("Q")]],
   );
   // A Boss reply acknowledges the question as the parked machine resumes.
   beginTurn(store, "s1", 2, "only what exists today", 3000);
@@ -2687,14 +2954,14 @@ test("dashboard-10: the Captain's own machine reporting after a park leaves the 
 test("dashboard-10/33: dispatching another intent in a later Boss turn leaves the prior question standing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "D", "h");
-  queueIntent(store, projectId, "Q", "i");
-  queueIntent(store, projectId, "N", "j");
+  queueIntent(store, projectId, "D");
+  queueIntent(store, projectId, "Q");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "completed delivery", 1000);
-  store.stampIntentDispatch("D", "s1", 1, 1000);
+  stamp(store, "D", "s1", 1, 1000);
   finishTurn(store, "s1", 1, 2000);
   beginTurn(store, "s1", 2, "plan it", 3000);
-  store.stampIntentDispatch("Q", "s1", 2, 3000);
+  stamp(store, "Q", "s1", 2, 3000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -2710,7 +2977,7 @@ test("dashboard-10/33: dispatching another intent in a later Boss turn leaves th
   // Inspect the new dispatch before any machine state transition: its
   // start answers nothing, so the earlier question stands (DR-085).
   beginTurn(store, "s1", 3, "start another intent", 5000);
-  store.stampIntentDispatch("N", "s1", 3, 5000);
+  stamp(store, "N", "s1", 3, 5000);
   ledger = fold(store, [lane("s1", projectId, true)]);
   assert.equal(stateOf(ledger, "N").state, "working");
   assert.equal(stateOf(ledger, "Q").state, "interrupted");
@@ -2718,7 +2985,7 @@ test("dashboard-10/33: dispatching another intent in a later Boss turn leaves th
   assert.equal(stateOf(ledger, "D").state, "finished");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId]),
-    [["question", "Q"], ["finish", "D"]],
+    [["question", uid("Q")], ["finish", uid("D")]],
   );
 
   // Only the runtime reporting the question gone clears it.
@@ -2734,19 +3001,19 @@ test("dashboard-10/33: dispatching another intent in a later Boss turn leaves th
   assert.equal(stateOf(ledger, "Q").state, "finished");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId]),
-    [["finish", "D"], ["finish", "Q"]],
+    [["finish", uid("D")], ["finish", uid("Q")]],
   );
-  assert.equal(store.getIntent("D")?.closedAt, undefined);
+  assert.equal(store.getIntent(uid("D"))?.closedAt, undefined);
   store.close();
 });
 
 test("dashboard-10/core-service-107: a Boss clarification turn leaves the parked question standing", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "Q", "i");
-  queueIntent(store, projectId, "N", "j");
+  queueIntent(store, projectId, "Q");
+  queueIntent(store, projectId, "N");
   beginTurn(store, "s1", 1, "plan it", 1000);
-  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  stamp(store, "Q", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -2780,7 +3047,7 @@ test("dashboard-10/core-service-107: a Boss clarification turn leaves the parked
   assert.equal(stateOf(ledger, "Q").reason, "question");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.since]),
-    [["question", "Q", 1500]],
+    [["question", uid("Q"), 1500]],
   );
   // The queue must not hand the next intent into the parked
   // conversation (core-service-107).
@@ -2794,9 +3061,9 @@ test("dashboard-10/core-service-107: a Boss clarification turn leaves the parked
 test("dashboard-10: a state report's pending questions raise the question under any state, and an empty set clears it", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "Q", "i");
+  queueIntent(store, projectId, "Q");
   beginTurn(store, "s1", 1, "analyse it", 1000);
-  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  stamp(store, "Q", "s1", 1, 1000);
   append(store, "s1", {
     type: "captain_telemetry",
     topic: "playbook.fsm.state",
@@ -2816,7 +3083,7 @@ test("dashboard-10: a state report's pending questions raise the question under 
   assert.equal(stateOf(ledger, "Q").reason, "question");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId, entry.since]),
-    [["question", "Q", 1500]],
+    [["question", uid("Q"), 1500]],
   );
 
   // The Boss answers; the runtime's next report carries no question.
@@ -2833,7 +3100,7 @@ test("dashboard-10: a state report's pending questions raise the question under 
   assert.equal(stateOf(ledger, "Q").state, "finished");
   assert.deepEqual(
     ledger.attention.map((entry) => [entry.kind, entry.intentId]),
-    [["finish", "Q"]],
+    [["finish", uid("Q")]],
   );
   store.close();
 });
@@ -2841,9 +3108,9 @@ test("dashboard-10: a state report's pending questions raise the question under 
 test("dashboard-10: a run dismissed while parked takes its question with it", () => {
   const { store, projectId } = newProjectStore();
   addSession(store, projectId, "s1");
-  queueIntent(store, projectId, "Q", "i");
+  queueIntent(store, projectId, "Q");
   beginTurn(store, "s1", 1, "plan it", 1000);
-  store.stampIntentDispatch("Q", "s1", 1, 1000);
+  stamp(store, "Q", "s1", 1, 1000);
   const trace = (type: string, payload: Record<string, unknown>, timestamp: number) =>
     append(store, "s1", {
       type: "captain_telemetry",

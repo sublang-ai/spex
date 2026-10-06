@@ -117,7 +117,7 @@ export interface AuthorManagerEvents {
   onState: (draft: DraftInfo) => void;
   onSource: (message: DraftSourceMessage) => void;
   onProgress: (draftId: string, line: string) => void;
-  onRemoved: (draftId: string) => void;
+  onRemoved: (draftId: string, projectId: string) => void;
 }
 
 type TurnOrigin =
@@ -472,6 +472,7 @@ export class AuthorManager {
     else state = "draft";
     return {
       id,
+      projectId: this.drafts.projectOf(id) ?? "",
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
       firstLine: source ? firstLineOf(source.markdown) : null,
@@ -505,6 +506,7 @@ export class AuthorManager {
     const resolved = this.resolveAgent(id);
     return {
       id,
+      projectId: this.drafts.projectOf(id) ?? "",
       createdAt: at,
       touchedAt: at,
       firstLine: source ? firstLineOf(source.markdown) : null,
@@ -656,7 +658,7 @@ export class AuthorManager {
 
   // -- commands -------------------------------------------------------------
 
-  create(id: string): DraftInfo {
+  create(id: string, location: { key: string; authoringDir: string }): DraftInfo {
     if (this.options.reservedIds().includes(id)) {
       throw new CoreError(
         "invalid_request",
@@ -677,7 +679,7 @@ export class AuthorManager {
         }),
       );
     }
-    const draft = this.drafts.create(id, this.now());
+    const draft = this.drafts.create(id, this.now(), location);
     const live = this.liveOf(id);
     live.records = [];
     live.seq = 0;
@@ -852,12 +854,13 @@ export class AuthorManager {
   /** The draft is registered: its record and preference go, the
    * directory stays with the playbook (playbook-library-70). */
   private async retire(id: string): Promise<void> {
+    const projectId = this.drafts.projectOf(id) ?? "";
     const remove = () => {
       this.drafts.retire(id);
-      this.options.store.deletePref(`draft:${id}:player`);
+      this.options.store.deletePref(`authoring:${id}:player`);
       this.live.delete(id);
       this.problems.delete(id);
-      this.events.onRemoved(id);
+      this.events.onRemoved(id, projectId);
     };
     if (this.options.retireMedia) await this.options.retireMedia(id, remove);
     else remove();
@@ -876,7 +879,7 @@ export class AuthorManager {
         }),
       );
     }
-    const key = `draft:${id}:player`;
+    const key = `authoring:${id}:player`;
     if (playerId === null) {
       this.options.store.deletePref(key);
     } else {
@@ -923,11 +926,12 @@ export class AuthorManager {
 
   delete(id: string): void {
     this.assertDeletable(id);
+    const projectId = this.drafts.projectOf(id) ?? "";
     this.drafts.delete(id);
-    this.options.store.deletePref(`draft:${id}:player`);
+    this.options.store.deletePref(`authoring:${id}:player`);
     this.live.delete(id);
     this.problems.delete(id);
-    this.events.onRemoved(id);
+    this.events.onRemoved(id, projectId);
   }
 
   private assertIdle(id: string): void {
@@ -959,7 +963,7 @@ export class AuthorManager {
    * Captain's (playbook-library-64, storage-5). */
   resolveAgent(id: string): ResolvedAuthorAgent {
     const composed = this.options.composed();
-    const preferred = this.options.store.getPref<string>(`draft:${id}:player`);
+    const preferred = this.options.store.getPref<string>(`authoring:${id}:player`);
     const player = preferred ? composed?.roster.find((entry) => entry.id === preferred) : undefined;
     const agent: ResolvedAgent = player ?? composed?.captainAgent ?? { adapter: "claude" };
     const playerId = player ? player.id : null;
@@ -1109,7 +1113,7 @@ export class AuthorManager {
     let error: string | undefined;
     let errorCode: string | undefined;
     try {
-      const assets = createAssetStore({directory: join(this.drafts.recordDir(id), "assets")});
+      const assets = createAssetStore({directory: this.drafts.assetsDir(id)});
       const nativeAttachments = attachments?.length ? await Promise.all(attachments.map((asset) => assets.resolveAttachment(asset, {signal: controller.signal}))) : undefined;
       for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false,
         ...(approvalHandler ? {approvalHandler: (request, context) => approvalHandler({request, turnId, actorId: AUTHOR_PLAYER, invocationId}, context)} : {}), ...(nativeAttachments ? {attachments: nativeAttachments} : {}) })) {

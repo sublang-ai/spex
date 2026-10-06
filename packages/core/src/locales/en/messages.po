@@ -17,8 +17,8 @@ msgstr ""
 #. Separates names listed in one message
 #. Separates names listed in one message
 #. Separates names listed in one message
-#: src/app-storage.ts
 #: src/config.ts
+#: src/files.ts
 #: src/service.ts
 msgid ", "
 msgstr ", "
@@ -43,7 +43,7 @@ msgid "; missing {roles}"
 msgstr "; missing {roles}"
 
 #. Clause naming the fields a record may also carry
-#: src/app-storage.ts
+#: src/files.ts
 msgid "; optional {fields}"
 msgstr "; optional {fields}"
 
@@ -89,20 +89,10 @@ msgstr "{act}. Then Retry."
 msgid "{command} failed: {output}"
 msgstr "{command} failed: {output}"
 
-#. A queue unit's detail: how many acts this side adds to the end
-#: src/space.ts
-msgid "{count, plural, one {# act appended} other {# acts appended}}"
-msgstr "{count, plural, one {# act appended} other {# acts appended}}"
-
-#. A queue unit side's detail: how many acts this side adds
-#: src/space.ts
-msgid "{count, plural, one {# act} other {# acts}}"
-msgstr "{count, plural, one {# act} other {# acts}}"
-
-#. A queue unit's label; {name} is the project whose queue changed
-#: src/space.ts
-msgid "{count, plural, one {# change in {name}'s queue} other {# changes in {name}'s queue}}"
-msgstr "{count, plural, one {# change in {name}'s queue} other {# changes in {name}'s queue}}"
+#. Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent
+#: src/service.ts
+msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
+msgstr "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
 
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
@@ -124,10 +114,10 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
 msgstr "{diagnostic}; delete the draft, or repair the file and restart Spex"
 
-#. Repair row: sessions name a folder no registered project holds
-#: src/app-storage.ts
-msgid "{directory} has no project on this device"
-msgstr "{directory} has no project on this device"
+#. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
+#: src/config.ts
+msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
+msgstr "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
@@ -137,7 +127,9 @@ msgid "{file} changed on disk since it was read"
 msgstr "{file} changed on disk since it was read"
 
 #. A storage fault as one line: the file, then the reason — itself a message
-#: src/app-storage.ts
+#. A storage fault as one line: the file, then the reason — itself a message
+#: src/files.ts
+#: src/service.ts
 msgid "{file}: {reason}"
 msgstr "{file}: {reason}"
 
@@ -152,7 +144,9 @@ msgid "{host} refused this machine's access"
 msgstr "{host} refused this machine's access"
 
 #. Refusal: the id offered for a new draft is taken by a playbook already
+#. Refusal: the id offered for a new draft is taken by a playbook already
 #: src/authoring.ts
+#: src/service.ts
 msgid "{id} is already a configured playbook or a built-in; pick another id"
 msgstr "{id} is already a configured playbook or a built-in; pick another id"
 
@@ -162,7 +156,7 @@ msgid "{label} has no divergent change"
 msgstr "{label} has no divergent change"
 
 #. Repair row: the project is registered, but nothing here holds it
-#: src/app-storage.ts
+#: src/store.ts
 msgid "{name} has no folder on this device"
 msgstr "{name} has no folder on this device"
 
@@ -385,6 +379,11 @@ msgstr "{path}.subagentModel must be a nonblank string"
 msgid "{playbookId} is compiling"
 msgstr "{playbookId} is compiling"
 
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#: src/service.ts
+msgid "{projectId} has no working folder on this device"
+msgstr "{projectId} has no working folder on this device"
+
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
@@ -514,8 +513,8 @@ msgstr "a session is starting in {project} — wait a moment"
 
 #. Refusal: a diff was asked of a unit that is read as a summary, not as text
 #: src/space.ts
-msgid "a session or queue offers no text diff"
-msgstr "a session or queue offers no text diff"
+msgid "a session, an intent or an authoring session offers no text diff"
+msgstr "a session, an intent or an authoring session offers no text diff"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -532,11 +531,6 @@ msgstr "A turn is already running in this session."
 #: src/service.ts
 msgid "a turn is being submitted in this session"
 msgstr "a turn is being submitted in this session"
-
-#. Storage diagnostic: an act follows the intent's removal
-#: src/app-storage.ts
-msgid "act targets removed intent {intentId}"
-msgstr "act targets removed intent {intentId}"
 
 #. Storage diagnostic: an act names an intent no queue act created
 #: src/app-storage.ts
@@ -558,20 +552,10 @@ msgstr "add this machine's SSH key to an account that can see it"
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "Add this machine's SSH key to an account that can see it"
 
-#. Storage diagnostic: two projects claim one folder
-#: src/app-storage.ts
-msgid "ambiguous project path {path}"
-msgstr "ambiguous project path {path}"
-
-#. Refusal: a row was linked after itself
-#: src/service.ts
-msgid "an intent cannot wait on itself"
-msgstr "an intent cannot wait on itself"
-
-#. Refusal: a move named a row in another project's queue
-#: src/service.ts
-msgid "an intent reorders only within its own project"
-msgstr "an intent reorders only within its own project"
+#. Migration diagnostic: a stored intent references an attachment whose bytes are gone
+#: src/migrate-home.ts
+msgid "an attachment the intent names is missing"
+msgstr "an attachment the intent names is missing"
 
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
@@ -587,6 +571,11 @@ msgstr "an open intent already holds this source: \"{title}\""
 #: src/space.ts
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
 msgstr "Another process is writing to the home; wait for it to finish, then Retry."
+
+#. Storage diagnostic: an intent's attachment folder stands without the intent's file
+#: src/storage-git.ts
+msgid "attachments without their intent"
+msgstr "attachments without their intent"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
@@ -618,6 +607,11 @@ msgstr "cannot read file: {message}"
 msgid "captain must resolve an adapter"
 msgstr "captain must resolve an adapter"
 
+#. Refusal: the remote's side was asked for before the remote was checked
+#: src/space.ts
+msgid "Check the host first"
+msgstr "Check the host first"
+
 #. Guidance where the remote's host could not be reached
 #: src/space-git.ts
 msgid "Check the network or the remote URL, then try again."
@@ -628,11 +622,6 @@ msgstr "Check the network or the remote URL, then try again."
 msgid "Check the path, create the repository if it is not there yet, or {act}. Then Retry."
 msgstr "Check the path, create the repository if it is not there yet, or {act}. Then Retry."
 
-#. Refusal: the remote's side was asked for before the remote was checked
-#: src/space.ts
-msgid "Check the remote first"
-msgstr "Check the remote first"
-
 #. Guidance where the remote holds no repository this machine can see; {act} is the act that gives this machine access
 #: src/space-git.ts
 msgid "Check the URL, create the repository if it is not there yet, or {act}. Then Retry."
@@ -642,6 +631,11 @@ msgstr "Check the URL, create the repository if it is not there yet, or {act}. T
 #: src/space.ts
 msgid "Choose the other side for this unit or fix the file, then Retry."
 msgstr "Choose the other side for this unit or fix the file, then Retry."
+
+#. The project file's unit label: the remote of the code changed
+#: src/space.ts
+msgid "Code remote changed"
+msgstr "Code remote changed"
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -704,6 +698,7 @@ msgid "config is not valid"
 msgstr "config is not valid"
 
 #. Config error: the file's top level is not a mapping
+#. Config error: the file's top level is not a mapping
 #: src/config.ts
 msgid "config must be a YAML mapping"
 msgstr "config must be a YAML mapping"
@@ -723,16 +718,6 @@ msgstr "damaged transcript after record {seq}; the draft refuses everything but 
 msgid "deleted"
 msgstr "deleted"
 
-#. Storage diagnostic: the queue's waiting chain loops
-#: src/app-storage.ts
-msgid "dependency cycle at {intentId}"
-msgstr "dependency cycle at {intentId}"
-
-#. Storage diagnostic; `reason` is the other file's own diagnostic, relayed
-#: src/store.ts
-msgid "depends on invalid {file}: {reason}"
-msgstr "depends on invalid {file}: {reason}"
-
 #. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
 msgid "draft {id} already exists; open it"
@@ -740,8 +725,8 @@ msgstr "draft {id} already exists; open it"
 
 #. Diagnostic for a damaged draft file: the id it names is not the one its folder does
 #: src/drafts.ts
-msgid "draft id disagrees with its directory"
-msgstr "draft id disagrees with its directory"
+msgid "draft id disagrees with its file name"
+msgstr "draft id disagrees with its file name"
 
 #. Refusal: the selected authoring draft does not exist
 #: src/service.ts
@@ -758,13 +743,8 @@ msgstr "duplicate binding {projectId}"
 msgid "duplicate effective command \"{command}\""
 msgstr "duplicate effective command \"{command}\""
 
-#. Storage diagnostic: two open intents claim one queue position
-#: src/app-storage.ts
-msgid "duplicate open rank {rank}"
-msgstr "duplicate open rank {rank}"
-
 #. Storage diagnostic: two open intents hold one issue or pull request
-#: src/app-storage.ts
+#: src/storage-git.ts
 msgid "duplicate open source {source}"
 msgstr "duplicate open source {source}"
 
@@ -778,7 +758,8 @@ msgstr "duplicate playbook id \"{playbookId}\""
 msgid "duplicate project {projectId}"
 msgstr "duplicate project {projectId}"
 
-#. Storage diagnostic: two act logs queue the same intent
+#. Storage diagnostic: two acts queue the same intent
+#. Storage diagnostic: two acts queue the same intent
 #. Storage diagnostic: two acts queue the same intent
 #: src/app-storage.ts
 #: src/store.ts
@@ -795,15 +776,12 @@ msgstr "duplicate record id {id}: {first} and {second}"
 msgid "edit rejected"
 msgstr "edit rejected"
 
-#. Migration diagnostic: the project registry's top level is not an object
-#: src/app-storage.ts
-msgid "expected a registry object"
-msgstr "expected a registry object"
-
 #. Diagnostic for a damaged file: its top level is not an object
+#. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
 #: src/app-storage.ts
 #: src/drafts.ts
+#: src/files.ts
 msgid "expected an object"
 msgstr "expected an object"
 
@@ -818,19 +796,26 @@ msgid "expected fields {required}; optional {optional}"
 msgstr "expected fields {required}; optional {optional}"
 
 #. Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message
-#: src/app-storage.ts
+#: src/files.ts
 msgid "expected fields {required}{optional}"
 msgstr "expected fields {required}{optional}"
 
-#. Storage diagnostic: an act log's filename is no project id
+#. Storage diagnostic: an intent file's name is no intent id
+#. Storage diagnostic: an intent file's name is no intent id
 #: src/app-storage.ts
-msgid "filename must be a project UUID"
-msgstr "filename must be a project UUID"
+#: src/storage-git.ts
+msgid "filename must be an intent UUID"
+msgstr "filename must be an intent UUID"
 
 #. Refusal: a Git merge is pending in the home
 #: src/space.ts
 msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
+
+#. Storage diagnostic: one folder appears in two pairs
+#: src/home.ts
+msgid "folder {path} is paired twice"
+msgstr "folder {path} is paired twice"
 
 #. A stopped save's message where git failed and printed nothing
 #: src/space.ts
@@ -907,16 +892,6 @@ msgstr "in a terminal run gh auth status to see which GitHub account this machin
 msgid "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
 msgstr "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
 
-#. Storage diagnostic: an intent carries a close time without its verdict, or the other way round
-#: src/app-storage.ts
-msgid "incomplete closed intent"
-msgstr "incomplete closed intent"
-
-#. Storage diagnostic: an act log ends mid-line, so nothing may be appended
-#: src/store.ts
-msgid "incomplete final act; restore or remove the incomplete tail before writing"
-msgstr "incomplete final act; restore or remove the incomplete tail before writing"
-
 #. Refusal: the home is not a Git repository yet
 #: src/space.ts
 msgid "Initialize the repository first"
@@ -927,7 +902,6 @@ msgstr "Initialize the repository first"
 msgid "Install Node >= 23.6 first; slc runs on it."
 msgstr "Install Node >= 23.6 first; slc runs on it."
 
-#. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
 #: src/app-storage.ts
 msgid "invalid attachment references"
@@ -984,7 +958,7 @@ msgid "invalid dispatch"
 msgstr "invalid dispatch"
 
 #. Storage diagnostic: an intent names a turn its session never ran
-#: src/app-storage.ts
+#: src/storage-git.ts
 msgid "invalid dispatch for {intentId}"
 msgstr "invalid dispatch for {intentId}"
 
@@ -993,20 +967,20 @@ msgstr "invalid dispatch for {intentId}"
 msgid "invalid failure count"
 msgstr "invalid failure count"
 
+#. Storage diagnostic: home.yaml's own fields are malformed
+#: src/home.ts
+msgid "invalid home file"
+msgstr "invalid home file"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
 msgstr "invalid intent ID"
 
 #. Migration diagnostic: the file to migrate is not readable JSON
-#: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "invalid JSON"
 msgstr "invalid JSON"
-
-#. Migration diagnostic: a project's recorded folder is no absolute local path
-#: src/app-storage.ts
-msgid "invalid legacy project path"
-msgstr "invalid legacy project path"
 
 #. Media storage failure
 #: src/media.ts
@@ -1019,19 +993,19 @@ msgid "invalid migration receipt or input"
 msgstr "invalid migration receipt or input"
 
 #. Migration diagnostic: the kept original no longer matches its receipt
-#: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "invalid migration receipt or retained input"
 msgstr "invalid migration receipt or retained input"
-
-#. Storage diagnostic: the intent an act waits on is no valid id
-#: src/app-storage.ts
-msgid "invalid predecessor"
-msgstr "invalid predecessor"
 
 #. Storage diagnostic: a project's folder or its recorded aliases are malformed
 #: src/app-storage.ts
 msgid "invalid project binding"
 msgstr "invalid project binding"
+
+#. Storage diagnostic: project.json's name or remote is malformed
+#: src/app-storage.ts
+msgid "invalid project file"
+msgstr "invalid project file"
 
 #. Storage diagnostic: a project's id, name or registration time is malformed
 #: src/app-storage.ts
@@ -1053,11 +1027,6 @@ msgstr "invalid queue"
 msgid "invalid queued intent"
 msgstr "invalid queued intent"
 
-#. Storage diagnostic: a move act carries no queue position
-#: src/app-storage.ts
-msgid "invalid rank"
-msgstr "invalid rank"
-
 #. Storage diagnostic: the issue or pull request an intent came from is malformed
 #: src/app-storage.ts
 msgid "invalid source"
@@ -1068,15 +1037,10 @@ msgstr "invalid source"
 msgid "invalid source digest"
 msgstr "invalid source digest"
 
-#. Storage diagnostic: an edit act carries no text
-#: src/app-storage.ts
-msgid "invalid text"
-msgstr "invalid text"
-
-#. Storage diagnostic: an act carries no readable time
-#: src/app-storage.ts
-msgid "invalid timestamp"
-msgstr "invalid timestamp"
+#. Diagnostic for a damaged authoring file: the path of its spec package will not read
+#: src/drafts.ts
+msgid "invalid spec package path"
+msgstr "invalid spec package path"
 
 #. Diagnostic for a damaged draft file: its recorded times will not read
 #: src/drafts.ts
@@ -1098,6 +1062,11 @@ msgstr "Invalid upload ID or file length."
 #: src/app-storage.ts
 msgid "invalid viewed marker {key}"
 msgstr "invalid viewed marker {key}"
+
+#. Storage diagnostic: a working folder or its spex repository's key is malformed
+#: src/home.ts
+msgid "invalid working folder pair"
+msgstr "invalid working folder pair"
 
 #. Guidance under a save that refused to share a file
 #: src/space.ts
@@ -1134,11 +1103,6 @@ msgstr "Link"
 msgid "Machine"
 msgstr "Machine"
 
-#. Why an interrupted sync's repair failed; main is the branch's own name
-#: src/space.ts
-msgid "main moved since the interrupted sync; resolve it in a terminal"
-msgstr "main moved since the interrupted sync; resolve it in a terminal"
-
 #. The act that gives access to a local-path remote, inside a sentence
 #: src/space-git.ts
 msgid "make sure this user can read the folder"
@@ -1167,7 +1131,9 @@ msgid "Media storage has stopped."
 msgstr "Media storage has stopped."
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
+#. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
+#: src/migrate-home.ts
 msgid "migration destination diverged; preserved unchanged"
 msgstr "migration destination diverged; preserved unchanged"
 
@@ -1175,11 +1141,6 @@ msgstr "migration destination diverged; preserved unchanged"
 #: src/app-storage.ts
 msgid "migration output verification failed"
 msgstr "migration output verification failed"
-
-#. Storage diagnostic: an intent waits on one the log never queued
-#: src/app-storage.ts
-msgid "missing predecessor {intentId}"
-msgstr "missing predecessor {intentId}"
 
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -1197,6 +1158,8 @@ msgid "no configured playbook {playbookId}"
 msgstr "no configured playbook {playbookId}"
 
 #. Refusal: no playbook draft of this id is open
+#. Refusal: no playbook draft of this id is open
+#: src/drafts.ts
 #: src/service.ts
 msgid "no draft {draftId}"
 msgstr "no draft {draftId}"
@@ -1222,7 +1185,10 @@ msgid "No GitHub origin remote. Add one (git remote add origin …) to see issue
 msgstr "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs."
 
 #. Refusal: no intent of this id is in the ledger
+#. Refusal: no intent of this id is in the ledger
+#. Refusal: no intent of this id is in the ledger
 #: src/service.ts
+#: src/store.ts
 msgid "no intent {intentId}"
 msgstr "no intent {intentId}"
 
@@ -1240,11 +1206,6 @@ msgstr "no one"
 #: src/service.ts
 msgid "no project {projectId}"
 msgstr "no project {projectId}"
-
-#. Session diagnostic: no project on this device holds the session's folder
-#: src/store.ts
-msgid "No project binding for {cwd}"
-msgstr "No project binding for {cwd}"
 
 #. Refusal: the answer names a repair the core does not report; {repair} is its key
 #: src/space.ts
@@ -1278,15 +1239,22 @@ msgstr "No source yet"
 msgid "no spec file at specs/{path}"
 msgstr "no spec file at specs/{path}"
 
+#. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
+#: src/space.ts
+#: src/store.ts
+msgid "no spex repository {key} on this device"
+msgstr "no spex repository {key} on this device"
+
 #. compile phase: slc normalizes the source
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "Normalize"
 
-#. Refusal: the home's HEAD names no branch; main is a branch's own name
+#. Refusal: the clone's HEAD names no branch; spex is the branch's own name
 #: src/space.ts
-msgid "Not on a branch; check out main in a terminal"
-msgstr "Not on a branch; check out main in a terminal"
+msgid "Not on a branch; check out spex in a terminal"
+msgstr "Not on a branch; check out spex in a terminal"
 
 #. Guidance where a file under the home failed validation before the save
 #: src/space.ts
@@ -1298,10 +1266,10 @@ msgstr "Nothing was saved. Fix or remove the file, then sync again."
 msgid "Nothing was saved. Fix the sync rules file, then sync again."
 msgstr "Nothing was saved. Fix the sync rules file, then sync again."
 
-#. Refusal: the home sits on another branch; main is a branch's own name
+#. Refusal: the clone sits on another branch; spex is the branch's own name
 #: src/space.ts
-msgid "On {branch}; check out main in a terminal"
-msgstr "On {branch}; check out main in a terminal"
+msgid "On {branch}; check out spex in a terminal"
+msgstr "On {branch}; check out spex in a terminal"
 
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
@@ -1334,7 +1302,7 @@ msgid "parse failed: {message}"
 msgstr "parse failed: {message}"
 
 #. Refusal: the folder is recorded for a project already, so Add cannot claim it
-#: src/app-storage.ts
+#: src/store.ts
 msgid "path {path} needs explicit rebinding"
 msgstr "path {path} needs explicit rebinding"
 
@@ -1349,7 +1317,8 @@ msgid "path must be relative to specs/"
 msgstr "path must be relative to specs/"
 
 #. Refusal: another project holds the folder this binding names
-#: src/app-storage.ts
+#. Refusal: another project holds the folder this binding names
+#: src/store.ts
 msgid "path or alias already belongs to another project"
 msgstr "path or alias already belongs to another project"
 
@@ -1357,11 +1326,6 @@ msgstr "path or alias already belongs to another project"
 #: src/specs.ts
 msgid "path resolves outside the project"
 msgstr "path resolves outside the project"
-
-#. A playbook unit's label; {name} is the playbook's own id
-#: src/space.ts
-msgid "Playbook {name}"
-msgstr "Playbook {name}"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -1384,6 +1348,7 @@ msgid "playbook {playbookId}'s {role} role now binds {player} instead of {before
 msgstr "playbook {playbookId}'s {role} role now binds {player} instead of {before}"
 
 #. Config error; `playbooks` is the config file's own field name
+#. Config error; `playbooks` is the config file's own field name
 #: src/config.ts
 msgid "playbooks must be an object"
 msgstr "playbooks must be an object"
@@ -1399,9 +1364,15 @@ msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 msgstr "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 
 #. Config error; `playbooks` is the config file's own field name and the id its key
+#. Config error; `playbooks` is the config file's own field name and the id its key
 #: src/config.ts
 msgid "playbooks.{id} must be an object"
 msgstr "playbooks.{id} must be an object"
+
+#. Config error: an enabled playbook carries no `from` and nothing installed provides it
+#: src/config.ts
+msgid "playbooks.{id} names no module, and no installed playbook provides it"
+msgstr "playbooks.{id} names no module, and no installed playbook provides it"
 
 #. Config error; `captain` is the reserved role id and `tmux-play` the runtime's name
 #: src/config.ts
@@ -1438,6 +1409,7 @@ msgstr "playbooks.{id}.from must be a module specifier"
 msgid "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session"
 msgstr "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session"
 
+#. Config error; `playbooks.<id>.roles` is the config file's own field name
 #. Config error; `playbooks.<id>.roles` is the config file's own field name
 #: src/config.ts
 msgid "playbooks.{id}.roles must be an object"
@@ -1498,16 +1470,6 @@ msgstr "Prefix"
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
 msgstr "profiles is retired (playbook 3.0): agents carry their settings inline"
 
-#. A project no registry names, by the head of its identifier
-#: src/space.ts
-msgid "project {id}"
-msgstr "project {id}"
-
-#. Refusal: the registry holds no such project at the revision read
-#: src/store.ts
-msgid "project {projectId} is absent; select its registry revision to restore it"
-msgstr "project {projectId} is absent; select its registry revision to restore it"
-
 #. Refusal: the project's own folder is not on this device
 #: src/specs.ts
 msgid "project directory is missing"
@@ -1518,50 +1480,15 @@ msgstr "project directory is missing"
 msgid "Project is unavailable."
 msgstr "Project is unavailable."
 
-#. Refusal: the revision chosen to restore a project is not in this history
-#: src/store.ts
-msgid "project restoration requires an ancestor of the current branch"
-msgstr "project restoration requires an ancestor of the current branch"
-
-#. The project registry's label where its change cannot be named
-#: src/space.ts
-msgid "Projects changed"
-msgstr "Projects changed"
-
 #. Media storage failure
 #: src/media-transfers.ts
 msgid "Published upload has a different byte length."
 msgstr "Published upload has a different byte length."
 
-#. A queue unit's detail: this side rewrote the queue instead of appending
-#: src/space.ts
-msgid "queue replaced"
-msgstr "queue replaced"
-
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
 msgstr "Refusing to share {leak}"
-
-#. Refusal: a staged file belongs to a family the home never shares; {leak} is its path
-#: src/space.ts
-msgid "Refusing to share {leak}: it belongs to a family that stays on this device"
-msgstr "Refusing to share {leak}: it belongs to a family that stays on this device"
-
-#. A project registry line: a project this side added, by its name
-#: src/space.ts
-msgid "Registered \"{name}\""
-msgstr "Registered \"{name}\""
-
-#. A project registry line: a project this side removed, by its name
-#: src/space.ts
-msgid "Removed \"{name}\""
-msgstr "Removed \"{name}\""
-
-#. A project registry line: a project this side renamed
-#: src/space.ts
-msgid "Renamed \"{before}\" to \"{name}\""
-msgstr "Renamed \"{before}\" to \"{name}\""
 
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
@@ -1633,11 +1560,6 @@ msgstr "Session ownership cannot be verified"
 msgid "session working directory is missing or invalid"
 msgstr "session working directory is missing or invalid"
 
-#. Guidance where Git has no committer identity; the setting names stay as they are
-#: src/space.ts
-msgid "Set user.name and user.email for Git on this machine, then Retry."
-msgstr "Set user.name and user.email for Git on this machine, then Retry."
-
 #. The settings unit's label
 #: src/space.ts
 msgid "Settings changed"
@@ -1684,13 +1606,8 @@ msgstr "Space is busy"
 
 #. Refusal while the Space checks the remote
 #: src/space.ts
-msgid "Space is checking the remote; wait for it to finish"
-msgstr "Space is checking the remote; wait for it to finish"
-
-#. Refusal while the Space initializes the home
-#: src/space.ts
-msgid "Space is initializing; wait for it to finish"
-msgstr "Space is initializing; wait for it to finish"
+msgid "Space is checking the host; wait for it to finish"
+msgstr "Space is checking the host; wait for it to finish"
 
 #. Refusal while the Space syncs
 #: src/space.ts
@@ -1702,10 +1619,25 @@ msgstr "Space is syncing; wait for it to finish"
 msgid "Spec items"
 msgstr "Spec items"
 
+#. The environment unit's label: spex.yaml or spex.lock changed
+#: src/space.ts
+msgid "Spec packages changed"
+msgstr "Spec packages changed"
+
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
 msgstr "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
+
+#. Why an interrupted sync's repair failed; spex is the branch's own name
+#: src/space.ts
+msgid "spex moved since the interrupted sync; resolve it in a terminal"
+msgstr "spex moved since the interrupted sync; resolve it in a terminal"
+
+#. Storage diagnostic: one spex repository appears in two pairs
+#: src/home.ts
+msgid "spex repository {key} is paired twice"
+msgstr "spex repository {key} is paired twice"
 
 #. Draft thread line for a turn Spex started; {where} is the pipeline stage's name, and keep the `Spex: ` opening
 #: src/authoring.ts
@@ -1734,8 +1666,8 @@ msgstr "state root {dir} lease could not be acquired"
 
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
-msgid "Sync again to merge what the remote received meanwhile."
-msgstr "Sync again to merge what the remote received meanwhile."
+msgid "Sync again to merge what the host received meanwhile."
+msgstr "Sync again to merge what the host received meanwhile."
 
 #. The sync-rules unit's label
 #: src/space.ts
@@ -1743,14 +1675,10 @@ msgid "Sync rules updated"
 msgstr "Sync rules updated"
 
 #. Attachment transfer or storage diagnostic
+#. Attachment transfer or storage diagnostic
 #: src/service.ts
 msgid "Text or an attachment is required."
 msgstr "Text or an attachment is required."
-
-#. Refusal: the queue's waiting chain would loop
-#: src/service.ts
-msgid "that link would close a waiting cycle"
-msgstr "that link would close a waiting cycle"
 
 #. Refusal: a summons is marked read only once its turn ended
 #: src/service.ts
@@ -1822,25 +1750,22 @@ msgstr "the config is not valid; fix it in Settings before the agent can answer"
 msgid "The core is stopping."
 msgstr "The core is stopping."
 
-#. Refusal: this core keeps no state on disk, so it has no Space
-#: src/service.ts
-msgid "the core runs without a state root; Space needs one"
-msgstr "the core runs without a state root; Space needs one"
-
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
 msgstr "The file has not finished uploading."
 
-#. Refusal: Initialize was asked of a home Git already holds
-#: src/space.ts
-msgid "The home is already a repository"
-msgstr "The home is already a repository"
-
 #. Refusal: the home itself is no folder
 #: src/space.ts
 msgid "the home is not a folder"
 msgstr "the home is not a folder"
+
+#. A stopped sync's message: the host's branch moved while this machine was sending
+#. A stopped transfer's message: the host's branch moved while this machine was sending
+#: src/space-git.ts
+#: src/space.ts
+msgid "The host changed again"
+msgstr "The host changed again"
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts
@@ -1856,16 +1781,6 @@ msgstr "the intent is already closed"
 #: src/service.ts
 msgid "the intent is already dispatched"
 msgstr "the intent is already dispatched"
-
-#. Refusal: an earlier row must close first; the title is the reader's own text
-#: src/service.ts
-msgid "the intent waits on \"{title}\""
-msgstr "the intent waits on \"{title}\""
-
-#. Refusal, read after the file it names
-#: src/space.ts
-msgid "the migration is incomplete; finish or remove it before initializing"
-msgstr "the migration is incomplete; finish or remove it before initializing"
 
 #. Live tool approval refusal
 #: src/approvals.ts
@@ -1897,13 +1812,6 @@ msgstr "the project"
 msgid "the remote"
 msgstr "the remote"
 
-#. A stopped sync's message: the remote moved while this machine was sending
-#. A stopped transfer's message: the remote moved while this machine was sending
-#: src/space-git.ts
-#: src/space.ts
-msgid "The remote changed again"
-msgstr "The remote changed again"
-
 #. Refusal of a remote URL
 #: src/space-git.ts
 msgid "The remote URL is malformed: it must be one word with no spaces or control characters."
@@ -1930,6 +1838,7 @@ msgid "the run is still parked, so the intent stays open"
 msgstr "the run is still parked, so the intent stays open"
 
 #. Refusal: the session is held, so it cannot be discarded now
+#. Refusal: the session is held, so it cannot be discarded now
 #: src/session.ts
 msgid "the session is active"
 msgstr "the session is active"
@@ -1953,6 +1862,11 @@ msgstr "the source is empty; nothing was written"
 #: src/space.ts
 msgid "The space changed twice while syncing"
 msgstr "The space changed twice while syncing"
+
+#. Repair row: a working folder is paired with a spex repository whose clone is gone
+#: src/store.ts
+msgid "the spex repository of {path} is missing on this device"
+msgstr "the spex repository of {path} is missing on this device"
 
 #. Live tool approval refusal
 #. Live tool approval refusal
@@ -2040,6 +1954,11 @@ msgstr "This session no longer offers “{actionId}” to end its run."
 msgid "This session offers no way to end its run."
 msgstr "This session offers no way to end its run."
 
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
+#: src/service.ts
+msgid "this session ran in {cwd}; continue it on the device whose folder it ran in"
+msgstr "this session ran in {cwd}; continue it on the device whose folder it ran in"
+
 #. Live tool approval refusal
 #: src/approvals.ts
 msgid "This tool approval has expired."
@@ -2056,7 +1975,10 @@ msgid "This upload has already completed."
 msgstr "This upload has already completed."
 
 #. Media transfer refusal
+#. Media transfer refusal
+#. Media transfer refusal
 #: src/media-transfers.ts
+#: src/media.ts
 msgid "This upload is unavailable. Retry the file upload."
 msgstr "This upload is unavailable. Retry the file upload."
 
@@ -2096,22 +2018,15 @@ msgstr "unknown unit {unit}"
 msgid "Unreadable cache; refresh to rebuild: {cause}"
 msgstr "Unreadable cache; refresh to rebuild: {cause}"
 
-#. Storage diagnostic: a file names a project the registry does not hold
-#. Storage diagnostic: a file names a project the registry does not hold
-#: src/app-storage.ts
-#: src/store.ts
-msgid "unregistered project {projectId}"
-msgstr "unregistered project {projectId}"
-
 #. Storage diagnostic: an act's kind or version is not one this Spex reads
 #: src/app-storage.ts
 msgid "unsupported act/version"
 msgstr "unsupported act/version"
 
-#. Diagnostic for a draft file this Spex cannot read
-#: src/drafts.ts
-msgid "unsupported draft version"
-msgstr "unsupported draft version"
+#. Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is
+#: src/files.ts
+msgid "unsupported format {format}; preserved unchanged"
+msgstr "unsupported format {format}; preserved unchanged"
 
 #. Storage diagnostic: the state root's own metadata file cannot be read
 #: src/store.ts
@@ -2123,6 +2038,8 @@ msgstr "unsupported migration metadata; original bytes preserved"
 msgid "unsupported path-map version or bindings array"
 msgstr "unsupported path-map version or bindings array"
 
+#. Storage diagnostic: the preferences file is not one this Spex reads
+#. Storage diagnostic: the preferences file is not one this Spex reads
 #. Storage diagnostic: the preferences file is not one this Spex reads
 #: src/app-storage.ts
 msgid "unsupported preference version or prefs object"
@@ -2138,10 +2055,10 @@ msgstr "unsupported registry version"
 msgid "unsupported registry version or projects array"
 msgstr "unsupported registry version or projects array"
 
-#. Migration diagnostic: the registry's version is not one this Spex migrates
-#: src/app-storage.ts
-msgid "unsupported registry version; preserved unchanged"
-msgstr "unsupported registry version; preserved unchanged"
+#. An authoring session unit's label where it carries no first message
+#: src/space.ts
+msgid "untitled authoring session"
+msgstr "untitled authoring session"
 
 #. A session unit's label where the session carries no title
 #: src/space.ts
@@ -2177,6 +2094,11 @@ msgstr "Wait for the media upload to finish."
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before rebinding"
 msgstr "wait for the project's running turn to finish, or abort it, before rebinding"
+
+#. Refusal: a turn is running in the project being removed
+#: src/service.ts
+msgid "wait for the project's running turn to finish, or abort it, before removing it"
+msgstr "wait for the project's running turn to finish, or abort it, before removing it"
 
 #. Refusal: the draft's agent is answering, so its agent cannot change now
 #: src/authoring.ts
@@ -2217,5 +2139,5 @@ msgstr "You stopped the transfer; your commits stand. Git runs without prompts, 
 
 #. Guidance under a push the remote rejected twice
 #: src/space.ts
-msgid "Your merge is saved locally; Retry to send it once the remote settles."
-msgstr "Your merge is saved locally; Retry to send it once the remote settles."
+msgid "Your merge is saved locally; Retry to send it once the host settles."
+msgstr "Your merge is saved locally; Retry to send it once the host settles."

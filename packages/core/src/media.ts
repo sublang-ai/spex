@@ -7,13 +7,15 @@ import { lstatSync, type Stats } from "node:fs";
 import { lstat, mkdir, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { createAssetStore, type AssetReader, type OwnerAssetStore } from "@sublang/playbook/session-assets";
 import { i18n } from "./i18n.js";
-import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
+import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
 import { MediaTransferError, MediaTransfers } from "./media-transfers.js";
 
 export interface ApplicationMediaOptions {
   home: string;
   /** Assert an existing owner and, for writes, its current mutation gate. */
   assertOwner(owner: MediaOwner, write: boolean): void;
+  /** The directory an application owner keeps its assets in (media-4). */
+  directoryOf(owner: MediaUploadOwner): string;
   /** Session storage remains entirely behind the shared Playbook facade. */
   openSessionAsset(sessionId: string, assetId: MediaAsset["assetId"]): Promise<AssetReader>;
 }
@@ -139,7 +141,7 @@ export class ApplicationMedia {
   async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
     this.assertAvailable(owner);
-    const key = `${owner.kind}:${owner.id}`;
+    const key = mediaOwnerKey(owner);
     this.retiring.add(key);
     try {
       return await this.writing(async () => {
@@ -156,25 +158,44 @@ export class ApplicationMedia {
   }
 
   private ownerDirectory(owner: MediaUploadOwner): string {
-    return owner.kind === "project"
-      ? join(this.options.home, "intents", `${owner.id}.assets`)
-      : join(this.options.home, "local", "drafts", owner.id, "assets");
+    return this.options.directoryOf(owner);
   }
 
   private assertAvailable(owner: MediaOwner): void {
-    if (this.retiring.has(`${owner.kind}:${owner.id}`)) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
+    if (this.retiring.has(mediaOwnerKey(owner))) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
   }
 
   async validate(owner: MediaUploadOwner, assets: readonly MediaAsset[]): Promise<void> {
     this.assertAvailable(owner);
     // Validation admits a later write: Space cannot select another asset
     // generation while this command still relies on the verified bytes.
-    return this.writing(() => this.trackOwnerWork(`${owner.kind}:${owner.id}`, async () => {
+    return this.writing(() => this.trackOwnerWork(mediaOwnerKey(owner), async () => {
       const store = this.ownerStore(owner);
       await this.prepareStore(store);
       for (const asset of assets) {
         const reader = await store.openAsset(asset);
         await reader.close();
+      }
+    }));
+  }
+
+  /** Take content's attachments into the owner that keeps them
+   * (media-4): each reference the destination does not hold yet is
+   * copied from the first source holding it, verified, so the queued
+   * intent's directory beside its file holds every byte it names. */
+  async adopt(destination: MediaUploadOwner, sources: readonly MediaUploadOwner[], assets: readonly MediaAsset[]): Promise<void> {
+    if (assets.length === 0) return;
+    this.assertAvailable(destination);
+    return this.writing(() => this.trackOwnerWork(mediaOwnerKey(destination), async () => {
+      const target = this.ownerStore(destination, true);
+      for (const asset of assets) {
+        try { const held = await target.openAsset(asset); await held.close(); continue; } catch { /* not here yet */ }
+        let copied = false;
+        for (const source of sources) {
+          const from = this.ownerStore(source);
+          try { await this.prepareStore(from); await target.copyAsset(from, asset); copied = true; break; } catch { /* try the next */ }
+        }
+        if (!copied) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
       }
     }));
   }
@@ -187,11 +208,11 @@ export class ApplicationMedia {
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 1 || length > MEDIA_CHUNK_BYTES) {
       throw new Error(i18n._({id: "Invalid media read range.", comment: "Media storage failure"}));
     }
-    return this.trackOwnerWork(`${owner.kind}:${owner.id}`, () => this.readAsset(owner, assetId, offset, length));
+    return this.trackOwnerWork(mediaOwnerKey(owner), () => this.readAsset(owner, assetId, offset, length));
   }
 
   private async readAsset(owner: MediaOwner, assetId: MediaAsset["assetId"], offset: number, length: number): Promise<{asset: MediaAsset; offset: number; data: string; eof: boolean}> {
-    const key = `${owner.kind}:${owner.id}:${assetId}`;
+    const key = `${mediaOwnerKey(owner)}:${assetId}`;
     let entry = this.readers.get(key);
     if (!entry) {
       // No more than 32 verified file handles remain open between chunks.
@@ -206,7 +227,7 @@ export class ApplicationMedia {
         this.assertAvailable(owner);
         this.options.assertOwner(owner, false);
         entry = {
-          ownerKey: `${owner.kind}:${owner.id}`,
+          ownerKey: mediaOwnerKey(owner),
           opened: owner.kind === "session"
             ? this.options.openSessionAsset(owner.id, assetId)
             : this.openOwnerAsset(owner, assetId),

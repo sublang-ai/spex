@@ -9,13 +9,23 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationMedia } from "./media.js";
-import type { MediaUploadOwner } from "./protocol.js";
+import { mediaOwnerKey, type MediaUploadOwner } from "./protocol.js";
+
+// An authoring session's assets sit beside its file in its project's
+// spex repository (media-4, storage-23).
+const PROJECT = "tester/proj-spex";
+const draft = (id: string) => ({kind: "draft" as const, projectId: PROJECT, id});
+const assetsDir = (home: string, id: string) => join(home, "workspace", "tester", "proj-spex", "authoring", `${id}.assets`);
+const directoryOf = (home: string) => (owner: MediaUploadOwner): string => {
+  if (owner.kind !== "draft") throw new Error("Only authoring owners in this fixture");
+  return assetsDir(home, owner.id);
+};
 
 test("media-18: owner retirement drains real publication without blocking another owner or reusing a reader", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-owner-"));
-  const a = {kind: "draft" as const, id: "first"};
-  const b = {kind: "draft" as const, id: "second"};
-  const owners = new Set([a.id, b.id]);
+  const a = draft("first");
+  const b = draft("second");
+  const owners = new Set([mediaOwnerKey(a), mediaOwnerKey(b)]);
   let entered!: () => void;
   const publishing = new Promise<void>((resolve) => { entered = resolve; });
   let release!: () => void;
@@ -26,13 +36,13 @@ test("media-18: owner retirement drains real publication without blocking anothe
   class DelayedMedia extends ApplicationMedia {
     override ownerStore(owner: MediaUploadOwner, write = false) {
       const store = super.ownerStore(owner, write);
-      return owner.id === a.id && write && pause ? {...store, importAsset: async (input: Parameters<typeof store.importAsset>[0]) => {
+      return mediaOwnerKey(owner) === mediaOwnerKey(a) && write && pause ? {...store, importAsset: async (input: Parameters<typeof store.importAsset>[0]) => {
         entered(); await barrier; return store.importAsset(input);
       }} : store;
     }
   }
-  const media = new DelayedMedia({home,
-    assertOwner(owner) { assert.ok(owners.has(owner.id), "owner must exist"); },
+  const media = new DelayedMedia({home, directoryOf: directoryOf(home),
+    assertOwner(owner) { assert.ok(owners.has(mediaOwnerKey(owner)), "owner must exist"); },
     async openSessionAsset() { throw new Error("No session in this fixture"); },
   });
   const request = (owner: typeof a) => ({owner, uploadId: randomUUID(), name: "evidence.txt", mimeType: "text/plain", byteLength: 4});
@@ -48,8 +58,8 @@ test("media-18: owner retirement drains real publication without blocking anothe
     await publishing;
     let removed = false;
     const retiring = media.retireOwner(a, async () => {
-      owners.delete(a.id);
-      await rm(join(home, "local", "drafts", a.id), {recursive: true, force: true});
+      owners.delete(mediaOwnerKey(a));
+      await rm(assetsDir(home, a.id), {recursive: true, force: true});
       removed = true;
     });
     assert.equal(removed, false, "removal must wait for publication");
@@ -61,16 +71,16 @@ test("media-18: owner retirement drains real publication without blocking anothe
     pause = false; release();
     await finished;
     await retiring;
-    assert.equal(existsSync(join(home, "local", "drafts", a.id)), false);
-    owners.add(a.id);
-    await mkdir(join(home, "local", "drafts", a.id), {recursive: true});
+    assert.equal(existsSync(assetsDir(home, a.id)), false);
+    owners.add(mediaOwnerKey(a));
+    await mkdir(assetsDir(home, a.id), {recursive: true});
     await assert.rejects(media.uploads.begin(first), /canceled|expired/);
     await assert.rejects(media.uploads.finish(first.uploadId), /canceled|expired/);
-    assert.deepEqual(await readdir(join(home, "local", "drafts", a.id)), []);
+    assert.deepEqual(await readdir(assetsDir(home, a.id)), []);
 
     // Recreate exactly the same content digest at a new inode. A retained
     // old reader would fail its identity check instead of reading this copy.
-    await media.retireOwner(b, () => rm(join(home, "local", "drafts", b.id), {recursive: true, force: true}));
+    await media.retireOwner(b, () => rm(assetsDir(home, b.id), {recursive: true, force: true}));
     const replacement = {...second, uploadId: randomUUID()};
     await media.uploads.begin(replacement);
     await media.uploads.chunk(replacement.uploadId, 0, Buffer.from("kept").toString("base64"));
@@ -81,7 +91,7 @@ test("media-18: owner retirement drains real publication without blocking anothe
 
 test("media-18: a removal its owner refuses after the drain leaves in-flight uploads resumable", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-refused-"));
-  const owner = {kind: "draft" as const, id: "kept"};
+  const owner = draft("kept");
   let entered!: () => void, release!: () => void;
   const publishing = new Promise<void>((resolve) => { entered = resolve; });
   const barrier = new Promise<void>((resolve) => { release = resolve; });
@@ -95,7 +105,7 @@ test("media-18: a removal its owner refuses after the drain leaves in-flight upl
       }} : store;
     }
   }
-  const media = new DelayedMedia({home, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  const media = new DelayedMedia({home, directoryOf: directoryOf(home), assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
   // The draft's own deletion rule: refused while a compile runs.
   let compiling = false;
   const assertDeletable = () => { if (compiling) throw new Error("busy: a compile is running for kept; cancel it first"); };
@@ -114,7 +124,7 @@ test("media-18: a removal its owner refuses after the drain leaves in-flight upl
     let removed = false;
     retiring = media.retireOwner(owner, async () => {
       assertDeletable();
-      await rm(join(home, "local", "drafts", owner.id), {recursive: true, force: true});
+      await rm(assetsDir(home, owner.id), {recursive: true, force: true});
       removed = true;
     }, assertDeletable);
     // A compile is admitted while retirement drains the publication.
@@ -134,7 +144,7 @@ test("media-18: a removal its owner refuses after the drain leaves in-flight upl
 
 test("media-18: retirement drains admitted validation before deleting its prepared owner", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-validation-"));
-  const owner = {kind: "draft" as const, id: "validating"};
+  const owner = draft("validating");
   let entered!: () => void, release!: () => void;
   const preparing = new Promise<void>((resolve) => { entered = resolve; });
   const barrier = new Promise<void>((resolve) => { release = resolve; });
@@ -144,7 +154,7 @@ test("media-18: retirement drains admitted validation before deleting its prepar
       return {...store, prepare: async () => { entered(); await barrier; await store.prepare(); }};
     }
   }
-  const media = new DelayedMedia({home, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  const media = new DelayedMedia({home, directoryOf: directoryOf(home), assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
   let retiring: Promise<void> | undefined;
   try {
     await media.prepare();
@@ -152,33 +162,33 @@ test("media-18: retirement drains admitted validation before deleting its prepar
     await preparing;
     let removed = false;
     retiring = media.retireOwner(owner, async () => {
-      await rm(join(home, "local", "drafts", owner.id), {recursive: true, force: true}); removed = true;
+      await rm(assetsDir(home, owner.id), {recursive: true, force: true}); removed = true;
     });
     await assert.rejects(media.validate(owner, []), /unavailable/);
     assert.equal(removed, false);
     release();
     await Promise.all([validation, retiring]);
-    assert.equal(existsSync(join(home, "local", "drafts", owner.id)), false, "prepare cannot resurrect the removed owner");
+    assert.equal(existsSync(assetsDir(home, owner.id)), false, "prepare cannot resurrect the removed owner");
   } finally { release(); await retiring; await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
 test("media-18: retirement drains a real reader already evicted from the cache", {timeout: 10_000}, async () => {
   const home = await mkdtemp(join(tmpdir(), "spex-media-reader-"));
-  const a = {kind: "draft" as const, id: "evicted"};
-  const b = {kind: "draft" as const, id: "other"};
+  const a = draft("evicted");
+  const b = draft("other");
   let entered!: () => void, release!: () => void;
   const closing = new Promise<void>((resolve) => { entered = resolve; });
   const barrier = new Promise<void>((resolve) => { release = resolve; });
   class DelayedMedia extends ApplicationMedia {
     override ownerStore(owner: MediaUploadOwner, write = false) {
       const store = super.ownerStore(owner, write);
-      return owner.id === a.id ? {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+      return mediaOwnerKey(owner) === mediaOwnerKey(a) ? {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
         const reader = await store.openAsset(...args);
         return {...reader, close: async () => { entered(); await barrier; await reader.close(); }};
       }} : store;
     }
   }
-  const media = new DelayedMedia({home, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  const media = new DelayedMedia({home, directoryOf: directoryOf(home), assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
   let retiring: Promise<void> | undefined;
   try {
     await media.prepare();
@@ -194,12 +204,12 @@ test("media-18: retirement drains a real reader already evicted from the cache",
     await closing;
     let removed = false;
     retiring = media.retireOwner(a, async () => {
-      await rm(join(home, "local", "drafts", a.id), {recursive: true, force: true}); removed = true;
+      await rm(assetsDir(home, a.id), {recursive: true, force: true}); removed = true;
     });
     await media.validate(b, []);
     assert.equal(removed, false, "an evicted reader still belongs to its owner's lifetime");
     release();
     await Promise.all([eviction, retiring]);
-    assert.equal(existsSync(join(home, "local", "drafts", a.id)), false);
+    assert.equal(existsSync(assetsDir(home, a.id)), false);
   } finally { release(); await retiring; await media.close(); await rm(home, {recursive: true, force: true}); }
 });

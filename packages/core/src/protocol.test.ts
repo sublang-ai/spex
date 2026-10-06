@@ -59,20 +59,29 @@ test("parseCommand rejects empty submission text", () => {
 });
 
 test("parseCommand accepts the space commands and their optional fields", () => {
+  const repository = "alice/a-spex";
   const ok = [
     { type: "space.get", id: "s1" },
-    { type: "space.init", id: "s2", remote: "/tmp/bare.git" },
-    { type: "space.remote.set", id: "s3", url: null },
-    { type: "space.fetch", id: "s4" },
-    { type: "space.sync", id: "s5", choices: { "sessions/a": "remote" }, join: true },
-    { type: "space.cancel", id: "s6" },
-    { type: "space.diff", id: "s7", unit: ".gitignore", path: ".gitignore", side: "mine" },
-    { type: "space.tree", id: "s8" },
-    { type: "space.read", id: "s9", path: "projects.json" },
+    { type: "space.remote.set", id: "s3", repository, url: null },
+    { type: "space.fetch", id: "s4", repository },
+    { type: "space.sync", id: "s5", repository, choices: { "sessions/a": "remote" }, join: true, noticed: true },
+    { type: "space.cancel", id: "s6", repository },
+    { type: "space.diff", id: "s7", repository, unit: ".gitignore", path: ".gitignore", side: "mine" },
+    { type: "space.tree", id: "s8", repository: "acme/platform/a-spex" },
+    { type: "space.read", id: "s9", repository, path: "project.json" },
   ];
   for (const command of ok) {
     const parsed = parseCommand(command);
     assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
+  }
+  // Every clone is a repository from creation; Initialize is gone.
+  assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
+});
+
+test("space-29: a space command names its repository by key", () => {
+  for (const repository of [undefined, "a-spex/", "Alice/a-spex", "alice/a", "../a-spex", ""]) {
+    const parsed = parseCommand({ type: "space.fetch", id: "k1", ...(repository !== undefined ? { repository } : {}) });
+    assert.ok(!parsed.ok, String(repository));
   }
 });
 
@@ -82,14 +91,37 @@ test("parseCommand rejects a space command with an unknown field or side", () =>
   const side = parseCommand({
     type: "space.sync",
     id: "s2",
+    repository: "alice/a-spex",
     choices: { "sessions/a": "theirs" },
   });
   assert.ok(!side.ok);
-  const missing = parseCommand({ type: "space.read", id: "s3" });
+  const missing = parseCommand({ type: "space.read", id: "s3", repository: "alice/a-spex" });
   assert.ok(!missing.ok);
   if (!missing.ok) assert.match(missing.error, /path/);
 });
 
+test("core-service-42: an intent is queued with no place of its own; move and link are gone", () => {
+  assert.ok(parseCommand({ type: "intent.queue", id: "q1", projectId: "alice/a-spex", text: "do it" }).ok);
+  assert.ok(!parseCommand({ type: "intent.move", id: "q2", intentId: "i", afterIntentId: null }).ok);
+  assert.ok(!parseCommand({ type: "intent.link", id: "q3", intentId: "i", afterIntentId: null }).ok);
+});
+
+test("media-4: media owners name a repository by key and an intent by its UUID", () => {
+  const assetId = `sha256:${"a".repeat(64)}`;
+  const read = (owner: unknown) => parseCommand({ type: "media.read", id: "m1", owner, assetId, offset: 0, length: 10 });
+  assert.ok(read({ kind: "project", id: "alice/a-spex" }).ok);
+  assert.ok(read({ kind: "intent", projectId: "alice/a-spex", intentId: "72000000-0000-4000-8000-000000000001" }).ok);
+  assert.ok(read({ kind: "draft", projectId: "alice/a-spex", id: "triage" }).ok);
+  assert.ok(!read({ kind: "project", id: "72000000-0000-4000-8000-000000000001" }).ok);
+  assert.ok(!read({ kind: "intent", projectId: "alice/a-spex", intentId: "A" }).ok);
+  assert.ok(!read({ kind: "draft", id: "triage" }).ok);
+});
+
+test("projects-9: removal takes an optional confirmation; rebind names a key and no revision", () => {
+  assert.ok(parseCommand({ type: "project.remove", id: "p1", projectId: "alice/a-spex", confirm: true }).ok);
+  assert.ok(parseCommand({ type: "project.rebind", id: "p2", projectId: "alice/a-spex", path: "/w/a", aliases: ["/old/a"] }).ok);
+  assert.ok(!parseCommand({ type: "project.rebind", id: "p3", projectId: "alice/a-spex", path: "/w/a", revision: "HEAD" }).ok);
+});
 // Playbook drafts (DR-058): the draft channel and the draft.* family.
 
 test("parseCommand accepts subscribe with a draft channel", () => {
@@ -109,26 +141,26 @@ test("parseCommand rejects a draft channel without a draft id", () => {
 test("parseCommand accepts every draft command", () => {
   const commands = [
     { type: "draft.list", id: "d3" },
-    { type: "draft.create", id: "d4", draftId: "triage" },
-    { type: "draft.open", id: "d5", draftId: "triage", afterSeq: 4 },
-    { type: "draft.send", id: "d6", draftId: "triage", text: "Compile it." },
-    { type: "draft.abort", id: "d7", draftId: "triage" },
-    { type: "draft.source.write", id: "d8", draftId: "triage", content: "# Triage", baseVersion: "v1" },
-    { type: "draft.source.write", id: "d9", draftId: "triage", sourcePath: "/tmp/triage.md" },
-    { type: "draft.compile", id: "d10", draftId: "triage" },
+    { type: "draft.create", id: "d4", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.open", id: "d5", projectId: "alice/a-spex", draftId: "triage", afterSeq: 4 },
+    { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", text: "Compile it." },
+    { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.source.write", id: "d8", projectId: "alice/a-spex", draftId: "triage", content: "# Triage", baseVersion: "v1" },
+    { type: "draft.source.write", id: "d9", projectId: "alice/a-spex", draftId: "triage", sourcePath: "/tmp/triage.md" },
+    { type: "draft.compile", id: "d10", projectId: "alice/a-spex", draftId: "triage" },
     {
       type: "draft.register",
       id: "d11",
-      draftId: "triage",
+      projectId: "alice/a-spex", draftId: "triage",
       command: "triage",
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
       newPlayers: { "dev.triager": { adapter: "claude", model: "opus" } },
     },
-    { type: "draft.player.set", id: "d12", draftId: "triage", playerId: "dev.reviewer" },
-    { type: "draft.player.set", id: "d13", draftId: "triage", playerId: null },
-    { type: "draft.delete", id: "d14", draftId: "triage" },
-    { type: "draft.artifacts", id: "d15", draftId: "triage" },
+    { type: "draft.player.set", id: "d12", projectId: "alice/a-spex", draftId: "triage", playerId: "dev.reviewer" },
+    { type: "draft.player.set", id: "d13", projectId: "alice/a-spex", draftId: "triage", playerId: null },
+    { type: "draft.delete", id: "d14", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.artifacts", id: "d15", projectId: "alice/a-spex", draftId: "triage" },
   ];
   for (const command of commands) {
     const parsed = parseCommand(command);
@@ -139,14 +171,14 @@ test("parseCommand accepts every draft command", () => {
 
 test("parseCommand rejects a draft id outside the lowercase rule", () => {
   for (const draftId of ["Triage", "1st", "with space", ""]) {
-    const parsed = parseCommand({ type: "draft.create", id: "d16", draftId });
+    const parsed = parseCommand({ type: "draft.create", id: "d16", projectId: "alice/a-spex", draftId });
     assert.ok(!parsed.ok, draftId);
     if (!parsed.ok) assert.match(parsed.error, /draftId/);
   }
 });
 
 test("parseCommand rejects an empty draft message", () => {
-  const parsed = parseCommand({ type: "draft.send", id: "d17", draftId: "triage", text: "" });
+  const parsed = parseCommand({ type: "draft.send", id: "d17", projectId: "alice/a-spex", draftId: "triage", text: "" });
   assert.ok(!parsed.ok);
 });
 
@@ -154,7 +186,7 @@ test("parseCommand rejects a draft registration missing its fields", () => {
   const parsed = parseCommand({
     type: "draft.register",
     id: "d18",
-    draftId: "triage",
+    projectId: "alice/a-spex", draftId: "triage",
     command: "triage",
     bindings: { Triager: "Not A Player" },
   });

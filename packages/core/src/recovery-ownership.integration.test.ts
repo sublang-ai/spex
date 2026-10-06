@@ -41,9 +41,11 @@ async function interrupted(t: TestContext) {
   const projectPath = join(dir, "project"); mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   const configPath = join(dir, "config.yaml"); writeFileSync(configPath, CONFIG);
-  const store = new Store({ dir: join(dir, "state") });
-  const shared = store.sessionStore();
+  const store = new Store({ dir: join(dir, "state"), own: "tester" });
   const project = store.registerProject(projectPath, "recovery ownership fixture", 1);
+  // The CLI writes into the session store of the project's spex
+  // repository, which makes the session the project's (storage-6).
+  const shared = store.sessionStore(project.id);
   const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath }));
   const { imports, stats } = fakeAdapterImports({ fallback: { result: "unused fixture answer" } });
   const cli = await openSessionHost({ store: shared, mode: "new", cwd: projectPath, config, adapterImports: imports });
@@ -51,7 +53,8 @@ async function interrupted(t: TestContext) {
   await cli.lease.beginTurn({ input: "saved fixture input", attemptId: randomUUID(), attemptedExecutionProjection: config });
   await cli.lease.recordProgress({ snapshot: null, step: { id: randomUUID(), kind: "player", stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId: "code" } });
   await cli.dispose();
-  await store.refreshSession(id, false);
+  await store.adoptForeignSessions(project.id);
+  assert.equal(store.sessionRepository(id), project.id);
   const manager = new SessionManager({ store, adapterImports: imports, env: {} });
   const states: ReturnType<Store["listSessions"]> = [];
   manager.onSessionState = (state) => states.push(state);

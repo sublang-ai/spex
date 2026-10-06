@@ -616,7 +616,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   const { store, lanes, now } = sources;
   const live = new Map(lanes.map((lane) => [lane.sessionId, lane]));
   const open = store.listOpenIntents();
-  const openById = new Map(open.map((intent) => [intent.id, intent]));
 
   // Per-session context, loaded once per session the fold touches.
   const turnsBySession = new Map<string, Turn[]>();
@@ -669,20 +668,9 @@ export function foldLedger(sources: LedgerSources): LedgerState {
   const ownedTurns = new Map<string, Set<number>>();
 
   for (const intent of open) {
-    const blockedTarget = intent.afterId
-      ? openById.get(intent.afterId)
-      : undefined;
-    const blockedBy = blockedTarget
-      ? {
-          intentId: blockedTarget.id,
-          title: intentTitle(blockedTarget),
-          projectId: blockedTarget.projectId,
-        }
-      : undefined;
-
     const bound = intent.dispatched;
     if (!bound) {
-      derived.push({ intent, state: "queued", ...(blockedBy ? { blockedBy } : {}) });
+      derived.push({ intent, state: "queued" });
       continue;
     }
 
@@ -690,14 +678,14 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const dispatchTurn = turns.find((turn) => turn.turnId === bound.turnId);
     const laneLive = live.has(bound.sessionId);
     // A dispatch whose turn aborted — or died with its session —
-    // releases the intent by derivation (DR-035): back to its kept
-    // rank, text editable again.
+    // releases the intent by derivation (DR-035): back to its place
+    // by age, text editable again.
     const released =
       !dispatchTurn ||
       dispatchTurn.status === "aborted" ||
       (dispatchTurn.endedAt === null && !laneLive);
     if (released) {
-      derived.push({ intent, state: "queued", ...(blockedBy ? { blockedBy } : {}) });
+      derived.push({ intent, state: "queued" });
       continue;
     }
 
@@ -766,7 +754,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         state: "interrupted",
         reason: "failure",
         stats,
-        ...(blockedBy ? { blockedBy } : {}),
       });
       attention.push({
         band: "interrupted",
@@ -796,7 +783,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         intent,
         state: "working",
         stats,
-        ...(blockedBy ? { blockedBy } : {}),
       });
       continue;
     }
@@ -811,7 +797,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         state: "interrupted",
         reason: "question",
         stats,
-        ...(blockedBy ? { blockedBy } : {}),
       });
       attention.push({
         band: "interrupted",
@@ -834,7 +819,6 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         intent,
         state: "finished",
         stats,
-        ...(blockedBy ? { blockedBy } : {}),
       });
       attention.push({
         band: "finished",
@@ -852,7 +836,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
 
     // Every turn in the range aborted after a re-dispatchable start:
     // nothing delivered, nothing running — released.
-    derived.push({ intent, state: "queued", ...(blockedBy ? { blockedBy } : {}) });
+    derived.push({ intent, state: "queued" });
   }
 
   // Session stand-ins (DR-035): a live session whose condition no open
@@ -950,15 +934,14 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     return a.since - b.since;
   });
 
-  // Presence of `next` is the project-local next marker: the first
-  // queued unblocked row in rank order (DR-077).
+  // Presence of `next` is the project-local next marker: the oldest
+  // queued row, by capture time then id (core-service-107).
   const lanesByProject = new Map(lanes.map((lane) => [lane.projectId, lane]));
   for (const projectId of new Set(derived.map((entry) => entry.intent.projectId))) {
     const lane = lanesByProject.get(projectId);
     const eligible = derived.filter((entry) =>
       entry.intent.projectId === projectId &&
-      entry.state === "queued" &&
-      !entry.blockedBy
+      entry.state === "queued"
     );
     const next = eligible[0];
     if (next) next.next = queueSchedule(store, lane);

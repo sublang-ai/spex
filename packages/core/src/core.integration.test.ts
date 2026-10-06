@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
 import { WebSocket } from "ws";
@@ -25,7 +25,7 @@ import { openSessionHost, loadLaunchPlan, executionConfigFromPlan } from "@subla
 import { CoreService } from "./service.js";
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { speak } from "./i18n.js";
-import { templatePath, resolveModulePath, resolveSessionsDir, REGISTRY_CONTRACT } from "./config.js";
+import { templatePath, resolveModulePath, REGISTRY_CONTRACT } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
@@ -190,6 +190,40 @@ function seedRepository(projectDir: string): void {
   execFileSync("git", ["-C", projectDir, "commit", "-q", "-m", "baseline"]);
 }
 
+/** Every scratch home's own group (storage-2). */
+const OWN = "tester";
+
+/** A spex repository's clone under a home (storage-1). */
+function clonePath(dataDir: string, key: string): string {
+  return join(dataDir, "workspace", ...key.split("/"));
+}
+
+/** The session store of the spex repository that holds a project's
+ * sessions (storage-6): the harness's `project` folder pairs with
+ * `tester/project-spex`. */
+function projectSessions(dataDir: string, key = `${OWN}/project-spex`): string {
+  return join(clonePath(dataDir, key), "sessions");
+}
+
+/** A home with one working folder paired before any core starts, so
+ * another host's sessions can be written into its spex repository's
+ * session store (storage-6): the project's key and that store. */
+function pairedHome(dataDir: string, projectDir: string): { projectId: string; sessionsDir: string } {
+  const store = new Store({ dir: dataDir, own: OWN });
+  try {
+    const project = store.registerProject(projectDir, basename(projectDir));
+    return { projectId: project.id, sessionsDir: store.repository(project.id)!.sessionsDir };
+  } finally {
+    store.close();
+  }
+}
+
+/** The shared config path of a scratch home: your own group's clone
+ * holds it (storage-1). */
+function ownConfig(dataDir: string): string {
+  return join(clonePath(dataDir, `${OWN}/${OWN}-spex`), "config", "playbook.config.yaml");
+}
+
 interface Harness {
   service: CoreService;
   stats: FakeAdapterStats;
@@ -266,6 +300,7 @@ async function startHarness(
     env: options.env ?? {},
     ...(options.systemLanguages ? { systemLanguages: options.systemLanguages } : {}),
     home: join(dir, "home"),
+    own: OWN,
     watchConfig: false,
     ...(options.scaffoldCommand
       ? { scaffoldCommand: options.scaffoldCommand }
@@ -425,9 +460,16 @@ test("CORE-20: hidden records reach only debug subscribers", async () => {
 
 const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   {
-    name: "missing from",
+    name: "empty from",
     pattern: /playbooks\.code\.from must be a module specifier/,
-    config: VALID_CONFIG.replace('    from: "@sublang/playbook/code/registry"\n', ""),
+    config: VALID_CONFIG.replace('"@sublang/playbook/code/registry"', '""'),
+  },
+  // A from-less entry is one the environment provides (storage-7): a
+  // built-in does, an id nothing installed provides is refused.
+  {
+    name: "a from-less playbook nothing provides",
+    pattern: /playbooks\.triage names no module, and no installed playbook provides it/,
+    config: VALID_CONFIG.replace('  code:\n    from: "@sublang/playbook/code/registry"\n', "  triage:\n"),
   },
   {
     name: "import failure",
@@ -721,8 +763,10 @@ test("settings-36: model discovery uses the captured environment without opening
 
   const configPath = join(harness.dir, "playbook.config.yaml");
   const configBefore = readFileSync(configPath, "utf8");
-  const sessionsDir = join(harness.dataDir, "sessions");
-  const filesBefore = readdirSync(sessionsDir).sort();
+  // No session file appears in any spex repository (storage-6).
+  const workspace = join(harness.dataDir, "workspace");
+  const sessionFiles = () => readdirSync(workspace, { recursive: true, encoding: "utf8" }).filter((path) => path.split("/").includes("sessions")).sort();
+  const filesBefore = sessionFiles();
   assert.deepEqual(await client.expectOk("agent.options", { adapter: "claude" }), {
     adapter: "claude", effortValues: ["minimal", "low", "medium", "high", "xhigh", "max", "ultracode"],
     fastModeSupported: true, subagentModelSupported: true,
@@ -747,7 +791,7 @@ test("settings-36: model discovery uses the captured environment without opening
   assert.equal(rejected.error.code, "invalid_message");
   assert.deepEqual(calls, ["claude", "codex", "gemini"], "unknown adapters never enter discovery");
   assert.equal(readFileSync(configPath, "utf8"), configBefore);
-  assert.deepEqual(readdirSync(sessionsDir).sort(), filesBefore);
+  assert.deepEqual(sessionFiles(), filesBefore);
   assert.deepEqual(await client.expectOk("session.list", {}), []);
   assert.equal(harness.stats.runs.length, 0, "discovery submits no agent task");
 
@@ -1566,7 +1610,7 @@ async function settledSession(
 /** The preferences as the file holds them. */
 function storedPrefs(dataDir: string): Record<string, unknown> {
   return (
-    JSON.parse(readFileSync(join(dataDir, "prefs.json"), "utf8")) as {
+    JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as {
       prefs: Record<string, unknown>;
     }
   ).prefs;
@@ -1605,7 +1649,7 @@ test(
 
     // The evidence really stands in the checkpoint.
     const manifest = JSON.parse(
-      readFileSync(join(harness.dataDir, "sessions", `${session.id}.json`), "utf8"),
+      readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8"),
     ) as { state: string; unresolvedEffects: unknown[] };
     assert.equal(manifest.state, "settled");
     assert.equal(manifest.unresolvedEffects.length, 1);
@@ -2058,12 +2102,14 @@ function writeForeignRecordEntries(
 
 test("core-service-103: stored call spans fold to per-agent active time", async (t) => {
   const dir = scratchDir("spex-agent-active-");
-  const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  // Another host writes into the session store of the spex repository
+  // the project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  writeFileSync(configPath, VALID_CONFIG);
 
   const measuredId = "10300000-0000-4000-8000-000000000001";
   const noPairId = "10300000-0000-4000-8000-000000000002";
@@ -2186,12 +2232,14 @@ test("core-service-103: stored call spans fold to per-agent active time", async 
 
 test("core-service-116: stored init reports fold to the model each agent's runtime named", async (t) => {
   const dir = scratchDir("spex-reported-models-");
-  const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  // Another host writes into the session store of the spex repository
+  // the project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  writeFileSync(configPath, VALID_CONFIG);
 
   // An execution context as the stream records it: every model and
   // effort a complete selection, and each role binding resolved. The
@@ -2402,21 +2450,30 @@ function foreignTurn(prompt: string): Record<string, unknown>[] {
   ];
 }
 
-test("core-service-60: sessions another host wrote are served, bound to their project by working directory", async () => {
+test("core-service-60: sessions another host wrote are served, bound to their project by the clone that holds them", async () => {
   const dir = scratchDir("spex-foreign-");
-  const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  // Another host writes into the session store of the spex repository
+  // the project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  writeFileSync(configPath, VALID_CONFIG);
 
   // One session is already there when the service starts...
   const atStartup = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
   writeForeignSession(sessionsDir, atStartup, projectDir, foreignTurn("from the terminal"));
-  // ...and one names a directory no project is registered for.
-  const unregistered = "ccccccc1-3333-4333-8333-cccccccccccc";
-  writeForeignSession(sessionsDir, unregistered, join(dir, "elsewhere"), foreignTurn("elsewhere"));
+  // ...one recorded in a directory no project is registered for, yet
+  // held by the project's clone, so the project's all the same
+  // (storage-6)...
+  const elsewhere = "ccccccc1-3333-4333-8333-cccccccccccc";
+  writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
+  // ...and one in a clone no folder pairs — your own group's — whose
+  // records stay unlisted though its directory is the project's
+  // (storage-12).
+  const unpaired = "ccccccc2-3333-4333-8333-cccccccccccc";
+  writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
 
   const service = await CoreService.start({
     token: "test",
@@ -2429,9 +2486,9 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   });
   const client = new Client(service.port());
   await client.open();
-  await client.expectOk("project.register", { path: projectDir });
-  // Registering the project lists the history the directory already
-  // holds for it, with no new record needed.
+  const project = await client.expectOk("project.register", { path: projectDir });
+  // Registering the project lists the history its clone already holds,
+  // with no new record needed.
   const afterRegister = await client.expectOk("session.list", {});
   assert.ok(afterRegister.some((s: SessionInfo) => s.id === atStartup));
 
@@ -2488,9 +2545,14 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   );
   assert.ok(ids.includes(atStartup), "the session present at startup is served");
   assert.ok(ids.includes(arrival), "the session that arrived is served");
+  assert.equal(
+    sessions.find((s: SessionInfo) => s.id === elsewhere)?.projectId,
+    project.id,
+    "a session is its clone's project's, whatever its working directory",
+  );
   assert.ok(
-    !ids.includes(unregistered),
-    "a session matching no registered project is not listed",
+    !ids.includes(unpaired),
+    "a session of a clone no folder pairs is not listed",
   );
   const served = sessions.find((s: SessionInfo) => s.id === atStartup);
   assert.equal(served?.live, false, "another host's session is never live here");
@@ -2518,12 +2580,14 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
 
 test("core-service-62: CLI stream changes refresh history and subscribers without duplicating folds or writing foreign files", async (t) => {
   const dir = scratchDir("spex-foreign-refresh-");
-  const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  // Another host writes into the session store of the spex repository
+  // the project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  writeFileSync(configPath, VALID_CONFIG);
   const sessionId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
   const manifest = join(sessionsDir, `${sessionId}.json`);
   const stream = join(sessionsDir, `${sessionId}.records.jsonl`);
@@ -2531,9 +2595,6 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
   writeForeignSession(sessionsDir, sessionId, projectDir, [opening]);
   // Sorting ahead of the healthy manifest exposed the old whole-scan
   // catch, which let one malformed neighbor hide every later session.
-  const bindingStore = new Store({dir:join(dir, "state"), sessionsDir});
-  bindingStore.registerProject(projectDir, "project", Date.now());
-  bindingStore.close();
   const malformed = join(sessionsDir, "00000000-0000-4000-8000-000000000000.json");
   writeFileSync(malformed, '{"sessionId":');
   const invalidStreamId = "00000000-0000-4000-8000-000000000001";
@@ -2675,35 +2736,48 @@ test("core-service-62: CLI stream changes refresh history and subscribers withou
 // CORE-70/71: session deletion
 // ---------------------------------------------------------------------------
 
-test("core-service-85: removing a recorded path alias unlists history without deleting it", async () => {
+test("core-service-85: a rebind keeps the clone's sessions listed, and a recorded path alias decides only where they continue", async () => {
   const harness = await startHarness();
   const client = new Client(harness.service.port());
   try {
     await client.open();
     const project = await client.expectOk("project.register", { path: harness.projectDir });
     const session = await client.expectOk("session.create", { projectId: project.id });
-    await client.expectOk("session.dispose", { sessionId: session.id });
+    await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
+    await client.expectOk("turn.submit", { sessionId: session.id, text: "first" });
+    await settledSession(client, session.id, 1);
     const history = await client.expectOk("history.get", { sessionId: session.id });
-    const paths = ["json", "records.jsonl", "hints.json"].map((suffix) => join(harness.dataDir, "sessions", `${session.id}.${suffix}`));
+    const paths = ["json", "records.jsonl", "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
     const before = paths.map((path) => existsSync(path) ? readFileSync(path) : undefined);
     const relocated = join(harness.dir, "relocated-project");
     mkdirSync(relocated);
     execFileSync("git", ["init", "-q", relocated]);
 
+    // Rebound without the recorded path: the clone still holds the
+    // session, so it stays the project's with its history (storage-6)...
     await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [] });
-    assert.ok(!(await client.expectOk("session.list", {})).some((entry) => entry.id === session.id));
-    await client.waitFor((message) => message.type === "session.removed" && message.sessionId === session.id && message.projectId === project.id);
-    const hidden = await client.command("history.get", { sessionId: session.id });
-    assert.ok(!hidden.ok && hidden.error.code === "not_found");
-    assert.ok((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file.endsWith(`${session.id}.json`) && entry.reason.includes(harness.projectDir) && !entry.blocking));
+    const kept = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.equal(kept?.projectId, project.id);
+    assert.equal(kept?.projectPath, relocated);
+    assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
+    // ...but it ran in a directory that is neither the folder nor an
+    // alias, so it cannot continue here (core-service-73).
+    const refused = await client.command("turn.submit", { sessionId: session.id, text: "second" });
+    assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
+    assert.match(refused.error.message, /continue it on the device whose folder it ran in/);
     assert.deepEqual(paths.map((path) => existsSync(path) ? readFileSync(path) : undefined), before);
 
+    // The recorded path as an alias passes the folder rule
+    // (core-service-85); the checkpoint, recorded in another directory
+    // than the folder it would now run in, is then Playbook's to refuse
+    // as a relocation, its history still readable (core-service-73).
     await client.expectOk("project.rebind", { projectId: project.id, path: relocated, aliases: [harness.projectDir] });
-    const restored = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
-    assert.equal(restored?.projectId, project.id);
-    assert.equal(restored?.projectPath, relocated);
+    const relocation = await client.command("turn.submit", { sessionId: session.id, text: "second" });
+    assert.ok(!relocation.ok && relocation.error.code === "invalid_request", JSON.stringify(relocation));
+    assert.doesNotMatch(relocation.error.message, /continue it on the device whose folder it ran in/);
+    assert.match(relocation.error.message, /relocation is unsupported/);
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
-    assert.ok(!(await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file.endsWith(`${session.id}.json`)));
+    assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.projectId, project.id);
   } finally {
     client.close();
     await harness.service.stop();
@@ -2712,18 +2786,20 @@ test("core-service-85: removing a recorded path alias unlists history without de
 });
 
 test("core-service-71: session.delete removes an ended session and its traces, refuses a live one, and refuses another host's while its lease is held", async () => {
-  const sessionsDir = join(scratchDir("spex-delete-"), "shared-sessions");
-  const harness = await startHarness(`sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  const harness = await startHarness();
+  const sessionsDir = projectSessions(harness.dataDir);
   const client = new Client(harness.service.port());
   await client.open();
   const watcher = new Client(harness.service.port());
   await watcher.open();
 
-  // A session another host wrote, adopted when its project registers
-  // (core-service-60).
+  // A session another host wrote into the project's clone, adopted when
+  // the folder registers again: a paired folder selects its pair, and
+  // the registration rescans (storage-6, core-service-60).
   const foreignId = "eeeeeee5-5555-4555-8555-eeeeeeeeeeee";
-  writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignTurn("from the terminal"));
   const project = await client.expectOk("project.register", { path: harness.projectDir });
+  writeForeignSession(sessionsDir, foreignId, harness.projectDir, foreignTurn("from the terminal"));
+  assert.equal((await client.expectOk("project.register", { path: harness.projectDir })).id, project.id);
 
   // A settled session that served an intent, with its runtime released.
   const ended = await client.expectOk("session.create", { projectId: project.id });
@@ -2749,7 +2825,7 @@ test("core-service-71: session.delete removes an ended session and its traces, r
 
   const sidecar = join(sessionsDir, `${ended.id}.json`);
   const stream = join(sessionsDir, `${ended.id}.records.jsonl`);
-  const prefsFile = join(harness.dataDir, "prefs.json");
+  const prefsFile = join(harness.dataDir, "local", "prefs.json");
   assert.ok(existsSync(sidecar) && existsSync(stream), "the ended session's files exist");
   assert.ok(readFileSync(prefsFile, "utf8").includes(`viewed:${ended.id}`));
 
@@ -2831,12 +2907,14 @@ test("core-service-71: session.delete removes an ended session and its traces, r
 
 test("core-service-78: another host's session deletes lease-free, its lock dirs untouched, and one that vanishes leaves the listing", async () => {
   const dir = scratchDir("spex-foreign-delete-");
-  const sessionsDir = join(dir, "shared-sessions");
   const projectDir = join(dir, "project");
   mkdirSync(projectDir);
   execFileSync("git", ["init", "-q", projectDir]);
+  // Another host writes into the session store of the spex repository
+  // the project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(join(dir, "state"), projectDir);
   const configPath = join(dir, "playbook.config.yaml");
-  writeFileSync(configPath, `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
+  writeFileSync(configPath, VALID_CONFIG);
 
   const held = "f0000001-1111-4111-8111-f00000000001";
   const released = "f0000002-2222-4222-8222-f00000000002";
@@ -2952,7 +3030,7 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   client.close();
   await service.stop();
 
-  const sessionsDir = join(harness.dataDir, "sessions");
+  const sessionsDir = projectSessions(harness.dataDir);
   const nativeStream = join(sessionsDir, `${native.id}.records.jsonl`);
   const original = readFileSync(nativeStream, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
   const opaque = [
@@ -2990,7 +3068,6 @@ test("core-service-22/62: opaque v1 records survive native restart and CLI repla
   writeFileSync(join(sessionsDir, `${opaqueId}.json`), JSON.stringify({
     sessionId: opaqueId, cwd: harness.projectDir, createdAt, updatedAt,
   }));
-  writeFileSync(join(harness.dir, "playbook.config.yaml"), `sessions: ${sessionsDir}\n${VALID_CONFIG}`);
 
   service = await CoreService.start({
     token: "test", configPath: join(harness.dir, "playbook.config.yaml"),
@@ -3083,7 +3160,7 @@ test("core-service-22: damaged native streams remain readable but cannot continu
     await client.expectOk("turn.submit", { sessionId: session.id, text: example.name });
     await client.waitFor((message) => message.type === "record" && message.sessionId === session.id && message.record.type === "turn_finished");
     await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && !m.session.turnActive && !m.session.live);
-    const stream = join(harness.dataDir, "sessions", `${session.id}.records.jsonl`);
+    const stream = join(projectSessions(harness.dataDir), `${session.id}.records.jsonl`);
     const before = readFileSync(stream, "utf8");
     const records = before.trimEnd().split("\n").map((line) => JSON.parse(line) as StoredRecord);
     const lastSeq = records.at(-1)?.seq ?? 0;
@@ -3092,9 +3169,9 @@ test("core-service-22: damaged native streams remain readable but cannot continu
       id: session.id,
       name: example.name,
       stream,
-      sidecar: join(harness.dataDir, "sessions", `${session.id}.json`),
+      sidecar: join(projectSessions(harness.dataDir), `${session.id}.json`),
       bytes: before + example.suffix(lastSeq + 1),
-      boundary: JSON.parse(readFileSync(join(harness.dataDir, "sessions", `${session.id}.json`), "utf8")).replay.seq,
+      boundary: JSON.parse(readFileSync(join(projectSessions(harness.dataDir), `${session.id}.json`), "utf8")).replay.seq,
       history,
       earlier: example.earlier,
     });
@@ -3148,7 +3225,7 @@ test("core-service-77: a real session continues after restart and respects anoth
   await client.expectOk("turn.submit", {sessionId:session.id,text:"first"});
   // Settlement releases the runtime (core-service-91).
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && !m.session.live && m.session.turns === 1);
-  const stream = join(harness.dataDir,"sessions",`${session.id}.records.jsonl`);
+  const stream = join(projectSessions(harness.dataDir),`${session.id}.records.jsonl`);
   const before = readFileSync(stream,"utf8");
   client.close(); await service.stop();
   service = await CoreService.start({token:"test",configPath:join(harness.dir,"playbook.config.yaml"),dataDir:harness.dataDir,adapterImports:fakeAdapterImports({fallback:{result:"continued answer"}}).imports,env:{},watchConfig:false});
@@ -3208,7 +3285,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
 
   // The turn's end persisted the shell's snapshot, token-free
   // (core-service-72).
-  const manifest = join(dir, "state", "sessions", `${session.id}.json`);
+  const manifest = join(projectSessions(join(dir, "state"), project.id), `${session.id}.json`);
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false);
   const text = readFileSync(manifest, "utf8");
   assert.ok(!text.includes("resumeToken"), "no token key in the manifest");
@@ -3231,7 +3308,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   // no longer live, and the provider hints written at settlement stay
   // bound to the untouched manifest.
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.live === false);
-  const hints = JSON.parse(readFileSync(join(dir, "state", "sessions", `${session.id}.hints.json`), "utf8")) as { checkpointSha256: string; captain?: { kind: string } };
+  const hints = JSON.parse(readFileSync(join(projectSessions(join(dir, "state"), project.id), `${session.id}.hints.json`), "utf8")) as { checkpointSha256: string; captain?: { kind: string } };
   assert.equal(hints.checkpointSha256, createHash("sha256").update(readFileSync(manifest)).digest("hex"), "hints bound to the settled manifest");
   assert.equal(hints.captain?.kind, "pinned");
 
@@ -3302,13 +3379,14 @@ test("core-service-66: a config at the XDG location relocates once, bytes and mo
   const text = `# the user's own comment\n${VALID_CONFIG}`;
   writeFileSync(legacy, text, { mode: 0o640 });
   const env = { HOME: home, XDG_CONFIG_HOME: xdg };
-  const canonical = join(dir, "state", "config", "playbook.config.yaml");
+  const canonical = ownConfig(join(dir, "state"));
 
   const first = await CoreService.start({
     token: "test",
     dataDir: join(dir, "state"),
     env,
     home,
+    own: OWN,
     watchConfig: false,
   });
   assert.equal(readFileSync(canonical, "utf8"), text, "bytes preserved");
@@ -3336,6 +3414,7 @@ test("core-service-66: a config at the XDG location relocates once, bytes and mo
     dataDir: join(dir, "state"),
     env,
     home,
+    own: OWN,
     watchConfig: false,
   });
   assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
@@ -3350,35 +3429,28 @@ test("core-service-66: the home's own former config moves ahead of the XDG one, 
   // location sits in is that one, not the process environment's.
   const dataDir = join(dir, "state");
   const former = join(dataDir, "playbook", "playbook.config.yaml");
-  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const canonical = ownConfig(dataDir);
   const legacy = join(xdg, "playbook", "playbook.config.yaml");
   mkdirSync(dirname(former), { recursive: true });
   mkdirSync(dirname(legacy), { recursive: true });
-  // A relative locator the sibling move keeps aimed at one directory.
-  const text = `# the user's own comment\nsessions: ../sessions\n${VALID_CONFIG}`;
+  const text = `# the user's own comment\n${VALID_CONFIG}`;
   writeFileSync(former, text, { mode: 0o640 });
   const legacyText = `# another machine's older config\n${VALID_CONFIG}`;
   writeFileSync(legacy, legacyText, { mode: 0o600 });
   const env = { HOME: home, XDG_CONFIG_HOME: xdg };
-  const sessionsBefore = resolveSessionsDir(former, { ...env, SPEX_HOME: dataDir }, home);
-  assert.equal(sessionsBefore, join(dataDir, "sessions"));
 
   const first = await CoreService.start({
     token: "test",
     dataDir,
     env,
     home,
+    own: OWN,
     watchConfig: false,
   });
   assert.equal(readFileSync(canonical, "utf8"), text, "the nearer config moved, not the XDG one");
   if (process.platform !== "win32") {
     assert.equal(statSync(canonical).mode & 0o777, 0o640, "mode preserved");
   }
-  assert.equal(
-    resolveSessionsDir(canonical, { ...env, SPEX_HOME: dataDir }, home),
-    sessionsBefore,
-    "the relative sessions locator keeps its target",
-  );
   assert.ok(!existsSync(former), "the former file is gone");
   assert.ok(!existsSync(dirname(former)), "and its emptied directory with it");
   assert.equal(readFileSync(legacy, "utf8"), legacyText, "the XDG file stays in place");
@@ -3401,6 +3473,7 @@ test("core-service-66: the home's own former config moves ahead of the XDG one, 
     dataDir,
     env,
     home,
+    own: OWN,
     watchConfig: false,
   });
   assert.ok(readFileSync(canonical, "utf8").endsWith("# edited after relocation\n"));
@@ -3414,7 +3487,7 @@ test("core-service-66: a former config whose locator points into its own directo
   const xdg = join(dir, "xdg");
   const dataDir = join(dir, "state");
   const former = join(dataDir, "playbook", "playbook.config.yaml");
-  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const canonical = ownConfig(dataDir);
   const legacy = join(xdg, "playbook", "playbook.config.yaml");
   mkdirSync(dirname(former), { recursive: true });
   mkdirSync(dirname(legacy), { recursive: true });
@@ -3435,6 +3508,7 @@ test("core-service-66: a former config whose locator points into its own directo
       dataDir,
       env: { HOME: home, XDG_CONFIG_HOME: xdg },
       home,
+      own: OWN,
       watchConfig: false,
     });
   } finally {
@@ -3469,7 +3543,7 @@ test("core-service-66: the former directory stays when another file of the reade
   const home = join(dir, "home");
   const dataDir = join(dir, "state");
   const former = join(dataDir, "playbook", "playbook.config.yaml");
-  const canonical = join(dataDir, "config", "playbook.config.yaml");
+  const canonical = ownConfig(dataDir);
   const beside = `${former}.bak`;
   mkdirSync(dirname(former), { recursive: true });
   const text = `# the user's own comment\n${VALID_CONFIG}`;
@@ -3481,6 +3555,7 @@ test("core-service-66: the former directory stays when another file of the reade
     dataDir,
     env: { HOME: home },
     home,
+    own: OWN,
     watchConfig: false,
   });
   assert.equal(readFileSync(canonical, "utf8"), text, "bytes preserved");
@@ -3596,17 +3671,24 @@ for (const selection of ["default", "home override", "sessions override"] as con
     await seed.dispose();
     writeFileSync(source,original,{mode:0o600});
     writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),readFileSync(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
-    const service = await CoreService.start({token:"test",configPath,dataDir,home,watchConfig:false,
+    const service = await CoreService.start({token:"test",configPath,dataDir,home,own:OWN,watchConfig:false,
       env:{HOME:home,XDG_STATE_HOME:join(home,"old-state"),...(selection === "home override" ? {SPEX_HOME:dataDir} : {})}});
     t.after(async () => {await service.stop();rmSync(home,{recursive:true,force:true});});
     const client = new Client(service.port()); t.after(() => client.close()); await client.open();
     await client.expectOk("project.register",{path:projectPath});
     const sessions = await client.expectOk("session.list",{});
     if (selection === "default") {
-      assert.equal(sessions[0]?.id,sessionId); assert.equal(sessions[0]?.title,"Prior CLI work");
-      assert.equal(sessions[0]?.continuable,true);
+      // storage-18: the ordinary default imports into your own group's
+      // sessions/, a clone no folder pairs, so it lists nowhere and is
+      // reported instead (storage-12).
+      const ownKey = `${OWN}/${OWN}-spex`;
+      assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into your own group's sessions");
+      assert.equal(sessions.length,0,"a session of a clone no folder pairs is not listed");
+      const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
+      assert.equal(repair?.repair?.sessions, 1, "your own group's clone is reported once it holds the session");
       assert.equal(existsSync(source),false,"old active manifest retires after the new bundle is valid");
-      const migrations = join(dataDir,"local","migrations");
+      // Retained in the destination store's receipts (storage-18).
+      const migrations = join(clonePath(dataDir, ownKey),"local","migrations");
       const inputs = readdirSync(migrations,{recursive:true}).filter((path) => String(path).endsWith(join("inputs","0")));
       assert.ok(inputs.some((path) => readFileSync(join(migrations,String(path)),"utf8") === original),"original bytes are retained locally");
     } else {
@@ -3621,9 +3703,11 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     const configPath = join(dir, "config.yaml");
     const projectPath = join(dir, "project");
     const dataDir = join(dir, "state");
-    const sessionsDir = join(dataDir, "sessions");
     mkdirSync(projectPath);
     execFileSync("git", ["init", "-q", projectPath]);
+    // The CLI writes into the session store of the spex repository the
+    // project pairs with (storage-6).
+    const { sessionsDir } = pairedHome(dataDir, projectPath);
     writeFileSync(configPath, VALID_CONFIG);
     const plan = await loadLaunchPlan({userConfigPath: configPath});
     const config = executionConfigFromPlan(plan);
@@ -3645,7 +3729,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     const client = new Client(service.port());
     t.after(() => client.close());
     await client.open();
-    assert.equal((await client.expectOk("session.list", {})).length, 0, "unregistered CLI history is not guessed");
+    // Adding the paired folder again selects its pair (storage-6).
     const project = await client.expectOk("project.register", {path:projectPath});
     const session = (await client.expectOk("session.list", {})).find((item) => item.id === sessionId);
     assert.equal(session?.projectId, project.id);
@@ -3733,11 +3817,13 @@ test("core-service-84: a writer stopped mid-step restores to its saved step and 
   const configPath = join(dir, "config.yaml");
   const projectPath = join(dir, "project");
   const dataDir = join(dir, "state");
-  const sessionsDir = join(dataDir, "sessions");
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
   writeFileSync(configPath, VALID_CONFIG);
+  // The CLI writes into the session store of the spex repository the
+  // project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(dataDir, projectPath);
   const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
   const { imports, stats } = fakeAdapterImports(parkingScript());
   const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
@@ -3796,7 +3882,6 @@ test("core-service-84: a restore bringing back a run the Boss stopped himself ra
   const configPath = join(dir, "config.yaml");
   const projectPath = join(dir, "project");
   const dataDir = join(dir, "state");
-  const sessionsDir = join(dataDir, "sessions");
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
@@ -3808,6 +3893,8 @@ test("core-service-84: a restore bringing back a run the Boss stopped himself ra
   t.after(() => client.close());
   await client.open();
   const project = await client.expectOk("project.register", { path: projectPath });
+  // The CLI writes into the session store of the project's clone (storage-6).
+  const sessionsDir = projectSessions(dataDir, project.id);
   const intent = await client.expectOk("intent.queue", { projectId: project.id, text: "Add a line to work.txt" });
   const session = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("subscribe", { channel: { kind: "session", sessionId: session.id } });
@@ -3852,11 +3939,13 @@ test("core-service-84: a restore whose core stopped before recording the positio
   const configPath = join(dir, "config.yaml");
   const projectPath = join(dir, "project");
   const dataDir = join(dir, "state");
-  const sessionsDir = join(dataDir, "sessions");
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
   writeFileSync(configPath, VALID_CONFIG);
+  // The CLI writes into the session store of the spex repository the
+  // project pairs with (storage-6).
+  const { sessionsDir } = pairedHome(dataDir, projectPath);
   const sessionId = await stopWriterMidStep(sessionsDir, projectPath, configPath, "Add a line to work.txt");
   const { imports, stats } = fakeAdapterImports(parkingScript());
 
@@ -3938,7 +4027,7 @@ test("core-service-84: Restore refuses a session with nothing interrupted and a 
 
   // An interrupted turn whose repository has since moved: Playbook
   // refuses to reconcile a relocated checkpoint, and says why.
-  const shared = createSessionStore({ sessionsDir: join(harness.dataDir, "sessions") });
+  const shared = createSessionStore({ sessionsDir: projectSessions(harness.dataDir) });
   const lease = await shared.acquire(session.id);
   try {
     const prior = await lease.read();
@@ -3970,7 +4059,7 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   const project = await client.expectOk("project.register", {path:harness.projectDir});
   const damaged = await client.expectOk("session.create", {projectId:project.id});
   await client.expectOk("session.dispose", {sessionId:damaged.id});
-  const manifestFile = join(harness.dataDir,"sessions",`${damaged.id}.json`);
+  const manifestFile = join(projectSessions(harness.dataDir),`${damaged.id}.json`);
   const manifest = JSON.parse(readFileSync(manifestFile,"utf8"));
   manifest.replay.sha256 = "0".repeat(64); writeFileSync(manifestFile,JSON.stringify(manifest));
   await harness.service["syncForeignSessions"]();
@@ -3989,45 +4078,57 @@ test("core-service-86: damaged sessions refuse only their own execution and rema
   assert.equal((await client.expectOk("session.list", {})).find((session) => session.id === healthy.id)?.live,true);
 });
 
-for (const defect of ["completed JSON", "cycle", "duplicate source", "foreign act"] as const) {
-  test(`core-service-86: ${defect} intent damage is isolated at startup`, async (t) => {
+// One file per intent (storage-4): a file that will not read is listed
+// nowhere and reported without blocking, an intent file a second clone
+// holds too is read once, and two open intents holding one source both
+// stand — the damage stays with that file (storage-12).
+for (const defect of ["malformed JSON", "mismatched id", "duplicate intent", "duplicate open source"] as const) {
+  test(`core-service-86: ${defect} intent file damage is isolated at startup`, async (t) => {
     const harness = await startHarness(VALID_CONFIG, {realShell:true});
     let service = harness.service; let client = new Client(service.port()); await client.open();
     t.after(async () => {client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
     const bad = await client.expectOk("project.register", {path:harness.projectDir});
-    const register = async (name:string) => {const path=join(harness.dir,name); mkdirSync(path); execFileSync("git",["init","-q",path]); return client.expectOk("project.register",{path});};
-    const good = await register("good"); const dependent = await register("dependent");
+    const goodPath = join(harness.dir, "good"); mkdirSync(goodPath); execFileSync("git", ["init", "-q", goodPath]);
+    const good = await client.expectOk("project.register", {path:goodPath});
     const first = await client.expectOk("intent.queue", {projectId:bad.id,text:"A",source:{kind:"issue",ref:"1"}});
     const second = await client.expectOk("intent.queue", {projectId:bad.id,text:"B"});
     const healthy = await client.expectOk("intent.queue", {projectId:good.id,text:"Healthy"});
-    await client.expectOk("intent.queue", {projectId:dependent.id,text:"After A",afterIntentId:first.id});
     client.close(); await service.stop();
-    const file=join(harness.dataDir,"intents",`${bad.id}.jsonl`);
-    const line=(act:object) => JSON.stringify({v:1,...act})+"\n";
-    if (defect === "completed JSON") appendFileSync(file,"broken JSON\n");
-    if (defect === "cycle") appendFileSync(file,line({act:"link",id:first.id,afterId:second.id})+line({act:"link",id:second.id,afterId:first.id}));
-    if (defect === "duplicate source") appendFileSync(file,line({act:"queue",intent:{id:randomUUID(),projectId:bad.id,text:"Duplicate",rank:"z",createdAt:1,source:{kind:"issue",ref:"1"}}}));
-    if (defect === "foreign act") appendFileSync(file,line({act:"edit",id:healthy.id,text:"Cross-project corruption"}));
-    const before=readFileSync(file);
-    service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
-    client=new Client(service.port()); await client.open();
-    const reports=await client.expectOk("storage.diagnostics",{});
-    assert.ok(reports.some((report)=>report.blocking&&report.file.includes(bad.id)));
-    assert.ok(reports.some((report)=>report.blocking&&report.file.includes(dependent.id)));
-    for (const project of [bad,dependent]) {
-      const reply=await client.command("intent.queue",{projectId:project.id,text:"Refused"});
-      assert.ok(!reply.ok&&reply.error.code==="invalid_request",JSON.stringify(reply));
-      assert.ok(!reply.ok&&reply.error.message.includes(project.id));
+    const intentsDir = join(clonePath(harness.dataDir, bad.id), "intents");
+    const id = defect === "duplicate intent" ? healthy.id : randomUUID();
+    const file = join(intentsDir, `${id}.json`);
+    if (defect === "malformed JSON") writeFileSync(file, "broken JSON\n");
+    if (defect === "mismatched id") writeFileSync(file, JSON.stringify({format:1,id:randomUUID(),text:"Named for another",createdAt:1}));
+    if (defect === "duplicate intent") writeFileSync(file, readFileSync(join(clonePath(harness.dataDir, good.id), "intents", `${healthy.id}.json`)));
+    if (defect === "duplicate open source") writeFileSync(file, JSON.stringify({format:1,id,text:"Duplicate",createdAt:1,source:{kind:"issue",ref:"1"}}));
+    const before = readFileSync(file);
+    service = await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
+    client = new Client(service.port()); await client.open();
+    const reports = await client.expectOk("storage.diagnostics",{});
+    const listed = (await client.expectOk("ledger.get",{})).intents.map((entry) => entry.intent);
+    const count = (intentId: string) => listed.filter((intent) => intent.id === intentId).length;
+    for (const intact of [first, second, healthy]) assert.equal(count(intact.id), 1, `${intact.text} is listed once`);
+    if (defect === "duplicate open source") {
+      // Nothing is dropped: both stand, and the source admits no third.
+      assert.equal(count(id), 1);
+      const again = await client.command("intent.queue",{projectId:bad.id,text:"Again",source:{kind:"issue",ref:"1"}});
+      assert.ok(!again.ok && again.error.code === "conflict", JSON.stringify(again));
+    } else {
+      assert.ok(reports.some((report) => report.file === file && !report.blocking), JSON.stringify(reports));
+      if (defect === "duplicate intent") assert.equal(listed.find((intent) => intent.id === healthy.id)?.projectId, good.id);
+      else assert.equal(count(id), 0, "a file that will not read is listed nowhere");
     }
+    // Every other intent of the project, and the project itself, stay writable.
+    await client.expectOk("intent.queue",{projectId:bad.id,text:"Still queueable"});
+    await client.expectOk("intent.edit",{intentId:second.id,text:"Still editable"});
     await client.expectOk("intent.edit",{intentId:healthy.id,text:"Still editable"});
-    await client.expectOk("intent.queue",{projectId:good.id,text:"Still queueable"});
     await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Still configurable"}}});
     await client.expectOk("session.create",{projectId:good.id});
-    assert.deepEqual(readFileSync(file),before,"invalid log bytes preserved");
+    assert.deepEqual(readFileSync(file),before,"the damaged file's bytes are preserved");
   });
 }
 
-for (const file of ["projects.json", "local/project-paths.json", "prefs.json"]) {
+for (const file of ["home.yaml", "local/prefs.json"]) {
   test(`core-service-86: invalid ${file} leaves independent configuration available`, async (t) => {
     const harness=await startHarness(); let service=harness.service; let client=new Client(service.port()); await client.open();
     t.after(async()=>{client.close(); await service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
@@ -4048,9 +4149,9 @@ for (const file of ["projects.json", "local/project-paths.json", "prefs.json"]) 
     client=new Client(service.port()); await client.open();
     assert.ok((await client.expectOk("storage.diagnostics",{})).some((report)=>report.blocking&&report.file.endsWith(file)));
     await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Independent config"}}});
-    const refused=file==="prefs.json" ? await client.command("session.viewed",{sessionId:session.id,turnId}) : await client.command("project.register",{path:harness.projectDir});
+    const refused=file==="local/prefs.json" ? await client.command("session.viewed",{sessionId:session.id,turnId}) : await client.command("project.register",{path:harness.projectDir});
     assert.ok(!refused.ok&&refused.error.code==="invalid_request",JSON.stringify(refused));
-    if (file !== "prefs.json") {
+    if (file !== "local/prefs.json") {
       const destination=join(harness.dir,"must-not-be-created");
       const creation=await client.command("project.create",{path:destination});
       assert.ok(!creation.ok&&creation.error.code==="invalid_request",JSON.stringify(creation));
@@ -4068,15 +4169,16 @@ test("core-service-32: a pending foreign scan cannot overwrite locally acquired 
   const project=await client.expectOk("project.register",{path:harness.projectDir});
   const session=await client.expectOk("session.create",{projectId:project.id});
   await client.expectOk("session.dispose",{sessionId:session.id});
-  const store=harness.service["store"]; const shared=store.sessionStore();
+  // The session's store is its project's clone's (storage-6).
+  const store=harness.service["store"]; const repository=store.repository(project.id)!; const shared=repository.store;
   let release!:()=>void; const paused=new Promise<void>((resolve)=>{release=resolve;});
   let observed!:()=>void; const entered=new Promise<void>((resolve)=>{observed=resolve;});
   let intercept=true;
-  store.sessionStore=()=>({...shared,readLeaseState:async(id)=>{
+  repository.store={...shared,readLeaseState:async(id)=>{
     const result=await shared.readLeaseState(id);
     if (intercept&&id===session.id) {intercept=false; observed(); await paused; return "active";}
     return result;
-  }});
+  }};
   const scan=store.refreshSession(session.id,false); await entered;
   try {
     await client.expectOk("turn.submit",{sessionId:session.id,text:"Local continuation"});
@@ -4096,19 +4198,20 @@ test("core-service-32/39: shutdown waits for a paused durable settlement after r
   let stopped=false;
   let release!:()=>void;
   t.after(async()=>{release?.(); client.close(); if(!stopped) await harness.service.stop(); rmSync(harness.dir,{recursive:true,force:true});});
-  const store=harness.service["store"]; const shared=store.sessionStore();
+  // The session's store is its project's clone's (storage-6).
+  const project=await client.expectOk("project.register",{path:harness.projectDir});
+  const store=harness.service["store"]; const original=store.sessionStore.bind(store); const shared=original(project.id);
   const paused=new Promise<void>((resolve)=>{release=resolve;});
   let settling!:()=>void; const entered=new Promise<void>((resolve)=>{settling=resolve;});
-  store.sessionStore=()=>({...shared,acquire:async(id)=>{
+  store.sessionStore=(key?:string)=>key!==project.id?original(key):({...shared,acquire:async(id)=>{
     const lease=await shared.acquire(id);
     return {...lease,settle:async(...args:Parameters<typeof lease.settle>)=>{settling(); await paused; return lease.settle(...args);}};
   }});
-  const project=await client.expectOk("project.register",{path:harness.projectDir});
   const session=await client.expectOk("session.create",{projectId:project.id});
   await client.expectOk("subscribe",{channel:{kind:"session",sessionId:session.id}});
   await client.expectOk("turn.submit",{sessionId:session.id,text:"Settle exactly once"});
   await entered;
-  const manifestFile=join(harness.dataDir,"sessions",`${session.id}.json`);
+  const manifestFile=join(projectSessions(harness.dataDir),`${session.id}.json`);
   assert.equal(JSON.parse(readFileSync(manifestFile,"utf8")).state,"uncertain");
   await client.waitFor((message)=>message.type==="record"&&message.record.type==="turn_finished");
   const listed=(await client.expectOk("session.list",{})).find((item)=>item.id===session.id)!;
@@ -4166,10 +4269,10 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   const prior=await client.expectOk("session.create",{projectId:project.id});
   await client.expectOk("session.dispose",{sessionId:prior.id});
   client.close(); await service.stop();
-  const sidecar=join(harness.dataDir,"sessions",`${randomUUID()}.spex.json`);
-  const malformed=join(harness.dataDir,"sessions",`${randomUUID()}.spex.json`);
+  const sidecar=join(projectSessions(harness.dataDir),`${randomUUID()}.spex.json`);
+  const malformed=join(projectSessions(harness.dataDir),`${randomUUID()}.spex.json`);
   const malformedBytes=JSON.stringify({id:"../outside-store",projectId:project.id,players:[],initialVisible:[]});
-  const cache=join(harness.dataDir,"forge-cache.json");
+  const cache=join(harness.dataDir,"local","forge-cache.json");
   writeFileSync(sidecar,"{broken sidecar",{mode:0o600}); writeFileSync(malformed,malformedBytes,{mode:0o600}); writeFileSync(cache,"{broken cache");
   service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
   client=new Client(service.port()); await client.open();
@@ -4188,13 +4291,17 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
 
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {
   const root=scratchDir("spex-migration-refusal-");
-  const home=join(root,"home");const dataDir=join(home,".spex");const sessionsDir=join(dataDir,"sessions");
-  const configPath=join(dataDir,"config","playbook.config.yaml");mkdirSync(dirname(configPath),{recursive:true});writeFileSync(configPath,VALID_CONFIG);
+  const home=join(root,"home");const dataDir=join(home,".spex");
+  // A config file directly under the home's config/ is the former layout
+  // (storage-9), so this one sits outside the home.
+  const configPath=join(root,"playbook.config.yaml");writeFileSync(configPath,VALID_CONFIG);
   const projectPath=join(root,"project");mkdirSync(projectPath);execFileSync("git",["init","-q",projectPath]);
-  const options={token:"test",configPath,dataDir,home,env:{},watchConfig:false};
+  const options={token:"test",configPath,dataDir,home,own:OWN,env:{},watchConfig:false};
   let service=await CoreService.start(options);let client=new Client(service.port());await client.open();
   t.after(async()=>{client.close();await service.stop();rmSync(root,{recursive:true,force:true});});
   const project=await client.expectOk("project.register",{path:projectPath});
+  // The sidecar sits in the session store of the project's clone (storage-6).
+  const sessionsDir=projectSessions(dataDir,project.id);
   client.close();await service.stop();
   const id=randomUUID();const sidecar=join(sessionsDir,`${id}.spex.json`);
   const valid={v:1,id,projectId:project.id,createdAt:1,endedAt:2,live:false,players:[],initialVisible:[]};
@@ -4265,7 +4372,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   // provider call is actually built from (core-service-92).
   await client.expectOk("turn.submit", { sessionId: tuned.id, text: "hello again" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === tuned.id && m.session.turns === 2 && m.session.live === false);
-  const manifest = join(dir, "state", "sessions", `${tuned.id}.json`);
+  const manifest = join(projectSessions(join(dir, "state"), project.id), `${tuned.id}.json`);
   const applied = (JSON.parse(readFileSync(manifest, "utf8")) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
@@ -4304,7 +4411,7 @@ test("core-service-101: a session's own tuning reaches its runtime, its config f
   const plain = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("turn.submit", { sessionId: plain.id, text: "hello" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === plain.id && m.session.live === false);
-  const other = (JSON.parse(readFileSync(join(dir, "state", "sessions", `${plain.id}.json`), "utf8")) as {
+  const other = (JSON.parse(readFileSync(join(projectSessions(join(dir, "state"), project.id), `${plain.id}.json`), "utf8")) as {
     lastAppliedExecutionProjection: {
       captain: { model: { value?: string }; subagentModel?: string };
       players: { id: string; subagentModel?: string; subagentEffort?: string }[];
@@ -4463,7 +4570,7 @@ test("core-service-110: the home's language is one stored choice every client re
   await first.open();
   await second.open();
 
-  const prefsFile = join(harness.dataDir, "prefs.json");
+  const prefsFile = join(harness.dataDir, "local", "prefs.json");
   const storedLanguage = (): unknown =>
     (JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> }).prefs.language;
   const broadcasts = (client: Client): (Language | null)[] =>
@@ -4608,9 +4715,10 @@ test("core-service-112: a start speaks the stored language before its store load
   const configPath = join(dir, "playbook.config.yaml");
   writeFileSync(configPath, VALID_CONFIG);
   const dataDir = join(dir, "state");
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(join(dataDir, "prefs.json"), JSON.stringify({ v: 1, prefs: { language: "zh" } }));
-  writeFileSync(join(dataDir, "forge-cache.json"), "{broken");
+  // storage-5: the preferences and the forge cache live under `local/`.
+  mkdirSync(join(dataDir, "local"), { recursive: true });
+  writeFileSync(join(dataDir, "local", "prefs.json"), JSON.stringify({ format: 1, prefs: { language: "zh" } }));
+  writeFileSync(join(dataDir, "local", "forge-cache.json"), "{broken");
   const { imports } = fakeAdapterImports({});
   const service = await CoreService.start({
     token: "test",
