@@ -7,9 +7,9 @@
 
 Accepted (2026-10-04).
 Revised on 2026-10-04: a playbook is a kind of its own, an applet is a browser-server application, translations replace the earlier variants, and a spec package's requirements are installed with it.
-Revised on 2026-10-05: an environment lives in `.spex/`, not in the code, and what you add for yourself is in your home; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
+Revised on 2026-10-05: an environment lives in a records folder under the home, not in the code, and what you add for yourself is in your own group's; then, in a second round, one word, language, where there were two; `from` covers what `spec` said; no registries map, no agents list, no manifest format in the lock.
 The spec package format and the environments are Spex's. spex.pub keeps the dependency declaration its registry checks [[8]] and the registry interface [[9]]; the materialization rules and the `mode` its dependency record describes are retired by this record.
-It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a `.spex/`, the home included.
+It fits [DR-103](103-the-home-and-its-spaces.md): every environment is a records folder under `~/.spex/workspace/`, your own group's included.
 Amends ([DR-046](046-decision-record-evolution.md)):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): a compiled playbook is registered by requesting its spec package and naming the player for each role, not by writing a locator into the launcher config. The compile flow stands.
@@ -28,8 +28,8 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### Principle
 
 - A spec package is one GEARS contract with everything made from it: sources, the spec, skills, playbooks and applets. One name, one version.
-- An environment is what a `.spex/` installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your home, `~/.spex`.
-- Spex installs verified files under `.spex/packages/`, exports skills to agents, and exports playbooks to the launcher. It commits nothing with the code.
+- An environment is what a records folder installs: `spex.yaml` says which spec packages it wants, and `spex.lock` records exactly what it got. Every project and group has one. What you add for yourself is in your own group's.
+- Spex installs verified files under the records folder's `packages/`, exports skills to agents, and exports playbooks to the launcher. It commits nothing with the code.
 
 ### A spec package
 
@@ -90,11 +90,11 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 ### An environment
 
 - An environment resolves from its own `spex.yaml` and `spex.lock` and nothing else. Two devices with the same files install the same thing.
-- A project's environment is in its `.spex/`, so every member installs the same thing. Your home is yours alone and follows you to every device you sign in on.
+- A project's environment is in its records folder, so every member installs the same thing. Your own group's is yours alone and follows you to every device you sign in on.
 - The Git host controls who reads a repository. The registry controls who publishes and downloads. Neither permission grants the other.
 - An environment holds one version of a spec package and one language of an artifact.
 
-| Path, under `.spex/` | Content | Synced |
+| Path, in the records folder | Content | Synced |
 | --- | --- | --- |
 | `spex.yaml` | Requests | Yes |
 | `spex.lock` | Resolution | Yes, as one sync unit with `spex.yaml` |
@@ -114,7 +114,7 @@ A request names one source:
 | Source | Fields | Meaning |
 | --- | --- | --- |
 | Registry | `version` | A requirement, resolved at spex.pub |
-| Path | `path` | A folder inside the project's folder, by relative path |
+| Path | `path` | A folder inside the project's working folder, by relative path |
 | Git | `git`, `rev`, optional `path` | A repository the Git host or the machine's Git can read, at a branch, tag or commit, with an optional folder inside |
 
 - A request may add `select`, a list of `{artifact, language}`, and `alias`, artifact id to exported name.
@@ -155,19 +155,19 @@ Selection, within a solution:
 
 ### Exports
 
-- A project's environment exports to the project: its skills into the agent folders of the project's folder, kept out of Git there, and its playbooks into the sessions started in it.
-- Your home exports its skills into your agents' home folders on each device, so they reach every session you run there.
+- A project's environment exports to the project: its skills into the agent folders of the project's working folder, kept out of Git there, and its playbooks into the sessions started in it.
+- Your own group's environment exports its skills into your agents' home folders on each device, so they reach every session you run there.
 - Where an agent should be able to start a playbook, Spex writes a skill that runs it. That skill names the exact spec package and version it came from and runs the playbook in the project's folder, with everything the playbook requires.
 - An exported skill or playbook is bound to the environment whose lock exported it: it runs that environment's installed files, never another environment's copy of the same name and version.
-- When a project and your home export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
+- When a project and your own group export one skill name, each keeps its name in its own folder and the agent's own precedence decides between them. Spex Desktop lists both, saying where each comes from. A person who wants both usable renames one with `alias`.
 - Spex exports to every agent this device has, into the folders where that agent reads its skills, as Cligent's adapter for it says. Nothing in a shared file chooses a path on your device.
 
 ### Playbooks
 
 - A playbook artifact holds what the launcher loads: the playbook source, the compiled module and what the compiler wrote beside them, in Playbook's native layout. The launcher finds the module by that layout.
 - Compiling is authoring. `slc` runs in the project that holds the spec package, in an authoring session, and writes the compiled files beside the source. The registry never compiles. Installing copies verified files.
-- A playbook is available wherever its spec package is installed. It is enabled where the project's `config/playbook.config.yaml` carries a `playbooks.<id>` entry naming which player each role uses; a session outside any project uses your home's file. Spex fills that entry's `from` with the installed module's location. A player this device does not have is reported before the session starts.
-- The built-in playbooks are a spec package the app ships. The app seeds its files into the store and requests it in your home, and the scaffold requests it in a new project's `.spex/`, so it works offline from the first start. The lock pins its version like any other; an app update changes an environment only through an explicit update. Playbook's compiled-in built-ins move into that spec package.
+- A playbook is available wherever its spec package is installed. It is enabled where the project's `config/playbook.config.yaml` carries a `playbooks.<id>` entry naming which player each role uses; a session outside any project uses your own group's file. Spex fills that entry's `from` with the installed module's location. A player this device does not have is reported before the session starts.
+- The built-in playbooks are a spec package the app ships. The app seeds its files into the store and requests it in your own group's environment, and the scaffold requests it in a new project's, so it works offline from the first start. The lock pins its version like any other; an app update changes an environment only through an explicit update. Playbook's compiled-in built-ins move into that spec package.
 
 ### Applets
 
@@ -175,7 +175,7 @@ Selection, within a solution:
 
 ### Publishing
 
-- A spec package under development is a folder in the release layout, inside a project's folder. Publishing uploads it as it is, after the same checks the registry makes. It uploads the declared release files only, never project history or conversations. A project may hold any number of spec packages.
+- A spec package under development is a folder in the release layout, inside a project's working folder. Publishing uploads it as it is, after the same checks the registry makes. It uploads the declared release files only, never project history or conversations. A project may hold any number of spec packages.
 - The registry checks shape and references only. It never compiles, converts, translates or runs content. Translation parity and the content of sources, skills, playbooks and applets are the publisher's.
 - To share before publishing, request the spec package by `git` from its repository at a commit, or publish a prerelease to a private namespace.
 
@@ -204,7 +204,7 @@ Selection, within a solution:
 - A `spec` field beside `from`: both say what an artifact was made from, and a release has at most one spec.
 - A manifest format in the lock: the installed `meta.yaml` carries its own.
 - Built-in playbooks outside the format: one more special case, for no gain.
-- A suffix Spex adds to a skill name that both your home and a project export: the name a person types would change with the project open. The agent's precedence applies, and `alias` renames one for good.
+- A suffix Spex adds to a skill name that both your own group and a project export: the name a person types would change with the project open. The agent's precedence applies, and `alias` renames one for good.
 
 ## Consequences
 
