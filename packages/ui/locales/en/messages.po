@@ -175,6 +175,10 @@ msgstr "{count, plural, one {# citation} other {# citations}}"
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, one {# entry} other {# entries}}"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
+msgstr "{count, plural, one {# file uploads:} other {# files upload:}}"
+
 #: src/components/SpaceExplorer.tsx
 msgid "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
 msgstr "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints."
@@ -278,8 +282,8 @@ msgid "{days}d ago"
 msgstr "{days}d ago"
 
 #: src/components/LibrarySurface.tsx
-msgid "{diagnostic} — delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic} — delete the draft, or repair the file and restart Spex"
+msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
+msgstr "{diagnostic} — delete the session, or repair the file and restart Spex"
 
 #: src/components/AgentEditor.tsx
 #: src/components/TuningField.tsx
@@ -323,8 +327,12 @@ msgid "{hours}h ago"
 msgstr "{hours}h ago"
 
 #: src/components/LibrarySurface.tsx
-msgid "{id} is a built-in — enable it below instead"
-msgstr "{id} is a built-in — enable it below instead"
+msgid "{id} is a built-in — enable it instead"
+msgstr "{id} is a built-in — enable it instead"
+
+#: src/components/LibrarySurface.tsx
+msgid "{id} is already a playbook of {package}"
+msgstr "{id} is already a playbook of {package}"
 
 #: src/components/SpecView.tsx
 msgid "{id} not found"
@@ -450,9 +458,21 @@ msgstr "{playbookId} state machine"
 msgid "{playbookId} state machine, {state} active"
 msgstr "{playbookId} state machine, {state} active"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "{project} — the project"
+msgstr "{project} — the project"
+
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
 msgstr "{reason} Remove anyway?"
+
+#: src/components/EnvironmentSection.tsx
+msgid "{requirement} by {requirer}"
+msgstr "{requirement} by {requirer}"
+
+#: src/components/LibrarySurface.tsx
+msgid "{role} needs a player id: lowercase segments joined by dots"
+msgstr "{role} needs a player id: lowercase segments joined by dots"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
@@ -486,13 +506,17 @@ msgstr "{size} KB"
 msgid "{size} MB"
 msgstr "{size} MB"
 
+#: src/components/EnvironmentSection.tsx
+msgid "{source}, required by {packages}"
+msgstr "{source}, required by {packages}"
+
 #: src/lib/time.ts
 msgid "{span} ago"
 msgstr "{span} ago"
 
 #: src/components/PlaybookStages.tsx
-msgid "{stage} not found next to this playbook's registry"
-msgstr "{stage} not found next to this playbook's registry"
+msgid "{stage} not found beside this playbook's module"
+msgstr "{stage} not found beside this playbook's module"
 
 #. {step} is the sync step's name
 #: src/components/SpaceSurface.tsx
@@ -559,8 +583,8 @@ msgid "/ for playbooks · Enter sends"
 msgstr "/ for playbooks · Enter sends"
 
 #: src/components/LibrarySurface.tsx
-msgid "/{id} is already a configured playbook"
-msgstr "/{id} is already a configured playbook"
+msgid "/{command} stops being offered; the spec package stays"
+msgstr "/{command} stops being offered; the spec package stays"
 
 #. a run's one-line strip: the workflow, where it stands, who called it
 #: src/components/MachineCard.tsx
@@ -691,6 +715,10 @@ msgstr "A player is waiting for your reply: {detail}"
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "A player named {id} already exists — edit it above instead."
 
+#: src/components/SettingsSurface.tsx
+msgid "A project's playbooks and role bindings are edited in Playbooks"
+msgstr "A project's playbooks and role bindings are edited in Playbooks"
+
 #: src/components/Composer.tsx
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "A reply is needed. Answer or ask Captain to explain."
@@ -710,6 +738,10 @@ msgstr "A session is waiting for your reply"
 #: src/state/dashboard.ts
 msgid "A session is waiting for your verdict"
 msgstr "A session is waiting for your verdict"
+
+#: src/components/EnvironmentSection.tsx
+msgid "A spec package is named org/name, each part lowercase words joined by single hyphens"
+msgstr "A spec package is named org/name, each part lowercase words joined by single hyphens"
 
 #: src/state/reducer.ts
 #: src/state/store.ts
@@ -768,10 +800,19 @@ msgstr "Adapter option; model support unverified"
 msgid "Adapter option; model support unverified."
 msgstr "Adapter option; model support unverified."
 
+#. create this player in your own roster
 #. register the typed path as an existing repository
+#. request this spec package at the chosen version
+#. request this spec package at the chosen version
+#: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
+#: src/components/SettingsSurface.tsx
 msgid "Add"
 msgstr "Add"
+
+#: src/components/SettingsSurface.tsx
+msgid "Add {id} with the neutral agent, then tune it here"
+msgstr "Add {id} with the neutral agent, then tune it here"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add a player"
@@ -798,9 +839,28 @@ msgstr "Add a project first ({keys})"
 msgid "Add a project…"
 msgstr "Add a project…"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Add a spec package"
+msgstr "Add a spec package"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
+
+#. request a spec package by its folder in the working folder
+#: src/components/EnvironmentSection.tsx
+msgid "Add from folder"
+msgstr "Add from folder"
+
+#. request a spec package from a Git repository at a rev
+#: src/components/EnvironmentSection.tsx
+msgid "Add from Git"
+msgstr "Add from Git"
+
+#. open the search over the registry's spec packages
+#: src/components/EnvironmentSection.tsx
+msgid "Add from registry"
+msgstr "Add from registry"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
@@ -831,6 +891,11 @@ msgstr "Added to Up next — see the project's Overview."
 
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
+#. the request is being written
+#. the request is being written
+#. the request is being written
+#: src/components/EnvironmentSection.tsx
+#: src/components/SettingsSurface.tsx
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
 msgstr "Adding…"
@@ -984,6 +1049,11 @@ msgstr "any letter"
 msgid "app state failed to load: {reason}"
 msgstr "app state failed to load: {reason}"
 
+#. a spec package's artifact kind: a browser-server application
+#: src/lib/environments.ts
+msgid "applet"
+msgstr "applet"
+
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
 #. sync step: applying the chosen versions
@@ -1063,6 +1133,8 @@ msgid "Attachments"
 msgstr "Attachments"
 
 #. heading over a spex repository's changed authoring sessions
+#. section heading: playbooks being written in this project
+#: src/components/LibrarySurface.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "Authoring"
@@ -1100,17 +1172,13 @@ msgstr "auto (protected)"
 msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 msgstr "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 
-#: src/components/LibrarySurface.tsx
-msgid "Available built-ins"
-msgstr "Available built-ins"
-
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "back to {id}"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Back to the playbook list — the draft stays as it is"
-msgstr "Back to the playbook list — the draft stays as it is"
+msgid "Back to the playbook list — the session stays as it is"
+msgstr "Back to the playbook list — the session stays as it is"
 
 #: src/components/ProjectsSurface.tsx
 msgid "behind upstream"
@@ -1142,6 +1210,10 @@ msgstr "blocking"
 #: src/components/SettingsSurface.tsx
 msgid "bound to no role yet"
 msgstr "bound to no role yet"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Branch, tag or commit"
+msgstr "Branch, tag or commit"
 
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
@@ -1202,6 +1274,11 @@ msgstr "bug"
 msgid "bug fixed"
 msgstr "bug fixed"
 
+#. a spec package's source: the one the app ships
+#: src/lib/environments.ts
+msgid "built-in"
+msgstr "built-in"
+
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
 msgid "bypass"
@@ -1232,6 +1309,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave an editor without saving
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1240,6 +1318,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/DraftSourceTab.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
@@ -1366,7 +1445,9 @@ msgid "Checking host…"
 msgstr "Checking host…"
 
 #. the Check host control, while the check runs
+#. the checks a publish makes are running, nothing uploads yet
 #: src/components/CaptainHome.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/SpaceSync.tsx
 msgid "Checking…"
 msgstr "Checking…"
@@ -1675,10 +1756,6 @@ msgstr "Configure {name}"
 msgid "Configure the Captain agent"
 msgstr "Configure the Captain agent"
 
-#: src/components/LibrarySurface.tsx
-msgid "Configured playbooks"
-msgstr "Configured playbooks"
-
 #. default confirm button: go ahead with the act
 #. verdict control: accept the delivered work
 #. verdict control: accept the delivered work
@@ -1689,8 +1766,8 @@ msgid "Confirm"
 msgstr "Confirm"
 
 #: src/components/AuthoringWorkspace.tsx
-msgid "Confirm the command, intent, and players"
-msgstr "Confirm the command, intent, and players"
+msgid "Confirm the command, intent, players and where to enable it"
+msgstr "Confirm the command, intent, players and where to enable it"
 
 #. verdict control, busy: the verdict is in flight
 #. verdict control, busy: the verdict is in flight
@@ -1927,16 +2004,16 @@ msgid "Decisions, {count} records"
 msgstr "Decisions, {count} records"
 
 #. confirm: delete this session for good
-#. confirm: remove the draft for good
-#. remove the draft for good
+#. confirm: remove the authoring session for good
+#. remove the authoring session for good
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 msgid "Delete"
 msgstr "Delete"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete draft {id}"
-msgstr "Delete draft {id}"
+msgid "Delete authoring session {id}"
+msgstr "Delete authoring session {id}"
 
 #: src/components/NavRail.tsx
 msgid "delete failed"
@@ -1947,8 +2024,8 @@ msgid "Delete session {title}"
 msgstr "Delete session {title}"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete this draft and its source?"
-msgstr "Delete this draft and its source?"
+msgid "Delete this authoring session? Its spec package folder stays."
+msgstr "Delete this authoring session? Its spec package folder stays."
 
 #: src/components/NavRail.tsx
 msgid "Delete this session and its transcript"
@@ -1971,17 +2048,21 @@ msgid "Delete this session? It was run from the terminal; its history goes too. 
 msgstr "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete waits: the draft's compile is running"
-msgstr "Delete waits: the draft's compile is running"
+msgid "Delete waits: the session's compile is running"
+msgstr "Delete waits: the session's compile is running"
 
 #: src/components/LibrarySurface.tsx
-msgid "Delete waits: the draft's turn is running"
-msgstr "Delete waits: the draft's turn is running"
+msgid "Delete waits: the session's turn is running"
+msgstr "Delete waits: the session's turn is running"
 
 #. a sync unit's change: it is gone on this side
 #: src/components/SpaceSync.tsx
 msgid "deleted"
 msgstr "deleted"
+
+#: src/components/LibrarySurface.tsx
+msgid "Deleted {id}; its spec package folder stays at {path}"
+msgstr "Deleted {id}; its spec package folder stays at {path}"
 
 #. session row, busy: the delete is in flight
 #: src/components/NavRail.tsx
@@ -2010,6 +2091,26 @@ msgstr "Describe the playbook…"
 #: src/components/SettingsSurface.tsx
 msgid "desktop"
 msgstr "desktop"
+
+#. stop offering this playbook in this config
+#. stop offering this playbook in this config
+#: src/components/LibrarySurface.tsx
+msgid "Disable"
+msgstr "Disable"
+
+#: src/components/LibrarySurface.tsx
+msgid "Disable {id}"
+msgstr "Disable {id}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Disable /{command}"
+msgstr "Disable /{command}"
+
+#. the disable request is in flight
+#. the disable request is in flight
+#: src/components/LibrarySurface.tsx
+msgid "Disabling…"
+msgstr "Disabling…"
 
 #. act: throw the interrupted attempt away
 #. confirm: drop the unsaved draft
@@ -2083,11 +2184,6 @@ msgstr "Draft artifacts"
 #: src/components/ApprovalInbox.tsx
 msgid "Draft: {name}"
 msgstr "Draft: {name}"
-
-#. section heading: playbooks being written
-#: src/components/LibrarySurface.tsx
-msgid "Drafts"
-msgstr "Drafts"
 
 #. act: end the parked run
 #. act: end the parked run
@@ -2237,16 +2333,61 @@ msgstr "effort"
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "Effort options apply to the adapter; support for this model is unverified."
 
-#. add this built-in playbook to the config
+#. enable this playbook in this config
+#. enable this playbook in this config
+#. enable this playbook in this config
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Enable"
 msgstr "Enable"
 
 #: src/components/LibrarySurface.tsx
-msgid "Enable this playbook — it is written to the shared config"
-msgstr "Enable this playbook — it is written to the shared config"
+msgid "Enable /{command}"
+msgstr "Enable /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enable /{command} with a player per role"
+msgstr "Enable /{command} with a player per role"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Enable in"
+msgstr "Enable in"
+
+#. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
+#. section heading: the playbooks this config enables
+#: src/components/LibrarySurface.tsx
+#: src/lib/drafts.ts
+msgid "Enabled"
+msgstr "Enabled"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled /{command}"
+msgstr "Enabled /{command}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in the project"
+msgstr "Enabled in the project"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in the project and your own group"
+msgstr "Enabled in the project and your own group"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled in your own group"
+msgstr "Enabled in your own group"
+
+#: src/components/LibrarySurface.tsx
+msgid "Enabled. Sessions started before must be restarted to use it."
+msgstr "Enabled. Sessions started before must be restarted to use it."
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Enables the last compile — the source changed since."
+msgstr "Enables the last compile — the source changed since."
 
 #. the enable request is in flight
+#. the enable request is in flight
+#: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
 msgid "Enabling…"
 msgstr "Enabling…"
@@ -2276,6 +2417,8 @@ msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter to send · Shift+Enter for a new line"
 
 #. heading over a spex repository's spec package requests and lock
+#. section heading: the spec packages one spex repository installs
+#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Environment"
 msgstr "Environment"
@@ -2409,6 +2552,11 @@ msgstr "Failed at an unknown phase, {age}"
 msgid "Failed workflow"
 msgstr "Failed workflow"
 
+#. mark: this artifact's wanted language was missing, the original stands
+#: src/components/EnvironmentSection.tsx
+msgid "fallback"
+msgstr "fallback"
+
 #. an agent runs in its adapter's fast mode
 #. mark on an agent: it runs in the runtime's fast mode
 #. mark on an agent: it runs in the runtime's fast mode
@@ -2497,6 +2645,14 @@ msgstr "Fix the file in your editor; Spex reloads it live."
 msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Folder inside {folder}"
+msgstr "Folder inside {folder}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Folder inside it (optional)"
+msgstr "Folder inside it (optional)"
+
 #. confirm: forget a folder whose records are gone from this device
 #: src/components/SpaceSync.tsx
 msgid "Forget"
@@ -2511,7 +2667,7 @@ msgstr "Forget folder"
 msgid "Forget this folder here? The folder stays on disk."
 msgstr "Forget this folder here? The folder stays on disk."
 
-#. label before the path a playbook was loaded from
+#. label before the spec package a playbook comes from
 #: src/components/LibrarySurface.tsx
 msgid "from"
 msgstr "from"
@@ -2567,6 +2723,19 @@ msgstr "from the last good compile"
 #: src/components/PlaybookStages.tsx
 msgid "Gears"
 msgstr "Gears"
+
+#. a spec package's source: a Git repository at a commit
+#: src/lib/environments.ts
+msgid "Git"
+msgstr "Git"
+
+#: src/lib/environments.ts
+msgid "Git {repository} at {rev}"
+msgstr "Git {repository} at {rev}"
+
+#: src/lib/environments.ts
+msgid "Git {repository} at {rev}, {path}"
+msgstr "Git {repository} at {rev}, {path}"
 
 #. entry mark: the repository's own files
 #. entry mark: the repository's own files
@@ -2646,10 +2815,6 @@ msgstr "Hide quick start (playbooks stay under / in the composer)"
 msgid "Hide sessions in {project}"
 msgstr "Hide sessions in {project}"
 
-#: src/components/LibrarySurface.tsx
-msgid "Hide source"
-msgstr "Hide source"
-
 #: src/components/CaptainHome.tsx
 msgid "Hide the quick-start card"
 msgstr "Hide the quick-start card"
@@ -2720,13 +2885,27 @@ msgstr "Inherit the player (off)"
 msgid "Inherit the player (on)"
 msgstr "Inherit the player (on)"
 
+#. install the locked files that are missing on this device
+#: src/components/EnvironmentSection.tsx
+msgid "Install"
+msgstr "Install"
+
 #: src/lib/labels.ts
 msgid "Install {command}"
 msgstr "Install {command}"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Install the locked files on this device"
+msgstr "Install the locked files on this device"
+
 #: src/lib/labels.ts
 msgid "Install the missing command"
 msgstr "Install the missing command"
+
+#. a spec package's files are installed on this device
+#: src/components/EnvironmentSection.tsx
+msgid "Installed"
+msgstr "Installed"
 
 #. catalog family: spec packages installed on this device from the lock
 #: src/lib/space.ts
@@ -2741,6 +2920,13 @@ msgstr "installed spec packages and exported skills"
 #: src/lib/useBrowserTools.ts
 msgid "Installing browser…"
 msgstr "Installing browser…"
+
+#. the environment's locked files are being installed
+#. the environment's locked files are being installed
+#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
+msgid "Installing…"
+msgstr "Installing…"
 
 #. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
@@ -2802,6 +2988,10 @@ msgstr "Interrupted {age} — Spex closed while it compiled"
 msgid "Interrupted turn"
 msgstr "Interrupted turn"
 
+#: src/components/LibrarySurface.tsx
+msgid "Invalid: {reason}"
+msgstr "Invalid: {reason}"
+
 #: src/lib/media.ts
 msgid "Invocation {call}"
 msgstr "Invocation {call}"
@@ -2845,6 +3035,10 @@ msgstr "it would do nothing"
 #: src/App.tsx
 msgid "its endpoint"
 msgstr "its endpoint"
+
+#: src/components/LibrarySurface.tsx
+msgid "Its files are not on this device"
+msgstr "Its files are not on this device"
 
 #: src/components/SpecView.tsx
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
@@ -2899,6 +3093,7 @@ msgstr "just now"
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
 #: src/components/DashboardSurface.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
@@ -2992,7 +3187,10 @@ msgstr "Loading transcript…"
 
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/LibrarySurface.tsx
 msgid "loading…"
 msgstr "loading…"
@@ -3012,12 +3210,12 @@ msgid "Local changes ({count})"
 msgstr "Local changes ({count})"
 
 #: src/lib/drafts.ts
-msgid "Lowercase letters, digits, - or _, starting with a letter"
-msgstr "Lowercase letters, digits, - or _, starting with a letter"
+msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 
 #: src/lib/drafts.ts
-msgid "Lowercase; it names the file and the /command — the command can change at registration"
-msgstr "Lowercase; it names the file and the /command — the command can change at registration"
+msgid "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it"
+msgstr "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it"
 
 #. pipeline stage: the compiled state machine
 #. pipeline stage: the compiled state machine
@@ -3063,6 +3261,10 @@ msgstr "Message the Captain…"
 msgid "migration receipts and inputs"
 msgstr "migration receipts and inputs"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Missing on this device: {path}"
+msgstr "Missing on this device: {path}"
+
 #: src/components/LibrarySurface.tsx
 msgid "missing stages: {stages}"
 msgstr "missing stages: {stages}"
@@ -3105,6 +3307,10 @@ msgstr "Name the folder on this device."
 #: src/components/SpaceSurface.tsx
 msgid "Name where this spex repository's records are kept"
 msgstr "Name where this spex repository's records are kept"
+
+#: src/components/SettingsSurface.tsx
+msgid "Named by {project}, not set up here"
+msgstr "Named by {project}, not set up here"
 
 #. session status: the run failed and waits for the Boss
 #: src/lib/labels.ts
@@ -3153,8 +3359,9 @@ msgstr "Never synced"
 msgid "new"
 msgstr "new"
 
-#. start a draft of one's own
-#. start a draft of one's own
+#. start writing a playbook of one's own
+#. start writing a playbook of one's own
+#. start writing a playbook of one's own
 #: src/components/LibrarySurface.tsx
 msgid "New playbook"
 msgstr "New playbook"
@@ -3190,6 +3397,10 @@ msgstr "Next page"
 #: src/lib/shortcuts.ts
 msgid "Next tab in Projects"
 msgstr "Next tab in Projects"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No {language} text; the original stands"
+msgstr "No {language} text; the original stands"
 
 #: src/components/SpecView.tsx
 msgid "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
@@ -3259,8 +3470,8 @@ msgid "No player named \"{player}\" — check the config"
 msgstr "No player named \"{player}\" — check the config"
 
 #: src/components/SettingsSurface.tsx
-msgid "No players yet — enabling a playbook in the Library adds the ones its roles need."
-msgstr "No players yet — enabling a playbook in the Library adds the ones its roles need."
+msgid "No players yet — enabling a playbook in Playbooks adds the ones its roles need."
+msgstr "No players yet — enabling a playbook in Playbooks adds the ones its roles need."
 
 #: src/components/SpaceExplorer.tsx
 msgid "No preview for this file."
@@ -3291,6 +3502,14 @@ msgstr "No source yet"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "No source yet — the agent writes <0>{path}</0> here as you talk."
 
+#: src/components/EnvironmentSection.tsx
+msgid "No spec package matches"
+msgstr "No spec package matches"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No spec packages requested yet"
+msgstr "No spec packages requested yet"
+
 #: src/components/SpaceSurface.tsx
 msgid "No spex repositories here yet"
 msgstr "No spex repositories here yet"
@@ -3299,9 +3518,17 @@ msgstr "No spex repositories here yet"
 msgid "No unfinished intent records."
 msgstr "No unfinished intent records."
 
+#: src/components/EnvironmentSection.tsx
+msgid "No version meets every requirement:"
+msgstr "No version meets every requirement:"
+
 #: src/components/SpaceSurface.tsx
 msgid "No working folder here"
 msgstr "No working folder here"
+
+#: src/components/EnvironmentSection.tsx
+msgid "No working folder on this device"
+msgstr "No working folder on this device"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -3360,6 +3587,12 @@ msgstr "Not connected"
 msgid "not deleted"
 msgstr "not deleted"
 
+#. a listed playbook no config enables
+#. section heading: playbooks this config does not enable
+#: src/components/LibrarySurface.tsx
+msgid "Not enabled"
+msgstr "Not enabled"
+
 #. the cited item is not in this tree
 #. the cited item is not in this tree
 #: src/components/SpecItemRows.tsx
@@ -3369,6 +3602,11 @@ msgstr "not found"
 #: src/components/ModelField.tsx
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "Not in this runtime's list. Check the model ID."
+
+#. a spec package's files are not installed on this device yet
+#: src/components/EnvironmentSection.tsx
+msgid "Not installed"
+msgstr "Not installed"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -3380,6 +3618,11 @@ msgstr "Not on this device"
 #: src/components/AgentChip.tsx
 msgid "not ready"
 msgstr "not ready"
+
+#. a requested spec package the lock holds no version of yet
+#: src/components/EnvironmentSection.tsx
+msgid "not resolved"
+msgstr "not resolved"
 
 #. stands where the Captain agent is not configured
 #: src/components/CaptainHome.tsx
@@ -3518,7 +3761,7 @@ msgstr "One spec item per state behavior, from the last compile"
 msgid "Only on this device"
 msgstr "Only on this device"
 
-#. open this draft's authoring workspace
+#. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
 msgid "Open"
 msgstr "Open"
@@ -3551,10 +3794,18 @@ msgstr "Open {title} — running in {project}"
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
 
+#: src/components/DraftConversation.tsx
+msgid "Open Enable"
+msgstr "Open Enable"
+
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Open its page"
+msgstr "Open its page"
 
 #: src/components/SpaceSync.tsx
 msgid "Open project"
@@ -3564,10 +3815,6 @@ msgstr "Open project"
 #: src/components/SourcesTabs.tsx
 msgid "Open records"
 msgstr "Open records"
-
-#: src/components/DraftConversation.tsx
-msgid "Open Register"
-msgstr "Open Register"
 
 #: src/components/SpaceExplorer.tsx
 #: src/components/SpaceSync.tsx
@@ -3614,15 +3861,15 @@ msgstr "Open to retry or drop the run."
 msgid "Opened {id}"
 msgstr "Opened {id}"
 
-#. a draft is being opened
-#. a draft is being opened
+#. an authoring session is being opened
+#. an authoring session is being opened
 #: src/components/LibrarySurface.tsx
 msgid "Opening…"
 msgstr "Opening…"
 
 #: src/components/LibrarySurface.tsx
-msgid "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
-msgstr "Opens a draft named {id} with the normalized text ready to paste — nothing is written or compiled"
+msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
+msgstr "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -3675,14 +3922,27 @@ msgstr "Paste a source or pick a file"
 msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
 msgstr "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
 
+#. a spec package's source: a folder in the working folder
+#: src/lib/environments.ts
+msgid "path"
+msgstr "path"
+
 #. field holding a path to select and copy
 #: src/components/SpaceSurface.tsx
 msgid "Path"
 msgstr "Path"
 
+#: src/lib/environments.ts
+msgid "path {path}"
+msgstr "path {path}"
+
 #: src/components/AgentEditor.tsx
 msgid "Permission mode"
 msgstr "Permission mode"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Pick a folder inside {folder}"
+msgstr "Pick a folder inside {folder}"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -3693,6 +3953,11 @@ msgstr "Pick a project first ({keys})"
 msgid "Pick file"
 msgstr "Pick file"
 
+#. open the system's folder picker
+#: src/components/EnvironmentSection.tsx
+msgid "Pick folder"
+msgstr "Pick folder"
+
 #. tuning choice: set an explicit value here
 #: src/components/TuningField.tsx
 msgid "pin a value…"
@@ -3701,6 +3966,11 @@ msgstr "pin a value…"
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
+
+#. a spec package's artifact kind: a playbook
+#: src/lib/environments.ts
+msgid "playbook"
+msgstr "playbook"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
@@ -3729,6 +3999,7 @@ msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
 
 #: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
 msgid "Player for {role}"
 msgstr "Player for {role}"
 
@@ -3753,7 +4024,7 @@ msgstr "Prefer your own?"
 msgid "preferences"
 msgstr "preferences"
 
-#. open a draft carrying the example's text
+#. open an authoring session carrying the example's text
 #: src/components/LibrarySurface.tsx
 msgid "Prefill"
 msgstr "Prefill"
@@ -3812,8 +4083,8 @@ msgid "Prompt"
 msgstr "Prompt"
 
 #: src/components/DraftConversation.tsx
-msgid "Proposed registration"
-msgstr "Proposed registration"
+msgid "Proposed enabling"
+msgstr "Proposed enabling"
 
 #. an agent chip's model reading when the provider's own default is taken
 #: src/lib/session-agents.ts
@@ -3836,6 +4107,24 @@ msgstr "provider hints"
 #: src/components/SourcesTabs.tsx
 msgid "PRs"
 msgstr "PRs"
+
+#. upload the spec package to the registry
+#. upload the spec package to the registry
+#: src/components/DraftRegisterTab.tsx
+msgid "Publish"
+msgstr "Publish"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Published {name} {version}"
+msgstr "Published {name} {version}"
+
+#. a spec package is being uploaded to the registry
+#. a spec package is being uploaded to the registry
+#. a spec package is being uploaded to the registry
+#: src/components/DraftRegisterTab.tsx
+#: src/lib/environments.ts
+msgid "Publishing…"
+msgstr "Publishing…"
 
 #. sync step: sending to the host
 #: src/lib/space.ts
@@ -4035,33 +4324,18 @@ msgstr "Refresh status and GitHub data"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
-#. tab: write the compiled playbook into the config
-#. write the compiled playbook into the config
-#: src/components/AuthoringWorkspace.tsx
-#: src/components/DraftRegisterTab.tsx
-msgid "Register"
-msgstr "Register"
-
 #: src/components/ProjectPalette.tsx
 msgid "Register this existing repository"
 msgstr "Register this existing repository"
 
-#: src/components/LibrarySurface.tsx
-msgid "Registered /{command}"
-msgstr "Registered /{command}"
+#. a spec package's source: the registry
+#: src/lib/environments.ts
+msgid "registry"
+msgstr "registry"
 
-#: src/components/LibrarySurface.tsx
-msgid "Registered. Sessions started before this registration must be restarted to use it."
-msgstr "Registered. Sessions started before this registration must be restarted to use it."
-
-#. the registration is in flight
-#: src/components/DraftRegisterTab.tsx
-msgid "Registering…"
-msgstr "Registering…"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Registers the last compile — the source changed since."
-msgstr "Registers the last compile — the source changed since."
+#: src/lib/environments.ts
+msgid "registry {requirement}"
+msgstr "registry {requirement}"
 
 #. confirm: re-read the file from disk
 #. confirm: re-read the file from disk
@@ -4083,12 +4357,13 @@ msgstr "Remote URL"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
-#. confirm: take this playbook out of the config
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
+#. confirm: take this spec package out of the requests
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
-#: src/components/LibrarySurface.tsx
+#. take this spec package out of the requests
+#: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
@@ -4105,8 +4380,13 @@ msgid "Remove {id}?"
 msgstr "Remove {id}?"
 
 #: src/components/ComposerAttachments.tsx
+#: src/components/EnvironmentSection.tsx
 msgid "Remove {name}"
 msgstr "Remove {name}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Remove {name}?"
+msgstr "Remove {name}?"
 
 #: src/components/NextCard.tsx
 msgid "Remove {title}"
@@ -4116,10 +4396,6 @@ msgstr "Remove {title}"
 msgid "Remove {title} from history"
 msgstr "Remove {title} from history"
 
-#: src/components/LibrarySurface.tsx
-msgid "Remove /{command} from the config"
-msgstr "Remove /{command} from the config"
-
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
 msgstr "Remove from Spex (repo stays on disk)"
@@ -4128,17 +4404,13 @@ msgstr "Remove from Spex (repo stays on disk)"
 msgid "Remove from Spex? The repo stays on disk."
 msgstr "Remove from Spex? The repo stays on disk."
 
-#: src/components/LibrarySurface.tsx
-msgid "Remove from the config (compiled artifacts stay in the library)"
-msgstr "Remove from the config (compiled artifacts stay in the library)"
-
 #: src/components/ProjectsSurface.tsx
 msgid "Remove project"
 msgstr "Remove project"
 
 #: src/components/LibrarySurface.tsx
-msgid "Remove the draft, its conversation, and its source"
-msgstr "Remove the draft, its conversation, and its source"
+msgid "Remove the session and its conversation; the spec package folder stays"
+msgstr "Remove the session and its conversation; the spec package folder stays"
 
 #: src/components/ProjectGroup.tsx
 msgid "Remove this intent from history"
@@ -4151,10 +4423,6 @@ msgstr "Remove this intent from history?"
 #: src/components/Composer.tsx
 msgid "Remove this message"
 msgstr "Remove this message"
-
-#: src/components/LibrarySurface.tsx
-msgid "Remove this playbook from the config?"
-msgstr "Remove this playbook from the config?"
 
 #: src/components/SettingsSurface.tsx
 msgid "Remove this player from the roster"
@@ -4170,6 +4438,8 @@ msgid "Removed “{title}”"
 msgstr "Removed “{title}”"
 
 #. queue row control, busy: the removal is in flight
+#. the removal is in flight
+#: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 msgid "Removing…"
 msgstr "Removing…"
@@ -4183,8 +4453,8 @@ msgid "Replace the source with pasted text or a file"
 msgstr "Replace the source with pasted text or a file"
 
 #: src/components/DraftSourceTab.tsx
-msgid "Replaces the draft's source"
-msgstr "Replaces the draft's source"
+msgid "Replaces the playbook's source"
+msgstr "Replaces the playbook's source"
 
 #: src/components/Composer.tsx
 msgid "Reply to {player}…"
@@ -4203,6 +4473,26 @@ msgstr "Repo-relative paths the agent may write under auto mode beyond its usual
 msgid "Report it"
 msgstr "Report it"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Repository URL"
+msgstr "Repository URL"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request {requirement}"
+msgstr "Request {requirement}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a folder inside the working folder"
+msgstr "Request a folder inside the working folder"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Request a Git repository at a branch, tag or commit"
+msgstr "Request a Git repository at a branch, tag or commit"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Requested {name}"
+msgstr "Requested {name}"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Requested action"
 msgstr "Requested action"
@@ -4214,6 +4504,14 @@ msgstr "Requested tool approval: {tool}"
 #: src/state/reducer.ts
 msgid "Requested tool approval: {tool} — {reason}"
 msgstr "Requested tool approval: {tool} — {reason}"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Requests changed; resolve again to install"
+msgstr "Requests changed; resolve again to install"
+
+#: src/components/DraftRegisterTab.tsx
+msgid "Requests the spec package by path, then writes the playbook and any new player"
+msgstr "Requests the spec package by path, then writes the playbook and any new player"
 
 #: src/components/ProjectGroup.tsx
 msgid "Resize History"
@@ -4246,6 +4544,22 @@ msgstr "Resize the graph pane"
 #: src/components/SpaceExplorer.tsx
 msgid "Resize the tree pane"
 msgstr "Resize the tree pane"
+
+#. resolve the changed requests into a new lock
+#: src/components/EnvironmentSection.tsx
+msgid "Resolve again"
+msgstr "Resolve again"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Resolve the requests into a new lock and install it"
+msgstr "Resolve the requests into a new lock and install it"
+
+#. the environment's requests are being resolved into a lock
+#. the environment's requests are being resolved into a lock
+#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
+msgid "Resolving…"
+msgstr "Resolving…"
 
 #. act: bring back the interrupted work's saved position and report what was recorded; nothing runs again
 #: src/components/SessionRecovery.tsx
@@ -4425,6 +4739,19 @@ msgstr "Scaffold one in the project directory:"
 #: src/components/ProjectPalette.tsx
 msgid "Scaffold specs when creating"
 msgstr "Scaffold specs when creating"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Search the registry"
+msgstr "Search the registry"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Search the registry and request a version"
+msgstr "Search the registry and request a version"
+
+#. the registry search is in flight
+#: src/components/EnvironmentSection.tsx
+msgid "Searching…"
+msgstr "Searching…"
 
 #: src/App.tsx
 msgid "seeding the example failed"
@@ -4695,6 +5022,10 @@ msgstr "Sign in again with that agent's CLI"
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "Sign in to publish"
+msgstr "Sign in to publish"
+
 #: src/components/SpaceSurface.tsx
 msgid "Signed in as {login} at {host}"
 msgstr "Signed in as {login} at {host}"
@@ -4708,6 +5039,11 @@ msgstr "Signing in from a terminal is picked up on re-check; a newly exported en
 msgid "size — items"
 msgstr "size — items"
 
+#. a spec package's artifact kind: an Agent Skills folder
+#: src/lib/environments.ts
+msgid "skill"
+msgstr "skill"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Slash command"
 msgstr "Slash command"
@@ -4715,6 +5051,11 @@ msgstr "Slash command"
 #: src/main.tsx
 msgid "Something broke in the UI"
 msgstr "Something broke in the UI"
+
+#. a spec package's artifact kind: source material
+#: src/lib/environments.ts
+msgid "source"
+msgstr "source"
 
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
@@ -4729,14 +5070,10 @@ msgstr "Source"
 msgid "Source file path (overrides the text)"
 msgstr "Source file path (overrides the text)"
 
-#. draft state chip, at most 14 characters: the draft's library directory is gone
+#. authoring state chip, at most 14 characters: the spec package folder is gone from the working folder
 #: src/lib/drafts.ts
 msgid "Source missing"
 msgstr "Source missing"
-
-#: src/components/LibrarySurface.tsx
-msgid "Source this playbook was loaded from: {from}"
-msgstr "Source this playbook was loaded from: {from}"
 
 #: src/components/SourcesTabs.tsx
 msgid "Sources: {issues, plural, one {# issue} other {# issues}} · {prs, plural, one {# PR} other {# PRs}} · {records, plural, one {# open record} other {# open records}}"
@@ -4764,6 +5101,11 @@ msgstr "Space views"
 msgid "space.issues"
 msgstr "Issues"
 
+#. a spec package's artifact kind: the spec
+#: src/lib/environments.ts
+msgid "spec"
+msgstr "spec"
+
 #. compile phase: slc derives the spec items
 #: src/lib/compile-log.ts
 msgid "Spec items"
@@ -4777,6 +5119,10 @@ msgstr "Spec package citation graph"
 #: src/lib/space.ts
 msgid "spec package lock"
 msgstr "spec package lock"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Spec package name"
+msgstr "Spec package name"
 
 #. catalog family: the spec packages the environment asks for
 #: src/lib/space.ts
@@ -4807,6 +5153,10 @@ msgstr "Spex could not create a starter config at <0>{path}</0> — check the fo
 msgid "Spex could not read this block"
 msgstr "Spex could not read this block"
 
+#: src/state/store.ts
+msgid "Spex could not read what this would publish."
+msgstr "Spex could not read what this would publish."
+
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex has no config file yet — playbooks are unavailable."
@@ -4818,6 +5168,10 @@ msgstr "Spex itself follows your OS theme."
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
 msgstr "Spex navigation"
+
+#: src/components/LibrarySurface.tsx
+msgid "Spex repository shown"
+msgstr "Spex repository shown"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -4934,6 +5288,10 @@ msgstr "step: {state}"
 #: src/components/SpaceSync.tsx
 msgid "Stop"
 msgstr "Stop"
+
+#: src/components/EnvironmentSection.tsx
+msgid "Stop requesting this spec package"
+msgstr "Stop requesting this spec package"
 
 #. how a run ended: it was stopped
 #: src/components/MachineCard.tsx
@@ -5184,17 +5542,13 @@ msgstr "The conversation could not be loaded: {reason}"
 msgid "The diff is cut here; the file is longer."
 msgstr "The diff is cut here; the file is longer."
 
-#: src/lib/drafts.ts
-msgid "The draft's library directory is gone; only Delete remains"
-msgstr "The draft's library directory is gone; only Delete remains"
-
 #: src/components/AuthoringWorkspace.tsx
 msgid "The draft's markdown as it stands on disk"
 msgstr "The draft's markdown as it stands on disk"
 
 #: src/components/DraftSourceTab.tsx
-msgid "The file is copied in as the draft's source"
-msgstr "The file is copied in as the draft's source"
+msgid "The file is copied in as the playbook's source"
+msgstr "The file is copied in as the playbook's source"
 
 #: src/lib/media-client.ts
 msgid "The file returned inconsistent content."
@@ -5220,9 +5574,17 @@ msgstr "The last turn failed. Send a message to pick it up."
 msgid "The ledger could not be loaded: {reason}"
 msgstr "The ledger could not be loaded: {reason}"
 
+#: src/components/EnvironmentSection.tsx
+msgid "The original text stands"
+msgstr "The original text stands"
+
 #: src/App.tsx
 msgid "The project's spec packages ({keys})"
 msgstr "The project's spec packages ({keys})"
+
+#: src/components/LibrarySurface.tsx
+msgid "The project's spex repository: {repository}"
+msgstr "The project's spex repository: {repository}"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "The proposal names {roles}, which the compiled entry lacks."
@@ -5252,6 +5614,10 @@ msgstr "the reload failed"
 #: src/components/SpecEditor.tsx
 msgid "the save failed"
 msgstr "the save failed"
+
+#: src/lib/drafts.ts
+msgid "The spec package folder is gone from the working folder; only Delete remains"
+msgstr "The spec package folder is gone from the working folder; only Delete remains"
 
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -5452,6 +5818,10 @@ msgstr "Try the Academy example"
 msgid "Try the example"
 msgstr "Try the example"
 
+#: src/components/BindingEditor.tsx
+msgid "Tuning is personal — set it in Settings"
+msgstr "Tuning is personal — set it in Settings"
+
 #: src/lib/media.ts
 msgid "Turn {turn}"
 msgstr "Turn {turn}"
@@ -5473,6 +5843,11 @@ msgstr "Tweak the {name} agent in place"
 #: src/components/CaptainHome.tsx
 msgid "Tweak the Captain agent in place"
 msgstr "Tweak the Captain agent in place"
+
+#. a required role no player answers yet
+#: src/components/LibrarySurface.tsx
+msgid "unbound"
+msgstr "unbound"
 
 #: src/components/ProjectsSurface.tsx
 msgid "uncommitted changes"
@@ -5573,6 +5948,10 @@ msgstr "Updated {age} by the agent"
 msgid "Updated {age} by you"
 msgstr "Updated {age} by you"
 
+#: src/components/DraftRegisterTab.tsx
+msgid "Upload {path} to the registry"
+msgstr "Upload {path} to the registry"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Upload failed"
 msgstr "Upload failed"
@@ -5612,13 +5991,13 @@ msgstr "Use browser setting from Settings"
 msgid "Use default"
 msgstr "Use default"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Version of {name}"
+msgstr "Version of {name}"
+
 #: src/components/SpaceSync.tsx
 msgid "View diff"
 msgstr "View diff"
-
-#: src/components/LibrarySurface.tsx
-msgid "View source"
-msgstr "View source"
 
 #: src/components/ParkedRun.tsx
 msgid "Wait for the running turn"
@@ -5684,6 +6063,10 @@ msgstr "Waits for the reply"
 #: src/components/DraftConversation.tsx
 msgid "Waits for the reply — the agent switches on the next turn"
 msgstr "Waits for the reply — the agent switches on the next turn"
+
+#: src/lib/environments.ts
+msgid "Waits for the sync of {repository}"
+msgstr "Waits for the sync of {repository}"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."
@@ -5762,10 +6145,6 @@ msgstr "Working…"
 msgid "Writable paths (comma-separated)"
 msgstr "Writable paths (comma-separated)"
 
-#: src/components/DraftRegisterTab.tsx
-msgid "Writes the playbook and any new player to the shared config"
-msgstr "Writes the playbook and any new player to the shared config"
-
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
@@ -5782,6 +6161,17 @@ msgstr "Your changes are saved; nothing is pushed yet"
 #: src/components/CaptainHome.tsx
 msgid "Your config file has errors — playbooks are unavailable."
 msgstr "Your config file has errors — playbooks are unavailable."
+
+#. switch: show your own group's playbooks
+#. switch: show your own group's playbooks
+#: src/components/DraftRegisterTab.tsx
+#: src/components/LibrarySurface.tsx
+msgid "Your own group"
+msgstr "Your own group"
+
+#: src/components/SettingsSurface.tsx
+msgid "Your own group's config, in {repository}"
+msgstr "Your own group's config, in {repository}"
 
 #. stands in for a project with no name yet
 #: src/components/CaptainHome.tsx
