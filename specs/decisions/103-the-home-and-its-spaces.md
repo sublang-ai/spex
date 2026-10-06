@@ -126,7 +126,7 @@ Spex never does these; it shows the state and links to the page.
 
 ### Which settings apply
 
-- A session runs with your own group's `config/playbook.config.yaml`, the project's own added on top, and the session's tuning last. The project's file names the playbooks it enables and which player each role uses. Yours says what each player runs on. A player this device lacks is reported before the session starts, and Settings offers to add it.
+- A session runs with your own group's `config/playbook.config.yaml`, the project's own added on top, and the session's tuning last. The project's file names the playbooks it enables and which player each role uses, by name, and never a model. Yours says what each player runs on, from what this device has, so a team shares player names and each person picks their own models. A player the project names and yours lacks is reported before the session starts, and Settings offers to add it.
 - History reads anywhere the records are. A session continues only on a device where the project's working folder matches the bundle's, the runtime validates, and no lease is held.
 
 ### Projects on this device
