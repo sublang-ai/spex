@@ -25,11 +25,11 @@
     "assets/"
   ],
   "scripts": {
-    "build": "npm run i18n:check && lingui compile --strict --typescript && node scripts/stage-academy.mjs && tsc",
+    "build": "npm run i18n:check && lingui compile --strict --typescript && node scripts/stage-academy.mjs && node scripts/stage-builtins.mjs && tsc",
     "dev:fake": "npm run build && node dist/bin/dev-core.js --fake",
     "i18n:extract": "lingui extract --clean",
     "i18n:check": "node ../../scripts/i18n-check.mjs",
-    "test": "npm run i18n:check && node scripts/stage-academy.mjs && node scripts/run-tests.cjs",
+    "test": "npm run i18n:check && node scripts/stage-academy.mjs && node scripts/stage-builtins.mjs && node scripts/run-tests.cjs",
     "test:integration": "node scripts/run-tests.cjs \"\\.integration\\.test\\.js$\""
   },
   "engines": {
