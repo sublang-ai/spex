@@ -162,14 +162,14 @@ function DirectiveCard({
       className="flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{i18n._("Proposed registration")}</span>
+        <span className="font-medium">{i18n._("Proposed enabling")}</span>
         <button
           type="button"
-          data-testid="open-register"
+          data-testid="open-enable"
           onClick={onOpenRegister}
           className="ml-auto rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          {i18n._("Open Register")}
+          {i18n._("Open Enable")}
         </button>
       </div>
       <div className="font-mono text-xs">/{proposal.command}</div>

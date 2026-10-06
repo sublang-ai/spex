@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The authoring workspace (DR-058, playbook-library-52): in place of
-// the playbook list, a header with the way back, the draft's id and
-// its state chip; the conversation on the left; on the right a pane
-// of four tabs — Source, Gears, Machine, Register — with the Compile
+// the playbook list, a header with the way back, the playbook's id
+// with its spec package's name, and its state chip; the conversation
+// on the left; on the right a pane of four tabs — Source, Gears,
+// Machine, Enable — with the Compile
 // control at the strip's end and the compile watched in a band under
 // it. The house divider stands between the panes from the @2xl step
 // and turns into the horizontal grip once they stack (DR-030,
@@ -28,7 +29,7 @@ import {
   getClient,
   useAppStore,
 } from "../state/store.js";
-import { draftChipTitle, draftChipTone, draftChipWord } from "../lib/drafts.js";
+import { draftChipTitle, draftChipTone, draftChipWord, draftPackagePath } from "../lib/drafts.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { CompileBand } from "./CompileBand.js";
@@ -42,7 +43,7 @@ import { SplitDivider } from "./RunView.js";
 import { draftAttachmentKey, useComposerAttachments } from "../lib/useComposerAttachments.js";
 
 type Toolchain = CommandResults["compile.check"];
-type Tab = "source" | "gears" | "machine" | "register";
+type Tab = "source" | "gears" | "machine" | "enable";
 
 /** The four tabs. Each label and hint is read when the strip draws,
  * never when this module loads, so the table never freezes the
@@ -82,13 +83,13 @@ const TABS: readonly { key: Tab; label: string; icon: IconName; hint: string }[]
     },
   },
   {
-    key: "register",
+    key: "enable",
     get label() {
-      return i18n._({ id: "Register", comment: "tab: write the compiled playbook into the config" });
+      return i18n._({ id: "Enable", comment: "enable this playbook in this config" });
     },
     icon: "check",
     get hint() {
-      return i18n._("Confirm the command, intent, and players");
+      return i18n._("Confirm the command, intent, players and where to enable it");
     },
   },
 ];
@@ -124,10 +125,14 @@ export function DraftStateChip({ draft }: { draft: DraftInfo }) {
 export function AuthoringWorkspace({
   draftId,
   onBack,
+  onNavigate,
 }: {
   draftId: string;
-  /** Back to the list; the draft stays open in the core. */
+  /** Back to the list; the session stays open in the core. */
   onBack: () => void;
+  /** The host's surface navigation, where it offers one: Sign in to
+   * publish leads to Space (playbook-library-93). */
+  onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const draft = useAppStore((state) => state.drafts[draftId]);
   const media = useComposerAttachments(
@@ -198,19 +203,19 @@ export function AuthoringWorkspace({
   // until one succeeds (playbook-library-60).
   const hasArtifacts = artifacts !== undefined && (artifacts.gears !== null || artifacts.fsm !== null);
   const artifactsReady = compiledOk || hasArtifacts;
-  // The Register tab's dot stays until it is opened after the agent's
+  // The Enable tab's dot stays until it is opened after the agent's
   // proposal lands (playbook-library-60).
   const registerKey =
     draft && compiledOk
       ? `${draft.compile?.at}:${JSON.stringify(draft.proposal ?? null)}`
       : undefined;
   useEffect(() => {
-    if (tab === "register" && registerKey !== undefined) setRegisterSeen(registerKey);
+    if (tab === "enable" && registerKey !== undefined) setRegisterSeen(registerKey);
   }, [tab, registerKey]);
   useEffect(() => {
     // A tab that stops being available yields to Source.
     if ((tab === "gears" || tab === "machine") && !artifactsReady) setTab("source");
-    if (tab === "register" && !compiledOk) setTab("source");
+    if (tab === "enable" && !compiledOk) setTab("source");
   }, [tab, artifactsReady, compiledOk]);
 
   if (!draft) return null;
@@ -243,7 +248,7 @@ export function AuthoringWorkspace({
     source: true,
     gears: artifactsReady,
     machine: artifactsReady,
-    register: compiledOk,
+    enable: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
   const pickFile = window.spexNative?.pickFile
@@ -297,12 +302,12 @@ export function AuthoringWorkspace({
 
   return (
     <div data-testid="authoring-workspace" className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-1.5 text-sm dark:border-neutral-800">
+      <header className="@container flex shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-1.5 text-sm dark:border-neutral-800">
         <button
           type="button"
           data-testid="workspace-back"
           onClick={onBack}
-          title={i18n._("Back to the playbook list — the draft stays as it is")}
+          title={i18n._("Back to the playbook list — the session stays as it is")}
           className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           <span aria-hidden="true">‹</span>
@@ -310,6 +315,16 @@ export function AuthoringWorkspace({
         </button>
         <span className="min-w-0 truncate font-mono font-semibold" title={draft.id}>
           {draft.id}
+        </span>
+        {/* The spec package under development the playbook lives in
+            (playbook-library-52): an at-a-glance extra, so it yields
+            first in a narrow pane (DR-041 §9). */}
+        <span
+          data-testid="workspace-package"
+          className="hidden min-w-0 truncate font-mono text-xs text-neutral-500 @md:inline"
+          title={draftPackagePath(draft)}
+        >
+          {draft.package ?? draftPackagePath(draft)}
         </span>
         <DraftStateChip draft={draft} />
       </header>
@@ -348,7 +363,7 @@ export function AuthoringWorkspace({
               onAbort={() => void abortDraft(draftId)}
               onPickAgent={(playerId) => setDraftPlayer(draftId, playerId)}
               onDismissError={() => clearDraftError(draftId)}
-              onOpenRegister={() => setTab("register")}
+              onOpenRegister={() => setTab("enable")}
               onUseSkill={async () => {
                 // playbook-library-84: a picked file is the source when
                 // the draft has none, else the paste mode's path for
@@ -417,7 +432,7 @@ export function AuthoringWorkspace({
                 const on = tab === entry.key;
                 const label = entry.label;
                 const dot =
-                  entry.key === "source" ? sourceDot : entry.key === "register" ? registerDot : false;
+                  entry.key === "source" ? sourceDot : entry.key === "enable" ? registerDot : false;
                 return (
                   <button
                     key={entry.key}
@@ -515,6 +530,7 @@ export function AuthoringWorkspace({
                   connected={connected}
                   onForm={(next) => setDraftForm(draftId, next)}
                   onRegister={(input) => registerDraft(draftId, input)}
+                  onNavigate={onNavigate}
                 />
               )}
             </div>
