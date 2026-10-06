@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -50,6 +50,16 @@ export type MediaAsset = z.infer<typeof mediaAssetSchema>;
  * by its spex repository's key. */
 export const REPOSITORY_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*-spex$/;
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
+
+/** A request in `spex.yaml` (environments-2): exactly one source. */
+export const environmentRequestSchema = z.union([
+  z.object({ kind: z.literal("registry"), version: z.string().min(1) }),
+  z.object({ kind: z.literal("path"), path: z.string().min(1) }),
+  z.object({ kind: z.literal("git"), git: z.string().min(1), rev: z.string().min(1), path: z.string().min(1).optional() }),
+]).and(z.object({
+  select: z.array(z.object({ artifact: z.string().min(1), language: z.string().min(1).optional() }).strict()).optional(),
+  alias: z.record(z.string(), z.string()).optional(),
+}));
 /** A canonical lowercase UUID, the identity of an intent (storage-4). */
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The owners of application media (media-4): a spex repository's
@@ -267,9 +277,75 @@ export interface ConfigSummary {
 }
 
 export type ConfigState =
-  | { status: "valid"; summary: ConfigSummary; seeded: boolean }
+  | { status: "valid"; summary: ConfigSummary; seeded: boolean; missingPlayers?: MissingPlayer[] }
   | { status: "invalid"; path: string; errors: string[] }
   | { status: "missing"; path: string };
+
+/** A player a project's config names for a role that your own group's
+ * roster lacks (core-service-2, settings-46): reported before a session
+ * of that project starts, and offered to add in Settings. */
+export interface MissingPlayer {
+  player: string;
+  /** The spex repository whose config names it. */
+  repository: string;
+  roles: { playbook: string; role: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Environments (environments-14, environments-17, DR-104)
+// ---------------------------------------------------------------------------
+
+/** One spex repository's environment as the Playbooks surface lists it. */
+export interface EnvironmentState {
+  repository: string;
+  language: string | null;
+  requests: Record<string, EnvironmentRequest>;
+  packages: EnvironmentPackage[];
+  /** The lock is stale: what changed, phrased for the reader; null when current. */
+  stale: string[] | null;
+  /** Resolution failed: the requirements in conflict, by package; null otherwise. */
+  conflicts: { name: string; requirements: { by: string; requirement: string }[] }[] | null;
+  busy: "resolving" | "installing" | "publishing" | null;
+  /** The last operation's failure, phrased for the reader; null when none. */
+  error: string | null;
+}
+export type EnvironmentRequest = (
+  | { kind: "registry"; version: string }
+  | { kind: "path"; path: string }
+  | { kind: "git"; git: string; rev: string; path?: string }
+) & { select?: { artifact: string; language?: string }[]; alias?: Record<string, string> };
+export interface EnvironmentPackage {
+  name: string;
+  version: string | null;
+  source: { kind: "registry" | "path" | "git" | "builtin"; detail: string };
+  direct: boolean;
+  requiredBy: string[];
+  artifacts: { id: string; kind: "source" | "spec" | "skill" | "playbook" | "applet"; language: string | null; fallback: boolean }[];
+  exports: { name: string; artifact: string }[];
+  installed: boolean;
+  /** A path source absent on this device: its path, else null. */
+  missingPath: string | null;
+}
+
+/** A playbook an environment exports, as the Playbooks surface lists it
+ * (playbook-library-1). */
+export interface PlaybookAvailability {
+  /** The exported name: the playbook's id or its alias. */
+  name: string;
+  id: string;
+  command: string | null;
+  intent: string | null;
+  roles: string[];
+  package: string;
+  version: string;
+  source: "registry" | "path" | "git" | "builtin";
+  /** The spex repository whose environment exports it. */
+  repository: string;
+  /** Where it is enabled: the project's config, your own group's, or neither. */
+  enabled: ("project" | "own")[];
+  /** The module is present on this device (a path source may be missing). */
+  present: boolean;
+}
 
 /** A project: a working folder paired with a spex repository
  * (storage-6, projects-10). */
@@ -1010,6 +1086,23 @@ export const commandSchema = z.discriminatedUnion("type", [
   // none is stored.
   z.object({ type: z.literal("language.get"), id }).strict(),
   z.object({ type: z.literal("language.set"), id, language: languageChoiceSchema }).strict(),
+  // Environments (environments-17, DR-104): one spex repository's requests,
+  // lock, installs and exports; long commands reply `accepted` at once and
+  // report through `environment.state`.
+  z.object({ type: z.literal("environment.get"), id, repository: repositoryKeySchema }).strict(),
+  z.object({
+    type: z.literal("environment.request"),
+    id,
+    repository: repositoryKeySchema,
+    name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    request: environmentRequestSchema,
+  }).strict(),
+  z.object({ type: z.literal("environment.remove"), id, repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("environment.resolve"), id, repository: repositoryKeySchema }).strict(),
+  z.object({ type: z.literal("environment.install"), id, repository: repositoryKeySchema }).strict(),
+  z.object({ type: z.literal("environment.search"), id, query: z.string().max(200) }).strict(),
+  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Groups (space-29, DR-103): the core performs every Git operation,
   // one spex repository at a time, `repository` naming it by its key;
   // long commands reply `accepted` at once and report their outcome as
@@ -1170,6 +1263,14 @@ export interface CommandResults {
   "language.get": { language: Language | null };
   /** The choice after the write, as `language.state` carries it. */
   "language.set": { language: Language | null };
+  "environment.get": EnvironmentState;
+  "environment.request": { accepted: true };
+  "environment.remove": { accepted: true };
+  "environment.resolve": { accepted: true };
+  "environment.install": { accepted: true };
+  "environment.search": { packages: { name: string; description: string | null; versions: string[] }[] };
+  "environment.publish": { accepted: true };
+  "environment.playbooks": { project: PlaybookAvailability[] | null; own: PlaybookAvailability[] };
   "space.get": GroupsState;
   "space.remote.set": GroupsState;
   "space.fetch": { accepted: true };
@@ -1713,6 +1814,14 @@ export interface LanguageStateMessage {
 /** A repository's machine moved, or `space.remote.set` or a sync's
  * Refresh step landed (space-29): broadcast to every client, the
  * state replacing the last one wholesale. */
+/** An environment changed: after a resolve, an install, a publish or a
+ * sync-applied lock (environments-17). */
+export interface EnvironmentStateMessage {
+  type: "environment.state";
+  repository: string;
+  state: EnvironmentState;
+}
+
 export interface SpaceStateMessage {
   type: "space.state";
   state: GroupsState;
@@ -1768,6 +1877,7 @@ export type ServerMessage =
   | IntentsChangedMessage
   | LanguageStateMessage
   | SpaceStateMessage
+  | EnvironmentStateMessage
   | DraftRecordMessage
   | DraftStateMessage
   | DraftSourceMessage
