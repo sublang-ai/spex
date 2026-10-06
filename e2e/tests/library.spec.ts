@@ -291,11 +291,9 @@ test("playbook-library-41: the Captain home's slash menu offers a built-in enabl
   page,
   app,
 }) => {
-  // The home's slash menu reads your own group's config summary alone
-  // (`config.get` names no project), so a playbook the project's config
-  // enables is not offered there: expected to fail until the menu lists
-  // the project's composed catalog (playbook-library-41, -34).
-  test.fail(true, "UI defect: the Captain home's slash menu omits playbooks enabled in the project's config");
+  // The home's slash menu lists the project's composed catalog — your
+  // own group's config with the project's on top (playbook-library-41,
+  // -34, core-service-2).
   await open(page, app);
   await nav(page, "Playbooks").click();
   await showSide(page, "project");

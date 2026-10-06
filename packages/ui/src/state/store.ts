@@ -179,6 +179,13 @@ export interface AppState extends AttachmentState {
    * reached (run-view-50). */
   coreUrl?: string;
   configState?: ConfigState;
+  /** Each project's composed configuration, by project id
+   * (core-service-2): your own group's with the project's file on top,
+   * the catalog a session of that project offers (playbook-library-34). */
+  projectConfigs: Record<string, ConfigState>;
+  /** Read one project's composed configuration (`config.get` with its
+   * id); a broadcast that overtook the read wins. */
+  loadProjectConfig(projectId: string): Promise<void>;
   /** Served machine definitions by playbook id (run-view-64); null
    * records a fetch that found no machine. */
   machineGraphs: Record<string, MachineGraph | null>;
@@ -868,6 +875,10 @@ const sentMarkers = new Map<string, number>();
  * than a `space.state` broadcast or a newer read is discarded. */
 let spaceReads = 0;
 
+/** The newest config announcement's number: a project's `config.get`
+ * reply older than a `config.state` broadcast is discarded. */
+let configReads = 0;
+
 export const useAppStore = create<AppState>((set, get) => {
   /** Records describe the conversation; the listing owns activity,
    * including settlement after the final reply and stopped history. */
@@ -1256,7 +1267,10 @@ export const useAppStore = create<AppState>((set, get) => {
         break;
       case "config.state":
         noteSpaceChange();
-        set({ configState: message.state });
+        // Every project's composition rides the announcement whole
+        // (core-service-2); a read still in flight is older.
+        configReads += 1;
+        set({ configState: message.state, projectConfigs: message.projects ?? {} });
         // An edit moves where playbooks are enabled (playbook-library-3):
         // an already-read list reads again so the surface stays true.
         reloadPlaybookLists();
@@ -1446,6 +1460,14 @@ export const useAppStore = create<AppState>((set, get) => {
     projects: [],
     projectMeta: {},
     machineGraphs: {},
+    projectConfigs: {},
+
+    async loadProjectConfig(projectId: string): Promise<void> {
+      const read = configReads;
+      const state = await getClient().command("config.get", { projectId });
+      if (read !== configReads && projectId in get().projectConfigs) return;
+      set({ projectConfigs: { ...get().projectConfigs, [projectId]: state } });
+    },
     compileProgress: {},
     sessions: [],
     views: {},

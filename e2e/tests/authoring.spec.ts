@@ -583,11 +583,9 @@ test.describe("the pasted example", () => {
     page,
     app,
   }) => {
-    // The slash menu reads your own group's config summary alone, so the
-    // example the Enable tab enables in the project's config is not
-    // offered: expected to fail until the menu lists the project's
-    // composed catalog (playbook-library-85, -41).
-    test.fail(true, "UI defect: the slash menu omits playbooks enabled in the project's config");
+    // The slash menu lists the project's composed catalog, so the
+    // example the Enable tab enables in the project's config is offered
+    // (playbook-library-85, -41).
     await open(page, app);
     await nav(page, "Playbooks").click();
     await page.getByTestId("example-prefill").click();

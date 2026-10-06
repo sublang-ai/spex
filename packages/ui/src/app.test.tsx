@@ -189,6 +189,7 @@ function seed(): void {
       status: "valid",
       summary: { playbooks: [], captain: undefined },
     } as never,
+    projectConfigs: {},
   });
 }
 
@@ -674,6 +675,62 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
     await useAppStore.getState().refresh();
 
     expect(useAppStore.getState().currentProjectId).toBe("fresh-1");
+  });
+});
+
+describe("playbook-library-34, core-service-2: the slash menus offer the project's composed catalog", () => {
+  const entry = (id: string) => ({ id, from: "", command: id, intent: `the ${id} playbook`, roles: {} });
+  const valid = (...ids: string[]) =>
+    ({ status: "valid", seeded: false, summary: { path: "/config", captain: { adapter: "claude" }, players: [], playbooks: ids.map(entry) } }) as never;
+
+  test("a playbook the project enables is offered there, read with its id and followed through the broadcast", async () => {
+    commandMock.mockImplementation(async (type: string, fields: { projectId?: string }) =>
+      type === "config.get" && fields?.projectId === "p1" ? valid("code", "decide") : defaultReply(type),
+    );
+    useAppStore.setState({ configState: valid("code"), workspaceTabs: { p1: "start" } });
+    render(<App />);
+
+    // Your own group's config enables /code alone; the project's on top
+    // adds /decide, which the Captain home's menu offers.
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: "p1" }),
+    );
+    const composer = screen.getByTestId("start-composer");
+    fireEvent.change(composer, { target: { value: "/" } });
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("slash-menu").textContent).toContain("/decide"),
+    );
+    expect(screen.getByTestId("slash-menu").textContent).toContain("/code");
+
+    // A broadcast carries every project's composition whole: the
+    // project disabled /decide, so the menu no longer offers it.
+    act(() => {
+      deliverServerMessageForTests({
+        type: "config.state",
+        state: valid("code"),
+        projects: { p1: valid("code", "review") },
+      });
+    });
+    fireEvent.change(composer, { target: { value: "" } });
+    fireEvent.change(composer, { target: { value: "/" } });
+    const menu = screen.getByTestId("slash-menu");
+    expect(menu.textContent).toContain("/review");
+    expect(menu.textContent).not.toContain("/decide");
+  });
+
+  test("a project whose composition is refused offers your own group's catalog", async () => {
+    commandMock.mockImplementation(async (type: string, fields: { projectId?: string }) =>
+      type === "config.get" && fields?.projectId === "p1"
+        ? { status: "invalid", path: "/p1/config", errors: ["dev.auditor is not set up"] }
+        : defaultReply(type),
+    );
+    useAppStore.setState({ configState: valid("code"), workspaceTabs: { p1: "start" } });
+    render(<App />);
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().projectConfigs.p1?.status).toBe("invalid"),
+    );
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
+    expect(screen.getByTestId("slash-menu").textContent).toContain("/code");
   });
 });
 

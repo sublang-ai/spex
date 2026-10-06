@@ -463,6 +463,23 @@ function WorkspaceSurface({
   const summary =
     configState?.status === "valid" ? configState.summary : undefined;
 
+  // A session runs with your own group's config and its project's on
+  // top (core-service-2), so the slash menus offer that project's
+  // composed catalog — yours alone while it is not read, or refused
+  // (playbook-library-34, DR-104: every member gets the same tools).
+  const projectConfigs = useAppStore((state) => state.projectConfigs);
+  const loadProjectConfig = useAppStore((state) => state.loadProjectConfig);
+  useEffect(() => {
+    if (connection !== "open" || !currentProjectId) return;
+    void loadProjectConfig(currentProjectId).catch(() => {});
+  }, [connection, currentProjectId, loadProjectConfig]);
+  const playbooksOf = (projectId: string | undefined) => {
+    const composed = projectId ? projectConfigs[projectId] : undefined;
+    return composed?.status === "valid"
+      ? composed.summary.playbooks
+      : (summary?.playbooks ?? []);
+  };
+
   // The Captain's adapter not ready is the likeliest cause of a failed
   // turn: a live session's failure lines then carry the way to
   // Settings (run-view-2).
@@ -502,7 +519,7 @@ function WorkspaceSurface({
       hasProjects={projects.length > 0}
       projectName={project?.name}
       projectId={project?.id}
-      playbooks={summary?.playbooks ?? []}
+      playbooks={playbooksOf(project?.id)}
       captain={summary?.captain}
       readiness={readiness}
       connected={connection === "open"}
@@ -894,7 +911,7 @@ function WorkspaceSurface({
             session={activeSession}
             view={view}
             composer={composer}
-            playbooks={summary?.playbooks ?? []}
+            playbooks={playbooksOf(activeSession.projectId)}
             connected={connection === "open"}
             error={runErrors[activeSession.id]}
             readOnly={!!activeSession.externalWriter || (!activeSession.live && !activeSession.continuable)}
