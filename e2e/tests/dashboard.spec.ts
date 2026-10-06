@@ -455,7 +455,7 @@ test.describe("the Running band", () => {
   });
 });
 
-test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape", async ({
+test("dashboard-29, dashboard-39: the row menu starts any row, removes with Undo, and closes on Escape", async ({
   page,
   app,
 }) => {
@@ -469,25 +469,23 @@ test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape"
   await add.fill("Second");
   await add.press("Enter");
   await expect(rows).toHaveCount(2);
+  // The queue has no order of its own: oldest first, nothing to move.
   await expect(rows.nth(0)).toContainText("First");
+  await expect(rows.nth(1)).toContainText("Second");
 
-  // Move down from the menu: a single-pointer alternative to dragging.
-  const trigger = page.getByRole("button", { name: /actions for first/i });
+  // A later row's menu offers Start, Edit and Remove — nothing moves.
+  const trigger = page.getByRole("button", { name: /actions for second/i });
   await trigger.click();
-  const menu = page.getByRole("menu", { name: /actions for first/i });
+  const menu = page.getByRole("menu", { name: /actions for second/i });
   await expect(menu).toBeVisible();
-  await menu.getByRole("menuitem", { name: "Move down" }).click();
-  await expect(rows.nth(0)).toContainText("Second");
-  await expect(rows.nth(1)).toContainText("First");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Start", "Edit", "Remove"]);
 
   // Escape closes the menu and puts focus back on its trigger.
-  await trigger.click();
-  await expect(menu).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
   await expect(trigger).toBeFocused();
 
-  // Remove, then Undo brings the row back where it was.
+  // Remove, then Undo re-queues it; captured again, it lands by age.
   await trigger.click();
   await menu.getByRole("menuitem", { name: "Remove" }).click();
   await expect(rows).toHaveCount(1);
@@ -496,8 +494,20 @@ test("dashboard-39: the row menu moves, removes with Undo, and closes on Escape"
   await expect(removed).toHaveAttribute("role", "status");
   await removed.getByRole("button", { name: "Undo" }).click();
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(1)).toContainText("First");
+  await expect(rows.nth(1)).toContainText("Second");
   await expect(removed).toBeHidden();
+
+  // Start from that later row's menu stages that very intent; Send
+  // dispatches it, the older row still queued.
+  await trigger.click();
+  await menu.getByRole("menuitem", { name: "Start" }).click();
+  await expect(page.getByTestId("staged-intent-chip")).toContainText("Second");
+  await expect(page.getByTestId("start-composer")).toHaveValue("Second");
+  await page.getByTestId("start-send").click();
+  await expect(page.getByTestId("captain-pane")).toBeVisible();
+  await nav(page, "Dashboard").click();
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+  await expect(rows.nth(0)).toContainText("First");
 });
 
 test.describe("removing a History row", () => {

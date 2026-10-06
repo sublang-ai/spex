@@ -71,7 +71,7 @@ test("approvals-8: authoring approval has draft scope and disappears on abort", 
   const inbox = page.getByRole("region", {name: "Tool approvals", exact: true});
   await expect(inbox).toContainText("Draft: approval-draft");
   await expect(inbox).toContainText("author · Turn 1");
-  await app.core.command("draft.abort", {draftId: "approval-draft"});
+  await app.core.command("draft.abort", {projectId: app.projectId!, draftId: "approval-draft"});
   await expect(inbox).toHaveCount(0);
   await expect(page.getByTestId("draft-working")).toHaveCount(0);
   await page.reload();

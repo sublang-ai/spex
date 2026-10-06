@@ -31,8 +31,9 @@ import type {
   AgentOptions,
   Command,
   CommandResults,
+  GroupsState,
+  RepositoryState,
   ServerMessage,
-  SpaceState,
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import { defaultRunCommand } from "../../packages/core/dist/forge.js";
@@ -194,6 +195,24 @@ export interface AppOptions {
    * the boot refuses a config the core does not read as valid.
    */
   compiler?: { adapter: string; model: string; effort?: string };
+}
+
+/** Every journey home's own group (storage-2): a fixed folder name, so
+ * the paths under `workspace/` are known before the shell boots. */
+export const E2E_OWN = "e2e";
+
+/** A spex repository's clone under a journey home (storage-1). */
+export function clonePath(dataDir: string, key: string): string {
+  return join(dataDir, "workspace", ...key.split("/"));
+}
+
+/** One repository's state out of the Groups state (space-30). */
+export function repositoryOf(state: GroupsState, key: string): RepositoryState {
+  for (const group of state.groups) {
+    const found = group.repositories.find((repository) => repository.key === key);
+    if (found) return found;
+  }
+  throw new Error(`no repository ${key}`);
 }
 
 /** The roster id `AppOptions.compiler` writes. */
@@ -424,9 +443,9 @@ export class CoreClient {
   /** The first `space.state` at or after `from` that `check` accepts. */
   async waitSpace(
     from: number,
-    check: (state: SpaceState) => boolean,
+    check: (state: GroupsState) => boolean,
     timeoutMs = 30_000,
-  ): Promise<SpaceState> {
+  ): Promise<GroupsState> {
     const start = Date.now();
     for (;;) {
       for (let i = from; i < this.messages.length; i += 1) {
@@ -437,7 +456,7 @@ export class CoreClient {
         const seen = this.messages
           .slice(from)
           .filter((m) => m.type === "space.state")
-          .map((m) => (m.type === "space.state" ? JSON.stringify(m.state.sync) : ""));
+          .map((m) => (m.type === "space.state" ? JSON.stringify(m.state.groups.flatMap((group) => group.repositories.map((repository) => [repository.key, repository.sync]))) : ""));
         throw new Error(`timeout waiting for space state; saw ${seen.join(" | ")}`);
       }
       await new Promise((r) => setTimeout(r, 10));
@@ -505,10 +524,11 @@ export interface App {
   /** The demo project's path — registered when `project` was asked. */
   projectDir: string;
   projectId?: string;
-  /** The shared session store the playbook CLI would write into —
-   * scratch in both lanes, so a terminal-run fixture lands where the
-   * core serves it (core-service-60). */
-  sharedSessionsDir: string;
+  /** The session store the playbook CLI would write into for the demo
+   * project: its spex repository's `sessions/` (storage-14), or your own
+   * group's before a project is registered — scratch in both lanes, so a
+   * terminal-run fixture lands where the core serves it (core-service-60). */
+  readonly sharedSessionsDir: string;
   server: RunningServer;
   /** Arrange-only protocol client on the running shell. */
   core: CoreClient;
@@ -518,21 +538,25 @@ export interface App {
   peerDir?: string;
   /** The session both homes changed (with `remote: "peer"`). */
   sessionId?: string;
-  /** Run a long Space command and wait until the machine leaves
-   * `running`, returning the state it settled in (arrange only). */
+  /** Run a long command on one spex repository and wait until its
+   * machine leaves `running`, returning the repository's state (arrange
+   * only). */
   settleSpace<T extends "space.sync" | "space.fetch">(
     type: T,
     fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
-  ): Promise<SpaceState>;
+  ): Promise<RepositoryState>;
   /** The peer changes its working copy and pushes to `origin` as
    * plain Git — the remote "moved" (with `remote`). */
   peerPush(mutate: (dir: string) => void | Promise<void>): Promise<string>;
   /**
-   * The remote's `main` moves under the next `times` pushes: a
-   * `pre-receive` hook on the bare repository commits a peer note on
-   * `main` and declines each of those pushes as not fast-forward, so a
-   * sync meets a remote that changed after its check — once for the
-   * automatic re-check, twice for "The remote changed again".
+   * The remote's `spex` moves under the next `times` pushes: an
+   * `update` hook on the bare repository commits a peer note on `spex`
+   * and declines each of those pushes as not fast-forward, so a sync
+   * meets a remote that changed after its check — once for the
+   * automatic re-check, twice for "The host changed again". Not a
+   * `pre-receive` hook: Git reports that hook's decline as "pre-receive
+   * hook declined", which is a host refusing by its rule (space-15),
+   * not a race.
    */
   rejectPushes(times: number): void;
   /** An `ssh://` remote whose transport never answers: the core's
@@ -599,8 +623,10 @@ async function arrangeApp(
   const projectDir = join(scratch, "demo-project");
   if (options.project) seedDemoProject(projectDir);
   const homeConfig = options.homeConfig || options.remote !== undefined;
+  // Inside the home, the config is your own group's spex repository's
+  // (storage-1, DR-103).
   const configPath = homeConfig
-    ? join(dataDir, "config", "playbook.config.yaml")
+    ? join(clonePath(dataDir, `${E2E_OWN}/${E2E_OWN}-spex`), "config", "playbook.config.yaml")
     : join(scratch, "config", "playbook.config.yaml");
   mkdirSync(dirname(configPath), { recursive: true });
   if (options.compiler) {
@@ -609,12 +635,10 @@ async function arrangeApp(
     writeFileSync(configPath, DEMO_CONFIG);
   }
   if (options.project && options.history) {
-    await seedDemoHistory(dataDir, projectDir, options.history);
+    await seedDemoHistory(dataDir, projectDir, options.history, E2E_OWN);
   }
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
   // Both hosts use this explicit isolated Spex home.
-  const sharedSessionsDir = join(dataDir, "sessions");
-  mkdirSync(sharedSessionsDir, { recursive: true, mode: 0o700 });
 
   // The Space journeys' Git environment (space-32, space-37): Git found
   // on the PATH, configured only through this environment — no identity,
@@ -626,7 +650,7 @@ async function arrangeApp(
     writeFileSync(sleeper, "#!/bin/sh\nexec sleep 300\n");
     chmodSync(sleeper, 0o755);
     remotePath = join(scratch, "remote.git");
-    git(scratch, "init", "-q", "--bare", "-b", "main", remotePath);
+    git(scratch, "init", "-q", "--bare", "-b", "spex", remotePath);
   }
   const baseEnv = options.env ?? {
     ANTHROPIC_API_KEY: "e2e-fake",
@@ -673,6 +697,7 @@ async function arrangeApp(
           // Real adapters and Captain; only what the run writes is
           // redirected, so the machine's own sessions stay untouched.
           env: { ...process.env, SPEX_HOME: dataDir },
+          own: E2E_OWN,
         }
       : {
           adapterImports: options.nativeBrowser ? undefined : options.park
@@ -689,6 +714,7 @@ async function arrangeApp(
           ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
+          own: E2E_OWN,
           // New projects must have a real baseline, independent of the
           // test host's identity and signing policy.
           runCommand: async (command, args, cwd, commandEnv) => {
@@ -723,7 +749,12 @@ async function arrangeApp(
     dataDir,
     configPath,
     projectDir,
-    sharedSessionsDir,
+    get sharedSessionsDir() {
+      const key = app.projectId ?? `${E2E_OWN}/${E2E_OWN}-spex`;
+      const dir = join(clonePath(dataDir, key), "sessions");
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      return dir;
+    },
     get server() {
       return live().server;
     },
@@ -735,28 +766,31 @@ async function arrangeApp(
       const core = live().core;
       const from = core.mark();
       await core.command(type, fields);
-      return core.waitSpace(from, (state) => state.sync.phase !== "running");
+      const key = (fields as { repository: string }).repository;
+      const state = await core.waitSpace(from, (candidate) => {
+        try { return repositoryOf(candidate, key).sync.phase !== "running"; } catch { return false; }
+      });
+      return repositoryOf(state, key);
     },
     async peerPush(mutate) {
       const dir = app.peerDir ?? clonePeer(app);
       git(dir, "fetch", "-q", "origin");
-      git(dir, "reset", "-q", "--hard", "origin/main");
+      git(dir, "reset", "-q", "--hard", "origin/spex");
       await mutate(dir);
       git(dir, "add", "-A", "--", ".");
       git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "peer change");
-      git(dir, "push", "-q", "origin", "HEAD:main");
+      git(dir, "push", "-q", "origin", "HEAD:spex");
       return git(dir, "rev-parse", "HEAD");
     },
     rejectPushes(times) {
       if (!remotePath) throw new Error("rejectPushes needs a remote");
       const counter = join(scratch, "rejected-pushes");
       writeFileSync(counter, "0\n");
-      const hook = join(remotePath, "hooks", "pre-receive");
+      const hook = join(remotePath, "hooks", "update");
       // The hook runs inside the bare repository during the core's
-      // push, before any ref moves: it advances main by one real peer
-      // commit — a note file over the current tree, written outside
-      // the push's quarantine — and declines the push as the remote
-      // would have, had the peer pushed first.
+      // push, before its ref moves: it advances spex by one real peer
+      // commit — a note file over the current tree — and declines the
+      // push as the remote would have, had the peer pushed first.
       writeFileSync(
         hook,
         [
@@ -768,12 +802,12 @@ async function arrangeApp(
           `echo "$count" > "${counter}"`,
           `if [ "$count" -le ${times} ]; then`,
           `  export GIT_INDEX_FILE="${scratch}/peer-index-$count"`,
-          "  git read-tree main",
+          "  git read-tree spex",
           '  blob=$(printf "peer note %s\\n" "$count" | git hash-object -w --stdin)',
           '  git update-index --add --cacheinfo 100644 "$blob" "peer-note-$count.txt"',
           "  tree=$(git write-tree)",
-          '  commit=$(git -c user.name=Peer -c user.email=peer@example.test commit-tree "$tree" -p main -m "peer moved $count")',
-          '  git update-ref refs/heads/main "$commit"',
+          '  commit=$(git -c user.name=Peer -c user.email=peer@example.test commit-tree "$tree" -p spex -m "peer moved $count")',
+          '  git update-ref refs/heads/spex "$commit"',
           '  echo "the peer pushed first: non-fast-forward, fetch first" >&2',
           "  exit 1",
           "fi",
@@ -817,7 +851,7 @@ async function arrangeApp(
       writeFileSync(join(app.draftDir(id), STUB_SLC_RELEASE_FILE), "");
     },
     readPrefs() {
-      const prefs = join(dataDir, "prefs.json");
+      const prefs = join(dataDir, "local", "prefs.json");
       return existsSync(prefs) ? readFileSync(prefs, "utf8") : "";
     },
   };
@@ -839,11 +873,33 @@ async function arrangeApp(
   return app;
 }
 
+/** Whether a Git command succeeds in a directory. */
+function spawnGit(cwd: string, ...args: string[]): boolean {
+  try { execFileSync("git", ["-C", cwd, ...args], { env: peerGitEnv, stdio: "ignore" }); return true; } catch { return false; }
+}
+
+/** One intent as a peer's spex repository holds it (storage-4). */
+function writeIntentFile(dir: string, text: string): string {
+  const id = randomUUID();
+  mkdirSync(join(dir, "intents"), { recursive: true });
+  writeFileSync(join(dir, "intents", `${id}.json`), JSON.stringify({ format: 1, id, text, createdAt: Date.now() }));
+  return id;
+}
+
+/** The peer's and this device's project settings (core-service-2):
+ * review's reviewer bound to different players, so the project's
+ * Settings is one whole-file choice (space-17). */
+export const PEER_PROJECT_CONFIG = "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n";
+export const LOCAL_PROJECT_CONFIG = "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n";
+
 /** Clone the bare remote as the peer's working copy. */
 function clonePeer(app: App): string {
   if (!app.remotePath) throw new Error("the peer needs a remote");
   const dir = join(dirname(app.dataDir), "peer");
   git(dirname(app.dataDir), "clone", "-q", app.remotePath, dir);
+  // A fresh remote holds no spex yet; the peer starts it.
+  if (spawnGit(dir, "rev-parse", "-q", "--verify", "origin/spex")) git(dir, "checkout", "-q", "-B", "spex", "origin/spex");
+  else git(dir, "checkout", "-q", "--orphan", "spex");
   app.peerDir = dir;
   return dir;
 }
@@ -897,31 +953,32 @@ async function arrangePeer(app: App): Promise<void> {
   const session = await app.core.command("session.create", { projectId });
   app.sessionId = session.id;
   await runTurn(app, session.id, SESSION_TITLE);
-  await app.core.command("space.init", {});
-  await app.core.command("space.remote.set", { url: app.remotePath });
-  const pushed = await app.settleSpace("space.sync", {});
+  // The demo project's spex repository gets the bare remote (space-29).
+  await app.core.command("space.remote.set", { repository: projectId, url: app.remotePath });
+  const pushed = await app.settleSpace("space.sync", { repository: projectId });
   if (pushed.sync.phase !== "done") {
     throw new Error(`the first push ended ${JSON.stringify(pushed.sync)}`);
   }
   await app.peerPush(async (dir) => {
-    writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_CONFIG);
+    // A project's settings file names only playbooks and players
+    // (core-service-2): the peer binds review's reviewer differently.
+    mkdirSync(join(dir, "config"), { recursive: true });
+    writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
     await appendHistorySession(join(dir, "sessions"), session.id, [
       { type: "turn_started", turnId: 2, turn: { id: 2, prompt: PEER_TURN }, timestamp: Date.now() },
       { type: "captain_reply", turnId: 2, timestamp: Date.now() + 1, text: "Done on the other laptop." },
       { type: "turn_finished", turnId: 2, timestamp: Date.now() + 2 },
     ]);
-    mkdirSync(join(dir, "intents"), { recursive: true });
-    const act = {
-      v: 1,
-      act: "queue",
-      intent: { id: randomUUID(), projectId, text: "Queued on the other laptop", rank: "a", createdAt: Date.now() },
-    };
-    writeFileSync(join(dir, "intents", `${projectId}.jsonl`), `${JSON.stringify(act)}\n`);
+    writeIntentFile(dir, "Queued on the other laptop");
   });
   await runTurn(app, session.id, LOCAL_TURN);
   await app.core.command("config.edit", {
     op: { kind: "captain.set", patch: { model: LOCAL_MODEL } },
   });
+  // This device's own project settings differ too: one Settings choice.
+  const local = join(clonePath(app.dataDir, projectId), "config");
+  mkdirSync(local, { recursive: true });
+  writeFileSync(join(local, "playbook.config.yaml"), LOCAL_PROJECT_CONFIG);
 }
 
 /**
@@ -935,26 +992,19 @@ async function seedRemote(app: App): Promise<void> {
   if (!app.projectId || !app.remotePath) {
     throw new Error("remote: \"seeded\" needs project: true");
   }
-  const projectId = app.projectId;
   const dir = clonePeer(app);
   mkdirSync(join(dir, "config"), { recursive: true });
-  writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_CONFIG);
+  writeFileSync(join(dir, "config", "playbook.config.yaml"), PEER_PROJECT_CONFIG);
   prepareStorageGitFiles(dir);
   app.sessionId = await seedHistorySession(join(dir, "sessions"), app.projectDir, [
     { type: "turn_started", turnId: 1, turn: { id: 1, prompt: PEER_SESSION_TITLE }, timestamp: Date.now() },
     { type: "captain_reply", turnId: 1, timestamp: Date.now() + 1, text: "Planned on the other laptop." },
     { type: "turn_finished", turnId: 1, timestamp: Date.now() + 2 },
   ]);
-  mkdirSync(join(dir, "intents"), { recursive: true });
-  const act = {
-    v: 1,
-    act: "queue",
-    intent: { id: randomUUID(), projectId, text: "Queued on the other laptop", rank: "a", createdAt: Date.now() },
-  };
-  writeFileSync(join(dir, "intents", `${projectId}.jsonl`), `${JSON.stringify(act)}\n`);
+  writeIntentFile(dir, "Queued on the other laptop");
   git(dir, "add", "-A", "--", ".");
   git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer space");
-  git(dir, "push", "-q", "-u", "origin", "HEAD:main");
+  git(dir, "push", "-q", "-u", "origin", "HEAD:spex");
 }
 
 /**

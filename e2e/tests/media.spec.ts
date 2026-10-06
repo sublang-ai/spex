@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator } from "@playwright/test";
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, nav, clonePath } from "../src/harness";
 import { measure, record, setRail } from "../src/fit";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
@@ -181,7 +181,7 @@ test.describe("authoring media output", () => {
     await screenshot.getByRole("button", { name: "Expand image native-screen.png" }).click();
     await expect(screenshot.getByRole("button", { name: "Collapse image native-screen.png" })).toHaveAttribute("aria-expanded", "true");
     await page.getByTestId("draft-working").waitFor({ state: "hidden" });
-    const records = readFileSync(join(app.dataDir, "local", "drafts", "visual", "records.jsonl"), "utf8");
+    const records = readFileSync(join(clonePath(app.dataDir, app.projectId!), "authoring", "visual.records.jsonl"), "utf8");
     expect(records).not.toContain(PNG);
     expect(records).toContain("playbook-asset:sha256:");
     const defects: string[] = [];

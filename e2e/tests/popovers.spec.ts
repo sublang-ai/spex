@@ -365,9 +365,9 @@ test.describe("a labelled Sources row", () => {
     app,
   }) => {
     const projectId = app.projectId!;
-    // One intent standing behind another, sourced from issue #7, so
-    // its row wears the longest state the band can show (dashboard-30).
-    const first = await app.core.command("intent.queue", {
+    // A second queued intent sourced from issue #7, so its row wears
+    // the longest state the band can show (dashboard-30).
+    await app.core.command("intent.queue", {
       projectId,
       text: "Add a README badge",
     });
@@ -375,7 +375,6 @@ test.describe("a labelled Sources row", () => {
       projectId,
       text: "Address #7: Token refresh drops the session after ninety seconds",
       source: { kind: "issue", ref: "7" },
-      afterIntentId: first.id,
     });
 
     await open(page, app);

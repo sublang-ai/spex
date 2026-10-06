@@ -405,7 +405,7 @@ test.describe("run-view-141: an agent's settings for one conversation", () => {
       .toBe(2);
     await settled(app);
     const applied = (JSON.parse(
-      readFileSync(join(app.dataDir, "sessions", `${sessionId}.json`), "utf8"),
+      readFileSync(join(app.sharedSessionsDir, `${sessionId}.json`), "utf8"),
     ) as { lastAppliedExecutionProjection: { captain: { model: { value?: string } }; catalog: Record<string, { roles: Record<string, { model: { value?: string }; subagentModel?: string; subagentEffort?: string }> }> } })
       .lastAppliedExecutionProjection;
     expect(applied.captain.model.value).toBe("claude-tuned-captain");

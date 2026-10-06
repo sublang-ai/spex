@@ -266,6 +266,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   await page.getByTestId("source-edit").click();
   await editor.fill(`${FIXED_SOURCE}\nEdited while another write landed.\n`);
   await app.core.command("draft.source.write", {
+    projectId: app.projectId!,
     draftId: "triage",
     content: "# triage\n\nForced from outside the editor.\n",
   });
@@ -307,7 +308,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
     .getByTestId("system-line")
     .filter({ hasText: "Now answering: dev.reviewer — the conversation so far was replayed to it" });
   await expect(switched).toBeVisible();
-  await expect.poll(() => app.readPrefs()).toContain("draft:triage:player");
+  await expect.poll(() => app.readPrefs()).toContain("authoring:triage:player");
 
   // ── A reload restores the transcript, the source, and the compiled
   //    tabs (playbook-library-62).
@@ -434,7 +435,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and registered 
   //    (playbook-library-59): the chip reads Interrupted, the band says
   //    so with Compile enabled, and the agent was told nothing.
   await app.stop();
-  seedInterruptedDraft(app.dataDir, "nightly", FIXED_SOURCE.replaceAll("triage", "nightly"));
+  seedInterruptedDraft(app.dataDir, app.projectId!, "nightly", FIXED_SOURCE.replaceAll("triage", "nightly"));
   await app.start();
   await open(page, app);
   await nav(page, "Playbooks").click();

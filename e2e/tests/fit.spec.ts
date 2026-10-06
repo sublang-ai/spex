@@ -320,17 +320,16 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
   test.setTimeout(120_000);
   const projectId = app.projectId!;
 
-  // Arrange through the protocol: a queued intent with a second one
-  // blocked behind it, and ten parked sessions in other projects so
+  // Arrange through the protocol: two queued intents, the second
+  // waiting by age (core-service-107), and ten parked sessions in other projects so
   // the attention queue holds ten entries and the badge passes nine.
-  const first = await app.core.command("intent.queue", {
+  await app.core.command("intent.queue", {
     projectId,
     text: "Add a README badge",
   });
   await app.core.command("intent.queue", {
     projectId,
     text: "Tighten the expiry tests once the badge lands on the README",
-    afterIntentId: first.id,
   });
   const parkedProjects: { id: string; name: string }[] = [];
   for (let index = 0; index < 10; index += 1) {
