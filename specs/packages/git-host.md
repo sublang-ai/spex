@@ -37,11 +37,17 @@ When a client sends `space.signin.start` on the desktop, the core shall sign in 
 
 When a client sends `space.signin.start` on the server shell, the core shall sign in through the device flow ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-1. send `client_id=spex` and the device label to the host's device endpoint and reply with the user code, the verification URL and the expiry it returned;
+1. send `client_id=spex` and the device label to the host's device endpoint and reply with the user code, the verification URL — the one completed with the user code where the host returned it, else the plain one — and the expiry it returned;
 2. poll the host's token endpoint at the interval it named, backing off when told to slow down, until the app token arrives, the person denies, or the code expires;
 3. on the token, continue as the browser flow does from its fourth step.
 
 - a denial ends the sign-in `failed` with `denied`, an expiry with `expired`, and `space.signin.cancel` stops the polling; nothing is stored until the token arrives.
+
+#### git-host-15
+
+When a client sends `space.signin.start` and the core holds no description of the host, the core shall read the host's display name and Git origin from `/api/v1/host`, which needs no credential, before replying, and keep them until a host read [[git-host-5](#git-host-5)] replaces them:
+
+- a read that fails leaves the display name unknown and the sign-in starting.
 
 #### git-host-4
 
@@ -119,7 +125,7 @@ When the host answers a call with anything but success, the core shall relay it 
 
 The core package shall ship a stand-in Git host for its own tests and the browser journeys ([DR-039](../decisions/039-browser-acceptance-journeys.md)): an in-process HTTP server that implements the host's sign-in and host routes over a directory of bare Git repositories, serves their Git transport over HTTP, and exposes a scripting interface:
 
-- sign-in: `/login/app` and `/login/device` pages and the device and token endpoints issuing app tokens, with scripted approval, denial and expiry; access secrets that expire on demand; revocation;
+- sign-in: `/login/app` and `/login/device` pages, the device endpoint returning the verification URL completed with the user code as spex.pub does, and the token endpoint issuing app tokens, with scripted approval, denial and expiry; access secrets that expire on demand; revocation;
 - host routes: the person, groups and spex repositories from a scripted fixture, creation of a bare repository with a README on `main`, members, branch preparation with a scripted refusal, and the credential for its own origin;
 - Git transport: every repository served at `<origin>/<group>/<name>-spex.git` over HTTP through Git's own backend, accepting the credentials the stand-in issued and refusing others with 401, with a scripted sleep, a scripted refusal and a scripted archive;
 - a scripted rename, transfer, archive and membership removal, each visible on the next read.
@@ -133,7 +139,8 @@ When an integration suite starts a real core on a scratch home against the stand
 - a new home records the stand-in's URL from `SPEX_HOST_URL`, and a later start with the variable changed keeps the recorded one [[git-host-1](#git-host-1)];
 - the browser flow's URL names the loopback redirect, an S256 challenge and `client_id=spex`; completing it at the stand-in stores the app token with owner-only permissions and the account in `home.yaml`, and the callback page says the browser may be closed [[git-host-2](#git-host-2)];
 - a callback with a wrong `state`, one carrying `access_denied`, a refused exchange, a cancel and a test-shortened expiry each end the sign-in with its cause and store nothing; a second start during a flow is `busy` [[git-host-2](#git-host-2)];
-- the device flow shows the stand-in's user code, polls at its interval, backs off on slow down, and completes on approval; a denial and an expiry end it with their causes [[git-host-3](#git-host-3)];
+- a start on a new home reads the stand-in's display name before its reply, and a start against a stand-in whose description fails still starts [[git-host-15](#git-host-15)];
+- the device flow replies with the stand-in's user code and its verification URL completed with that code, polls at its interval, backs off on slow down, and completes on approval; a denial and an expiry end it with their causes [[git-host-3](#git-host-3)];
 - an access secret the stand-in expires is refreshed once before the next call, two concurrent calls refresh once, and a refresh the stand-in refuses signs the device out with every remote repository unreachable until the next sign-in [[git-host-4](#git-host-4)];
 - sign-out revokes the device at the stand-in and removes the credential, and a stand-in that cannot be reached still leaves the home signed out [[git-host-10](#git-host-10)].
 
