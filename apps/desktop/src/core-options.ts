@@ -8,6 +8,7 @@
 // compiler, the scaffold CLI and the Git credential helper, and the
 // browser sign-in flow — this device's browser is the reader's.
 
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   moduleDirectoriesAbove,
@@ -30,11 +31,20 @@ export interface DesktopCoreInput {
   moduleUrl: string;
 }
 
+/** A directory inside the app's asar archive, named by the copy the
+ * packaged app unpacks beside it (app-shell-13): the engine links the
+ * core writes and the children it spawns resolve on the real file
+ * system, which cannot open the archive. Any other directory as it is. */
+function unpackedDirectory(path: string): string {
+  const unpacked = path.replace(/\.asar(?=[\\/]|$)/, ".asar.unpacked");
+  return unpacked !== path && existsSync(unpacked) ? unpacked : path;
+}
+
 export function desktopCoreOptions(input: DesktopCoreInput): CoreServiceOptions {
   const runtime = {
     execPath: input.execPath,
     electron: true,
-    modulePaths: moduleDirectoriesAbove(input.moduleUrl),
+    modulePaths: moduleDirectoriesAbove(input.moduleUrl).map(unpackedDirectory),
   };
   return {
     dataDir: input.dataDir,
