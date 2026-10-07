@@ -84,7 +84,14 @@ Where a project is bound to a GitHub repository, while the gh CLI is installed a
 
 #### projects-7
 
-Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition — no GitHub `origin` remote, gh not installed, or gh not authenticated — instead of issue and pull-request lists:
+Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition instead of issue and pull-request lists:
+
+| Unmet condition | Guidance |
+| --- | --- |
+| no `origin` remote | "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs." |
+| an `origin` remote not on GitHub | "Issues and PRs come from GitHub; this project's origin is at ⟨host⟩.", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
+| gh not installed | names that gh is not installed |
+| gh not authenticated | names that gh is not authenticated |
 
 - While the panel shows setup guidance, the Overview tab keeps showing repository state [[projects-4](#projects-4)] and its remove control remains functional.
 - While the Sources band is folded, the Overview's header names the guidance beside the repository state, so the reason GitHub is empty is read without opening the band; an open band carries the guidance itself and the header repeats nothing ([DR-069](../decisions/069-key-phrases-not-sentences.md)).
@@ -223,7 +230,10 @@ Where a registered fixture repository's `origin` remote points at a GitHub repos
 
 #### projects-20
 
-Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `PATH`, or the registered repository has no GitHub `origin` remote, when the project's forge panel is loaded, the test suite shall assert that setup guidance naming the specific unmet condition is shown instead of issue and pull-request lists [[projects-7](#projects-7)], that the project card still shows repository state, and that the core keeps serving subsequent commands [[projects-16](#projects-16)].
+Where the stub `gh` reports a not-authenticated state, or `gh` is absent from `PATH`, or the registered repository has no `origin` remote or one not on GitHub, when the project's forge panel is loaded, the test suite shall assert that setup guidance naming the specific unmet condition is shown instead of issue and pull-request lists [[projects-7](#projects-7)], that the project card still shows repository state, and that the core keeps serving subsequent commands [[projects-16](#projects-16)]:
+
+- No `origin` remote: the guidance is the no-remote sentence exactly [[projects-7](#projects-7)].
+- An `origin` remote at `gitlab.com`, in HTTPS form carrying a credential and in scp-like form: the guidance is "Issues and PRs come from GitHub; this project's origin is at gitlab.com." exactly, carrying no part of the credential [[projects-7](#projects-7)].
 
 #### projects-29
 
@@ -251,7 +261,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - creating with scaffolding from a Chinese browser against an English core produces a Chinese spec tree and authoring-language declaration through the real bundled scaffold [[projects-3](#projects-3)] [[projects-31](#projects-31)];
 - confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
 - confirming an existing repository's path adds it and makes it current, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
-- the Overview tab shows the repository's branch and, for a project with no GitHub origin, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
+- the Overview tab shows the repository's branch and, for a project with no `origin` remote, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
 - confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)];
 - in a 400-pixel-tall window, a path the palette refuses shows its message inside the window, the palette's own box ending inside it [[projects-30](#projects-30)].
 

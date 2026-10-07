@@ -683,6 +683,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   app ships ([DR-096](specs/decisions/096-the-app-supplies-the-scaffold.md)).
   Only a checkout without a built CLI still runs the registry's, and a
   failed scaffold names the command that ran.
+- A project whose `origin` remote is not on GitHub, such as one at
+  `gitlab.com`, was told in its Overview and on the Dashboard that it had
+  no GitHub origin remote and should add one. Its guidance now says issues
+  and PRs come from GitHub and names the host its origin is at, never a
+  credential the URL carries; a project with no `origin` remote keeps the
+  sentence that asks for one (projects-7).
 
 ### Security
 

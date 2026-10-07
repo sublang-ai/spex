@@ -15,6 +15,7 @@ import type { ToolchainRuntime } from "./compile.js";
 import { i18n } from "./i18n.js";
 import type { Language } from "./language.js";
 import type { ForgeItem, ForgeState, RepoStatusInfo } from "./protocol.js";
+import { remoteHost } from "./space-git.js";
 
 export type { ForgeItem, ForgeState };
 export type RepoStatus = RepoStatusInfo;
@@ -389,15 +390,24 @@ export class GitHubForgeAdapter implements ForgeAdapter {
   async state(projectPath: string, originUrl?: string): Promise<ForgeState> {
     const repo = originUrl ? parseGitHubRepo(originUrl) : undefined;
     if (!repo) {
+      // No binding reads as one of two conditions (projects-7): no
+      // origin at all, or an origin elsewhere, named by its host alone
+      // and never by a credential its URL carries.
       return {
         adapter: "github",
         authenticated: null,
         issues: [],
         prs: [],
-        guidance: i18n._({
-          id: "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
-          comment: "Forge guidance where the project names no GitHub origin; the command stays as it is",
-        }),
+        guidance: originUrl
+          ? i18n._({
+              id: "Issues and PRs come from GitHub; this project's origin is at {host}.",
+              values: { host: remoteHost(originUrl) },
+              comment: "Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written",
+            })
+          : i18n._({
+              id: "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+              comment: "Forge guidance where the project has no origin remote; the command stays as it is",
+            }),
       };
     }
     const auth = await this.run("gh", ["auth", "status"], projectPath);

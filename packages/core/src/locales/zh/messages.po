@@ -1237,6 +1237,11 @@ msgstr "已读标记 {key} 无效"
 msgid "invalid working folder pair"
 msgstr "工作文件夹配对无效"
 
+#. Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written
+#: src/forge.ts
+msgid "Issues and PRs come from GitHub; this project's origin is at {host}."
+msgstr "Issue 与 PR 来自 GitHub；本项目的 origin 位于 {host}。"
+
 #. Guidance under a save that refused to share a file
 #: src/space.ts
 msgid "It belongs to a family that stays on this device; check the sync rules. Nothing was saved."
@@ -1359,7 +1364,7 @@ msgstr "{path} 处没有文件"
 msgid "no folder at {path}"
 msgstr "{path} 处没有文件夹"
 
-#. Forge guidance where the project names no GitHub origin; the command stays as it is
+#. Forge guidance where the project has no origin remote; the command stays as it is
 #: src/forge.ts
 msgid "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs."
 msgstr "没有 GitHub origin 远程仓库。添加一个（git remote add origin …）即可查看 Issue 与 PR。"
