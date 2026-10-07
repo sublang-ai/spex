@@ -182,5 +182,5 @@ test("projects-28: the Overview names the project's spex repository and its stat
   await page.getByRole("tab", { name: "Overview" }).click();
   const overview = page.getByTestId("overview-tab");
   await expect(overview).toContainText("demo-project-spex", { timeout: 5_000 });
-  await expect(overview).toContainText("Only on this device", { timeout: 5_000 });
+  await expect(overview).toContainText("On this device only", { timeout: 5_000 });
 });

@@ -163,26 +163,38 @@ test.describe("first start", () => {
     await showGroups(page);
     const header = page.getByTestId("space-header");
 
-    // Not signed in: Sign in is the header's one primary control, a
-    // phrase says what it brings, and your own group stands alone
-    // beneath (space-1, space-3).
-    await expect(header.getByTestId("space-account")).toContainText("Not signed in");
+    // Not signed in: the header is one card saying what signing in
+    // brings, Sign in its one primary control, with no home path, read
+    // time or Refresh; your own group stands alone beneath, called so,
+    // its row with no control (space-1, space-3).
+    await expect(header.getByTestId("space-account").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
+    await expect(header.getByTestId("space-signin-body")).toHaveText(
+      "Sign in to see your groups and share each project's records with the people in them." +
+        "Until you do, everything stays on this device and nothing is contacted.",
+    );
     await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
     await expect(header.locator("button.bg-brand-600")).toHaveCount(1);
     await expect(header.locator("button.bg-brand-600")).toHaveAttribute("data-testid", "space-signin");
-    await expect(header.getByTestId("space-signin-caption")).toHaveText(
-      "Your groups and each project's records shared with its members · nothing contacted until you sign in",
-    );
+    await expect(header.getByRole("button")).toHaveCount(1);
+    await expect(header).not.toContainText("/");
+    await expect(page.getByTestId("space-refresh")).toHaveCount(0);
+    await expect(page.getByTestId("space-read-at")).toHaveCount(0);
+    await expect(page.getByTestId("space-home")).toHaveCount(0);
     const groups = page.getByTestId("space-groups");
     await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(1);
     await expect(groups.getByTestId("space-group-e2e")).toBeVisible();
-    await expect(groups.getByRole("group", { name: "e2e" }).getByRole("heading", { level: 2 })).toHaveText("e2e");
+    const own = groups.getByRole("group", { name: "Your own group" });
+    await expect(own.getByRole("heading", { level: 2 })).toHaveText("Your own group");
+    const ownRow = own.locator('[data-testid^="space-row-"]');
+    await expect(ownRow).toHaveCount(1);
+    await expect(ownRow.locator('[data-testid^="space-repo-state-"]')).toHaveText("On this device only — shared once you sign in");
+    await expect(ownRow.locator('button:not([data-testid^="space-repo-"])')).toHaveCount(0);
     // Nothing was contacted.
     expect(host.script.requests.filter((request) => request.path.startsWith("/api/"))).toEqual([]);
 
     // A project added from the palette lists under your own group as
-    // "Only on this device", Sign in standing as its control while
-    // signed out (space-61).
+    // "On this device only", with no control while signed out
+    // (space-61).
     seedDemoProject(app.projectDir);
     await page.getByRole("button", { name: "Switch or add a project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
@@ -192,20 +204,33 @@ test.describe("first start", () => {
     await showGroups(page);
     const localKey = "e2e/demo-project-spex";
     await expect(page.getByTestId(`space-row-${localKey}`)).toBeVisible();
-    await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("Only on this device");
-    await expect(page.getByTestId(`space-row-signin-${localKey}`)).toHaveText("Sign in");
+    await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
+    await expect(page.getByTestId(`space-row-${localKey}`).locator('button:not([data-testid^="space-repo-"])')).toHaveCount(0);
 
-    // Sign in shows the user code and the verification link, reading
-    // "Signing in…" until the stand-in approves; then the header reads
-    // the account and your own group bears its login (space-3, space-4).
+    // Sign in links the page that carries the code, naming the host
+    // read at Sign in, and shows no code, reading "Signing in…" until
+    // the stand-in approves; then the header reads the account and
+    // Refresh, your own group bears its login, and the surface ends in
+    // where this device's files are (space-3, space-4, space-1).
+    await header.getByTestId("space-signin").click();
+    await expect(header.getByTestId("space-signin-link")).toHaveText("Open Stand-in Git host to sign in");
+    await expect(header.getByTestId("space-signin-body")).toContainText(
+      "Sign in with your Stand-in Git host account there and approve; you return here signed in.",
+    );
+    await expect(page.getByTestId("space-surface").getByRole("button", { name: /^Sign/ })).toHaveCount(1);
+    await header.getByTestId("space-signin-cancel").click();
+    await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
     await signInThroughPage(page, app);
-    await expect(header.getByTestId("space-account")).toContainText(`Signed in as ${HOST_LOGIN} at Stand-in Git host`);
+    await expect(header.getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN} at Stand-in Git host`);
     await expect(header.getByTestId("space-signout")).toHaveText("Sign out");
+    await expect(header.getByTestId("space-refresh")).toHaveText("Refresh");
+    await expect(page.getByTestId("space-home")).toHaveText(/^Spex keeps this device's files in /);
+    await expect(page.getByTestId("space-home")).toHaveAttribute("title", app.dataDir);
     await expect(groups.getByTestId(`space-group-${HOST_LOGIN}`)).toBeVisible();
     await expect(groups.getByTestId("space-group-e2e")).toHaveCount(0);
     await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName(`${HOST_LOGIN}-spex`);
     const projectKey = `${HOST_LOGIN}/demo-project-spex`;
-    await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("Only on this device");
+    await expect(page.getByTestId(`space-repo-state-${projectKey}`)).toHaveText("On this device only");
     // Your own group's spex repository stands on the host, pushed.
     await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
     await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
@@ -655,18 +680,16 @@ test.describe("exploring", () => {
     await expect(page.getByTestId("space-privacy-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.getByTestId("space-privacy-toggle").click();
 
-    // The served page offers Copy path and no reveal control, and
-    // acknowledges the copy in words (space-26).
-    const header = page.getByTestId("space-header");
-    await expect(header.getByTestId("space-path-reveal")).toHaveCount(0);
+    // The served page offers Copy path beside the repository and no
+    // reveal control, and acknowledges the copy in words (space-26).
     await expect(page.getByRole("button", { name: /Show in (Finder|folder)/ })).toHaveCount(0);
-    const copy = header.getByTestId("space-path-copy");
-    await expect(copy).toHaveText("Copy path");
+    const copy = page.getByTestId("space-clone-path-copy");
+    await expect(copy).toHaveAccessibleName("Copy path");
     await copy.click();
-    await expect(copy).toHaveText("Copied");
-    await expect(page.getByTestId("space-live")).toHaveText(`Copied ${app.dataDir}`);
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(app.dataDir);
-    await expect(copy).toHaveText("Copy path");
+    await expect(page.getByTestId("space-repository-header")).toContainText("Copied");
+    await expect(page.getByTestId("space-live")).toHaveText(`Copied ${clone}`);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(clone);
+    await expect(page.getByTestId("space-repository-header")).not.toContainText("Copied");
   });
 });
 

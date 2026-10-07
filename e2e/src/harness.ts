@@ -1187,22 +1187,28 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
 }
 
 /**
- * Sign in through the page (space-3): Groups' Sign in, the user code
- * and the verification link shown while the control reads "Signing
- * in…", the code approved at the stand-in as its page would, and the
- * header reading the account. Groups must be shown.
+ * Sign in through the page (space-3): Groups' Sign in, the link to the
+ * page that carries the code shown while the control reads "Signing
+ * in…" and no code is, the code the link carries approved at the
+ * stand-in as its page would, and the header reading the account.
+ * Groups must be shown.
  */
 export async function signInThroughPage(page: Page, app: App): Promise<void> {
   const host = app.host;
   if (!host) throw new Error("signing in needs a host");
   const header = page.getByTestId("space-header");
   await header.getByTestId("space-signin").click();
-  const code = header.getByTestId("space-signin-code");
-  await expect(code).toBeVisible();
+  const link = header.getByTestId("space-signin-link");
+  await expect(link).toHaveText(/^Open .+ to sign in$/);
   await expect(header.getByTestId("space-signin")).toHaveText("Signing in…");
-  await expect(header.getByTestId("space-signin-link")).toHaveAttribute("href", `${host.url}/login/device`);
-  host.script.approveDevice(await code.inputValue());
-  await expect(header.getByTestId("space-account")).toContainText(`Signed in as ${HOST_LOGIN}`);
+  await expect(header.getByTestId("space-signin")).toBeDisabled();
+  const href = new URL((await link.getAttribute("href")) ?? "");
+  expect(`${href.origin}${href.pathname}`).toBe(`${host.url}/login/device`);
+  const code = href.searchParams.get("user_code") ?? "";
+  expect(code).not.toBe("");
+  await expect(page.getByTestId("space-surface")).not.toContainText(code);
+  host.script.approveDevice(code);
+  await expect(header.getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN}`);
 }
 
 /**
