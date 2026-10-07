@@ -48,7 +48,7 @@ import type {
   TmuxPlayRecord,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
-import { launcherConfig } from "./testing/launcher-config.js";
+import { builtinLaunchModules } from "./testing/launch-modules.js";
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -191,13 +191,6 @@ function seedRepository(projectDir: string): void {
 
 /** Every scratch home's own group (storage-2). */
 
-/** The playbook CLI's own config beside Spex's (DR-104): the launcher
- * still names each playbook's module itself. */
-function launcherFile(configPath: string): string {
-  const path = `${configPath}.launcher.yaml`;
-  writeFileSync(path, launcherConfig(readFileSync(configPath, "utf8")));
-  return path;
-}
 
 const OWN = "tester";
 
@@ -3660,7 +3653,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
     mkdirSync(legacyDir,{recursive:true,mode:0o700}); mkdirSync(projectPath);
     execFileSync("git",["init","-q",projectPath]);
     writeFileSync(configPath,(selection === "sessions override" ? `sessions: ${join(dataDir,"sessions")}\n` : "") + VALID_CONFIG);
-    const plan = await loadLaunchPlan({userConfigPath:launcherFile(configPath)});
+    const plan = await loadLaunchPlan({userConfigPath:configPath,modules:builtinLaunchModules(configPath)});
     const {imports} = fakeAdapterImports({fallback:{result:"Done"}});
     const seedDir = join(home,"seed-sessions");
     const seed = await openSessionHost({store:createSessionStore({sessionsDir:seedDir}),mode:"new",cwd:projectPath,
@@ -3711,7 +3704,7 @@ for (const action of ["restore", "discard", "restore after recorded work"] as co
     // project pairs with (storage-6).
     const { sessionsDir } = pairedHome(dataDir, projectPath);
     writeFileSync(configPath, VALID_CONFIG);
-    const plan = await loadLaunchPlan({userConfigPath: launcherFile(configPath)});
+    const plan = await loadLaunchPlan({userConfigPath: configPath, modules: builtinLaunchModules(configPath)});
     const config = executionConfigFromPlan(plan);
     const {imports, stats} = fakeAdapterImports({fallback: {result: "recovered answer"}});
     const shared = createSessionStore({sessionsDir});

@@ -15,5 +15,6 @@ export * from "./standin-host.js";
 export { prepareStorageGitFiles } from "../storage-git.js";
 export * from "./standin-registry.js";
 export * from "./git-http-host.js";
-// The playbook CLI's own config beside Spex's (DR-104).
-export * from "./launcher-config.js";
+// Each enabled playbook's module, supplied to Playbook's launcher at
+// launch beside a Spex config naming no `from` (DR-105).
+export * from "./launch-modules.js";

@@ -17,13 +17,13 @@
 //
 //   node dist/testing/stopped-writer.js <sessionsDir> <cwd> <configPath> <input> [sessionId]
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
 import { parkingScript } from "./demo.js";
 import { fakeAdapterImports, type FakeScript } from "./fake-adapter.js";
-import { launcherConfig } from "./launcher-config.js";
+import { builtinLaunchModules } from "./launch-modules.js";
 
 const [sessionsDir, cwd, configPath, input, continued] = process.argv.slice(2);
 if (!sessionsDir || !cwd || !configPath || !input) {
@@ -55,17 +55,16 @@ const held: FakeScript = continued
           }
         : rule),
     };
-// The CLI's own config (DR-104): Spex's names no module, so each
-// playbook takes the one a continued session was launched on, else the
-// package's own registry specifier.
+// Spex's config names no module (DR-105): each playbook's is supplied
+// at launch — the one a continued session was launched on, else the
+// built-in spec package's.
 const stored = continued
   ? (JSON.parse(readFileSync(join(sessionsDir, `${continued}.json`), "utf8")) as { structuralProjection?: { catalog?: Record<string, { from?: string }> } }).structuralProjection?.catalog ?? {}
   : {};
-const launcherText = launcherConfig(readFileSync(configPath, "utf8"),
-  Object.fromEntries(Object.entries(stored).flatMap(([id, entry]) => (entry.from ? [[id, entry.from]] : []))));
-const launcherPath = `${configPath}.launcher.yaml`;
-writeFileSync(launcherPath, launcherText);
-const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: launcherPath }));
+const enabled = builtinLaunchModules(configPath);
+const modules = { ...enabled,
+  ...Object.fromEntries(Object.entries(stored).flatMap(([id, entry]) => (entry.from && id in enabled ? [[id, entry.from]] : []))) };
+const config = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath, modules }));
 host = await openSessionHost({
   store: createSessionStore({ sessionsDir }),
   mode: continued ? "continue" : "new",
