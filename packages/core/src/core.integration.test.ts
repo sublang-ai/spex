@@ -1455,12 +1455,43 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   assert.equal(again.error.code, "conflict");
   assert.deepEqual(again.error.details, { path: created.path });
 
-  // Forge state via the stubbed gh (PROJ-5/6): bind an origin first.
+  // Unbound, the guidance names which condition holds in place of the
+  // lists while the repository state stays served (projects-20,
+  // projects-7): no origin at all, then an origin elsewhere, named by
+  // its host alone and never by the credential its URL carries.
+  const unbound = () =>
+    client.expectOk("forge.items", { projectId: created.id, refresh: true });
+  const noOrigin = await unbound();
+  assert.equal(
+    noOrigin.guidance,
+    "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+  );
+  assert.deepEqual([noOrigin.issues, noOrigin.prs], [[], []]);
   execFileSync("git", [
     "-C",
     created.path,
     "remote",
     "add",
+    "origin",
+    "https://oauth2:glpat-secret@gitlab.com/spex-internal/demo-app.git",
+  ]);
+  const elsewhere = await unbound();
+  assert.equal(
+    elsewhere.guidance,
+    "Issues and PRs come from GitHub; this project's origin is at gitlab.com.",
+  );
+  assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []]);
+  assert.equal(
+    (await client.expectOk("project.status", { projectId: created.id })).branch,
+    status.branch,
+  );
+
+  // Forge state via the stubbed gh (PROJ-5/6): bind a GitHub origin.
+  execFileSync("git", [
+    "-C",
+    created.path,
+    "remote",
+    "set-url",
     "origin",
     "https://github.com/sublang-ai/demo.git",
   ]);

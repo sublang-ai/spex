@@ -1237,6 +1237,11 @@ msgstr "invalid viewed marker {key}"
 msgid "invalid working folder pair"
 msgstr "invalid working folder pair"
 
+#. Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written
+#: src/forge.ts
+msgid "Issues and PRs come from GitHub; this project's origin is at {host}."
+msgstr "Issues and PRs come from GitHub; this project's origin is at {host}."
+
 #. Guidance under a save that refused to share a file
 #: src/space.ts
 msgid "It belongs to a family that stays on this device; check the sync rules. Nothing was saved."
@@ -1359,7 +1364,7 @@ msgstr "no file at {path}"
 msgid "no folder at {path}"
 msgstr "no folder at {path}"
 
-#. Forge guidance where the project names no GitHub origin; the command stays as it is
+#. Forge guidance where the project has no origin remote; the command stays as it is
 #: src/forge.ts
 msgid "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs."
 msgstr "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs."

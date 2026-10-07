@@ -249,13 +249,40 @@ test("gh adapter: missing tool, unauthenticated, and authenticated states", asyn
   assert.equal(authedState.prs[0].number, 12);
 });
 
-test("no origin remote degrades to guidance", async () => {
-  const adapter = new GitHubForgeAdapter(
-    stubRun(() => ({ code: 0, stdout: "", stderr: "" })),
+test("no GitHub origin degrades to guidance naming which condition (projects-7)", async () => {
+  const ran: string[] = [];
+  const adapter = new GitHubForgeAdapter(async (command, args) => {
+    ran.push([command, ...args].join(" "));
+    return { code: 0, stdout: "", stderr: "" };
+  });
+
+  // No origin remote at all.
+  const none = await adapter.state("/tmp/x", undefined);
+  assert.equal(none.authenticated, null);
+  assert.equal(
+    none.guidance,
+    "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
   );
-  const state = await adapter.state("/tmp/x", undefined);
-  assert.equal(state.authenticated, null);
-  assert.match(state.guidance ?? "", /origin remote/);
+
+  // An origin elsewhere is named by its host alone, in every remote
+  // form, and never by a credential its URL carries.
+  for (const origin of [
+    "https://gitlab.com/spex-internal/demo-app.git",
+    "https://oauth2:glpat-secret@gitlab.com/spex-internal/demo-app.git",
+    "git@gitlab.com:spex-internal/demo-app.git",
+    "ssh://git@gitlab.com:2222/spex-internal/demo-app.git",
+  ]) {
+    const elsewhere = await adapter.state("/tmp/x", origin);
+    assert.equal(elsewhere.authenticated, null, origin);
+    assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []], origin);
+    assert.equal(
+      elsewhere.guidance,
+      "Issues and PRs come from GitHub; this project's origin is at gitlab.com.",
+      origin,
+    );
+  }
+  // Neither condition asks gh anything.
+  assert.deepEqual(ran, []);
 });
 
 test("seedExampleProject materializes the corpus into an empty dir", async () => {
