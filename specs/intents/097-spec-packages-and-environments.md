@@ -5,7 +5,8 @@
 
 ## Status
 
-Implemented 2026-10-06 with the gaps below: Playbook's launcher still requires `from`, so the CLI runs a Spex session only with a launcher config naming the module (DR-104's ask to Playbook); `playbook-library-87` skips until a compiled fixture is committed.
+Implemented 2026-10-06 with one gap: `playbook-library-87` skips until a compiled fixture is committed.
+The launcher gap — Playbook's launcher requiring `from`, so the CLI ran a Spex session only with a launcher config naming the module — closed with Playbook 17.5.0 under [DR-105](../decisions/105-playbook-17-5-0-adoption.md).
 
 ## Intent
 

@@ -587,7 +587,7 @@ The core package shall own Spex application files through the versioned encoding
 
 #### core-service-16
 
-The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package:
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md)):
 
 | Rule | Composition |
 | --- | --- |
@@ -601,6 +601,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
+| Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both |
 
 #### core-service-17
 
@@ -791,6 +792,7 @@ When an integration suite changes stored history and folder pairs through a runn
 When the integration suite settles and restarts a shared-store session, it shall verify that either a desktop- or CLI-created supported checkpoint lists continuable [[core-service-32](#core-service-32)], that its runtime was released at settlement with the provider hints kept [[core-service-91](#core-service-91)], continues with the same identities and stream [[core-service-74](#core-service-74)], and persists recovery without provider tokens [[core-service-72](#core-service-72)]; that a message opens it on the current tuning while an added playbook changes nothing and a structural change is refused naming the field [[core-service-92](#core-service-92)]; and that active leases and turns in flight, history-only recovery, damaged digests, uncertain work, missing bindings and path/config drift shall refuse before a turn or intent stamp [[core-service-73](#core-service-73)]:
 
 - a session parked on a question keeps its summons across the release and answers where it waited [[core-service-93](#core-service-93)];
+- a session Spex created continues through the real CLI from a configuration naming no `from`, with no module supplied, on the module the session records [[core-service-16](#core-service-16)];
 - a rejected attachment handoff starts no turn or provider call, releases the runtime opened for the submission before its reply, and permits session deletion and another session for the project [[core-service-73](#core-service-73)]; the same refusal preserves a runtime that was already live [[core-service-5](#core-service-5)];
 - with release-time summary refresh held after runtime disposal, a next-message or new-session request waits for publication before admission [[core-service-91](#core-service-91)], and shutdown keeps the store open until refresh completes [[core-service-39](#core-service-39)]; a finished turn and an aborted turn the shared lifecycle settled at its saved progress both permit continuation [[core-service-6](#core-service-6)], and no waiting message stamps an intent [[core-service-47](#core-service-47)].
 
@@ -1002,3 +1004,4 @@ When an integration suite aborts a real session's turn while a scripted call is 
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared session format and host lifecycle"
 [2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/recovery.md "Prepare and resume interrupted work"
+[3]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-94 "Playbook playbook-cli-94: modules supplied at launch"

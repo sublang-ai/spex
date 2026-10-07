@@ -9,6 +9,7 @@ Accepted (2026-10-03).
 Amends [DR-095](095-a-subagents-effort-and-the-agents-own-model.md) in its floors alone: the core requires `@sublang/playbook` `^17.4.1` and `@sublang/cligent` `^0.33.3`, and both shells declare `@sublang/slc` `^0.15.1`; everything else DR-095 decided stands.
 Amends [DR-097](097-media-and-browser-tools-across-hosts.md) in its dependency closure alone: the floors its rollout adopted — Playbook `^17.4.0`, Cligent `^0.33.3` and slc `^0.15.1` — had no adoption record of their own and are recorded here, with the Playbook floor now `^17.4.1`; everything else DR-097 decided stands.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
+Amended by [DR-105](105-playbook-17-5-0-adoption.md) in its Playbook floor alone, now `^17.5.0`; the lock holds Playbook 17.5.0.
 
 ## Context
 
