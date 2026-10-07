@@ -28,7 +28,7 @@ import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, repositoryOf } f
 import type { StandinHost } from "./testing/standin-host.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, otherDevice, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 type Started = Awaited<ReturnType<typeof startHome>>;
@@ -424,7 +424,7 @@ test("space-38: an intent added on each home lists on the other with no choice a
   const bare = bareRepo();
   const a = await startHome("intents-a");
   t.after(() => a.stop());
-  const b = await startHome("intents-b", { project: false });
+  const b = await startHome("intents-b", { project: false, env: otherDevice("intents-b") });
   t.after(() => b.stop());
   const { key, clone: aClone } = await addFolder(a, a.projectDir);
   await a.client.expectOk("space.remote.set", { repository: key, url: bare });
@@ -475,7 +475,7 @@ test("space-38: the same session changed on both homes is one choice; the host's
   const bare = bareRepo();
   const a = await startHome("a2");
   t.after(() => a.stop());
-  const b = await startHome("b2", { project: false });
+  const b = await startHome("b2", { project: false, env: otherDevice("b2") });
   t.after(() => b.stop());
   const { key, clone: aClone } = await addFolder(a, a.projectDir);
   const shared = await runTurn(a, key, "Shared session");

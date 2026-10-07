@@ -246,6 +246,18 @@ playbooks:
     return dir;
   }
 
+  /** The core environment of a home standing in for another device: Git
+   * configured with that device's own identity. Every scratch home runs
+   * on this host, so under the fallback identity (space-32) two homes
+   * starting one project's spex repository within one clock second write
+   * the same root commit, and their histories are one — never the
+   * unrelated pair a join meets (space-13). */
+  function otherDevice(name: string): Record<string, string> {
+    const file = join(scratch, `${name}.gitconfig`);
+    writeFileSync(file, `[user]\n\tname = ${name}\n\temail = ${name}@example.test\n`);
+    return { GIT_CONFIG_GLOBAL: file };
+  }
+
   function sleepingSsh(): { script: string; pidFile: string } {
     const script = join(scratch, `sleep-ssh-${randomUUID().slice(0, 8)}.sh`);
     const pidFile = `${script}.pid`;
@@ -266,7 +278,8 @@ playbooks:
     throw new Error(`the sleeping transport never started (${pidFile})`);
   }
 
-  /** Join a clone to a remote whose history it does not share: the first
+  /** Join a clone to a remote whose history it does not share — the
+   * clone of a home with its own identity (`otherDevice`): the first
    * sync ends unrelated, the join asks for any conflict, "mine" answers
    * each. */
   async function joinRemote(home: Home, repository: string): Promise<RepositoryState> {
@@ -431,7 +444,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });
