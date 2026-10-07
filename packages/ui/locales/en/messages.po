@@ -124,6 +124,11 @@ msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural
 msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, one {# entry} other {# entries}}"
 
+#. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#: src/components/SpaceSignIn.tsx
+msgid "{cause}."
+msgstr "{cause}."
+
 #. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
 #: src/components/TuningField.tsx
 msgid "{choice} ({value})"
@@ -1840,6 +1845,10 @@ msgstr "Connection to the Spex core lost — reconnecting."
 msgid "Continue"
 msgstr "Continue"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Continue in your browser:"
+msgstr "Continue in your browser:"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
@@ -2646,10 +2655,6 @@ msgstr "Filter projects"
 msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Finish signing in in your browser:"
-msgstr "Finish signing in in your browser:"
-
 #. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
@@ -3318,8 +3323,8 @@ msgid "Members"
 msgstr "Members"
 
 #: src/components/SpaceGroups.tsx
-msgid "Members change on {host}"
-msgstr "Members change on {host}"
+msgid "Members change at {host}"
+msgstr "Members change at {host}"
 
 #: src/components/SpaceGroups.tsx
 msgid "Members of {name}"
@@ -3857,10 +3862,6 @@ msgstr "One spec item per state behavior, from the last compile"
 msgid "Open"
 msgstr "Open"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Open {host} to sign in"
-msgstr "Open {host} to sign in"
-
 #: src/components/RecordRow.tsx
 msgid "Open {id}"
 msgstr "Open {id}"
@@ -3876,6 +3877,10 @@ msgstr "Open {id}: {title}"
 #: src/components/TrustedMedia.tsx
 msgid "Open {name}"
 msgstr "Open {name}"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open {site} to sign in"
+msgstr "Open {site} to sign in"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — {reason}"
@@ -5145,6 +5150,10 @@ msgstr "Sign in again with that agent's CLI"
 msgid "Sign in first"
 msgstr "Sign in first"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in there and approve; you return here signed in."
+msgstr "Sign in there and approve; you return here signed in."
+
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
@@ -5157,18 +5166,10 @@ msgstr "Sign in to publish"
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "Sign in to see your groups and share each project's records with the people in them."
 
-#: src/components/SpaceSignIn.tsx
-msgid "Sign in with your {host} account there and approve; you return here signed in."
-msgstr "Sign in with your {host} account there and approve; you return here signed in."
-
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
 msgid "Sign out"
 msgstr "Sign out"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Sign-in did not complete: {cause}."
-msgstr "Sign-in did not complete: {cause}."
 
 #: src/components/SpaceSignIn.tsx
 msgid "Signed in as @{login}"
@@ -6325,8 +6326,8 @@ msgid "Writing…"
 msgstr "Writing…"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
-msgstr "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
+msgid "Your browser is open at {site}: sign in there and approve; you return here signed in."
+msgstr "Your browser is open at {site}: sign in there and approve; you return here signed in."
 
 #: src/components/SpaceSync.tsx
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."

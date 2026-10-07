@@ -207,16 +207,14 @@ test.describe("first start", () => {
     await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
     await expect(page.getByTestId(`space-row-${localKey}`).locator('button:not([data-testid^="space-repo-"])')).toHaveCount(0);
 
-    // Sign in links the page that carries the code, naming the host
-    // read at Sign in, and shows no code, reading "Signing in…" until
-    // the stand-in approves; then the header reads the account and
-    // Refresh, your own group bears its login, and the surface ends in
-    // where this device's files are (space-3, space-4, space-1).
+    // Sign in links the page that carries the code, named by its host
+    // name, and shows no code, reading "Signing in…" until the stand-in
+    // approves; then the header reads the account and Refresh, your own
+    // group bears its login, and the surface ends in where this
+    // device's files are (space-3, space-4, space-1).
     await header.getByTestId("space-signin").click();
-    await expect(header.getByTestId("space-signin-link")).toHaveText("Open Stand-in Git host to sign in");
-    await expect(header.getByTestId("space-signin-body")).toContainText(
-      "Sign in with your Stand-in Git host account there and approve; you return here signed in.",
-    );
+    await expect(header.getByTestId("space-signin-link")).toHaveText(`Open ${new URL(host.url).hostname} to sign in`);
+    await expect(header.getByTestId("space-signin-body")).toContainText("Sign in there and approve; you return here signed in.");
     await expect(page.getByTestId("space-surface").getByRole("button", { name: /^Sign/ })).toHaveCount(1);
     await header.getByTestId("space-signin-cancel").click();
     await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
@@ -546,7 +544,7 @@ test.describe("daily sync", () => {
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
     const link = members.getByTestId(`space-members-link-${TEAM_KEY}`);
-    await expect(link).toHaveText("Members change on Stand-in Git host");
+    await expect(link).toHaveText(`Members change at ${new URL(host.url).hostname}`);
     await expect(link).toHaveAttribute("href", `${host.url}/${TEAM_KEY}/-/project_members`);
     await scanVocabulary(page, "members", words);
 

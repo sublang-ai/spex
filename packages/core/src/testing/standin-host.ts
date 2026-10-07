@@ -77,8 +77,6 @@ export interface StandinScript {
   accessTtlMs: number;
   /** Refuse every refresh grant with `invalid_grant`. */
   refuseRefresh: boolean;
-  /** Answer the host's description 503 `provider_unavailable`. */
-  describeUnavailable: boolean;
   /** Every request, in arrival order. */
   requests: StandinRequest[];
   /** Every token grant, in order. */
@@ -477,7 +475,6 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     deviceExpiresIn: 600,
     accessTtlMs: 3_600_000,
     refuseRefresh: false,
-    describeUnavailable: false,
     requests: [],
     tokenGrants: [],
     heldSignIns: () => held.length,
@@ -592,10 +589,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (path === "/api/v1/auth/device" && method === "POST") return deviceStart(req, res);
     if (path === "/api/v1/auth/token" && method === "POST") return token(req, res);
     if (path === "/api/v1/auth/revoke" && method === "POST") return revoke(req, res);
-    if (path === "/api/v1/host" && method === "GET") {
-      if (script.describeUnavailable) return envelope(res, 503, "provider_unavailable", "The Git host is unavailable.");
-      return json(res, 200, { display_name: displayName, git_origin: gitOrigin });
-    }
+    if (path === "/api/v1/host" && method === "GET") return json(res, 200, { display_name: displayName, git_origin: gitOrigin });
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
     if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {
       return forwardToRegistry(req, res, method, target, opts.registry);

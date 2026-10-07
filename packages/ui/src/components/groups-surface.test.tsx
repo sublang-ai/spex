@@ -210,7 +210,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     // Where the browser is open and what to do there, with the page
     // offered again through the bridge (space-3).
     expect(screen.getByTestId("space-signin-opened").textContent).toBe(
-      "Your browser is open at gitlab.example: sign in with your GitLab account there and approve; you return here signed in. Open it again",
+      "Your browser is open at gitlab.example: sign in there and approve; you return here signed in. Open it again",
     );
     const again = screen.getByTestId("space-signin-link") as HTMLAnchorElement;
     expect(again.textContent).toBe("Open it again");
@@ -231,8 +231,8 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     fireEvent.click(screen.getByTestId("space-signin"));
     const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
     expect(link.href).toBe("https://gitlab.example/login/app?client_id=spex&state=s");
-    expect(link.textContent).toBe("Open GitLab to sign in");
-    expect(screen.getByTestId("space-signin-finish").textContent).toBe("Finish signing in in your browser:");
+    expect(link.textContent).toBe("Open gitlab.example to sign in");
+    expect(screen.getByTestId("space-signin-finish").textContent).toBe("Continue in your browser:");
     cleanup();
     const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(false);
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
@@ -262,13 +262,13 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     await renderGroups(signedOut({ host: { url: "https://spex.example", displayName: null } }), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
     const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
-    // Before the host's display name is known, its host name stands in.
+    // The link names the page it opens by its host name.
     expect(link.textContent).toBe("Open spex.example to sign in");
     expect(link.href).toBe(complete);
     expect(link.target).toBe("_blank");
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
-      "Finish signing in in your browser:Open spex.example to sign in" +
-        "Sign in with your spex.example account there and approve; you return here signed in.",
+      "Continue in your browser:Open spex.example to sign in" +
+        "Sign in there and approve; you return here signed in.",
     );
     // The code is never shown, nor offered to copy.
     expect(document.body.textContent).not.toContain("WDJB-MJHT");
@@ -278,16 +278,15 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     expect(control.disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     expect(screen.getAllByRole("button").filter((button) => /Sign/.test(button.textContent ?? ""))).toEqual([control]);
-    // A page that opens mid-flow reads the link from the state alone,
-    // the host named by its display name once the core knows it.
+    // A page that opens mid-flow reads the link from the state alone.
     cleanup();
     await renderGroups(
       signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: complete, since: NOW } }),
       { open: false },
     );
-    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open GitLab to sign in");
+    expect(screen.getByTestId("space-signin-link").textContent).toBe("Open gitlab.example to sign in");
     expect((screen.getByTestId("space-signin-link") as HTMLAnchorElement).href).toBe(complete);
-    expect(screen.getByTestId("space-signin-body").textContent).toContain("Sign in with your GitLab account there and approve");
+    expect(screen.getByTestId("space-signin-body").textContent).toContain("Sign in there and approve");
     expect(document.body.textContent).not.toContain("ABCD-EFGH");
     expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
   });
@@ -295,7 +294,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
   test("a denial, an expiry or a refusal ends the flow with its cause beside the control, which reads Sign in again", async () => {
     await renderGroups(signedOut({ signIn: { phase: "running", flow: "device", userCode: "ABCD-EFGH", verificationUri: "https://gitlab.example/oauth/device", since: NOW } }), { open: false });
     deliver(signedOut({ signIn: { phase: "failed", cause: "denied", message: "The sign-in was denied at GitLab" } }));
-    expect(screen.getByTestId("space-signin-error").textContent).toBe("Sign-in did not complete: The sign-in was denied at GitLab.");
+    expect(screen.getByTestId("space-signin-error").textContent).toBe("The sign-in was denied at GitLab.");
     expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again");
     expect(screen.queryByTestId("space-signin-link")).toBeNull();
     // A start the core refuses says why in the same place.
@@ -304,7 +303,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
       return answer(type, fields);
     });
     fireEvent.click(screen.getByTestId("space-signin"));
-    await waitFor(() => expect(screen.getByTestId("space-signin-error").textContent).toBe("Sign-in did not complete: A sign-in is already running."));
+    await waitFor(() => expect(screen.getByTestId("space-signin-error").textContent).toBe("A sign-in is already running."));
   });
 
   test("Sign out sends the command and every repository reads as the core then says", async () => {
@@ -632,7 +631,7 @@ describe("GROUPS: Members (space-62)", () => {
     expect(screen.getByTestId("space-member-bob").textContent).toContain("bob");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("Developer");
     const link = screen.getByTestId(`space-members-link-${KEY}`) as HTMLAnchorElement;
-    expect(link.textContent).toBe("Members change on GitLab");
+    expect(link.textContent).toBe("Members change at gitlab.example");
     expect(link.href).toBe("https://gitlab.example/jane/academy-spex/-/project_members");
     // Refresh reads them again; nothing is cached across reads.
     fireEvent.click(screen.getByTestId("space-refresh"));

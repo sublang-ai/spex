@@ -124,6 +124,11 @@ msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, ot
 msgid "{annotation} · {count, plural, one {# entry} other {# entries}}"
 msgstr "{annotation} · {count, plural, other {# 项}}"
 
+#. the sign-in's cause, a phrase the core sends without its final stop, as one sentence
+#: src/components/SpaceSignIn.tsx
+msgid "{cause}."
+msgstr "{cause}。"
+
 #. an inherit choice, then the value it inherits: a model, an effort, or the provider-default words
 #: src/components/TuningField.tsx
 msgid "{choice} ({value})"
@@ -1840,6 +1845,10 @@ msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 msgid "Continue"
 msgstr "继续"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Continue in your browser:"
+msgstr "请在浏览器中继续："
+
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
@@ -2646,10 +2655,6 @@ msgstr "筛选项目"
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Finish signing in in your browser:"
-msgstr "请在浏览器中完成登录："
-
 #. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
@@ -3318,8 +3323,8 @@ msgid "Members"
 msgstr "成员"
 
 #: src/components/SpaceGroups.tsx
-msgid "Members change on {host}"
-msgstr "在 {host} 上更改成员"
+msgid "Members change at {host}"
+msgstr "在 {host} 更改成员"
 
 #: src/components/SpaceGroups.tsx
 msgid "Members of {name}"
@@ -3857,10 +3862,6 @@ msgstr "每个状态行为一条规约条目，来自上次编译"
 msgid "Open"
 msgstr "打开"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Open {host} to sign in"
-msgstr "打开 {host} 登录"
-
 #: src/components/RecordRow.tsx
 msgid "Open {id}"
 msgstr "打开 {id}"
@@ -3876,6 +3877,10 @@ msgstr "打开 {id}：{title}"
 #: src/components/TrustedMedia.tsx
 msgid "Open {name}"
 msgstr "打开 {name}"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open {site} to sign in"
+msgstr "打开 {site} 登录"
 
 #: src/components/DashboardSurface.tsx
 msgid "Open {title} — {reason}"
@@ -5145,6 +5150,10 @@ msgstr "用该智能体的 CLI 重新登录"
 msgid "Sign in first"
 msgstr "请先登录"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in there and approve; you return here signed in."
+msgstr "请在那里登录并批准；完成后回到这里即已登录。"
+
 #: src/lib/failure-catalogue.ts
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
@@ -5157,18 +5166,10 @@ msgstr "登录后发布"
 msgid "Sign in to see your groups and share each project's records with the people in them."
 msgstr "登录后即可查看你的群组，并与群组中的成员共享各项目的记录。"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Sign in with your {host} account there and approve; you return here signed in."
-msgstr "请在那里用你的 {host} 账号登录并批准；完成后回到这里即已登录。"
-
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
 msgid "Sign out"
 msgstr "退出登录"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Sign-in did not complete: {cause}."
-msgstr "登录未完成：{cause}。"
 
 #: src/components/SpaceSignIn.tsx
 msgid "Signed in as @{login}"
@@ -6325,8 +6326,8 @@ msgid "Writing…"
 msgstr "写入中…"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
-msgstr "浏览器已打开 {site}：请在那里用你的 {host} 账号登录并批准；完成后回到这里即已登录。"
+msgid "Your browser is open at {site}: sign in there and approve; you return here signed in."
+msgstr "浏览器已打开 {site}：请在那里登录并批准；完成后回到这里即已登录。"
 
 #: src/components/SpaceSync.tsx
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."

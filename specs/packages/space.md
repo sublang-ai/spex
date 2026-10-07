@@ -39,11 +39,11 @@ The Groups surface shall re-read the core's state only on an event, never on a t
 
 While the home is not signed in, the Groups surface's header shall be one card titled "Not signed in" that reads "Sign in to see your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", with Sign in as its one primary control ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- on the desktop, Sign in starts the browser flow [[git-host-2](git-host.md#git-host-2)], and the card reads "Your browser is open at <host name>: sign in with your <Git host> account there and approve; you return here signed in." with the link "Open it again" to the sign-in URL; where the shell did not open the browser, the card reads as the device flow's with the sign-in URL as its link;
-- in a browser client of the server shell, Sign in starts the device flow [[git-host-3](git-host.md#git-host-3)], and the card reads "Finish signing in in your browser:", the link "Open <Git host> to sign in" to the verification URL in a new tab, and "Sign in with your <Git host> account there and approve; you return here signed in.", showing no code;
-- <host name> is the host name of the home's host URL, and <Git host> the host's display name, which the core reads from the host when Sign in is activated where it holds none [[git-host-15](git-host.md#git-host-15)], else <host name>;
+- on the desktop, Sign in starts the browser flow [[git-host-2](git-host.md#git-host-2)], and the card reads "Your browser is open at <host name>: sign in there and approve; you return here signed in." with the link "Open it again" to the sign-in URL; where the shell did not open the browser, the card reads as the device flow's with the sign-in URL as its link;
+- in a browser client of the server shell, Sign in starts the device flow [[git-host-3](git-host.md#git-host-3)], and the card reads "Continue in your browser:", the link "Open <host name> to sign in" to the verification URL in a new tab, and "Sign in there and approve; you return here signed in.", showing no code;
+- <host name> is the host name of the home's host URL: the page the person opens says how to sign in there, and the surface names no account elsewhere;
 - while a flow runs, Sign in reads "Signing in…", disabled, beside Cancel, and no row offers a sign-in control;
-- a denial, an expiry or a refusal ends the flow, the card reading "Sign-in did not complete: <cause>." and the control "Sign in again";
+- a denial, an expiry or a refusal ends the flow, the card reading the core's cause as one sentence and the control "Sign in again";
 - while signed out, your own group's spex repository reads "On this device only — shared once you sign in" with no control, a spex repository with a remote at the host is unreachable with "Sign in again" and the others are local only [[space-61](#space-61)], and the surface never contacts the host.
 
 #### space-4
@@ -111,7 +111,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
-| local only | the clone has no remote on the host | "On this device only" | Pick a group [[space-58](#space-58)], none while signed out |
+| local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], none while signed out |
 | reachable | the host listed it at the last read and the clone is here | the last sync's time | Sync |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or the home is signed out while the clone has a remote | "Unreachable: <cause>" | Retry, none while signed out with the remote at the host |
@@ -122,7 +122,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 
 #### space-62
 
-When the reader activates Members on a reachable spex repository's row, the surface shall list its members as the host reports them [[git-host-8](git-host.md#git-host-8)] — login, display name and the host's own role name — with a link to the host's members page, and shall say in one phrase that members are changed there ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When the reader activates Members on a reachable spex repository's row, the surface shall list its members as the host reports them [[git-host-8](git-host.md#git-host-8)] — login, display name and the host's own role name — with a link to the host's members page, and shall say in one phrase that members are changed there, naming that page by its host name ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - the list is read on activation and on Refresh, never cached across reads.
 
@@ -659,7 +659,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.get` reads not signed in with your own group alone under this device's user name, and reads the `git` guidance on a `PATH` without `git` [[space-1](#space-1)] [[space-3](#space-3)];
 - a working folder added while signed out pairs with a local-only spex repository under your own group [[space-61](#space-61)];
 - `space.signin.start` in the browser flow returns a loopback URL the suite completes against the stand-in, after which the state carries the account, your own group's folder and clone bear the login, every pair naming it is rewritten, and your own group's spex repository stands on the stand-in with its clone pushed [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)];
-- `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome, and the state then carries the stand-in's display name; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
+- `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
 - a core restarted on that home reads the same account, no read time but the same last sync [[space-1](#space-1)];
@@ -733,9 +733,9 @@ Where the Groups surface renders over a home whose issues list holds three unans
 Where the Groups surface renders over a signed-out home, when the reader signs in through each flow, the test suite shall assert through the surface:
 
 - signed out, the header is the "Not signed in" card with its two sentences and Sign in, showing no home path, Copy path, read time or Refresh, and your own group is headed "Your own group", its row reading "On this device only — shared once you sign in" with no control [[space-3](#space-3)] [[space-1](#space-1)];
-- in the device flow, the card reads "Finish signing in in your browser:", the link "Open <Git host> to sign in" whose href is the verification URL opening a new tab, and the sentence naming the Git host, with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
+- in the device flow, the card reads "Continue in your browser:", the link "Open <host name> to sign in" whose href is the verification URL opening a new tab, and "Sign in there and approve; you return here signed in.", with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
 - in the browser flow opened through the bridge, the card reads that the browser is open at the host name with "Open it again" linking to the sign-in URL; where the bridge refused, it reads as the device flow's [[space-3](#space-3)];
-- Cancel brings back the two sentences and Sign in; a denial reads "Sign-in did not complete: <cause>." with "Sign in again" [[space-3](#space-3)];
+- Cancel brings back the two sentences and Sign in; a denial reads the core's cause as one sentence with "Sign in again" [[space-3](#space-3)];
 - signed in, the header reads "Signed in as @<login> at <host>" with Sign out, the read time with Refresh, and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
 - a group's own repository reads "Group records", a project's with no code remote "Code not on a remote", and a local-only one "On this device only" [[space-1](#space-1)] [[space-61](#space-61)].
 
@@ -747,7 +747,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 - Groups reads the "Not signed in" card with its two sentences and Sign in as its one primary control, no home path, read time or Refresh, and your own group alone beneath it headed "Your own group", its row reading "On this device only — shared once you sign in" with no control [[space-1](#space-1)] [[space-3](#space-3)];
 - a project added from the palette lists under your own group as "On this device only" with no control [[space-61](#space-61)];
-- Sign in shows "Open <Git host> to sign in" linking to the verification URL that carries the code, and no code, the control reading "Signing in…" disabled until the harness approves the code the link carries; the header then reads the account and Refresh, your own group bears its login, and the surface ends in the line naming where this device's files are kept [[space-3](#space-3)] [[space-4](#space-4)] [[space-1](#space-1)];
+- Sign in shows "Open <host name> to sign in" linking to the verification URL that carries the code, and no code, the control reading "Signing in…" disabled until the harness approves the code the link carries; the header then reads the account and Refresh, your own group bears its login, and the surface ends in the line naming where this device's files are kept [[space-3](#space-3)] [[space-4](#space-4)] [[space-1](#space-1)];
 - Pick a group on the project's row offers the stand-in's groups, and picking one turns the row reachable with a sync time, the stand-in holding `<name>-spex` on its `spex` branch [[space-58](#space-58)] [[space-12](#space-12)];
 - a session then run from the Captain home appears under the repository's local changes by its title, its Open session control opens its tab, and Sync sends it [[space-7](#space-7)] [[space-12](#space-12)];
 - an intent queued while Groups is shown lists under local changes with Refresh never activated, and Refresh's caption reads the time of the read [[space-2](#space-2)].

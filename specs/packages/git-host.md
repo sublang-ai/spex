@@ -43,12 +43,6 @@ When a client sends `space.signin.start` on the server shell, the core shall sig
 
 - a denial ends the sign-in `failed` with `denied`, an expiry with `expired`, and `space.signin.cancel` stops the polling; nothing is stored until the token arrives.
 
-#### git-host-15
-
-When a client sends `space.signin.start` and the core holds no description of the host, the core shall read the host's display name and Git origin from `/api/v1/host`, which needs no credential, before replying, and keep them until a host read [[git-host-5](#git-host-5)] replaces them:
-
-- a read that fails leaves the display name unknown and the sign-in starting.
-
 #### git-host-4
 
 While the home holds an app token, when a call to the host is made, the core shall present the access secret as a bearer credential and keep the token current:
@@ -139,7 +133,6 @@ When an integration suite starts a real core on a scratch home against the stand
 - a new home records the stand-in's URL from `SPEX_HOST_URL`, and a later start with the variable changed keeps the recorded one [[git-host-1](#git-host-1)];
 - the browser flow's URL names the loopback redirect, an S256 challenge and `client_id=spex`; completing it at the stand-in stores the app token with owner-only permissions and the account in `home.yaml`, and the callback page says the browser may be closed [[git-host-2](#git-host-2)];
 - a callback with a wrong `state`, one carrying `access_denied`, a refused exchange, a cancel and a test-shortened expiry each end the sign-in with its cause and store nothing; a second start during a flow is `busy` [[git-host-2](#git-host-2)];
-- a start on a new home reads the stand-in's display name before its reply, and a start against a stand-in whose description fails still starts [[git-host-15](#git-host-15)];
 - the device flow replies with the stand-in's user code and its verification URL completed with that code, polls at its interval, backs off on slow down, and completes on approval; a denial and an expiry end it with their causes [[git-host-3](#git-host-3)];
 - an access secret the stand-in expires is refreshed once before the next call, two concurrent calls refresh once, and a refresh the stand-in refuses signs the device out with every remote repository unreachable until the next sign-in [[git-host-4](#git-host-4)];
 - sign-out revokes the device at the stand-in and removes the credential, and a stand-in that cannot be reached still leaves the home signed out [[git-host-10](#git-host-10)].

@@ -127,16 +127,13 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
 }
 
 /** The host as the sign-in card names it (space-3): its URL's host
- * name, and the Git host behind it by its display name, else that host
- * name. */
-export function hostNames(groups: GroupsState): { site: string; git: string } {
-  let site: string;
+ * name — the page the person opens. */
+export function siteName(groups: GroupsState): string {
   try {
-    site = new URL(groups.host.url).hostname || groups.host.url;
+    return new URL(groups.host.url).hostname || groups.host.url;
   } catch {
-    site = groups.host.url;
+    return groups.host.url;
   }
-  return { site, git: groups.host.displayName ?? site };
 }
 
 /** The header's account while signed in (space-1, space-6): who, at
@@ -153,7 +150,7 @@ export function AccountField({
   const spaceSignOut = useAppStore((state) => state.spaceSignOut);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string>();
-  const host = groups.host.displayName ?? groups.host.url;
+  const host = groups.host.displayName || siteName(groups);
   const login = groups.account?.login ?? "";
 
   const signOut = async () => {
@@ -220,18 +217,18 @@ export function SignInCard({
   signIn: SignInFlow;
   connected: boolean;
 }) {
-  const { site, git } = hostNames(groups);
+  const site = siteName(groups);
   const running = signIn.running;
-  const finish = i18n._("Sign in with your {host} account there and approve; you return here signed in.", { host: git });
+  const finish = i18n._("Sign in there and approve; you return here signed in.");
 
   // The page to finish at, as a link: the device flow's URL carries the
   // code, so nothing is typed (git-host-3).
   const finishAt = (url: string | undefined) => (
     <>
-      <p data-testid="space-signin-finish">{i18n._("Finish signing in in your browser:")}</p>
+      <p data-testid="space-signin-finish">{i18n._("Continue in your browser:")}</p>
       {url ? (
         <a data-testid="space-signin-link" href={url} target="_blank" rel="noreferrer" className={LINK_CLASS}>
-          {i18n._("Open {host} to sign in", { host: git })}
+          {i18n._("Open {site} to sign in", { site })}
         </a>
       ) : null}
       <p>{finish}</p>
@@ -243,10 +240,7 @@ export function SignInCard({
     const url = running.url;
     body = (
       <p data-testid="space-signin-opened">
-        {i18n._("Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in.", {
-          site,
-          host: git,
-        })}{" "}
+        {i18n._("Your browser is open at {site}: sign in there and approve; you return here signed in.", { site })}{" "}
         {url ? (
           <a
             data-testid="space-signin-link"
@@ -273,7 +267,11 @@ export function SignInCard({
   } else if (signIn.failure !== undefined) {
     body = (
       <p data-testid="space-signin-error" role="alert" className="text-red-600 dark:text-red-400">
-        {i18n._("Sign-in did not complete: {cause}.", { cause: signIn.failure.replace(/[.。]\s*$/, "") })}
+        {i18n._({
+          id: "{cause}.",
+          values: { cause: signIn.failure.replace(/[.。]\s*$/, "") },
+          comment: "the sign-in's cause, a phrase the core sends without its final stop, as one sentence",
+        })}
       </p>
     );
   } else {
@@ -316,7 +314,7 @@ export function SignInCard({
           data-testid="space-signin"
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={!connected || running !== null || signIn.starting}
-          title={i18n._("Signs in to {host}", { host: git })}
+          title={i18n._("Signs in to {host}", { host: site })}
           onClick={signIn.start}
         >
           {label}

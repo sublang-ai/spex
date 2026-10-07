@@ -1032,28 +1032,21 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   const host = await startHost();
   const home = await startHome("signin-device", { host, project: false });
   t.after(() => home.stop());
-  // A start whose description fails still starts, the host's display
-  // name unknown (git-host-15); a cancel stops the polling and ends the
-  // flow with nothing stored.
-  host.script.describeUnavailable = true;
+  // A cancel stops the polling and ends the flow with nothing stored.
   const fromCancel = home.client.mark();
   const canceled = await home.client.expectOk("space.signin.start", {});
   assert.equal(canceled.flow, "device");
-  assert.equal((await home.client.expectOk("space.get", {})).host.displayName, null);
   assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: true });
   await home.client.waitSpace(fromCancel, (state) => state.signIn.phase === "idle" && state.account === null);
   assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: false });
-  host.script.describeUnavailable = false;
   const from = home.client.mark();
   const denied = await home.client.expectOk("space.signin.start", {});
   assert.ok(denied.flow === "device", JSON.stringify(denied));
   assert.ok(host.script.pendingDevices().includes(denied.userCode));
   // The verification URL carries the code, so nobody types it
-  // (git-host-3, space-29); the host's display name is read before the
-  // reply (git-host-15).
+  // (git-host-3, space-29).
   assert.equal(denied.verificationUri, `${host.url}/login/device?user_code=${encodeURIComponent(denied.userCode)}`);
   assert.ok(denied.expiresAt > Date.now());
-  assert.equal((await home.client.expectOk("space.get", {})).host.displayName, "Stand-in Git host");
   const running = await home.client.waitSpace(from, (state) => state.signIn.phase === "running");
   assert.ok(running.signIn.phase === "running" && running.signIn.flow === "device" && running.signIn.userCode === denied.userCode);
   assert.equal(running.signIn.verificationUri, denied.verificationUri);

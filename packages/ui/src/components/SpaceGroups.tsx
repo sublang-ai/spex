@@ -952,6 +952,16 @@ export function GroupPicker({
 /** A spex repository's members as the host reports them (space-62):
  * read when the list opens and on each Refresh, held nowhere else, with
  * the host's members page where members are changed. */
+/** The host name of the host's page a phrase names (space-62), else
+ * the host as the core names it. */
+function pageHost(url: string, fallback: string): string {
+  try {
+    return new URL(url).hostname || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function MembersList({
   groups,
   repo,
@@ -1036,7 +1046,7 @@ function MembersList({
             onClick={(event) => openPage(event, result.membersUrl)}
             className="self-start text-xs text-brand-600 hover:underline dark:text-brand-300"
           >
-            {i18n._("Members change on {host}", { host })}
+            {i18n._("Members change at {host}", { host: pageHost(result.membersUrl, host) })}
           </a>
         </>
       )}
