@@ -143,6 +143,23 @@ class Client {
   async repository(key: string): Promise<RepositoryState> {
     return repositoryOf(await this.expectOk("space.get", {}), key);
   }
+  /** Every reading of one spex repository — under any of its keys, as a
+   * move changes it — in the states broadcast at or after `from`, up to
+   * the first reading its sync done. */
+  readings(from: number, keys: string[]): RepositoryState[] {
+    const out: RepositoryState[] = [];
+    for (let i = from; i < this.messages.length; i += 1) {
+      const message = this.messages[i];
+      if (message.type !== "space.state") continue;
+      for (const key of keys) {
+        let repository: RepositoryState;
+        try { repository = repositoryOf(message.state, key); } catch { continue; }
+        out.push(repository);
+        if (repository.sync.phase === "done") return out;
+      }
+    }
+    return out;
+  }
   mark(): number { return this.messages.length; }
 }
 
