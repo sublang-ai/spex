@@ -272,7 +272,8 @@ test("space-37: while a check runs, writes beneath that clone are refused naming
   await home.client.expectOk("intent.queue", { projectId: key, text: "Saved by the sync" });
   const from = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
-  const running = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check");
+  // Stop is offered once the step's Git child runs (space-16).
+  const running = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
   assert.ok(running.sync.phase === "running" && running.sync.cancelable);
   for (const [type, fields] of [
     ["turn.submit", { sessionId, text: "blocked" }],
@@ -1316,7 +1317,11 @@ test("space-37: while a check sleeps on the stand-in's transport, writes beneath
   const requests = host.script.requests.length;
   const fromSync = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
-  await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check");
+  // The Check step reads the host first, offering no Stop; Stop comes
+  // once its Git child runs (space-16).
+  const entered = await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check");
+  assert.ok(entered.sync.phase === "running" && !entered.sync.cancelable, JSON.stringify(entered.sync));
+  await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
   for (let i = 0; i < 400 && !host.script.requests.slice(requests).some((request) => request.path.startsWith("/git/")); i += 1) await sleep(25);
   assert.ok(host.script.requests.slice(requests).some((request) => request.path.startsWith("/git/")), "the transport is in flight");
   const blocked = await home.client.command("intent.queue", { projectId: key, text: "blocked" });

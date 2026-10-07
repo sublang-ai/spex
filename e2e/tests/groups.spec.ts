@@ -446,15 +446,14 @@ test.describe("daily sync", () => {
     // with its stopped state and Retry (space-15, space-16).
     host.script.sleepTransport(120_000);
     const checkLabels = await watch(page, '[data-testid="space-check"]');
-    const sent = host.script.requests.length;
     await tab.getByTestId("space-check").click();
     const rail = tab.getByTestId("space-rail");
     await expect(rail.getByTestId("space-step-line")).toHaveText("Checking host…");
-    // Stop once Git's own transport is in flight, sleeping at the host.
-    await expect
-      .poll(() => host.script.requests.slice(sent).some((request) => request.path.startsWith(`/git/${TEAM_KEY}.git/`)))
-      .toBe(true);
-    await rail.getByTestId("space-stop").click();
+    // Stop stands once Git's own transport is in flight, sleeping at the
+    // host, the host read before it offering none (space-16).
+    const stop = rail.getByTestId("space-stop");
+    await expect(stop).toBeVisible();
+    await stop.click();
     await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Check stopped — No answer from Stand-in Git host");
     await expect(stopped.getByTestId("space-retry")).toHaveText("Retry");
     await expect(tab.getByTestId("space-check")).toHaveText("Check host");

@@ -512,6 +512,19 @@ class RepositorySync {
     return new SpaceGit(dir, this.host.env, {
       ...(this.host.transportTimeoutMs !== undefined ? { transportTimeoutMs: this.host.transportTimeoutMs } : {}),
       identity: () => this.owner.identity(),
+      onTransport: () => this.transportStarted(),
+    });
+  }
+
+  /** The step's Git child runs (space-16): the Check step offers Stop
+   * from now, the host read before it bounded by the client's own
+   * timeout. */
+  private transportStarted(): void {
+    if (this.phase.phase !== "running" || this.phase.cancelable) return;
+    if (this.phase.step !== "check" && this.phase.step !== "push") return;
+    this.phase = { ...this.phase, cancelable: true };
+    void this.broadcast(false).catch((error: unknown) => {
+      console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -1051,6 +1064,8 @@ class RepositorySync {
     return work;
   }
 
+  /** Enter a step. Check enters with no Stop: its host read comes
+   * first, and Stop is offered once its Git child runs (space-16). */
   private async enter(op: SpaceOp, step: SyncStep, cancelable: boolean): Promise<void> {
     this.phase = { phase: "running", op, step, since: Date.now(), cancelable };
     await this.broadcast(false);
@@ -1067,7 +1082,7 @@ class RepositorySync {
       await this.owner.admit(this, { push: false, noticed: true });
     } catch (error) { this.phase = previous; throw error; }
     void this.runOperation("check", async () => {
-      await this.enter("check", "check", true);
+      await this.enter("check", "check", false);
       await this.check(repo.remote, "check");
       this.phase = { phase: "idle" };
     });
@@ -1152,7 +1167,7 @@ class RepositorySync {
           break;
         }
         case "check": {
-          await this.enter(op, "check", true);
+          await this.enter(op, "check", false);
           const checked = await this.check(remote, "sync");
           remote = checked.remote;
           readOnly = checked.readOnly;

@@ -453,14 +453,22 @@ export class SpaceGit {
   private transportChild?: { child: import("node:child_process").ChildProcess; kill: (why: "timeout" | "stopped") => void };
 
   private readonly identity?: () => { name: string; email: string } | null;
+  private readonly onTransport?: () => void;
 
   constructor(
     private readonly home: string,
     private readonly captured: NodeJS.ProcessEnv,
-    options: { transportTimeoutMs?: number; identity?: () => { name: string; email: string } | null } = {},
+    options: {
+      transportTimeoutMs?: number;
+      identity?: () => { name: string; email: string } | null;
+      /** Called as a transport child starts: from then on Stop can end it
+       * (space-16). */
+      onTransport?: () => void;
+    } = {},
   ) {
     this.transportTimeoutMs = options.transportTimeoutMs ?? DEFAULT_TRANSPORT_TIMEOUT_MS;
     this.identity = options.identity;
+    this.onTransport = options.onTransport;
   }
 
   /** The environment every child runs with (space-32). */
@@ -523,6 +531,7 @@ export class SpaceGit {
       if (options.transport) {
         this.transportChild = { child, kill };
         limit = setTimeout(() => kill("timeout"), this.transportTimeoutMs);
+        this.onTransport?.();
       }
       child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
       child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
