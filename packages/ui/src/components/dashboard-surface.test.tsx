@@ -89,9 +89,17 @@ function q(
   return { intent: info({ id, projectId, text }), state: "queued", ...over };
 }
 
+/** A Groups state holding no spex repository: the Overview's records
+ * field reads its row from it (projects-4). */
+const EMPTY_GROUPS = {
+  home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
+  account: null, signIn: { phase: "idle" }, readAt: null, groups: [], diagnostics: [], issues: 0,
+};
+
 /** Seed the real store; the client is faked via setClientForTests. */
 function seed(over: Record<string, unknown> = {}) {
   useAppStore.setState({
+    space: EMPTY_GROUPS,
     attachmentDraftTexts: {},
     attachmentDrafts: {},
     connection: "open",
@@ -120,6 +128,7 @@ beforeEach(() => {
       return useAppStore.getState().ledger ?? EMPTY_LEDGER;
     }
     if (type === "ledger.history") return { intents: [], more: false };
+    if (type === "space.get") return EMPTY_GROUPS;
     return {};
   });
   setClientForTests({
