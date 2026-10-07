@@ -12,7 +12,7 @@
 // intact (run-view-42).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectInfo, SessionInfo } from "@sublang/spex-core/protocol";
+import type { ProjectInfo, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
 import {
   ATTENTION_MARK_CLASS,
@@ -22,6 +22,7 @@ import {
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
+import { GroupPicker } from "./SpaceGroups.js";
 
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
@@ -63,6 +64,22 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
+  // A folder added while signed in asks where its records go, in the
+  // one picker of matching spex repositories and groups (projects-1,
+  // space-58): the key of its local-only spex repository while asked.
+  const [picking, setPicking] = useState<string>();
+  const space = useAppStore((state) => state.space);
+  const loadSpace = useAppStore((state) => state.loadSpace);
+  const connected = useAppStore((state) => state.connection === "open");
+  const pickingRepo = picking
+    ? space?.groups.flatMap((group) => group.repositories).find((repository) => repository.key === picking)
+    : undefined;
+  // A repository that left the Groups state while asked — moved after
+  // its pick — has nothing left to ask.
+  const { onClose } = props;
+  useEffect(() => {
+    if (picking && !pickingRepo) onClose();
+  }, [picking, pickingRepo, onClose]);
   // No project registered: the remedy is adding one, so the filter
   // goes and the add flow takes the front (projects-22).
   const empty = props.projects.length === 0;
@@ -120,16 +137,41 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     props.onClose();
   }
 
+  /** A folder added (projects-1): it becomes the current project, and
+   * where the home is signed in and the folder newly paired, its
+   * local-only spex repository asks for its group in place (space-58);
+   * otherwise the palette closes. */
+  async function added(project: ProjectInfo, known: boolean): Promise<void> {
+    props.onPick(project.id);
+    const key = project.repository.key;
+    const row = (): RepositoryState | undefined => {
+      const groups = useAppStore.getState().space;
+      return groups?.account
+        ? groups.groups.flatMap((group) => group.repositories).find((repository) => repository.key === key)
+        : undefined;
+    };
+    if (!known && !row()) await loadSpace().catch(() => {});
+    const repo = known ? undefined : row();
+    if (repo && repo.state === "local-only" && !repo.waiting) {
+      setPicking(key);
+      return;
+    }
+    props.onClose();
+  }
+
   async function runAdd(create: boolean): Promise<void> {
     const path = pathDraft.trim();
     if (!path || busy) return;
     setBusy(true);
     setError(undefined);
     try {
-      const project = create
-        ? await props.onCreatePath(path, scaffold)
-        : await props.onAddPath(path);
-      pick(project.id);
+      if (create) {
+        pick((await props.onCreatePath(path, scaffold)).id);
+      } else {
+        const before = new Set(props.projects.map((project) => project.id));
+        const project = await props.onAddPath(path);
+        await added(project, before.has(project.id));
+      }
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -158,9 +200,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       if (!path) return;
       setBusy(true);
       setError(undefined);
+      const before = new Set(props.projects.map((project) => project.id));
       props
         .onAddPath(path)
-        .then((project) => pick(project.id))
+        .then((project) => added(project, before.has(project.id)))
         .catch((cause: Error) => setError(cause.message))
         .finally(() => setBusy(false));
     });
@@ -270,6 +313,20 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
+        {space && pickingRepo ? (
+          // The picker stands in place of the list (space-58): a pick or
+          // Cancel — which leaves it local only — closes the palette.
+          <div data-testid="palette-group-picker" className="min-h-0 flex-1 overflow-y-auto p-2">
+            <GroupPicker
+              groups={space}
+              repo={pickingRepo}
+              connected={connected}
+              onClose={props.onClose}
+              onNote={() => {}}
+            />
+          </div>
+        ) : (
+        <>
         {empty ? null : (
           <input
             ref={searchRef}
@@ -467,6 +524,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </div>
           ) : null}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

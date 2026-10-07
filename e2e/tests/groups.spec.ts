@@ -286,6 +286,56 @@ test.describe("first start", () => {
 });
 
 // ---------------------------------------------------------------------------
+// space-58, projects-1: a folder added while signed in
+// ---------------------------------------------------------------------------
+
+test.describe("a folder added while signed in", () => {
+  test.use({ appOptions: { host: true, signedIn: true } });
+
+  test("space-58, projects-1: the palette's Add asks for the group in place, and a pick puts the project there", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    const host = app.host!;
+    seedDemoProject(app.projectDir);
+    await open(page, app);
+
+    // The folder pairs with a spex repository through the picker of
+    // matching spex repositories and groups, standing in the palette
+    // in place of its list (projects-1, space-58).
+    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
+    await palette.getByTestId("palette-path").fill(app.projectDir);
+    await palette.getByTestId("palette-add").click();
+    const localKey = `${HOST_LOGIN}/demo-project-spex`;
+    const picker = palette.getByTestId(`space-picker-${localKey}`);
+    await expect(picker).toBeVisible();
+    await expect(palette.getByTestId("palette-path")).toHaveCount(0);
+    for (const group of [HOST_LOGIN, HOST_GROUP, `${HOST_GROUP}/research`]) {
+      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(group);
+    }
+    await expect(picker.getByTestId(`space-pick-name-${localKey}`)).toHaveValue("demo-project");
+
+    // Picking the team's group creates `<name>-spex` there and pushes;
+    // the palette closes, and the row is reachable in that group with
+    // the project followed to its key (space-58, space-60).
+    await picker.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    await expect(palette).toBeHidden();
+    await showGroups(page);
+    await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
+    expect(headOf(bareOf(host, TEAM_KEY), "spex")).toMatch(/^[0-9a-f]{40}$/);
+    await nav(page, "Projects").click();
+    await expect(page.getByTestId("captain-home")).toContainText("demo-project");
+    await expect(
+      page.getByRole("tree", { name: "Projects and sessions" }).getByRole("treeitem", { name: "demo-project", exact: true }),
+    ).toBeVisible();
+    expect((await app.core.command("project.list", {})).map((project) => project.id)).toEqual([TEAM_KEY]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // space-41: the daily sync with conflicts
 // ---------------------------------------------------------------------------
 
