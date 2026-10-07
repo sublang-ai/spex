@@ -4,8 +4,8 @@
 // The Groups surface's header and groups list over a mocked client
 // (DR-103): the header in both signed states with Refresh and the
 // host's last read (space-1, space-2), signing in through the browser
-// flow and the device flow, its failure, Cancel and Sign out (space-3,
-// space-6), every row state with its control and phrase (space-61,
+// flow and the device flow, its failure, Cancel, the host's sign-out
+// and Sign out (space-3, space-6), every row state with its control and phrase (space-61,
 // space-64), Pick a group (space-58), Join (space-63), Members
 // (space-62), the vocabulary (space-27) and the label budget and the
 // container steps the fit rests on (space-28). Each act is checked by
@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
+import { activateLanguage } from "../i18n.js";
 import { setClientForTests } from "../state/store.js";
 import {
   BRANCH,
@@ -43,6 +44,7 @@ beforeEach(installClient);
 
 afterEach(() => {
   cleanup();
+  activateLanguage("en");
   setClientForTests(undefined);
   vi.useRealTimers();
 });
@@ -304,6 +306,38 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
     });
     fireEvent.click(screen.getByTestId("space-signin"));
     await waitFor(() => expect(screen.getByTestId("space-signin-error").textContent).toBe("A sign-in is already running."));
+  });
+
+  test.each(["en", "zh"] as const)("where the host signed this device out, the card says so with the login, and the control reads Sign in again (%s)", async (language) => {
+    activateLanguage(language);
+    await renderGroups(signedOut({ signIn: { phase: "idle", signedOut: { by: "host", login: "jane" } } }), { open: false });
+    // The host's name is its URL's host name, as on the rest of the card.
+    expect(screen.getByTestId("space-signin-body").textContent).toBe(
+      language === "zh"
+        ? "gitlab.example 已让此设备退出登录。重新登录即可以 @jane 继续。在此之前，一切都只保存在此设备上，不会联系任何服务。"
+        : "gitlab.example signed this device out. Sign in again to continue as @jane." +
+            "Until you do, everything stays on this device and nothing is contacted.",
+    );
+    expect(screen.getByTestId("space-signin").textContent).toBe(language === "zh" ? "重新登录" : "Sign in again");
+    expect(within(screen.getByTestId("space-account")).getByRole("heading", { level: 2 }).textContent).toBe(
+      language === "zh" ? "未登录" : "Not signed in",
+    );
+  });
+
+  test("from the host's sign-out, Sign in again starts the flow, Cancel brings the sentence back, and the next sign-in ends it", async () => {
+    const out = signedOut({ signIn: { phase: "idle", signedOut: { by: "host", login: "jane" } } });
+    await renderGroups(out, { open: false });
+    fireEvent.click(screen.getByTestId("space-signin"));
+    await screen.findByTestId("space-signin-link");
+    expect(calls("space.signin.start")).toEqual([{}]);
+    expect(screen.getByTestId("space-signin").textContent).toBe("Signing in…");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByTestId("space-signin").textContent).toBe("Sign in again"));
+    expect(screen.getByTestId("space-signin-caption").textContent).toBe("gitlab.example signed this device out. Sign in again to continue as @jane.");
+    // A sign-in that completes reads the account, the sentence gone.
+    deliver(base());
+    expect(screen.getByTestId("space-account-wide").textContent).toBe("Signed in as @jane at GitLab");
+    expect(screen.queryByTestId("space-signin-caption")).toBeNull();
   });
 
   test("Sign out sends the command and every repository reads as the core then says", async () => {

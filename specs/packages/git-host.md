@@ -48,7 +48,7 @@ When a client sends `space.signin.start` on the server shell, the core shall sig
 While the home holds an app token, when a call to the host is made, the core shall present the access secret as a bearer credential and keep the token current:
 
 - an access secret within a minute of expiring, or one the host answers `token_expired` to, is refreshed first through the refresh secret, one refresh at a time, the new pair stored before any further call [[storage-19](storage.md#storage-19)]; a call refused `token_expired` is retried once after the refresh;
-- a refresh the host refuses, or a call the host answers `invalid_token`, `token_revoked` or `reauth_required` to, signs the device out of the home: the credential is removed, the account kept in `home.yaml` marked signed out, and every spex repository with a remote turns unreachable with "Sign in again" [[space-61](space.md#space-61)], until the next sign-in;
+- a refresh the host refuses, or a call the host answers `invalid_token`, `token_revoked` or `reauth_required` to, signs the device out of the home: the credential is removed, the account kept in `home.yaml` marked signed out, the Groups state reporting the sign-out as the host's with that account's login [[space-3](space.md#space-3)], held for the core's run alone, and every spex repository with a remote turns unreachable with "Sign in again" [[space-61](space.md#space-61)], until the next sign-in;
 - `rate_limited` is reported with the host's retry time, `provider_unavailable` and a network failure as unreachable, and a `host_refused` with the host's words [[git-host-11](git-host.md#git-host-11)].
 
 ### Reads and Writes
@@ -136,7 +136,7 @@ When an integration suite starts a real core on a scratch home against the stand
 - the browser flow's URL names the loopback redirect, an S256 challenge and `client_id=spex`; completing it at the stand-in stores the app token with owner-only permissions and the account in `home.yaml`, and the callback page says the browser may be closed [[git-host-2](#git-host-2)];
 - a callback with a wrong `state`, one carrying `access_denied`, a refused exchange, a cancel and a test-shortened expiry each end the sign-in with its cause and store nothing; a second start during a flow is `busy` [[git-host-2](#git-host-2)];
 - the device flow replies with the stand-in's user code and its verification URL completed with that code, polls at its interval, backs off on slow down, and completes on approval; a denial and an expiry end it with their causes [[git-host-3](#git-host-3)];
-- an access secret the stand-in expires is refreshed once before the next call, two concurrent calls refresh once, and a refresh the stand-in refuses signs the device out with every remote repository unreachable until the next sign-in [[git-host-4](#git-host-4)];
+- an access secret the stand-in expires is refreshed once before the next call, two concurrent calls refresh once, and a refresh the stand-in refuses, or a device it revoked, signs the device out with every remote repository unreachable and the state reporting the host's sign-out with the account's login until the next sign-in, which clears it [[git-host-4](#git-host-4)];
 - sign-out revokes the device at the stand-in and removes the credential, and a stand-in that cannot be reached still leaves the home signed out [[git-host-10](#git-host-10)].
 
 #### git-host-14

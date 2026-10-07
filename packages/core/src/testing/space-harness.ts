@@ -179,6 +179,17 @@ const CHANGES = new Set(["new", "updated", "deleted"]);
 export function assertGroupsState(state: GroupsState): void {
   assert.deepEqual(Object.keys(state).sort(), GROUPS_KEYS);
   assert.ok(typeof state.home === "string" && Array.isArray(state.diagnostics) && Array.isArray(state.groups));
+  // The sign-in's phase: idle carries nothing but the host's sign-out,
+  // with the login, and that only while signed out (space-30).
+  const signIn = state.signIn;
+  assert.ok(["idle", "running", "failed"].includes(signIn.phase), JSON.stringify(signIn));
+  if (signIn.phase === "idle" && signIn.signedOut !== undefined) {
+    assert.deepEqual(Object.keys(signIn).sort(), ["phase", "signedOut"]);
+    assert.ok(signIn.signedOut.by === "host" && typeof signIn.signedOut.login === "string" && Object.keys(signIn.signedOut).length === 2, JSON.stringify(signIn));
+    assert.equal(state.account, null, "the host's sign-out is said only while signed out");
+  } else if (signIn.phase === "idle") {
+    assert.deepEqual(Object.keys(signIn), ["phase"]);
+  }
   for (const group of state.groups) {
     assert.deepEqual(Object.keys(group).sort(), ["fullPath", "id", "name", "own", "repositories", "url"]);
     for (const repository of group.repositories) {

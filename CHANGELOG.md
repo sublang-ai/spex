@@ -33,8 +33,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   runtime, never through a remote URL, and the device's token is kept
   in `local/credentials.yaml`, readable by you alone. An app that starts
   signed in reads the host once something first shows your groups, so
-  they and Pick a group's choices need no Refresh
-  ([DR-106](specs/decisions/106-groups-after-a-restart-and-a-host-sign-out.md)).
+  they and Pick a group's choices need no Refresh, and when the host
+  signs this device out, Groups says so and offers to sign in again as
+  the same account ([DR-106](specs/decisions/106-groups-after-a-restart-and-a-host-sign-out.md)).
 - Playbooks come in spec packages ([DR-104](specs/decisions/104-spec-package-format-and-client-environments.md)).
   Each spex repository has an environment: `spex.yaml` requests spec
   packages from the Git host's registry, a Git repository or a folder in

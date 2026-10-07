@@ -44,6 +44,7 @@ While the home is not signed in, the Groups surface's header shall be one card t
 - <host name> is the host name of the home's host URL: the page the person opens says how to sign in there, and the surface names no account elsewhere;
 - while a flow runs, Sign in reads "Signing in…", disabled, beside Cancel, and no row offers a sign-in control;
 - a denial, an expiry or a refusal ends the flow, the card reading the core's cause as one sentence and the control "Sign in again";
+- while no flow runs or stands failed and the core reports that the host signed this device out [[git-host-4](git-host.md#git-host-4)], the card reads "<host name> signed this device out. Sign in again to continue as @<login>." in place of its first sentence, <login> being the account's, and Sign in reads "Sign in again";
 - while signed out, your own group's spex repository reads "On this device only — shared once you sign in" with no control, a spex repository with a remote at the host is unreachable with "Sign in again" and the others are local only [[space-61](#space-61)], and the surface never contacts the host.
 
 #### space-4
@@ -511,7 +512,8 @@ interface GroupsState {
   git: { ok: true; version: string } | { ok: false; guidance: string };
   host: { url: string; displayName: string | null };
   account: { id: string; login: string; displayName: string | null } | null;
-  signIn: { phase: "idle" } | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
+  signIn: { phase: "idle"; signedOut?: { by: "host"; login: string } }   // signedOut: the host signed this device out, for the core's run
+    | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
@@ -736,6 +738,7 @@ Where the Groups surface renders over a signed-out home, when the reader signs i
 - in the device flow, the card reads "Continue in your browser:", the link "Open <host name> to sign in" whose href is the verification URL opening a new tab, and "Sign in there and approve; you return here signed in.", with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
 - in the browser flow opened through the bridge, the card reads that the browser is open at the host name with "Open it again" linking to the sign-in URL; where the bridge refused, it reads as the device flow's [[space-3](#space-3)];
 - Cancel brings back the two sentences and Sign in; a denial reads the core's cause as one sentence with "Sign in again" [[space-3](#space-3)];
+- where the core reports that the host signed this device out, the card reads "<host name> signed this device out. Sign in again to continue as @<login>." before "Until you do, everything stays on this device and nothing is contacted.", with "Sign in again" as its control, in English and in Chinese [[space-3](#space-3)];
 - signed in, the header reads "Signed in as @<login> at <host>" with Sign out, the read time with Refresh, and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
 - a group's own repository reads "Group records", a project's with no code remote "Code not on a remote", and a local-only one "On this device only" [[space-1](#space-1)] [[space-61](#space-61)].
 

@@ -1862,6 +1862,10 @@ export class SpaceManager {
   private readonly attached = new Map<string, HostListing>();
   /** The sign-in shown on the header (space-30). */
   private signInState: GroupsState["signIn"] = { phase: "idle" };
+  /** The login of the account the host signed this device out of
+   * (git-host-4): said on the header while no flow runs or stands
+   * failed (space-3), for the core's run, until the next sign-in. */
+  private hostSignedOut?: string;
   /** Whether the read a signed-in start owes is still to be begun at a
    * client's first ask for the state (git-host-5): spent on that ask. */
   private startRead = true;
@@ -1999,6 +2003,7 @@ export class SpaceManager {
     this.flow = undefined;
     try {
       this.host.store.signIn(account);
+      this.hostSignedOut = undefined;
       this.view = undefined;
       this.attached.clear();
       this.readFailure = undefined;
@@ -2020,8 +2025,11 @@ export class SpaceManager {
   }
 
   /** The host signed this device out (git-host-4): the credential is
-   * gone, the account kept and marked signed out. */
+   * gone, the account kept and marked signed out, and the header says
+   * the host did it, naming the account's login (space-3). */
   signedOutByHost(): void {
+    const account = this.host.store.home.account();
+    if (account) this.hostSignedOut = account.login;
     this.host.store.signOut();
     this.view = undefined;
     this.attached.clear();
@@ -2036,6 +2044,7 @@ export class SpaceManager {
     this.flow?.cancel();
     await this.host.client.signOut();
     this.host.store.signOut();
+    this.hostSignedOut = undefined;
     this.view = undefined;
     this.attached.clear();
     this.readFailure = undefined;
@@ -2765,6 +2774,13 @@ export class SpaceManager {
     return state;
   }
 
+  /** The sign-in the header shows (space-3, space-30): idle carries the
+   * host's sign-out, with the account's login, while signed out. */
+  private signInView(): GroupsState["signIn"] {
+    if (this.signInState.phase !== "idle" || this.hostSignedOut === undefined || this.signedIn()) return this.signInState;
+    return { phase: "idle", signedOut: { by: "host", login: this.hostSignedOut } };
+  }
+
   private async assemble(recompute: boolean): Promise<GroupsState> {
     const store = this.host.store;
     const repositories: RepositoryState[] = [];
@@ -2785,7 +2801,7 @@ export class SpaceManager {
       git: await this.probe.version(),
       host: { url: host.url, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
       account: store.home.account(),
-      signIn: this.signInState,
+      signIn: this.signInView(),
       readAt: this.signedIn() ? this.view?.readAt ?? null : null,
       groups: this.groupsOf(repositories),
       diagnostics,

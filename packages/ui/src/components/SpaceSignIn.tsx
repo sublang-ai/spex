@@ -8,9 +8,10 @@
 // bridge (app-shell-37), the card offering it again; where no bridge
 // opened it, and on the served page's device flow, the card links the
 // page to finish at — the device flow's link carries the code, which
-// is never shown. The outcome is state: the surface reads `signIn` and
-// `account` as the core sends them and keeps only the start's reply,
-// which state does not carry.
+// is never shown. Where the host signed this device out, the card says
+// so with the login to sign in again as. The outcome is state: the
+// surface reads `signIn` and `account` as the core sends them and keeps
+// only the start's reply, which state does not carry.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
@@ -207,7 +208,8 @@ export function AccountField({
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
 
 /** The header while signed out (space-3): one card saying what signing
- * in brings, or the flow in flight, or why it ended, with Sign in. */
+ * in brings, or that the host signed this device out, or the flow in
+ * flight, or why it ended, with Sign in. */
 export function SignInCard({
   groups,
   signIn,
@@ -219,6 +221,9 @@ export function SignInCard({
 }) {
   const site = siteName(groups);
   const running = signIn.running;
+  // The host signed this device out (git-host-4): said with the login
+  // the account bore, until the next sign-in.
+  const hostSignedOut = groups.signIn.phase === "idle" ? groups.signIn.signedOut : undefined;
   const finish = i18n._("Sign in there and approve; you return here signed in.");
 
   // The page to finish at, as a link: the device flow's URL carries the
@@ -278,7 +283,9 @@ export function SignInCard({
     body = (
       <>
         <p data-testid="space-signin-caption">
-          {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
+          {hostSignedOut
+            ? i18n._("{site} signed this device out. Sign in again to continue as @{login}.", { site, login: hostSignedOut.login })
+            : i18n._("Sign in to see your groups and share each project's records with the people in them.")}
         </p>
         <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
       </>
@@ -288,8 +295,8 @@ export function SignInCard({
   const label =
     running || signIn.starting
       ? i18n._({ id: "Signing in…", comment: "the Sign in control, while the sign-in runs" })
-      : signIn.failure !== undefined
-        ? i18n._({ id: "Sign in again", comment: "the Sign in control after a sign-in failed" })
+      : signIn.failure !== undefined || hostSignedOut
+        ? i18n._({ id: "Sign in again", comment: "the Sign in control after a sign-in failed or the host signed this device out" })
         : i18n._({ id: "Sign in", comment: "sign in to the Git host" });
 
   return (
