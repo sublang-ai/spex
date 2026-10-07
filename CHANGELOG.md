@@ -18,8 +18,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 - Share a project's records through a Git host ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Space becomes **Groups**: sign in to the host — spex.pub, or the one
-  `SPEX_HOST_URL` names when a home is created — through your browser on
-  the desktop or with a code on the server shell, and Spex lists your
+  `SPEX_HOST_URL` names when a home is created — through your browser,
+  opened by the desktop or linked by the server shell with no code to
+  type, and Spex lists your
   groups and the spex repositories you can read in each, creates your
   own group's on the host, and creates a project's in the group you pick.
   The host's members of a spex repository see its records, with the
