@@ -106,11 +106,38 @@ class Client {
   }
   /** Run a long command on one repository — it replies accepted at once
    * (space-29) — and wait until that repository's machine leaves
-   * running. */
+   * running. Broadcasts coalesce, and one assembled before the command
+   * took effect can arrive after it still reading the previous phase: a
+   * reading that is not running settles the command only after one of
+   * its own running readings, or where a read made after the reply
+   * agrees the machine no longer runs. */
   async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<RepositoryState> {
+    const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
+    // The core runs in this process: its steps' `since` reads this clock.
+    const sent = Date.now();
     assert.deepEqual(await this.expectOk(type, fields), { accepted: true });
-    return this.waitRepository(from, (fields as { repository: string }).repository, (repository) => repository.sync.phase !== "running");
+    const start = Date.now();
+    let ran = false;
+    for (let next = from; ;) {
+      for (; next < this.messages.length; next += 1) {
+        const message = this.messages[next];
+        if (message.type !== "space.state") continue;
+        assertGroupsState(message.state);
+        let repository: RepositoryState;
+        try { repository = repositoryOf(message.state, key); } catch { continue; }
+        const { sync } = repository;
+        if (sync.phase === "running") { ran ||= sync.since >= sent; continue; }
+        if (ran) return repository;
+        const fresh = await this.repository(key);
+        if (fresh.sync.phase !== "running") return fresh;
+      }
+      if (Date.now() - start > 20_000) {
+        const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => describe(m.state));
+        throw new Error(`timeout waiting for ${key} to settle; saw ${seen.join(" | ")}`);
+      }
+      await sleep(10);
+    }
   }
   /** One repository's state, read afresh. */
   async repository(key: string): Promise<RepositoryState> {
