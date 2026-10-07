@@ -10,9 +10,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { moduleDirectoriesAbove } from "@sublang/spex-core";
 
@@ -48,6 +49,31 @@ test("the desktop's core signs in through the browser and runs Git's helper on t
   });
   assert.deepEqual(options.scaffoldCommand, [electron, join(packageRoot, "..", "..", "packages", "cli", "dist", "cli.js")]);
   assert.deepEqual(options.scaffoldEnv, { ELECTRON_RUN_AS_NODE: "1" });
+});
+
+test("a packaged shell hands the core the module directories its asar archive unpacks", () => {
+  // Electron's file system lists an archive's unpacked node_modules
+  // inside it; the files themselves lie beside it (app-shell-13).
+  const resources = mkdtempSync(join(tmpdir(), "spex-resources-"));
+  try {
+    mkdirSync(join(resources, "app.asar", "dist"), { recursive: true });
+    mkdirSync(join(resources, "app.asar", "node_modules"));
+    mkdirSync(join(resources, "app.asar.unpacked", "node_modules"), { recursive: true });
+    const options = desktopCoreOptions({
+      dataDir: "/home/ada/.spex",
+      userData: "/home/ada/Library/Application Support/Spex",
+      systemLanguages: ["en-US"],
+      execPath: "/Applications/Spex.app/Contents/MacOS/Spex",
+      moduleUrl: pathToFileURL(join(resources, "app.asar", "dist", "main.js")).href,
+    });
+    // app-shell-33: the engine links an install writes resolve on the
+    // real file system, which cannot open the archive.
+    const handed = options.compileRuntime?.modulePaths ?? [];
+    assert.ok(handed.includes(join(resources, "app.asar.unpacked", "node_modules")), JSON.stringify(handed));
+    assert.ok(!handed.some((dir) => /\.asar[\\/]/.test(dir)), JSON.stringify(handed));
+  } finally {
+    rmSync(resources, { recursive: true, force: true });
+  }
 });
 
 test("main.ts starts the core with those options, the smoke redirect unchanged", () => {

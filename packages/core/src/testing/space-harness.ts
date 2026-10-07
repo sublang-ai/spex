@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
@@ -106,11 +106,38 @@ class Client {
   }
   /** Run a long command on one repository — it replies accepted at once
    * (space-29) — and wait until that repository's machine leaves
-   * running. */
+   * running. Broadcasts coalesce, and one assembled before the command
+   * took effect can arrive after it still reading the previous phase: a
+   * reading that is not running settles the command only after one of
+   * its own running readings, or where a read made after the reply
+   * agrees the machine no longer runs. */
   async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<RepositoryState> {
+    const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
+    // The core runs in this process: its steps' `since` reads this clock.
+    const sent = Date.now();
     assert.deepEqual(await this.expectOk(type, fields), { accepted: true });
-    return this.waitRepository(from, (fields as { repository: string }).repository, (repository) => repository.sync.phase !== "running");
+    const start = Date.now();
+    let ran = false;
+    for (let next = from; ;) {
+      for (; next < this.messages.length; next += 1) {
+        const message = this.messages[next];
+        if (message.type !== "space.state") continue;
+        assertGroupsState(message.state);
+        let repository: RepositoryState;
+        try { repository = repositoryOf(message.state, key); } catch { continue; }
+        const { sync } = repository;
+        if (sync.phase === "running") { ran ||= sync.since >= sent; continue; }
+        if (ran) return repository;
+        const fresh = await this.repository(key);
+        if (fresh.sync.phase !== "running") return fresh;
+      }
+      if (Date.now() - start > 20_000) {
+        const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => describe(m.state));
+        throw new Error(`timeout waiting for ${key} to settle; saw ${seen.join(" | ")}`);
+      }
+      await sleep(10);
+    }
   }
   /** One repository's state, read afresh. */
   async repository(key: string): Promise<RepositoryState> {
@@ -176,6 +203,10 @@ export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
 }
 
+/** A scratch home's preferences file, as written. */
+export const prefsOf = (dataDir: string): Record<string, unknown> =>
+  (JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
+
 export function createSpaceHarness() {
   const scratch = mkdtempSync(join(tmpdir(), "spex-space-"));
   const userHome = join(scratch, "home");
@@ -219,6 +250,42 @@ playbooks:
     return dir;
   }
 
+  /** The core environment of a home standing in for another device: Git
+   * configured with that device's own identity. Every scratch home runs
+   * on this host, so under the fallback identity (space-32) two homes
+   * starting one project's spex repository within one clock second write
+   * the same root commit, and their histories are one — never the
+   * unrelated pair a join meets (space-13). */
+  function otherDevice(name: string): Record<string, string> {
+    const file = join(scratch, `${name}.gitconfig`);
+    writeFileSync(file, `[user]\n\tname = ${name}\n\temail = ${name}@example.test\n`);
+    return { GIT_CONFIG_GLOBAL: file };
+  }
+
+  /** A Git working folder named `name`. */
+  function gitFolder(name: string): string {
+    const dir = join(mkdtempSync(join(scratch, `${name}-`)), name);
+    mkdirSync(dir);
+    git(dir, "init", "-q");
+    return dir;
+  }
+
+  /** A Git working folder bearing another folder's name, so the second
+   * home's spex repository takes the same key and `project.json`. */
+  function sameNameFolder(original: string, side: string): string {
+    const dir = join(mkdtempSync(join(scratch, `${side}-`)), basename(original));
+    mkdirSync(dir);
+    git(dir, "init", "-q");
+    return dir;
+  }
+
+  /** Add a working folder: it pairs with a local spex repository in your
+   * own group (storage-6); returns its key and its clone. */
+  async function addFolder(home: Home, path: string): Promise<{ key: string; clone: string }> {
+    const project = await home.client.expectOk("project.register", { path });
+    return { key: project.id, clone: clonePath(home.dataDir, project.id) };
+  }
+
   function sleepingSsh(): { script: string; pidFile: string } {
     const script = join(scratch, `sleep-ssh-${randomUUID().slice(0, 8)}.sh`);
     const pidFile = `${script}.pid`;
@@ -239,7 +306,8 @@ playbooks:
     throw new Error(`the sleeping transport never started (${pidFile})`);
   }
 
-  /** Join a clone to a remote whose history it does not share: the first
+  /** Join a clone to a remote whose history it does not share — the
+   * clone of a home with its own identity (`otherDevice`): the first
    * sync ends unrelated, the join asks for any conflict, "mine" answers
    * each. */
   async function joinRemote(home: Home, repository: string): Promise<RepositoryState> {
@@ -404,7 +472,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });

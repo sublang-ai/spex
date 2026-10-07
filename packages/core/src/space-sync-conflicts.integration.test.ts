@@ -15,7 +15,7 @@ import type { RepositoryState } from "./protocol.js";
 import { clonePath, createSpaceHarness } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, bareRepo, joinRemote, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, otherDevice, joinRemote, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 /** A project's own settings: the player each role uses, no model (core-service-2). */
@@ -25,7 +25,7 @@ test("space-38: a Settings conflict, validation at Apply, a slipped writer, a re
   const bare = bareRepo();
   const a = await startHome("a3");
   t.after(() => a.stop());
-  const b = await startHome("b3", { project: false });
+  const b = await startHome("b3", { project: false, env: otherDevice("b3") });
   t.after(() => b.stop());
   const projectA = await a.client.expectOk("project.register", { path: a.projectDir });
   const key = projectA.id;
