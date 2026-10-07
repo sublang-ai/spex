@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
@@ -203,6 +203,10 @@ export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
 }
 
+/** A scratch home's preferences file, as written. */
+export const prefsOf = (dataDir: string): Record<string, unknown> =>
+  (JSON.parse(readFileSync(join(dataDir, "local", "prefs.json"), "utf8")) as { prefs: Record<string, unknown> }).prefs;
+
 export function createSpaceHarness() {
   const scratch = mkdtempSync(join(tmpdir(), "spex-space-"));
   const userHome = join(scratch, "home");
@@ -256,6 +260,30 @@ playbooks:
     const file = join(scratch, `${name}.gitconfig`);
     writeFileSync(file, `[user]\n\tname = ${name}\n\temail = ${name}@example.test\n`);
     return { GIT_CONFIG_GLOBAL: file };
+  }
+
+  /** A Git working folder named `name`. */
+  function gitFolder(name: string): string {
+    const dir = join(mkdtempSync(join(scratch, `${name}-`)), name);
+    mkdirSync(dir);
+    git(dir, "init", "-q");
+    return dir;
+  }
+
+  /** A Git working folder bearing another folder's name, so the second
+   * home's spex repository takes the same key and `project.json`. */
+  function sameNameFolder(original: string, side: string): string {
+    const dir = join(mkdtempSync(join(scratch, `${side}-`)), basename(original));
+    mkdirSync(dir);
+    git(dir, "init", "-q");
+    return dir;
+  }
+
+  /** Add a working folder: it pairs with a local spex repository in your
+   * own group (storage-6); returns its key and its clone. */
+  async function addFolder(home: Home, path: string): Promise<{ key: string; clone: string }> {
+    const project = await home.client.expectOk("project.register", { path });
+    return { key: project.id, clone: clonePath(home.dataDir, project.id) };
   }
 
   function sleepingSsh(): { script: string; pidFile: string } {
@@ -444,7 +472,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });
