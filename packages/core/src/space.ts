@@ -1949,10 +1949,16 @@ export class SpaceManager {
     if (this.flow || this.signInState.phase === "running" || this.host.client.signingIn()) throw new CoreError("busy", signInRunning());
     const kind = this.host.signInFlow;
     let started: { kind: "browser"; flow: BrowserSignIn } | { kind: "device"; flow: DeviceSignIn };
+    // The host's display name names it on the sign-in card (git-host-15):
+    // read beside the start where none is held, a failure leaving it unknown.
+    const describing = this.view || this.described
+      ? undefined
+      : this.host.client.describe().then((described) => { this.described = described; }, () => undefined);
     try {
-      started = kind === "browser"
-        ? { kind, flow: await this.host.client.startBrowserSignIn({ pages: callbackPages() }) }
-        : { kind, flow: await this.host.client.startDeviceSignIn() };
+      const flow = kind === "browser"
+        ? this.host.client.startBrowserSignIn({ pages: callbackPages() }).then((browser) => ({ kind: "browser" as const, flow: browser }))
+        : this.host.client.startDeviceSignIn().then((device) => ({ kind: "device" as const, flow: device }));
+      [started] = await Promise.all([flow, describing]);
     } catch (error) {
       if (error instanceof SignInBusyError) throw new CoreError("busy", signInRunning());
       const failure = signInFailure(error, this.hostName());

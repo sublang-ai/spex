@@ -462,7 +462,7 @@ export class GitHostClient {
 
   /**
    * The device flow (git-host-3): the host's user code and verification
-   * URL, then polling the token endpoint at its interval, five seconds
+   * URL, completed with the code where the host gives it, then polling the token endpoint at its interval, five seconds
    * slower on each `slow_down`, until the token, a denial or the expiry.
    */
   async startDeviceSignIn(): Promise<DeviceSignIn> {
@@ -475,7 +475,9 @@ export class GitHostClient {
       start = {
         deviceCode: text(body.device_code),
         userCode: text(body.user_code),
-        verificationUri: text(body.verification_uri),
+        // The URL completed with the code where the host gives one,
+        // so the person never types it (git-host-3).
+        verificationUri: optionalText(body.verification_uri_complete) || text(body.verification_uri),
         expiresIn: positive(body.expires_in, 600),
         interval: positive(body.interval, 5),
       };

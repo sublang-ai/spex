@@ -233,12 +233,12 @@ test("git-host-2: a cancel and an expiry end the sign-in and close the listener;
 // ---------------------------------------------------------------------------
 // git-host-3: the device flow
 
-test("git-host-3: the device flow shows the user code, polls at the interval and completes on approval", async () => {
+test("git-host-3: the device flow links the user code, polls at the interval and completes on approval", async () => {
   const t = await setup();
   try {
     const flow = await t.client.startDeviceSignIn();
     assert.match(flow.userCode, /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/);
-    assert.equal(flow.verificationUri, `${t.host.url}/login/device`);
+    assert.equal(flow.verificationUri, `${t.host.url}/login/device?user_code=${encodeURIComponent(flow.userCode)}`);
     assert.ok(flow.expiresAt > Date.now() + 590_000);
     assert.deepEqual(t.host.script.pendingDevices(), [flow.userCode]);
     while (tokenPolls(t.host).length < 2) await new Promise((r) => setTimeout(r, 50));
