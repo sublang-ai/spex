@@ -316,10 +316,6 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} is no longer an ancestor"
 
-#: src/components/SpaceSignIn.tsx
-msgid "{host}'s sign-in page"
-msgstr "{host}'s sign-in page"
-
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours}h"
@@ -1271,10 +1267,6 @@ msgstr "Browser access follows the selected agent in Settings"
 msgid "Browser not prepared"
 msgstr "Browser not prepared"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Browser opened at {host}"
-msgstr "Browser opened at {host}"
-
 #: src/lib/media.ts
 msgid "Browser preparation · {actor}"
 msgstr "Browser preparation · {actor}"
@@ -1624,6 +1616,11 @@ msgstr "Close this tab — the session stays in the sidebar"
 msgid "Code"
 msgstr "Code"
 
+#. a project's spex repository whose records name no code remote
+#: src/components/SpaceGroups.tsx
+msgid "Code not on a remote"
+msgstr "Code not on a remote"
+
 #. catalog family: the file naming where a project's code lives
 #: src/lib/space.ts
 msgid "code remote"
@@ -1843,10 +1840,6 @@ msgstr "Connection to the Spex core lost — reconnecting."
 msgid "Continue"
 msgstr "Continue"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Continue at {link}"
-msgstr "Continue at {link}"
-
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
@@ -1864,7 +1857,6 @@ msgstr "copied"
 msgid "Copied"
 msgstr "Copied"
 
-#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecView.tsx
 msgid "Copied {what}"
@@ -1896,10 +1888,6 @@ msgstr "Copy"
 msgid "Copy {id}"
 msgstr "Copy {id}"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Copy code"
-msgstr "Copy code"
-
 #: src/components/SpecView.tsx
 msgid "Copy command {command}"
 msgstr "Copy command {command}"
@@ -1917,10 +1905,6 @@ msgstr "Copy failed"
 #: src/components/SpecView.tsx
 msgid "Copy failed for {what}"
 msgstr "Copy failed for {what}"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Copy is not available here; select the code to copy it."
-msgstr "Copy is not available here; select the code to copy it."
 
 #: src/components/SpaceSurface.tsx
 msgid "Copy is not available here; the path is shown to select."
@@ -2460,10 +2444,6 @@ msgstr "Enter a model ID, inherit, or use the provider default."
 msgid "Enter a model ID, take the configured value, or use the provider default."
 msgstr "Enter a model ID, take the configured value, or use the provider default."
 
-#: src/components/SpaceSignIn.tsx
-msgid "Enter it at {link}"
-msgstr "Enter it at {link}"
-
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter sends"
@@ -2666,6 +2646,10 @@ msgstr "Filter projects"
 msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Finish signing in in your browser:"
+msgstr "Finish signing in in your browser:"
+
 #. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
@@ -2837,6 +2821,11 @@ msgstr "Go to Dashboard, Projects, Playbooks, Groups, Settings"
 #: src/components/SpecView.tsx
 msgid "Graph"
 msgstr "Graph"
+
+#. where a group's own spex repository's code lives: it has none, holding the group's records
+#: src/components/SpaceGroups.tsx
+msgid "Group records"
+msgstr "Group records"
 
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
@@ -3516,11 +3505,6 @@ msgstr "No adapters in use yet — assign agents to the Captain or a playbook ro
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "no automatic check for this adapter — verify sign-in yourself"
 
-#. a spex repository whose records name no code remote
-#: src/components/SpaceGroups.tsx
-msgid "No code"
-msgstr "No code"
-
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "No config file"
@@ -3851,6 +3835,14 @@ msgstr "On (unsupported)"
 msgid "On the host for this code"
 msgstr "On the host for this code"
 
+#: src/lib/space.ts
+msgid "On this device only"
+msgstr "On this device only"
+
+#: src/components/SpaceGroups.tsx
+msgid "On this device only — shared once you sign in"
+msgstr "On this device only — shared once you sign in"
+
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
@@ -3860,14 +3852,14 @@ msgstr "One normative spec item per state behavior — the compiler's middle sta
 msgid "One spec item per state behavior, from the last compile"
 msgstr "One spec item per state behavior, from the last compile"
 
-#: src/lib/space.ts
-msgid "Only on this device"
-msgstr "Only on this device"
-
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
 msgid "Open"
 msgstr "Open"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open {host} to sign in"
+msgstr "Open {host} to sign in"
 
 #: src/components/RecordRow.tsx
 msgid "Open {id}"
@@ -3905,6 +3897,10 @@ msgstr "Open Enable"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open it again"
+msgstr "Open it again"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Open its page"
@@ -5132,8 +5128,6 @@ msgid "shown despite search"
 msgstr "shown despite search"
 
 #. sign in to the Git host
-#. sign in to the Git host
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "Sign in"
@@ -5159,30 +5153,36 @@ msgstr "Sign in to {who} again"
 msgid "Sign in to publish"
 msgstr "Sign in to publish"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in to see your groups and share each project's records with the people in them."
+msgstr "Sign in to see your groups and share each project's records with the people in them."
+
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in with your {host} account there and approve; you return here signed in."
+msgstr "Sign in with your {host} account there and approve; you return here signed in."
+
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
 msgid "Sign out"
 msgstr "Sign out"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Sign-in code"
-msgstr "Sign-in code"
+msgid "Sign-in did not complete: {cause}."
+msgstr "Sign-in did not complete: {cause}."
 
 #: src/components/SpaceSignIn.tsx
-msgid "Signed in as {login}"
-msgstr "Signed in as {login}"
+msgid "Signed in as @{login}"
+msgstr "Signed in as @{login}"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Signed in as {login} at {host}"
-msgstr "Signed in as {login} at {host}"
+msgid "Signed in as @{login} at {host}"
+msgstr "Signed in as @{login} at {host}"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 msgstr "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 
 #. the Sign in control, while the sign-in runs
-#. the Sign in control, while the sign-in runs
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Signing in…"
 msgstr "Signing in…"
@@ -5321,6 +5321,10 @@ msgstr "Spex has no config file yet — playbooks are unavailable."
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex itself follows your OS theme."
+
+#: src/components/SpaceSurface.tsx
+msgid "Spex keeps this device's files in {path}"
+msgstr "Spex keeps this device's files in {path}"
 
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
@@ -6064,6 +6068,10 @@ msgstr "unrelated history"
 msgid "Unrelated history"
 msgstr "Unrelated history"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Until you do, everything stays on this device and nothing is contacted."
+msgstr "Until you do, everything stays on this device and nothing is contacted."
+
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
 msgid "untitled session"
@@ -6316,6 +6324,10 @@ msgstr "Writable paths (comma-separated)"
 msgid "Writing…"
 msgstr "Writing…"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
+msgstr "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
+
 #: src/components/SpaceSync.tsx
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 msgstr "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
@@ -6333,14 +6345,11 @@ msgstr "Your config file has errors — playbooks are unavailable."
 msgid "Your groups"
 msgstr "Your groups"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Your groups and each project's records shared with its members · nothing contacted until you sign in"
-msgstr "Your groups and each project's records shared with its members · nothing contacted until you sign in"
-
 #. switch: show your own group's playbooks
 #. switch: show your own group's playbooks
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Your own group"
 msgstr "Your own group"
 

@@ -374,5 +374,5 @@ export const HOST_WORDS = /\b(space|namespace)\b/i;
 /** "remote" says only what space-7 and space-23 name it for: the
  * code's remote, never the host's things. */
 export function strayRemote(text: string): boolean {
-  return /\bremote\b/i.test(text.replace(/code remote/gi, ""));
+  return /\bremote\b/i.test(text.replace(/code remote|code not on a remote/gi, ""));
 }

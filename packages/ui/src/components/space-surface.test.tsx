@@ -64,7 +64,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       window.dispatchEvent(new Event("focus"));
     });
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Only on this device");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
     deliver(repoState());
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 2h ago");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
@@ -964,15 +964,15 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
 });
 
 describe("GROUPS: reveal and copy (space-26)", () => {
-  test("with the native bridge the home and the clone reveal in the file manager; a path it refuses says so", async () => {
+  test("with the native bridge the clone reveals in the file manager; a path it refuses says so", async () => {
     const revealPath = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(true);
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), revealPath };
     await renderGroups(repoState());
-    const reveal = screen.getByTestId("space-path-reveal");
-    expect(reveal.textContent).toMatch(/^Show in (Finder|folder)$/);
+    // The header holds no path to reveal (space-1).
+    expect(screen.queryByTestId("space-path-reveal")).toBeNull();
+    const reveal = screen.getByTestId("space-clone-path-reveal");
+    expect(reveal.getAttribute("aria-label")).toMatch(/^Show in (Finder|folder)$/);
     fireEvent.click(reveal);
-    expect(revealPath).toHaveBeenCalledWith(HOME);
-    fireEvent.click(screen.getByTestId("space-clone-path-reveal"));
     expect(revealPath).toHaveBeenLastCalledWith(CLONE);
     revealPath.mockResolvedValueOnce(false);
     fireEvent.click(reveal);
@@ -981,11 +981,11 @@ describe("GROUPS: reveal and copy (space-26)", () => {
 
   test("with no clipboard access Copy path falls back to a selectable read-only field", async () => {
     await renderGroups(repoState());
-    expect(screen.queryByTestId("space-path-reveal")).toBeNull();
-    fireEvent.click(screen.getByTestId("space-path-copy"));
-    const field = screen.getByTestId("space-path-field") as HTMLInputElement;
+    expect(screen.queryByTestId("space-clone-path-reveal")).toBeNull();
+    fireEvent.click(screen.getByTestId("space-clone-path-copy"));
+    const field = screen.getByTestId("space-clone-path-field") as HTMLInputElement;
     expect(field.readOnly).toBe(true);
-    expect(field.value).toBe(HOME);
+    expect(field.value).toBe(CLONE);
     expect(live()).toContain("shown to select");
   });
 
@@ -993,10 +993,12 @@ describe("GROUPS: reveal and copy (space-26)", () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await renderGroups(repoState());
-    fireEvent.click(screen.getByTestId("space-path-copy"));
-    await waitFor(() => expect(live()).toBe(`Copied ${HOME}`));
-    expect(writeText).toHaveBeenCalledWith(HOME);
-    expect(screen.getByTestId("space-path-copy").textContent).toBe("Copied");
+    const copy = screen.getByTestId("space-clone-path-copy");
+    expect(copy.getAttribute("aria-label")).toBe("Copy path");
+    fireEvent.click(copy);
+    await waitFor(() => expect(live()).toBe(`Copied ${CLONE}`));
+    expect(writeText).toHaveBeenCalledWith(CLONE);
+    expect(copy.parentElement?.textContent).toContain("Copied");
   });
 });
 
@@ -1054,7 +1056,7 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
     await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Groups" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "jane" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Your own group" })).toBeTruthy();
     expect(screen.getByRole("tablist", { name: "Views of academy-spex" })).toBeTruthy();
     const syncTab = screen.getByRole("tab", { name: "Sync" });
     const exploreTab = screen.getByRole("tab", { name: "Explore" });

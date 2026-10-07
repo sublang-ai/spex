@@ -1471,6 +1471,11 @@ msgstr "Nothing was saved. Fix the sync rules file, then sync again."
 msgid "On {branch}; check out spex in a terminal"
 msgstr "On {branch}; check out spex in a terminal"
 
+#. A spex repository's state: it has no remote on the Git host
+#: src/space.ts
+msgid "On this device only"
+msgstr "On this device only"
+
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
 msgid "only .md files under specs/ can be read"
@@ -1485,11 +1490,6 @@ msgstr "only a closed intent leaves history"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "only a finished intent confirms done"
-
-#. A spex repository's state: it has no remote on the Git host
-#: src/space.ts
-msgid "Only on this device"
-msgstr "Only on this device"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts

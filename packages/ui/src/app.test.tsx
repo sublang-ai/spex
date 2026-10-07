@@ -894,7 +894,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     // (projects-4, space-61).
     expect(records.textContent).toContain("alpha-spex in me");
     await vi.waitFor(() =>
-      expect(screen.getByTestId("overview-records-state").textContent).toBe("Only on this device"),
+      expect(screen.getByTestId("overview-records-state").textContent).toBe("On this device only"),
     );
     expect(commandMock).toHaveBeenCalledWith("space.get", {});
 

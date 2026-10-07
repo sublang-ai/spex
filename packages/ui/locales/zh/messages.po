@@ -316,10 +316,6 @@ msgstr "{head} — {said}"
 msgid "{head} is no longer an ancestor"
 msgstr "{head} 已不再是祖先提交"
 
-#: src/components/SpaceSignIn.tsx
-msgid "{host}'s sign-in page"
-msgstr "{host} 的登录页面"
-
 #: src/lib/time.ts
 msgid "{hours}h"
 msgstr "{hours} 小时"
@@ -1271,10 +1267,6 @@ msgstr "浏览器访问权限遵循“设置”中所选代理的配置"
 msgid "Browser not prepared"
 msgstr "浏览器尚未准备好"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Browser opened at {host}"
-msgstr "已在浏览器中打开 {host}"
-
 #: src/lib/media.ts
 msgid "Browser preparation · {actor}"
 msgstr "浏览器准备 · {actor}"
@@ -1624,6 +1616,11 @@ msgstr "关闭此标签页 — 会话仍留在侧栏"
 msgid "Code"
 msgstr "代码"
 
+#. a project's spex repository whose records name no code remote
+#: src/components/SpaceGroups.tsx
+msgid "Code not on a remote"
+msgstr "代码不在远程仓库"
+
 #. catalog family: the file naming where a project's code lives
 #: src/lib/space.ts
 msgid "code remote"
@@ -1843,10 +1840,6 @@ msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 msgid "Continue"
 msgstr "继续"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Continue at {link}"
-msgstr "请前往 {link} 继续"
-
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
@@ -1864,7 +1857,6 @@ msgstr "已复制"
 msgid "Copied"
 msgstr "已复制"
 
-#: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpecView.tsx
 msgid "Copied {what}"
@@ -1896,10 +1888,6 @@ msgstr "复制"
 msgid "Copy {id}"
 msgstr "复制 {id}"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Copy code"
-msgstr "复制登录码"
-
 #: src/components/SpecView.tsx
 msgid "Copy command {command}"
 msgstr "复制命令 {command}"
@@ -1917,10 +1905,6 @@ msgstr "复制失败"
 #: src/components/SpecView.tsx
 msgid "Copy failed for {what}"
 msgstr "复制 {what} 失败"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Copy is not available here; select the code to copy it."
-msgstr "此处无法复制，请选中登录码后手动复制。"
 
 #: src/components/SpaceSurface.tsx
 msgid "Copy is not available here; the path is shown to select."
@@ -2460,10 +2444,6 @@ msgstr "输入模型 ID、继承，或使用服务商默认值。"
 msgid "Enter a model ID, take the configured value, or use the provider default."
 msgstr "输入模型 ID、采用已配置的值，或使用服务商默认值。"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Enter it at {link}"
-msgstr "请在 {link} 输入"
-
 #: src/components/DraftConversation.tsx
 msgid "Enter sends"
 msgstr "Enter 发送"
@@ -2666,6 +2646,10 @@ msgstr "筛选项目"
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Finish signing in in your browser:"
+msgstr "请在浏览器中完成登录："
+
 #. a run that ended with no outcome reported
 #. a run that ended with no outcome reported
 #: src/state/reducer.ts
@@ -2837,6 +2821,11 @@ msgstr "前往仪表盘、项目、规程、群组、设置"
 #: src/components/SpecView.tsx
 msgid "Graph"
 msgstr "图谱"
+
+#. where a group's own spex repository's code lives: it has none, holding the group's records
+#: src/components/SpaceGroups.tsx
+msgid "Group records"
+msgstr "群组记录"
 
 #. the surface: your groups on the Git host and their spex repositories
 #. the surface: your groups on the Git host and their spex repositories
@@ -3516,11 +3505,6 @@ msgstr "尚未使用任何适配器 — 为 Captain 或某个规程角色指定�
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "此适配器无自动检查 — 请自行确认登录状态"
 
-#. a spex repository whose records name no code remote
-#: src/components/SpaceGroups.tsx
-msgid "No code"
-msgstr "无代码"
-
 #: src/components/SettingsSurface.tsx
 msgid "No config file"
 msgstr "没有配置文件"
@@ -3851,6 +3835,14 @@ msgstr "开启（不支持）"
 msgid "On the host for this code"
 msgstr "托管平台上对应此代码的仓库"
 
+#: src/lib/space.ts
+msgid "On this device only"
+msgstr "仅在此设备上"
+
+#: src/components/SpaceGroups.tsx
+msgid "On this device only — shared once you sign in"
+msgstr "仅在此设备上 — 登录后即可共享"
+
 #: src/components/LibrarySurface.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
@@ -3860,14 +3852,14 @@ msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
 msgid "One spec item per state behavior, from the last compile"
 msgstr "每个状态行为一条规约条目，来自上次编译"
 
-#: src/lib/space.ts
-msgid "Only on this device"
-msgstr "仅在此设备上"
-
 #. open this authoring session's workspace
 #: src/components/LibrarySurface.tsx
 msgid "Open"
 msgstr "打开"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open {host} to sign in"
+msgstr "打开 {host} 登录"
 
 #: src/components/RecordRow.tsx
 msgid "Open {id}"
@@ -3905,6 +3897,10 @@ msgstr "打开“启用”"
 #: src/components/SpaceSync.tsx
 msgid "Open folder…"
 msgstr "打开文件夹…"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Open it again"
+msgstr "再次打开"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Open its page"
@@ -5132,8 +5128,6 @@ msgid "shown despite search"
 msgstr "搜索外仍显示"
 
 #. sign in to the Git host
-#. sign in to the Git host
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "登录"
@@ -5159,30 +5153,36 @@ msgstr "重新登录 {who}"
 msgid "Sign in to publish"
 msgstr "登录后发布"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in to see your groups and share each project's records with the people in them."
+msgstr "登录后即可查看你的群组，并与群组中的成员共享各项目的记录。"
+
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in with your {host} account there and approve; you return here signed in."
+msgstr "请在那里用你的 {host} 账号登录并批准；完成后回到这里即已登录。"
+
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
 msgid "Sign out"
 msgstr "退出登录"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Sign-in code"
-msgstr "登录码"
+msgid "Sign-in did not complete: {cause}."
+msgstr "登录未完成：{cause}。"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Signed in as {login}"
-msgstr "已以 {login} 登录"
+msgid "Signed in as @{login}"
+msgstr "已以 @{login} 登录"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Signed in as {login} at {host}"
-msgstr "已在 {host} 以 {login} 登录"
+msgid "Signed in as @{login} at {host}"
+msgstr "已在 {host} 以 @{login} 登录"
 
 #: src/components/CaptainHome.tsx
 msgid "Signing in from a terminal is picked up on re-check; a newly exported env var needs a Spex restart."
 msgstr "在终端登录后，重新检查即可识别；新导出的环境变量需重启 Spex。"
 
 #. the Sign in control, while the sign-in runs
-#. the Sign in control, while the sign-in runs
-#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Signing in…"
 msgstr "登录中…"
@@ -5321,6 +5321,10 @@ msgstr "Spex 还没有配置文件 — 规程不可用。"
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex 本身跟随系统主题。"
+
+#: src/components/SpaceSurface.tsx
+msgid "Spex keeps this device's files in {path}"
+msgstr "Spex 将此设备的文件保存在 {path}"
 
 #: src/components/NavRail.tsx
 msgid "Spex navigation"
@@ -6064,6 +6068,10 @@ msgstr "历史互不相关"
 msgid "Unrelated history"
 msgstr "历史互不相关"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Until you do, everything stays on this device and nothing is contacted."
+msgstr "在此之前，一切都只保存在此设备上，不会联系任何服务。"
+
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
 msgid "untitled session"
@@ -6316,6 +6324,10 @@ msgstr "可写路径（逗号分隔）"
 msgid "Writing…"
 msgstr "写入中…"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Your browser is open at {site}: sign in with your {host} account there and approve; you return here signed in."
+msgstr "浏览器已打开 {site}：请在那里用你的 {host} 账号登录并批准；完成后回到这里即已登录。"
+
 #: src/components/SpaceSync.tsx
 msgid "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead)."
 msgstr "更改已保存在本地（领先 {count, plural, other {# 个提交}}）。"
@@ -6333,14 +6345,11 @@ msgstr "配置文件有错误 — 规程不可用。"
 msgid "Your groups"
 msgstr "你的群组"
 
-#: src/components/SpaceSignIn.tsx
-msgid "Your groups and each project's records shared with its members · nothing contacted until you sign in"
-msgstr "你的群组，以及与成员共享的各项目记录 · 登录前不会联系任何服务"
-
 #. switch: show your own group's playbooks
 #. switch: show your own group's playbooks
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Your own group"
 msgstr "你自己的群组"
 

@@ -6,7 +6,7 @@
 // spex repositories as rows. A row reads the repository's name, where
 // its code lives, its reachability, its local changes, ahead and behind
 // and its last sync, and carries the one control its state offers —
-// Sync, Join, Pick a group, Sign in, Retry — with Members on a
+// Sync, Join, Pick a group, Retry — with Members on a
 // reachable row. What a control opens stands in place beneath its row:
 // the group picker (space-58), the folder a Join clones into
 // (space-63), the members the host reports (space-62), the first-push
@@ -32,7 +32,6 @@ import {
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import type { SignInFlow } from "./SpaceSignIn.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
@@ -85,21 +84,22 @@ export function rowSyncRefusal(groups: GroupsState, repo: RepositoryState): stri
 }
 
 /** The control a row's state offers (space-61). */
-type RowControl = "sync" | "unrelated" | "pick" | "signin" | "retry" | "join" | "none";
+type RowControl = "sync" | "unrelated" | "pick" | "retry" | "join" | "none";
 
 function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): RowControl {
   switch (repo.state) {
     case "absent":
       return "join";
     case "local-only":
-      if (!groups.account) return "signin";
+      // Signing in is the header's alone (space-3).
+      if (!groups.account) return "none";
       // A group's own spex repository is made by sign-in or its first
       // session (space-4, space-65); only a project's is picked for.
       return isGroupRepository(group, repo) ? "none" : "pick";
     case "unreachable":
-      // Signed out, a repository the host holds is reached by signing
-      // in again; a path or a refused read by reading once more.
-      return !groups.account && !isPathRemote(repo.remote) ? "signin" : "retry";
+      // Signed out, a repository the host holds waits for the header's
+      // Sign in; a path or a refused read is read once more.
+      return !groups.account && !isPathRemote(repo.remote) ? "none" : "retry";
     case "reachable":
     case "read-only":
       return repo.sync.phase === "unrelated" || repo.branch?.unrelated === true ? "unrelated" : "sync";
@@ -115,7 +115,6 @@ export function GroupsList({
   now,
   selected,
   connected,
-  signIn,
   refreshes,
   onSelect,
   onNote,
@@ -124,7 +123,6 @@ export function GroupsList({
   now: number;
   selected?: string;
   connected: boolean;
-  signIn: SignInFlow;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   onSelect(key: string): void;
@@ -136,47 +134,53 @@ export function GroupsList({
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
-      {groups.groups.map((group) => (
-        <div
-          key={group.fullPath}
-          role="group"
-          aria-label={group.fullPath}
-          data-testid={`space-group-${group.fullPath}`}
-          className="flex min-w-0 flex-col gap-1"
-        >
-          <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-medium">
-            <span className="min-w-0 truncate" title={group.fullPath}>
-              {group.name}
-            </span>
-            {group.fullPath !== group.name ? (
-              <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
-                {group.fullPath}
+      {groups.groups.map((group) => {
+        // Your own group is called so, never by a folder's or this
+        // device's user name; its path shows once the host names it
+        // (space-1).
+        const name = group.own ? i18n._("Your own group") : group.name;
+        const path = group.own && !groups.account ? null : group.fullPath;
+        return (
+          <div
+            key={group.fullPath}
+            role="group"
+            aria-label={group.own ? name : group.fullPath}
+            data-testid={`space-group-${group.fullPath}`}
+            className="flex min-w-0 flex-col gap-1"
+          >
+            <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-medium">
+              <span className="min-w-0 truncate" title={path ?? undefined}>
+                {name}
               </span>
-            ) : null}
-          </h2>
-          {group.repositories.length === 0 ? (
-            <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
-          ) : (
-            <ul className="flex min-w-0 flex-col gap-0.5">
-              {group.repositories.map((repo) => (
-                <RepositoryRow
-                  key={repo.key}
-                  groups={groups}
-                  group={group}
-                  repo={repo}
-                  now={now}
-                  selected={repo.key === selected}
-                  connected={connected}
-                  signIn={signIn}
-                  refreshes={refreshes}
-                  onSelect={() => onSelect(repo.key)}
-                  onNote={onNote}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+              {path !== null && path !== name ? (
+                <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
+                  {group.fullPath}
+                </span>
+              ) : null}
+            </h2>
+            {group.repositories.length === 0 ? (
+              <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
+            ) : (
+              <ul className="flex min-w-0 flex-col gap-0.5">
+                {group.repositories.map((repo) => (
+                  <RepositoryRow
+                    key={repo.key}
+                    groups={groups}
+                    group={group}
+                    repo={repo}
+                    now={now}
+                    selected={repo.key === selected}
+                    connected={connected}
+                    refreshes={refreshes}
+                    onSelect={() => onSelect(repo.key)}
+                    onNote={onNote}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -193,7 +197,6 @@ function RepositoryRow({
   now,
   selected,
   connected,
-  signIn,
   refreshes,
   onSelect,
   onNote,
@@ -204,7 +207,6 @@ function RepositoryRow({
   now: number;
   selected: boolean;
   connected: boolean;
-  signIn: SignInFlow;
   refreshes: number;
   onSelect(): void;
   onNote: Note;
@@ -394,15 +396,6 @@ function RepositoryRow({
         { expanded: opened === "pick", onClick: () => setOpened((was) => (was === "pick" ? undefined : "pick")) },
       );
       break;
-    case "signin":
-      controlButton = button(
-        `space-row-signin-${repo.key}`,
-        signIn.running || signIn.starting
-          ? i18n._({ id: "Signing in…", comment: "the Sign in control, while the sign-in runs" })
-          : i18n._({ id: "Sign in", comment: "sign in to the Git host" }),
-        { disabled: signIn.running !== null || signIn.starting, onClick: signIn.start },
-      );
-      break;
     case "retry":
       controlButton = button(
         `space-row-retry-${repo.key}`,
@@ -446,9 +439,14 @@ function RepositoryRow({
     : repo.state === "absent"
       ? i18n._("Not on this device")
       : groupRepository
-        ? i18n._({ id: "No code", comment: "a spex repository whose records name no code remote" })
-        : null;
-  const state = repositoryStatePhrase(repo, now);
+        ? i18n._({ id: "Group records", comment: "where a group's own spex repository's code lives: it has none, holding the group's records" })
+        : i18n._({ id: "Code not on a remote", comment: "a project's spex repository whose records name no code remote" });
+  // Signed out, your own group's records wait for the sign-in that
+  // shares them (space-3).
+  const state =
+    repo.own && repo.state === "local-only" && !groups.account
+      ? i18n._("On this device only — shared once you sign in")
+      : repositoryStatePhrase(repo, now);
   const dot = statusDot(repo);
   const branch = repo.branch;
   const counted = branch && branch.checkedAt !== null && !branch.unrelated;
@@ -505,8 +503,8 @@ function RepositoryRow({
             <span
               id={describe("code")}
               data-testid={`space-repo-code-${repo.key}`}
-              // A remote reads as code; "No code" and "Not on this
-              // device" read as words.
+              // A remote reads as code; the phrases for none read as
+              // words.
               className={`hidden min-w-0 max-w-[30%] truncate text-xs text-neutral-500 @md:inline ${
                 repo.code ? "font-mono" : ""
               }`}

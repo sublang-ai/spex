@@ -61,7 +61,7 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number): strin
   if (repo.waiting) return waitingPhrase(repo.waiting);
   switch (repo.state) {
     case "local-only":
-      return i18n._("Only on this device");
+      return i18n._("On this device only");
     case "reachable":
       return repo.lastSync
         ? i18n._({

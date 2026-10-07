@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Groups surface (DR-103; DR-057 named it Space): the home at a
-// glance in one header — the account with its sign-in, the home's path,
-// the last read of the Git host with Refresh, the issues and Git's
-// presence (space-1, space-3) — over the groups list, each group with
+// glance in one header — signed out, the sign-in card; signed in, the
+// account, the last read of the Git host with Refresh, the issues and
+// Git's presence (space-1, space-3) — over the groups list, each group with
 // its spex repositories as rows (space-61). Activating a row opens that
 // repository's Sync and Explore tabs beneath the list. The surface
 // renders the core's state and runs no Git and no call to the host
@@ -39,7 +39,7 @@ import { Icon } from "./Icon.js";
 import { IssuesList, SyncTab } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList, statusDot } from "./SpaceGroups.js";
-import { AccountField, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
+import { AccountField, SignInCard, useSignIn, type SignInFlow } from "./SpaceSignIn.js";
 
 export interface SpaceSurfaceProps {
   /** Open a session as its tab (space-7, run-view-68). */
@@ -365,7 +365,6 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               now={now}
               selected={selected}
               connected={connected}
-              signIn={signIn}
               refreshes={refreshes}
               onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
               onNote={onNote}
@@ -382,6 +381,17 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               onNote={onNote}
             />
           ) : null}
+          {groups.account ? (
+            // Where this device's files are, said once and quietly at
+            // the foot (space-1): selectable, the full path in its title.
+            <p
+              data-testid="space-home"
+              title={groups.home}
+              className="min-w-0 select-text break-all text-xs text-neutral-500"
+            >
+              {i18n._("Spex keeps this device's files in {path}", { path: tildify(groups.home) })}
+            </p>
+          ) : null}
         </>
       ) : !spaceError ? (
         <p className="text-sm text-neutral-500">{i18n._("Reading your groups…")}</p>
@@ -390,9 +400,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
   );
 }
 
-/** The home at a glance (space-1): the account and its sign-in, the
- * home's path, the host's last read with Refresh, the issues the core
- * counts, and Git's presence. Below 42rem the read time yields, below
+/** The home at a glance (space-1): signed out, the sign-in card
+ * (space-3); signed in, the account, the host's last read with Refresh;
+ * the issues the core counts, and Git's presence. Below 42rem the read time yields, below
  * 28rem the host's name (space-28); below 20rem the fields stack, the
  * account's control last and full-width. */
 function HomeHeader({
@@ -423,6 +433,26 @@ function HomeHeader({
   const issueCount = groups.issues;
   const readAt = groups.readAt;
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
+  const issues =
+    groups.diagnostics.length > 0 ? (
+      <button
+        type="button"
+        data-testid="space-issues"
+        aria-expanded={issuesOpen}
+        // Amber and the warning glyph say attention is owed. With
+        // nothing unanswered none is, so the control stays reachable
+        // while reading as settled.
+        className={`flex items-center gap-1 text-sm hover:underline ${
+          issueCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
+        }`}
+        onClick={() => onIssuesOpen(!issuesOpen)}
+      >
+        {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
+        {issueCount > 0
+          ? i18n._("{count, plural, one {# issue} other {# issues}}", { count: issueCount })
+          : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
+      </button>
+    ) : null;
   return (
     <header
       data-testid="space-header"
@@ -433,14 +463,9 @@ function HomeHeader({
         connected ? "" : "opacity-70"
       }`}
     >
-      <div className={row}>
-        <Field testId="space-path" title={groups.home} className="min-w-0 flex-1">
-          <span className="min-w-0 truncate font-mono text-sm">{tildify(groups.home)}</span>
-        </Field>
-        <PathControls path={groups.home} testId="space-path" onNote={onNote} />
-      </div>
-      {groups.git.ok ? (
+      {!groups.git.ok ? null : groups.account ? (
         <>
+          <AccountField groups={groups} connected={connected} onNote={onNote} />
           <div className={row}>
             <Field
               testId="space-read"
@@ -455,25 +480,7 @@ function HomeHeader({
                   : i18n._("Not read yet")}
               </span>
             </Field>
-            {groups.diagnostics.length > 0 ? (
-              <button
-                type="button"
-                data-testid="space-issues"
-                aria-expanded={issuesOpen}
-                // Amber and the warning glyph say attention is owed.
-                // With nothing unanswered none is, so the control
-                // stays reachable while reading as settled.
-                className={`flex items-center gap-1 text-sm hover:underline ${
-                  issueCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
-                }`}
-                onClick={() => onIssuesOpen(!issuesOpen)}
-              >
-                {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
-                {issueCount > 0
-                  ? i18n._("{count, plural, one {# issue} other {# issues}}", { count: issueCount })
-                  : i18n._({ id: "issues", comment: "the control's name when none are unanswered" })}
-              </button>
-            ) : null}
+            {issues}
             {refreshError ? (
               <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
                 {refreshError}
@@ -496,9 +503,14 @@ function HomeHeader({
               {i18n._({ id: "Refresh", comment: "re-read the groups and the Git host" })}
             </button>
           </div>
-          <AccountField groups={groups} signIn={signIn} connected={connected} onNote={onNote} />
         </>
       ) : (
+        <>
+          <SignInCard groups={groups} signIn={signIn} connected={connected} />
+          {issues ? <div className={row}>{issues}</div> : null}
+        </>
+      )}
+      {groups.git.ok ? null : (
         <div data-testid="space-no-git" className="text-sm">
           <p className="font-medium">{i18n._("Git is not installed")}</p>
           <p className="text-xs text-neutral-500">{groups.git.guidance}</p>

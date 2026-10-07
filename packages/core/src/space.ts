@@ -2483,7 +2483,7 @@ export class SpaceManager {
     if (this.host.store.repository(key)) {
       const facts = await this.machine(key).readFacts();
       if (facts.remote === null) {
-        throw new CoreError("invalid_request", i18n._({ id: "Only on this device", comment: "A spex repository's state: it has no remote on the Git host" }));
+        throw new CoreError("invalid_request", i18n._({ id: "On this device only", comment: "A spex repository's state: it has no remote on the Git host" }));
       }
       id = facts.id ?? listingFor(this.view, null, facts.remote)?.repository.id ?? null;
     } else {

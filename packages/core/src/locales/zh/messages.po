@@ -1471,6 +1471,11 @@ msgstr "未保存任何内容。请修复同步规则文件，然后重新同步
 msgid "On {branch}; check out spex in a terminal"
 msgstr "当前在 {branch} 分支上；请在终端中切换到 spex"
 
+#. A spex repository's state: it has no remote on the Git host
+#: src/space.ts
+msgid "On this device only"
+msgstr "仅在此设备上"
+
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
 msgid "only .md files under specs/ can be read"
@@ -1485,11 +1490,6 @@ msgstr "只有已结束的意图才能从历史中移除"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "只有已完成的意图才能确认完成"
-
-#. A spex repository's state: it has no remote on the Git host
-#: src/space.ts
-msgid "Only on this device"
-msgstr "仅在本设备上"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts
