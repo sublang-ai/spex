@@ -16,6 +16,7 @@ import { basename, join } from "node:path";
 import { Home } from "./home.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
+import type { RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, runTurn } = fixture;
@@ -34,6 +35,15 @@ const HOST_NAME = "Stand-in Git host";
 function bareOf(host: StandinHost, key: string): string {
   const parts = key.split("/");
   return join(host.dir, ...parts.slice(0, -1), `${parts[parts.length - 1]}.git`);
+}
+
+/** A repository's readings up to its first sync's end: they reach the
+ * sync and its end, and none reads unreachable (space-61). */
+function assertNeverUnreachable(readings: RepositoryState[]): void {
+  assert.ok(readings.some((repository) => repository.sync.phase === "running"), "the readings reach the sync");
+  assert.equal(readings[readings.length - 1]?.sync.phase, "done", "the readings reach the sync's end");
+  const unreachable = readings.filter((repository) => repository.state === "unreachable");
+  assert.deepEqual(unreachable.map((repository) => `${repository.key}: ${repository.reason ?? ""} (${repository.sync.phase})`), []);
 }
 
 /** A project's code: a Git working folder with one commit. */
@@ -95,6 +105,9 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, HOST_OWN);
   assert.equal(own.state, "reachable");
+  // Created at the host, it goes straight to its sync: no state between
+  // reads it no longer shared (space-61, git-host-5).
+  assertNeverUnreachable(home.client.readings(from, [OWN_KEY, HOST_OWN]));
   assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
   assert.equal(git(bareOf(host, HOST_OWN), "symbolic-ref", "HEAD"), "refs/heads/main");
   assert.equal(git(clone, "config", "--get", "spex.repositoryId"), own.id);
@@ -242,6 +255,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "alpha" } }), { accepted: true });
   const created = await home.client.waitRepository(from, "acme/alpha-spex", (repository) => repository.sync.phase === "done");
   assert.equal(created.state, "reachable");
+  assertNeverUnreachable(home.client.readings(from, [local, "acme/alpha-spex"]));
   assert.ok(created.lastSync && created.lastSync.sent > 0, JSON.stringify(created.lastSync));
   assert.equal(created.folder, alpha);
   const clone = clonePath(home.dataDir, "acme/alpha-spex");
@@ -277,6 +291,40 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   const found = await home.client.waitRepository(fromGamma, "acme/research/gamma-spex", (repository) => repository.sync.phase === "done");
   assert.equal(found.waiting, null);
   assert.equal(found.state, "reachable");
+});
+
+test("git-host-14: a repository created while a read begun before it is in flight never reads unreachable, and its push lands with no Refresh", async (t) => {
+  const host = await startHost();
+  const home = await startHome("created-mid-read", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signedFrom = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signedFrom, HOST_OWN, (repository) => repository.sync.phase === "done");
+  const added = home.client.mark();
+  const { key } = await addFolder(home, gitFolder("delta"));
+  await home.client.waitRepository(added, key, (repository) => repository.state === "local-only");
+  // A read begins and takes the listing before the creation, and answers
+  // after it without the new repository (git-host-5).
+  const asked = host.script.requests.length;
+  const listingSince = () => host.script.requests.slice(asked).find((request) => request.method === "GET" && request.path === "/api/v1/host/repositories");
+  host.script.sleepListing(1_500);
+  t.after(() => host.script.sleepListing(0));
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
+  for (let i = 0; i < 400 && !listingSince(); i += 1) await sleep(10);
+  const listing = listingSince();
+  assert.ok(listing, "the read reached the listing");
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "delta" } }), { accepted: true });
+  const creation = host.script.requests.slice(asked).find((request) => request.method === "POST" && request.path === "/api/v1/host/repositories");
+  assert.ok(creation && creation.at < listing.at + 1_500, "the creation came while the listing slept");
+  // The created repository goes straight to its sync, which pushes with
+  // no Refresh asked after the pick (git-host-5, git-host-6).
+  const synced = await home.client.waitRepository(from, "acme/delta-spex", (repository) => repository.sync.phase === "done", 30_000);
+  assert.equal(synced.state, "reachable");
+  assert.ok(synced.lastSync && synced.lastSync.sent > 0, JSON.stringify(synced.lastSync));
+  assert.equal(git(bareOf(host, "acme/delta-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, "acme/delta-spex"), "rev-parse", "spex"));
+  assertNeverUnreachable(home.client.readings(from, [key, "acme/delta-spex"]));
+  assert.equal((await home.client.repository("acme/delta-spex")).state, "reachable");
 });
 
 test("space-65: a working folder paired with a group's own spex repository brings it to that group on the host, pushed", async (t) => {
@@ -352,6 +400,8 @@ test("space-37: a join pick and the first sync into a repository with other memb
   await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", hostId: pal.id }, noticed: true });
   const palJoined = await home.client.waitRepository(fromPal, "acme/pal-spex", (repository) => repository.sync.phase === "done");
   assert.equal(palJoined.state, "reachable");
+  // Joined from the listing, it goes straight to its sync (git-host-5).
+  assertNeverUnreachable(home.client.readings(fromPal, [mine.key, "acme/pal-spex"]));
   assert.equal(prefsOf(home.dataDir)["sync:acme/pal-spex:noticed"], true);
 });
 
