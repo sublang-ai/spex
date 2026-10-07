@@ -203,6 +203,18 @@ export async function createProjectRepo(
       }));
     }
   };
+  // The initial commit is the one step whose failure leaves a repository
+  // the person must finish by hand (projects-3): the refusal says so.
+  const initialCommit = async (args: string[]): Promise<void> => {
+    const result = await run("git", ["commit", ...args], options.path);
+    if (result.code !== 0) {
+      throw new Error(i18n._({
+        id: "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+        values: { output: result.stderr.trim() || result.stdout.trim() || String(result.code) },
+        comment: "Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action",
+      }));
+    }
+  };
   const agentInstructionFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
   await checkedGit(["init", options.path]);
   let scaffolded = false;
@@ -249,15 +261,9 @@ export async function createProjectRepo(
     for (const path of ["specs", ...createdAgentFiles, "LICENSE"]) {
       await checkedGit(["add", "--", path], options.path);
     }
-    await checkedGit(
-      ["commit", "-m", "chore: scaffold specs"],
-      options.path,
-    );
+    await initialCommit(["-m", "chore: scaffold specs"]);
   } else {
-    await checkedGit(
-      ["commit", "--allow-empty", "-m", "chore: initialize project"],
-      options.path,
-    );
+    await initialCommit(["--allow-empty", "-m", "chore: initialize project"]);
   }
   return { scaffolded };
 }

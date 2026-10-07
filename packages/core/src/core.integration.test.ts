@@ -1436,7 +1436,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
     scaffold: true,
   });
   assert.ok(!anonymous.ok);
-  assert.match(anonymous.error.message, /git commit failed/);
+  assert.match(anonymous.error.message, /^git commit failed: .+\. The generated files stay in the folder: finish the initial commit in your terminal, then use Add\.$/s);
   const unpinned = readFileSync(
     join(anonymousPath, "specs", "packages", "licensing.md"),
     "utf-8",

@@ -971,6 +971,11 @@ msgstr "Finish or abort the merge in your terminal"
 msgid "folder {path} is paired twice"
 msgstr "folder {path} is paired twice"
 
+#. Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action
+#: src/forge.ts
+msgid "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+
 #. A join's stop where git failed to clone the code and printed nothing
 #: src/space.ts
 msgid "Git could not clone the code"

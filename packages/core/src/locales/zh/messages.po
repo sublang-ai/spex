@@ -971,6 +971,11 @@ msgstr "请在终端完成或中止合并"
 msgid "folder {path} is paired twice"
 msgstr "文件夹 {path} 被配对了两次"
 
+#. Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action
+#: src/forge.ts
+msgid "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "git commit 失败：{output}。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
+
 #. A join's stop where git failed to clone the code and printed nothing
 #: src/space.ts
 msgid "Git could not clone the code"
