@@ -113,7 +113,7 @@ export function underOrigin(remote: string | null, origin: string | null | undef
 
 /** The listing a clone stands for: by its recorded id, else by its
  * remote URL, never by name (git-host-5). */
-export function listingFor(view: HostView | undefined, id: string | null, remote: string | null): HostListing | undefined {
+export function listingFor(view: Pick<HostView, "listings"> | undefined, id: string | null, remote: string | null): HostListing | undefined {
   if (!view) return undefined;
   if (id !== null) {
     const byId = view.listings.find((listing) => listing.repository.id === id);

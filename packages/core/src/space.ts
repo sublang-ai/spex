@@ -15,7 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
-import { HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostRepository } from "./git-host.js";
+import { HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import type {
@@ -1851,6 +1851,15 @@ export class SpaceManager {
    * succeeds (git-host-5). */
   private readFailure?: string;
   private reading?: Promise<HostView>;
+  /** Reads of the host begun so far, each numbered by this count. */
+  private readsBegun = 0;
+  /** The count of reads begun when a clone was last attached to a
+   * repository at the host: a read numbered no higher began before. */
+  private attachedAfter = 0;
+  /** The repositories clones were attached to since the view's read
+   * began, as the host answered them, by id: listed until the next read
+   * is held (git-host-5). */
+  private readonly attached = new Map<string, HostListing>();
   /** The sign-in shown on the header (space-30). */
   private signInState: GroupsState["signIn"] = { phase: "idle" };
   private flow?: { cancel(): void };
@@ -1988,6 +1997,7 @@ export class SpaceManager {
     try {
       this.host.store.signIn(account);
       this.view = undefined;
+      this.attached.clear();
       this.readFailure = undefined;
       await this.publish();
       await this.setUp();
@@ -2011,6 +2021,7 @@ export class SpaceManager {
   signedOutByHost(): void {
     this.host.store.signOut();
     this.view = undefined;
+    this.attached.clear();
     void this.publish();
   }
 
@@ -2023,6 +2034,7 @@ export class SpaceManager {
     await this.host.client.signOut();
     this.host.store.signOut();
     this.view = undefined;
+    this.attached.clear();
     this.readFailure = undefined;
     this.waiting.clear();
     this.joining.clear();
@@ -2064,13 +2076,21 @@ export class SpaceManager {
   }
 
   /** Read the host (git-host-5): one read at a time, the answer held as
-   * the current view, a failure keeping the previous view and its time. */
+   * the current view, a failure keeping the previous view and its time.
+   * A read begun before a clone was attached to a repository cannot
+   * list it: it is made again before it is held. */
   readHost(): Promise<HostView> {
     if (this.reading) return this.reading;
     const work = (async (): Promise<HostView> => {
       try {
-        const view = await readHostView(this.host.client);
+        let view: HostView;
+        let begun: number;
+        do {
+          begun = (this.readsBegun += 1);
+          view = await readHostView(this.host.client);
+        } while (begun <= this.attachedAfter);
         this.view = view;
+        this.attached.clear();
         this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
         this.readFailure = undefined;
         // A clone matched by its remote records the host's id (git-host-5).
@@ -2166,7 +2186,7 @@ export class SpaceManager {
     const name = splitKey(key).name;
     const listed = view.listings.find((listing) => listing.repository.group.fullPath === group.fullPath && listing.repository.path === name);
     if (listed) {
-      await this.adopt(machine, listed.repository, true);
+      await this.adopt(machine, listed, true);
       return;
     }
     await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
@@ -2191,7 +2211,7 @@ export class SpaceManager {
       const view = this.view ?? await this.readHost();
       const listed = view.listings.find((listing) => listing.repository.group.fullPath === group && listing.repository.path === name);
       if (listed) {
-        await this.adopt(machine, listed.repository, true);
+        await this.adopt(machine, listed, true);
         return "joined";
       }
       const hostGroup = view.groups.find((entry) => entry.fullPath === group);
@@ -2206,9 +2226,19 @@ export class SpaceManager {
   // -- picks, creations and joins (space-58, space-63, space-64) --------------
 
   /** Give a clone the host's repository and sync it — a join of two
-   * histories where `join` (space-13), a first push otherwise. */
-  private async adopt(machine: RepositorySync, repository: HostRepository, join: boolean): Promise<void> {
-    await machine.attachHost(repository.remoteUrl, repository.id);
+   * histories where `join` (space-13), a first push otherwise. From the
+   * first write of its remote, the repository counts as listed as the
+   * host answered it until a read begun after this is held (git-host-5),
+   * so its row goes straight to its sync. */
+  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean): Promise<void> {
+    const { repository } = listing;
+    this.attachedAfter = this.readsBegun;
+    this.attached.set(repository.id, listing);
+    try { await machine.attachHost(repository.remoteUrl, repository.id); }
+    catch (error) {
+      this.attached.delete(repository.id);
+      throw error;
+    }
     this.waiting.delete(machine.key);
     await this.publish();
     this.startSync(machine.key, { join });
@@ -2244,7 +2274,8 @@ export class SpaceManager {
       await this.publish();
       return "waiting";
     }
-    await this.adopt(machine, answer.repository, false);
+    // As the host answered: no `spex` branch yet, nor a members' count.
+    await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false);
     return "created";
   }
 
@@ -2258,7 +2289,7 @@ export class SpaceManager {
         const ask = waiting.create;
         const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
         this.waiting.delete(key);
-        if (found) await this.adopt(machine, found.repository, true);
+        if (found) await this.adopt(machine, found, true);
         else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
         continue;
       }
@@ -2313,7 +2344,7 @@ export class SpaceManager {
             comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
           }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
         }
-        await this.adopt(machine, listing.repository, true);
+        await this.adopt(machine, listing, true);
         return { accepted: true };
       }
       const base = kebab(choice.name.trim().replace(/-spex$/i, ""));
@@ -2761,7 +2792,8 @@ export class SpaceManager {
     // A remote the reader named, a path this device reaches: no host.
     if (!this.atHost(facts)) return row;
     if (!this.signedIn()) return { ...row, state: "unreachable", reason: signInAgain() };
-    const listing = listingFor(this.view, facts.id, facts.remote);
+    // Attached since the view's read began, it counts as listed (git-host-5).
+    const listing = listingFor(this.view, facts.id, facts.remote) ?? listingFor({ listings: [...this.attached.values()] }, facts.id, facts.remote);
     const listed: RepositoryState = listing ? { ...row, members: listing.members, visibility: listing.repository.visibility } : row;
     if (machine.hostOverride) return { ...listed, state: machine.hostOverride.state, reason: machine.hostOverride.reason };
     if (this.readFailure !== undefined) return { ...listed, state: "unreachable", reason: this.readFailure };

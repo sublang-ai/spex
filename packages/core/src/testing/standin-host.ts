@@ -128,6 +128,10 @@ export interface StandinScript {
   unauthorizeTransport(on: boolean): void;
   /** Delay every transport response by this long; 0 stops delaying. */
   sleepTransport(ms: number): void;
+  /** Delay every answer to a listing of spex repositories by this long,
+   * the listing taken as the request arrives — a read begun before a
+   * change answering after it; 0 stops delaying. */
+  sleepListing(ms: number): void;
   /** Answer the next `count` admitted host requests 429 with `Retry-After`. */
   rateLimit(count: number, retryAfter: string): void;
   /** Answer the next `count` admitted host requests 503 `provider_unavailable`. */
@@ -306,6 +310,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let transportRefusal: string | null = null;
   let transportUnauthorized = false;
   let transportSleepMs = 0;
+  let listingSleepMs = 0;
   const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
   await new Promise<void>((resolveListen, rejectListen) => {
@@ -546,6 +551,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     refuseTransport: (message) => { transportRefusal = message; },
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
     sleepTransport: (ms) => { transportSleepMs = Math.max(0, ms); },
+    sleepListing: (ms) => { listingSleepMs = Math.max(0, ms); },
     rateLimit: (count, retryAfter) => {
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
     },
@@ -786,7 +792,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       const all = script.repositories.filter((r) => r.listed && r.path.endsWith("-spex"));
       const page = all.slice(offset, offset + PAGE_SIZE);
       const next = offset + PAGE_SIZE < all.length ? `o${offset + PAGE_SIZE}` : null;
-      return json(res, 200, { repositories: await Promise.all(page.map(repositoryWire)), next_cursor: next });
+      const repositories = await Promise.all(page.map(repositoryWire));
+      if (listingSleepMs > 0) await sleep(listingSleepMs);
+      return json(res, 200, { repositories, next_cursor: next });
     }
     if (path === "/api/v1/host/repositories" && method === "POST") return create(req, res);
     const match = /^\/api\/v1\/host\/repositories\/([^/]+)(\/members|\/spex-branch)?$/.exec(path);

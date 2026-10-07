@@ -59,6 +59,7 @@ When the home is signed in and a read of the host is due — at sign-in, on Refr
 
 - a listed spex repository is matched to a clone by the id stored in the clone's Git configuration, else by the remote URL, never by name alone;
 - a clone whose id the host no longer lists is marked unreachable with the cause, its files untouched;
+- a spex repository the core attaches a clone to, after creating it [[git-host-6](#git-host-6)] or from the view's own listing, counts as listed — as that answer gave it, a created one without its `spex` branch — until a read begun after the attachment is held, and a read begun before an attachment is made again before it is held;
 - the host's `project.json` for each listed repository is kept for the pickers [[space-58](space.md#space-58)], and its archived flag and the account's role, as the host reports them, decide read-only [[space-61](space.md#space-61)];
 - a read that fails leaves the previous view with its time and reports the failure once.
 
@@ -120,7 +121,7 @@ When the host answers a call with anything but success, the core shall relay it 
 The core package shall ship a stand-in Git host for its own tests and the browser journeys ([DR-039](../decisions/039-browser-acceptance-journeys.md)): an in-process HTTP server that implements the host's sign-in and host routes over a directory of bare Git repositories, serves their Git transport over HTTP, and exposes a scripting interface:
 
 - sign-in: `/login/app` and `/login/device` pages, the device endpoint returning the verification URL completed with the user code as spex.pub does, and the token endpoint issuing app tokens, with scripted approval, denial and expiry; access secrets that expire on demand; revocation;
-- host routes: the person, groups and spex repositories from a scripted fixture, creation of a bare repository with a README on `main`, members, branch preparation with a scripted refusal, and the credential for its own origin;
+- host routes: the person, groups and spex repositories from a scripted fixture, the listing answered after a scripted sleep with what stood at its arrival, creation of a bare repository with a README on `main`, members, branch preparation with a scripted refusal, and the credential for its own origin;
 - Git transport: every repository served at `<origin>/<group>/<name>-spex.git` over HTTP through Git's own backend, accepting the credentials the stand-in issued and refusing others with 401, with a scripted sleep, a scripted refusal and a scripted archive;
 - a scripted rename, transfer, archive and membership removal, each visible on the next read.
 
@@ -143,6 +144,7 @@ When an integration suite drives host reads and writes against the stand-in [[gi
 
 - a read lists every group and every spex repository across two pages, matches clones by id and then by remote, marks a clone the stand-in stopped listing unreachable with its files intact, and keeps the previous view with its time when the stand-in answers 503 [[git-host-5](#git-host-5)];
 - creating a spex repository records its id and remote in the clone's Git configuration, prepares the branch and pushes; a pending answer leaves the clone local only with the words; a taken name is reported as such [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)];
+- from a creation, or a pick joining a listed repository, to its push's end no state reads the repository unreachable, also where a read begun before the creation answers after it without it, and the push lands with no Refresh [[git-host-5](#git-host-5)];
 - an empty repository on the stand-in is not pushed until its default branch exists [[git-host-7](#git-host-7)];
 - members are read with the stand-in's role names and members URL and held nowhere after the reply [[git-host-8](#git-host-8)];
 - a push runs with the helper and a credential file of mode `0600` in a directory removed after the child ends, the stand-in's transport receiving the issued credential and refusing a push attempted with none; a fetch from a bare path remote names no helper [[git-host-9](#git-host-9)];
