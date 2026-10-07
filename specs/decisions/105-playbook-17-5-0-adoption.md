@@ -17,14 +17,14 @@ Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for 
 - Playbook 17.5.0's shared loader takes an optional `modules` record from playbook id to module specifier, which wins over a configured `from`, makes `from` optional where a module is supplied, and writes no supplied module into any config [[1]] [[2]].
 - An absolute path becomes a file URL and a file URL or package specifier is kept, while the loader refuses a relative path [[2]].
 - The CLI gains a repeatable `--module <id>=<specifier>` flag, and its record-backed reopen — `playbook --session` and `playbook run --session` — takes the module the session records when the config names no `from` [[2]] [[3]].
-- The public loaders' reopen with selected members still needs a supplied module or a `from` [[2]].
-- Playbook 17.5.0 keeps Cligent `^0.33.2`, which the core's `^0.33.3` meets, and slc 0.15.1's Playbook `^17.4.0` admits it [[1]].
+- Playbook's shared loader itself, on a reopen with selected members, still needs a supplied module or a `from`; only the CLI's record-backed reopen takes the module the session records [[2]].
+- Playbook 17.5.0 keeps Cligent `^0.33.2`, which the core's `^0.33.3` meets [[1]], and slc 0.15.1's Playbook `^17.4.0` admits it [[4]].
 
 ## Decision
 
 - **Floor.** The core requires `@sublang/playbook` `^17.5.0`; `@sublang/cligent` stays `^0.33.3`, and both shells keep `@sublang/slc` `^0.15.1`.
 - **The lock.** The lockfile is regenerated from the public registry, with no links or overrides, and holds one Playbook, 17.5.0, at the tree's root, the compiler's Playbook range resolving to that copy; no other locked version changes.
-- **Modules at launch, end to end.** Spex's configurations name no `from` anywhere: wherever Spex or its suites hand a configuration to Playbook's launcher, each enabled playbook's module is supplied at launch — the one the environment exports, or on a reopen through the public loaders the one the session records — and a record-backed reopen through the CLI supplies none.
+- **Modules at launch, end to end.** Spex's configurations name no `from` anywhere: wherever Spex or its suites hand a configuration to Playbook's launcher, each enabled playbook's module is supplied at launch — the one the session's environment exports, or, in a suite that launches before any environment is installed, the one in the staged built-in spec package the core seeds; on a reopen through the shared loader, the one the session records — and a record-backed reopen through the CLI supplies none.
 - **The workaround retires.** The launcher config rewritten beside a Spex config to name each module is deleted.
 - **The parity claim names its one exception.** The core still refuses `from` while the launcher accepts one; the launcher takes each playbook's module supplied at launch ahead of it.
 - **The built-in spec package follows.** Its staged version follows the installed Playbook's, so the build stages `sublang/playbooks` 17.5.0.
@@ -45,3 +45,4 @@ Considered and declined:
 [1]: https://github.com/sublang-ai/playbook/blob/main/CHANGELOG.md "Playbook changelog: 17.5.0"
 [2]: https://github.com/sublang-ai/playbook/blob/main/specs/decisions/083-module-locations-supplied-at-launch.md "Playbook DR-083: Module locations supplied at launch"
 [3]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-94 "Playbook playbook-cli-94: modules supplied at launch"
+[4]: https://github.com/sublang-ai/slc/blob/main/package.json "slc package manifest: its Playbook range"

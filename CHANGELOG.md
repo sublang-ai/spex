@@ -224,7 +224,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   asking again while it holds records the host has not received, and never
   touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app requires Playbook 17.4.1, slc 0.15.1 and Cligent 0.33.3 ([DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.5.0, slc 0.15.1 and Cligent 0.33.3 ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
@@ -250,7 +250,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   carries a subagent effort. Stop older writers and update every host to
   compatible Playbook 17.4-based releases before saving attachment-bearing
   history; older writers do not preserve the new asset-bearing records.
-- Playbook 17.4.1 is the floor ([DR-102](specs/decisions/102-playbook-17-4-1-adoption.md)).
+- Playbook 17.5.0 is the floor ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md)): the launcher takes each playbook's module at launch, so a `playbook` CLI sharing the home continues a session Spex created from a configuration naming no `from`, with no launcher config rewritten, and a fresh CLI launch on Spex's configuration names each module with `--module <id>=<specifier>`.
   A packaged `/code` or `/decide` run with `/review` disabled now stops at
   its start with an explanation instead of committing work its review
   cannot check, as the Library's hint beside those entries says. Session

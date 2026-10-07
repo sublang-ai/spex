@@ -601,7 +601,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Concurrency | every group in the entry's `concurrentRoleSets` must bind to pairwise-distinct players, refused naming the group otherwise |
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
-| Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both |
+| Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both — in the launcher with each module supplied at launch, or on a record-backed reopen with the module the session records [[4]] |
 
 #### core-service-17
 
@@ -1005,3 +1005,4 @@ When an integration suite aborts a real session's turn while a scripted call is 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared session format and host lifecycle"
 [2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/recovery.md "Prepare and resume interrupted work"
 [3]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-94 "Playbook playbook-cli-94: modules supplied at launch"
+[4]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-22 "Playbook playbook-cli-22: a reopen takes the module the session records"
