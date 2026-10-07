@@ -5,7 +5,7 @@
 
 ## Status
 
-In progress
+Implemented 2026-10-06 with the gaps below: Playbook's launcher still requires `from`, so the CLI runs a Spex session only with a launcher config naming the module (DR-104's ask to Playbook); `playbook-library-87` skips until a compiled fixture is committed.
 
 ## Intent
 
@@ -14,14 +14,14 @@ Implement [DR-104](../decisions/104-spec-package-format-and-client-environments.
 ## Deliverables
 
 - [x] The `environments` package, the `playbook-library` rewrite, and the `storage`, `core-service`, `app-shell`, `server-shell` and `settings` amendments, lint-clean.
-- [ ] The format reader and checker, version requirements, `spex.yaml` and `spex.lock` encodings.
-- [ ] The resolver over the registry's version index, path and Git sources, with selection and export naming.
-- [ ] The store and cache, atomic installs, the stale-lock rule, the registry client and the Git source fetch.
-- [ ] Exports: skills into agent folders and the user's home, generated skills for playbooks, launch-time module locations, the agent folder table.
-- [ ] The built-in spec package staged at build in both shells and seeded at start; new environments requesting it.
-- [ ] Authoring sessions writing a spec package in the working folder, compiling in its playbook artifact, the Enable form requesting by path and enabling, publishing.
-- [ ] The Playbooks surface over environments with its controls and the stand-in registry for tests and journeys.
-- [ ] Core, UI and browser-journey coverage for every new verification item.
+- [x] The format reader and checker, version requirements, `spex.yaml` and `spex.lock` encodings.
+- [x] The resolver over the registry's version index, path and Git sources, with selection and export naming.
+- [x] The store and cache, atomic installs, the stale-lock rule, the registry client and the Git source fetch.
+- [x] Exports: skills into agent folders and the user's home, generated skills for playbooks, launch-time module locations, the agent folder table.
+- [x] The built-in spec package staged at build in both shells and seeded at start; new environments requesting it.
+- [x] Authoring sessions writing a spec package in the working folder, compiling in its playbook artifact, the Enable form requesting by path and enabling, publishing.
+- [x] The Playbooks surface over environments with its controls and the stand-in registry for tests and journeys.
+- [x] Core, UI and browser-journey coverage for every new verification item.
 
 ## Tasks
 
@@ -37,5 +37,5 @@ Implement [DR-104](../decisions/104-spec-package-format-and-client-environments.
 
 ## Verification
 
-- `npm run build`, `npm test`, `npm run e2e` and the spec linter pass across the workspace.
+- `npm run build`, `npm test` and `npm run e2e` pass across the workspace and the spec linter is clean on 2026-10-06; a fresh home launches every built-in playbook offline from the seeded spec package, and an authored playbook compiles, enables, launches, publishes to the stand-in registry and installs on a second home in the journeys.
 - A fresh home launches every built-in playbook offline from the seeded spec package; a playbook authored in a project compiles, enables, launches, publishes to the stand-in registry and installs on a second home.
