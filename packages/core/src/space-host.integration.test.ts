@@ -2,11 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Groups surface against the stand-in Git host (git-host-12):
-// sign-in in both flows, picks, joins, members, the notice, sign-out,
-// and the host's renames, archives, removals and refusals over its own
+// sign-in in both flows, picks, joins, members, the notice, sign-out
+// by the reader and by the host, the read a signed-in start owes, and
+// the host's renames, archives, removals and refusals over its own
 // HTTP transport (space-37, space-38, space-52, space-59, space-65,
-// git-host-11) — hermetic, on loopback alone, in a file budget of its
-// own.
+// git-host-4, git-host-5, git-host-11) — hermetic, on loopback alone,
+// in a file budget of its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,7 +17,7 @@ import { basename, join } from "node:path";
 import { Home } from "./home.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
-import type { RepositoryState } from "./protocol.js";
+import type { GroupsState, RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, runTurn } = fixture;
@@ -119,11 +120,24 @@ test("space-37: the browser sign-in renames your own group after the login, push
   await home.stop();
   const again = await startHome("signin-browser-again", { dataDir: home.dataDir, project: false, env: { SPEX_HOST_URL: "http://127.0.0.1:9" } });
   t.after(() => again.stop());
-  const reread = await again.client.expectOk("space.get", {});
+  const reads = (): number => host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
+  const readsBefore = reads();
+  const fromStart = again.client.mark();
+  const [reread] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
   assert.deepEqual(reread.account, signed.account);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
+  // That first ask began the read a signed-in start owes, once for both
+  // asks, its state landing with a read time and the host's groups for
+  // the picker (space-1, git-host-5); a later ask begins none.
+  const read = await again.client.waitSpace(fromStart, (state) => state.readAt !== null);
+  assert.equal(typeof read.readAt, "number");
+  assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
+  assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
+  await again.client.expectOk("space.get", {});
+  await sleep(300);
+  assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
 });
 
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
@@ -432,6 +446,59 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   const back = await home.client.waitRepository(fromAgain, HOST_OWN, (repository) => repository.state === "reachable");
   assert.equal(back.reason, null);
   assert.equal(Home.load(home.dataDir).file.host.signedOut, undefined);
+});
+
+test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs this device out, the state saying the host did it as whom until the next sign-in", async (t) => {
+  const host = await startHost();
+  const home = await startHome("host-signout", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  assert.deepEqual((await home.client.expectOk("space.get", {})).signIn, { phase: "idle" });
+  /** Refresh, and the first state signed out after it. */
+  const signedOutBy = async (): Promise<GroupsState> => {
+    const mark = home.client.mark();
+    await home.client.expectOk("space.refresh", {});
+    return home.client.waitSpace(mark, (state) => state.account === null);
+  };
+  /** The sign-out as the host's: the credential gone, the account kept
+   * marked signed out, the remote repository waiting for a sign-in. */
+  const assertHostSignedOut = (state: GroupsState): void => {
+    assert.deepEqual(state.signIn, { phase: "idle", signedOut: { by: "host", login: LOGIN } });
+    assert.ok(!existsSync(join(home.dataDir, "local", "credentials.yaml")), "the credential is gone");
+    const file = Home.load(home.dataDir).file;
+    assert.equal(file.host.signedOut, true);
+    assert.equal(file.host.account?.login, LOGIN, "the account is kept");
+    const own = repositoryOf(state, HOST_OWN);
+    assert.deepEqual([own.state, own.reason], ["unreachable", "Sign in again"]);
+  };
+  // An expired access secret whose refresh the stand-in refuses.
+  host.script.refuseRefresh = true;
+  host.script.expireAccess();
+  assertHostSignedOut(await signedOutBy());
+  // A sign-in that ends without an account leaves it said.
+  const fromCancel = home.client.mark();
+  await home.client.expectOk("space.signin.start", {});
+  await home.client.waitSpace(fromCancel, (state) => state.signIn.phase === "running");
+  assert.deepEqual(await home.client.expectOk("space.signin.cancel", {}), { stopped: true });
+  assertHostSignedOut(await home.client.expectOk("space.get", {}));
+  /** Sign in again and wait for its set-up's read to land. */
+  const signInRead = async (): Promise<GroupsState> => {
+    const mark = home.client.mark();
+    const signed = await signIn(home, host);
+    await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.state === "reachable");
+    return signed;
+  };
+  // The next sign-in clears it.
+  host.script.refuseRefresh = false;
+  assert.deepEqual((await signInRead()).signIn, { phase: "idle" });
+  // A device the stand-in revoked: the same.
+  host.script.revokeDevices();
+  assertHostSignedOut(await signedOutBy());
+  // A sign-out of the reader's own says nothing of the host.
+  await signInRead();
+  assert.deepEqual((await home.client.expectOk("space.signout", {})).signIn, { phase: "idle" });
 });
 
 test("space-37: while a check sleeps on the stand-in's transport, writes beneath that clone are refused naming the sync, another's admitted, and Stop ends it", async (t) => {

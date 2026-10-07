@@ -20,7 +20,7 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | Field | Content |
 | --- | --- |
 | account | while signed in, "Signed in as @<login> at <host>" with the host's display name, and Sign out [[git-host-10](git-host.md#git-host-10)]; while signed out, the sign-in card [[space-3](#space-3)] |
-| last read | while signed in, the time the host was last read, with Refresh, whose caption prints that time; "Not read yet" before any read |
+| last read | while signed in, the time the host was last read, with Refresh, whose caption prints that time; "Not read yet" until a read since the core started is held — on a signed-in start, the one its first `space.get` begins [[git-host-5](git-host.md#git-host-5)] |
 | issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
@@ -44,6 +44,7 @@ While the home is not signed in, the Groups surface's header shall be one card t
 - <host name> is the host name of the home's host URL: the page the person opens says how to sign in there, and the surface names no account elsewhere;
 - while a flow runs, Sign in reads "Signing in…", disabled, beside Cancel, and no row offers a sign-in control;
 - a denial, an expiry or a refusal ends the flow, the card reading the core's cause as one sentence and the control "Sign in again";
+- while no flow runs or stands failed and the core reports that the host signed this device out [[git-host-4](git-host.md#git-host-4)], the card reads "<host name> signed this device out. Sign in again to continue as @<login>." in place of its first sentence, <login> being the account's, and Sign in reads "Sign in again";
 - while signed out, your own group's spex repository reads "On this device only — shared once you sign in" with no control, a spex repository with a remote at the host is unreachable with "Sign in again" and the others are local only [[space-61](#space-61)], and the surface never contacts the host.
 
 #### space-4
@@ -511,7 +512,8 @@ interface GroupsState {
   git: { ok: true; version: string } | { ok: false; guidance: string };
   host: { url: string; displayName: string | null };
   account: { id: string; login: string; displayName: string | null } | null;
-  signIn: { phase: "idle" } | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
+  signIn: { phase: "idle"; signedOut?: { by: "host"; login: string } }   // signedOut: the host signed this device out, for the core's run
+    | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
@@ -662,7 +664,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
-- a core restarted on that home reads the same account, no read time but the same last sync [[space-1](#space-1)];
+- a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
@@ -736,6 +738,7 @@ Where the Groups surface renders over a signed-out home, when the reader signs i
 - in the device flow, the card reads "Continue in your browser:", the link "Open <host name> to sign in" whose href is the verification URL opening a new tab, and "Sign in there and approve; you return here signed in.", with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
 - in the browser flow opened through the bridge, the card reads that the browser is open at the host name with "Open it again" linking to the sign-in URL; where the bridge refused, it reads as the device flow's [[space-3](#space-3)];
 - Cancel brings back the two sentences and Sign in; a denial reads the core's cause as one sentence with "Sign in again" [[space-3](#space-3)];
+- where the core reports that the host signed this device out, the card reads "<host name> signed this device out. Sign in again to continue as @<login>." before "Until you do, everything stays on this device and nothing is contacted.", with "Sign in again" as its control, in English and in Chinese [[space-3](#space-3)];
 - signed in, the header reads "Signed in as @<login> at <host>" with Sign out, the read time with Refresh, and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
 - a group's own repository reads "Group records", a project's with no code remote "Code not on a remote", and a local-only one "On this device only" [[space-1](#space-1)] [[space-61](#space-61)].
 

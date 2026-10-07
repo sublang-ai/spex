@@ -495,6 +495,10 @@ msgstr "{role} runs as"
 msgid "{seconds}s"
 msgstr "{seconds}s"
 
+#: src/components/SpaceSignIn.tsx
+msgid "{site} signed this device out. Sign in again to continue as @{login}."
+msgstr "{site} signed this device out. Sign in again to continue as @{login}."
+
 #. a file size in bytes
 #: src/lib/space.ts
 msgid "{size} B"
@@ -5137,7 +5141,7 @@ msgstr "shown despite search"
 msgid "Sign in"
 msgstr "Sign in"
 
-#. the Sign in control after a sign-in failed
+#. the Sign in control after a sign-in failed or the host signed this device out
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in again"
 msgstr "Sign in again"

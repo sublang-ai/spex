@@ -1795,7 +1795,10 @@ export interface GroupsState {
   host: { url: string; displayName: string | null };
   account: { id: string; login: string; displayName: string | null } | null;
   signIn:
-    | { phase: "idle" }
+    /** `signedOut`: the host signed this device out (git-host-4), with
+     * the login the account bore; held for the core's run, until the
+     * next sign-in (space-3). */
+    | { phase: "idle"; signedOut?: { by: "host"; login: string } }
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
