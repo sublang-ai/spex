@@ -17,6 +17,7 @@
 import assert from "node:assert/strict";
 import { nativeApprovalStage } from "./native-approval-stage.mjs";
 import { waitForBrowserPreparation } from "./browser-preparation.ts";
+import { ownConfigPath } from "./own-config.mjs";
 import { prepareInspectionBrowserCache } from "./inspection-browser-cache.mjs";
 import { successfulInspectionText } from "./inspection-evidence.mjs";
 import { spawnSync } from "node:child_process";
@@ -50,7 +51,6 @@ assert.ok(!evidenceDir.startsWith(`${scratch}/`), "retained evidence must be out
 const profile = join(scratch, "user data");
 const projectPath = join(scratch, "inspection fixture");
 const handshake = join(scratch, "handshake.json");
-const configPath = join(profile, "spex-home", "config", "playbook.config.yaml");
 const env = { ...process.env, SPEX_SMOKE_HANDSHAKE: handshake, SPEX_SMOKE_USERDATA: profile,
   XDG_CONFIG_HOME: join(scratch, "config"), XDG_DATA_HOME: join(scratch, "data"),
   PLAYWRIGHT_BROWSERS_PATH: join(scratch, "managed browsers") };
@@ -332,6 +332,7 @@ try {
   assert.equal(config.status, "valid");
   const inspector = config.summary.playbooks.find((entry) => entry.id === "inspect")?.roles.inspector.playerId;
   assert.ok(inspector, "fresh published configuration must seed Inspect");
+  const configPath = ownConfigPath(join(profile, "spex-home"));
   const seeded = parse(readFileSync(configPath, "utf8"));
   assert.notEqual(seeded.players[inspector].browser, true, "fresh Browser choice is off");
   await page.getByRole("button", { name: "Settings", exact: true }).click();

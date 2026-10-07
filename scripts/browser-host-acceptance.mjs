@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
 import { parse } from "yaml";
 import { waitForBrowserPreparation } from "./browser-preparation.ts";
+import { ownConfigPath } from "./own-config.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scratch = mkdtempSync(join(tmpdir(), "spex browser host "));
@@ -43,7 +44,7 @@ try {
   const captain = page.getByTestId("captain-section");
   await captain.getByTestId("captain-edit").click();
   await captain.getByTestId("agent-adapter-codex").click();
-  const configPath = join(profile, "spex-home", "config", "playbook.config.yaml");
+  const configPath = ownConfigPath(join(profile, "spex-home"));
   const before = readFileSync(configPath, "utf8");
   const browser = captain.getByRole("checkbox", { name: "Browser", exact: true });
   assert.equal(await browser.isChecked(), false);
