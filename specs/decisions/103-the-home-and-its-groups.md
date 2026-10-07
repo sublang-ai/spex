@@ -20,6 +20,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-006](006-projects-and-forge.md): a project's code is any Git repository; its records live in a spex repository, cloned under the home and pushed to its group on the Git host once you sign in. The forge binding stands.
 - [DR-080](080-the-config-directory-is-named-config.md): `config/playbook.config.yaml` keeps its name and moves into your own group's spex repository, synced with it.
 
+Amended by [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md) in when Spex reads the host: also once when it starts signed in.
+
 ## Context
 
 - Until now the home, Spex's folder `~/.spex` or `SPEX_HOME`, was one Git repository with one remote, so every session and intent of every project had the same audience. A person could not keep private work beside a team's, and a team could not share one project without sharing all.

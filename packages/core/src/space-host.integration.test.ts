@@ -3,10 +3,10 @@
 
 // The Groups surface against the stand-in Git host (git-host-12):
 // sign-in in both flows, picks, joins, members, the notice, sign-out,
-// and the host's renames, archives, removals and refusals over its own
-// HTTP transport (space-37, space-38, space-52, space-59, space-65,
-// git-host-11) — hermetic, on loopback alone, in a file budget of its
-// own.
+// the read a signed-in start owes, and the host's renames, archives,
+// removals and refusals over its own HTTP transport (space-37,
+// space-38, space-52, space-59, space-65, git-host-5, git-host-11) —
+// hermetic, on loopback alone, in a file budget of its own.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -119,11 +119,24 @@ test("space-37: the browser sign-in renames your own group after the login, push
   await home.stop();
   const again = await startHome("signin-browser-again", { dataDir: home.dataDir, project: false, env: { SPEX_HOST_URL: "http://127.0.0.1:9" } });
   t.after(() => again.stop());
-  const reread = await again.client.expectOk("space.get", {});
+  const reads = (): number => host.script.requests.filter((request) => request.path === "/api/v1/host/me").length;
+  const readsBefore = reads();
+  const fromStart = again.client.mark();
+  const [reread] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
   assert.deepEqual(reread.account, signed.account);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
+  // That first ask began the read a signed-in start owes, once for both
+  // asks, its state landing with a read time and the host's groups for
+  // the picker (space-1, git-host-5); a later ask begins none.
+  const read = await again.client.waitSpace(fromStart, (state) => state.readAt !== null);
+  assert.equal(typeof read.readAt, "number");
+  assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
+  assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
+  await again.client.expectOk("space.get", {});
+  await sleep(300);
+  assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
 });
 
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {

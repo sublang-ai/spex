@@ -1862,6 +1862,9 @@ export class SpaceManager {
   private readonly attached = new Map<string, HostListing>();
   /** The sign-in shown on the header (space-30). */
   private signInState: GroupsState["signIn"] = { phase: "idle" };
+  /** Whether the read a signed-in start owes is still to be begun at a
+   * client's first ask for the state (git-host-5): spent on that ask. */
+  private startRead = true;
   private flow?: { cancel(): void };
   private settingUp?: Promise<void>;
   /** Steps at the host waiting for a member with the rights (space-64),
@@ -2742,6 +2745,24 @@ export class SpaceManager {
   /** The Groups state (space-30), every repository recomputed. */
   async state(): Promise<GroupsState> {
     return this.assemble(true);
+  }
+
+  /** The Groups state a client asks for (`space.get`, space-29). The
+   * first ask after a start signed in, with no read begun since, begins
+   * the host read that start owes, as Refresh does: once, however many
+   * clients ask, and not awaited — the reply is the state as it stood at
+   * the ask, and the read's outcome is announced as any read's
+   * (git-host-5). */
+  async get(): Promise<GroupsState> {
+    const owed = this.startRead && this.signedIn() && this.readsBegun === 0 && !this.reading && !this.settingUp;
+    this.startRead = false;
+    const state = await this.state();
+    if (owed && this.signedIn() && !this.stopping) {
+      void this.setUp().catch((error: unknown) => {
+        console.error(`spex: reading the host at start failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    return state;
   }
 
   private async assemble(recompute: boolean): Promise<GroupsState> {

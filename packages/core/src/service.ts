@@ -2720,7 +2720,7 @@ export class CoreService {
       // spex repository at a time; long commands reply accepted and
       // report as state.
       case "space.get":
-        return this.requireSpace().state();
+        return this.requireSpace().get();
       // The Git host (git-host-2..10, space-3..6, space-58..65): sign-in
       // and its set-up, the host read, picks, joins and members.
       case "space.refresh":

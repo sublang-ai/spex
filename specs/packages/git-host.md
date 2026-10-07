@@ -8,7 +8,7 @@
 This package defines how the core talks to the Git host under [DR-103](../decisions/103-the-home-and-its-groups.md): signing a person in as a public client, keeping the app token, reading groups and spex repositories, creating one, preparing its `spex` branch, reading members, handing Git a credential through a helper, and the stand-in host the test suites run against.
 The **Git host** is spex.pub, which brokers the Git credential and wraps the Git system behind it; its routes are JSON under `/api/v1` and its sign-in pages under `/login`, as spex.pub's own specs state [[1]].
 An **app token** is the credential the host issues to one signed-in device: a short-lived access secret and a rotating refresh secret [[storage-19](storage.md#storage-19)].
-The core reads the host only when a person signs in, activates Refresh, or starts a sync, never on a timer, and derives nothing from a cached list.
+The core reads the host only when a person signs in, activates Refresh, or starts a sync, and once when a client first asks for the Groups state after a signed-in start, never on a timer, and derives nothing from a cached list.
 
 ## External Behavior
 
@@ -55,12 +55,13 @@ While the home holds an app token, when a call to the host is made, the core sha
 
 #### git-host-5
 
-When the home is signed in and a read of the host is due — at sign-in, on Refresh, and before a sync's Check step — the core shall read, in one pass, the person, every group, and every spex repository the host lists across its pages, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When the home is signed in and a read of the host is due — at sign-in, on Refresh, before a sync's Check step, and at the first `space.get` after the core started signed in with no read begun since — the core shall read, in one pass, the person, every group, and every spex repository the host lists across its pages, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - a listed spex repository is matched to a clone by the id stored in the clone's Git configuration, else by the remote URL, never by name alone;
 - a clone whose id the host no longer lists is marked unreachable with the cause, its files untouched;
 - a spex repository the core attaches a clone to, after creating it [[git-host-6](#git-host-6)] or from the view's own listing, counts as listed — as that answer gave it, a created one without its `spex` branch — until a read begun after the attachment is held, and a read begun before an attachment is made again before it is held;
 - the host's `project.json` for each listed repository is kept for the pickers [[space-58](space.md#space-58)], and its archived flag and the account's role, as the host reports them, decide read-only [[space-61](space.md#space-61)];
+- the read due at the first `space.get` is begun once, however many clients ask, and that reply answers the state as it stands, never waiting for the read, whose outcome the core announces as any host read's [[space-2](space.md#space-2)];
 - a read that fails leaves the previous view with its time and reports the failure once.
 
 #### git-host-6
@@ -143,6 +144,7 @@ When an integration suite starts a real core on a scratch home against the stand
 When an integration suite drives host reads and writes against the stand-in [[git-host-12](#git-host-12)], it shall assert:
 
 - a read lists every group and every spex repository across two pages, matches clones by id and then by remote, marks a clone the stand-in stopped listing unreachable with its files intact, and keeps the previous view with its time when the stand-in answers 503 [[git-host-5](#git-host-5)];
+- a core restarted on a signed-in home answers its first `space.get` with no read time and begins one read of the stand-in however many `space.get` follow, its state announced with a read time [[git-host-5](#git-host-5)];
 - creating a spex repository records its id and remote in the clone's Git configuration, prepares the branch and pushes; a pending answer leaves the clone local only with the words; a taken name is reported as such [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)];
 - from a creation, or a pick joining a listed repository, to its push's end no state reads the repository unreachable, also where a read begun before the creation answers after it without it, and the push lands with no Refresh [[git-host-5](#git-host-5)];
 - an empty repository on the stand-in is not pushed until its default branch exists [[git-host-7](#git-host-7)];

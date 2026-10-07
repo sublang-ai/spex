@@ -20,7 +20,7 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | Field | Content |
 | --- | --- |
 | account | while signed in, "Signed in as @<login> at <host>" with the host's display name, and Sign out [[git-host-10](git-host.md#git-host-10)]; while signed out, the sign-in card [[space-3](#space-3)] |
-| last read | while signed in, the time the host was last read, with Refresh, whose caption prints that time; "Not read yet" before any read |
+| last read | while signed in, the time the host was last read, with Refresh, whose caption prints that time; "Not read yet" until a read since the core started is held — on a signed-in start, the one its first `space.get` begins [[git-host-5](git-host.md#git-host-5)] |
 | issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
@@ -662,7 +662,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
-- a core restarted on that home reads the same account, no read time but the same last sync [[space-1](#space-1)];
+- a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
