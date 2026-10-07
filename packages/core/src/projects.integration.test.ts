@@ -70,14 +70,24 @@ class Client {
   }
 }
 
-/** Every file of a folder with its bytes and mode, `.git` included. */
+/** Every file of a folder with its bytes and mode, `.git` included —
+ * except what Git's own background maintenance creates and removes
+ * meanwhile: its `maintenance.lock`, and any file gone by the time it
+ * is read. */
 function snapshot(dir: string): Map<string, string> {
   const out = new Map<string, string>();
   const walk = (current: string): void => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entry.name === "maintenance.lock") continue;
       const full = join(current, entry.name);
       if (entry.isDirectory()) walk(full);
-      else out.set(relative(dir, full), `${statSync(full).mode}:${readFileSync(full).toString("base64")}`);
+      else {
+        try {
+          out.set(relative(dir, full), `${statSync(full).mode}:${readFileSync(full).toString("base64")}`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
     }
   };
   walk(dir);
