@@ -113,10 +113,10 @@ The Groups surface shall show each spex repository in exactly one of these state
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
 | local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], none while signed out |
-| reachable | the home's current view lists it [[git-host-5](git-host.md#git-host-5)] and the clone is here | the last sync's time | Sync |
+| reachable | the home's current view lists it [[git-host-5](git-host.md#git-host-5)] and the clone is here, no join of it running [[space-63](#space-63)] | the last sync's time | Sync |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or the home is signed out while the clone has a remote | "Unreachable: <cause>" | Retry, none while signed out with the remote at the host |
-| not on this device | the host listed it and no clone is here | "Not on this device" | Join [[space-63](#space-63)] |
+| not on this device | the host listed it and no clone is here, or its join still runs [[space-63](#space-63)] | "Not on this device" | Join [[space-63](#space-63)] |
 
 - nothing on this device is deleted because the host refused or stopped listing;
 - a waiting creation or branch preparation [[space-64](#space-64)] shows its phrase on the row in place of the state's; the wait is held for the app's run alone, so after a restart the row offers its control again and the next attempt finds what a member did meanwhile.
@@ -132,7 +132,8 @@ When the reader activates Members on a reachable spex repository's row, the surf
 When the reader activates Join on a spex repository the host lists and this device lacks, the core shall clone it under `workspace/<group>/`, then, where its `project.json` names a remote, clone the code from that remote with this device's own Git and its credentials into a folder the reader picks, or take a working folder the reader already has, and pair the two [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
-- a code clone that fails reports Git's words, leaving the spex repository cloned and the row offering "Choose folder…" to pair it later.
+- the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Cloning code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
+- a code clone that fails stops the join at its Code step with Git's words, leaving the spex repository cloned and the row offering "Choose folder…" to pair it later.
 
 #### space-64
 
@@ -545,7 +546,7 @@ interface RepositoryState {
     | { phase: "stopped"; op: "sync" | "check" | "join" | "move"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean }
     | { phase: "done"; at: number; sent: number; received: number; pushed: boolean };
 }
-type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push";
+type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";   // code: a join's code clone
 type SyncCause = "unreachable" | "reauth" | "refused" | "gone" | "timeout" | "stopped" | "rejected"
   | "validation" | "lease" | "writer" | "unrelated" | "git";
 interface SpaceUnit {
@@ -664,6 +665,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
+- `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
 - a session with a turn in flight, a session under a management lease taken out of band, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds [[space-11](#space-11)] [[space-21](#space-21)];
@@ -789,5 +791,5 @@ Where the harness boots the served shell signed in with a spex repository whose 
 Where the harness boots the served shell on an empty home against a stand-in holding a group with a project's spex repository a peer pushed — the peer holding a configuration, a titled session and one queued intent — the test suite shall assert the second device's set-up through the page:
 
 - after sign-in the group's row lists the project as "Not on this device" with Join [[space-61](#space-61)];
-- Join clones the spex repository and, the code remote being a path the harness serves, the code into the folder the page names, the row then reading reachable and the project listed in the sidebar with the peer's session and intent [[space-63](#space-63)] [[space-20](#space-20)];
+- Join clones the spex repository and, the code remote being a path the harness serves, the code into the folder the page names, the row reading reachable once the code is in that folder and the project listed in the sidebar with the peer's session and intent [[space-63](#space-63)] [[space-61](#space-61)] [[space-20](#space-20)];
 - a session run here and synced lands on the stand-in's `spex` branch beside the peer's [[space-12](#space-12)].

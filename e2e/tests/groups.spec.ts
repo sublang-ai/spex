@@ -898,8 +898,9 @@ test.describe("second device", () => {
 
     // Join clones the spex repository and, the code remote a path this
     // machine serves, the code into the folder the page names; the row
-    // reads reachable and the project lists in the sidebar with the
-    // peer's session and intent (space-63, space-20).
+    // reads reachable once the code is there, and the project lists in
+    // the sidebar with the peer's session and intent (space-63,
+    // space-61, space-20).
     await join_.click();
     const editor = page.getByTestId(`space-join-${key}`);
     await expect(editor).toContainText("Folder for its code on this device");
