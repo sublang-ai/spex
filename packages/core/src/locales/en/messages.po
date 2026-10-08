@@ -195,7 +195,7 @@ msgstr "{id} is already a playbook of this project's or your own environment; pi
 msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} is already an authoring session of another project; pick another id"
 
-#. Log line: a turn of an authoring session stops recording, since a rescan gave its id another project's session
+#. Log line or refusal: a rescan gave an authoring session's id another project's session, so its turn stops recording and its enabling commits nothing
 #: src/authoring.ts
 msgid "{id} now names another authoring session"
 msgstr "{id} now names another authoring session"
@@ -2502,6 +2502,11 @@ msgstr "Upload write made no progress."
 #: src/service.ts
 msgid "Wait for {name} in {project}"
 msgstr "Wait for {name} in {project}"
+
+#. What blocks a Space operation: an authoring session of this spex repository has a turn running
+#: src/service.ts
+msgid "Wait for {playbookId}"
+msgstr "Wait for {playbookId}"
 
 #. Attachment transfer or storage diagnostic
 #: src/service.ts

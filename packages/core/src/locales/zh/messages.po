@@ -195,7 +195,7 @@ msgstr "{id} 已是本项目或你自己的环境中的规程；请换一个 id"
 msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} 已是另一个项目的编写会话；请换一个 id"
 
-#. Log line: a turn of an authoring session stops recording, since a rescan gave its id another project's session
+#. Log line or refusal: a rescan gave an authoring session's id another project's session, so its turn stops recording and its enabling commits nothing
 #: src/authoring.ts
 msgid "{id} now names another authoring session"
 msgstr "{id} 现已指向另一个编写会话"
@@ -2502,6 +2502,11 @@ msgstr "无法继续写入上传文件。"
 #: src/service.ts
 msgid "Wait for {name} in {project}"
 msgstr "请等待 {project} 中的 {name}"
+
+#. What blocks a Space operation: an authoring session of this spex repository has a turn running
+#: src/service.ts
+msgid "Wait for {playbookId}"
+msgstr "请等待 {playbookId}"
 
 #. Attachment transfer or storage diagnostic
 #: src/service.ts

@@ -865,7 +865,8 @@ export class CoreService {
    * The named blocker of an operation on one clone (space-11): a turn
    * in flight or being admitted in one of its sessions, a session of it
    * held — or unprovably held — by another host, observed live through
-   * its shared store, or a running compile of its authoring sessions.
+   * its shared store, a turn of one of its authoring sessions, or a
+   * running compile of them.
    */
   private async spaceBlocker(repository: string): Promise<string | undefined> {
     if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
@@ -894,6 +895,12 @@ export class CoreService {
     if ([...this.submitting.keys()].some((sessionId) => this.store.sessionRepository(sessionId) === repository)) return i18n._({
       id: "Wait for the turn being submitted",
       comment: "What blocks a Space operation: a turn is being admitted",
+    });
+    const answering = this.authors.turning(repository);
+    if (answering !== undefined) return i18n._({
+      id: "Wait for {playbookId}",
+      comment: "What blocks a Space operation: an authoring session of this spex repository has a turn running",
+      values: { playbookId: answering },
     });
     for (const playbookId of this.activeCompiles.keys()) {
       const holder = this.compileHolders.get(playbookId) ?? this.drafts.projectOf(playbookId) ?? this.store.home.own();

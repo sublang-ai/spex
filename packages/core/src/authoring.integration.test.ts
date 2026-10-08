@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Authoring coverage (playbook-library-72..76, playbook-library-96..97,
-// core-service-97, storage-25):
+// playbook-library-100, core-service-97, storage-25):
 // drafts driven over the WebSocket protocol against the scripted fake
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
@@ -1312,6 +1312,91 @@ test("playbook-library-97: a compile running for a session its id no longer name
     assert.deepEqual(opened.records.map((entry) => entry.seq), [1]);
   } finally {
     process.off("unhandledRejection", onRejection);
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-100: an enabling re-package of a session its id no longer names
+// ---------------------------------------------------------------------------
+
+test("playbook-library-100: an enabling re-package for a session its id no longer names is refused, and nothing of it is committed", async () => {
+  const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+  const { projectId, clone, dir, dataDir, configPath } = harness;
+  const kept = authoringFiles(clone, "triage");
+  const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "triage" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+    // Another project holds a session of the id, shadowed while this one stands.
+    const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
+    const promoted = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "triage");
+    mkdirSync(dirname(promoted.record), { recursive: true });
+    const promotedRecord = JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 });
+    const promotedRecords = `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`;
+    writeFileSync(promoted.record, promotedRecord);
+    writeFileSync(promoted.records, promotedRecords);
+
+    // The session compiles and its agent proposes the enabling.
+    await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+    await until(() => {
+      const draft = client.latest("triage");
+      return draft?.activity === "idle" && draft.proposal !== undefined;
+    }, 120_000, "the proposal");
+
+    // The re-package is held where it loads the entry the compiler
+    // emitted: the entry waits, at import, for the test's release.
+    const reached = join(dir, "repackage-reached");
+    const release = join(dir, "repackage-release");
+    const entry = join(artifactDir, "triage.ts");
+    writeFileSync(entry, [
+      'import { existsSync as heldExists, writeFileSync as heldWrite } from "node:fs";',
+      `heldWrite(${JSON.stringify(reached)}, "");`,
+      `while (!heldExists(${JSON.stringify(release)})) await new Promise((resolve) => setTimeout(resolve, 25));`,
+      readFileSync(entry, "utf8"),
+    ].join("\n"));
+    const projectConfig = join(clone, "config", "playbook.config.yaml");
+    const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
+    const configBefore = contents(configPath);
+    const projectConfigBefore = contents(projectConfig);
+    const requestsBefore = contents(join(clone, "spex.yaml"));
+    const registering = client.command("draft.register", {
+      projectId,
+      draftId: "triage",
+      command: "triage",
+      intent: "Label new issues",
+      bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+      newPlayers: { "dev.triager": { adapter: "claude" } },
+    });
+    await until(() => existsSync(reached), 60_000, "the held re-package");
+
+    // The kept session's file goes, and a rescan gives the id to the other project's session.
+    rmSync(kept.record);
+    await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
+    const keptTranscript = readFileSync(kept.records, "utf8");
+    writeFileSync(release, "");
+
+    // Refused: nothing of the enabling is committed.
+    const reply = await registering;
+    assert.ok(!reply.ok, "the enabling is refused");
+    if (reply.ok) throw new Error("unreachable");
+    assert.equal(reply.error.code, "invalid_request");
+    assert.equal(reply.error.message, "triage now names another authoring session");
+    assert.equal(contents(configPath), configBefore, "your own group's config is unchanged");
+    assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
+    assert.equal(contents(join(clone, "spex.yaml")), requestsBefore, "no spec package is requested");
+    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
+    // The session the id now names is untouched.
+    assert.equal(readFileSync(promoted.record, "utf8"), promotedRecord);
+    assert.equal(readFileSync(promoted.records, "utf8"), promotedRecords);
+    const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+    assert.equal(opened.draft.enabled, false);
+    assert.equal(opened.draft.activity, "idle");
+    assert.deepEqual(opened.records.map((record) => record.seq), [1]);
+  } finally {
     client.close();
     await harness.service.stop();
   }

@@ -312,6 +312,16 @@ function compileRunning(id: string): string {
   });
 }
 
+/** What a rescan giving the id another project's session stops,
+ * worded once (playbook-library-70). */
+function nowNamesAnother(id: string): string {
+  return i18n._({
+    id: "{id} now names another authoring session",
+    values: { id },
+    comment: "Log line or refusal: a rescan gave an authoring session's id another project's session, so its turn stops recording and its enabling commits nothing",
+  });
+}
+
 /** The refusal for an id no draft holds, worded once. */
 function noDraft(id: string): string {
   return i18n._({
@@ -340,13 +350,15 @@ export class AuthorManager {
   }
 
   /** A rescan gave the id another session, or none (storage-12): what
-   * was read from the one before goes, and a turn or compile still
-   * running for it is aborted or canceled; nothing of it reaches the
-   * session the id now names (playbook-library-70). */
+   * was read from the one before goes, and a turn, compile or enabling
+   * re-package still running for it is aborted or canceled; nothing of
+   * it reaches the session the id now names (playbook-library-70). */
   private forget(id: string): void {
     const live = this.live.get(id);
     live?.turn?.controller.abort();
     live?.compile?.controller.abort();
+    // The enabling re-package holds its marker alone (register).
+    this.options.activeCompiles.get(id)?.abort();
     this.live.delete(id);
     this.problems.delete(id);
   }
@@ -366,6 +378,12 @@ export class AuthorManager {
       live.damaged = undefined;
       if (JSON.stringify(this.recordsOf(id, live)) !== JSON.stringify(held)) live.resume = undefined;
     }
+  }
+
+  /** A session of the spex repository whose turn is running, if any:
+   * a sync of it waits for that turn (space-11). */
+  turning(repository: string): string | undefined {
+    return this.drafts.idsIn(repository).find((id) => this.live.get(id)?.turn !== undefined);
   }
 
   private get drafts(): DraftStore {
@@ -659,13 +677,7 @@ export class AuthorManager {
 
   private append(id: string, live: LiveDraft, record: TmuxPlayRecord): DraftRecord {
     // State the id no longer names records nothing (storage-12).
-    if (this.live.get(id) !== live) {
-      throw new Error(i18n._({
-        id: "{id} now names another authoring session",
-        values: { id },
-        comment: "Log line: a turn of an authoring session stops recording, since a rescan gave its id another project's session",
-      }));
-    }
+    if (this.live.get(id) !== live) throw new Error(nowNamesAnother(id));
     this.recordsOf(id, live);
     if (live.damaged) throw new CoreError("invalid_request", live.damaged);
     live.seq += 1;
@@ -914,11 +926,14 @@ export class AuthorManager {
       }));
     }
     if (this.options.activeCompiles.has(id)) throw new CoreError("busy", compileRunning(id));
+    // The spex repository of the session this enabling serves.
+    const holder = this.drafts.projectOf(id);
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
     this.publish(id);
     try {
-      let result: CompileResult;
+      let result: CompileResult | undefined;
+      let failure: unknown;
       try {
         result = await compilePlaybook({
           playbookId: id,
@@ -933,8 +948,13 @@ export class AuthorManager {
           ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
         });
       } catch (error) {
-        throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+        failure = error;
       }
+      // A rescan gave the id another session, or none, while it
+      // re-packaged, canceling it (forget): nothing is committed
+      // (playbook-library-70).
+      if (this.drafts.projectOf(id) !== holder) throw new CoreError("invalid_request", nowNamesAnother(id));
+      if (result === undefined) throw new CoreError("invalid_request", failure instanceof Error ? failure.message : String(failure));
       return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder });
     } finally {
       this.options.activeCompiles.delete(id);

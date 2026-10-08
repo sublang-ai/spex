@@ -535,7 +535,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 - an unreadable record or transcript is a scoped diagnostic that blocks that session alone;
 - the transcript of a session whose spex repository a sync applied [[space-20](space.md#space-20)] is read back before anything appends, so the next record continues the sequence on disk;
-- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile canceled, and nothing they later record or settle reaches the session the id now names.
+- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile or an enabling re-package canceled, and nothing they later record or settle reaches the session the id now names.
 
 #### playbook-library-71
 
@@ -684,6 +684,10 @@ Where an authoring session's transcript holds one record its manager has read an
 #### playbook-library-97
 
 Where another project's spex repository holds a session of the same id and the stub `slc` holds the compile in its first phase, when the agent's compile block starts a compile, the kept session's file is removed and a rescan follows, and the stub is then released, the test suite shall assert that the compiler stopped before emitting anything, no unhandled rejection occurred, the removed session's transcript gained no record, and the session the id now names kept its file and transcript unchanged with no compile recorded [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-100
+
+Where another project's spex repository holds a session of the same id and the entry the compiler emitted holds its import until released, when an enabling of the compiled session is requested, the kept session's file is removed and a rescan follows while the re-package runs, and the entry is then released, the test suite shall assert that the enabling is refused `invalid_request` naming the id as another session's, both configs and the spex repository's requests are unchanged, the removed session's transcript gained no record, and the session the id now names kept its file and transcript unchanged and reads not enabled [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-99
 

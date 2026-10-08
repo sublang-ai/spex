@@ -186,7 +186,7 @@ test("space-37: the first sync pushes spex to the empty host, sets the upstream 
   assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));
 });
 
-test("space-37: a turn in flight, an out-of-band lease and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
+test("space-37: a turn in flight, an out-of-band lease, an authoring turn and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
   const home = await startHome("blockers", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
@@ -213,6 +213,19 @@ test("space-37: a turn in flight, an out-of-band lease and a running compile ref
     await home.client.expectError("space.sync", { repository: key }, "busy", /“Settle first” (is in use elsewhere|ownership cannot be verified)/);
     await proceeds(other.key, "a lease in one clone holds no other");
   } finally { await lease.release(); }
+  // An authoring session's turn in flight, admitted once it ends.
+  await home.client.expectOk("draft.create", { projectId: key, draftId: "drafting" });
+  const turning = home.client.mark();
+  await home.client.expectOk("draft.send", { projectId: key, draftId: "drafting", text: "slow: keep drafting" });
+  await home.client.waitFor((m) => m.type === "draft.state" && m.draft.id === "drafting" && m.draft.activity === "turn");
+  await home.client.expectError("space.sync", { repository: key }, "busy", /Wait for drafting/);
+  await proceeds(other.key, "an authoring turn holds only its own repository");
+  for (const start = Date.now(); ;) {
+    if (home.client.messages.slice(turning).some((m) => m.type === "draft.state" && m.draft.id === "drafting" && m.draft.activity === "idle")) break;
+    if (Date.now() - start > 20_000) throw new Error("timeout waiting for the authoring turn to end");
+    await sleep(25);
+  }
+  await proceeds(key, "the authoring turn ended");
   // A running compile belongs to the project whose working folder holds
   // its spec package (environments-10).
   const compile = home.client.command("compile.run", { ...COMPILE_INPUT, projectId: key });

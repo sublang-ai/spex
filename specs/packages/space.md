@@ -287,6 +287,7 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 | no Git merge is pending from a terminal in the clone | "Finish or abort the merge in your terminal" |
 | no session of this spex repository has a turn in flight [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title>" |
 | no session of it is held, or unprovably held, by another host [[core-service-32](core-service.md#core-service-32)] | "<session title> is in use elsewhere" |
+| no authoring session of it has a turn in flight [[core-service-96](core-service.md#core-service-96)] | "Wait for <playbook id>" |
 | no compile of its authoring sessions is running | "<playbook> is compiling" |
 | no media upload operation or attachment validation for content admission is in flight for it [[media-2](media.md#media-2)] [[media-5](media.md#media-5)] | "Wait for the media upload to finish." |
 | no sync of it is running | "Already syncing" |
@@ -678,7 +679,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
-- a session with a turn in flight, a session under a management lease taken out of band, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds [[space-11](#space-11)] [[space-21](#space-21)];
+- a session with a turn in flight, a session under a management lease taken out of band, an authoring session with a turn in flight, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds, the sync admitted once the authoring turn ends [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
 - `space.signout` revokes the device at the stand-in, every repository turns local only or unreachable with nothing deleted, and a later sign-in finds them reachable again [[space-6](#space-6)] [[space-61](#space-61)];
 - a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)].
