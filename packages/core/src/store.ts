@@ -588,20 +588,22 @@ export class Store {
   /** Every clone under `workspace/`: a folder named `<name>-spex` inside
    * plain group folders mirroring the Git host (storage-1). A group
    * folder may bear such a name too, so a clone is told by what it
-   * holds: `.git`, a file, or nothing yet, a dot-named entry such as
-   * Finder's `.DS_Store` aside. A group folder holds only folders, and
-   * the walk goes on inside it. Your own group's clone always stands. */
+   * holds: `.git` or a file, a dot-named entry such as Finder's
+   * `.DS_Store` aside. A clone the store makes holds a file before its
+   * `.git`, so a folder holding nothing, or only folders, is no clone:
+   * the walk goes on inside it and writes nothing there. Your own
+   * group's clone always stands. */
   private discoverRepositories(): void {
     const found = new Map<string, string>();
     const held = (dir: string) => readdirSync(dir, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
     const folders = (dir: string): string[] => held(dir).filter((entry) => entry.isDirectory()).map((entry) => join(dir, entry.name));
-    const isClone = (dir: string, key: string): boolean => {
-      if (key === this.homeFile.own() || existsSync(join(dir, ".git"))) return true;
-      const entries = held(dir);
-      return entries.some((entry) => entry.isFile()) || !entries.some((entry) => entry.isDirectory());
-    };
+    const isClone = (dir: string, key: string): boolean =>
+      key === this.homeFile.own() || existsSync(join(dir, ".git")) || held(dir).some((entry) => entry.isFile());
+    // The bound only stops a runaway walk: GitLab nests twenty levels of
+    // subgroups under a top-level group, so 32 group levels leave room
+    // above any host's deepest clone.
     const walk = (dir: string, depth: number): void => {
-      if (depth > 8 || !existsSync(dir)) return;
+      if (depth > 32 || !existsSync(dir)) return;
       for (const path of folders(dir)) {
         const key = this.homeFile.keyOf(path);
         if (key && isClone(path, key)) found.set(key, path);

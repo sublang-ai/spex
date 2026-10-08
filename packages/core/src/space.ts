@@ -222,7 +222,7 @@ function sameEntry(a: string, b: string): boolean {
   } catch { return false; }
 }
 
-/** Remove the folders a move left empty, up to the workspace itself. */
+/** Remove the folders a move left empty, up to `stopAt` itself. */
 function pruneEmptyFolders(dir: string, stopAt: string): void {
   let current = resolve(dir);
   const root = resolve(stopAt);
@@ -233,6 +233,71 @@ function pruneEmptyFolders(dir: string, stopAt: string): void {
     } catch { return; }
     current = dirname(current);
   }
+}
+
+/** Whether a clone moving from key `from` to key `to` meets another
+ * entry under the workspace: a destination that is the source itself, as
+ * a case-insensitive filesystem reads a spelling differing only by case,
+ * is none (space-59, space-60). */
+function moveCollides(workspace: string, from: string, to: string): boolean {
+  const target = join(workspace, ...to.split("/"));
+  return existsSync(target) && !sameEntry(join(workspace, ...from.split("/")), target);
+}
+
+/** How many leading folders of key `from` a move to key `to` keeps where
+ * they lie: those spelled alike, and those differing only by case whose
+ * new spelling names the same entry, as on a case-insensitive filesystem,
+ * which the move renames in place. */
+function keptFolders(workspace: string, from: string[], to: string[]): number {
+  let at = workspace;
+  let depth = 0;
+  for (; depth < from.length - 1 && depth < to.length - 1; depth += 1) {
+    const same = from[depth] === to[depth] ||
+      (from[depth].toLowerCase() === to[depth].toLowerCase() && sameEntry(join(at, from[depth]), join(at, to[depth])));
+    if (!same) break;
+    at = join(at, from[depth]);
+  }
+  return depth;
+}
+
+/** Move a clone from key `from` to key `to` under the workspace, on
+ * either filesystem kind (space-59, space-60): each kept folder takes the
+ * new spelling in place, so its spelling follows the host's; the clone
+ * then moves, or takes its own new spelling in place, and the folders it
+ * left empty go, never one renamed in place. The caller checks the
+ * collision first ({@link moveCollides}). */
+function moveClone(workspace: string, from: string, to: string): void {
+  const source = from.split("/");
+  const target = to.split("/");
+  const kept = keptFolders(workspace, source, target);
+  let at = workspace;
+  for (let depth = 0; depth < kept; depth += 1) {
+    if (source[depth] !== target[depth]) renameSync(join(at, source[depth]), join(at, target[depth]));
+    at = join(at, target[depth]);
+  }
+  const was = join(at, ...source.slice(kept));
+  const now = join(workspace, ...target);
+  if (was === now) return;
+  const inPlace = sameEntry(was, now);
+  mkdirSync(dirname(now), { recursive: true, mode: 0o700 });
+  renameSync(was, now);
+  if (!inPlace) pruneEmptyFolders(dirname(was), at);
+}
+
+/** The other clones a move from key `from` to key `to` carries: those
+ * beneath a folder it renames in place, each with its key so spelled. */
+function carriedClones(workspace: string, from: string, to: string, keys: string[]): { from: string; to: string }[] {
+  const source = from.split("/");
+  const target = to.split("/");
+  const kept = keptFolders(workspace, source, target);
+  return keys.flatMap((key) => {
+    if (key === from) return [];
+    const parts = key.split("/");
+    let shared = 0;
+    while (shared < kept && shared < parts.length - 1 && parts[shared] === source[shared]) shared += 1;
+    const respelled = [...target.slice(0, shared), ...parts.slice(shared)].join("/");
+    return respelled === key ? [] : [{ from: key, to: respelled }];
+  });
 }
 
 /** The diagnostic a pending Git merge stands as (space-11). */
@@ -2167,10 +2232,7 @@ export class SpaceManager {
     // A destination taken by another entry collides; one that is the
     // source itself, as a case-insensitive filesystem reads a login
     // differing only by case, does not.
-    if (moves.some((move) => {
-      const to = store.home.clonePath(move.to);
-      return existsSync(to) && !sameEntry(store.home.clonePath(move.from), to);
-    })) return "busy";
+    if (moves.some((move) => moveCollides(store.home.workspace, move.from, move.to))) return "busy";
     // A pick in flight writes the clone's remote: it ends first.
     if (keys.some((key) => this.picking.has(key))) return "busy";
     const held: RepositorySync[] = [];
@@ -2194,22 +2256,10 @@ export class SpaceManager {
         await machine.beginMove();
       }
       await this.host.settleBeneath?.(keys);
-      // A login differing only by case renames the folder in place,
-      // which either filesystem kind allows, and each clone then moves
-      // from where it now lies, your own alone changing its name.
-      const folder = join(store.home.workspace, current);
-      const renamed = join(store.home.workspace, target);
-      const inPlace = current.toLowerCase() === target.toLowerCase() && existsSync(folder) &&
-        (!existsSync(renamed) || sameEntry(folder, renamed));
-      if (inPlace) renameSync(folder, renamed);
-      for (const move of moves) {
-        const from = store.home.clonePath(inPlace ? `${target}/${move.from.slice(current.length + 1)}` : move.from);
-        const to = store.home.clonePath(move.to);
-        if (from === to) continue;
-        mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
-        renameSync(from, to);
-      }
-      if (!inPlace) pruneEmptyFolders(folder, store.home.workspace);
+      // A login differing only by case renames the folder in place where
+      // the filesystem reads both spellings as one, and each clone then
+      // moves from where it now lies.
+      for (const move of moves) moveClone(store.home.workspace, move.from, move.to);
       this.relocate(moves, target);
       for (const machine of moving.splice(0)) machine.endMove();
       await this.afterMove(moves);
@@ -2601,7 +2651,8 @@ export class SpaceManager {
 
   /** The admission of space-11 the host decides: a clone on the host
    * needs a sign-in, and its first push into a repository with other
-   * members needs the notice seen (space-57). */
+   * members, or whose members the host has not told, needs the notice
+   * seen (space-57). */
   async admit(machine: RepositorySync, input: { push: boolean; noticed: boolean }): Promise<void> {
     const facts = machine.facts;
     if (!this.atHost(facts)) return;
@@ -2609,15 +2660,20 @@ export class SpaceManager {
     if (!input.push || input.noticed) return;
     const store = this.host.store;
     if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
-    let view = this.view;
-    if (!view) { try { view = await this.readHost(); } catch { return; } }
-    const listing = listingFor(view, facts.id, facts.remote);
-    if (!listing || listing.readOnly || (listing.members ?? 0) <= 1) return;
+    // Unknown is not "only me": a repository the view read before it
+    // existed, or whose members it lacks, is read again; still unknown,
+    // its first push waits for the notice.
+    let listing = listingFor(this.view, facts.id, facts.remote);
+    if (!listing || listing.members === null) {
+      try { listing = listingFor(await this.readHost(), facts.id, facts.remote); } catch { listing = undefined; }
+    }
+    const members = listing?.members ?? null;
+    if (listing && members !== null && (listing.readOnly || members <= 1)) return;
     throw new CoreError("invalid_request", i18n._({
       id: "Read the sharing notice before the first sync of {name}",
       values: { name: splitKey(machine.key).name },
       comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
-    }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
+    }), { notice: true, members, visibility: listing && members !== null ? listing.repository.visibility : null });
   }
 
   /** The Check step's read of the host for one clone (space-12): follow
@@ -2674,12 +2730,16 @@ export class SpaceManager {
   }
 
   /** Follow the host's rename or transfer of one clone, inside its sync's
-   * gate (space-60). */
+   * gate (space-60), a spelling differing only by case on either
+   * filesystem kind. A folder renamed in place carries the clones beneath
+   * it: they stay where they lie, every path to them still read on the
+   * filesystem that read both spellings as one, and their keys follow
+   * the folder's spelling in the same step. */
   private async moveInSync(machine: RepositorySync, to: string): Promise<void> {
     const store = this.host.store;
+    const workspace = store.home.workspace;
     const from = machine.key;
-    const target = store.home.clonePath(to);
-    if (existsSync(target)) {
+    if (moveCollides(workspace, from, to)) {
       throw new SpaceStopped("check", {
         cause: "git",
         message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
@@ -2687,18 +2747,19 @@ export class SpaceManager {
         retry: true,
       });
     }
+    const moves = [{ from, to }, ...carriedClones(workspace, from, to, store.listRepositories().map((repository) => repository.key))];
+    const moving = [machine, ...moves.slice(1).map((move) => this.machine(move.from))];
     // Reads in flight end, and an environment's writes land, before the
-    // clone moves; a read starting meanwhile reads it moved.
-    await machine.beginMove();
+    // clones move; a read starting meanwhile reads them moved.
     try {
-      await this.host.settleBeneath?.([from]);
-      const source = machine.repository.dir;
-      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-      renameSync(source, target);
-      pruneEmptyFolders(dirname(source), store.home.workspace);
-      this.relocate([{ from, to }]);
-    } finally { machine.endMove(); }
-    await this.afterMove([{ from, to }]);
+      for (const each of moving) await each.beginMove();
+      await this.host.settleBeneath?.(moves.map((move) => move.from));
+      moveClone(workspace, from, to);
+      this.relocate(moves);
+    } finally {
+      for (const each of moving) each.endMove();
+    }
+    await this.afterMove(moves);
   }
 
   /** The store, the machines and the waiting steps follow moved clones. */

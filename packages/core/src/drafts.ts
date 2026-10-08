@@ -392,6 +392,11 @@ export class DraftStore {
     return this.locations.get(id)?.key;
   }
 
+  /** Every id whose kept session one spex repository holds. */
+  idsIn(key: string): string[] {
+    return [...this.locations].filter(([, location]) => location.key === key).map(([id]) => id);
+  }
+
   recordFile(id: string): string {
     return join(this.location(id).authoringDir, `${id}.json`);
   }

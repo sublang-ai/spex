@@ -14,7 +14,8 @@
 // (playbook-library-61) and its role defaults (playbook-library-88),
 // Publish beneath it (playbook-library-93), Delete's confirm
 // (playbook-library-63), the example prefill (playbook-library-35),
-// and the 14-character budget on every workspace control (DR-041).
+// an id another project's session takes (playbook-library-98), and
+// the 14-character budget on every workspace control (DR-041).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -1646,6 +1647,121 @@ describe("playbook-library-62: restore on open", () => {
     );
     expect(screen.getByTestId("compile-caption").textContent).toBe("sent to the agent");
     expect(screen.getByTestId("source-markdown").textContent).toContain("Fixed.");
+  });
+});
+
+describe("playbook-library-98: an id another project's session takes", () => {
+  /** Another project's session of the same id (storage-12). */
+  const OTHER_ID = "acme/tools-spex";
+  const OTHER_PROJECT = {
+    id: OTHER_ID,
+    path: "/work/tools",
+    name: "tools",
+    registeredAt: now - 20 * HOUR,
+    repository: { key: OTHER_ID, name: "tools-spex", group: "acme", own: false },
+  };
+  const promoted = draftInfo({ projectId: OTHER_ID, firstLine: "# Triage elsewhere", touchedAt: now });
+
+  /** The former session opened with everything the workspace holds,
+   * the surface's own reads on mount answered before the core speaks
+   * again, as one connection delivers them. */
+  async function holdFormer(): Promise<void> {
+    renderWorkspace(COMPILED, { view: foldView(THREAD) });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => {
+      useAppStore.setState({
+        projects: [PROJECT, OTHER_PROJECT],
+        draftArtifacts: { triage: ARTIFACTS } as ReturnType<typeof useAppStore.getState>["draftArtifacts"],
+        draftComposers: { triage: { draft: "half a thought" } },
+        draftEditors: { triage: { path: "spex-packages/triage/triage.md", original: "# Triage", draft: "# Triage, edited", preview: false } },
+        draftForms: { triage: { command: "triage", players: { Triager: "dev.coder" }, newPlayers: {} } },
+      });
+    });
+    expect(screen.getByTestId("authoring-workspace")).toBeTruthy();
+  }
+
+  function expectNothingOfFormer(): void {
+    const state = useAppStore.getState();
+    expect(state.drafts.triage).toEqual(promoted);
+    expect(state.draftViews.triage).toBeUndefined();
+    expect(state.draftSources.triage).toBeUndefined();
+    expect(state.draftArtifacts.triage).toBeUndefined();
+    expect(state.draftComposers.triage).toBeUndefined();
+    expect(state.draftEditors.triage).toBeUndefined();
+    expect(state.draftForms.triage).toBeUndefined();
+  }
+
+  test.each([
+    ["its state", () => deliverServerMessageForTests({ type: "draft.state", draft: promoted })],
+    ["a listing", async () => {
+      const base = commandMock.getMockImplementation()!;
+      commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+        type === "draft.list" ? [promoted] : base(type, params),
+      );
+      await useAppStore.getState().listDrafts();
+    }],
+  ])("named by %s, the former session's state goes, its workspace returns to the list, and opening replays from the first record", async (_case, announce) => {
+    await holdFormer();
+    await act(async () => {
+      await announce();
+    });
+    expectNothingOfFormer();
+    expect(useAppStore.getState().openDraftId).toBeUndefined();
+    expect(screen.queryByTestId("authoring-workspace")).toBeNull();
+    // A live record of the session now holding the id folds into no view.
+    act(() => {
+      deliverServerMessageForTests({
+        type: "draft.record",
+        draftId: "triage",
+        seq: 12,
+        record: { type: "captain_status", turnId: null, timestamp: now, message: "◇ Compiling — asked by you" } as unknown as TmuxPlayRecord,
+      });
+    });
+    expect(useAppStore.getState().draftViews.triage).toBeUndefined();
+    commandMock.mockClear();
+    await act(() => useAppStore.getState().openDraft("triage"));
+    expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: OTHER_ID, draftId: "triage", afterSeq: 0 });
+  });
+
+  test("deleting the kept session leaves the session listed in its place before the reply", async () => {
+    seed({ drafts: { triage: draftInfo() }, projects: [PROJECT, OTHER_PROJECT] });
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type !== "draft.delete") return base(type, params);
+      // The core announces the removal and the session it lists in its
+      // place before it replies.
+      deliverServerMessageForTests({ type: "draft.removed", projectId: PROJECT_ID, draftId: "triage" });
+      deliverServerMessageForTests({ type: "draft.state", draft: promoted });
+      return null;
+    });
+    await act(() => useAppStore.getState().deleteDraft("triage"));
+    expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage" });
+    expect(useAppStore.getState().drafts.triage).toEqual(promoted);
+    commandMock.mockClear();
+    await act(() => useAppStore.getState().openDraft("triage"));
+    expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: OTHER_ID, draftId: "triage", afterSeq: 0 });
+  });
+
+  test.each([
+    ["draft.open", { draft: draftInfo(), source: SOURCE, records: [] }, () => useAppStore.getState().refreshDraftSource("triage")],
+    ["draft.source.write", { version: "v2", mtime: now }, () => useAppStore.getState().writeDraftSource("triage", { content: "# Triage, mine", baseVersion: "v1" })],
+    ["draft.player.set", { ...draftInfo(), player: "dev.coder" }, () => useAppStore.getState().setDraftPlayer("triage", "dev.coder")],
+    ["draft.artifacts", ARTIFACTS, () => useAppStore.getState().loadDraftArtifacts("triage")],
+  ])("a %s reply for the former session writes nothing over the session now holding the id", async (command, reply, run) => {
+    await holdFormer();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type !== command) return base(type, params);
+      deliverServerMessageForTests({ type: "draft.state", draft: promoted });
+      return reply;
+    });
+    await act(async () => {
+      await run();
+    });
+    expect(commandMock).toHaveBeenCalledWith(command, expect.objectContaining({ projectId: PROJECT_ID, draftId: "triage" }));
+    expectNothingOfFormer();
   });
 });
 

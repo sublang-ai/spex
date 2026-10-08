@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Authoring coverage (playbook-library-72..76, core-service-97, storage-25):
+// Authoring coverage (playbook-library-72..76, playbook-library-96..97,
+// core-service-97, storage-25):
 // drafts driven over the WebSocket protocol against the scripted fake
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
@@ -20,7 +21,8 @@ import { authoringDocuments } from "./authoring.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
-import { stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
+import { repositoryOf } from "./testing/space-harness.js";
+import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import type {
   Command,
   CommandResults,
@@ -1139,5 +1141,178 @@ test("storage-25: two spex repositories holding one authoring session id are rep
   } finally {
     client.close();
     await service.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-96: what a sync applied is read back before anything appends
+// ---------------------------------------------------------------------------
+
+/** Plain Git for the test's own peer: no user or system config, a fixed identity. */
+function peerGit(cwd: string, ...args: string[]): string {
+  return execFileSync("git", ["-C", cwd, ...args], {
+    encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Peer", GIT_AUTHOR_EMAIL: "peer@example.test", GIT_COMMITTER_NAME: "Peer", GIT_COMMITTER_EMAIL: "peer@example.test" },
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+/** Sync one spex repository and wait until it no longer runs. */
+async function sync(client: Client, repository: string): Promise<string> {
+  assert.deepEqual(await client.expectOk("space.sync", { repository }), { accepted: true });
+  const start = Date.now();
+  for (;;) {
+    const state = repositoryOf(await client.expectOk("space.get", {}), repository).sync;
+    if (state.phase !== "running") return state.phase;
+    if (Date.now() - start > 60_000) throw new Error(`timeout waiting for the sync of ${repository}`);
+    await sleep(25);
+  }
+}
+
+test("playbook-library-96: a sync bringing a peer's records is read back before the session records again", async () => {
+  const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcSource() });
+  const { projectId, clone, dir, stats } = harness;
+  const files = authoringFiles(clone, "synced");
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "synced" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "synced" } });
+    // One record the manager has read: the transcript holds seq 1.
+    await client.expectOk("draft.player.set", { projectId, draftId: "synced", playerId: null });
+    const seqs = (): number[] => readFileSync(files.records, "utf8").trim().split("\n").map((line) => (JSON.parse(line) as { seq: number }).seq);
+    assert.deepEqual(seqs(), [1]);
+
+    // The spex repository reaches a remote a peer shares.
+    const bare = join(dir, "remote.git");
+    mkdirSync(bare);
+    peerGit(bare, "init", "-q", "--bare", "-b", "spex");
+    await client.expectOk("space.remote.set", { repository: projectId, url: bare });
+    assert.equal(await sync(client, projectId), "done");
+    const peer = join(dir, "peer");
+    peerGit(dir, "clone", "-q", "--branch", "spex", bare, peer);
+    /** The peer changes the spex repository and pushes it. */
+    const peerPush = (mutate: () => void): void => {
+      peerGit(peer, "fetch", "-q", "origin");
+      peerGit(peer, "reset", "-q", "--hard", "origin/spex");
+      mutate();
+      peerGit(peer, "add", "-A", "--", ".");
+      peerGit(peer, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer change");
+      peerGit(peer, "push", "-q", "origin", "HEAD:spex");
+    };
+    /** The peer records the next line of the session. */
+    const peerRecords = (message: string): void => peerPush(() => {
+      const file = join(peer, "authoring", "synced.records.jsonl");
+      const seq = readFileSync(file, "utf8").trim().split("\n").length + 1;
+      appendFileSync(file, `${JSON.stringify({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message } })}\n`);
+    });
+
+    // A sync applies a peer's record; the session records again after it.
+    peerRecords("◇ Recorded on another device");
+    assert.equal(await sync(client, projectId), "done");
+    assert.deepEqual(seqs(), [1, 2], "the sync applied the peer's record");
+    await client.expectOk("draft.player.set", { projectId, draftId: "synced", playerId: null });
+    assert.deepEqual(seqs(), [1, 2, 3], "the next record continues the sequence on disk");
+    const opened = await client.expectOk("draft.open", { projectId, draftId: "synced" });
+    assert.equal(opened.draft.diagnostic, undefined);
+    assert.deepEqual(opened.records.map((entry) => entry.seq), [1, 2, 3]);
+    assert.equal((opened.records[1].record as { message: string }).message, "◇ Recorded on another device");
+
+    // A sync that changed nothing of the transcript keeps the provider
+    // conversation; one that changed it reseeds the next turn.
+    const turns = async (n: number): Promise<void> => until(() => client.latest("synced")?.activity === "idle" &&
+      client.records("synced").filter(({ record }) => record.type === "turn_finished").length >= n, 20_000, `turn ${n}`);
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "hello" });
+    await turns(1);
+    assert.equal(await sync(client, projectId), "done");
+    peerPush(() => writeFileSync(join(peer, "notes.md"), "# Notes from another device\n"));
+    assert.equal(await sync(client, projectId), "done");
+    assert.ok(existsSync(join(clone, "notes.md")), "the sync applied the peer's other change");
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "again" });
+    await turns(2);
+    assert.match(stats.runs[1].resume ?? "", /^fake-resume-/, "a sync that changed nothing keeps the conversation");
+    assert.equal(await sync(client, projectId), "done");
+    peerRecords("◇ Recorded on another device again");
+    assert.equal(await sync(client, projectId), "done");
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "after" });
+    await turns(3);
+    const after = stats.runs[2];
+    assert.equal(after.resume, undefined, "a transcript the sync changed reseeds");
+    assert.match(after.prompt, /Conversation so far:/);
+    assert.match(after.prompt, /System: ◇ Recorded on another device again\nBoss: after\n/);
+    assert.match(after.prompt, /Boss: after$/);
+    const all = seqs();
+    assert.deepEqual(all, all.map((_seq, index) => index + 1), "the transcript stays in sequence");
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-97: a compile of a session its id no longer names
+// ---------------------------------------------------------------------------
+
+test("playbook-library-97: a compile running for a session its id no longer names is canceled, and its late outcome reaches no session", async () => {
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown): void => { rejections.push(reason); };
+  process.on("unhandledRejection", onRejection);
+  const harness = await startHarness({
+    script: authoringScript(),
+    slc: stubSlcScriptedSource(["ok"], "['Triager', 'Verifier']", { hold: true }),
+  });
+  const { projectId, clone, dir, dataDir } = harness;
+  const kept = authoringFiles(clone, "triage");
+  const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "triage" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+    // Another project holds a session of the id, shadowed while this one stands.
+    const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
+    const promoted = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "triage");
+    mkdirSync(dirname(promoted.record), { recursive: true });
+    const promotedRecord = JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 });
+    const promotedRecords = `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`;
+    writeFileSync(promoted.record, promotedRecord);
+    writeFileSync(promoted.records, promotedRecords);
+
+    // The agent writes the source and asks for a compile, held in its first phase.
+    await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+    await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "triage" && m.line.startsWith("→ normalize"), 60_000);
+    assert.equal(client.latest("triage")?.activity, "compiling");
+
+    // The kept session's file goes, and a rescan gives the id to the other project's session.
+    rmSync(kept.record);
+    await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
+    const keptTranscript = readFileSync(kept.records, "utf8");
+    // The stub is let past its hold: a compile still running finishes now.
+    writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
+    const start = Date.now();
+    for (;;) {
+      const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+      if (opened.draft.activity === "idle") break;
+      if (Date.now() - start > 60_000) throw new Error("timeout waiting for the compile to end");
+      await sleep(25);
+    }
+    await sleep(500);
+
+    // Canceled: the compiler was stopped before it emitted anything, and
+    // nothing of it was recorded or rejected unhandled.
+    assert.deepEqual(rejections.map(String), [], "no unhandled rejection");
+    assert.ok(!client.progress("triage").includes("compile complete"), "the compiler did not finish");
+    assert.ok(!existsSync(join(artifactDir, "triage.playbook")), "the compiler emitted nothing");
+    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
+    // The session the id now names is untouched.
+    assert.equal(readFileSync(promoted.record, "utf8"), promotedRecord);
+    assert.equal(readFileSync(promoted.records, "utf8"), promotedRecords);
+    const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+    assert.equal(opened.draft.compile, undefined);
+    assert.deepEqual(opened.records.map((entry) => entry.seq), [1]);
+  } finally {
+    process.off("unhandledRejection", onRejection);
+    client.close();
+    await harness.service.stop();
   }
 });

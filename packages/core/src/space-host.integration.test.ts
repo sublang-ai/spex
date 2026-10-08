@@ -556,6 +556,46 @@ test("space-57: your own group's repository the host lists with other members is
   assert.ok(git(bareOf(host, HOST_OWN), "ls-tree", "-r", "--name-only", "spex").split("\n").includes(`sessions/${sessionId}.json`));
 });
 
+test("space-57: a creation the host grants with other members after a session was recorded here pushes nothing until the notice is seen", async (t) => {
+  const host = await startHost();
+  const home = await startHome("granted-shared", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signedFrom = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signedFrom, HOST_OWN, (repository) => repository.sync.phase === "done");
+  // A creation the host leaves waiting, and a session recorded here
+  // meanwhile (space-64).
+  host.script.refuseCreate("You need the Maintainer role in ada to create projects.");
+  const { key } = await addFolder(home, gitFolder("zeta"));
+  const fromPick = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: "2001", name: "zeta" } }), { accepted: true });
+  await home.client.waitRepository(fromPick, key, (repository) => repository.waiting !== null);
+  const sessionId = await runTurn(home, key, "Before the grant");
+  // The host grants it, the repository carrying another member: its
+  // members, unknown until it exists, are read before anything is
+  // pushed, and the first push waits for the notice (space-57).
+  const bob = { id: "1002", login: "bob", displayName: "Bob", role: "Developer" };
+  host.script.refuseCreate(null);
+  host.script.createMembers([bob]);
+  const asked = host.script.requests.length;
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
+  const held = await home.client.waitRepository(from, key, (repository) => repository.members === 2 && repository.sync.phase !== "running");
+  assert.deepEqual([held.state, held.waiting, held.noticed, held.sync.phase, held.lastSync], ["reachable", null, false, "idle", null]);
+  assert.ok(host.script.repositories.some((repository) => repository.id === held.id), "the creation is granted");
+  assert.equal(git(bareOf(host, key), "for-each-ref", "refs/heads/spex"), "", "nothing is pushed");
+  assert.ok(!host.script.requests.slice(asked).some((request) => request.path.includes("git-receive-pack")), "no push reached the stand-in");
+  const unseen = await home.client.command("space.sync", { repository: key });
+  assert.ok(!unseen.ok, "the sync waits for the notice");
+  assert.equal(unseen.error.code, "invalid_request");
+  assert.deepEqual(unseen.error.details, { notice: true, members: 2, visibility: "private" });
+  const done = await home.client.settle("space.sync", { repository: key, noticed: true });
+  assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
+  assert.equal(done.noticed, true);
+  assert.equal(git(bareOf(host, key), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+  assert.ok(git(bareOf(host, key), "ls-tree", "-r", "--name-only", "spex").split("\n").includes(`sessions/${sessionId}.json`));
+});
+
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {
   const host = await startHost();
   const code = codeRepository("held");
@@ -791,6 +831,83 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   const gone = await b.client.waitRepository(fromGone, renamed, (repository) => repository.state === "unreachable");
   assert.equal(gone.reason, "No longer shared with you");
   assert.ok(existsSync(join(clonePath(b.dataDir, renamed), "sessions", `${sessionB}.json`)), "nothing on the device is deleted");
+});
+
+test("space-60: a rename and a transfer on the host differing only by case are followed, the folders spelled as the host spells them", async (t) => {
+  const host = await startHost();
+  const home = await startHome("case-moves", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const folder = gitFolder("lower");
+  const { key: local } = await addFolder(home, folder);
+  const fromPick = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "lower" }, noticed: true });
+  const pushed = await home.client.waitRepository(fromPick, "acme/lower-spex", (repository) => repository.sync.phase === "done");
+  const id = pushed.id ?? "";
+  const workspace = join(home.dataDir, "workspace");
+  /** The entries of `dir` spelled `name` in any case, as on disk. */
+  const spelled = (dir: string, name: string): string[] => readdirSync(dir).filter((entry) => entry.toLowerCase() === name.toLowerCase());
+  /** Sync `from` and read its row once the sync ends, under whichever
+   * key it then bears: a sync that stops leaves it at `from`. */
+  const follow = async (from: string, to: string): Promise<RepositoryState> => {
+    const mark = home.client.mark();
+    await home.client.expectOk("space.sync", { repository: from });
+    const state = await home.client.waitSpace(mark, (candidate) => {
+      const rows = candidate.groups.flatMap((group) => group.repositories);
+      return rows.some((row) => row.key === to && row.sync.phase !== "running") || rows.some((row) => row.key === from && row.sync.phase === "stopped");
+    });
+    const stayed = state.groups.flatMap((group) => group.repositories).find((row) => row.key === from);
+    assert.equal(stayed, undefined, `the clone stayed at ${from}: ${JSON.stringify(stayed?.sync)}`);
+    return repositoryOf(state, to);
+  };
+  // A rename differing only by case moves the clone on its next sync,
+  // on either filesystem kind (space-60).
+  host.script.rename(id, { name: "Lower-spex" });
+  const renamed = await follow("acme/lower-spex", "acme/Lower-spex");
+  assert.equal(renamed.sync.phase, "done", JSON.stringify(renamed.sync));
+  assert.deepEqual(spelled(join(workspace, "acme"), "lower-spex"), ["Lower-spex"]);
+  assert.equal(Home.load(home.dataDir).keyForFolder(folder), "acme/Lower-spex");
+  assert.equal(git(clonePath(home.dataDir, "acme/Lower-spex"), "remote", "get-url", "origin"), `${host.gitOrigin}/acme/Lower-spex.git`);
+  // A second project in the same group, on the host too.
+  const otherFolder = gitFolder("other");
+  const other = await addFolder(home, otherFolder);
+  const fromOther = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: other.key, choice: { kind: "create", groupId: "2002", name: "other" }, noticed: true });
+  const otherPushed = await home.client.waitRepository(fromOther, "acme/other-spex", (repository) => repository.sync.phase === "done");
+  // The group's path changes only by case on the host, both repositories
+  // following it: the first sync gives the group's folder the host's
+  // spelling, and no pair is left naming a key that names no clone
+  // (space-60).
+  host.script.groups.push({ id: "2004", fullPath: "Acme", name: "Acme", kind: "group" });
+  host.script.rename(id, { group: "Acme" });
+  host.script.rename(otherPushed.id ?? "", { group: "Acme" });
+  const sessionId = await runTurn(home, "acme/Lower-spex", "After the rename");
+  const moved = await follow("acme/Lower-spex", "Acme/Lower-spex");
+  assert.ok(moved.sync.phase === "done" && moved.sync.pushed, JSON.stringify(moved.sync));
+  assert.deepEqual(spelled(join(workspace, "Acme"), "lower-spex"), ["Lower-spex"]);
+  assert.equal(Home.load(home.dataDir).keyForFolder(folder), "Acme/Lower-spex");
+  assert.equal(git(clonePath(home.dataDir, "Acme/Lower-spex"), "remote", "get-url", "origin"), `${host.gitOrigin}/Acme/Lower-spex.git`);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === "Acme/Lower-spex"));
+  assert.ok(git(bareOf(host, "Acme/Lower-spex"), "ls-tree", "-r", "--name-only", "spex").split("\n").includes(`sessions/${sessionId}.json`));
+  const listed = (await home.client.expectOk("space.get", {})).groups.flatMap((group) => group.repositories.map((repository) => repository.key));
+  for (const project of await home.client.expectOk("project.list", {})) {
+    assert.ok(listed.includes(project.id) && existsSync(join(clonePath(home.dataDir, project.id), ".git")), `${project.id} names its clone`);
+  }
+  // The other project's sync ends under the host's spelling too, the
+  // former folder gone whatever the filesystem's case rule.
+  const otherKey = Home.load(home.dataDir).keyForFolder(otherFolder) ?? "";
+  const otherMoved = otherKey === "Acme/other-spex"
+    ? await home.client.settle("space.sync", { repository: otherKey })
+    : await follow(otherKey, "Acme/other-spex");
+  assert.equal(otherMoved.sync.phase, "done", JSON.stringify(otherMoved.sync));
+  assert.deepEqual(spelled(workspace, "acme"), ["Acme"]);
+  assert.deepEqual(readdirSync(join(workspace, "Acme")).sort(), ["Lower-spex", "other-spex"]);
+  assert.equal(Home.load(home.dataDir).keyForFolder(otherFolder), "Acme/other-spex");
+  // A restarted core reads both projects where they now lie.
+  await home.stop();
+  const again = await startHome("case-moves-again", { dataDir: home.dataDir, project: false });
+  t.after(() => again.stop());
+  assert.deepEqual((await again.client.expectOk("project.list", {})).map((project) => [project.id, project.path]).sort(), [["Acme/Lower-spex", folder], ["Acme/other-spex", otherFolder]]);
 });
 
 test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names only its words, a sleeping transport stops timeout; a credentialed origin is refused", async (t) => {

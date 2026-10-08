@@ -492,6 +492,40 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     }
   });
 
+  test("space-57: a Join of unrelated histories the core holds for the sharing notice says it on the row; Continue sends the join noticed", async () => {
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      // The facts, apart from the words, say the notice is owed.
+      if (type === "space.sync" && fields.noticed !== true) {
+        throw new SpexCommandError("invalid_request", "Held", { notice: true, members: 3, visibility: "private" });
+      }
+      return answer(type, fields);
+    });
+    await renderGroups(
+      base({}, [repo({ members: 3, noticed: false, sync: { phase: "unrelated" }, branch: { ...BRANCH, unrelated: true } })]),
+      { open: false },
+    );
+    const control = screen.getByTestId(`space-row-sync-${KEY}`);
+    expect(control.textContent).toBe("Join");
+    fireEvent.click(control);
+    fireEvent.click(within(screen.getByTestId("space-join-confirm")).getByRole("button", { name: "Join" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, join: true }]));
+    // The refusal opens the row's notice, Cancel focused, its words never
+    // standing as the row's refusal.
+    const notice = await screen.findByTestId("space-notice-confirm");
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(notice.textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, join: true },
+        { repository: KEY, join: true, noticed: true },
+      ]),
+    );
+    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
+  });
+
   test("a read-only row says new sessions stay on this device, and a clone without its folder offers Choose folder…", async () => {
     await renderGroups(base({}, [repo({ state: "read-only", reason: "archived", lastSync: { at: NOW - MIN, sent: 0, received: 1 } })]), { open: false });
     expect(screen.getByTestId(`space-repo-state-${KEY}`).getAttribute("title")).toBe(

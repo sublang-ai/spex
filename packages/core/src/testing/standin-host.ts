@@ -12,7 +12,7 @@
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, renameSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -119,6 +119,9 @@ export interface StandinScript {
   accessLevel(id: string, role: string): void;
   /** While set, creation answers 202 pending with these words. */
   refuseCreate(message: string | null): void;
+  /** The members besides the person each repository created from now on
+   * carries, as a group's members carry into a project created in it. */
+  createMembers(members: StandinMember[]): void;
   /** While set, branch preparation answers 202 pending with these words. */
   refuseBranch(message: string | null): void;
   /** While set, every transport request answers 403 with these words. */
@@ -248,6 +251,15 @@ function normalizeUserCode(code: string): string {
   return code.toUpperCase().replace(/-/g, "");
 }
 
+/** Whether two paths name one entry on disk. */
+function sameEntry(a: string, b: string): boolean {
+  try {
+    const first = lstatSync(a);
+    const second = lstatSync(b);
+    return first.dev === second.dev && first.ino === second.ino;
+  } catch { return false; }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -308,6 +320,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   const held: HeldSignIn[] = [];
   let nextId = 3001;
   let createRefusal: string | null = null;
+  let createdMembers: StandinMember[] = [];
   let branchRefusal: string | null = null;
   let transportRefusal: string | null = null;
   let transportUnauthorized = false;
@@ -536,7 +549,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       const path = change.name ?? repo.path;
       const bare = bareFor(group, path);
       if (bare !== repo.bare) {
-        if (existsSync(bare)) throw new Error(`stand-in: ${group.fullPath}/${path} exists`);
+        // A spelling differing only by case names the same bare
+        // repository on a case-insensitive filesystem: no collision.
+        if (existsSync(bare) && !sameEntry(bare, repo.bare)) throw new Error(`stand-in: ${group.fullPath}/${path} exists`);
         mkdirSync(dirname(bare), { recursive: true });
         renameSync(repo.bare, bare);
       }
@@ -549,6 +564,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     removeMember: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => { findRepository(id).role = role; },
     refuseCreate: (message) => { createRefusal = message; },
+    createMembers: (members) => { createdMembers = members.map((member) => ({ ...member })); },
     refuseBranch: (message) => { branchRefusal = message; },
     refuseTransport: (message) => { transportRefusal = message; },
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
@@ -845,7 +861,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       archived: false,
       lfs: true,
       role: "Owner",
-      members: [],
+      members: createdMembers.map((member) => ({ ...member })),
       listed: true,
       blocked: false,
       bare,

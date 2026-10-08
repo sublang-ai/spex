@@ -1189,8 +1189,11 @@ export const useAppStore = create<AppState>((set, get) => {
    * thread interleave lines and segments in record order. A record at
    * or before the view's last seq is a replay and folds nothing. */
   function foldDraftRecord(draftId: string, entry: DraftRecord): void {
-    const current = get().draftViews[draftId] ?? emptyDraftView();
-    if (entry.seq <= current.view.lastSeq) return;
+    // Only a view opened this launch folds: one dropped since — its
+    // session deleted, or its id another project's — replays from the
+    // first record when next opened (playbook-library-98).
+    const current = get().draftViews[draftId];
+    if (!current || entry.seq <= current.view.lastSeq) return;
     const before = current.view.captain.length;
     applyRecord(current.view, entry.seq, permissionAsFailure(entry.record));
     if (current.view.captain.length > before) current.lineSeqs.push(entry.seq);
@@ -1273,6 +1276,20 @@ export const useAppStore = create<AppState>((set, get) => {
     const projectId = get().drafts[draftId]?.projectId;
     if (!projectId) throw new Error(i18n._("This draft is no longer listed."));
     return projectId;
+  }
+
+  /** A reply about a draft applies only while its id still names the
+   * project the command addressed (playbook-library-98). */
+  function stillNames(draftId: string, projectId: string): boolean {
+    return get().drafts[draftId]?.projectId === projectId;
+  }
+
+  /** The core names another project's session under an id held here
+   * (storage-12): nothing of the former session's stays, and the id's
+   * next open replays from the first record (playbook-library-98). */
+  function retireReassignedDraft(draft: DraftInfo): void {
+    const known = get().drafts[draft.id];
+    if (known && known.projectId !== draft.projectId) forgetDraft(draft.id);
   }
 
   /** Read the playbook lists again where they were read before. */
@@ -1394,6 +1411,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       case "draft.state": {
         const draft = message.draft;
+        retireReassignedDraft(draft);
         const previous = get().drafts[draft.id];
         const updates: Partial<AppState> = {
           drafts: { ...get().drafts, [draft.id]: draft },
@@ -2538,6 +2556,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const drafts = Object.fromEntries(
         (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
       );
+      for (const draft of Object.values(drafts)) retireReassignedDraft(draft);
       set({ drafts, draftsLoaded: true });
     },
 
@@ -2588,13 +2607,15 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async writeDraftSource(draftId, input) {
+      const projectId = draftProject(draftId);
       const reply = await getClient().command("draft.source.write", {
-        projectId: draftProject(draftId),
+        projectId,
         draftId,
         ...(input.content !== undefined ? { content: input.content } : {}),
         ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
         ...(input.baseVersion !== undefined ? { baseVersion: input.baseVersion } : {}),
       });
+      if (!stillNames(draftId, projectId)) return reply;
       // The broadcast follows; the Boss's own write is known to be theirs.
       const current = get().draftSources[draftId];
       if (input.content !== undefined || current) {
@@ -2615,8 +2636,9 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async refreshDraftSource(draftId: string): Promise<DraftSourceState | null> {
       const view = get().draftViews[draftId];
+      const projectId = draftProject(draftId);
       const reply = await getClient().command("draft.open", {
-        projectId: draftProject(draftId),
+        projectId,
         draftId,
         // Only the source is wanted: records after the last seq are
         // those the stream is already delivering.
@@ -2625,6 +2647,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const source = reply.source
         ? { markdown: reply.source.markdown, version: reply.source.version, mtime: reply.source.mtime }
         : null;
+      if (!stillNames(draftId, projectId)) return source;
       set({
         drafts: { ...get().drafts, [draftId]: reply.draft },
         draftSources: { ...get().draftSources, [draftId]: source },
@@ -2684,19 +2707,26 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
-      const draft = await getClient().command("draft.player.set", { projectId: draftProject(draftId), draftId, playerId });
-      set({ drafts: { ...get().drafts, [draftId]: draft } });
+      const projectId = draftProject(draftId);
+      const draft = await getClient().command("draft.player.set", { projectId, draftId, playerId });
+      if (stillNames(draftId, projectId)) set({ drafts: { ...get().drafts, [draftId]: draft } });
     },
 
     async deleteDraft(draftId: string): Promise<void> {
-      await getClient().command("draft.delete", { projectId: draftProject(draftId), draftId });
-      forgetDraft(draftId);
+      const projectId = draftProject(draftId);
+      await getClient().command("draft.delete", { projectId, draftId });
+      // The broadcast may already list another project's session of
+      // the id in its place (storage-12): only the deleted one's goes.
+      if (!get().drafts[draftId] || stillNames(draftId, projectId)) forgetDraft(draftId);
       void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
     },
 
     async loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts> {
-      const artifacts = await getClient().command("draft.artifacts", { projectId: draftProject(draftId), draftId });
-      set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
+      const projectId = draftProject(draftId);
+      const artifacts = await getClient().command("draft.artifacts", { projectId, draftId });
+      if (stillNames(draftId, projectId)) {
+        set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
+      }
       return artifacts;
     },
 

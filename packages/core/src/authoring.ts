@@ -340,12 +340,32 @@ export class AuthorManager {
   }
 
   /** A rescan gave the id another session, or none (storage-12): what
-   * was read from the one before goes, and a turn still running for it
-   * is aborted; nothing of it reaches the session the id now names. */
+   * was read from the one before goes, and a turn or compile still
+   * running for it is aborted or canceled; nothing of it reaches the
+   * session the id now names (playbook-library-70). */
   private forget(id: string): void {
-    this.live.get(id)?.turn?.controller.abort();
+    const live = this.live.get(id);
+    live?.turn?.controller.abort();
+    live?.compile?.controller.abort();
     this.live.delete(id);
     this.problems.delete(id);
+  }
+
+  /** A sync applied the spex repository (space-20): each of its
+   * sessions' transcript, with the sequence it ends at, is read back
+   * before anything appends; one the sync changed is one the provider
+   * conversation never saw, so the next turn reseeds (playbook-library-70,
+   * playbook-library-64). */
+  reread(repository: string): void {
+    for (const id of this.drafts.idsIn(repository)) {
+      const live = this.live.get(id);
+      const held = live?.records;
+      if (!live || !held) continue;
+      if (live.damaged) this.problems.delete(id);
+      live.records = undefined;
+      live.damaged = undefined;
+      if (JSON.stringify(this.recordsOf(id, live)) !== JSON.stringify(held)) live.resume = undefined;
+    }
   }
 
   private get drafts(): DraftStore {
@@ -1543,6 +1563,13 @@ export class AuthorManager {
       if (live.compile?.controller === controller) live.compile = undefined;
     }
     if (this.stopping) return settled;
+    // A rescan gave the id another session, or none: the outcome is the
+    // session's it no longer names and records nothing; the id's state
+    // reads its compile over (playbook-library-70).
+    if (this.live.get(id) !== live) {
+      this.publish(id);
+      return settled;
+    }
     this.settleCompile(id, live, settled, lines, startedAt);
     return settled;
   }

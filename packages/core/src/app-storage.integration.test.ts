@@ -317,21 +317,29 @@ test("storage-24: a group folder named like a clone is walked into, and every cl
   const scratch = scratchDir("spex-groups-named-spex-");
   const keysOf = (store: Store): string[] => store.listRepositories().map((repository) => repository.key).sort();
   // Another group, a subgroup, and a group holding Finder's `.DS_Store`
-  // and a clone two levels down; then clones Git has not made
-  // repositories yet: one holding only a file, one empty. Each folder
-  // bears a name that ends in `-spex`.
+  // and a clone two levels down; a clone Git has not made a repository
+  // yet, holding only a file; an empty folder, which no clone ever is,
+  // and a group holding only such a folder. Each folder bears a name
+  // that ends in `-spex`. And a clone under ten levels of groups.
   const home = join(scratch, "home");
   const at = (...segments: string[]): string => join(home, "workspace", ...segments);
   (await Store.open({ machineIdentity, dir: home, own: "alice", env: gitEnv })).close();
-  for (const key of ["my-spex/my-spex-spex", "acme/a-spex", "acme/x-spex/y-spex", "acme/my-spex/backend/project-spex"]) initializeClone(at(...key.split("/")), { env: gitEnv });
+  const deep = `${Array.from({ length: 10 }, (_, level) => `level${level}`).join("/")}/deep-spex`;
+  for (const key of ["my-spex/my-spex-spex", "acme/a-spex", "acme/x-spex/y-spex", "acme/my-spex/backend/project-spex", deep]) initializeClone(at(...key.split("/")), { env: gitEnv });
   writeFileSync(at("acme", "my-spex", ".DS_Store"), "");
   mkdirSync(at("acme", "f-spex"), { recursive: true });
   writeFileSync(at("acme", "f-spex", "project.json"), JSON.stringify({ format: 1, name: "f", remote: null }));
+  mkdirSync(at("acme", "e-spex"), { recursive: true });
   mkdirSync(at("acme", "z-spex", "w-spex"), { recursive: true });
-  const listed = ["acme/a-spex", "acme/f-spex", "acme/my-spex/backend/project-spex", "acme/x-spex/y-spex", "acme/z-spex/w-spex", "alice/alice-spex", "my-spex/my-spex-spex"];
-  const store = await Store.open({ machineIdentity, dir: home, own: "alice", env: gitEnv });
-  assert.deepEqual(keysOf(store), listed);
-  store.close();
+  const listed = ["acme/a-spex", "acme/f-spex", "acme/my-spex/backend/project-spex", "acme/x-spex/y-spex", "alice/alice-spex", deep, "my-spex/my-spex-spex"];
+  for (let open = 0; open < 2; open += 1) {
+    const store = await Store.open({ machineIdentity, dir: home, own: "alice", env: gitEnv });
+    assert.deepEqual(keysOf(store), listed);
+    store.close();
+    for (const empty of [["acme", "e-spex"], ["acme", "z-spex", "w-spex"]]) {
+      assert.deepEqual(readdirSync(at(...empty)), [], `${empty.join("/")} stays empty`);
+    }
+  }
   for (const group of [["my-spex"], ["acme", "x-spex"], ["acme", "z-spex"], ["acme", "my-spex"], ["acme", "my-spex", "backend"]]) {
     assert.ok(!existsSync(at(...group, "sessions")), `nothing is written into ${group.join("/")}`);
   }

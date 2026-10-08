@@ -22,7 +22,7 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host and holding only folders, names starting with a dot other than `.git` aside; one whose name ends in `-spex` is told from a clone by holding at least one folder and by not being your own group's clone | — |
+| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host and holding only folders, names starting with a dot other than `.git` aside; one whose name ends in `-spex` is told from a clone by holding neither `.git` nor a file and by not being your own group's clone, so an empty one is no clone | — |
 | `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
@@ -271,10 +271,11 @@ When an integration suite merges two real Git branches of one spex repository co
 
 ### storage-24
 
-When an integration suite opens a store on a home whose group folders bear names ending in `-spex` — another group, a subgroup, a group holding a `.DS_Store` and a clone two levels down, and your own group — it shall verify:
+When an integration suite opens a store on a home whose group folders bear names ending in `-spex` — another group, a subgroup, a group holding a `.DS_Store` and a clone two levels down, and your own group — and that holds a clone under ten levels of groups, it shall verify:
 
-- each clone beneath them listed by its own key, such as `my-spex/my-spex-spex` and `acme/my-spex/backend/project-spex`, and no group folder listed or written into [[storage-1](#storage-1)];
-- a clone Git has not made a repository listed both where it holds only a file and where it holds nothing [[storage-1](#storage-1)];
+- on each of two opens, each clone listed by its own key, such as `my-spex/my-spex-spex`, `acme/my-spex/backend/project-spex` and the one ten group levels down, and no group folder listed or written into [[storage-1](#storage-1)];
+- a clone Git has not made a repository listed where it holds only a file [[storage-1](#storage-1)];
+- a folder so named holding nothing, alone or as a group's only folder, listed on neither open and left empty [[storage-1](#storage-1)];
 - your own group so named listing its own spex repository `<own>/<own>-spex` on every open, as does your own group's clone holding only folders where Git cannot run [[storage-1](#storage-1)] [[storage-2](#storage-2)].
 
 ### storage-25

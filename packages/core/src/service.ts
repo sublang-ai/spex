@@ -620,6 +620,9 @@ export class CoreService {
       rescanSessions: async (repository) => {
         await this.media.reset();
         this.drafts.refresh();
+        // What the sync applied is read back before any authoring
+        // session of it records again (playbook-library-70).
+        this.authors.reread(repository);
         await this.syncForeignSessions();
         // A sync applied what the host holds, its lock among it: the
         // environment installs from it and exports (environments-8,

@@ -225,6 +225,9 @@ function RepositoryRow({
   // reply and the state (DR-010 §3, space-29).
   const [accepted, setAccepted] = useState<{ op: "sync" | "join"; key: string }>();
   const [error, setError] = useState<string>();
+  // The act the notice holds — a sync, or a join of two histories — and
+  // whether the repository is public (space-57).
+  const [owed, setOwed] = useState<{ input: { join?: boolean }; isPublic: boolean }>({ input: {}, isPublic: false });
   const controlRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
@@ -255,6 +258,19 @@ function RepositoryRow({
       await spaceSync(repo.key, input);
       setAccepted({ op, key });
     } catch (cause) {
+      // A sync or a join the core holds for the sharing notice says it
+      // on the row, Continue sending the same act noticed: the refusal's
+      // facts, never its words, say it is owed (space-57,
+      // core-service-111).
+      const details = (cause as SpexCommandError).details;
+      if (!input.noticed && details?.notice === true) {
+        setOwed({
+          input: input.join ? { join: true } : {},
+          isPublic: (details.visibility ?? repo.visibility) === "public",
+        });
+        setOpened("notice");
+        return;
+      }
       const message = (cause as Error).message;
       setError(message);
       onNote(message);
@@ -386,8 +402,10 @@ function RepositoryRow({
           describedBy: refusal || error ? captionId : undefined,
           onClick: () => {
             if (control === "unrelated") setOpened("unrelated");
-            else if (needsNotice && !readOnly) setOpened("notice");
-            else void start({});
+            else if (needsNotice && !readOnly) {
+              setOwed({ input: {}, isPublic: repo.visibility === "public" });
+              setOpened("notice");
+            } else void start({});
           },
         },
       );
@@ -646,7 +664,7 @@ function RepositoryRow({
         <div data-testid="space-notice-confirm" className="pl-6">
           <InlineConfirm
             question={
-              repo.visibility === "public"
+              owed.isPublic
                 ? i18n._(
                     "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
                   )
@@ -657,7 +675,7 @@ function RepositoryRow({
             confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
             onConfirm={() => {
               setOpened(undefined);
-              void start({ noticed: true });
+              void start({ ...owed.input, noticed: true });
             }}
             onCancel={() => close()}
           />

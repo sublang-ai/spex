@@ -122,7 +122,7 @@ When the host answers a call with anything but success, the core shall relay it 
 The core package shall ship a stand-in Git host for its own tests and the browser journeys ([DR-039](../decisions/039-browser-acceptance-journeys.md)): an in-process HTTP server that implements the host's sign-in and host routes over a directory of bare Git repositories, serves their Git transport over HTTP, and exposes a scripting interface:
 
 - sign-in: `/login/app` and `/login/device` pages, the device endpoint returning the verification URL completed with the user code as spex.pub does, and the token endpoint issuing app tokens, with scripted approval, denial and expiry; access secrets that expire on demand; revocation;
-- host routes: the person, groups and spex repositories from a scripted fixture, the listing answered after a scripted sleep with what stood at its arrival, creation of a bare repository with a README on `main`, members, branch preparation with a scripted refusal, and the credential for its own origin;
+- host routes: the person, groups and spex repositories from a scripted fixture, the listing answered after a scripted sleep with what stood at its arrival, creation of a bare repository with a README on `main` carrying the members scripted for it, members, branch preparation with a scripted refusal, and the credential for its own origin;
 - Git transport: every repository served at `<origin>/<group>/<name>-spex.git` over HTTP through Git's own backend, accepting the credentials the stand-in issued and refusing others with 401, with a scripted sleep, a scripted refusal and a scripted archive;
 - a scripted rename, transfer, archive and membership removal, each visible on the next read.
 

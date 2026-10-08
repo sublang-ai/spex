@@ -253,6 +253,15 @@ While an authoring session's last compile succeeded and the home is signed in, t
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a signed-out home shows "Sign in to publish" in place of the control.
 
+#### playbook-library-98
+
+When the core names another project's authoring session under an id the app holds a session's state for — in that session's state or a listing [[core-service-96](core-service.md#core-service-96)], the id freed by a deletion or reassigned by a rescan [[storage-12](storage.md#storage-12)] — the Playbooks surface shall hold under that id only the state of the session it now names:
+
+- the former session's transcript, source, compiled tabs, composer text, Source edits and Enable form go, and its open workspace returns to the list;
+- opening the id restores the session now holding it from its first record [[playbook-library-62](#playbook-library-62)];
+- a reply to a command addressed to the former session, arriving after, changes nothing;
+- the reply to the deletion that freed the id leaves the state of the session named in its place standing.
+
 ### Pipeline Artifacts
 
 #### playbook-library-22
@@ -442,7 +451,7 @@ When an authoring turn starts, the conversation runner shall run the session's a
 | cwd | the spec package's folder in the working folder [[environments-10](environments.md#environments-10)] |
 | permissions | `{ mode: "auto" }` with `writablePaths` naming that folder alone — the block's own policy dropped |
 | allowedTools, disallowedTools, maxTurns | absent |
-| resume | the token the previous turn of this run returned, when the agent is unchanged; else none |
+| resume | the token the previous turn of this run returned, when the agent is unchanged and no sync has changed the transcript since; else none |
 | abortSignal | the turn's, tripped by Abort |
 
 - the block's `instruction` is not carried; the prompt composition carries everything [[playbook-library-65](#playbook-library-65)];
@@ -460,7 +469,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 | --- | --- |
 | First turn of a provider conversation | the preamble, the shape of a source, the shipped documents by path, the example's six-line source [[playbook-library-35](#playbook-library-35)], the directive protocol, the working rules, the session state, then `Boss:` and the message |
 | Later turn of the same provider conversation | a `Since your last reply:` line when the session changed since the last prompt — the Boss edited or replaced the source, a compile settled — then `Boss:` and the message |
-| Reseed — a restart, a switched agent, a rejected resume | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
+| Reseed — a restart, a switched agent, a rejected resume, a transcript a sync changed | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
 | Success | "The compile succeeded; the roles are ⟨roles⟩. Propose enabling in a register block" as a system-origin message |
 
@@ -524,7 +533,9 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 | list | every `authoring/<id>.json` of the project, with the source's first line and "source missing" when the package folder is gone |
 | delete | remove the session file, its records, its assets and the preference, leaving the package folder |
 
-- an unreadable record or transcript is a scoped diagnostic that blocks that session alone.
+- an unreadable record or transcript is a scoped diagnostic that blocks that session alone;
+- the transcript of a session whose spex repository a sync applied [[space-20](space.md#space-20)] is read back before anything appends, so the next record continues the sequence on disk;
+- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile canceled, and nothing they later record or settle reaches the session the id now names.
 
 #### playbook-library-71
 
@@ -661,6 +672,26 @@ Where the Enable tab renders a compiled authoring session over a roster holding 
 - distinct roles whose normalization collides receive distinct automatic lanes and offered new options, including when the roster holds the normalized base; an implicit roster choice never shares another role's explicit existing-lane choice, while explicitly shared proposals or Boss selections retain one lane;
 - an automatic lane avoids a later role's explicitly proposed or selected new id, and selecting an already offered new option or a roster lane leaves unaffected defaults and offered new options stable;
 - the spex repository field defaults to the project and offers your own group [[playbook-library-61](#playbook-library-61)].
+
+#### playbook-library-96
+
+Where an authoring session's transcript holds one record its manager has read and its project's spex repository syncs with a local bare remote a peer pushes to, when syncs apply the peer's changes between the session's records and turns, the test suite shall assert:
+
+- after a sync applying a second record of the session, the session's next record makes the transcript on disk and the reopened session read 1, 2, 3 with the peer's record second [[playbook-library-70](#playbook-library-70)];
+- after a sync applying only another file of the spex repository, the next turn passed the previous turn's token as `resume` [[playbook-library-64](#playbook-library-64)];
+- after a sync applying another record of the session, the next turn passed no `resume` and its prompt reseeded with the peer's record in the conversation so far, the transcript staying in sequence [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)] [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-97
+
+Where another project's spex repository holds a session of the same id and the stub `slc` holds the compile in its first phase, when the agent's compile block starts a compile, the kept session's file is removed and a rescan follows, and the stub is then released, the test suite shall assert that the compiler stopped before emitting anything, no unhandled rejection occurred, the removed session's transcript gained no record, and the session the id now names kept its file and transcript unchanged with no compile recorded [[playbook-library-70](#playbook-library-70)].
+
+#### playbook-library-99
+
+Where a substitute client feeds the Playbooks surface holding an authoring session, when the client names another project's session under that session's id, the test suite shall assert, as an explicit case matrix, what the surface holds under the id:
+
+- named by a state message, and by a listing, while the workspace stands open with a transcript, a source, compiled tabs, composer text, Source edits and an Enable form: every one of those is gone and the workspace returned to the list, and opening the id after a live record of the new session asks for its records from the first [[playbook-library-98](#playbook-library-98)];
+- named before the reply to the held session's deletion: the named session's state stands, and opening the id asks its project for its records from the first [[playbook-library-98](#playbook-library-98)];
+- named while a source refresh, a source write, a player choice, or an artifacts read addressed to the held session awaits its reply: the reply writes nothing over the named session's state [[playbook-library-98](#playbook-library-98)].
 
 ### Browser Journeys
 
