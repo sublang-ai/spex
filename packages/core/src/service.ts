@@ -598,7 +598,7 @@ export class CoreService {
       env: this.env,
       store: this.store,
       libraryDir: this.libraryDir(),
-      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics()]),
+      diagnostics: () => foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.drafts.diagnostics()]),
       checkRepairs: (diagnostics) => checkRepairs(
         diagnostics,
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
@@ -1971,7 +1971,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics()]);
+        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.drafts.diagnostics(), ...this.authors.diagnostics()]);
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);

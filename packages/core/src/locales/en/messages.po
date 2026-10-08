@@ -121,6 +121,16 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
 msgstr "{diagnostic}; delete the draft, or repair the file and restart Spex"
 
+#. Diagnostic: two spex repositories each hold an authoring session of one id; the first found is the one that opens
+#: src/drafts.ts
+msgid "{draftId} is authored in both {kept} and {other}; the one in {kept} opens"
+msgstr "{draftId} is authored in both {kept} and {other}; the one in {kept} opens"
+
+#. Refusal: the id offered for a new playbook is another project's authoring session
+#: src/drafts.ts
+msgid "{draftId} is being authored in {projectId}"
+msgstr "{draftId} is being authored in {projectId}"
+
 #. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
 #: src/config.ts
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
@@ -1583,6 +1593,11 @@ msgstr "playbooks must enable at least one playbook"
 msgid "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
 msgstr "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
 
+#. Config error: the environment exports the enabled playbook, but its files are not installed here; {repository} is the spex repository's key; "Playbooks" is the app's own surface
+#: src/config.ts
+msgid "playbooks.{id} is enabled, but the environment of {repository} has not installed its module on this device; install that environment in Playbooks"
+msgstr "playbooks.{id} is enabled, but the environment of {repository} has not installed its module on this device; install that environment in Playbooks"
+
 #. Config error: the key enabling a playbook differs from the id its module declares
 #: src/config.ts
 msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
@@ -1709,6 +1724,11 @@ msgstr "Published upload has a different byte length."
 #: src/environments.ts
 msgid "Publishing stopped: {cause}"
 msgstr "Publishing stopped: {cause}"
+
+#. Refusal of a pick creating a spex repository in a group other than the reader's own until the reader has seen the privacy notice
+#: src/space.ts
+msgid "Read the sharing notice before creating {name} in {group}"
+msgstr "Read the sharing notice before creating {name} in {group}"
 
 #. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts

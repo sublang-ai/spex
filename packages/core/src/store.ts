@@ -664,16 +664,21 @@ export class Store {
   }
 
   /** Every clone under `workspace/`: a folder named `<name>-spex` inside
-   * plain group folders mirroring the Git host (storage-1). */
+   * plain group folders mirroring the Git host (storage-1). A group
+   * folder may bear such a name too: it holds no `.git` and holds a
+   * folder named `<name>-spex`, and the walk goes on inside it. */
   private discoverRepositories(): void {
     const found = new Map<string, string>();
+    const folders = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => join(dir, entry.name));
+    const isClone = (dir: string): boolean =>
+      existsSync(join(dir, ".git")) || !folders(dir).some((path) => this.homeFile.keyOf(path) !== undefined);
     const walk = (dir: string, depth: number): void => {
       if (depth > 8 || !existsSync(dir)) return;
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-        const path = join(dir, entry.name);
+      for (const path of folders(dir)) {
         const key = this.homeFile.keyOf(path);
-        if (key) found.set(key, path);
+        if (key && isClone(path)) found.set(key, path);
         else walk(path, depth + 1);
       }
     };

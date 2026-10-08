@@ -1845,6 +1845,7 @@ msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
 
 #. confirm: go on with the first sync
+#. confirm: go on with the first sync
 #: src/components/SpaceGroups.tsx
 msgid "Continue"
 msgstr "Continue"

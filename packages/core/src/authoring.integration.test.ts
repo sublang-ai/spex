@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Authoring coverage (playbook-library-72..76, core-service-97):
+// Authoring coverage (playbook-library-72..76, core-service-97, storage-25):
 // drafts driven over the WebSocket protocol against the scripted fake
 // adapter and a stub slc — no network, no agent credentials, no real
 // compiler (DR-058).
@@ -1042,4 +1042,54 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const retained = await client.expectOk("media.read", {owner, assetId: asset.assetId, offset: 0, length: 65536});
     assert.deepEqual(Buffer.from(retained.data, "base64"), image);
   } finally { client.close(); await harness.service.stop(); }
+});
+
+// ---------------------------------------------------------------------------
+// storage-25: one id held by two spex repositories
+// ---------------------------------------------------------------------------
+
+test("storage-25: two spex repositories holding one authoring session id are reported, the one sorting first kept", async () => {
+  const script: FakeScript = { fallback: { result: "Noted." } };
+  const slc = stubSlcSource("['Helper']");
+  const harness = await startHarness({ script, slc });
+  const { projectId, clone, dir, dataDir } = harness;
+  let service = harness.service;
+  let client = new Client(service.port());
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "triage" });
+    const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
+    assert.ok(projectId.localeCompare(other) < 0, `${projectId} sorts before ${other}`);
+    // Another device created a triage of its own in the other project
+    // before syncing, and a sync brought it here.
+    const authoring = join(dataDir, "workspace", ...other.split("/"), "authoring");
+    mkdirSync(authoring, { recursive: true });
+    const shadowed = join(authoring, "triage.json");
+    writeFileSync(shadowed, readFileSync(authoringFiles(clone, "triage").record));
+    client.close();
+    await service.stop();
+    service = (await startHarness({ dir, script, slc })).service;
+    client = new Client(service.port());
+    await client.open();
+
+    // One nonblocking diagnostic among the home's, naming both spex
+    // repositories and the id, wherever the home's diagnostics are read.
+    const reports = (await client.expectOk("storage.diagnostics", {})).filter((entry) => entry.file.endsWith(join("authoring", "triage.json")));
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].file, shadowed);
+    assert.equal(reports[0].blocking, false);
+    for (const name of ["triage", projectId, other]) assert.ok(reports[0].reason.includes(name), `${reports[0].reason} names ${name}`);
+    const groups = await client.expectOk("space.get", {});
+    assert.deepEqual(groups.diagnostics.filter((entry) => entry.file === shadowed), reports);
+
+    // The session of the spex repository sorting first opens; the
+    // other's is no such session.
+    const opened = await client.expectOk("draft.open", { projectId, draftId: "triage" });
+    assert.equal(opened.draft.id, "triage");
+    await client.expectError("draft.open", { projectId: other, draftId: "triage" }, "not_found");
+    await client.expectError("draft.send", { projectId: other, draftId: "triage", text: "hello" }, "not_found");
+  } finally {
+    client.close();
+    await service.stop();
+  }
 });

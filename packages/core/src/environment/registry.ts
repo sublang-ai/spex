@@ -9,7 +9,7 @@
 // verified by its digest elsewhere. The device's app token is presented
 // as a bearer where the home is signed in.
 
-import { isPackageName } from "./format.js";
+import { idRecord, isPackageName } from "./format.js";
 
 export type RegistryErrorKind = "not_found" | "forbidden" | "unauthenticated" | "unavailable" | "unreadable" | "format" | "rejected";
 
@@ -114,9 +114,9 @@ function encodePath(path: string): string {
 }
 
 function readArtifacts(raw: unknown): Record<string, IndexArtifact> | undefined {
-  if (raw === undefined) return {};
+  if (raw === undefined) return idRecord();
   if (!isPlainObject(raw)) return undefined;
-  const out: Record<string, IndexArtifact> = {};
+  const out = idRecord<IndexArtifact>();
   for (const [id, value] of Object.entries(raw)) {
     if (!isPlainObject(value) || typeof value.kind !== "string") return undefined;
     const languages = Array.isArray(value.languages) ? value.languages.filter((item): item is string => typeof item === "string")

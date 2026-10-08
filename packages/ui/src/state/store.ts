@@ -295,10 +295,12 @@ export interface AppState extends AttachmentState {
   spaceSignOut(): Promise<void>;
   /** Give a local-only spex repository a home on the host (space-58):
    * a listed spex repository by its host id, or a new one in a
-   * group. Accepted at once, outcome as state. */
+   * group, with its sharing notice seen (space-57). Accepted at once,
+   * outcome as state. */
   spacePick(
     repository: string,
     choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+    noticed?: boolean,
   ): Promise<void>;
   /** Clone a spex repository the host lists and this device lacks
    * (space-63), pairing it with a folder. Accepted at once. */
@@ -1635,8 +1637,8 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
-    async spacePick(repository, choice): Promise<void> {
-      await getClient().command("space.pick", { repository, choice });
+    async spacePick(repository, choice, noticed): Promise<void> {
+      await getClient().command("space.pick", { repository, choice, ...(noticed ? { noticed: true } : {}) });
     },
 
     async spaceJoin(hostId: string, folder?: string): Promise<void> {

@@ -26,6 +26,7 @@ import {
   FormatError,
   gitSource,
   install,
+  installedPackages,
   InstallError,
   isGitSource,
   isInsidePath,
@@ -741,24 +742,27 @@ export class EnvironmentManager {
   }
 
   /** Where a session's playbooks come from (environments-9): the
-   * project's environment, else your own group's; a module missing on
-   * this device counts as none. */
+   * project's environment, else your own group's for a playbook the
+   * project's does not export; a module the exporting environment has
+   * not installed on this device is missing there, never taken from the
+   * other environment. */
   modulesFor(projectKey: string | null): PlaybookModules {
     const own = this.store.home.own();
     const ownLocations = this.locations(own);
     const project = projectKey !== null && projectKey !== own ? this.locations(projectKey) : null;
     const pick = (locations: Map<string, ModuleLocation> | null, id: string): ModuleLocation | undefined => {
       if (!locations) return undefined;
-      const named = locations.get(id);
-      if (named?.present) return named;
-      for (const location of locations.values()) if (location.id === id && location.present) return location;
+      for (const location of locations.values()) if (location.id === id) return location;
       return undefined;
     };
     return {
       repository: project ? projectKey! : own,
       find: (id) => {
-        const location = pick(project, id) ?? pick(ownLocations, id);
-        return location ? { module: location.module, builtin: location.builtin } : undefined;
+        const fromProject = pick(project, id);
+        const location = fromProject ?? pick(ownLocations, id);
+        if (!location) return undefined;
+        if (!location.present) return { missing: { repository: fromProject ? projectKey! : own, module: location.module } };
+        return { module: location.module, builtin: location.builtin };
       },
     };
   }
@@ -794,6 +798,7 @@ export class EnvironmentManager {
     try { lock = readLockSync(join(dir, "spex.lock")); }
     catch (cause) { error = failurePhrase("install", cause); }
     const packages: EnvironmentPackage[] = [];
+    const installedNow = lock ? installedPackages(dir, lock) : new Set<string>();
     for (const name of Object.keys(lock?.packages ?? {}).sort()) {
       const resolution = lock!.packages[name]!;
       const source = resolution.source;
@@ -806,7 +811,7 @@ export class EnvironmentManager {
         try { manifest = parseManifestText(readFileSync(join(root, "meta.yaml"), "utf8")).manifest; } catch { manifest = null; }
       }
       const missing = pathSource && (root === null || manifest === null);
-      const installed = pathSource ? !missing : resolution.files.every((file) => existsSync(join(root!, ...file.path.split("/"))));
+      const installed = pathSource ? !missing : installedNow.has(name);
       const pkg = name.split("/")[1]!;
       const kindOf = (id: string): EnvironmentPackage["artifacts"][number]["kind"] => {
         const declared = manifest?.artifacts[id]?.kind;

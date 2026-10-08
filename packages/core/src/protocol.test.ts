@@ -88,13 +88,14 @@ test("space-29: a space command names its repository by key", () => {
 test("storage: a key's segments are spelled as the host spells its paths", () => {
   // Letters of either case, digits, `.`, `_` and `-`: a host's group or
   // repository name stands as a segment unchanged.
-  for (const key of ["alice/a-spex", "a-spex", "Alice/a-spex", "Acme.Corp/platform_team/web.app-spex", "_ops/x_y-spex", "acme/sub.group/a..b-spex"]) {
+  for (const key of ["alice/a-spex", "Alice/a-spex", "Acme.Corp/platform_team/web.app-spex", "_ops/x_y-spex", "acme/sub.group/a..b-spex", "my-spex/my-spex-spex"]) {
     assert.ok(REPOSITORY_KEY_PATTERN.test(key), key);
     assert.ok(parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
   }
   // Never a segment starting with a dot or a hyphen, never an empty
-  // segment, never a name without `-spex`, nothing outside the set.
-  for (const key of [".hidden/a-spex", "alice/.a-spex", "alice/..-spex", "-x/a-spex", "alice/-spex", "alice//a-spex", "/alice/a-spex", "alice/a b-spex", "alice/a+b-spex", "alice/a-spex.git", "alice/a-Spex", "-spex"]) {
+  // segment, never a name without `-spex` or without its group, nothing
+  // outside the set.
+  for (const key of [".hidden/a-spex", "alice/.a-spex", "alice/..-spex", "-x/a-spex", "alice/-spex", "alice//a-spex", "/alice/a-spex", "alice/a b-spex", "alice/a+b-spex", "alice/a-spex.git", "alice/a-Spex", "-spex", "a-spex"]) {
     assert.ok(!REPOSITORY_KEY_PATTERN.test(key), key);
     assert.ok(!parseCommand({ type: "space.fetch", id: "k1", repository: key }).ok, key);
   }

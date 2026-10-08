@@ -323,7 +323,8 @@ export function playbookModuleCandidates(folder: string, id: string): string[] {
 
 /** Each exported playbook's module location (environments-9): the
  * installed artifact under `packages/`, or a path source's in the
- * working folder. Keyed by the exported name. */
+ * working folder. Keyed by the exported name; a playbook is found by
+ * its `id`, never by its alias. */
 export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: string | null): Map<string, ModuleLocation> {
   const out = new Map<string, ModuleLocation>();
   const packagesDir = join(cloneDir, "packages");
@@ -354,31 +355,4 @@ export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: str
     }
   }
   return out;
-}
-
-export interface EnvironmentModules {
-  /** The spex repository's key. */
-  repository: string;
-  locations: Map<string, ModuleLocation>;
-}
-
-export type LaunchModules =
-  | { ok: true; modules: Map<string, ModuleLocation & { repository: string }> }
-  | { ok: false; errors: { playbook: string; repository: string }[] };
-
-/** The modules a session hands the launcher (environments-9): each
- * enabled playbook from the project's environment, else your own
- * group's; one no environment exports is a config error naming the
- * playbook and the spex repository whose environment lacks it. */
-export function launchModules(enabled: Iterable<string>, project: EnvironmentModules | null, own: EnvironmentModules): LaunchModules {
-  const modules = new Map<string, ModuleLocation & { repository: string }>();
-  const errors: { playbook: string; repository: string }[] = [];
-  for (const playbook of [...new Set(enabled)].sort()) {
-    const fromProject = project?.locations.get(playbook);
-    if (fromProject) { modules.set(playbook, { ...fromProject, repository: project!.repository }); continue; }
-    const fromOwn = own.locations.get(playbook);
-    if (fromOwn) { modules.set(playbook, { ...fromOwn, repository: own.repository }); continue; }
-    errors.push({ playbook, repository: (project ?? own).repository });
-  }
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, modules };
 }

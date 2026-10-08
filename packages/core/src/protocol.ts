@@ -45,13 +45,16 @@ export const mediaAssetSchema = z.object({
 }).strict();
 /** Wire-validated form of Playbook's SessionAssetRef. */
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
-/** A spex repository's key: its clone's path under `workspace/`, the
- * name ending in `-spex` (storage-1, projects-10), each segment spelled
- * as the Git host spells its paths — letters, digits, `.`, `_` and `-`,
- * never starting with a dot or a hyphen — so a host's group or
- * repository name stands as a segment unchanged. A project is named by
- * its spex repository's key. */
-export const REPOSITORY_KEY_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*-spex$/;
+/** One segment of a key, spelled as the Git host spells its paths —
+ * letters, digits, `.`, `_` and `-`, never starting with a dot or a
+ * hyphen — so a host's group or repository name stands as a segment
+ * unchanged (storage-1). */
+const KEY_SEGMENT = "[A-Za-z0-9_][A-Za-z0-9._-]*";
+export const KEY_SEGMENT_PATTERN = new RegExp(`^${KEY_SEGMENT}$`);
+/** A spex repository's key: its clone's path under `workspace/` —
+ * its group's segments, then its name ending in `-spex` (storage-1,
+ * projects-10). A project is named by its spex repository's key. */
+export const REPOSITORY_KEY_PATTERN = new RegExp(`^${KEY_SEGMENT}(?:/${KEY_SEGMENT})+-spex$`);
 export const repositoryKeySchema = z.string().regex(REPOSITORY_KEY_PATTERN);
 
 /** A request in `spex.yaml` (environments-2): exactly one source. */
@@ -1178,7 +1181,7 @@ export const commandSchema = z.discriminatedUnion("type", [
       z.object({ kind: z.literal("join"), hostId: z.string().min(1) }).strict(),
       z.object({ kind: z.literal("create"), groupId: z.string().min(1).nullable(), name: z.string().min(1) }).strict(),
     ]),
-    /** The privacy notice was shown for a join into a repository with other members (space-57). */
+    /** The privacy notice was shown for a join into a repository with other members or a creation in a group other than your own (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
   z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),

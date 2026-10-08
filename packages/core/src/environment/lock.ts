@@ -15,7 +15,7 @@ import { dirname } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
 import { writeApplicationBytes } from "../app-storage.js";
-import { isPackageName, sha256Hex, type Issue, type Manifest } from "./format.js";
+import { idRecord, isPackageName, sha256Hex, type Issue, type Manifest } from "./format.js";
 import { requestsDigest } from "./requests.js";
 
 /** A selected file as the lock records it. */
@@ -81,7 +81,7 @@ const sortedKeys = (record: Record<string, unknown>): string[] => Object.keys(re
 function sourceValue(source: SourceLock): Record<string, unknown> {
   if (isRegistrySource(source)) return { registry: source.registry, version: source.version, checksum: source.checksum };
   if (isGitSource(source)) return { git: source.git, commit: source.commit, ...(source.path !== undefined ? { path: source.path } : {}) };
-  const requires: Record<string, string[]> = {};
+  const requires = idRecord<string[]>();
   for (const id of sortedKeys(source.requires)) requires[id] = [...source.requires[id]!];
   const dependencies: Record<string, string> = {};
   for (const name of sortedKeys(source.dependencies)) dependencies[name] = source.dependencies[name]!;
@@ -93,12 +93,12 @@ export function serializeLock(lock: Lock): string {
   const packages: Record<string, unknown> = {};
   for (const name of sortedKeys(lock.packages)) {
     const resolution = lock.packages[name]!;
-    const artifacts: Record<string, unknown> = {};
+    const artifacts = idRecord<unknown>();
     for (const id of sortedKeys(resolution.artifacts)) {
       const artifact = resolution.artifacts[id]!;
       artifacts[id] = { language: artifact.language, fallback: artifact.fallback };
     }
-    const exports: Record<string, string> = {};
+    const exports = idRecord<string>();
     for (const exported of sortedKeys(resolution.exports)) exports[exported] = resolution.exports[exported]!;
     packages[name] = {
       source: sourceValue(resolution.source),
@@ -166,7 +166,7 @@ function parseSource(raw: unknown, at: string, issues: Issue[]): SourceLock | un
     issues.push({ path: at, rule: "source", message: `${at} is not {path, version, dependencies, requires}` });
     return undefined;
   }
-  return { path: raw.path, version: raw.version, dependencies: dependencies as Record<string, string>, requires: requires as Record<string, string[]> };
+  return { path: raw.path, version: raw.version, dependencies: dependencies as Record<string, string>, requires: Object.assign(idRecord<string[]>(), requires as Record<string, string[]>) };
 }
 
 /** Read a parsed `spex.lock` value, or throw. Reads `required-by` and
@@ -189,7 +189,7 @@ export function parseLockValue(raw: unknown): Lock {
       const source = parseSource(value.source, `${at}.source`, issues);
       const requiredBy = value["required-by"] ?? value.requiredBy ?? [];
       if (!isStringArray(requiredBy)) issues.push({ path: at, rule: "required-by", message: `${at}.required-by is not a list of names` });
-      const artifacts: Record<string, LockedArtifact> = {};
+      const artifacts = idRecord<LockedArtifact>();
       if (!isPlainObject(value.artifacts)) issues.push({ path: at, rule: "artifacts", message: `${at}.artifacts is not a mapping` });
       else for (const [id, artifact] of Object.entries(value.artifacts)) {
         if (!isPlainObject(artifact) || !(artifact.language === null || typeof artifact.language === "string") || typeof artifact.fallback !== "boolean") {
@@ -207,7 +207,7 @@ export function parseLockValue(raw: unknown): Lock {
         }
         files.push({ path: file.path, sha256: file.sha256, executable: file.executable });
       }
-      const exports: Record<string, string> = {};
+      const exports = idRecord<string>();
       if (!isPlainObject(value.exports ?? {})) issues.push({ path: at, rule: "exports", message: `${at}.exports is not a mapping` });
       else for (const [exported, id] of Object.entries((value.exports ?? {}) as Record<string, unknown>)) {
         if (typeof id === "string") exports[exported] = id;
@@ -242,7 +242,7 @@ export async function writeLock(file: string, lock: Lock): Promise<string> {
 
 /** The `requires` a path source's manifest states, as the lock keeps it. */
 export function manifestRequires(manifest: Manifest): Record<string, string[]> {
-  const requires: Record<string, string[]> = {};
+  const requires = idRecord<string[]>();
   for (const id of Object.keys(manifest.artifacts).sort()) {
     const list = manifest.artifacts[id]!.requires;
     if (list.length > 0) requires[id] = [...list];
@@ -285,7 +285,7 @@ export function lockStaleness(
     if (canonical(manifest.dependencies) !== canonical(source.dependencies)) reasons.push(`${name} at ${source.path} changed its dependencies`);
     if (canonical(manifestRequires(manifest)) !== canonical(source.requires)) reasons.push(`${name} at ${source.path} changed what its artifacts require`);
     for (const id of Object.keys(resolution.artifacts).sort()) {
-      if (!manifest.artifacts[id]) reasons.push(`${name} at ${source.path} no longer holds the selected artifact ${id}`);
+      if (!Object.hasOwn(manifest.artifacts, id)) reasons.push(`${name} at ${source.path} no longer holds the selected artifact ${id}`);
     }
   }
   return reasons.length > 0 ? { stale: true, reasons } : { stale: false };

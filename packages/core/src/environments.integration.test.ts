@@ -422,6 +422,48 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.deepEqual(await client.expectOk("environment.install", { repository: key }), { accepted: true });
   await client.environment(key, mark, (state) => state.busy === null);
 
+  // An update that fails to download leaves the last files at the same
+  // paths and reads not installed, so Install stands, until an install
+  // succeeds (environments-14).
+  {
+    const env = await import("./environment/index.js");
+    const through = new env.RegistryClient({ url: registry.url });
+    await env.publishRelease(through, await makeRelease(join(scratchDir("spex-env-commands-release-"), "lint"), {
+      format: 2, org: "acme", name: "lint", version: "1.2.1", description: "Lint skills", license: "Apache-2.0",
+      artifacts: { tidy: { kind: "skill", language: "en" } },
+    }, { "skills/en/tidy/SKILL.md": skill("tidy").replace("Do tidy.", "Do tidy again.") }));
+    const clone = clonePath(core.dataDir, key);
+    const current = readFileSync(join(clone, "spex.yaml"), "utf8");
+    const text = current.replace('"~1.2.0"', '"~1.2.1"');
+    assert.notEqual(text, current);
+    const elsewhere = scratchDir("spex-env-update-home-");
+    const updated = await env.resolve({
+      requests: env.parseRequests(text), requestsText: text, workingFolder: null, git: env.gitSource(join(elsewhere, "cache")),
+      registry: env.compositeRegistry(env.builtinRegistrySource({ store: new env.ContentStore(elsewhere), cacheDir: join(elsewhere, "cache"), url: registry.url, shipped: builtinPackage() }), through),
+    });
+    assert.ok(updated.ok);
+    writeFileSync(join(clone, "spex.yaml"), text);
+    if (updated.ok) await env.writeLock(join(clone, "spex.lock"), updated.lock);
+    const installedSkill = join(clone, "packages", "acme", "lint", "skills", "en", "tidy", "SKILL.md");
+    registry.script.unavailable(1_000);
+    mark = client.mark();
+    await client.expectOk("environment.install", { repository: key });
+    const failed = await client.environment(key, mark, (state) => state.busy === null && state.error !== null);
+    registry.script.unavailable(0);
+    const lint = failed.packages.find((pkg) => pkg.name === "acme/lint");
+    assert.deepEqual([lint?.version, lint?.installed, lint?.missingPath], ["1.2.1", false, null]);
+    assert.equal(failed.packages.find((pkg) => pkg.name === "sublang/playbooks")?.installed, true, "a spec package the update left alone stays installed");
+    assert.equal(readFileSync(installedSkill, "utf8"), skill("tidy"), "the last files stay");
+    const read = await client.expectOk("environment.get", { repository: key });
+    assert.equal(read.packages.find((pkg) => pkg.name === "acme/lint")?.installed, false);
+    mark = client.mark();
+    await client.expectOk("environment.install", { repository: key });
+    const retried = await client.environment(key, mark, (state) => state.busy === null);
+    assert.equal(retried.error, null);
+    assert.equal(retried.packages.find((pkg) => pkg.name === "acme/lint")?.installed, true);
+    assert.equal(readFileSync(installedSkill, "utf8"), skill("tidy").replace("Do tidy.", "Do tidy again."));
+  }
+
   // A conflict stands in the state, by name.
   mark = client.mark();
   await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^2.0.0" } });

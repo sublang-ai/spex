@@ -157,7 +157,9 @@ const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
 const CODE_TTL_MS = 10 * 60_000;
 const POLL_TOLERANCE_MS = 50;
 const PAGE_SIZE = 2;
-const SPEX_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*-spex$/;
+/** A project path the Git host accepts — letters, digits, `_`, `-` and
+ * `.`, never starting with `-` — ending in `-spex`. */
+const SPEX_NAME = /^[A-Za-z0-9_.][A-Za-z0-9_.-]*-spex$/;
 
 interface Device {
   id: string;
@@ -822,7 +824,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     const body = await readJson(req);
     if (!isRecord(body)) return envelope(res, 400, "bad_request", "The body must be a JSON object.");
     const { group_id: groupId, name, description } = body;
-    if (typeof name !== "string" || !SPEX_NAME.test(name)) return envelope(res, 400, "bad_request", "The name must be lowercase kebab-case ending in -spex.");
+    if (typeof name !== "string" || !SPEX_NAME.test(name)) return envelope(res, 400, "bad_request", "The name must be a project path ending in -spex.");
     if (groupId !== null && typeof groupId !== "string") return envelope(res, 400, "bad_request", "The group_id must be a string or null.");
     if (typeof description !== "string") return envelope(res, 400, "bad_request", "The description must be a string.");
     const group = groupId === null ? own() : script.groups.find((g) => g.id === groupId);

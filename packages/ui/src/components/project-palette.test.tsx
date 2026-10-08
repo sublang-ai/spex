@@ -258,7 +258,7 @@ describe("DR-015: the palette offers the Academy example", () => {
   });
 });
 
-describe("projects-1, space-58: a folder added while signed in asks for its group in place", () => {
+describe("projects-33: a folder added or created while signed in asks for its group in place", () => {
   const ADDED: ProjectInfo = { id: "ada/gamma-spex", path: "/tmp/gamma", name: "gamma", registeredAt: 2, repository: { key: "ada/gamma-spex", name: "gamma-spex", group: "ada", own: true } };
   const row = (key: string, extra: object = {}) => ({
     key, name: key.split("/").pop(), id: null, own: false, code: null, folder: "/tmp/gamma",
@@ -275,9 +275,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     ],
   }) as never;
 
-  function add(path = "/tmp/gamma"): void {
+  function add(path = "/tmp/gamma", action = "palette-add"): void {
     fireEvent.change(screen.getByTestId("palette-path"), { target: { value: path } });
-    fireEvent.click(screen.getByTestId("palette-add"));
+    fireEvent.click(screen.getByTestId(action));
   }
 
   test("the picker stands in the palette; picking a group creates there and closes it", async () => {
@@ -315,6 +315,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const first = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
     add();
     await vi.waitFor(() => expect(first.onClose).toHaveBeenCalled());
+    expect(first.onPick).toHaveBeenCalledWith(ADDED.id);
     expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
     cleanup();
 
@@ -324,5 +325,39 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     await vi.waitFor(() => expect(again.onClose).toHaveBeenCalled());
     expect(again.onPick).toHaveBeenCalledWith(PROJECTS[0].id);
     expect(screen.queryByTestId(`space-picker-${PROJECTS[0].id}`)).toBeNull();
+  });
+
+  test("Create pairs as Add does: the picker stands in the palette once the Groups state reads the new repository", async () => {
+    const realLoadSpace = useAppStore.getState().loadSpace;
+    // The Groups state predates the creation: the new spex repository
+    // lists only once the palette reads it again.
+    const loadSpace = vi.fn(async () => useAppStore.setState({ space: groups(true, [row(ADDED.id)]) }));
+    const spacePick = vi.fn(async () => {});
+    useAppStore.setState({ connection: "open", space: groups(true, []), spacePick, loadSpace });
+    try {
+      const onCreatePath = vi.fn(async () => ADDED);
+      const { onPick, onClose } = renderPalette({ onCreatePath });
+      add("/tmp/gamma", "palette-create");
+      await screen.findByTestId(`space-picker-${ADDED.id}`);
+      expect(onCreatePath).toHaveBeenCalledWith("/tmp/gamma", true);
+      expect(loadSpace).toHaveBeenCalled();
+      expect(onPick).toHaveBeenCalledWith(ADDED.id);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("palette-path")).toBeNull();
+      fireEvent.click(screen.getByTestId(`space-pick-cancel-${ADDED.id}`));
+      expect(onClose).toHaveBeenCalled();
+      expect(spacePick).not.toHaveBeenCalled();
+    } finally {
+      useAppStore.setState({ loadSpace: realLoadSpace });
+    }
+  });
+
+  test("signed out, Create makes the project current and the palette just closes", async () => {
+    useAppStore.setState({ connection: "open", space: groups(false, [row(ADDED.id)]) });
+    const { onPick, onClose } = renderPalette({ onCreatePath: vi.fn(async () => ADDED) });
+    add("/tmp/gamma", "palette-create");
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onPick).toHaveBeenCalledWith(ADDED.id);
+    expect(screen.queryByTestId(`space-picker-${ADDED.id}`)).toBeNull();
   });
 });

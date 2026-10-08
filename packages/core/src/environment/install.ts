@@ -94,14 +94,44 @@ export function missingPathSources(lock: Lock, workingFolder: string | null): st
   return missing;
 }
 
+/** A spec package's entry in the install record: the resolution its
+ * installed files were placed from. */
+function recordEntry(resolution: Resolution): Record<string, unknown> {
+  return { source: resolution.source, files: resolution.files, artifacts: resolution.artifacts };
+}
+
 function installRecord(lock: Lock): Record<string, unknown> {
   const packages: Record<string, unknown> = {};
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     if (isPathSource(resolution.source)) continue;
-    packages[name] = { source: resolution.source, files: resolution.files, artifacts: resolution.artifacts };
+    packages[name] = recordEntry(resolution);
   }
   return { format: 1, packages };
+}
+
+/** The spec packages of a lock whose resolution's files are installed
+ * (environments-14): the install record holds that very resolution and
+ * every file stands. An update that failed leaves the last files and
+ * their record, so it reads as not installed. Path sources are never
+ * installed here. */
+export function installedPackages(cloneDir: string, lock: Lock): Set<string> {
+  const target = join(cloneDir, "packages");
+  const installed = new Set<string>();
+  let recorded: Record<string, unknown>;
+  try {
+    const record = JSON.parse(readFileSync(join(target, INSTALL_RECORD), "utf8")) as { packages?: unknown } | null;
+    if (typeof record?.packages !== "object" || record.packages === null) return installed;
+    recorded = record.packages as Record<string, unknown>;
+  } catch {
+    return installed;
+  }
+  for (const [name, resolution] of Object.entries(lock.packages)) {
+    if (isPathSource(resolution.source) || !Object.hasOwn(recorded, name)) continue;
+    if (JSON.stringify(recorded[name]) !== JSON.stringify(recordEntry(resolution))) continue;
+    if (resolution.files.every((file) => existsSync(join(target, ...name.split("/"), ...file.path.split("/"))))) installed.add(name);
+  }
+  return installed;
 }
 
 function treeMatches(target: string, lock: Lock, record: Record<string, unknown>): boolean {

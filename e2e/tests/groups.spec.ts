@@ -244,6 +244,13 @@ test.describe("first start", () => {
     }
     await expect(picker.getByTestId(`space-pick-name-${projectKey}`)).toHaveValue("demo-project");
     await picker.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    // Creating in a team's group says the sharing notice first, in the
+    // picker, Cancel focused and nothing of public (space-57).
+    const notice = picker.getByTestId(`space-pick-notice-${projectKey}`);
+    await expect(notice).toContainText("Every session goes there whole");
+    await expect(notice).not.toContainText("public");
+    await expect(notice.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await notice.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
     await expect(page.getByTestId(`space-row-sync-${TEAM_KEY}`)).toHaveText("Sync");
@@ -344,6 +351,7 @@ test.describe("a folder added while signed in", () => {
     // the palette closes, and the row is reachable in that group with
     // the project followed to its key (space-58, space-60).
     await picker.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    await picker.getByTestId(`space-pick-notice-${localKey}`).getByRole("button", { name: "Continue" }).click();
     await expect(palette).toBeHidden();
     await showGroups(page);
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });

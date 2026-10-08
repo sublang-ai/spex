@@ -790,17 +790,27 @@ class RepositorySync {
   }
 
   /** What a removal of this clone would lose (projects-9): its record
-   * units the host has not received. */
+   * units not known to have reached the host. The working tree is
+   * planned against the host's branch as this device last fetched or
+   * pushed it, through their common ancestor — every unit where no such
+   * branch is on disk or the clone is local only. It reads the clone
+   * alone, never this process's checks, and leaves the Sync tab's lists
+   * as they are. */
   async pendingUnits(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
-    if (repo.remote === null) {
-      const mine = await this.workingTree();
-      const units = planStorageUnits({ ours: readStorageTree(this.dir, mine), theirs: new Map(), base: new Map() });
-      return units.filter((unit) => RECORD_KINDS.has(spaceUnitKind(unit.name))).length;
+    const mine = await this.workingTree();
+    let theirs = EMPTY_TREE;
+    let base = EMPTY_TREE;
+    if (repo.remote !== null && repo.originSpex !== null) {
+      theirs = repo.originSpex;
+      const merged = await this.git.run(["merge-base", "HEAD", `refs/remotes/origin/${SPEX_BRANCH}`]);
+      if (merged.code === 0) base = merged.stdout.toString("utf8").trim();
     }
-    await this.computeWorkingLists(repo.head, repo.originSpex);
-    return [...this.lists.local, ...this.lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
+    const units = planStorageUnits({ ours: readStorageTree(this.dir, mine), theirs: readStorageTree(this.dir, theirs), base: readStorageTree(this.dir, base) });
+    // Local and conflicting units; an incoming or agreed one is there.
+    return units.filter((unit) => RECORD_KINDS.has(spaceUnitKind(unit.name)) &&
+      (unit.choice === "conflict" || unit.changed.ours && !unit.changed.theirs)).length;
   }
 
   // -- the plan (space-33) and its labels (space-34) ------------------------
@@ -2144,6 +2154,9 @@ export class SpaceManager {
     const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
+    // The home file the move leaves is checked before any clone moves:
+    // a refusal leaves every folder and pair where it is.
+    store.home.checkMove(moves, target);
     if (moves.some((move) => existsSync(store.home.clonePath(move.to)))) return "busy";
     // A pick in flight writes the clone's remote: it ends first.
     if (keys.some((key) => this.picking.has(key))) return "busy";
@@ -2342,14 +2355,15 @@ export class SpaceManager {
       }
       if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
       const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+      // A join or a creation pushes this clone's records where others
+      // may read them: the notice is seen first (space-57).
+      const store = this.host.store;
+      if (noticed) store.setPref(noticedPref(key), true);
+      const seen = noticed || store.getPref<unknown>(noticedPref(key)) === true;
       if (choice.kind === "join") {
         const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
         if (!listing) throw new CoreError("not_found", noLongerShared());
-        // Joining pushes this clone's records into a repository others
-        // read: the notice is seen first (space-57).
-        const store = this.host.store;
-        if (noticed) store.setPref(noticedPref(key), true);
-        else if (!listing.readOnly && (listing.members ?? 0) > 1 && store.getPref<unknown>(noticedPref(key)) !== true) {
+        if (!seen && !listing.readOnly && (listing.members ?? 0) > 1) {
           throw new CoreError("invalid_request", i18n._({
             id: "Read the sharing notice before joining {name}",
             values: { name: listing.repository.path },
@@ -2364,9 +2378,21 @@ export class SpaceManager {
         throw new CoreError("invalid_request", i18n._({ id: "The name must hold a letter or a digit", comment: "Refusal of a new spex repository's name with nothing of a name in it" }));
       }
       const group = choice.groupId === null
-        ? (userGroup(view) ?? { id: null, fullPath: this.host.store.home.ownName })
+        ? (userGroup(view) ?? { id: null, fullPath: this.host.store.home.ownName, kind: "user" as const })
         : view.groups.find((entry) => entry.id === choice.groupId);
       if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
+      // A creation in a group other than your own: its members, unknown
+      // until it exists, may read what the push sends. Your own group
+      // says nothing; neither do the syncs after a sign-in nor a group's
+      // own repository created quietly with no session in it (space-65),
+      // and a waiting creation joined later follows this pick's notice.
+      if (!seen && group.kind !== "user") {
+        throw new CoreError("invalid_request", i18n._({
+          id: "Read the sharing notice before creating {name} in {group}",
+          values: { name: `${base}-spex`, group: group.fullPath },
+          comment: "Refusal of a pick creating a spex repository in a group other than the reader's own until the reader has seen the privacy notice",
+        }), { notice: true, members: null, visibility: null });
+      }
       const project = this.projectFile(machine.repository);
       await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
         repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse");

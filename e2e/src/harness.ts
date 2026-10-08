@@ -1084,7 +1084,8 @@ export function ownSetUp(state: GroupsState): boolean {
 
 /** Pick a group for the demo project's local-only spex repository over
  * the protocol (arrange only): `<name>-spex` created in that group and
- * pushed (space-58); the project's key and remote follow it. */
+ * pushed with its sharing notice seen (space-58, space-57); the
+ * project's key and remote follow it. */
 export async function pickGroup(
   app: App,
   options: { name?: string; groupId?: string; groupPath?: string } = {},
@@ -1097,6 +1098,7 @@ export async function pickGroup(
   await app.core.command("space.pick", {
     repository: app.projectId,
     choice: { kind: "create", groupId: options.groupId ?? HOST_GROUP_ID, name },
+    noticed: true,
   });
   const state = await app.core.waitSpace(from, (candidate) => {
     try { return repositoryOf(candidate, key).sync.phase === "done"; } catch { return false; }

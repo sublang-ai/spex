@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { stringify } from "yaml";
 
 import { unpackRelease } from "../environment/archive.js";
-import { artifactLanguages, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../environment/format.js";
+import { artifactLanguages, idRecord, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../environment/format.js";
 import { compareVersions, isVersion } from "../environment/semver.js";
 
 export type ReleaseFixture =
@@ -148,7 +148,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
 
   function artifactsIndex(stored: Stored): Record<string, unknown> {
     const languages = artifactLanguages(stored.manifest, stored.files);
-    const out: Record<string, unknown> = {};
+    const out = idRecord<unknown>();
     for (const [id, artifact] of Object.entries(stored.manifest.artifacts)) {
       out[id] = { kind: artifact.kind, ...(artifact.language ? { language: artifact.language } : {}), languages: languages[id] ?? [] };
     }
@@ -157,7 +157,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
 
   function artifactsFull(stored: Stored): Record<string, unknown> {
     const index = artifactsIndex(stored);
-    const out: Record<string, unknown> = {};
+    const out = idRecord<unknown>();
     for (const [id, artifact] of Object.entries(stored.manifest.artifacts)) {
       out[id] = {
         ...(index[id] as Record<string, unknown>),

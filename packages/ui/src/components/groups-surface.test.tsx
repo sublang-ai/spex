@@ -6,7 +6,7 @@
 // host's last read (space-1, space-2), signing in through the browser
 // flow and the device flow, its failure, Cancel, the host's sign-out
 // and Sign out (space-3, space-6), every row state with its control and phrase (space-61,
-// space-64), Pick a group (space-58), Join (space-63), Members
+// space-64), Pick a group with its sharing notice (space-58, space-57), Join (space-63), Members
 // (space-62), the vocabulary (space-27) and the label budget and the
 // container steps the fit rests on (space-28). Each act is checked by
 // the command it sends; its outcome arrives as state.
@@ -16,6 +16,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
+import { SpexCommandError } from "../lib/client.js";
 import { setClientForTests } from "../state/store.js";
 import {
   BRANCH,
@@ -574,6 +575,57 @@ describe("GROUPS: Pick a group (space-58)", () => {
     );
     expect(document.activeElement).toBe(name);
     expect((name as HTMLInputElement).value).toBe("academy");
+  });
+
+  test("space-57: a pick the core holds for the sharing notice says it in the picker; Cancel hands focus back, Continue sends it noticed", async () => {
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.pick" && fields.noticed !== true) {
+        const join = (fields.choice as { kind: string }).kind === "join";
+        // The facts, apart from the words, say the notice is owed.
+        throw new SpexCommandError("invalid_request", "Held", join
+          ? { notice: true, members: 3, visibility: "public" }
+          : { notice: true, members: null, visibility: null });
+      }
+      return answer(type, fields);
+    });
+    await renderGroups(localProject(), { open: false });
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    const option = screen.getByTestId("space-pick-group-acme/team");
+    fireEvent.click(option);
+    // A creation's notice says nothing of public; Cancel is focused and
+    // no refusal stands.
+    let notice = await screen.findByTestId(`space-pick-notice-${KEY}`);
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(notice.textContent).toContain("hidden parts and attachments included");
+    expect(notice.textContent).toContain("nothing recalls what others downloaded");
+    expect(notice.textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    expect(within(screen.getByTestId(`space-picker-${KEY}`)).queryByRole("alert")).toBeNull();
+    expect((option as HTMLButtonElement).disabled).toBe(true);
+    // Escape cancels back to the picker, focus on the option it came from.
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
+    expect(screen.getByTestId(`space-picker-${KEY}`)).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(option));
+    expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "create", groupId: "2", name: "academy" } }]);
+    // Continue sends the same pick with the notice seen.
+    fireEvent.click(option);
+    notice = await screen.findByTestId(`space-pick-notice-${KEY}`);
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", groupId: "2", name: "academy" }, noticed: true }),
+    );
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
+    // A join into a public repository others share says its records are
+    // public.
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    fireEvent.click(screen.getByTestId("space-pick-repo-acme/team/academy-spex"));
+    notice = await screen.findByTestId(`space-pick-notice-${KEY}`);
+    expect(notice.textContent).toContain("its records are public");
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.pick")[4]).toEqual({ repository: KEY, choice: { kind: "join", hostId: "51" }, noticed: true }),
+    );
   });
 
   test("Cancel and Escape leave the repository local only with Pick a group offered again, focus on it", async () => {

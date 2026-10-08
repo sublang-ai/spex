@@ -50,7 +50,7 @@ class Client {
     await this.waitFor((m) => m.type === "hello");
   }
   close(): void { this.socket.close(); }
-  async command<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<{ ok: true; result: CommandResults[T] } | { ok: false; error: { code: string; message: string } }> {
+  async command<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<{ ok: true; result: CommandResults[T] } | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } }> {
     const id = `c${(this.nextId += 1)}`;
     this.socket.send(JSON.stringify({ type, id, ...fields }));
     const reply = await this.waitFor((m) => m.type === "reply" && m.id === id, 30_000);

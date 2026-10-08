@@ -64,9 +64,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   // Academy seeding (DR-015) lives on the store: registration and
   // project selection happen there, the palette only offers the row.
   const openAcademyExample = useAppStore((state) => state.openAcademyExample);
-  // A folder added while signed in asks where its records go, in the
-  // one picker of matching spex repositories and groups (projects-1,
-  // space-58): the key of its local-only spex repository while asked.
+  // A folder added or created while signed in asks where its records
+  // go, in the one picker of matching spex repositories and groups
+  // (projects-1, projects-3, space-58): the key of its local-only spex
+  // repository while asked.
   const [picking, setPicking] = useState<string>();
   const space = useAppStore((state) => state.space);
   const loadSpace = useAppStore((state) => state.loadSpace);
@@ -137,10 +138,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     props.onClose();
   }
 
-  /** A folder added (projects-1): it becomes the current project, and
-   * where the home is signed in and the folder newly paired, its
-   * local-only spex repository asks for its group in place (space-58);
-   * otherwise the palette closes. */
+  /** A folder added (projects-1) or created (projects-3): it becomes
+   * the current project, and where the home is signed in and the
+   * folder newly paired, its local-only spex repository asks for its
+   * group in place (space-58); otherwise the palette closes. */
   async function added(project: ProjectInfo, known: boolean): Promise<void> {
     props.onPick(project.id);
     const key = project.repository.key;
@@ -165,13 +166,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     setBusy(true);
     setError(undefined);
     try {
-      if (create) {
-        pick((await props.onCreatePath(path, scaffold)).id);
-      } else {
-        const before = new Set(props.projects.map((project) => project.id));
-        const project = await props.onAddPath(path);
-        await added(project, before.has(project.id));
-      }
+      // Create pairs the new project as Add does (projects-3).
+      const before = new Set(props.projects.map((project) => project.id));
+      const project = create
+        ? await props.onCreatePath(path, scaffold)
+        : await props.onAddPath(path);
+      await added(project, before.has(project.id));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {

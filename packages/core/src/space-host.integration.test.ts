@@ -140,6 +140,44 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
 });
 
+test("space-37: a login spelled with a capital or a dot names your own group's folder, its clones and every pair as the host spells it", async (t) => {
+  const errors = t.mock.method(console, "error");
+  for (const login of ["Ada", "ada.dev"]) {
+    const host = await startHost();
+    host.script.person.login = login;
+    host.script.groups[0].fullPath = login;
+    host.script.groups[0].name = login;
+    const home = await startHome("signin-spelled", { host, extra: { signIn: "browser" } });
+    t.after(() => home.stop());
+    await addFolder(home, home.projectDir);
+    const from = home.client.mark();
+    const signed = await signIn(home, host);
+    assert.equal(signed.account?.login, login);
+    // The folder, every clone in it and every pair bear the login as
+    // the host spells it (space-59, storage-2).
+    const ownKey = `${login}/${login}-spex`;
+    const moved = `${login}/${basename(home.projectDir)}-spex`;
+    assert.equal(repositoryOf(signed, moved).folder, home.projectDir);
+    assert.ok(existsSync(join(clonePath(home.dataDir, moved), ".git")), moved);
+    assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
+    const file = Home.load(home.dataDir).file;
+    assert.equal(file.own, login);
+    assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
+    // Your own group's spex repository stands on the stand-in as
+    // `<login>-spex`, pushed (space-4, space-65).
+    const own = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase === "done");
+    assert.equal(own.state, "reachable");
+    assert.equal(git(bareOf(host, ownKey), "rev-parse", "spex"), git(clonePath(home.dataDir, ownKey), "rev-parse", "spex"));
+    // Nothing of the set-up failed, and a restart reads the same project.
+    assert.deepEqual(errors.mock.calls.map((call) => String(call.arguments[0])).filter((line) => /failed/.test(line)), []);
+    await home.stop();
+    const again = await startHome("signin-spelled-again", { dataDir: home.dataDir, project: false });
+    t.after(() => again.stop());
+    assert.deepEqual((await again.client.expectOk("project.list", {})).map((project) => [project.id, project.path]), [[moved, home.projectDir]]);
+    await again.stop();
+  }
+});
+
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
   const host = await startHost();
   const home = await startHome("signin-device", { host, project: false });
@@ -251,7 +289,7 @@ test("space-59: a sign-in while a read of your own group is in flight moves the 
   assert.deepEqual(after.groups.flatMap((group) => group.repositories.map((repository) => repository.key)).filter((repoKey) => repoKey.startsWith(`${OWN}/`)), []);
 });
 
-test("space-37: Pick a group creates <name>-spex there and pushes; a taken name is refused; a refused creation waits until a Refresh finds it", async (t) => {
+test("space-37: Pick a group creates <name>-spex there and pushes, a group other than your own once the notice is seen; a taken name is refused; a refused creation waits until a Refresh finds it", async (t) => {
   const host = await startHost();
   const home = await startHome("pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -263,11 +301,27 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   const row = repositoryOf(signed, local);
   assert.equal(row.state, "local-only");
   const sessionId = await runTurn(home, local, "Shared with Acme");
-  // A group picked: `<name>-spex` created there, the clone following it
-  // under `workspace/acme/`, its `spex` pushed (space-58, space-60).
+  // A creation in a group other than your own waits for the notice, its
+  // members unknown until it exists: nothing is created or pushed
+  // (space-57).
+  const asked = host.script.requests.length;
+  const unseen = await home.client.command("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "alpha" } });
+  assert.ok(!unseen.ok, "the creation waits for the notice");
+  assert.equal(unseen.error.code, "invalid_request");
+  assert.match(unseen.error.message, /sharing notice before creating alpha-spex in acme/);
+  assert.deepEqual(unseen.error.details, { notice: true, members: null, visibility: null });
+  assert.ok(!host.script.repositories.some((repository) => repository.path === "alpha-spex"), "nothing is created");
+  assert.ok(!host.script.requests.slice(asked).some((request) => request.path.includes("alpha-spex")), "nothing is pushed");
+  const held = await home.client.repository(local);
+  assert.deepEqual([held.state, held.noticed], ["local-only", false]);
+  // A group picked with the notice seen: `<name>-spex` created there, the
+  // clone following it under `workspace/acme/`, its `spex` pushed and the
+  // notice recorded (space-57, space-58, space-60).
   const from = home.client.mark();
-  assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "alpha" } }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", groupId: "2002", name: "alpha" }, noticed: true }), { accepted: true });
   const created = await home.client.waitRepository(from, "acme/alpha-spex", (repository) => repository.sync.phase === "done");
+  assert.equal(created.noticed, true);
+  assert.equal(prefsOf(home.dataDir)["sync:acme/alpha-spex:noticed"], true);
   assert.equal(created.state, "reachable");
   assertNeverUnreachable(home.client.readings(from, [local, "acme/alpha-spex"]));
   assert.ok(created.lastSync && created.lastSync.sent > 0, JSON.stringify(created.lastSync));
@@ -287,16 +341,24 @@ test("space-37: Pick a group creates <name>-spex there and pushes; a taken name 
   const beta = await addFolder(home, gitFolder("beta"));
   // A project added is announced, so the surface re-reads (space-2).
   await home.client.waitRepository(fromBeta, beta.key, (repository) => repository.state === "local-only");
-  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", groupId: "2002", name: "beta" } }, "invalid_request", /beta-spex is taken in acme/);
+  await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", groupId: "2002", name: "beta" }, noticed: true }, "invalid_request", /beta-spex is taken in acme/);
   await home.client.expectError("space.pick", { repository: beta.key, choice: { kind: "create", groupId: "2002", name: "--" } }, "invalid_request", /letter or a digit/);
   assert.equal((await home.client.repository(beta.key)).state, "local-only");
+  // A creation in your own group says nothing (space-57).
+  const omega = await addFolder(home, gitFolder("omega"));
+  const fromOmega = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: omega.key, choice: { kind: "create", groupId: "2001", name: "omega" } }), { accepted: true });
+  const ownCreated = await home.client.waitRepository(fromOmega, `${LOGIN}/omega-spex`, (repository) => repository.sync.phase === "done");
+  assert.equal(ownCreated.state, "reachable");
+  assert.equal(ownCreated.noticed, false);
+  assert.equal(git(bareOf(host, `${LOGIN}/omega-spex`), "rev-parse", "spex"), git(clonePath(home.dataDir, `${LOGIN}/omega-spex`), "rev-parse", "spex"));
   // A creation the host leaves waiting stands on the row with its words,
   // and the next read after it grants finds it done (space-64).
   const words = "You need the Maintainer role in Research to create projects.";
   host.script.refuseCreate(words);
   const gamma = await addFolder(home, gitFolder("gamma"));
   const fromGamma = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: gamma.key, choice: { kind: "create", groupId: "2003", name: "gamma" } });
+  await home.client.expectOk("space.pick", { repository: gamma.key, choice: { kind: "create", groupId: "2003", name: "gamma" }, noticed: true });
   const waiting = await home.client.waitRepository(fromGamma, gamma.key, (repository) => repository.waiting !== null);
   assert.deepEqual(waiting.waiting, { step: "create", group: "acme/research", message: words });
   assert.equal(waiting.state, "local-only");
@@ -328,7 +390,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   for (let i = 0; i < 400 && !listingSince(); i += 1) await sleep(10);
   const listing = listingSince();
   assert.ok(listing, "the read reached the listing");
-  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "delta" } }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "delta" }, noticed: true }), { accepted: true });
   const creation = host.script.requests.slice(asked).find((request) => request.method === "POST" && request.path === "/api/v1/host/repositories");
   assert.ok(creation && creation.at < listing.at + 1_500, "the creation came while the listing slept");
   // The created repository goes straight to its sync, which pushes with
@@ -511,7 +573,7 @@ test("space-37: while a check sleeps on the stand-in's transport, writes beneath
   await addFolder(home, gated);
   await signIn(home, host);
   const from = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: `${LOGIN}/gated-spex`, choice: { kind: "create", groupId: "2002", name: "gated" } });
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/gated-spex`, choice: { kind: "create", groupId: "2002", name: "gated" }, noticed: true });
   const key = "acme/gated-spex";
   await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
   const clone = clonePath(home.dataDir, key);
@@ -553,7 +615,7 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   assert.equal(JSON.parse(readFileSync(join(local.clone, "project.json"), "utf8")).remote, code);
   const sessionA = await runTurn(a, local.key, "From home A");
   const fromA = a.client.mark();
-  await a.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", groupId: "2002", name: "shared" } });
+  await a.client.expectOk("space.pick", { repository: local.key, choice: { kind: "create", groupId: "2002", name: "shared" }, noticed: true });
   const key = "acme/shared-spex";
   const pushed = await a.client.waitRepository(fromA, key, (repository) => repository.sync.phase === "done");
   const id = pushed.id ?? "";

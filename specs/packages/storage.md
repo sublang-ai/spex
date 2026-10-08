@@ -22,7 +22,7 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host | — |
+| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host; one whose name ends in `-spex` is told from a clone by holding no `.git` and holding a folder named `<name>-spex` | — |
 | `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
@@ -52,7 +52,7 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 | --- | --- |
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
 | `host` | `{url, clientId, account?, signedOut?}`: the Git host's URL, the public client id `spex`, once signed in `{id, login, displayName}` as the host reported them, and `signedOut` true once the credential was removed while the account is kept [[git-host-4](git-host.md#git-host-4)] |
-| `own` | the folder name of your own group under `workspace/`: this device's user name before sign-in, the account's login after [[storage-6](#storage-6)] |
+| `own` | the folder name of your own group under `workspace/`, one key segment [[storage-1](#storage-1)]: this device's user name before sign-in, the account's login as the host spells it after [[storage-6](#storage-6)] |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
@@ -208,6 +208,7 @@ Before reopening selected state, the validator shall validate the complete selec
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
 - a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
+- two spex repositories holding an authoring session of one id are reported without blocking, naming both and the id, the one whose key sorts first kept [[storage-23](#storage-23)];
 - incompatible modules or unsupported checkpoint relocation permit history only;
 - invalid session data blocks that session's execution and recovery, preserving lease-checked deletion; an invalid intent file blocks that intent alone;
 - invalid shared files block operations that require them; diagnostics name the failing file and reason, while startup, unrelated valid spex repositories and independent configuration or preference edits remain available;
@@ -250,6 +251,20 @@ When an integration suite merges two real Git branches of one spex repository co
 - reports of unpaired clones and folders, and rejection of duplicate sources, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook the environment lacks is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
 - leases blocking competing writes, one session store per spex repository [[storage-14](#storage-14)].
+
+### storage-24
+
+When an integration suite opens a store on a home whose group folders bear names ending in `-spex` — another group, a subgroup, and your own group — it shall verify:
+
+- each clone beneath them, one not yet a Git repository among them, listed by its own key, such as `my-spex/my-spex-spex`, and no group folder listed or written into [[storage-1](#storage-1)];
+- your own group so named listing its own spex repository `<own>/<own>-spex` on every open [[storage-1](#storage-1)] [[storage-2](#storage-2)].
+
+### storage-25
+
+When an integration suite starts the core on a home whose two spex repositories each hold an authoring session of one id, it shall verify:
+
+- one nonblocking diagnostic among the home's diagnostics, naming both spex repositories and the id [[storage-12](#storage-12)];
+- the session of the spex repository whose key sorts first opening, and the other's refused as no such session [[storage-12](#storage-12)].
 
 ## References
 

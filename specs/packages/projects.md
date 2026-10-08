@@ -106,7 +106,7 @@ When the user picks a project from the palette or opens one of its sessions from
 
 When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files, and its git state on disk unmodified apart from the exported skills Spex removes with their exclude entries [[environments-8](environments.md#environments-8)], and nothing on the host changed ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- While anything in the clone has not reached the host — a local-only spex repository, or one with local units [[space-7](space.md#space-7)] — the confirm says what would be lost and asks a second confirmation naming the count.
+- While the clone holds units not known to have reached the host, the confirm says what would be lost and asks a second confirmation naming their count: each unit [[storage-11](storage.md#storage-11)] other than `project.json`, `.gitignore` and `.gitattributes` whose working-tree bytes differ both from the host's `spex` branch as this device last fetched or pushed it and from their common ancestor, each of those two read as empty where it does not exist or the spex repository is local only.
 
 - While a session of the project has a turn in flight, the Overview tab disables removal, stating that the running turn must finish or be aborted first ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - Removal confirms inline with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4); Keep returns focus to the Remove control, and a completed removal moves focus to the sidebar's Dashboard entry — never to the page body.
@@ -222,6 +222,14 @@ Where the core starts with a scaffold command and its variables under a command 
 - Command exiting non-zero: the refusal names that command and its output, and the project is not registered [[projects-31](#projects-31)].
 - No command named: the runner ran `npx --yes @sublang/spex`, and its failure names that command and that the app's own CLI was not supplied [[projects-31](#projects-31)].
 
+#### projects-33
+
+Where the project palette renders over a Groups state, when a folder is added or created from its path row, the test suite shall assert the pairing cases below:
+
+- Signed in, with the folder's spex repository new and local only: the folder becomes the current project and the palette offers the picker of matching spex repositories and groups in place, after Add [[projects-1](#projects-1)] and after Create alike [[projects-3](#projects-3)].
+- Signed out: the folder becomes the current project and the palette closes with no picker, after Add [[projects-1](#projects-1)] and after Create [[projects-3](#projects-3)].
+- A folder already a project: Add switches to it and the palette closes with no picker [[projects-2](#projects-2)].
+
 ### Forge Coverage
 
 #### projects-19
@@ -243,7 +251,7 @@ Where the Overview tab renders a project whose GitHub binding names an unmet con
 
 #### projects-21
 
-Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session and the environment among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
+Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session and the environment among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)]; that, the project registered again and synced to a host, a later turn whose push the host refuses still has the first confirm, after a core restart, ask the second naming the one unit the host lacks [[projects-9](#projects-9)]; and that, once a sync has pushed it, the project is removed on the first confirm alone [[projects-9](#projects-9)].
 
 ### Label Coverage
 

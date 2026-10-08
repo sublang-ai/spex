@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
@@ -167,8 +167,7 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     assert.ok(!existsSync(clone));
     assert.deepEqual(snapshot(folder), before, "the working folder's files and Git state are as they were");
 
-    // A project whose spex repository has reached the host goes on the
-    // first confirm alone.
+    // The project registered again, its spex repository synced to a host.
     const bare = join(scratch, "host.git");
     execFileSync("git", ["init", "-q", "--bare", "-b", "spex", bare]);
     const again = await client.ok("project.register", { path: folder });
@@ -180,6 +179,37 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     await client.ok("space.sync", { repository: again.id });
     await client.until((m) => client.messages.indexOf(m) >= from && m.type === "space.state" &&
       m.state.groups.some((group) => group.repositories.some((repository) => repository.key === again.id && repository.sync.phase === "done")), 30_000);
+    const synced = (phase: string, since: number) => (m: ServerMessage) => client.messages.indexOf(m) >= since && m.type === "space.state" &&
+      m.state.groups.some((group) => group.repositories.some((repository) => repository.key === again.id && repository.sync.phase === phase));
+
+    // A later turn whose push the host refuses has not reached it: after
+    // a restart, which remembers no check, the first confirm still names
+    // it (projects-9).
+    const hook = join(bare, "hooks", "pre-receive");
+    writeFileSync(hook, "#!/bin/sh\nexit 1\n");
+    chmodSync(hook, 0o755);
+    await client.ok("turn.submit", { sessionId: second.id, text: "Read it once more" });
+    await client.until((m) => m.type === "session.state" && m.session.id === second.id && !m.session.live && m.session.turns > 1);
+    const refusedFrom = client.messages.length;
+    await client.ok("space.sync", { repository: again.id });
+    await client.until(synced("stopped", refusedFrom), 30_000);
+    const hostHead = git(bare, "rev-parse", "spex");
+    client.close();
+    await service.stop();
+    ({ service, client } = await boot(dataDir, home));
+    const lacking = await client.command("project.remove", { projectId: again.id });
+    assert.ok(!lacking.ok, "the refused push is not taken for the host's");
+    assert.equal(lacking.error.code, "conflict");
+    assert.match(lacking.error.message, /1 record has not reached the host/);
+    assert.deepEqual(lacking.error.details, { units: 1 });
+    assert.ok(existsSync(join(dataDir, "workspace", "tester", "fixture-spex")), "nothing is deleted before the second confirm");
+    assert.equal(git(bare, "rev-parse", "spex"), hostHead);
+
+    // Once a sync has pushed it, the first confirm alone removes it.
+    rmSync(hook);
+    const pushedFrom = client.messages.length;
+    await client.ok("space.sync", { repository: again.id });
+    await client.until(synced("done", pushedFrom), 30_000);
     await client.ok("project.remove", { projectId: again.id });
     assert.ok(!existsSync(join(dataDir, "workspace", "tester", "fixture-spex")));
     assert.notEqual(git(bare, "rev-parse", "spex"), "", "nothing on the host changed");

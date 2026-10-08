@@ -5,7 +5,8 @@
 // a home written exactly as the former layout's writers wrote it — the
 // registry, this device's path map, one act log per project, one
 // sessions folder, the config and the preferences at the root, the home
-// itself a Git repository — becomes a home of spex repositories.
+// itself a Git repository — becomes a home of spex repositories. And
+// the walk that finds every clone under `workspace/` (storage-24).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -22,6 +23,7 @@ import { WebSocket } from "ws";
 import { foldFormerIntentActs, parseFormerIntentLog, parsePrefs } from "./app-storage.js";
 import { defaultOwnName } from "./home.js";
 import { CoreService } from "./service.js";
+import { initializeClone } from "./storage-git.js";
 import { Store } from "./store.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { seedHistorySession } from "./testing/demo.js";
@@ -306,6 +308,33 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   assert.ok(Array.isArray(JSON.parse(cli.stdout)));
   const viaEnv = spawnSync(process.execPath, [join(ROOT, "scripts", "storage-git.mjs"), "--repository", keyB, "validate"], { encoding: "utf8", env: { ...process.env, SPEX_HOME: home } });
   assert.equal(viaEnv.status, 0, viaEnv.stderr);
+  rmSync(scratch, { recursive: true, force: true });
+});
+
+test("storage-24: a group folder named like a clone is walked into, and every clone lists by its own key", async () => {
+  const scratch = scratchDir("spex-groups-named-spex-");
+  const keysOf = (store: Store): string[] => store.listRepositories().map((repository) => repository.key).sort();
+  // Another group, a subgroup and a subgroup's clone Git has not made a
+  // repository yet, each folder bearing a name that ends in `-spex`.
+  const home = join(scratch, "home");
+  (await Store.open({ dir: home, own: "alice", env: gitEnv })).close();
+  for (const key of ["my-spex/my-spex-spex", "acme/a-spex", "acme/x-spex/y-spex"]) initializeClone(join(home, "workspace", ...key.split("/")), { env: gitEnv });
+  mkdirSync(join(home, "workspace", "acme", "z-spex", "w-spex"), { recursive: true });
+  const store = await Store.open({ dir: home, own: "alice", env: gitEnv });
+  assert.deepEqual(keysOf(store), ["acme/a-spex", "acme/x-spex/y-spex", "acme/z-spex/w-spex", "alice/alice-spex", "my-spex/my-spex-spex"]);
+  store.close();
+  for (const group of [["my-spex"], ["acme", "x-spex"], ["acme", "z-spex"]]) {
+    assert.ok(!existsSync(join(home, "workspace", ...group, "sessions")), `nothing is written into ${group.join("/")}`);
+  }
+  // Your own group so named lists its own spex repository, opened again alike.
+  const own = join(scratch, "own");
+  for (let open = 0; open < 2; open += 1) {
+    const ownStore = await Store.open({ dir: own, own: "my-spex", env: gitEnv });
+    assert.equal(ownStore.home.own(), "my-spex/my-spex-spex");
+    assert.deepEqual(keysOf(ownStore), ["my-spex/my-spex-spex"]);
+    ownStore.close();
+  }
+  assert.ok(!existsSync(join(own, "workspace", "my-spex", "sessions")));
   rmSync(scratch, { recursive: true, force: true });
 });
 

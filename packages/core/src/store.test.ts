@@ -898,3 +898,42 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.ok(existsSync(join(packageDir, "meta.yaml")));
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("playbook-library-70: the authoring store refuses an id another project's spex repository holds, and reports two holding one", () => {
+  const dir = tempRoot(); mkdirSync(dir, { recursive: true });
+  const at = (name: string) => ({
+    key: `tester/${name}-spex`,
+    authoringDir: join(dir, "workspace", "tester", `${name}-spex`, "authoring"),
+    workingFolder: join(dir, name),
+  });
+  const a = at("alpha");
+  const b = at("beta");
+  const drafts = new DraftStore(() => [a, b]);
+  drafts.create("triage", 1000, a, "local");
+  // The id is the home's: the store itself refuses it to another
+  // project, naming the one that holds it, and writes nothing there.
+  assert.throws(() => drafts.create("triage", 2000, b, "local"),
+    (error: unknown) => error instanceof StorageFormatError && error.reason.includes("triage") && error.reason.includes(a.key));
+  assert.ok(!existsSync(join(b.authoringDir, "triage.json")));
+  assert.ok(!existsSync(join(b.workingFolder, "spex-packages", "triage")));
+  assert.equal(drafts.projectOf("triage"), a.key);
+  assert.deepEqual(drafts.diagnostics(), []);
+  // Two devices each created one before syncing: a rescan keeps the
+  // first found and reports the other, nonblocking, by both and the id
+  // (storage-12).
+  mkdirSync(b.authoringDir, { recursive: true });
+  writeFileSync(join(b.authoringDir, "triage.json"), readFileSync(join(a.authoringDir, "triage.json")));
+  drafts.refresh();
+  assert.equal(drafts.projectOf("triage"), a.key);
+  assert.deepEqual(drafts.ids(), ["triage"]);
+  const reports = drafts.diagnostics();
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].file, join(b.authoringDir, "triage.json"));
+  assert.equal(reports[0].blocking, false);
+  for (const name of ["triage", a.key, b.key]) assert.ok(reports[0].reason.includes(name), `${reports[0].reason} names ${name}`);
+  // Once the other file is gone, the next rescan reports nothing.
+  rmSync(join(b.authoringDir, "triage.json"));
+  drafts.refresh();
+  assert.deepEqual(drafts.diagnostics(), []);
+  rmSync(dir, { recursive: true, force: true });
+});

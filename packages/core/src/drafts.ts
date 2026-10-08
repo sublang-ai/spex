@@ -297,11 +297,19 @@ export function authoringManifest(id: string, org: string): string {
   ].join("\n");
 }
 
+/** A session file of an id another spex repository already holds:
+ * the spex repository kept, the one shadowed, and its file. */
+interface ShadowedDraft { id: string; kept: string; other: string; file: string }
+
 export class DraftStore {
   /** Which spex repository holds each authoring session. */
   private locations = new Map<string, AuthoringLocation>();
   /** Each session's spec package path inside its working folder. */
   private packages = new Map<string, string>();
+  /** The session files the last rescan found shadowed by another spex
+   * repository's of the same id: the id is the home's, the first found
+   * kept (storage-12). */
+  private duplicates: ShadowedDraft[] = [];
 
   constructor(
     /** Every clone's `authoring/` directory, read on each rescan. */
@@ -314,18 +322,40 @@ export class DraftStore {
   refresh(): void {
     const next = new Map<string, AuthoringLocation>();
     const packages = new Map<string, string>();
+    const duplicates: ShadowedDraft[] = [];
     for (const location of this.repositories()) {
       if (!existsSync(location.authoringDir)) continue;
       for (const name of readdirSync(location.authoringDir)) {
         if (!name.endsWith(".json")) continue;
         const id = name.slice(0, -5);
-        if (!DRAFT_ID.test(id) || next.has(id)) continue;
+        if (!DRAFT_ID.test(id)) continue;
+        const kept = next.get(id);
+        if (kept) {
+          duplicates.push({ id, kept: kept.key, other: location.key, file: join(location.authoringDir, name) });
+          continue;
+        }
         next.set(id, location);
         packages.set(id, readPackagePath(join(location.authoringDir, name), id));
       }
     }
     this.locations = next;
     this.packages = packages;
+    this.duplicates = duplicates;
+  }
+
+  /** One nonblocking diagnostic per session file the last rescan found
+   * shadowed, phrased when asked so it follows the home's language
+   * (storage-12, DR-079). */
+  diagnostics(): StorageDiagnostic[] {
+    return this.duplicates.map(({ id, kept, other, file }) => ({
+      file,
+      reason: i18n._({
+        id: "{draftId} is authored in both {kept} and {other}; the one in {kept} opens",
+        values: { draftId: id, kept, other },
+        comment: "Diagnostic: two spex repositories each hold an authoring session of one id; the first found is the one that opens",
+      }),
+      blocking: false,
+    }));
   }
 
   private location(id: string): AuthoringLocation {
@@ -421,6 +451,16 @@ export class DraftStore {
         id: "{projectId} has no working folder on this device",
         comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
         values: { projectId: location.key },
+      }));
+    }
+    // The id is the home's: another project's session keeps it
+    // (playbook-library-70).
+    const holder = this.projectOf(id);
+    if (holder !== undefined && holder !== location.key && this.exists(id)) {
+      throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
+        id: "{draftId} is being authored in {projectId}",
+        comment: "Refusal: the id offered for a new playbook is another project's authoring session",
+        values: { draftId: id, projectId: holder },
       }));
     }
     const packagePath = draftPackagePath(id);

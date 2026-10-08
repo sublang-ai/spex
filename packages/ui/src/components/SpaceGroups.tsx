@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { GroupsState, HostMemberInfo, RepositoryState } from "@sublang/spex-core/protocol";
 
+import type { SpexCommandError } from "../lib/client.js";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
@@ -35,6 +36,8 @@ import { InlineConfirm } from "./InlineConfirm.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
+/** What a pick asks of the core (space-58). */
+type PickChoice = { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string };
 
 /** A repository's dot carries the status palette (DR-010 §8): neutral
  * idle, emerald running, amber choices and unrelated, red stopped. */
@@ -770,7 +773,8 @@ function FolderEditor({
 /** Where a local-only project's records go on the host (space-58): in
  * one picker, the spex repositories the host lists for the same code —
  * each with its group and members' count — and, below them, every
- * group, the new repository's name in an editable field. */
+ * group, the new repository's name in an editable field. A pick the
+ * core holds for the sharing notice says it in place (space-57). */
 export function GroupPicker({
   groups,
   repo,
@@ -807,22 +811,31 @@ export function GroupPicker({
   const [name, setName] = useState(defaultName);
   const [busy, setBusy] = useState<string>();
   const [refusal, setRefusal] = useState<string>();
+  // A pick the core holds for the sharing notice (space-57): the option
+  // it came from, its choice, and whether the repository is public.
+  const [notice, setNotice] = useState<{ option: string; choice: PickChoice; isPublic: boolean }>();
+  const rootRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
 
-  const pick = async (
-    id: string,
-    choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
-  ) => {
-    setBusy(id);
+  /** Pick through the option whose test id is `option`. */
+  const pick = async (option: string, choice: PickChoice, noticed = false) => {
+    setBusy(option);
     setRefusal(undefined);
     try {
-      await spacePick(repo.key, choice);
+      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
       onClose();
     } catch (cause) {
+      // The refusal's facts, never its words, say the notice is owed
+      // (core-service-111); it is said here, in the picker.
+      const details = (cause as SpexCommandError).details;
+      if (!noticed && details?.notice === true) {
+        setNotice({ option, choice, isPublic: details.visibility === "public" });
+        return;
+      }
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
@@ -840,12 +853,23 @@ export function GroupPicker({
       nameRef.current?.focus();
       return;
     }
-    void pick(`group:${group.fullPath}`, { kind: "create", groupId: group.id, name: chosen });
+    void pick(`space-pick-group-${group.fullPath}`, { kind: "create", groupId: group.id, name: chosen });
+  };
+
+  /** Cancel on the notice starts nothing and hands focus back to the
+   * option it came from (DR-010 §6). */
+  const cancelNotice = () => {
+    const option = notice?.option;
+    setNotice(undefined);
+    setTimeout(() => {
+      const buttons = rootRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
+      [...buttons].find((button) => button.dataset.testid === option)?.focus();
+    }, 0);
   };
 
   const option =
     "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
-  const disabled = !connected || busy !== undefined;
+  const disabled = !connected || busy !== undefined || notice !== undefined;
   let first = true;
   const takeFirst = () => {
     if (!first) return undefined;
@@ -855,6 +879,7 @@ export function GroupPicker({
 
   return (
     <div
+      ref={rootRef}
       role="group"
       aria-label={i18n._("Pick a group for {name}", { name: repo.name })}
       data-testid={`space-picker-${repo.key}`}
@@ -880,7 +905,7 @@ export function GroupPicker({
                   data-testid={`space-pick-repo-${other.key}`}
                   className={option}
                   disabled={disabled}
-                  onClick={() => void pick(other.key, { kind: "join", hostId: other.id! })}
+                  onClick={() => void pick(`space-pick-repo-${other.key}`, { kind: "join", hostId: other.id! })}
                 >
                   <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
                     {other.name}
@@ -911,7 +936,7 @@ export function GroupPicker({
             value={name}
             onChange={(event) => setName(event.target.value)}
             spellCheck={false}
-            disabled={busy !== undefined}
+            disabled={busy !== undefined || notice !== undefined}
             className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
           />
           <span className="shrink-0 font-mono text-neutral-500">-spex</span>
@@ -935,6 +960,30 @@ export function GroupPicker({
           ))}
         </ul>
       </section>
+      {notice ? (
+        // A creation's says nothing of public: the repository does not
+        // exist yet (space-57).
+        <div data-testid={`space-pick-notice-${repo.key}`}>
+          <InlineConfirm
+            question={
+              notice.isPublic
+                ? i18n._(
+                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
+                  )
+                : i18n._(
+                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
+                  )
+            }
+            confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
+            onConfirm={() => {
+              const { option, choice } = notice;
+              setNotice(undefined);
+              void pick(option, choice, true);
+            }}
+            onCancel={cancelNotice}
+          />
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}

@@ -17,7 +17,7 @@ import { Document, isMap, parseDocument } from "yaml";
 import { writeApplicationBytes } from "../app-storage.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME } from "./exports.js";
-import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
+import { artifactLanguages, idRecord, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
 import { serializeLock, type Lock } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
 import { parseRequests, requestsDigest } from "./requests.js";
@@ -163,7 +163,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
 
   function artifactsOf(release: BuiltinRelease): VersionIndexEntry["artifacts"] {
     const languages = artifactLanguages(release.manifest, release.files);
-    const out: VersionIndexEntry["artifacts"] = {};
+    const out: VersionIndexEntry["artifacts"] = idRecord();
     for (const [id, artifact] of Object.entries(release.manifest.artifacts)) {
       out[id] = { kind: artifact.kind, ...(artifact.language ? { language: artifact.language } : {}), languages: languages[id] ?? [] };
     }
@@ -197,7 +197,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
     },
     async version(name: string, version: string): Promise<VersionResource> {
       const release = await releaseOf(name, version);
-      const artifacts: VersionResource["artifacts"] = {};
+      const artifacts: VersionResource["artifacts"] = idRecord();
       const indexArtifacts = artifactsOf(release);
       for (const [id, artifact] of Object.entries(release.manifest.artifacts)) {
         artifacts[id] = { ...indexArtifacts[id]!, ...(artifact.from ? { from: artifact.from } : {}), requires: [...artifact.requires] };
@@ -305,8 +305,8 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
   if (!manifest) throw new Error(issues.map((issue) => issue.message).join("; "));
   const files = listFilesSync(pkg.dir);
   const archive = packFiles(manifest.name, files.map((file) => ({ path: file.path, executable: file.executable, data: readFileSync(pkgPathOf(pkg.dir, file.path)) })));
-  const artifacts: Lock["packages"][string]["artifacts"] = {};
-  const exports: Record<string, string> = {};
+  const artifacts: Lock["packages"][string]["artifacts"] = idRecord();
+  const exports = idRecord<string>();
   const ids = Object.keys(manifest.artifacts).sort();
   for (const id of ids) {
     const artifact = manifest.artifacts[id]!;

@@ -16,13 +16,12 @@ import {
   StorageFormatError, writeApplicationBytes,
 } from "./files.js";
 import { i18n } from "./i18n.js";
-import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import { KEY_SEGMENT_PATTERN, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export const HOME_FILE = "home.yaml";
 export const WORKSPACE = "workspace";
 /** The public OAuth client id every Spex uses at the Git host (storage-2). */
 export const CLIENT_ID = "spex";
-const GROUP_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
 export interface HomeAccount { id: string; login: string; displayName: string | null }
 export interface HomeHost { url: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean }
@@ -53,9 +52,10 @@ export function defaultOwnName(env: NodeJS.ProcessEnv = process.env): string {
   return kebab(name) || "me";
 }
 
-/** Whether a name may stand as a group folder under `workspace/`. */
+/** Whether a name may stand as a group folder under `workspace/`: one
+ * key segment (storage-1, storage-2). */
 export function isGroupName(value: string): boolean {
-  return GROUP_NAME.test(value);
+  return KEY_SEGMENT_PATTERN.test(value);
 }
 
 /** A spex repository's name for a folder or group name: `<name>-spex`. */
@@ -80,7 +80,7 @@ export function parseHomeFile(value: unknown, file: string): HomeFile {
   need(isObject(value), file, invalidHome());
   knownFormat(value, file);
   closed(value, ["format", "device", "host", "own", "folders"], [], file);
-  need(isUuid(value.device) && typeof value.own === "string" && GROUP_NAME.test(value.own) && Array.isArray(value.folders), file, invalidHome());
+  need(isUuid(value.device) && typeof value.own === "string" && isGroupName(value.own) && Array.isArray(value.folders), file, invalidHome());
   closed(value.host, ["url", "clientId"], ["account", "signedOut"], file);
   need(isText(value.host.url) && value.host.clientId === CLIENT_ID &&
     (value.host.signedOut === undefined || typeof value.host.signedOut === "boolean"), file, invalidHome());
@@ -194,7 +194,7 @@ export class Home {
     this.data = { ...this.data, folders: this.data.folders.map((folder) => folder.repository === oldKey ? { ...folder, repository: newKey } : folder) };
     if (oldKey === this.own()) {
       const { group, name } = splitKey(newKey);
-      if (`${group}-spex` === name && GROUP_NAME.test(group)) this.data = { ...this.data, own: group };
+      if (`${group}-spex` === name && isGroupName(group)) this.data = { ...this.data, own: group };
     }
   }
 
@@ -202,14 +202,19 @@ export class Home {
    * naming a moved key names its new one, and your own group's folder
    * takes `own` where it was renamed. Validated before it is taken. */
   move(moves: { from: string; to: string }[], own?: string): void {
+    this.data = this.checkMove(moves, own);
+  }
+
+  /** The home file a move would leave, validated but not taken, so a
+   * move it refuses is refused before any clone leaves its folder. */
+  checkMove(moves: { from: string; to: string }[], own?: string): HomeFile {
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
     const next: HomeFile = {
       ...this.data,
       ...(own !== undefined ? { own } : {}),
       folders: this.data.folders.map((folder) => to.has(folder.repository) ? { ...folder, repository: to.get(folder.repository) as string } : folder),
     };
-    parseHomeFile(next, Home.file(this.root));
-    this.data = next;
+    return parseHomeFile(next, Home.file(this.root));
   }
 
   /** The account a sign-in read (storage-2): written, and the home no

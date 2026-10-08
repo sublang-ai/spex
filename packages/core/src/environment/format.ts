@@ -183,6 +183,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A record keyed by artifact ids or exported names, with no prototype:
+ * an id such as `constructor` or `__proto__` is an own key like any other. */
+export function idRecord<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
+}
+
 const MANIFEST_FIELDS = new Set(["format", "org", "name", "version", "description", "license", "repository", "dependencies", "artifacts"]);
 const ARTIFACT_FIELDS = new Set(["kind", "language", "from", "requires", "generated-by"]);
 
@@ -226,7 +232,7 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
       }
     }
   }
-  const artifacts: Record<string, Artifact> = {};
+  const artifacts = idRecord<Artifact>();
   if (!isPlainObject(raw.artifacts) || Object.keys(raw.artifacts).length === 0) {
     issues.push({ path: at, rule: "artifact", message: "artifacts must name at least one artifact" });
   } else {
@@ -296,7 +302,7 @@ export function parseManifestText(text: string): { manifest: Manifest | null; is
 
 /** The manifest as `meta.yaml` text, fields in the format's order. */
 export function serializeManifest(manifest: Manifest): string {
-  const artifacts: Record<string, unknown> = {};
+  const artifacts = idRecord<unknown>();
   for (const [id, artifact] of Object.entries(manifest.artifacts)) {
     artifacts[id] = {
       kind: artifact.kind,
@@ -365,15 +371,15 @@ export function inArtifact(path: string, kind: ArtifactKind, id: string, languag
 
 /** Each artifact's language folders, read from the files. */
 export function artifactLanguages(manifest: Manifest, files: readonly { path: string }[]): Record<string, string[]> {
-  const languages: Record<string, Set<string>> = {};
+  const languages = idRecord<Set<string>>();
   for (const file of files) {
     const place = placeOf(file.path, manifest.name);
     if (!place || place.root || place.language === undefined) continue;
-    const artifact = manifest.artifacts[place.id];
+    const artifact = Object.hasOwn(manifest.artifacts, place.id) ? manifest.artifacts[place.id] : undefined;
     if (!artifact || artifact.kind !== place.kind) continue;
     (languages[place.id] ??= new Set()).add(place.language);
   }
-  const out: Record<string, string[]> = {};
+  const out = idRecord<string[]>();
   for (const id of Object.keys(manifest.artifacts)) out[id] = [...(languages[id] ?? [])].sort();
   return out;
 }
@@ -436,7 +442,7 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
     if (seenFolders.has(place.folder)) continue;
     seenFolders.add(place.folder);
     if (shared.has(place.id)) continue;
-    const artifact = manifest.artifacts[place.id];
+    const artifact = Object.hasOwn(manifest.artifacts, place.id) ? manifest.artifacts[place.id] : undefined;
     if (!artifact) {
       issues.push({ path: place.folder, rule: "folder", message: `folder has no manifest entry ${place.id}` });
     } else if (artifact.kind !== place.kind) {
@@ -506,11 +512,11 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
         }
       }
     }
-    if (artifact.from !== undefined && (artifact.from === id || !manifest.artifacts[artifact.from])) {
+    if (artifact.from !== undefined && (artifact.from === id || !Object.hasOwn(manifest.artifacts, artifact.from))) {
       issues.push({ path: at, rule: "from", message: `artifact ${id} from ${artifact.from} names no other artifact of this release` });
     }
     for (const required of artifact.requires) {
-      if (required === id || !manifest.artifacts[required]) {
+      if (required === id || !Object.hasOwn(manifest.artifacts, required)) {
         issues.push({ path: at, rule: "requires", message: `artifact ${id} requires ${required}, which names no other artifact of this release` });
       }
     }

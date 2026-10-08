@@ -64,11 +64,18 @@ export interface PlaybookModule {
   builtin: boolean;
 }
 
+/** An enabled playbook whose exporting environment has not installed its
+ * module on this device (environments-9): a config error naming that
+ * spex repository, never replaced by another environment's copy. */
+export interface MissingPlaybookModule {
+  missing: { repository: string; module: string };
+}
+
 /** Where composition finds each enabled playbook's module: the
  * environments of the session's spex repositories, the project's before
  * your own group's (environments-9). A shared file names no path. */
 export interface PlaybookModules {
-  find(id: string): PlaybookModule | undefined;
+  find(id: string): PlaybookModule | MissingPlaybookModule | undefined;
   /** The spex repository whose environment lacks a playbook no
    * environment of the session exports, named in that config error. */
   repository: string;
@@ -1447,6 +1454,17 @@ export async function composeConfig(
           comment:
             "Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key",
           values: { id, repository: modules.repository },
+        }),
+      );
+    }
+    if ("missing" in located) {
+      throw new RegistryError(
+        "unavailable",
+        i18n._({
+          id: "playbooks.{id} is enabled, but the environment of {repository} has not installed its module on this device; install that environment in Playbooks",
+          comment:
+            "Config error: the environment exports the enabled playbook, but its files are not installed here; {repository} is the spex repository's key; \"Playbooks\" is the app's own surface",
+          values: { id, repository: located.missing.repository },
         }),
       );
     }

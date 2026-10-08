@@ -14,7 +14,7 @@ import { dirname, isAbsolute, posix } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
 import { writeApplicationBytes } from "../app-storage.js";
-import { isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
+import { idRecord, isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
 import { isRequirement } from "./semver.js";
 
 export interface Selection {
@@ -137,7 +137,7 @@ function toRequest(value: Record<string, unknown>): Request {
         ...(typeof entry.language === "string" ? { language: entry.language } : {}),
       })) }
       : {}),
-    ...(isPlainObject(value.alias) ? { alias: { ...(value.alias as Record<string, string>) } } : {}),
+    ...(isPlainObject(value.alias) ? { alias: Object.assign(idRecord<string>(), value.alias as Record<string, string>) } : {}),
   };
   if (value.version !== undefined) return { version: value.version as string, ...extras };
   if (value.git !== undefined) {
@@ -206,7 +206,7 @@ function requestValue(request: Request): Record<string, unknown> {
     if (request.path !== undefined) value.path = request.path;
   } else value.path = request.path;
   if (request.select !== undefined) value.select = request.select.map((entry) => ({ ...entry }));
-  if (request.alias !== undefined) value.alias = { ...request.alias };
+  if (request.alias !== undefined) value.alias = Object.assign(idRecord<string>(), request.alias);
   return value;
 }
 
@@ -227,7 +227,7 @@ function syncNode(doc: Document, path: (string | number)[], value: unknown): voi
   if (isPlainObject(value) && isMap(node)) {
     for (const item of [...node.items]) {
       const key = (item.key as { value?: unknown })?.value ?? item.key;
-      if (typeof key === "string" && !(key in value)) doc.deleteIn([...path, key]);
+      if (typeof key === "string" && !Object.hasOwn(value, key)) doc.deleteIn([...path, key]);
     }
     for (const [key, child] of Object.entries(value)) {
       if (!node.has(key)) doc.setIn([...path, key], doc.createNode(child));

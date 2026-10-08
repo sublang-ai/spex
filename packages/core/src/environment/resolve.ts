@@ -4,13 +4,14 @@
 // Resolution and selection (environments-5, environments-6, DR-104).
 // The graph holds the requested spec packages and everything they
 // require at any depth; a solution gives each one version so that every
-// requirement and `select` entry holds. A backtracking search assigns
-// the requested names first, then the rest, each in name order, trying
-// candidates newest first — so the first solution found is the highest
-// by the record's comparison. Registry versions are picked from the
-// version index alone; a version resource is read only for each version
-// picked. Within the solution, artifacts, languages, files and exports
-// are selected in the record's four steps.
+// requirement and `select` entry holds. A depth-first search assigns the
+// requested names first, in name order, then the first in name order of
+// those the assigned ones require and none assigns yet, trying each
+// one's candidates newest first; the first solution found stands.
+// Registry versions are picked from the version index alone; a version
+// resource is read only for each version picked. Within the solution,
+// artifacts, languages, files and exports are selected in the record's
+// four steps.
 
 import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
@@ -18,6 +19,7 @@ import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:pa
 import {
   ARTIFACT_KINDS,
   artifactLanguages,
+  idRecord,
   inArtifact,
   readRelease,
   ROOT_FILES,
@@ -54,8 +56,8 @@ export interface ResolveInput {
   git: GitSource;
   /** The credential for a Git repository, where one applies. */
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
-  /** The lock being replaced. A resolve takes the highest solution and
-   * reads nothing from it (DR-104). */
+  /** The lock being replaced. A resolve takes the search's first
+   * solution and reads nothing from it (DR-104). */
   previous?: Lock;
   /** A bound on candidate trials before the search gives up. */
   maxSteps?: number;
@@ -105,7 +107,7 @@ function describeSelection(selection: Selection): string {
 
 function selectionHolds(selection: readonly Selection[], artifacts: Candidate["artifacts"]): boolean {
   return selection.every((entry) => {
-    const artifact = artifacts[entry.artifact];
+    const artifact = Object.hasOwn(artifacts, entry.artifact) ? artifacts[entry.artifact] : undefined;
     return artifact !== undefined && (entry.language === undefined || artifact.languages.includes(entry.language));
   });
 }
@@ -144,7 +146,7 @@ async function loadFixed(name: string, request: Request, input: ResolveInput): P
 function candidateOfFixed(fixed: Fixed): Candidate {
   const { manifest, files } = fixed.release;
   const languages = artifactLanguages(manifest, files);
-  const artifacts: Candidate["artifacts"] = {};
+  const artifacts: Candidate["artifacts"] = idRecord();
   for (const [id, artifact] of Object.entries(manifest.artifacts)) artifacts[id] = { kind: artifact.kind, languages: languages[id] ?? [] };
   return { version: manifest.version, dependencies: { ...manifest.dependencies }, artifacts, fixed };
 }
@@ -296,7 +298,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     if (candidate.fixed) {
       const { release } = candidate.fixed;
       const languages = artifactLanguages(release.manifest, release.files);
-      const artifacts: Record<string, ArtifactInfo> = {};
+      const artifacts = idRecord<ArtifactInfo>();
       for (const [id, artifact] of Object.entries(release.manifest.artifacts)) {
         artifacts[id] = { kind: artifact.kind, ...(artifact.language !== undefined ? { language: artifact.language } : {}), languages: languages[id] ?? [], requires: artifact.requires };
       }
@@ -308,7 +310,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     }
     const resource = await registry.version(name, candidate.version);
     if (!resource.files) throw new RegistryError("not_found", name, `${name} ${candidate.version} lists no files: the registry withholds it`);
-    const artifacts: Record<string, ArtifactInfo> = {};
+    const artifacts = idRecord<ArtifactInfo>();
     for (const [id, artifact] of Object.entries(resource.artifacts)) {
       if (!(ARTIFACT_KINDS as readonly string[]).includes(artifact.kind)) continue;
       artifacts[id] = {
@@ -331,6 +333,9 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
   // Selection, in the record's four steps.
   const packages: Record<string, Resolution> = {};
   const exported = new Map<string, { by: string; kind: ArtifactKind; id: string }[]>();
+  // A playbook is its id wherever it is enabled or found; an alias names
+  // only its skill, so two playbooks of one id clash, alias or not.
+  const playbooks = new Map<string, string[]>();
   for (const entry of picked) {
     const request = requests.packages[entry.name];
     const required = (requiredBy.get(entry.name) ?? []).length > 0;
@@ -351,7 +356,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     }
     selected.sort();
     // 2. Languages.
-    const artifacts: Record<string, LockedArtifact> = {};
+    const artifacts = idRecord<LockedArtifact>();
     for (const id of selected) {
       const artifact = entry.artifacts[id]!;
       if (artifact.kind === "applet") { artifacts[id] = { language: null, fallback: false }; continue; }
@@ -373,26 +378,29 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       : [];
     // 4. Exports: one skill per selected skill and playbook.
-    const exports: Record<string, string> = {};
+    const exports = idRecord<string>();
     for (const id of selected) {
       const kind = entry.artifacts[id]!.kind;
       if (kind !== "skill" && kind !== "playbook") continue;
-      const name = request?.alias?.[id] ?? id;
+      const alias = request?.alias;
+      const name = alias && Object.hasOwn(alias, id) ? alias[id]! : id;
       exports[name] = id;
       const list = exported.get(name) ?? [];
       list.push({ by: entry.name, kind, id });
       exported.set(name, list);
+      if (kind === "playbook") playbooks.set(id, [...(playbooks.get(id) ?? []), entry.name]);
     }
     packages[entry.name] = { source: entry.source, requiredBy: [...(requiredBy.get(entry.name) ?? [])].sort(), artifacts, files, exports };
   }
 
-  const clashes: Conflict[] = [];
-  for (const name of [...exported.keys()].sort()) {
-    const list = exported.get(name)!;
-    if (list.length < 2) continue;
-    clashes.push({ name, requirements: list.map((item) => ({ by: item.by, requirement: `${item.kind} ${item.id}` })) });
-  }
-  if (clashes.length > 0) return { ok: false, conflicts: clashes };
+  // One clash once, though a playbook id and its exported name both clash.
+  const clashes = new Map<string, Conflict>();
+  const clash = (name: string, requirements: ConflictRequirement[]): void => {
+    clashes.set(JSON.stringify([name, requirements]), { name, requirements });
+  };
+  for (const [id, by] of playbooks) if (by.length > 1) clash(id, by.map((name) => ({ by: name, requirement: `playbook ${id}` })));
+  for (const [name, list] of exported) if (list.length > 1) clash(name, list.map((item) => ({ by: item.by, requirement: `${item.kind} ${item.id}` })));
+  if (clashes.size > 0) return { ok: false, conflicts: [...clashes.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) };
 
   const digest = requestsDigest(input.requestsText ?? JSON.stringify(requests));
   return { ok: true, lock: { format: 1, requests: digest, packages } };

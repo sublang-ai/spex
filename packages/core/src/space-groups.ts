@@ -19,6 +19,7 @@ import {
   type HostRepository,
   type SignInCause,
 } from "./git-host.js";
+import { isGroupName, kebab } from "./home.js";
 import { i18n } from "./i18n.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 import { hostRefused, noLongerShared, signInAgain } from "./space-git.js";
@@ -131,8 +132,7 @@ export function userGroup(view: HostView | undefined): HostGroup | undefined {
  * spells it where that is a key segment (storage-2, space-59), else the
  * login kebab-cased. */
 export function ownNameFor(login: string): string {
-  if (/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(login) && !login.endsWith("-spex")) return login;
-  return login.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "me";
+  return isGroupName(login) ? login : kebab(login) || "me";
 }
 
 // ---------------------------------------------------------------------------
