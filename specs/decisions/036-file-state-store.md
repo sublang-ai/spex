@@ -11,6 +11,7 @@ Amends [DR-004](004-config-and-persistence.md) (the app-local SQLite store retir
 Amended by [DR-045](045-unified-session-storage.md): storage ownership, default locations, local files and Git synchronization.
 Amended by [DR-103](103-the-home-and-its-groups.md): the records move into spex repositories, one per project and one per group, cloned under `workspace/`; file state, the lease and the shared session store stand.
 Amended by [DR-104](104-spec-package-format-and-client-environments.md): the compiled playbook library gives way to installed spec packages.
+Extended by [DR-108](108-the-root-lease-names-the-machine.md): the root lease's owner names its machine by Playbook's machine identity, and its retirement keeps a permanent record; one core per state root stands.
 
 ## Context
 

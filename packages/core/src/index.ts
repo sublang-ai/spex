@@ -7,6 +7,7 @@ export * from "./protocol.js";
 export * from "./config.js";
 export { Store, type SpexRepository } from "./store.js";
 export { Home, defaultOwnName, hostUrlFor, type HomeFile } from "./home.js";
+export { StateRootHeldError, StateRootLeaseError, acquireRootLease, type RootLease } from "./root-lease.js";
 export {
   SessionManager,
   CoreError,

@@ -28,6 +28,8 @@ import { seedHistorySession } from "./testing/demo.js";
 import { scratchDir } from "./testing/scratch.js";
 import type { Command, CommandResults, MediaAsset, ServerMessage } from "./protocol.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const line = (act: object): string => `${JSON.stringify({ v: 1, ...act })}\n`;
 
@@ -183,13 +185,13 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   // nothing it found is overwritten, and the retry finishes the work.
   mkdirSync(join(home, "local"), { recursive: true });
   writeFileSync(join(home, "local", "prefs.json"), '{"format":1,"prefs":{"stray":true}}');
-  await assert.rejects(Store.open({ dir: home }), /destination diverged/);
+  await assert.rejects(Store.open({ machineIdentity, dir: home }), /destination diverged/);
   assert.equal(readFileSync(join(home, "local", "prefs.json"), "utf8"), '{"format":1,"prefs":{"stray":true}}');
   const receipts = readdirSync(join(home, "local", "migrations"));
   assert.equal(receipts.length, 1);
   assert.equal(JSON.parse(readFileSync(join(home, "local", "migrations", receipts[0], "receipt.json"), "utf8")).complete, false);
   rmSync(join(home, "local", "prefs.json"));
-  const store = await Store.open({ dir: home });
+  const store = await Store.open({ machineIdentity, dir: home });
   store.close();
 
   // 1 — the receipt kept every rewritten input's bytes and records the steps.
@@ -265,7 +267,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   assert.notEqual(spawnSync("git", ["-C", home, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim(), home);
 
   // A restart migrates nothing again.
-  (await Store.open({ dir: home })).close();
+  (await Store.open({ machineIdentity, dir: home })).close();
   assert.equal(readdirSync(join(home, "local", "migrations")).length, 1);
 
   // Opened through the core (the desktop and server shells' path)...
@@ -325,7 +327,7 @@ test("storage-9: an unknown registry version is preserved and refuses the migrat
   const home = scratchDir("spex-groups-unknown-");
   const original = '{"v":55,"projects":[]}';
   writeFileSync(join(home, "projects.json"), original);
-  await assert.rejects(Store.open({ dir: home }), /unsupported registry version/);
+  await assert.rejects(Store.open({ machineIdentity, dir: home }), /unsupported registry version/);
   assert.equal(readFileSync(join(home, "projects.json"), "utf8"), original);
   assert.ok(!existsSync(join(home, "home.yaml")));
   rmSync(home, { recursive: true, force: true });
@@ -334,7 +336,7 @@ test("storage-9: an unknown registry version is preserved and refuses the migrat
 test("storage-9: a home holding the former layout refuses a synchronous open", () => {
   const home = scratchDir("spex-groups-sync-");
   writeFileSync(join(home, "prefs.json"), JSON.stringify({ v: 1, prefs: {} }));
-  assert.throws(() => new Store({ dir: home }), /Store\.open/);
+  assert.throws(() => new Store({ machineIdentity, dir: home }), /Store\.open/);
   assert.ok(!existsSync(join(home, ".lease")), "the refused open leaves no lease");
   rmSync(home, { recursive: true, force: true });
   void tmpdir;

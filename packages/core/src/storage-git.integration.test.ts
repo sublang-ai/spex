@@ -9,7 +9,7 @@
 import { createAssetStore } from "@sublang/playbook/session-assets";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +22,20 @@ import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge, validateStorageTree } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { scratchDir } from "./testing/scratch.js";
+
+/** One fixed machine identity for the in-process writers and the
+ * command alike (storage-26): the command reads it from its own state
+ * directory, never the developer's. */
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+const stateHome = scratchDir("spex-xdg-");
+mkdirSync(join(stateHome, "playbook"), { mode: 0o700 });
+writeFileSync(join(stateHome, "playbook", "machine-id"), `${machineIdentity}\n`, { mode: 0o600 });
+/** A process of this machine that has exited: a dead owner's pid. */
+const deadPid = (): number => spawnSync(process.execPath, ["-e", ""]).pid as number;
+const selectStorageMerge = (home: string, key: string, choices: Record<string, StorageChoice> = {}, options: { join?: boolean } = {}) =>
+  selectStorageMergeWith(home, key, choices, { ...options, machineIdentity });
 
 /** The test's own Git: no user or system configuration, a fixed identity. */
 const gitEnv: NodeJS.ProcessEnv = {
@@ -31,6 +44,7 @@ const gitEnv: NodeJS.ProcessEnv = {
   GIT_AUTHOR_NAME: "Storage Test", GIT_AUTHOR_EMAIL: "storage@example.test",
   GIT_COMMITTER_NAME: "Storage Test", GIT_COMMITTER_EMAIL: "storage@example.test",
   LC_ALL: "C",
+  XDG_STATE_HOME: stateHome,
 };
 const git = (dir: string, ...args: string[]): string => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: gitEnv, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const script = resolve(dirname(fileURLToPath(import.meta.url)), "../../../scripts/storage-git.mjs");
@@ -87,7 +101,7 @@ function setup(options: { second?: boolean } = {}) {
   const home = join(root, "home");
   const folder = join(root, "project");
   mkdirSync(folder); git(folder, "init", "-q");
-  const store = new Store({ dir: home, own: "tester", env: gitEnv });
+  const store = new Store({ machineIdentity, dir: home, own: "tester", env: gitEnv });
   let project: ProjectInfo; let other: ProjectInfo | undefined;
   try {
     project = store.registerProject(folder, "Project");
@@ -190,9 +204,11 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     // Leases block competing writes (storage-14): the home lease refuses
     // every mutating command; a session lease in this clone refuses
     // selection, while one in another spex repository's own store does not.
-    const releaseHome = reserveStorageHome(home);
+    const releaseHome = reserveStorageHome(home, machineIdentity);
     try {
-      cliFails(home, key, ["select", ...complete], /stop the Spex core/);
+      // The command reads this machine's identity, so the holder is a
+      // live owner of this machine, named by its pid (storage-26).
+      cliFails(home, key, ["select", ...complete], new RegExp(`stop the Spex core before changing stored data; .*pid ${process.pid} on this machine`));
       cliFails(home, key, ["validate"], /stop the Spex core/);
       cliFails(home, key, ["rebind", key, folder], /held|one core/);
     } finally { releaseHome(); }
@@ -231,9 +247,16 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     }
     git(clone, "commit", "-q", "-m", "merge the other branch");
 
-    // validate: reserves the home and changes nothing (storage-22).
+    // validate: reserves the home and changes nothing (storage-22). A
+    // dead owner of this machine is reclaimed by the command, its record
+    // kept under `.lease.retired/<token>/` (storage-10).
     const settled = snapshot(clone); const settledIndex = git(clone, "ls-files", "-s");
+    const deadToken = randomUUID();
+    mkdirSync(join(home, ".lease"), { mode: 0o700 });
+    writeFileSync(join(home, ".lease", "owner.json"), JSON.stringify({ pid: deadPid(), hostname: machineIdentity, acquiredAt: Date.now(), token: deadToken }), { mode: 0o600 });
     assert.deepEqual(cli(home, key, "validate"), []);
+    assert.equal(existsSync(join(home, ".lease")), false);
+    assert.equal(JSON.parse(readFileSync(join(home, ".lease.retired", deadToken, "owner.json"), "utf8")).token, deadToken);
     assert.deepEqual(snapshot(clone), settled); assert.equal(git(clone, "ls-files", "-s"), settledIndex);
     // A dispatch naming a turn its session never ran, and a damaged
     // bundle, are refused by name (storage-12).
@@ -312,7 +335,7 @@ test("storage-16: delete versus modify needs explicit bundle choice; active core
     git(clone, "branch", "other");
     rmSync(join(clone, "sessions", `${sessionId}.json`)); rmSync(join(clone, "sessions", `${sessionId}.records.jsonl`)); commit("delete");
     git(clone, "checkout", "-q", "other"); bundle("changed"); commit("modify"); git(clone, "checkout", "-q", "spex"); merge(clone);
-    const release = reserveStorageHome(home); await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/); release();
+    const release = reserveStorageHome(home, machineIdentity); await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/); release();
     const shared = createSessionStore({ sessionsDir: join(clone, "sessions") }); await shared.prepare(); const lease = await shared.acquireManagement(sessionId);
     await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "ours" }), /held|owner|active|lease/i); await lease.release();
     await selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "ours" });
@@ -394,7 +417,7 @@ test("storage-16: the apply seam plans over a caller-supplied ancestor and write
     git(clone, "checkout", "-q", "spex");
     assert.notEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
     const plan = planStorageMerge(clone, ours, theirs);
-    const release = reserveStorageHome(home);
+    const release = reserveStorageHome(home, machineIdentity);
     try {
       await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/);
       let marked = false;
@@ -495,7 +518,7 @@ test("storage-16: Git validation refuses a dispatch outside its session's turns,
     const before = readFileSync(intentPath);
     if (valid) assert.deepEqual(await validateStorageTree(clone), []);
     else await assert.rejects(() => validateStorageTree(clone), /invalid dispatch/);
-    const store = new Store({ dir: home, env: gitEnv });
+    const store = new Store({ machineIdentity, dir: home, env: gitEnv });
     try {
       await store.initializeSessions();
       // An invalid intent file blocks that intent alone, never its project (storage-12).
@@ -514,7 +537,7 @@ test("storage-22: the rebind command pairs a clone no folder pairs, and every se
   const { root, home, key, clone, folder, sessionId, dispose } = setup();
   try {
     const unpaired = Home.load(home); unpaired.unpair(key); unpaired.save();
-    let store = new Store({ dir: home, env: gitEnv });
+    let store = new Store({ machineIdentity, dir: home, env: gitEnv });
     try {
       await store.initializeSessions();
       assert.equal(store.listSessions().length, 0, "a clone no folder pairs lists nothing");
@@ -526,13 +549,13 @@ test("storage-22: the rebind command pairs a clone no folder pairs, and every se
     const checkout = join(root, "checkout"); mkdirSync(checkout); git(checkout, "init", "-q");
     const output = cli(home, key, "rebind", key, checkout, "--alias", folder);
     assert.equal(output.project.id, key); assert.equal(output.project.path, checkout); assert.deepEqual(output.diagnostics, []);
-    store = new Store({ dir: home, env: gitEnv });
+    store = new Store({ machineIdentity, dir: home, env: gitEnv });
     try { await store.initializeSessions(); assert.equal(store.listSessions()[0]?.id, sessionId); assert.equal(store.listSessions()[0]?.projectId, key); }
     finally { store.close(); }
     const before = readFileSync(join(home, "home.yaml")); const child = join(checkout, "child"); mkdirSync(child);
     cliFails(home, key, ["rebind", key, child], /not the root/);
     assert.deepEqual(readFileSync(join(home, "home.yaml")), before);
-    const release = reserveStorageHome(home);
+    const release = reserveStorageHome(home, machineIdentity);
     try { cliFails(home, key, ["rebind", key, checkout], /held|one core/); }
     finally { release(); }
     assert.ok(existsSync(clone));
@@ -546,7 +569,7 @@ test("storage-17: a clone's Git rules ignore a session Playbook has yet to accep
   writeFileSync(file, authored + readFileSync(file, "utf8"));
   const manifestFile = join(clone, "sessions", `${sessionId}.json`); const valid = readFileSync(manifestFile);
   const future = { ...JSON.parse(valid.toString()), schemaVersion: 99 }; writeFileSync(manifestFile, JSON.stringify(future));
-  const store = new Store({ dir: home, env: gitEnv });
+  const store = new Store({ machineIdentity, dir: home, env: gitEnv });
   try {
     await store.initializeSessions(); prepareStorageGitFiles(clone, store.untrackedSessionPaths(key));
     assert.deepEqual(store.untrackedSessionPaths(key).sort(), [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`]);

@@ -19,6 +19,7 @@ Amends:
 
 Amended by [DR-103](103-the-home-and-its-groups.md): `projects.json`, `intents/<projectId>.jsonl`, `prefs.json` and `local/project-paths.json` give way to that record's layout; Git synchronization runs per spex repository, on its `spex` branch, from the app and the command line alike; queue-order and link validation go with ranks and links; every other rule stands.
 Amended by [DR-104](104-spec-package-format-and-client-environments.md): the playbook library folder gives way to installed spec packages.
+Extended by [DR-108](108-the-root-lease-names-the-machine.md): the storage Git tool takes the root lease by the core's rule and recovers a dead owner of this machine.
 
 ## Context
 
