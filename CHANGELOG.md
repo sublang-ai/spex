@@ -16,6 +16,23 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- The root lease names the machine ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md)).
+  The core and the storage Git tool record Playbook's machine identity
+  in the home's `.lease/owner.json` instead of the host name the network
+  renames, so a renamed Mac still reclaims its own dead lease; an owner
+  from another machine is still never broken, and a legacy record left
+  by an older writer is reclaimed only under the old same-host rule.
+  The app requires Playbook 17.6.0, the first release publishing that
+  identity. Every retirement — a dead owner's or a normal release — moves
+  the lease to `.lease.retired/<token>/` and keeps it, so a delayed
+  reclaimer can no longer delete a successor's lease; only `ESRCH`
+  proves an owner dead; a mutating storage command reclaims a dead local
+  owner instead of refusing every existing lease; and `Ctrl+C` in
+  `npm start` stops the core and releases the home. **Upgrade
+  together:** stop every Playbook CLI and Spex shell sharing the home
+  before the first new writer runs, after the home snapshot; an older
+  binary reads the new lease as a foreign host's and refuses it.
+
 - Share a project's records through a Git host ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Space becomes **Groups**: sign in to the host — spex.pub, or the one
   `SPEX_HOST_URL` names when a home is created — through your browser,
@@ -229,7 +246,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   asking again while it holds records the host has not received, and never
   touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app requires Playbook 17.5.0, slc 0.15.1 and Cligent 0.33.3 ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.6.0, slc 0.15.1 and Cligent 0.33.3 ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
@@ -255,7 +272,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   carries a subagent effort. Stop older writers and update every host to
   compatible Playbook 17.4-based releases before saving attachment-bearing
   history; older writers do not preserve the new asset-bearing records.
-- Playbook 17.5.0 is the floor ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md)): the launcher takes each playbook's module at launch, so a `playbook` CLI sharing the home continues a session Spex created from a configuration naming no `from`, with no launcher config rewritten, and a fresh CLI launch on Spex's configuration names each module with `--module <id>=<specifier>`.
+- From Playbook 17.5.0 ([DR-105](specs/decisions/105-playbook-17-5-0-adoption.md)), the launcher takes each playbook's module at launch, so a `playbook` CLI sharing the home continues a session Spex created from a configuration naming no `from`, with no launcher config rewritten, and a fresh CLI launch on Spex's configuration names each module with `--module <id>=<specifier>`.
   A packaged `/code` or `/decide` run with `/review` disabled now stops at
   its start with an explanation instead of committing work its review
   cannot check, as the Library's hint beside those entries says. Session

@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
 import type { Server as HttpServer } from "node:http";
@@ -145,6 +146,9 @@ export interface CoreServiceOptions {
    * import (core-service-64); the file is left in place, marked
    * `<store>.imported` beside itself once a root has taken it. */
   legacyDbPath?: string;
+  /** This machine's identity for the root lease (core-service-61);
+   * resolved through Playbook's facade when unset. */
+  machineIdentity?: string;
   /** A legacy compiled-playbook library to relocate into the root,
    * with config `from` paths rewritten (core-service-64). */
   legacyLibraryDir?: string;
@@ -1015,6 +1019,22 @@ export class CoreService {
         }
       }
       : undefined;
+    // The root lease carries this machine's identity (core-service-61,
+    // storage-26), read once through Playbook's facade before the store
+    // takes the lease; an unusable identity file refuses the start
+    // naming it, before the lease is inspected.
+    let machineIdentity = options.machineIdentity;
+    if (machineIdentity === undefined && dataDir) {
+      try {
+        machineIdentity = await resolveMachineIdentity({ env, homeDir: options.home ?? env.HOME ?? homedir() });
+      } catch (error) {
+        throw new Error(i18n._({
+          id: "Spex cannot identify this machine: {reason}",
+          comment: "Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file",
+          values: { reason: error instanceof Error ? error.message : String(error) },
+        }));
+      }
+    }
     // The home opens under its lease, migrating the former layout once
     // before any writer is admitted (storage-9, core-service-15). Every
     // clone the store makes requests the built-in spec package before
@@ -1022,6 +1042,7 @@ export class CoreService {
     const builtin = CoreService.shippedBuiltin(options);
     const store = await Store.open({
       ...(options.dataDir ? { dir: options.dataDir } : {}),
+      ...(machineIdentity !== undefined ? { machineIdentity } : {}),
       ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
       ...(options.own ? { own: options.own } : {}),
       env,

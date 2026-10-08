@@ -718,6 +718,11 @@ msgstr "已有未结意图占用此来源：“{title}”"
 msgid "Another process is writing to the home; wait for it to finish, then Retry."
 msgstr "另一个进程正在写入空间；请等待它完成，然后重试。"
 
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "another writer published while this one was retrying"
+msgstr "本写入者重试期间，另一写入者已发布"
+
 #. A spex repository's read-only reason where the host gave no words for its archive
 #: src/space.ts
 msgid "Archived"
@@ -1283,6 +1288,11 @@ msgstr "条目 ID 前缀“{prefix}”与文件名“{basename}”不一致"
 #: src/specs.ts
 msgid "items under unexpected section \"{section}\""
 msgstr "规约条目位于非预期的章节“{section}”下"
+
+#. Why a state-root lock cannot be verified; the path stays as it is
+#: src/root-lease.ts
+msgid "its retired path {retired} is already occupied"
+msgstr "其退役路径 {retired} 已被占用"
 
 #. Spec notice; the two directory paths and the `spex scaffold --update` command stay as they are
 #: src/specs.ts
@@ -1914,6 +1924,11 @@ msgstr "规约条目"
 msgid "Spec packages changed"
 msgstr "规约包有更改"
 
+#. Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file
+#: src/service.ts
+msgid "Spex cannot identify this machine: {reason}"
+msgstr "Spex 无法识别本机：{reason}"
+
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
 msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
@@ -1964,20 +1979,26 @@ msgstr "Spex: 编译在“{where}”阶段失败 — 正在请智能体修正源
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: 编译成功 — 正在请求注册方案"
 
+#. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-108)"
+msgstr "状态根目录 {dir} 在 {lock} 处被另一台机器（身份 {identity}）占用；请先停止该写入者，再移除锁（DR-108）"
+
+#. Startup refusal the shell shows in a dialog; the paths, the process id, the host name and the decision's id stay as they are
+#. Startup refusal the shell shows in a dialog; the paths, the process id, the host name and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} is held by pid {pid} on {host} at {lock}; one core serves a root at a time (DR-036)"
+msgstr "状态根目录 {dir} 在 {lock} 处已被 {host} 上的进程 {pid} 占用；同一时间只有一个核心可服务一个根目录（DR-036）"
+
+#. Startup refusal the shell shows in a dialog; the paths, the process id and the decision's id stay as they are
+#: src/root-lease.ts
+msgid "state root {dir} is held by pid {pid} on this machine at {lock}; one core serves a root at a time (DR-036)"
+msgstr "状态根目录 {dir} 在 {lock} 处已被本机进程 {pid} 占用；同一时间只有一个核心可服务一个根目录（DR-036）"
+
 #. Startup refusal the shell shows in a dialog; the paths and the decision's id stay as they are
-#: src/store.ts
-msgid "state root {dir} holds an unreadable lock at {lock}; delete it if no other Spex core is running (DR-036)"
-msgstr "状态根目录 {dir} 在 {lock} 处有一个无法读取的锁；若没有其他 Spex 核心在运行，请删除它（DR-036）"
-
-#. Startup refusal the shell shows in a dialog; the path, the process id, the host name and the decision's id stay as they are
-#: src/store.ts
-msgid "state root {dir} is held by pid {pid} on {host}; one core serves a root at a time (DR-036)"
-msgstr "状态根目录 {dir} 已被 {host} 上的进程 {pid} 占用；同一时间只有一个核心可服务一个根目录（DR-036）"
-
-#. Startup refusal the shell shows in a dialog
-#: src/store.ts
-msgid "state root {dir} lease could not be acquired"
-msgstr "无法获取状态根目录 {dir} 的租约"
+#: src/root-lease.ts
+msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
+msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请先停止所有 Spex 写入者，再移除它（DR-108）"
 
 #. Guidance where the remote rejected the push
 #: src/space-git.ts
@@ -2014,6 +2035,11 @@ msgstr "{adapter} 运行时加载失败 — 请重新安装应用，或在源码
 #: src/config.ts
 msgid "the {adapter} SDK publishes no executable for {platform}-{arch}"
 msgstr "{adapter} SDK 未发布适用于 {platform}-{arch} 的可执行文件"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the active lock is empty"
+msgstr "活动锁为空目录"
 
 #. A failed authoring turn that carried no message; {status} is the runtime's own status word and stays as it is
 #: src/authoring.ts
@@ -2117,6 +2143,16 @@ msgstr "该意图已结束"
 msgid "the intent is already dispatched"
 msgstr "该意图已派发"
 
+#. Why a state-root lock cannot be verified; the error code stays as it is
+#: src/root-lease.ts
+msgid "the lock cannot be inspected ({code})"
+msgstr "无法检查该锁（{code}）"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the moved owner's token changed"
+msgstr "移走的所有者令牌已改变"
+
 #. The Git host reports the name of a new spex repository taken
 #: src/space-groups.ts
 msgid "The name is taken"
@@ -2131,6 +2167,21 @@ msgstr "名称中须含有字母或数字"
 #: src/approvals.ts
 msgid "The native tool approval is invalid or expired."
 msgstr "原生工具审批请求无效或已过期。"
+
+#. Why a state-root lock cannot be verified; the error code stays as it is
+#: src/root-lease.ts
+msgid "the owner process cannot be probed ({code})"
+msgstr "无法探测所有者进程（{code}）"
+
+#. Why a state-root lock cannot be verified
+#: src/root-lease.ts
+msgid "the owner record is malformed"
+msgstr "所有者记录格式错误"
+
+#. Why a state-root lock cannot be verified; the value stays as it is
+#: src/root-lease.ts
+msgid "the owner's machine identity {value} is unverifiable"
+msgstr "所有者的机器身份 {value} 无法核实"
 
 #. Refusal: the explorer was given a path leading outside the home
 #: src/space.ts

@@ -207,6 +207,7 @@ What no automation sees (release-21).
 | --- | --- |
 | A settled turn's notification and badge: `SPEX_SMOKE_MANUAL=1 npm run smoke:desktop` | The native notification follows the scratch preferences; the dock badge matches the Dashboard's attention, and a cleanly settled standalone session leaves both at zero. A failure blocks the tag. |
 | The packaged app, a local option and not a gate — app releases ship no binaries ([DR-040](../specs/decisions/040-source-only-app-releases.md)): `npm run package -w apps/desktop` | The zip in `apps/desktop/release/` carries the sunset-rabbit icon; the packaged app boots to the Captain home and seeds the Academy example. |
+| `Ctrl+C` in the terminal running `npm start` against a scratch home (`SPEX_HOME=$(mktemp -d) npm start`) | The app quits without a confirmation, the command returns 130 after the Node restore, and the scratch home holds no `.lease/`, only `.lease.retired/<token>/` ([DR-108](../specs/decisions/108-the-root-lease-names-the-machine.md)). A failure blocks the tag. |
 
 ## 5. Beta app releases
 

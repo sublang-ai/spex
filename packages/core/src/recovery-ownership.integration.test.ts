@@ -17,6 +17,8 @@ import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
 import { builtinLaunchModules } from "./testing/launch-modules.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 const CONFIG = `captain:
   adapter: claude
   model: claude-test
@@ -41,7 +43,7 @@ async function interrupted(t: TestContext) {
   const projectPath = join(dir, "project"); mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   const configPath = join(dir, "config.yaml"); writeFileSync(configPath, CONFIG);
-  const store = new Store({ dir: join(dir, "state"), own: "tester" });
+  const store = new Store({ machineIdentity, dir: join(dir, "state"), own: "tester" });
   const project = store.registerProject(projectPath, "recovery ownership fixture", 1);
   // The CLI writes into the session store of the project's spex
   // repository, which makes the session the project's (storage-6).

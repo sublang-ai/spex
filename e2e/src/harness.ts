@@ -709,7 +709,7 @@ async function arrangeApp(
     writeFileSync(configPath, DEMO_CONFIG);
   }
   if (options.project && options.history) {
-    await seedDemoHistory(dataDir, projectDir, options.history, E2E_OWN);
+    await seedDemoHistory(dataDir, projectDir, options.history, E2E_OWN, { env: { HOME: home }, homeDir: home });
   }
   const token = `e2e-${Math.random().toString(36).slice(2, 10)}`;
   // Both hosts use this explicit isolated Spex home.

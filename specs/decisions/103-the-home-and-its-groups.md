@@ -21,6 +21,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-080](080-the-config-directory-is-named-config.md): `config/playbook.config.yaml` keeps its name and moves into your own group's spex repository, synced with it.
 
 Amended by [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md) in when Spex reads the host: also once when it starts signed in.
+Extended by [DR-108](108-the-root-lease-names-the-machine.md): beside `.lease/`, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`, its owner naming the machine by Playbook's machine identity; a `.lock/` of the former layout is read by the same rule before the migration.
 
 ## Context
 

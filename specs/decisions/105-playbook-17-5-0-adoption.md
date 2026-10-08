@@ -9,6 +9,7 @@ Accepted (2026-10-06).
 Amends [DR-102](102-playbook-17-4-1-adoption.md) in its Playbook floor alone, now `^17.5.0`; Cligent `^0.33.3`, slc `^0.15.1` and everything else DR-102 decided stand.
 Completes [DR-104](104-spec-package-format-and-client-environments.md) in its ask that the launcher take each playbook's module location from Spex at launch instead of from the launcher config; nothing DR-104 decided changes.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
+Amended by [DR-108](108-the-root-lease-names-the-machine.md) in its Playbook floor alone, now `^17.6.0`: the core requires Playbook 17.6.0, the first release publishing `@sublang/playbook/machine-identity`.
 
 ## Context
 

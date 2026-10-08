@@ -63,6 +63,8 @@ import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js
 import { scratchDir } from "./testing/scratch.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 let registry: StandinRegistry;
 let client: RegistryClient;
 
@@ -1008,7 +1010,7 @@ test("environments-22: a playbook the project's environment exports but has not 
   const { git } = hermeticGit(scratch);
   const workingFolder = join(scratch, "project");
   git(scratch, ["init", "--quiet", "-b", "main", workingFolder]);
-  const store = new Store({ dir: join(scratch, "state"), own: "me" });
+  const store = new Store({ machineIdentity, dir: join(scratch, "state"), own: "me" });
   try {
     const projectKey = store.registerProject(workingFolder, "project").id;
     const ownKey = store.home.own();

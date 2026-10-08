@@ -39,7 +39,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `local/credentials.yaml` | the Git host's app token [[storage-19](#storage-19)] | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
-| `.lease/` | held by the one process serving this home [[storage-14](#storage-14)] | — |
+| `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
 
 - Only a clone is a Git work tree; the home itself is none, and nothing outside `workspace/` is ever committed.
 - `local/` never leaves the device, and its credentials file has owner-only permissions.
@@ -161,6 +161,7 @@ Where no home or session location is explicitly selected, when the ordinary defa
 The storage Git tool shall expose `plan`, `select`, `validate` and `rebind` through `node scripts/storage-git.mjs [--home path] --repository <key> <command>`, using `--home`, then nonempty `SPEX_HOME`, then `~/.spex` to select the home and `--repository` to select the clone:
 
 - commands report JSON results on stdout; invalid arguments and refused operations report their cause on stderr and exit nonzero;
+- a mutating command takes the root lease by the core's rule [[storage-26](#storage-26)] — recovering a verifiably dead owner of this machine, and refusing with `stop the Spex core before changing stored data` followed by the lease path and the reason while a live, foreign, or unverifiable owner holds it — and refuses before any change while this machine's identity is unavailable, naming the identity file and the reason;
 - Git transport and committing remain ordinary Git operations; local writers must stop for checkout, merge and mutating storage commands, and each session runs on at most one device at a time;
 - this tool is the stopped-core path; the desktop and server app perform the same plan, validation and application in-process under the running core's lease, one spex repository at a time ([DR-103](../decisions/103-the-home-and-its-groups.md)).
 
@@ -222,6 +223,22 @@ When continuing after Git selection, the host shall require Playbook's repositor
 
 The core shall remain the sole writer of Spex-owned files, using atomic same-directory replacement under the Spex home lease at `.lease/` [[core-service-61](core-service.md#core-service-61)], while session mutations use Playbook's per-session lease and shared store [[1]], one shared store per spex repository's `sessions/`.
 
+### storage-26
+
+When a home writer — the core or a mutating storage Git command — takes the root lease, it shall admit itself by one shared rule over `.lease/owner.json`, a record of `pid`, `hostname`, `acquiredAt` and `token` whose `hostname` carries this machine's identity from Playbook's facade [[2]] ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)):
+
+1. Inspect `.lease` without following links: a definite `ENOENT` permits publication; any other inspection error refuses.
+2. Read an existing owner: a symlink, a non-directory, an empty directory, contents other than one regular `owner.json` of the current user's, a record of another shape, a non-positive `pid`, a `token` that is not a UUID, or a `hostname` of the tagged form of step 3 in an `owner.json` with any group or other permission bit is malformed and refuses; an untagged record is read whatever its mode.
+3. Read the owner's `hostname`: exactly the tagged form `machine-id:v1:<lowercase UUID>` is an identity, local when it equals this machine's; an untagged value is a legacy host name, local when it equals the current `os.hostname()`; a value that begins `machine-id:` but fails the exact form is unverifiable and refuses; another machine's owner refuses.
+4. Probe a local owner's `pid` with signal `0`: success or `EPERM` is live and refuses; `ESRCH` is dead; any other error refuses, naming its code.
+5. Retire a dead owner: create the private `.lease.retired/`, or, where it already stands, validate it as a private non-symlink directory, any other creation error refusing with its code; refuse an existing `.lease.retired/<token>/` target, rename `.lease/` there, re-read the moved `owner.json` and require its `token`; a changed token refuses without deleting anything, and the retired directory with its `owner.json` is kept forever.
+6. Publish: write a private `.lease.stage.<token>/owner.json`, rename the stage to `.lease/` — a rename failing with `EEXIST` or `ENOTEMPTY`, a target that appeared meanwhile, makes the writer re-inspect, and any other staging or rename error refuses at once with its code — and re-read `.lease/owner.json` to confirm its own `token`.
+7. Release: re-read `.lease/owner.json`; only an owner carrying this writer's `token` is retired as in step 5, and a successor is never touched.
+
+- Every refusal names the lease path and the reason, calling a tagged value a machine identity and never a host name; a live owner's refusal names its `pid`.
+- A writer whose identity is unavailable refuses before inspecting the lease, naming the identity file and the reason, and never publishes `os.hostname()`.
+- The core, once published, reads a `.lock/owner.json` of the former layout [[storage-9](#storage-9)] by steps 3 and 4: an owner of another machine, an unverifiable one, a live one, or one whose probe answers neither way refuses and retires this writer's lease; a dead owner of this machine, or a record naming no `pid` and `hostname`, is left for the migration.
+
 ## Verification
 
 ### storage-15
@@ -270,6 +287,23 @@ When an integration suite starts the core on a home whose two spex repositories 
 - once the opened session's file is removed, the next rescan opening the third's, whose next turn's records follow its own last sequence while the removed one's transcript stays unchanged [[storage-12](#storage-12)] [[storage-23](#storage-23)];
 - deleting that session over the protocol leaving the remaining one listed and opening, with no diagnostic left for the id [[storage-12](#storage-12)].
 
+### storage-27
+
+When the root-lease integration suite runs the core's store and the storage Git reservation against one home with real competing processes and a fixed machine identity, it shall verify:
+
+- a killed owner of this machine is reclaimed by the core and by a storage command alike, its `.lease.retired/<token>/owner.json` retained, and a normal release retires the same way so repeated starts leave one retired directory each [[storage-26](#storage-26)];
+- a live owner refuses naming its `pid`, an owner tagged with another machine's identity refuses naming it as a machine identity, a legacy host-name owner is reclaimed when its name is the current one and refused when it differs, and a value that only begins like the tag refuses as unverifiable [[storage-26](#storage-26)];
+- a malformed record, a tokenless record, a tagged `owner.json` open to the group or others, an empty active directory, a dangling symlink at `.lease`, and a probe failing with an error other than `ESRCH` each refuse without changing the home, the probe's refusal naming the error's code [[storage-26](#storage-26)];
+- a dead local legacy owner whose `owner.json` is open to the group or others is reclaimed by the core's store, the storage command and the shared lease alike [[storage-26](#storage-26)];
+- a `.lease.retired/` parent another writer created is validated and retired into, while one open to others or a symlink refuses with the lease left in place [[storage-26](#storage-26)];
+- a home the writer cannot write refuses at once, naming the error's code rather than a race [[storage-26](#storage-26)];
+- a reclaimer that read owner O, delayed until another process retired O and published N, refuses on the occupied retired target and N stays authoritative [[storage-26](#storage-26)];
+- a second writer publishing between a contender's inspection and its rename leaves the contender refusing without overwriting the active entry [[storage-26](#storage-26)];
+- a moved owner whose token differs from the one read fails closed with the moved directory intact [[storage-26](#storage-26)];
+- a former-layout `.lock/` held by a live owner or another machine's keeps the core out, leaving no lease, and a dead one of this machine is left in place [[storage-26](#storage-26)];
+- a storage command with an unavailable identity refuses before any change, naming the identity file [[storage-10](#storage-10)].
+
 ## References
 
 [1]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/session-storage.md "Shared Playbook session storage"
+[2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-98 "Playbook playbook-cli-98: the machine identity facade"

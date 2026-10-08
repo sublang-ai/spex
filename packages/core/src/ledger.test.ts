@@ -35,6 +35,8 @@ import {
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 // ---------------------------------------------------------------------------
 // Store-level harness: the fold's contract is over stored rows, so a
 // synthetic session written straight into the store is a legitimate
@@ -56,7 +58,7 @@ function uid(name: string): string {
 }
 
 function newProjectStore(path?: string): { store: Store; projectId: string } {
-  const store = new Store(path ? { dir: path, own: OWN } : { own: OWN });
+  const store = new Store(path ? { machineIdentity, dir: path, own: OWN } : { own: OWN });
   const project = store.registerProject("/tmp/ledger-proj", "ledger-proj", 1);
   return { store, projectId: project.id };
 }
@@ -861,7 +863,7 @@ test("DR-066: a project whose store refuses its acts raises no summons", async (
 
   // The same stored session summons after a restart while the store
   // can answer it ...
-  const healthy = new Store({ dir });
+  const healthy = new Store({ machineIdentity, dir });
   await healthy.initializeSessions();
   assert.deepEqual(
     fold(healthy, live).attention.map((entry) => entry.kind),
@@ -874,7 +876,7 @@ test("DR-066: a project whose store refuses its acts raises no summons", async (
   // every write, so the summons would stand with no act able to clear it.
   mkdirSync(dirname(prefsFileOf(dir)), { recursive: true });
   writeFileSync(prefsFileOf(dir), "{bad JSON}");
-  const reopened = new Store({ dir });
+  const reopened = new Store({ machineIdentity, dir });
   await reopened.initializeSessions();
   const blocked = foldLedger({
     store: reopened,
@@ -1344,7 +1346,7 @@ test("DR-035: reopening the store reproduces closed, queued, and finished; a dea
   store.close();
 
   // Restart: same files, no live lanes.
-  const reopened = new Store({ dir: path });
+  const reopened = new Store({ machineIdentity, dir: path });
   await reopened.initializeSessions();
   const after = fold(reopened, []);
   const queued = stateOf(after, ids.queued);
@@ -1443,7 +1445,7 @@ test("core-service-79: a remove deletes a closed intent's file and attachments, 
   store.close();
 
   // Restart: the reopened store reads it as absent all the same.
-  const reopened = new Store({ dir: path });
+  const reopened = new Store({ machineIdentity, dir: path });
   await reopened.initializeSessions();
   assert.equal(reopened.getIntent(ids.gone), undefined);
   assert.deepEqual(reopened.listClosedIntents(projectId, 20), []);
@@ -2620,7 +2622,7 @@ test("core-service-58: ledger.history pages 45 closed intents 20/20/5, newest fi
   // closed rows, wherever they came from.
   const dir = scratchDir("spex-ledger-hist-");
   const dataDir = join(dir, "state");
-  const seeded = new Store({ dir: dataDir, own: OWN });
+  const seeded = new Store({ machineIdentity, dir: dataDir, own: OWN });
   const project = seeded.registerProject("/tmp/ledger-hist-proj", "hist", 1);
   // Half close done, half were worked — one finished turn each — then
   // dropped: both are history (DR-038).

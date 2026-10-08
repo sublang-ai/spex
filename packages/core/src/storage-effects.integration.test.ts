@@ -17,6 +17,8 @@ import { Store } from "./store.js";
 import { selectStorageMerge } from "./storage-git.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 
+const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
+
 /** The test's own Git: no user or system configuration, a fixed identity. */
 const gitEnv: NodeJS.ProcessEnv = {
   ...process.env,
@@ -45,7 +47,7 @@ test("storage-16: Git selection reconciles an omitted repository receipt before 
   git(project, "add", ".");
   git(project, "commit", "-q", "-m", "baseline");
   // The project's records live in its spex repository's clone, on `spex`.
-  const registry = new Store({ dir: home, own: "tester", env: gitEnv });
+  const registry = new Store({ machineIdentity, dir: home, own: "tester", env: gitEnv });
   let key: string;
   try { key = registry.registerProject(project, "Project").id; } finally { registry.close(); }
   const clone = Home.load(home).clonePath(key);
