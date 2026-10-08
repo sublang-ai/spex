@@ -1600,6 +1600,11 @@ msgstr "单击打开 · 拖动移动 · 滚动缩放"
 msgid "client not connected"
 msgstr "客户端未连接"
 
+#. join step running: cloning the project's code into its folder
+#: src/lib/space.ts
+msgid "Cloning code…"
+msgstr "克隆代码中…"
+
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "关闭当前会话标签页"
@@ -1621,6 +1626,7 @@ msgid "Close this tab — the session stays in the sidebar"
 msgstr "关闭此标签页 — 会话仍留在侧栏"
 
 #. heading over the file naming where a project's code lives
+#. join step: cloning the project's code
 #: src/lib/space.ts
 msgid "Code"
 msgstr "代码"

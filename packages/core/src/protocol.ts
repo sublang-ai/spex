@@ -1669,7 +1669,8 @@ export interface RepairChecked {
   unknown?: boolean;
 }
 
-export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push";
+/** A sync's steps (space-12), and `code`: a join's code clone (space-63). */
+export type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";
 
 export type SyncCause =
   | "unreachable"

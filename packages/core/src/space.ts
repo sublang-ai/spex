@@ -2480,14 +2480,16 @@ export class SpaceManager {
         return;
       }
       await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
-      this.joining.delete(id);
       store.adoptRepositories();
       this.host.repositoriesChanged();
       const machine = this.machine(key);
       await machine.readFacts();
       await this.host.rescanSessions(key);
       this.host.ledgerChanged([key]);
-      if (folder !== undefined) await this.pairJoined(machine, folder);
+      if (folder !== undefined) await this.pairJoined(machine, id, folder);
+      // The join ends once its code is here or its clone failed; only
+      // then does its row read the clone's state (space-61, space-63).
+      this.joining.delete(id);
     } catch (error) {
       stop({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
@@ -2498,17 +2500,21 @@ export class SpaceManager {
   /** The joined clone's working folder (space-63): the code cloned from
    * the remote its `project.json` names with this device's own Git and
    * credentials, or a folder already holding it, paired with the clone;
-   * a group's own spex repository pairs the folder its sessions run in. */
-  private async pairJoined(machine: RepositorySync, folder: string): Promise<void> {
-    if (!machine.hold("join", "check")) return;
+   * a group's own spex repository pairs the folder its sessions run in.
+   * The join's Code step runs while the code clones (space-63). */
+  private async pairJoined(machine: RepositorySync, id: string, folder: string): Promise<void> {
+    const project = this.projectFile(machine.repository);
+    const root = existsSync(folder) && await this.workTreeRoot(folder);
+    const remote = !root && project?.remote ? project.remote : undefined;
+    const step: SyncStep = remote ? "code" : "check";
+    if (!machine.hold("join", step)) return;
+    this.joining.set(id, machine.phase);
     await this.publish();
     let failure: GitFailure | undefined;
     try {
-      const project = this.projectFile(machine.repository);
-      const root = existsSync(folder) && await this.workTreeRoot(folder);
-      if (!root && project?.remote) {
+      if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
-        const run = await this.probe.run(["clone", "-q", project.remote, folder], { transport: true });
+        const run = await this.probe.run(["clone", "-q", remote, folder], { transport: true });
         if (run.code !== 0) {
           failure = {
             cause: run.killed ?? "git",
@@ -2527,7 +2533,7 @@ export class SpaceManager {
     } catch (error) {
       failure = { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false };
     } finally {
-      machine.release(failure ? { op: "join", step: "check", failure } : undefined);
+      machine.release(failure ? { op: "join", step, failure } : undefined);
     }
   }
 
@@ -2858,6 +2864,10 @@ export class SpaceManager {
     // Attached since the view's read began, it counts as listed (git-host-5).
     const listing = listingFor(this.view, facts.id, facts.remote) ?? listingFor({ listings: [...this.attached.values()] }, facts.id, facts.remote);
     const listed: RepositoryState = listing ? { ...row, members: listing.members, visibility: listing.repository.visibility } : row;
+    // A clone whose join still runs is not on this device yet: its code
+    // may still be cloning (space-61, space-63).
+    const joining = facts.id === null ? undefined : this.joining.get(facts.id);
+    if (joining?.phase === "running") return { ...listed, state: "absent", reason: null, sync: joining };
     if (machine.hostOverride) return { ...listed, state: machine.hostOverride.state, reason: machine.hostOverride.reason };
     if (this.readFailure !== undefined) return { ...listed, state: "unreachable", reason: this.readFailure };
     // Not read since this core started: as the last sync left it.
