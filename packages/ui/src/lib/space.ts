@@ -176,9 +176,11 @@ export const STEP_NAMES: Record<SyncStep, () => string> = {
   apply: () => i18n._({ id: "Apply", comment: "sync step: applying the chosen versions" }),
   refresh: () => i18n._({ id: "Refresh", comment: "sync step: re-reading the spex repository" }),
   push: () => i18n._({ id: "Push", comment: "sync step: sending to the host" }),
+  // A join's step while its code clones (space-63).
+  code: () => i18n._({ id: "Code", comment: "join step: cloning the project's code" }),
 };
 
-/** What the step line reads while a step runs (space-12). */
+/** What the step line reads while a step runs (space-12, space-63). */
 export const STEP_LINES: Record<SyncStep, () => string> = {
   save: () => i18n._("Saving changes…"),
   check: () => i18n._("Checking host…"),
@@ -186,6 +188,7 @@ export const STEP_LINES: Record<SyncStep, () => string> = {
   apply: () => i18n._({ id: "Applying…", comment: "sync step running: applying the chosen versions" }),
   refresh: () => i18n._({ id: "Refreshing…", comment: "sync step running: re-reading the spex repository" }),
   push: () => i18n._({ id: "Pushing…", comment: "sync step running: sending to the host" }),
+  code: () => i18n._({ id: "Cloning code…", comment: "join step running: cloning the project's code into its folder" }),
 };
 
 /** A byte count in the reader's units: "312 B", "4.1 KB", "2.3 MB". */
