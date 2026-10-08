@@ -33,10 +33,14 @@ if (files.length === 0) {
 
 // --test-timeout turns a hung test into a named failure; force-exit
 // keeps a leaked handle from zombifying the run (observed on the
-// Windows CI runners).
+// Windows CI runners). Node 22 applies the timeout to each file as a
+// whole as well as to each test (Node 24 to each test only), so the
+// budget must hold the longest file on the slowest runner: the core
+// integration file alone passed 180 s on the macOS runner, where this
+// suite takes about five times what it takes on Linux.
 execFileSync(
   process.execPath,
-  ["--test", "--test-timeout=180000", "--test-force-exit", ...files],
+  ["--test", "--test-timeout=600000", "--test-force-exit", ...files],
   {
     stdio: "inherit",
     cwd: root,
