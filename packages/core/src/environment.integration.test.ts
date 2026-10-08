@@ -461,7 +461,7 @@ test("environments-20: selection chooses languages in order, takes what a playbo
   const preferred = locked(await resolveText(home.clone, requestsYaml({ "acme/docs": { version: "^1.0.0", select: [{ artifact: "ship" }] } }, "zh-Hans")));
   const chosen = preferred.packages["acme/docs"]!;
   assert.equal((chosen.source as { version: string }).version, "1.1.0");
-  assert.deepEqual(plain(chosen.artifacts), { guide: { language: "zh-Hans", fallback: false }, ship: { language: "en", fallback: true } });
+  assert.deepEqual(plain(chosen.artifacts), { guide: { kind: "skill", language: "zh-Hans", fallback: false }, ship: { kind: "playbook", language: "en", fallback: true } });
   assert.ok(chosen.files.some((file) => file.path === "skills/zh-Hans/guide/SKILL.md"));
   assert.ok(!chosen.files.some((file) => file.path === "skills/en/guide/SKILL.md"));
   assert.ok(chosen.files.some((file) => file.path === "playbooks/en/ship/ship.md"));
@@ -470,11 +470,11 @@ test("environments-20: selection chooses languages in order, takes what a playbo
 
   // A select entry's language comes before the environment's.
   const named = locked(await resolveText(home.clone, requestsYaml({ "acme/docs": { version: "^1.0.0", select: [{ artifact: "guide", language: "en" }] } }, "zh-Hans")));
-  assert.deepEqual(plain(named.packages["acme/docs"]!.artifacts), { guide: { language: "en", fallback: false } });
+  assert.deepEqual(plain(named.packages["acme/docs"]!.artifacts), { guide: { kind: "skill", language: "en", fallback: false } });
 
   // No language wanted: the original, no fallback.
   const original = locked(await resolveText(home.clone, requestsYaml({ "acme/docs": { version: "^1.0.0" } })));
-  assert.deepEqual(plain(original.packages["acme/docs"]!.artifacts), { guide: { language: "en", fallback: false }, ship: { language: "en", fallback: false } });
+  assert.deepEqual(plain(original.packages["acme/docs"]!.artifacts), { guide: { kind: "skill", language: "en", fallback: false }, ship: { kind: "playbook", language: "en", fallback: false } });
 
   // A newer release lacking a selected artifact does not block an older solution.
   const older = locked(await resolveText(home.clone, requestsYaml({ "acme/docs": { version: "^1.0.0", select: [{ artifact: "tips" }] } })));
@@ -523,9 +523,19 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
     assert.deepEqual(Object.keys(resolution), ["source", "required-by", "artifacts", "files", "exports"], name);
     assert.deepEqual(Object.keys(resolution.source as object), ["registry", "version", "checksum"]);
     for (const file of resolution.files as Record<string, unknown>[]) assert.deepEqual(Object.keys(file), ["path", "sha256", "executable"]);
-    for (const artifact of Object.values(resolution.artifacts as Record<string, Record<string, unknown>>)) assert.deepEqual(Object.keys(artifact), ["language", "fallback"]);
+    for (const artifact of Object.values(resolution.artifacts as Record<string, Record<string, unknown>>)) assert.deepEqual(Object.keys(artifact), ["kind", "language", "fallback"]);
   }
+  assert.deepEqual(plain(lock.packages["acme/press"]!.artifacts), { press: { kind: "skill", language: "en", fallback: false }, roll: { kind: "playbook", language: "en", fallback: false } });
   assert.deepEqual(await readLock(join(first.clone, "spex.lock")), lock);
+  // A lock written before artifacts carried their kind still reads, the
+  // kind unknown, and writes back the same bytes until a resolve.
+  const kindless = written.replace(/kind: [a-z]+, /g, "");
+  assert.notEqual(kindless, written);
+  const older = parseLock(kindless);
+  assert.deepEqual(plain(older.packages["acme/press"]!.artifacts), { press: { language: "en", fallback: false }, roll: { language: "en", fallback: false } });
+  assert.equal(serializeLock(older), kindless);
+  // A kind that is not one of the five is refused.
+  assert.throws(() => parseLock(written.replace("press: { kind: skill", "press: { kind: tool")), /packages\.acme\/press\.artifacts\.press is not \{kind, language, fallback\}/);
   const firstReport = await install({ cloneDir: first.clone, lock, store: first.store, cache: first.cache, registry: client, git: gitSource(first.cache), workingFolder: null });
   assert.deepEqual(firstReport.installed, ["acme/app", "acme/lib", "acme/press"]);
 
@@ -573,7 +583,7 @@ test("environments-19, environments-20: artifact ids alike to object members, co
   const home = makeHome("me/members-spex");
   const lock = locked(await resolveText(home.clone, requestsYaml({ "acme/members": { version: "^1.0.0", alias: { guide: "member-guide" } } })));
   const resolution = lock.packages["acme/members"]!;
-  assert.deepEqual(plain(resolution.artifacts), JSON.parse('{"__proto__": {"language": null, "fallback": false}, "constructor": {"language": "en", "fallback": false}, "guide": {"language": "en", "fallback": false}}'));
+  assert.deepEqual(plain(resolution.artifacts), JSON.parse('{"__proto__": {"kind": "applet", "language": null, "fallback": false}, "constructor": {"kind": "skill", "language": "en", "fallback": false}, "guide": {"kind": "skill", "language": "en", "fallback": false}}'));
   assert.deepEqual(plain(resolution.exports), { constructor: "constructor", "member-guide": "guide" });
   assert.ok(resolution.files.some((file) => file.path === "applets/__proto__/index.html"));
 
@@ -1047,4 +1057,61 @@ test("environments-22: a playbook the project's environment exports but has not 
   } finally {
     store.close();
   }
+});
+
+test("environments-22: a path source's playbook whose folder this device lacks is refused naming the project and the folder, never taken from your own group's", async () => {
+  // Your own group's environment installs walk and stroll from the registry.
+  await publish(manifestOf("acme/hiker", "1.0.0", {
+    walk: { kind: "playbook", language: "en" },
+    stroll: { kind: "playbook", language: "en" },
+  }), { ...playbookFiles("walk"), ...playbookFiles("stroll") });
+  const projectKey = "acme/trail-spex";
+  const ownKey = "me/me-spex";
+  const home = makeHome(projectKey);
+  const ownClone = cloneOf(home, ownKey);
+  const ownModule = (id: string): string => join(ownClone, "packages/acme/hiker/playbooks/en", id, `${id}.playbook`, `${id}.registry.mjs`);
+  const ownLock = locked(await resolveText(ownClone, requestsYaml({ "acme/hiker": { version: "^1.0.0" } })));
+  await writeLock(join(ownClone, "spex.lock"), ownLock);
+  await install({ cloneDir: ownClone, lock: ownLock, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), workingFolder: null });
+
+  // The project requests its own walk by path: the device that resolved
+  // it has the folder, this one lacks it.
+  const resolvedOn = scratchDir("spex-wf-");
+  await makeRelease(join(resolvedOn, "tools", "walk"), manifestOf("acme/trail", "0.1.0", { walk: { kind: "playbook", language: "en" } }), playbookFiles("walk"));
+  const projectLock = locked(await resolveText(home.clone, requestsYaml({ "acme/trail": { path: "tools/walk" } }), { workingFolder: resolvedOn }));
+  const lockText = await writeLock(join(home.clone, "spex.lock"), projectLock);
+  const lacking = scratchDir("spex-wf-");
+  const expected = "tools/walk/playbooks/en/walk/walk.playbook/walk.registry.js";
+
+  // A working folder lacking the folder, no working folder on this
+  // device, and a lock written before artifacts carried their kind.
+  const cases: [string, string | null, string][] = [
+    ["a working folder lacking it", lacking, lockText],
+    ["no working folder on this device", null, lockText],
+    ["a lock without kinds", lacking, lockText.replace(/kind: [a-z]+, /g, "")],
+  ];
+  for (const [label, workingFolder, text] of cases) {
+    writeFileSync(join(home.clone, "spex.lock"), text);
+    const environments = environmentsOver(home, ownKey, { [projectKey]: { dir: home.clone, workingFolder }, [ownKey]: { dir: ownClone, workingFolder: null } });
+    const modules = environments.modulesFor(projectKey);
+    // Missing in the project's environment, naming it and the folder.
+    assert.deepEqual(modules.find("walk"), { missing: { repository: projectKey, module: workingFolder === null ? expected : join(workingFolder, expected), path: "tools/walk" } }, label);
+    await assert.rejects(composeConfig(sessionConfig("walk"), undefined, undefined, { modules }), (error: unknown) =>
+      error instanceof ConfigRegistryError && error.kind === "unavailable"
+      && error.message === `playbooks.walk is enabled, but the environment of ${projectKey} finds no tools/walk in the working folder on this device`, label);
+    // A playbook the project does not export still comes from your own
+    // group's, whose own walk stands for its own sessions.
+    assert.deepEqual(modules.find("stroll"), { module: ownModule("stroll"), builtin: false }, label);
+    assert.equal(moduleOf(environments.modulesFor(null).find("walk")), ownModule("walk"), label);
+    // The Playbooks surface lists the folder missing.
+    const listed = environments.state(projectKey).packages.find((entry) => entry.name === "acme/trail");
+    assert.equal(listed?.missingPath, "tools/walk", label);
+    assert.deepEqual(listed?.artifacts.map((artifact) => [artifact.id, artifact.kind]), [["walk", "playbook"]], label);
+  }
+
+  // Once the folder is in this working folder, its own module is handed over.
+  writeFileSync(join(home.clone, "spex.lock"), lockText);
+  cpSync(join(resolvedOn, "tools"), join(lacking, "tools"), { recursive: true });
+  const found = environmentsOver(home, ownKey, { [projectKey]: { dir: home.clone, workingFolder: lacking }, [ownKey]: { dir: ownClone, workingFolder: null } }).modulesFor(projectKey).find("walk");
+  assert.deepEqual(found, { module: join(lacking, "tools/walk/playbooks/en/walk/walk.playbook/walk.registry.mjs"), builtin: false });
 });

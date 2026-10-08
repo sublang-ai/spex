@@ -310,7 +310,7 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
   const ids = Object.keys(manifest.artifacts).sort();
   for (const id of ids) {
     const artifact = manifest.artifacts[id]!;
-    artifacts[id] = { language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
+    artifacts[id] = { kind: artifact.kind, language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
     if (artifact.kind === "playbook" || artifact.kind === "skill") exports[id] = id;
   }
   const selected = files.filter((file) => (ROOT_FILES as readonly string[]).includes(file.path)

@@ -22,7 +22,7 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host; one whose name ends in `-spex` is told from a clone by holding no `.git` and holding a folder named `<name>-spex` | — |
+| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host and holding only folders, names starting with a dot other than `.git` aside; one whose name ends in `-spex` is told from a clone by holding at least one folder and by not being your own group's clone | — |
 | `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
@@ -208,7 +208,7 @@ Before reopening selected state, the validator shall validate the complete selec
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
 - a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
-- two spex repositories holding an authoring session of one id are reported without blocking, naming both and the id, the one whose key sorts first kept [[storage-23](#storage-23)];
+- two spex repositories holding an authoring session of one id are reported without blocking, naming both and the id; each rescan — one follows every deletion — keeps the one kept while its file stands, wherever its clone moves, and otherwise the one whose key sorts first [[storage-23](#storage-23)];
 - incompatible modules or unsupported checkpoint relocation permit history only;
 - invalid session data blocks that session's execution and recovery, preserving lease-checked deletion; an invalid intent file blocks that intent alone;
 - invalid shared files block operations that require them; diagnostics name the failing file and reason, while startup, unrelated valid spex repositories and independent configuration or preference edits remain available;
@@ -254,17 +254,21 @@ When an integration suite merges two real Git branches of one spex repository co
 
 ### storage-24
 
-When an integration suite opens a store on a home whose group folders bear names ending in `-spex` — another group, a subgroup, and your own group — it shall verify:
+When an integration suite opens a store on a home whose group folders bear names ending in `-spex` — another group, a subgroup, a group holding a `.DS_Store` and a clone two levels down, and your own group — it shall verify:
 
-- each clone beneath them, one not yet a Git repository among them, listed by its own key, such as `my-spex/my-spex-spex`, and no group folder listed or written into [[storage-1](#storage-1)];
-- your own group so named listing its own spex repository `<own>/<own>-spex` on every open [[storage-1](#storage-1)] [[storage-2](#storage-2)].
+- each clone beneath them listed by its own key, such as `my-spex/my-spex-spex` and `acme/my-spex/backend/project-spex`, and no group folder listed or written into [[storage-1](#storage-1)];
+- a clone Git has not made a repository listed both where it holds only a file and where it holds nothing [[storage-1](#storage-1)];
+- your own group so named listing its own spex repository `<own>/<own>-spex` on every open, as does your own group's clone holding only folders where Git cannot run [[storage-1](#storage-1)] [[storage-2](#storage-2)].
 
 ### storage-25
 
 When an integration suite starts the core on a home whose two spex repositories each hold an authoring session of one id, it shall verify:
 
 - one nonblocking diagnostic among the home's diagnostics, naming both spex repositories and the id [[storage-12](#storage-12)];
-- the session of the spex repository whose key sorts first opening, and the other's refused as no such session [[storage-12](#storage-12)].
+- the session of the spex repository whose key sorts first opening, and the other's refused as no such session [[storage-12](#storage-12)];
+- after a turn of the opened session, a third spex repository whose key sorts before both coming to hold the id, and a rescan, the opened session still opening, the third's refused and reported [[storage-12](#storage-12)];
+- once the opened session's file is removed, the next rescan opening the third's, whose next turn's records follow its own last sequence while the removed one's transcript stays unchanged [[storage-12](#storage-12)] [[storage-23](#storage-23)];
+- deleting that session over the protocol leaving the remaining one listed and opening, with no diagnostic left for the id [[storage-12](#storage-12)].
 
 ## References
 

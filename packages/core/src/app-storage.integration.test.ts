@@ -314,17 +314,24 @@ test("storage-15: a former home of two projects and one unmatched session migrat
 test("storage-24: a group folder named like a clone is walked into, and every clone lists by its own key", async () => {
   const scratch = scratchDir("spex-groups-named-spex-");
   const keysOf = (store: Store): string[] => store.listRepositories().map((repository) => repository.key).sort();
-  // Another group, a subgroup and a subgroup's clone Git has not made a
-  // repository yet, each folder bearing a name that ends in `-spex`.
+  // Another group, a subgroup, and a group holding Finder's `.DS_Store`
+  // and a clone two levels down; then clones Git has not made
+  // repositories yet: one holding only a file, one empty. Each folder
+  // bears a name that ends in `-spex`.
   const home = join(scratch, "home");
+  const at = (...segments: string[]): string => join(home, "workspace", ...segments);
   (await Store.open({ dir: home, own: "alice", env: gitEnv })).close();
-  for (const key of ["my-spex/my-spex-spex", "acme/a-spex", "acme/x-spex/y-spex"]) initializeClone(join(home, "workspace", ...key.split("/")), { env: gitEnv });
-  mkdirSync(join(home, "workspace", "acme", "z-spex", "w-spex"), { recursive: true });
+  for (const key of ["my-spex/my-spex-spex", "acme/a-spex", "acme/x-spex/y-spex", "acme/my-spex/backend/project-spex"]) initializeClone(at(...key.split("/")), { env: gitEnv });
+  writeFileSync(at("acme", "my-spex", ".DS_Store"), "");
+  mkdirSync(at("acme", "f-spex"), { recursive: true });
+  writeFileSync(at("acme", "f-spex", "project.json"), JSON.stringify({ format: 1, name: "f", remote: null }));
+  mkdirSync(at("acme", "z-spex", "w-spex"), { recursive: true });
+  const listed = ["acme/a-spex", "acme/f-spex", "acme/my-spex/backend/project-spex", "acme/x-spex/y-spex", "acme/z-spex/w-spex", "alice/alice-spex", "my-spex/my-spex-spex"];
   const store = await Store.open({ dir: home, own: "alice", env: gitEnv });
-  assert.deepEqual(keysOf(store), ["acme/a-spex", "acme/x-spex/y-spex", "acme/z-spex/w-spex", "alice/alice-spex", "my-spex/my-spex-spex"]);
+  assert.deepEqual(keysOf(store), listed);
   store.close();
-  for (const group of [["my-spex"], ["acme", "x-spex"], ["acme", "z-spex"]]) {
-    assert.ok(!existsSync(join(home, "workspace", ...group, "sessions")), `nothing is written into ${group.join("/")}`);
+  for (const group of [["my-spex"], ["acme", "x-spex"], ["acme", "z-spex"], ["acme", "my-spex"], ["acme", "my-spex", "backend"]]) {
+    assert.ok(!existsSync(at(...group, "sessions")), `nothing is written into ${group.join("/")}`);
   }
   // Your own group so named lists its own spex repository, opened again alike.
   const own = join(scratch, "own");
@@ -335,6 +342,18 @@ test("storage-24: a group folder named like a clone is walked into, and every cl
     ownStore.close();
   }
   assert.ok(!existsSync(join(own, "workspace", "my-spex", "sessions")));
+  // Where Git cannot run, your own group's clone holds only folders and
+  // still lists on every open.
+  const bare = join(scratch, "bare");
+  const noGit = { ...gitEnv, PATH: join(scratch, "no-git") };
+  mkdirSync(noGit.PATH);
+  for (let open = 0; open < 2; open += 1) {
+    const bareStore = await Store.open({ dir: bare, own: "bob", env: noGit });
+    assert.deepEqual(keysOf(bareStore), ["bob/bob-spex"]);
+    bareStore.close();
+  }
+  const ownClone = join(bare, "workspace", "bob", "bob-spex");
+  assert.ok(readdirSync(ownClone, { withFileTypes: true }).every((entry) => entry.isDirectory()), "no .git and no file in your own clone");
   rmSync(scratch, { recursive: true, force: true });
 });
 

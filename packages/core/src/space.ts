@@ -212,6 +212,16 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
   }
 }
 
+/** Whether two paths name one entry on disk: two spellings of one name
+ * on a case-insensitive filesystem do. */
+function sameEntry(a: string, b: string): boolean {
+  try {
+    const first = lstatSync(a);
+    const second = lstatSync(b);
+    return first.dev === second.dev && first.ino === second.ino;
+  } catch { return false; }
+}
+
 /** Remove the folders a move left empty, up to the workspace itself. */
 function pruneEmptyFolders(dir: string, stopAt: string): void {
   let current = resolve(dir);
@@ -1099,10 +1109,7 @@ class RepositorySync {
     return { accepted: true };
   }
 
-  /** `internal` marks a sync the core starts itself — after a sign-in, a
-   * pick or a creation (space-4, space-58) — whose act already said what
-   * a join does (space-13). */
-  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean }): Promise<{ accepted: true }> {
+  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
     this.assertNotRunning();
     const previous = this.phase;
     // The gate is set before the admission checks (space-21).
@@ -1133,7 +1140,7 @@ class RepositorySync {
         }
       }
       if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
-      await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
+      await this.owner.admit(this, { push: true, noticed: input.noticed === true });
     } catch (error) {
       this.phase = previous;
       throw error;
@@ -2157,7 +2164,13 @@ export class SpaceManager {
     // The home file the move leaves is checked before any clone moves:
     // a refusal leaves every folder and pair where it is.
     store.home.checkMove(moves, target);
-    if (moves.some((move) => existsSync(store.home.clonePath(move.to)))) return "busy";
+    // A destination taken by another entry collides; one that is the
+    // source itself, as a case-insensitive filesystem reads a login
+    // differing only by case, does not.
+    if (moves.some((move) => {
+      const to = store.home.clonePath(move.to);
+      return existsSync(to) && !sameEntry(store.home.clonePath(move.from), to);
+    })) return "busy";
     // A pick in flight writes the clone's remote: it ends first.
     if (keys.some((key) => this.picking.has(key))) return "busy";
     const held: RepositorySync[] = [];
@@ -2181,12 +2194,22 @@ export class SpaceManager {
         await machine.beginMove();
       }
       await this.host.settleBeneath?.(keys);
+      // A login differing only by case renames the folder in place,
+      // which either filesystem kind allows, and each clone then moves
+      // from where it now lies, your own alone changing its name.
+      const folder = join(store.home.workspace, current);
+      const renamed = join(store.home.workspace, target);
+      const inPlace = current.toLowerCase() === target.toLowerCase() && existsSync(folder) &&
+        (!existsSync(renamed) || sameEntry(folder, renamed));
+      if (inPlace) renameSync(folder, renamed);
       for (const move of moves) {
+        const from = store.home.clonePath(inPlace ? `${target}/${move.from.slice(current.length + 1)}` : move.from);
         const to = store.home.clonePath(move.to);
+        if (from === to) continue;
         mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
-        renameSync(store.home.clonePath(move.from), to);
+        renameSync(from, to);
       }
-      pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
+      if (!inPlace) pruneEmptyFolders(folder, store.home.workspace);
       this.relocate(moves, target);
       for (const machine of moving.splice(0)) machine.endMove();
       await this.afterMove(moves);
@@ -2333,10 +2356,14 @@ export class SpaceManager {
     }
   }
 
+  /** A sync the core starts itself — after a sign-in, a creation or a
+   * retried step — admitted as the reader's (space-57): where the notice
+   * is owed it does not start, and the row stands with its Sync. */
   private startSync(key: string, input: { join?: boolean }): void {
     const machine = this.machines.get(key);
     if (!machine || this.stopping) return;
-    machine.sync({ ...input, internal: true }).catch((error: unknown) => {
+    machine.sync(input).catch((error: unknown) => {
+      if (error instanceof CoreError && error.details?.notice === true) { void this.publish(); return; }
       console.error(`spex: ${key} did not start syncing: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
@@ -2383,9 +2410,9 @@ export class SpaceManager {
       if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
       // A creation in a group other than your own: its members, unknown
       // until it exists, may read what the push sends. Your own group
-      // says nothing; neither do the syncs after a sign-in nor a group's
-      // own repository created quietly with no session in it (space-65),
-      // and a waiting creation joined later follows this pick's notice.
+      // says nothing, nor does a group's own repository created quietly
+      // with no session in it (space-65), and a waiting creation joined
+      // later follows this pick's notice.
       if (!seen && group.kind !== "user") {
         throw new CoreError("invalid_request", i18n._({
           id: "Read the sharing notice before creating {name} in {group}",

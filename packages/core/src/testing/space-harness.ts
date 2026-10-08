@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
@@ -220,9 +220,9 @@ interface Home {
 
 /** Your own group's clone in a scratch home: under the name its
  * `home.yaml` records, once it has one — a sign-in renames it. */
-export function ownClone(dataDir: string): string {
-  let own = OWN;
-  try { own = /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? OWN; } catch { own = OWN; }
+export function ownClone(dataDir: string, fallback = OWN): string {
+  let own = fallback;
+  try { own = /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? fallback; } catch { own = fallback; }
   return join(dataDir, "workspace", own, `${own}-spex`);
 }
 
@@ -399,11 +399,13 @@ playbooks:
   }
 
   /** A real core on a scratch home whose configuration lies in your own
-   * group's spex repository; `host` names the stand-in it signs in to. */
-  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
+   * group's spex repository; `host` names the stand-in it signs in to,
+   * and `own` your own group's name for a new home. */
+  async function startHome(name: string, options: { model?: string; env?: Record<string, string>; dataDir?: string; project?: boolean; host?: StandinHost; own?: string; extra?: Partial<CoreServiceOptions> } = {}): Promise<Home> {
     const dataDir = options.dataDir ?? mkdtempSync(join(scratch, `${name}-`));
-    const configPath = join(ownClone(dataDir), "config", "playbook.config.yaml");
-    if (!existsSync(configPath)) { mkdirSync(join(ownClone(dataDir), "config"), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
+    const own = options.own ?? OWN;
+    const configPath = join(ownClone(dataDir, own), "config", "playbook.config.yaml");
+    if (!existsSync(configPath)) { mkdirSync(dirname(configPath), { recursive: true }); writeFileSync(configPath, config(options.model ?? "claude-test")); }
     const projectDir = join(scratch, `${name}-project-${randomUUID().slice(0, 8)}`);
     if (options.project !== false) { mkdirSync(projectDir); git(projectDir, "init", "-q"); }
     const { imports } = fakeAdapterImports({
@@ -423,7 +425,7 @@ playbooks:
     const service = await CoreService.start({
       token: "test",
       dataDir,
-      own: OWN,
+      own,
       adapterImports: imports,
       adapterRuntime: () => ({ usable: true }),
       captainFactory: async () => captain,

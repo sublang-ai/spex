@@ -355,17 +355,18 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
       selected = [...chosen];
     }
     selected.sort();
-    // 2. Languages.
+    // 2. Languages, each artifact recorded with its kind.
     const artifacts = idRecord<LockedArtifact>();
     for (const id of selected) {
       const artifact = entry.artifacts[id]!;
-      if (artifact.kind === "applet") { artifacts[id] = { language: null, fallback: false }; continue; }
+      const kind = artifact.kind;
+      if (kind === "applet") { artifacts[id] = { kind, language: null, fallback: false }; continue; }
       const named = request?.select?.find((selection) => selection.artifact === id && selection.language !== undefined)?.language;
-      if (named !== undefined && artifact.languages.includes(named)) artifacts[id] = { language: named, fallback: false };
-      else if (requests.language !== undefined && artifact.languages.includes(requests.language)) artifacts[id] = { language: requests.language, fallback: false };
+      if (named !== undefined && artifact.languages.includes(named)) artifacts[id] = { kind, language: named, fallback: false };
+      else if (requests.language !== undefined && artifact.languages.includes(requests.language)) artifacts[id] = { kind, language: requests.language, fallback: false };
       else {
         const wanted = named ?? requests.language;
-        artifacts[id] = { language: artifact.language ?? null, fallback: wanted !== undefined && wanted !== artifact.language };
+        artifacts[id] = { kind, language: artifact.language ?? null, fallback: wanted !== undefined && wanted !== artifact.language };
       }
     }
     // 3. Files: the root files and each selected artifact's in its language.

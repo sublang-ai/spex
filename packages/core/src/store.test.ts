@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import Database from "better-sqlite3";
@@ -935,5 +935,88 @@ test("playbook-library-70: the authoring store refuses an id another project's s
   rmSync(join(b.authoringDir, "triage.json"));
   drafts.refresh();
   assert.deepEqual(drafts.diagnostics(), []);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("storage-12: the kept authoring session stays kept while its file stands, a deletion hands its id on, and create never replaces a record", () => {
+  const dir = tempRoot(); mkdirSync(dir, { recursive: true });
+  const at = (name: string) => ({
+    key: `tester/${name}-spex`,
+    authoringDir: join(dir, "workspace", "tester", `${name}-spex`, "authoring"),
+    workingFolder: join(dir, name),
+  });
+  const alpha = at("alpha");
+  const beta = at("beta");
+  const gamma = at("gamma");
+  const status = (message: string) => ({ type: "captain_status", turnId: null, timestamp: 1, message }) as unknown as TmuxPlayRecord;
+  /** A session of `id` another device made in `location`, written
+   * behind the store's back as a sync would. */
+  const arrive = (location: typeof alpha, id: string, message: string): { record: string; records: string } => {
+    mkdirSync(location.authoringDir, { recursive: true });
+    const record = join(location.authoringDir, `${id}.json`);
+    const records = join(location.authoringDir, `${id}.records.jsonl`);
+    writeFileSync(record, JSON.stringify({ format: 1, id, createdAt: 1, touchedAt: 1, package: `spex-packages/${id}`, queued: [], failures: 0 }));
+    writeFileSync(records, `${JSON.stringify({ seq: 1, record: status(message) })}\n`);
+    return { record, records };
+  };
+  let repositories = [beta, gamma];
+  const drafts = new DraftStore(() => repositories);
+  // Each id a rescan gives another session, or none, is told.
+  const changed: string[] = [];
+  drafts.onKeptChanged = (id) => changed.push(id);
+  drafts.create("triage", 1000, beta, "local");
+  drafts.append("triage", 1, status("beta"));
+  drafts.append("triage", 2, status("beta again"));
+  const inGamma = arrive(gamma, "triage", "gamma");
+  drafts.refresh();
+  assert.equal(drafts.projectOf("triage"), beta.key);
+
+  // A record standing where a session is created is never replaced,
+  // nor its transcript removed: the store refuses.
+  const sift = arrive(gamma, "sift", "sift");
+  assert.throws(() => drafts.create("sift", 2000, gamma, "local"), StorageFormatError);
+  assert.equal(readFileSync(sift.records, "utf8"), `${JSON.stringify({ seq: 1, record: status("sift") })}\n`);
+  assert.equal(JSON.parse(readFileSync(sift.record, "utf8")).createdAt, 1);
+
+  // A spex repository whose key sorts first joins holding the id: the
+  // one kept stays kept while its file stands, both others reported.
+  const inAlpha = arrive(alpha, "triage", "alpha");
+  repositories = [alpha, beta, gamma];
+  drafts.refresh();
+  assert.equal(drafts.projectOf("triage"), beta.key);
+  assert.equal(drafts.recordsFile("triage"), join(beta.authoringDir, "triage.records.jsonl"));
+  assert.deepEqual(drafts.diagnostics().map((report) => report.file).sort(), [inAlpha.record, inGamma.record]);
+  for (const report of drafts.diagnostics()) assert.ok(report.reason.includes(`the one in ${beta.key} opens`), report.reason);
+  assert.deepEqual(changed, []);
+
+  // The kept one's clone moves (space-60): it stays the one kept, now
+  // sorting last.
+  const zeta = { ...at("zeta"), workingFolder: beta.workingFolder };
+  renameSync(dirname(beta.authoringDir), dirname(zeta.authoringDir));
+  repositories = [alpha, gamma, zeta];
+  drafts.moved([{ from: beta.key, to: zeta.key }]);
+  assert.equal(drafts.projectOf("triage"), zeta.key);
+  assert.deepEqual(drafts.records("triage").records.map((entry) => entry.seq), [1, 2]);
+  assert.deepEqual(changed, []);
+
+  // Deleting the kept session hands the id to the one shadowed whose
+  // key sorts first: kept, listed, and its diagnostic gone.
+  drafts.delete("triage");
+  assert.ok(!existsSync(join(zeta.authoringDir, "triage.json")));
+  assert.equal(drafts.projectOf("triage"), alpha.key);
+  assert.deepEqual(changed, ["triage"]);
+  assert.ok(drafts.ids().includes("triage"));
+  assert.deepEqual(drafts.records("triage").records.map((entry) => entry.seq), [1]);
+  assert.deepEqual(drafts.diagnostics().map((report) => report.file), [inGamma.record]);
+  // Creating it there again is refused, the transcript intact.
+  assert.throws(() => drafts.create("triage", 3000, alpha, "local"), StorageFormatError);
+  assert.equal(readFileSync(inAlpha.records, "utf8"), `${JSON.stringify({ seq: 1, record: status("alpha") })}\n`);
+
+  // Once the kept file goes, the next rescan keeps the other.
+  rmSync(inAlpha.record);
+  drafts.refresh();
+  assert.equal(drafts.projectOf("triage"), gamma.key);
+  assert.deepEqual(drafts.diagnostics(), []);
+  assert.deepEqual(changed, ["triage", "triage"]);
   rmSync(dir, { recursive: true, force: true });
 });

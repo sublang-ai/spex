@@ -298,7 +298,8 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
 }
 
 export interface ModuleLocation {
-  /** The playbook's registry module, absolute. */
+  /** The playbook's registry module, absolute; relative to the working
+   * folder where a path source has no working folder on this device. */
   module: string;
   /** The spec package it came from, and its version. */
   package: string;
@@ -309,6 +310,9 @@ export interface ModuleLocation {
   id: string;
   /** Whether the module file is there. */
   present: boolean;
+  /** A path source's folder, as the lock names it, where this device's
+   * working folder lacks it or there is none. */
+  missingPath?: string;
 }
 
 /** The module candidates of a playbook artifact folder, preferred first. */
@@ -324,26 +328,37 @@ export function playbookModuleCandidates(folder: string, id: string): string[] {
 /** Each exported playbook's module location (environments-9): the
  * installed artifact under `packages/`, or a path source's in the
  * working folder. Keyed by the exported name; a playbook is found by
- * its `id`, never by its alias. */
+ * its `id`, never by its alias. A path source whose folder this device
+ * lacks still locates its playbooks, not present and naming the folder,
+ * so no other environment's copy stands in for them. */
 export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: string | null): Map<string, ModuleLocation> {
   const out = new Map<string, ModuleLocation>();
   const packagesDir = join(cloneDir, "packages");
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
+    const source = resolution.source;
+    const pathSource = isPathSource(source);
     const root = packageRoot(name, resolution, packagesDir, workingFolder);
-    if (root === null) continue;
-    const pathSource = isPathSource(resolution.source);
-    const manifest = pathSource ? readManifestAt(root) : null;
-    const version = resolutionVersion(resolution) ?? readManifestAt(root)?.version ?? "";
+    const locked = resolutionVersion(resolution);
+    const manifest = root !== null && (pathSource || locked === undefined) ? readManifestAt(root) : null;
+    const missingPath = pathSource && manifest === null ? source.path : undefined;
+    const version = locked ?? manifest?.version ?? "";
     for (const exported of Object.keys(resolution.exports).sort()) {
       const id = resolution.exports[exported]!;
-      const language = resolution.artifacts[id]?.language;
-      if (!language) continue;
+      const artifact = resolution.artifacts[id];
+      if (!artifact?.language) continue;
+      const language = artifact.language;
       const prefix = `playbooks/${language}/${id}/`;
-      const isPlaybook = pathSource ? manifest?.artifacts[id]?.kind === "playbook" : resolution.files.some((file) => file.path.startsWith(prefix));
+      // The lock's kind; a lock written before it recorded one leaves
+      // the manifest or the files to tell, and a path source missing
+      // here counts as a playbook, so it is never found elsewhere.
+      const isPlaybook = artifact.kind !== undefined ? artifact.kind === "playbook"
+        : pathSource ? manifest === null || manifest.artifacts[id]?.kind === "playbook"
+          : resolution.files.some((file) => file.path.startsWith(prefix));
       if (!isPlaybook) continue;
-      const candidates = playbookModuleCandidates(join(root, "playbooks", language, id), id);
-      const found = candidates.find((candidate) => existsSync(candidate));
+      const folder = join(root ?? (pathSource ? source.path : ""), "playbooks", language, id);
+      const candidates = playbookModuleCandidates(folder, id);
+      const found = missingPath === undefined ? candidates.find((candidate) => existsSync(candidate)) : undefined;
       out.set(exported, {
         module: found ?? candidates[0]!,
         package: name,
@@ -351,6 +366,7 @@ export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: str
         builtin: name === BUILTIN_PACKAGE_NAME,
         id,
         present: found !== undefined,
+        ...(missingPath !== undefined ? { missingPath } : {}),
       });
     }
   }

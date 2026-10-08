@@ -53,7 +53,7 @@ When a sign-in completes [[git-host-2](git-host.md#git-host-2)] [[git-host-3](gi
 
 1. rename your own group's folder and its spex repository after the account's login where it bore this device's user name [[space-59](#space-59)];
 2. read the host [[git-host-5](git-host.md#git-host-5)];
-3. create your own group's spex repository on the host where the host lists none, and push it [[space-65](#space-65)]; where one exists, join the two histories as any two [[space-13](#space-13)];
+3. create your own group's spex repository on the host where the host lists none, and push it [[space-65](#space-65)]; where one exists, join the two histories as any two [[space-13](#space-13)], one the host lists with other members only after the notice on its row [[space-57](#space-57)];
 4. list every local-only spex repository of a project with its "Pick a group" control [[space-58](#space-58)], creating nothing for them unasked.
 
 - a turn in flight refuses the rename as it refuses a sync [[space-11](#space-11)], the sign-in standing complete with the rename retried on the next read;
@@ -83,6 +83,7 @@ While a spex repository has never been pushed from this device, when a sync of i
 
 - Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing;
 - a sync or a join of a spex repository whose only member is the account says nothing, nor does a creation in your own group;
+- a sync the core starts itself — after a sign-in [[space-4](#space-4)], a creation [[space-65](#space-65)] or a retried step [[space-64](#space-64)] — is admitted the same way: where the notice is owed, it does not start, and the row's Sync says the notice first;
 - a creation in any other group says it whatever its members, unknown until it exists, and says nothing of public, the repository not existing yet.
 
 #### space-58
@@ -98,7 +99,8 @@ When a working folder is added while signed in [[storage-6](storage.md#storage-6
 
 When the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the rename runs only while no session beneath the folder has a turn in flight, and blocks writes beneath it only [[space-21](#space-21)].
+- the rename runs only while no session beneath the folder has a turn in flight, and blocks writes beneath it only [[space-21](#space-21)];
+- a login differing from the folder's name only by case renames the folder and the repository in place, on a case-insensitive filesystem too.
 
 #### space-60
 
@@ -664,9 +666,11 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a working folder added while signed out pairs with a local-only spex repository under your own group [[space-61](#space-61)];
 - `space.signin.start` in the browser flow returns a loopback URL the suite completes against the stand-in, after which the state carries the account, your own group's folder and clone bear the login, every pair naming it is rewritten, and your own group's spex repository stands on the stand-in with its clone pushed [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)], no state from the sign-in to that push reading it unreachable [[space-61](#space-61)];
 - a sign-in as a login the stand-in spells with a capital or a dot, such as `Ada` or `ada.dev`, leaves your own group's folder, its clones and every pair bearing the login so spelled, its spex repository pushed, nothing of the set-up failed, and a restarted core listing the same project [[space-4](#space-4)] [[space-59](#space-59)];
+- a sign-in as `Ada` on a home whose own group is `ada` leaves the folder named `Ada` on disk whatever the filesystem's case rule, your own clone `Ada-spex` in it, every pair rewritten, `Ada-spex` created on the stand-in and pushed with no move left to retry, and a restarted core listing the same project [[space-59](#space-59)] [[space-4](#space-4)];
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group other than your own is refused until `noticed`, its details naming the notice with members and visibility null and nothing created or pushed at the stand-in [[space-57](#space-57)]; with `noticed` it records the notice [[space-57](#space-57)], creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; a pick in your own group creates and pushes with no notice [[space-57](#space-57)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
+- a sign-in while the stand-in lists your own group's `<login>-spex` with another member and your own clone holds a session pushes nothing, the row reading reachable and idle with two members and no notice recorded; `space.sync` is then refused until `noticed`, its details naming the notice, and with it pushes the session [[space-4](#space-4)] [[space-57](#space-57)];
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];

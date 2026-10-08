@@ -10,6 +10,7 @@ Spex decides the spec package format and the environments.
 spex.pub, the registry, keeps the dependency declaration it checks [[8]] and its interface [[9]], and takes the format in its own decision record [[11]].
 This record builds on [DR-103](103-the-home-and-its-groups.md), which defines spex repositories, working folders, projects and groups.
 Completed by [DR-105](105-playbook-17-5-0-adoption.md) in its ask that the launcher take each playbook's module location at launch: Playbook 17.5.0 takes it, so no launcher config names a module.
+Amended by [DR-107](107-resolution-takes-the-first-solution-found.md) in how Spex chooses among the solutions of a resolution: the first a depth-first search finds, not the highest by a global comparison.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role; the launcher gets the module's location from Spex at launch instead of from the launcher config. The compile flow stands.

@@ -336,6 +336,16 @@ export class AuthorManager {
 
   constructor(private readonly options: AuthorManagerOptions) {
     this.now = options.now ?? Date.now;
+    options.drafts.onKeptChanged = (id) => this.forget(id);
+  }
+
+  /** A rescan gave the id another session, or none (storage-12): what
+   * was read from the one before goes, and a turn still running for it
+   * is aborted; nothing of it reaches the session the id now names. */
+  private forget(id: string): void {
+    this.live.get(id)?.turn?.controller.abort();
+    this.live.delete(id);
+    this.problems.delete(id);
   }
 
   private get drafts(): DraftStore {
@@ -628,6 +638,14 @@ export class AuthorManager {
   // -- records --------------------------------------------------------------
 
   private append(id: string, live: LiveDraft, record: TmuxPlayRecord): DraftRecord {
+    // State the id no longer names records nothing (storage-12).
+    if (this.live.get(id) !== live) {
+      throw new Error(i18n._({
+        id: "{id} now names another authoring session",
+        values: { id },
+        comment: "Log line: a turn of an authoring session stops recording, since a rescan gave its id another project's session",
+      }));
+    }
     this.recordsOf(id, live);
     if (live.damaged) throw new CoreError("invalid_request", live.damaged);
     live.seq += 1;
@@ -975,6 +993,9 @@ export class AuthorManager {
     this.live.delete(id);
     this.problems.delete(id);
     this.events.onRemoved(id, projectId);
+    // Another project's session of the id, shadowed until now, is
+    // listed in its place (storage-12).
+    if (this.drafts.exists(id)) this.publish(id);
   }
 
   private assertIdle(id: string): void {

@@ -64,11 +64,12 @@ The core shall write and read a spex repository's `spex.lock` as exactly `{forma
 | --- | --- |
 | `source` | the exact source: `{registry, version, checksum}`; `{path, version, dependencies, requires}` as the path's manifest states them; or `{git, commit, path?}` |
 | `required-by` | the spec packages that required it, `[]` for a direct request alone |
-| `artifacts` | each selected artifact id to `{language, fallback}`: its chosen language and whether that was a fallback |
+| `artifacts` | each selected artifact id to `{kind, language, fallback}`: its kind, its chosen language and whether that was a fallback |
 | `files` | every selected file as `{path, sha256, executable}`; empty for a path source |
 | `exports` | exported Agent Skills name to artifact id |
 
-- a lock changes only when `spex.yaml` changes or the reader asks to resolve again; installing from an existing lock resolves nothing.
+- a lock changes only when `spex.yaml` changes or the reader asks to resolve again; installing from an existing lock resolves nothing;
+- a lock written before artifacts carried their `kind` reads with each kind unknown, until a resolve writes it again.
 
 #### environments-4
 
@@ -88,7 +89,7 @@ When a client sends `environment.resolve` for a spex repository, or its `spex.ya
 
 - a cycle in the dependency graph is allowed and adds nothing;
 - caret and tilde never pick a version its publisher yanked; an exact requirement, or installing from the lock, may; nothing picks a version the registry's operator suppressed;
-- among solutions the core takes the first a depth-first search finds, trying each spec package's candidates from the highest version down — the requested spec packages first, in name order, then, among the spec packages the assigned ones require and none assigns yet, the first in name order; a newer release lacking a selected artifact never blocks an older solution;
+- among solutions the core takes the first a depth-first search finds, trying each spec package's candidates from the highest version down — the requested spec packages first, in name order, then, among the spec packages the assigned ones require and none assigns yet, the first in name order ([DR-107](../decisions/107-resolution-takes-the-first-solution-found.md)); a newer release lacking a selected artifact never blocks an older solution;
 - a path source resolves to the manifest in the working folder, a Git source to the named commit's manifest, with their dependencies from the registry;
 - when no solution exists, the core replies `invalid_request` naming the version requirements in conflict, before anything is installed or run.
 
@@ -137,7 +138,7 @@ When an environment is installed or its lock applied by a sync, the core shall e
 When a session starts in a working folder, the core shall hand the launcher the module location of each playbook its composed configuration enables [[core-service-2](core-service.md#core-service-2)] — found by the playbook's id in the project's environment, else in your own group's, and there the installed playbook artifact's module or, for a path source, the module in the working folder — and shall write no path into a shared file ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - a playbook the configuration enables and no environment of the session exports is a config error naming the playbook and the spex repository whose environment lacks it;
-- your own group's environment is consulted only for a playbook the project's environment does not export, and a playbook whose exporting environment has not installed its module on this device is a config error naming the playbook and that spex repository, never replaced by another environment's copy;
+- your own group's environment is consulted only for a playbook the project's environment does not export, and a playbook whose exporting environment has not installed its module on this device, or whose path source's folder this device lacks — its working folder lacking the folder, or no working folder on this device — is a config error naming the playbook and that spex repository, and for a path source the folder, never replaced by another environment's copy;
 - a playbook available in an environment but enabled in no configuration is listed and not launched.
 
 ### Authoring and Publishing
@@ -233,7 +234,8 @@ When an integration suite resolves fixture requests against the stand-in registr
 - a two-level graph resolves to its highest versions reading the version index alone; in a three-level graph a required spec package keeps its highest version though that leaves what it requires, earlier in name order, at an older one; a yanked version is skipped by caret and taken by exact, a suppressed one never, and a cycle resolves [[environments-5](#environments-5)];
 - conflicting requirements are reported by name before anything is installed [[environments-5](#environments-5)];
 - a `select` entry, the environment's `language` and the original text choose the language in that order with the fallback recorded; what a playbook `requires` is selected with it; two skills of one name are refused until one is aliased, and two playbooks of one id are refused alias or not [[environments-6](#environments-6)];
-- the lock written is exactly the encoding of [[environments-3](#environments-3)] and installing from it on a second scratch home resolves nothing and yields byte-identical `packages/` [[environments-3](#environments-3)] [[environments-7](#environments-7)].
+- the lock written is exactly the encoding of [[environments-3](#environments-3)], each artifact with its kind, and installing from it on a second scratch home resolves nothing and yields byte-identical `packages/` [[environments-3](#environments-3)] [[environments-7](#environments-7)];
+- a lock without `kind` reads with the kinds unknown and writes back the same bytes, and a `kind` not one of the five is refused [[environments-3](#environments-3)].
 
 #### environments-21
 
@@ -254,6 +256,7 @@ When an integration suite exports an installed environment to a working folder w
 - a generated skill per playbook names the spec package, version and id and runs that playbook in the working folder; the project's and your own group's skill of one name both stand with their origins listed [[environments-8](#environments-8)] [[environments-16](#environments-16)];
 - a session started in the folder hands the launcher the installed playbook's module location, your own group's where the project lacks it, the path source's in the folder for a path request, an aliased playbook's found and enabled by its id while its alias enables none, and a config enabling a playbook no environment exports is refused naming both [[environments-9](#environments-9)];
 - a playbook the project's environment exports but has not installed on this device is refused naming the project's spex repository, never taken from your own group's, which still supplies a playbook the project does not export [[environments-9](#environments-9)];
+- a path source's playbook is refused naming the project's spex repository and the folder, never taken from your own group's, when the working folder lacks the folder, when there is no working folder on this device, and from a lock without kinds, while the environment lists the path source missing [[environments-9](#environments-9)] [[environments-14](#environments-14)];
 - a re-export removes a skill the lock no longer selects and leaves a reader-placed skill beside it [[environments-8](#environments-8)].
 
 #### environments-23

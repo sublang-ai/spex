@@ -307,9 +307,12 @@ export class DraftStore {
   /** Each session's spec package path inside its working folder. */
   private packages = new Map<string, string>();
   /** The session files the last rescan found shadowed by another spex
-   * repository's of the same id: the id is the home's, the first found
-   * kept (storage-12). */
+   * repository's of the same id: the id is the home's, the one kept
+   * staying kept while its file stands (storage-12). */
   private duplicates: ShadowedDraft[] = [];
+  /** Told of each id a rescan gave another session, or none, so state
+   * read from the one kept before is dropped (storage-12). */
+  onKeptChanged: (id: string) => void = () => {};
 
   constructor(
     /** Every clone's `authoring/` directory, read on each rescan. */
@@ -318,29 +321,48 @@ export class DraftStore {
     this.refresh();
   }
 
-  /** Re-read which clone holds which session (space-20). */
+  /** Re-read which clone holds which session (space-20): the one kept
+   * stays kept while its file stands; else the first by key order
+   * (storage-12). */
   refresh(): void {
-    const next = new Map<string, AuthoringLocation>();
-    const packages = new Map<string, string>();
-    const duplicates: ShadowedDraft[] = [];
+    const holders = new Map<string, AuthoringLocation[]>();
     for (const location of this.repositories()) {
       if (!existsSync(location.authoringDir)) continue;
       for (const name of readdirSync(location.authoringDir)) {
         if (!name.endsWith(".json")) continue;
         const id = name.slice(0, -5);
         if (!DRAFT_ID.test(id)) continue;
-        const kept = next.get(id);
-        if (kept) {
-          duplicates.push({ id, kept: kept.key, other: location.key, file: join(location.authoringDir, name) });
-          continue;
-        }
-        next.set(id, location);
-        packages.set(id, readPackagePath(join(location.authoringDir, name), id));
+        holders.set(id, [...(holders.get(id) ?? []), location]);
       }
     }
+    const next = new Map<string, AuthoringLocation>();
+    const packages = new Map<string, string>();
+    const duplicates: ShadowedDraft[] = [];
+    for (const [id, found] of holders) {
+      const previous = this.locations.get(id)?.key;
+      const kept = found.find((location) => location.key === previous) ?? found[0];
+      next.set(id, kept);
+      packages.set(id, readPackagePath(join(kept.authoringDir, `${id}.json`), id));
+      for (const location of found) {
+        if (location !== kept) duplicates.push({ id, kept: kept.key, other: location.key, file: join(location.authoringDir, `${id}.json`) });
+      }
+    }
+    const changed = [...this.locations].filter(([id, location]) => next.get(id)?.key !== location.key).map(([id]) => id);
     this.locations = next;
     this.packages = packages;
     this.duplicates = duplicates;
+    for (const id of changed) this.onKeptChanged(id);
+  }
+
+  /** Clones moved under `workspace/` (space-59, space-60): a kept
+   * session follows its clone, still the one kept. */
+  moved(moves: readonly { from: string; to: string }[]): void {
+    const to = new Map(moves.map((move) => [move.from, move.to]));
+    for (const [id, location] of [...this.locations]) {
+      const key = to.get(location.key);
+      if (key !== undefined) this.locations.set(id, { ...location, key });
+    }
+    this.refresh();
   }
 
   /** One nonblocking diagnostic per session file the last rescan found
@@ -352,7 +374,7 @@ export class DraftStore {
       reason: i18n._({
         id: "{draftId} is authored in both {kept} and {other}; the one in {kept} opens",
         values: { draftId: id, kept, other },
-        comment: "Diagnostic: two spex repositories each hold an authoring session of one id; the first found is the one that opens",
+        comment: "Diagnostic: two spex repositories each hold an authoring session of one id; the one kept is the one that opens",
       }),
       blocking: false,
     }));
@@ -463,6 +485,15 @@ export class DraftStore {
         values: { draftId: id, projectId: holder },
       }));
     }
+    // A session already standing there is never replaced, nor its
+    // transcript removed (playbook-library-51).
+    if (existsSync(join(location.authoringDir, `${id}.json`))) {
+      throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
+        id: "draft {id} already exists; open it",
+        comment: "Refusal: a draft with that id is already on this device",
+        values: { id },
+      }));
+    }
     const packagePath = draftPackagePath(id);
     const dir = join(location.workingFolder, ...packagePath.split("/"));
     mkdirSync(join(dir, "playbooks", AUTHORING_LANGUAGE, id), { recursive: true });
@@ -478,14 +509,15 @@ export class DraftStore {
   }
 
   /** Remove the record, transcript and attachments, leaving the spec
-   * package folder in the working folder (playbook-library-63). */
+   * package folder in the working folder (playbook-library-63); a
+   * session of the id another spex repository holds takes its place
+   * (storage-12). */
   retire(id: string): void {
     if (!this.locations.has(id)) return;
     rmSync(this.assetsDir(id), { recursive: true, force: true });
     rmSync(this.recordsFile(id), { force: true });
     rmSync(this.recordFile(id), { force: true });
-    this.locations.delete(id);
-    this.packages.delete(id);
+    this.refresh();
   }
 
   /** Delete the session: its record, transcript and attachments; the

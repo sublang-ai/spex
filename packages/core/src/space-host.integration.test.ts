@@ -11,7 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
 import { Home } from "./home.js";
@@ -176,6 +176,49 @@ test("space-37: a login spelled with a capital or a dot names your own group's f
     assert.deepEqual((await again.client.expectOk("project.list", {})).map((project) => [project.id, project.path]), [[moved, home.projectDir]]);
     await again.stop();
   }
+});
+
+test("space-59: a login differing from your own group's name only by case renames the folder and its spex repository in place", async (t) => {
+  const errors = t.mock.method(console, "error");
+  const host = await startHost();
+  host.script.person.login = "Ada";
+  host.script.groups[0].fullPath = "Ada";
+  host.script.groups[0].name = "Ada";
+  // This device's user name, lower-cased, names your own group `ada`;
+  // the host spells the login `Ada`.
+  const home = await startHome("signin-case", { host, own: "ada", extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, home.projectDir);
+  const project = basename(key);
+  assert.equal(key, `ada/${project}`);
+  const from = home.client.mark();
+  const signed = await signIn(home, host);
+  // The folder and your own group's spex repository bear the login as
+  // the host spells it, on disk whatever the filesystem's case rule, and
+  // every pair names them so (space-59, storage-2).
+  const ownKey = "Ada/Ada-spex";
+  const moved = `Ada/${project}`;
+  assert.deepEqual(signed.groups.flatMap((group) => group.repositories.map((repository) => repository.key)).filter((repoKey) => repoKey.startsWith("ada/")), []);
+  assert.equal(repositoryOf(signed, moved).folder, home.projectDir);
+  const workspace = join(home.dataDir, "workspace");
+  assert.deepEqual(readdirSync(workspace).filter((entry) => entry.toLowerCase() === "ada"), ["Ada"]);
+  assert.deepEqual(readdirSync(join(workspace, "Ada")).sort(), ["Ada-spex", project].sort());
+  assert.ok(existsSync(join(clonePath(home.dataDir, moved), ".git")), moved);
+  const file = Home.load(home.dataDir).file;
+  assert.equal(file.own, "Ada");
+  assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
+  // No move is left to retry: your own group's spex repository stands on
+  // the stand-in as `Ada-spex`, pushed (space-4, space-65).
+  const own = await home.client.waitRepository(from, ownKey, (repository) => repository.sync.phase === "done");
+  assert.equal(own.state, "reachable");
+  assert.ok(host.script.repositories.some((repository) => repository.group.fullPath === "Ada" && repository.path === "Ada-spex"));
+  assert.equal(git(bareOf(host, ownKey), "rev-parse", "spex"), git(clonePath(home.dataDir, ownKey), "rev-parse", "spex"));
+  assert.deepEqual(errors.mock.calls.map((call) => String(call.arguments[0])).filter((line) => /failed/.test(line)), []);
+  // A restarted core reads the same project where it now lies.
+  await home.stop();
+  const again = await startHome("signin-case-again", { dataDir: home.dataDir, project: false });
+  t.after(() => again.stop());
+  assert.deepEqual((await again.client.expectOk("project.list", {})).map((entry) => [entry.id, entry.path]), [[moved, home.projectDir]]);
 });
 
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
@@ -480,6 +523,37 @@ test("space-37: a join pick and the first sync into a repository with other memb
   // Joined from the listing, it goes straight to its sync (git-host-5).
   assertNeverUnreachable(home.client.readings(fromPal, [mine.key, "acme/pal-spex"]));
   assert.equal(prefsOf(home.dataDir)["sync:acme/pal-spex:noticed"], true);
+});
+
+test("space-57: your own group's repository the host lists with other members is joined after a sign-in only once the notice is seen on its row", async (t) => {
+  const host = await startHost();
+  const bob = { id: "1002", login: "bob", displayName: "Bob", role: "Developer" };
+  const listed = host.script.addRepository({ group: LOGIN, name: `${LOGIN}-spex`, members: [bob] });
+  const home = await startHome("own-shared", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  // A session in your own group's spex repository, on this device alone.
+  await home.client.expectOk("project.rebind", { projectId: OWN_KEY, path: gitFolder("own-work") });
+  const sessionId = await runTurn(home, OWN_KEY, "Mine alone");
+  const asked = host.script.requests.length;
+  await signIn(home, host);
+  await sleep(500);
+  // The sync the sign-in would start is owed the notice: it does not
+  // start, and nothing reaches the stand-in (space-4, space-57).
+  const held = await home.client.repository(HOST_OWN);
+  assert.deepEqual([held.state, held.id, held.members, held.noticed, held.sync.phase, held.lastSync], ["reachable", listed.id, 2, false, "idle", null]);
+  assert.equal(git(bareOf(host, HOST_OWN), "for-each-ref", "refs/heads/spex"), "", "nothing is pushed");
+  assert.ok(!host.script.requests.slice(asked).some((request) => request.path.includes("git-receive-pack")), "no push reached the stand-in");
+  // The reader's Sync asks for the notice, then pushes (space-57).
+  const unseen = await home.client.command("space.sync", { repository: HOST_OWN });
+  assert.ok(!unseen.ok, "the sync waits for the notice");
+  assert.equal(unseen.error.code, "invalid_request");
+  assert.match(unseen.error.message, /sharing notice/);
+  assert.deepEqual(unseen.error.details, { notice: true, members: 2, visibility: "private" });
+  const done = await home.client.settle("space.sync", { repository: HOST_OWN, noticed: true });
+  assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
+  assert.equal(done.noticed, true);
+  assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(clonePath(home.dataDir, HOST_OWN), "rev-parse", "spex"));
+  assert.ok(git(bareOf(host, HOST_OWN), "ls-tree", "-r", "--name-only", "spex").split("\n").includes(`sessions/${sessionId}.json`));
 });
 
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {

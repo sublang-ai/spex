@@ -120,6 +120,7 @@ When the Playbooks surface is opened with a project chosen, the surface shall li
 - the chip reads "No source", "Draft", "Compiling", "Failed", "Interrupted", "Compiled", "Changed", or "Enabled" — the failed phase and the compile's age in its title, never in the chip ([DR-041](../decisions/041-chrome-that-fits.md) §9);
 - a session whose spec package folder is gone from the working folder reads "Source missing" and offers only Delete;
 - a session compiling in the background keeps its row live, and opening it shows the running phases;
+- a session shadowed by another project's session of the same id is not listed, standing as the home's diagnostic until the id frees [[storage-12](storage.md#storage-12)];
 - the section is absent while there is no authoring session, and the playbook list's empty state then points at enabling a built-in or "New playbook".
 
 #### playbook-library-51

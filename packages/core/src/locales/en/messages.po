@@ -121,7 +121,7 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
 msgstr "{diagnostic}; delete the draft, or repair the file and restart Spex"
 
-#. Diagnostic: two spex repositories each hold an authoring session of one id; the first found is the one that opens
+#. Diagnostic: two spex repositories each hold an authoring session of one id; the one kept is the one that opens
 #: src/drafts.ts
 msgid "{draftId} is authored in both {kept} and {other}; the one in {kept} opens"
 msgstr "{draftId} is authored in both {kept} and {other}; the one in {kept} opens"
@@ -194,6 +194,11 @@ msgstr "{id} is already a playbook of this project's or your own environment; pi
 #: src/service.ts
 msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} is already an authoring session of another project; pick another id"
+
+#. Log line: a turn of an authoring session stops recording, since a rescan gave its id another project's session
+#: src/authoring.ts
+msgid "{id} now names another authoring session"
+msgstr "{id} now names another authoring session"
 
 #. Refusal: publishing reads a folder inside the repository's working folder
 #: src/environments.ts
@@ -880,7 +885,9 @@ msgid "deleted"
 msgstr "deleted"
 
 #. Refusal: a draft with that id is already on this device
+#. Refusal: a draft with that id is already on this device
 #: src/authoring.ts
+#: src/drafts.ts
 msgid "draft {id} already exists; open it"
 msgstr "draft {id} already exists; open it"
 
@@ -1592,6 +1599,11 @@ msgstr "playbooks must enable at least one playbook"
 #: src/config.ts
 msgid "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
 msgstr "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
+
+#. Config error: the environment requests the enabled playbook's spec package by a path inside the working folder, and this device's working folder lacks that folder or there is none; {repository} is the spex repository's key; {path} is the folder, relative to the working folder
+#: src/config.ts
+msgid "playbooks.{id} is enabled, but the environment of {repository} finds no {path} in the working folder on this device"
+msgstr "playbooks.{id} is enabled, but the environment of {repository} finds no {path} in the working folder on this device"
 
 #. Config error: the environment exports the enabled playbook, but its files are not installed here; {repository} is the spex repository's key; "Playbooks" is the app's own surface
 #: src/config.ts

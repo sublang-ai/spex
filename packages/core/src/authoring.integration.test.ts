@@ -10,8 +10,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
 
@@ -1048,7 +1048,7 @@ test("draft media preserves file-only input, native bytes, owned output and text
 // storage-25: one id held by two spex repositories
 // ---------------------------------------------------------------------------
 
-test("storage-25: two spex repositories holding one authoring session id are reported, the one sorting first kept", async () => {
+test("storage-25: two spex repositories holding one authoring session id are reported, the one kept staying kept while its file stands", async () => {
   const script: FakeScript = { fallback: { result: "Noted." } };
   const slc = stubSlcSource("['Helper']");
   const harness = await startHarness({ script, slc });
@@ -1088,6 +1088,54 @@ test("storage-25: two spex repositories holding one authoring session id are rep
     assert.equal(opened.draft.id, "triage");
     await client.expectError("draft.open", { projectId: other, draftId: "triage" }, "not_found");
     await client.expectError("draft.send", { projectId: other, draftId: "triage", text: "hello" }, "not_found");
+
+    // The kept session holds a turn its manager has read.
+    const finished = (): number => client.records("triage").filter(({ record }) => record.type === "turn_finished").length;
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+    await client.expectOk("draft.send", { projectId, draftId: "triage", text: "hello" });
+    await until(() => finished() === 1 && client.latest("triage")?.activity === "idle", 10_000, "the first turn");
+    const kept = authoringFiles(clone, "triage");
+    const keptTranscript = readFileSync(kept.records, "utf8");
+
+    // A spex repository whose key sorts first comes to hold the id, and
+    // a rescan follows another project's adding: the one kept stays kept
+    // while its file stands.
+    const first = (await client.expectOk("project.register", { path: workingFolder(join(dir, "alpha")) })).id;
+    assert.ok(first.localeCompare(projectId) < 0, `${first} sorts before ${projectId}`);
+    const arrived = authoringFiles(join(dataDir, "workspace", ...first.split("/")), "triage");
+    mkdirSync(dirname(arrived.record), { recursive: true });
+    writeFileSync(arrived.record, readFileSync(kept.record));
+    writeFileSync(arrived.records, `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`);
+    mkdirSync(join(dir, "alpha", "spex-packages", "triage", "playbooks", "en", "triage"), { recursive: true });
+    await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
+    assert.equal((await client.expectOk("draft.open", { projectId, draftId: "triage" })).draft.projectId, projectId);
+    await client.expectError("draft.open", { projectId: first, draftId: "triage" }, "not_found");
+    const shadowedNow = (await client.expectOk("storage.diagnostics", {})).filter((entry) => entry.file.endsWith(join("authoring", "triage.json")));
+    assert.deepEqual(shadowedNow.map((entry) => entry.file).sort(), [arrived.record, shadowed].sort());
+
+    // Once the kept file goes, the next rescan keeps the one sorting
+    // first: its next records follow its own last sequence, and none
+    // reach the transcript left behind.
+    rmSync(kept.record);
+    await client.expectOk("project.register", { path: workingFolder(join(dir, "theta")) });
+    await client.expectError("draft.open", { projectId, draftId: "triage" }, "not_found");
+    await client.expectOk("draft.send", { projectId: first, draftId: "triage", text: "hello again" });
+    await until(() => finished() === 2 && client.latest("triage")?.activity === "idle", 10_000, "the second turn");
+    const lines = readFileSync(arrived.records, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { seq: number });
+    assert.ok(lines.length > 1, "the turn's records follow the one that arrived");
+    assert.deepEqual(lines.map((line) => line.seq), lines.map((_, index) => index + 1));
+    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript);
+    const reopened = await client.expectOk("draft.open", { projectId: first, draftId: "triage" });
+    assert.equal(reopened.draft.diagnostic, undefined);
+    assert.deepEqual(reopened.records.map((entry) => entry.seq), lines.map((line) => line.seq));
+
+    // Deleting it hands the id to the one left: listed and opening, with
+    // no diagnostic left for the id.
+    await client.expectOk("draft.delete", { projectId: first, draftId: "triage" });
+    await client.waitFor((message) => message.type === "draft.state" && message.draft.id === "triage" && message.draft.projectId === other);
+    assert.deepEqual((await client.expectOk("draft.list", {})).filter((draft) => draft.id === "triage").map((draft) => draft.projectId), [other]);
+    assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.projectId, other);
+    assert.deepEqual((await client.expectOk("storage.diagnostics", {})).filter((entry) => entry.file.endsWith(join("authoring", "triage.json"))), []);
   } finally {
     client.close();
     await service.stop();

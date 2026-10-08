@@ -4,10 +4,10 @@
 // The lock: a spex repository's `spex.lock` (environments-3, DR-104).
 // Exactly `{format: 1, requests, packages}`: the digest of the
 // `spex.yaml` it resolved, and per spec package the exact source, who
-// required it, the selected artifacts with their languages, every
-// selected file with its digest and executable flag, and the exported
-// names. Written as YAML in one fixed order, so one resolution always
-// writes the same bytes on every device.
+// required it, the selected artifacts with their kinds and languages,
+// every selected file with its digest and executable flag, and the
+// exported names. Written as YAML in one fixed order, so one resolution
+// always writes the same bytes on every device.
 
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
@@ -15,7 +15,7 @@ import { dirname } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
 import { writeApplicationBytes } from "../app-storage.js";
-import { idRecord, isPackageName, sha256Hex, type Issue, type Manifest } from "./format.js";
+import { ARTIFACT_KINDS, idRecord, isPackageName, sha256Hex, type ArtifactKind, type Issue, type Manifest } from "./format.js";
 import { requestsDigest } from "./requests.js";
 
 /** A selected file as the lock records it. */
@@ -31,6 +31,10 @@ export type GitSourceLock = { git: string; commit: string; path?: string };
 export type SourceLock = RegistrySourceLock | PathSourceLock | GitSourceLock;
 
 export interface LockedArtifact {
+  /** The artifact's kind, so a reader tells a playbook from a skill
+   * without its files; absent only in a lock written before the lock
+   * recorded it, which the next resolve rewrites with it. */
+  kind?: ArtifactKind;
   language: string | null;
   fallback: boolean;
 }
@@ -96,7 +100,7 @@ export function serializeLock(lock: Lock): string {
     const artifacts = idRecord<unknown>();
     for (const id of sortedKeys(resolution.artifacts)) {
       const artifact = resolution.artifacts[id]!;
-      artifacts[id] = { language: artifact.language, fallback: artifact.fallback };
+      artifacts[id] = { ...(artifact.kind !== undefined ? { kind: artifact.kind } : {}), language: artifact.language, fallback: artifact.fallback };
     }
     const exports = idRecord<string>();
     for (const exported of sortedKeys(resolution.exports)) exports[exported] = resolution.exports[exported]!;
@@ -192,11 +196,14 @@ export function parseLockValue(raw: unknown): Lock {
       const artifacts = idRecord<LockedArtifact>();
       if (!isPlainObject(value.artifacts)) issues.push({ path: at, rule: "artifacts", message: `${at}.artifacts is not a mapping` });
       else for (const [id, artifact] of Object.entries(value.artifacts)) {
-        if (!isPlainObject(artifact) || !(artifact.language === null || typeof artifact.language === "string") || typeof artifact.fallback !== "boolean") {
-          issues.push({ path: at, rule: "artifacts", message: `${at}.artifacts.${id} is not {language, fallback}` });
+        // A lock written before the lock recorded `kind` reads with the
+        // kind unknown; the next resolve rewrites it with the kind.
+        if (!isPlainObject(artifact) || !(artifact.language === null || typeof artifact.language === "string") || typeof artifact.fallback !== "boolean"
+          || (artifact.kind !== undefined && !(ARTIFACT_KINDS as readonly unknown[]).includes(artifact.kind))) {
+          issues.push({ path: at, rule: "artifacts", message: `${at}.artifacts.${id} is not {kind, language, fallback}` });
           continue;
         }
-        artifacts[id] = { language: artifact.language as string | null, fallback: artifact.fallback };
+        artifacts[id] = { ...(artifact.kind !== undefined ? { kind: artifact.kind as ArtifactKind } : {}), language: artifact.language as string | null, fallback: artifact.fallback };
       }
       const files: LockedFile[] = [];
       if (!Array.isArray(value.files)) issues.push({ path: at, rule: "files", message: `${at}.files is not a list` });

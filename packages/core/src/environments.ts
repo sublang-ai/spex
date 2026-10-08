@@ -744,8 +744,8 @@ export class EnvironmentManager {
   /** Where a session's playbooks come from (environments-9): the
    * project's environment, else your own group's for a playbook the
    * project's does not export; a module the exporting environment has
-   * not installed on this device is missing there, never taken from the
-   * other environment. */
+   * not installed on this device, or a path source's folder this device
+   * lacks, is missing there, never taken from the other environment. */
   modulesFor(projectKey: string | null): PlaybookModules {
     const own = this.store.home.own();
     const ownLocations = this.locations(own);
@@ -761,7 +761,9 @@ export class EnvironmentManager {
         const fromProject = pick(project, id);
         const location = fromProject ?? pick(ownLocations, id);
         if (!location) return undefined;
-        if (!location.present) return { missing: { repository: fromProject ? projectKey! : own, module: location.module } };
+        if (!location.present) {
+          return { missing: { repository: fromProject ? projectKey! : own, module: location.module, ...(location.missingPath !== undefined ? { path: location.missingPath } : {}) } };
+        }
         return { module: location.module, builtin: location.builtin };
       },
     };
@@ -813,8 +815,10 @@ export class EnvironmentManager {
       const missing = pathSource && (root === null || manifest === null);
       const installed = pathSource ? !missing : installedNow.has(name);
       const pkg = name.split("/")[1]!;
+      // The lock's kind; a lock written before it recorded one leaves the
+      // manifest or the files to tell.
       const kindOf = (id: string): EnvironmentPackage["artifacts"][number]["kind"] => {
-        const declared = manifest?.artifacts[id]?.kind;
+        const declared = resolution.artifacts[id]?.kind ?? manifest?.artifacts[id]?.kind;
         if (declared) return declared;
         for (const file of resolution.files) {
           const place = placeOf(file.path, pkg);

@@ -3163,6 +3163,8 @@ export class CoreService {
    * session and ledger is announced under its new key.
    */
   private async repositoriesMoved(moves: { from: string; to: string }[]): Promise<void> {
+    // A kept authoring session follows its clone (storage-12).
+    this.drafts.moved(moves);
     if (this.options.configPath === undefined) {
       const configPath = this.store.ownRepository().configPath;
       if (configPath !== this.configPath) {

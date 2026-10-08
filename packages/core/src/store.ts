@@ -665,20 +665,24 @@ export class Store {
 
   /** Every clone under `workspace/`: a folder named `<name>-spex` inside
    * plain group folders mirroring the Git host (storage-1). A group
-   * folder may bear such a name too: it holds no `.git` and holds a
-   * folder named `<name>-spex`, and the walk goes on inside it. */
+   * folder may bear such a name too, so a clone is told by what it
+   * holds: `.git`, a file, or nothing yet, a dot-named entry such as
+   * Finder's `.DS_Store` aside. A group folder holds only folders, and
+   * the walk goes on inside it. Your own group's clone always stands. */
   private discoverRepositories(): void {
     const found = new Map<string, string>();
-    const folders = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => join(dir, entry.name));
-    const isClone = (dir: string): boolean =>
-      existsSync(join(dir, ".git")) || !folders(dir).some((path) => this.homeFile.keyOf(path) !== undefined);
+    const held = (dir: string) => readdirSync(dir, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
+    const folders = (dir: string): string[] => held(dir).filter((entry) => entry.isDirectory()).map((entry) => join(dir, entry.name));
+    const isClone = (dir: string, key: string): boolean => {
+      if (key === this.homeFile.own() || existsSync(join(dir, ".git"))) return true;
+      const entries = held(dir);
+      return entries.some((entry) => entry.isFile()) || !entries.some((entry) => entry.isDirectory());
+    };
     const walk = (dir: string, depth: number): void => {
       if (depth > 8 || !existsSync(dir)) return;
       for (const path of folders(dir)) {
         const key = this.homeFile.keyOf(path);
-        if (key && isClone(path)) found.set(key, path);
+        if (key && isClone(path, key)) found.set(key, path);
         else walk(path, depth + 1);
       }
     };
