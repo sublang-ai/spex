@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 import { Home, isRepositoryKey } from "../packages/core/dist/home.js";
 import { Store } from "../packages/core/dist/store.js";
 import { isWorkTreeRoot } from "../packages/core/dist/forge.js";
-import { planStorageMerge, reserveStorageHome, selectStorageMerge, validateStorageTree } from "../packages/core/dist/storage-git.js";
+import { planStorageMerge, reserveStorageHome, selectStorageMerge, storageMachineIdentity, validateStorageTree } from "../packages/core/dist/storage-git.js";
 
 const USAGE = "Usage: node scripts/storage-git.mjs [--home path] --repository <key> plan <ours> <theirs> | select [unit=ours|theirs ...] | validate | rebind <key> <path> [--alias recorded-path ...]";
 
@@ -46,7 +46,7 @@ try {
     }
     console.log(JSON.stringify(await selectStorageMerge(home, repository, choices), null, 2));
   } else if (operation === "validate" && args.length === 0) {
-    const release = reserveStorageHome(home);
+    const release = reserveStorageHome(home, await storageMachineIdentity());
     try {
       console.log(JSON.stringify(await validateStorageTree(dir, { own: repository === loaded.own(), libraryDir: join(home, "playbooks") }), null, 2));
     } finally { release(); }
@@ -59,7 +59,7 @@ try {
       (aliases ??= []).push(value);
     }
     if (!(await isWorkTreeRoot(path))) throw new Error(`${path} is not the root of a Git work tree`);
-    const store = await Store.open({ dir: home });
+    const store = await Store.open({ dir: home, machineIdentity: await storageMachineIdentity() });
     try {
       const project = store.rebindProject({ id: key, path, ...(aliases ? { aliases } : {}) });
       await store.initializeSessions();

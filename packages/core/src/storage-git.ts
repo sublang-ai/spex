@@ -12,10 +12,12 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { parseIntentFile, parsePrefs, parseProjectFile, type IntentFile, type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { Home } from "./home.js";
 import { i18n } from "./i18n.js";
+import { acquireRootLease } from "./root-lease.js";
 
 export type StorageChoice = "ours" | "theirs";
 /** One whole-unit selection subject (storage-11). `changed` says which
@@ -122,16 +124,24 @@ export function resolveStorageChoices(units: StorageMergeUnit[], choices: Record
   return resolved;
 }
 
-/** The home lease (storage-14), taken where no core runs: fail-closed. */
-export function reserveStorageHome(home: string): () => void {
+/** The home lease (storage-14) by the core's rule (storage-26), taken
+ * where no core runs: a dead owner of this machine is reclaimed, and a
+ * live, foreign, or unverifiable one refuses with the lease path and the
+ * reason. */
+export function reserveStorageHome(home: string, machineIdentity: string): () => void {
   mkdirSync(home, { recursive: true, mode: 0o700 });
-  const token = randomUUID(); const stage = join(home, `.lease.stage.${token}`); const lease = join(home, ".lease");
-  mkdirSync(stage, { mode: 0o700 });
-  writeApplicationFile(join(stage, "owner.json"), { pid: process.pid, hostname: hostname(), acquiredAt: Date.now(), token });
-  try { renameSync(stage, lease); } catch { rmSync(stage, { recursive: true, force: true }); throw new Error("stop the Spex core before changing stored data; the home lease is held or cannot be verified"); }
-  return () => {
-    try { if ((readJsonFile(join(lease, "owner.json")) as { token?: string }).token === token) rmSync(lease, { recursive: true }); } catch { /* Never remove an unproven owner. */ }
-  };
+  let lease;
+  try { lease = acquireRootLease(home, { machineIdentity }); }
+  catch (error) { throw new Error(`stop the Spex core before changing stored data; ${error instanceof Error ? error.message : String(error)}`); }
+  return () => { lease.release(); };
+}
+
+/** This machine's identity for a command that takes the root lease
+ * (storage-10): resolved before any change, and a refusal names the
+ * identity file and the reason. */
+export async function storageMachineIdentity(): Promise<string> {
+  try { return await resolveMachineIdentity(); }
+  catch (error) { throw new Error(`Spex cannot identify this machine: ${error instanceof Error ? error.message : String(error)}`); }
 }
 function copySafe(source: string, target: string, top = true): void {
   if (!existsSync(source)) return;
@@ -382,8 +392,8 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
 
 /** Select into an in-progress ordinary Git merge of one clone; leave
  * committing to Git (storage-21). */
-export async function selectStorageMerge(home_: string, key: string, choices: Record<string, StorageChoice> = {}, options: { join?: boolean } = {}): Promise<{ plan: StorageMergePlan; diagnostics: StorageDiagnostic[] }> {
-  const home = resolve(home_); const releaseHome = reserveStorageHome(home);
+export async function selectStorageMerge(home_: string, key: string, choices: Record<string, StorageChoice> = {}, options: { join?: boolean; machineIdentity?: string } = {}): Promise<{ plan: StorageMergePlan; diagnostics: StorageDiagnostic[] }> {
+  const home = resolve(home_); const releaseHome = reserveStorageHome(home, options.machineIdentity ?? await storageMachineIdentity());
   try {
     const loaded = Home.load(home);
     const dir = loaded.clonePath(key);

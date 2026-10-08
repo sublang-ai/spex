@@ -504,7 +504,17 @@ The core service shall mutate a session from either interface only through Playb
 
 #### core-service-61
 
-When the core service starts against a state root that another core instance holds, the core service shall refuse to serve, reporting the holding instance to the host — one core per state root at a time ([DR-036](../decisions/036-file-state-store.md)).
+When the core service starts against a state root, the core service shall take this machine's identity from Playbook's facade [[5]] and the root lease by the shared rule [[storage-26](storage.md#storage-26)], refusing to serve — one core per state root at a time ([DR-036](../decisions/036-file-state-store.md), [DR-108](../decisions/108-the-root-lease-names-the-machine.md)) — with a message the host shows that names the lease path and the cause:
+
+| Cause | Message |
+| --- | --- |
+| a live process of this machine holds the root | the holder's `pid` and its recorded host name or machine identity |
+| another machine's owner holds the root | the owner's machine identity, or its legacy host name, named as such |
+| the owner cannot be verified: malformed — a tagged owner not private among them — tokenless, empty, a probe failing otherwise than `ESRCH`, an occupied retired target, or a staging or rename failure other than a target that appeared | the reason, a failed probe or file operation by its error code, with the instruction to stop every Spex writer before removing the lease by hand |
+| a `.lock/` of the former layout whose owner, read by the same rule, is live, another machine's or unverifiable | as above for that owner, naming `.lock/` in place of the lease path |
+| the machine identity is unavailable | the identity file and the reason, before the lease is inspected; no lease path |
+
+- A dead owner of this machine is reclaimed and the start proceeds; a dead former-layout owner of this machine is left for the migration [[storage-9](storage.md#storage-9)].
 
 #### core-service-64
 
@@ -798,7 +808,7 @@ When the integration suite settles and restarts a shared-store session, it shall
 
 #### core-service-63
 
-While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder, and after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds.
+While a core service is serving a state root, the test suite shall start a second core service against the same root and assert the admission contract of [[core-service-61](#core-service-61)]: the second start refuses to serve reporting the holder's `pid`; after the first service stops [[core-service-39](#core-service-39)], a fresh start on that root succeeds and the stopped service's lease stands retired under `.lease.retired/`; a root whose lease a killed process of this machine left is reclaimed by the next start; a lease tagged with another machine's identity refuses naming it as a machine identity; and a start whose identity file is malformed refuses naming that file, leaving no lease [[core-service-61](#core-service-61)].
 
 #### core-service-68
 
@@ -1006,3 +1016,4 @@ When an integration suite aborts a real session's turn while a scripted call is 
 [2]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/recovery.md "Prepare and resume interrupted work"
 [3]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-94 "Playbook playbook-cli-94: modules supplied at launch"
 [4]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-22 "Playbook playbook-cli-22: a reopen takes the module the session records"
+[5]: https://github.com/sublang-ai/playbook/blob/main/specs/packages/playbook-cli.md#playbook-cli-98 "Playbook playbook-cli-98: the machine identity facade"

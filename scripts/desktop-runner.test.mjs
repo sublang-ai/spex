@@ -45,6 +45,7 @@ function harness(outcomes = {}, options = {}) {
         stdout: { write: (text) => (stdout += text) },
         stderr: { write: (text) => (stderr += text) },
         killProcess: options.killProcess,
+        escalationMs: options.escalationMs,
       }),
   };
 }
@@ -166,4 +167,55 @@ test("a signal during restore does not replace an earlier failure", async () => 
   assert.match(run.stderr(), /Electron launch exited 4/);
   assert.match(run.stderr(), /Node ABI restore exited 5/);
   assert.match(run.stderr(), /waiting for the mandatory Node ABI restore/);
+});
+
+// The runner unrefs its escalation timer so an early exit never holds the process; Node 22's test runner cancels a test holding only unref'd handles.
+async function runHeld(run) {
+  const keepAlive = setInterval(() => {}, 1_000);
+  try {
+    return await run.run();
+  } finally {
+    clearInterval(keepAlive);
+  }
+}
+
+// app-shell-26 §5, DR-108: a signalled app that does not exit within the
+// bound is killed with its process group; one that exits in time is not.
+test("a launch that ignores the signal is killed after the bound and Node is still restored", async () => {
+  const killed = [];
+  let killSignals;
+  const run = harness(
+    {
+      launch: ({ signalSource }) =>
+        new Promise((resolveLaunch) => {
+          killSignals = (pid, signal) => {
+            killed.push({ pid, signal });
+            if (signal === "SIGKILL") resolveLaunch({ code: null, signal: "SIGKILL" });
+          };
+          signalSource.emit("SIGINT");
+        }),
+    },
+    { platform: "linux", escalationMs: 20, killProcess: (pid, signal) => killSignals(pid, signal) },
+  );
+  assert.equal(await runHeld(run), 130);
+  assert.deepEqual(killed.map((entry) => entry.signal), ["SIGINT", "SIGKILL"]);
+  assert.ok(killed.every((entry) => entry.pid < 0), "the process group is signalled");
+  assert.equal(run.calls.at(-1), "node-abi");
+  assert.match(run.stderr(), /has not exited 20ms after SIGINT; killing it/);
+});
+
+test("a launch that exits within the bound is never killed", async () => {
+  const killed = [];
+  const run = harness(
+    {
+      launch: ({ signalSource }) => {
+        signalSource.emit("SIGINT");
+        return { code: null, signal: "SIGINT" };
+      },
+    },
+    { platform: "linux", escalationMs: 20, killProcess: (pid, signal) => killed.push(signal) },
+  );
+  assert.equal(await runHeld(run), 130);
+  await new Promise((resolveWait) => setTimeout(resolveWait, 60));
+  assert.deepEqual(killed, ["SIGINT"]);
 });
