@@ -218,12 +218,13 @@ interface Home {
   stop(): Promise<void>;
 }
 
-/** Your own group's clone in a scratch home: under the name its
- * `home.yaml` records, once it has one — a sign-in renames it. */
+/** Your own group's clone in a scratch home: the spex repository its
+ * `home.yaml` records, once it has one — a sign-in renames it, a move
+ * the host made follows it — else the one `fallback` names. */
 export function ownClone(dataDir: string, fallback = OWN): string {
-  let own = fallback;
-  try { own = /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? fallback; } catch { own = fallback; }
-  return join(dataDir, "workspace", own, `${own}-spex`);
+  let own = `${fallback}/${fallback}-spex`;
+  try { own = /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? own; } catch { /* no home file yet */ }
+  return clonePath(dataDir, own);
 }
 
 /** A project's clone in a scratch home. */

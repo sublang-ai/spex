@@ -286,7 +286,7 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 #### core-service-96
 
-The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per authoring session ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages, and its transcript re-read whole as `draft.history-replaced` once a sync changed it, to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per authoring session ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 | Command | While a turn runs | While a compile runs |
 | --- | --- | --- |
@@ -296,9 +296,10 @@ The core service shall accept the authoring command family — `draft.list`, `dr
 | `draft.abort` | ends the turn | `{aborted: false}` |
 
 - a draft compile is the playbook id's one compile, canceled by `compile.abort` as any compile is; `compile.run` and `draft.compile` for one id exclude each other;
+- an enabling — `draft.register` until it replies — and a `compile.run` of the session's id hold the session as its compile does, `draft.send` queuing and its state reading `compiling` from its start until it replies;
 - `draft.create` replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, or for a project with no working folder on this device; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`; every command replies `busy` while the project's spex repository syncs;
-- a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an enabled one stays and reads enabled;
-- `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
+- every departure of a session — its deletion, its project's removal, a sync removing it, a rescan giving its id another session [[storage-12](storage.md#storage-12)] — is announced to every client as `draft.removed` naming its project, followed by the session then holding the id as its `draft.state`, so no client keeps a trace of the one that left; a deleted session's enabled playbook stays and reads enabled;
+- `draft.send` replies when the message is accepted, never when the turn ends, and while the session is idle with a queued message replies accepted, queued, the message joining the queue's end and the oldest starting; the protocol version bumps [[core-service-12](#core-service-12)].
 
 ### Intent Ledger
 
@@ -934,7 +935,7 @@ Where the core service runs with an injected compile spawner whose toolchain run
 
 #### core-service-97
 
-Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, `conflict` and `busy` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
+Where the core service runs with the scripted fake adapter, a compile spawner that blocks until canceled or a stub `slc` held until released, an enabling's re-package held until released, and a local bare remote a peer pushes to, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, `conflict` and `busy` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that a transcript a sync changed reaches the draft channel's subscribers only as `draft.history-replaced` with its records, that `draft.state` follows every transition, a `compile.run` of the session's id taking and freeing it included, that the removal of a project holding a session, a sync removing a session, the deletion of a session another project's session of its id shadows, and a rescan giving a session's id another project's session each reach a client once as `draft.removed` naming the former project, the deletion and the rescan followed by the new holder's `draft.state`, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
 
 ### Endpoint Coverage
 

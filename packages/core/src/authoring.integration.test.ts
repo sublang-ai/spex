@@ -27,6 +27,7 @@ import type {
   Command,
   CommandResults,
   CompileProgressMessage,
+  DraftHistoryReplacedMessage,
   DraftInfo,
   DraftRecordMessage,
   DraftSourceMessage,
@@ -988,6 +989,120 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   await harness.service.stop();
 });
 
+/** Wait until a spex repository's environment neither resolves nor
+ * installs: removal waits for it as a sync does (space-11). */
+async function environmentIdle(client: Client, repository: string): Promise<void> {
+  const start = Date.now();
+  while ((await client.expectOk("environment.get", { repository })).busy !== null) {
+    if (Date.now() - start > 60_000) throw new Error(`timeout waiting for the environment of ${repository}`);
+    await sleep(25);
+  }
+}
+
+test("core-service-97: every departure reaches each client as draft.removed naming its project, then the session holding the id; a replaced transcript reaches the draft channel's subscribers only", async () => {
+  const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcSource() });
+  const { projectId, clone, dir, dataDir } = harness;
+  const a = new Client(harness.service.port());
+  const b = new Client(harness.service.port());
+  try {
+    await a.open();
+    await b.open();
+    /** The messages b received about one id since a mark. */
+    const about = (id: string, from: number): ServerMessage[] => b.messages.slice(from).filter((m) =>
+      (m.type === "draft.removed" && m.draftId === id) || (m.type === "draft.state" && m.draft.id === id));
+    const label = (m: ServerMessage): string =>
+      m.type === "draft.removed" ? `removed ${m.projectId}` : m.type === "draft.state" ? `state ${m.draft.projectId}` : m.type;
+
+    // A rescan giving the id another project's session: the departure
+    // names the former project, then the session now holding the id.
+    await a.expectOk("draft.create", { projectId, draftId: "dup" });
+    const other = (await a.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
+    const shadowed = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "dup");
+    mkdirSync(dirname(shadowed.record), { recursive: true });
+    writeFileSync(shadowed.record, readFileSync(authoringFiles(clone, "dup").record));
+    const reassigning = b.messages.length;
+    rmSync(authoringFiles(clone, "dup").record);
+    await a.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
+    await until(() => about("dup", reassigning).some((m) => m.type === "draft.state" && m.draft.projectId === other), 10_000, "the new holder's state");
+    assert.deepEqual(
+      about("dup", reassigning).slice(0, 2).map(label),
+      [`removed ${projectId}`, `state ${other}`],
+      "the departure names the former project, then the session now holding the id",
+    );
+
+    // A deletion of a session another project's session of its id
+    // shadows: the departure names the deleted session's project once,
+    // then the session now holding the id.
+    await a.expectOk("draft.create", { projectId, draftId: "twin" });
+    writeFileSync(authoringFiles(join(dataDir, "workspace", ...other.split("/")), "twin").record, readFileSync(authoringFiles(clone, "twin").record));
+    await b.expectOk("draft.list", {});
+    const deleting = b.messages.length;
+    await a.expectOk("draft.delete", { projectId, draftId: "twin" });
+    await until(() => about("twin", deleting).some((m) => m.type === "draft.state" && m.draft.projectId === other), 10_000, "the holder's state");
+    await sleep(200);
+    assert.deepEqual(
+      about("twin", deleting).map(label),
+      [`removed ${projectId}`, `state ${other}`],
+      "the deletion is announced once, naming the deleted session's project, then the session now holding the id",
+    );
+
+    // Its project's removal: the departure names the removed project.
+    const doomed = (await a.expectOk("project.register", { path: workingFolder(join(dir, "doomed")) })).id;
+    await a.expectOk("draft.create", { projectId: doomed, draftId: "gone" });
+    await environmentIdle(a, doomed);
+    const removing = b.messages.length;
+    await a.expectOk("project.remove", { projectId: doomed, confirm: true });
+    await until(() => about("gone", removing).some((m) => m.type === "draft.removed"), 10_000, "the removal's announcement");
+    assert.deepEqual(about("gone", removing).map(label), [`removed ${doomed}`]);
+
+    // A replaced transcript reaches the draft channel's subscribers only.
+    await a.expectOk("draft.create", { projectId, draftId: "shared" });
+    await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "shared" } });
+    await a.expectOk("draft.player.set", { projectId, draftId: "shared", playerId: null });
+    const bare = join(dir, "remote.git");
+    mkdirSync(bare);
+    peerGit(bare, "init", "-q", "--bare", "-b", "spex");
+    await a.expectOk("space.remote.set", { repository: projectId, url: bare });
+    assert.equal(await sync(a, projectId), "done");
+    const peer = join(dir, "peer");
+    peerGit(dir, "clone", "-q", "--branch", "spex", bare, peer);
+    appendFileSync(
+      join(peer, "authoring", "shared.records.jsonl"),
+      `${JSON.stringify({ seq: 2, record: { type: "captain_status", turnId: null, timestamp: 2, message: "◇ Recorded on another device" } })}\n`,
+    );
+    peerGit(peer, "add", "-A", "--", ".");
+    peerGit(peer, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer change");
+    peerGit(peer, "push", "-q", "origin", "HEAD:spex");
+    assert.equal(await sync(a, projectId), "done");
+    const replaced = a.messages.find((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "shared");
+    assert.ok(replaced, "the subscriber receives the replaced transcript");
+    assert.equal(replaced.projectId, projectId);
+    assert.deepEqual(replaced.records.map((entry) => entry.seq), [1, 2]);
+    assert.ok(!b.messages.some((m) => m.type === "draft.history-replaced"), "a client not subscribed receives no replacement");
+
+    // A sync removing a session: the departure names its project once.
+    const unsynced = b.messages.length;
+    peerGit(peer, "fetch", "-q", "origin");
+    peerGit(peer, "reset", "-q", "--hard", "origin/spex");
+    peerGit(peer, "rm", "-q", "--", "authoring/shared.json", "authoring/shared.records.jsonl");
+    peerGit(peer, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer removes the session");
+    peerGit(peer, "push", "-q", "origin", "HEAD:spex");
+    assert.equal(await sync(a, projectId), "done");
+    assert.ok(!existsSync(authoringFiles(clone, "shared").record), "the sync removed the session");
+    await until(() => about("shared", unsynced).some((m) => m.type === "draft.removed"), 10_000, "the sync's announcement");
+    await sleep(200);
+    assert.deepEqual(
+      b.messages.slice(unsynced).filter((m) => m.type === "draft.removed" && m.draftId === "shared").map(label),
+      [`removed ${projectId}`],
+      "the sync's removal is announced once, naming the session's project",
+    );
+  } finally {
+    a.close();
+    b.close();
+    await harness.service.stop();
+  }
+});
+
 
 test("draft media preserves file-only input, native bytes, owned output and text-only later turns", {timeout: 30_000}, async () => {
   const image = Buffer.from("real owned fixture image bytes");
@@ -1224,10 +1339,14 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
       client.records("synced").filter(({ record }) => record.type === "turn_finished").length >= n, 20_000, `turn ${n}`);
     await client.expectOk("draft.send", { projectId, draftId: "synced", text: "hello" });
     await turns(1);
+    const replacements = (): DraftHistoryReplacedMessage[] =>
+      client.messages.filter((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "synced");
+    const replacedBefore = replacements().length;
     assert.equal(await sync(client, projectId), "done");
     peerPush(() => writeFileSync(join(peer, "notes.md"), "# Notes from another device\n"));
     assert.equal(await sync(client, projectId), "done");
     assert.ok(existsSync(join(clone, "notes.md")), "the sync applied the peer's other change");
+    assert.equal(replacements().length, replacedBefore, "a sync that changed nothing of the transcript sends no replacement");
     await client.expectOk("draft.send", { projectId, draftId: "synced", text: "again" });
     await turns(2);
     assert.match(stats.runs[1].resume ?? "", /^fake-resume-/, "a sync that changed nothing keeps the conversation");
@@ -1243,6 +1362,54 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     assert.match(after.prompt, /Boss: after$/);
     const all = seqs();
     assert.deepEqual(all, all.map((_seq, index) => index + 1), "the transcript stays in sequence");
+
+    // The peer recreates the session under the same id in the same
+    // project: the subscribed client receives the peer's transcript
+    // whole before anything appends, and the next turn's records
+    // continue it at 3.
+    assert.equal(await sync(client, projectId), "done");
+    const recreated = [1, 2].map((seq) => ({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message: `◇ Recreated on another device, line ${seq}` } }));
+    peerPush(() => {
+      const file = join(peer, "authoring", "synced.json");
+      const stored = JSON.parse(readFileSync(file, "utf8")) as { createdAt: number; touchedAt: number };
+      writeFileSync(file, JSON.stringify({ ...stored, createdAt: stored.createdAt + 1, touchedAt: stored.touchedAt + 1, queued: [], failures: 0 }));
+      writeFileSync(join(peer, "authoring", "synced.records.jsonl"), recreated.map((line) => `${JSON.stringify(line)}\n`).join(""));
+    });
+    const from = client.messages.length;
+    assert.equal(await sync(client, projectId), "done");
+    const replacedAt = client.messages.findIndex((m, index) => index >= from && m.type === "draft.history-replaced" && m.draftId === "synced");
+    assert.ok(replacedAt >= 0, "the subscribed client receives the replaced transcript");
+    const replaced = client.messages[replacedAt] as DraftHistoryReplacedMessage;
+    assert.equal(replaced.projectId, projectId);
+    assert.deepEqual(replaced.records, recreated, "the replacement carries the peer's records whole");
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "fresh" });
+    await turns(4);
+    const next = client.messages.slice(from).filter((m): m is DraftRecordMessage => m.type === "draft.record" && m.draftId === "synced");
+    assert.ok(next.length > 0, "the next turn records");
+    assert.deepEqual(next.map((m) => m.seq), next.map((_m, index) => index + 3), "the next turn's records continue at 3");
+    assert.ok(next.every((m) => client.messages.indexOf(m) > replacedAt), "the replacement arrives before anything appends");
+
+    // A transcript held with a torn last line is served with no records
+    // beside its diagnostic; a sync taking the host's copy, its readable
+    // prefix, reaches the subscribed client as that prefix replaced.
+    const prefix = readFileSync(files.records, "utf8");
+    appendFileSync(files.records, `{"seq":${prefix.trim().split("\n").length + 1},"rec`);
+    peerPush(() => writeFileSync(join(peer, "notes.md"), "# Notes from another device, again\n"));
+    assert.equal(await sync(client, projectId), "done");
+    const torn = await client.expectOk("draft.open", { projectId, draftId: "synced" });
+    assert.ok(torn.draft.diagnostic, "the torn transcript is held with its diagnostic");
+    assert.deepEqual(torn.records, [], "and served with no records");
+    peerPush(() => writeFileSync(join(peer, "authoring", "synced.records.jsonl"), prefix));
+    const repairing = client.messages.length;
+    assert.equal(await sync(client, projectId), "done");
+    assert.equal(readFileSync(files.records, "utf8"), prefix, "the sync took the host's copy");
+    const repaired = client.messages.slice(repairing).find((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "synced");
+    assert.ok(repaired, "the subscribed client receives the repaired transcript");
+    assert.deepEqual(
+      repaired.records,
+      prefix.trim().split("\n").map((line) => JSON.parse(line) as unknown),
+      "the replacement carries the transcript's readable prefix",
+    );
   } finally {
     client.close();
     await harness.service.stop();

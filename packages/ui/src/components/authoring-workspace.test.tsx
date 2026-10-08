@@ -1745,23 +1745,268 @@ describe("playbook-library-98: an id another project's session takes", () => {
   });
 
   test.each([
-    ["draft.open", { draft: draftInfo(), source: SOURCE, records: [] }, () => useAppStore.getState().refreshDraftSource("triage")],
-    ["draft.source.write", { version: "v2", mtime: now }, () => useAppStore.getState().writeDraftSource("triage", { content: "# Triage, mine", baseVersion: "v1" })],
-    ["draft.player.set", { ...draftInfo(), player: "dev.coder" }, () => useAppStore.getState().setDraftPlayer("triage", "dev.coder")],
-    ["draft.artifacts", ARTIFACTS, () => useAppStore.getState().loadDraftArtifacts("triage")],
-  ])("a %s reply for the former session writes nothing over the session now holding the id", async (command, reply, run) => {
+    ["a draft.open reply", "draft.open", { draft: draftInfo(), source: SOURCE, records: [] }, undefined, () => useAppStore.getState().refreshDraftSource("triage")],
+    ["a draft.source.write reply", "draft.source.write", { version: "v2", mtime: now }, undefined, () => useAppStore.getState().writeDraftSource("triage", { content: "# Triage, mine", baseVersion: "v1" })],
+    ["a draft.player.set reply", "draft.player.set", { ...draftInfo(), player: "dev.coder" }, undefined, () => useAppStore.getState().setDraftPlayer("triage", "dev.coder")],
+    ["a draft.artifacts reply", "draft.artifacts", ARTIFACTS, undefined, () => useAppStore.getState().loadDraftArtifacts("triage")],
+    ["a draft.register reply", "draft.register", CONFIG_STATE, undefined, () => useAppStore.getState().registerDraft("triage", { command: "triage", intent: "Label", bindings: { Triager: "dev.coder" } })],
+    ["a draft.compile refusal", "draft.compile", undefined, new Error("no draft triage"), () => useAppStore.getState().compileDraft("triage")],
+    ["a draft.abort refusal", "draft.abort", undefined, new Error("no draft triage"), () => useAppStore.getState().abortDraft("triage")],
+  ])("%s for the former session writes nothing over the session now holding the id", async (_case, command, reply, refusal, run) => {
     await holdFormer();
+    /** Another session the Boss opened meanwhile. */
+    const elsewhere = draftInfo({ id: "labels", firstLine: "# Labels" });
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
-      if (type !== command) return base(type, params);
+      if (type !== command || params?.draftId !== "triage") return base(type, params);
+      // The id names another project's session, which reports its own
+      // error, while the Boss opens another session on the other side.
       deliverServerMessageForTests({ type: "draft.state", draft: promoted });
+      useAppStore.getState().reportDraftError("triage", THEIR_ERROR);
+      useAppStore.setState({ drafts: { ...useAppStore.getState().drafts, labels: elsewhere }, openDraftId: "labels", playbooksSide: "own" });
+      if (refusal) throw refusal;
       return reply;
     });
     await act(async () => {
-      await run();
+      // An act that throws is told it retired; a refused compile or
+      // abort settles quietly.
+      if (refusal) await run();
+      else await expect(run()).rejects.toMatchObject({ code: "retired" });
     });
-    expect(commandMock).toHaveBeenCalledWith(command, expect.objectContaining({ projectId: PROJECT_ID, draftId: "triage" }));
+    expect(commandMock.mock.calls.some(([type, params]) =>
+      type === command && (params as Record<string, unknown>).projectId === PROJECT_ID && (params as Record<string, unknown>).draftId === "triage")).toBe(true);
     expectNothingOfFormer();
+    const state = useAppStore.getState();
+    expect(state.draftErrors.triage).toBe(THEIR_ERROR);
+    expect(state.openDraftId).toBe("labels");
+    expect(state.playbooksSide).toBe("own");
+    expect(state.revealPlaybook).toBeUndefined();
+  });
+
+  test("a listing leaving the id out drops the former session's state, and another project's session named under it opens from the first record", async () => {
+    await holdFormer();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "draft.list" ? [] : base(type, params),
+    );
+    await act(async () => {
+      await useAppStore.getState().listDrafts();
+    });
+    const state = useAppStore.getState();
+    expect(state.drafts.triage).toBeUndefined();
+    expect(state.draftViews.triage).toBeUndefined();
+    expect(state.draftSources.triage).toBeUndefined();
+    expect(state.draftArtifacts.triage).toBeUndefined();
+    expect(state.draftComposers.triage).toBeUndefined();
+    expect(state.draftEditors.triage).toBeUndefined();
+    expect(state.draftForms.triage).toBeUndefined();
+    expect(state.openDraftId).toBeUndefined();
+    expect(screen.queryByTestId("authoring-workspace")).toBeNull();
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.state", draft: promoted });
+    });
+    expectNothingOfFormer();
+    expect(screen.queryByTestId("authoring-workspace")).toBeNull();
+    commandMock.mockClear();
+    await act(() => useAppStore.getState().openDraft("triage"));
+    expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: OTHER_ID, draftId: "triage", afterSeq: 0 });
+  });
+
+  /** A reply the test hands over when it chooses. */
+  function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (cause: unknown) => void } {
+    let resolve!: (value: T) => void;
+    let reject!: (cause: unknown) => void;
+    const promise = new Promise<T>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+    return { promise, resolve, reject };
+  }
+
+  async function settle(): Promise<void> {
+    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  /** What the session now holding the id set for itself. */
+  const THEIR_EDITOR = { path: "spex-packages/triage/triage.md", original: "# Theirs", draft: "# Theirs, edited", preview: false };
+  const THEIR_MODE = { mode: "edit" as const, pasteText: "# Their paste", pastePath: "/their/skill.md" };
+  const THEIR_COMPOSER = { draft: "their own thought" };
+  const THEIR_ERROR = "their own refusal";
+  const EDITING = { path: "spex-packages/triage/triage.md", original: "# Triage", draft: "# Triage, edited", version: "v1", preview: false };
+
+  test.each([
+    ["Save", "draft.source.write", { triage: { mode: "edit" as const, pasteText: "", pastePath: "" } }, async () => {
+      fireEvent.click(screen.getByTestId("editor-save"));
+    }, { version: "v2", mtime: now }, undefined],
+    ["Reload", "draft.open", { triage: { mode: "edit" as const, pasteText: "", pastePath: "" } }, async () => {
+      fireEvent.click(screen.getByTestId("editor-save"));
+      fireEvent.click(within(await screen.findByTestId("editor-conflict")).getByTestId("editor-reload"));
+      fireEvent.click(within(screen.getByTestId("editor-confirm")).getByRole("button", { name: "Reload" }));
+    }, { draft: COMPILED, source: { markdown: "# FORMER PROJECT SOURCE", version: "vF", mtime: now }, records: [] }, undefined],
+    ["Paste", "draft.source.write", { triage: { mode: "paste" as const, pasteText: "# Former paste", pastePath: "" } }, async () => {
+      fireEvent.click(screen.getByTestId("paste-use"));
+    }, { version: "v2", mtime: now }, undefined],
+    ["Send", "draft.send", {}, async () => {
+      fireEvent.click(screen.getByTestId("draft-send"));
+    }, { accepted: true, queued: false }, undefined],
+    ["a refused Send", "draft.send", {}, async () => {
+      fireEvent.click(screen.getByTestId("draft-send"));
+    }, undefined, new Error("no draft triage")],
+  ])("a late %s started for the former session writes nothing over what the session now holding the id set", async (_case, command, modes, start, reply, refusal) => {
+    await holdFormer();
+    const pending = deferred<unknown>();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "draft.source.write" && command === "draft.open" && params?.baseVersion !== undefined) {
+        throw Object.assign(new Error("the source changed since it was read"), { code: "conflict" });
+      }
+      return type === command ? pending.promise : base(type, params);
+    });
+    act(() => {
+      useAppStore.setState({ draftSourceModes: modes, draftEditors: { triage: EDITING } });
+    });
+    await start();
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith(command, expect.objectContaining({ projectId: PROJECT_ID, draftId: "triage" })));
+    // The id names another project's session, which sets its own state.
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.state", draft: promoted });
+      useAppStore.getState().setDraftEditor("triage", THEIR_EDITOR);
+      useAppStore.getState().setDraftSourceMode("triage", THEIR_MODE);
+      useAppStore.getState().setDraftComposer("triage", THEIR_COMPOSER.draft);
+      useAppStore.getState().reportDraftError("triage", THEIR_ERROR);
+    });
+    await act(async () => {
+      if (refusal) pending.reject(refusal);
+      else pending.resolve(reply);
+      await settle();
+    });
+    const state = useAppStore.getState();
+    expect(state.drafts.triage).toEqual(promoted);
+    expect(state.draftEditors.triage).toEqual(THEIR_EDITOR);
+    expect(state.draftSourceModes.triage).toEqual(THEIR_MODE);
+    expect(state.draftComposers.triage).toEqual(THEIR_COMPOSER);
+    expect(state.draftErrors.triage).toBe(THEIR_ERROR);
+    expect(state.draftSources.triage).toBeUndefined();
+  });
+
+  test.each([
+    ["Use a SKILL.md…", async () => {
+      fireEvent.click(screen.getByTestId("opener-skill"));
+    }],
+    ["Pick file", async () => {
+      fireEvent.click(screen.getByTestId("source-paste"));
+      fireEvent.click(screen.getByTestId("paste-pick"));
+    }],
+  ])("a file %s picks after the id names another session is written and placed nowhere", async (_case, start) => {
+    const pick = deferred<string | null>();
+    const pickFile = vi.fn(() => pick.promise);
+    window.spexNative = { pickDirectory: async () => null, pickFile };
+    try {
+      renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { view: foldView([]), source: null });
+      act(() => {
+        useAppStore.setState({ projects: [PROJECT, OTHER_PROJECT] });
+      });
+      await start();
+      await vi.waitFor(() => expect(pickFile).toHaveBeenCalledTimes(1));
+      const noSource = draftInfo({ projectId: OTHER_ID, state: "no-source", firstLine: null, touchedAt: now });
+      act(() => {
+        deliverServerMessageForTests({ type: "draft.state", draft: noSource });
+        useAppStore.getState().setDraftSourceMode("triage", THEIR_MODE);
+        useAppStore.getState().setDraftComposer("triage", THEIR_COMPOSER.draft);
+      });
+      await act(async () => {
+        pick.resolve("/Users/dev/skill/SKILL.md");
+        await settle();
+      });
+      expect(commandMock).not.toHaveBeenCalledWith("draft.source.write", expect.anything());
+      const state = useAppStore.getState();
+      expect(state.draftSourceModes.triage).toEqual(THEIR_MODE);
+      expect(state.draftComposers.triage).toEqual(THEIR_COMPOSER);
+      expect(state.draftErrors.triage).toBeUndefined();
+    } finally {
+      delete window.spexNative;
+    }
+  });
+});
+
+describe("playbook-library-101: the transcript the core now serves", () => {
+  /** Two records of a transcript the core read back changed. */
+  const REPLACED = [
+    rec(1, { type: "captain_status", turnId: null, timestamp: now, message: "◇ Recreated on another device" }),
+    rec(2, { type: "captain_status", turnId: null, timestamp: now + 1, message: "◇ Recreated, second line" }),
+  ];
+  const EDITING = { path: "spex-packages/triage/triage.md", original: "# Triage", draft: "# Triage, edited", preview: false };
+
+  function holdWithEdits(): void {
+    renderWorkspace(COMPILED, { view: foldView(THREAD) });
+    act(() => {
+      useAppStore.setState({
+        draftComposers: { triage: { draft: "half a thought" } },
+        draftSourceModes: { triage: { mode: "edit", pasteText: "", pastePath: "" } },
+        draftEditors: { triage: EDITING },
+        draftForms: { triage: { command: "triage", players: { Triager: "dev.coder" }, newPlayers: {} } },
+      });
+    });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(9);
+  }
+
+  function expectEditsKept(): void {
+    const state = useAppStore.getState();
+    expect(state.draftComposers.triage).toEqual({ draft: "half a thought" });
+    expect(state.draftEditors.triage).toEqual(EDITING);
+    expect(state.draftSourceModes.triage).toEqual({ mode: "edit", pasteText: "", pastePath: "" });
+    expect(state.draftForms.triage).toEqual({ command: "triage", players: { Triager: "dev.coder" }, newPlayers: {} });
+    expect((screen.getByTestId("draft-composer") as HTMLTextAreaElement).value).toBe("half a thought");
+  }
+
+  test("a replaced transcript is drawn from the records it carries, the composer, Source edit and Enable form kept, and a live record then folds", () => {
+    holdWithEdits();
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.history-replaced", draftId: "triage", projectId: PROJECT_ID, records: REPLACED });
+    });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(2);
+    expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toEqual([
+      "◇ Recreated on another device",
+      "◇ Recreated, second line",
+    ]);
+    expectEditsKept();
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.record", ...rec(3, { type: "captain_status", turnId: null, timestamp: now + 2, message: "◇ Next on this device" }), draftId: "triage" });
+    });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(3);
+    expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toContain("◇ Next on this device");
+  });
+
+  test("a reconnect reloads each held transcript from its first record, the composer, Source edit and Enable form kept", async () => {
+    holdWithEdits();
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      switch (type) {
+        case "config.get":
+          return CONFIG_STATE;
+        case "readiness.get":
+          return READINESS;
+        case "project.list":
+        case "session.list":
+          return [];
+        case "draft.list":
+          return [COMPILED];
+        case "draft.open":
+          return { draft: COMPILED, source: SOURCE, records: REPLACED };
+        default:
+          return base(type, params);
+      }
+    });
+    await act(async () => {
+      await useAppStore.getState().refresh();
+    });
+    expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: PROJECT_ID, draftId: "triage", afterSeq: 0 });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(2);
+    expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toEqual([
+      "◇ Recreated on another device",
+      "◇ Recreated, second line",
+    ]);
+    expectEditsKept();
   });
 });
 

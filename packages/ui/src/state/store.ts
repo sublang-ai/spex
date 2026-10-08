@@ -1206,7 +1206,7 @@ export const useAppStore = create<AppState>((set, get) => {
    * after the view's last seq (playbook-library-62); live records
    * arriving meanwhile buffer and apply afterwards, so a reconnect can
    * never lose the gap. */
-  async function ensureDraftSubscribed(draftId: string): Promise<void> {
+  async function ensureDraftSubscribed(draftId: string, fromStart = false): Promise<void> {
     const current = get().draftViews[draftId] ?? emptyDraftView();
     set({
       draftViews: {
@@ -1221,9 +1221,12 @@ export const useAppStore = create<AppState>((set, get) => {
       const reply = await getClient().command("draft.open", {
         projectId: draftProject(draftId),
         draftId,
-        afterSeq: current.view.lastSeq,
+        afterSeq: fromStart ? 0 : current.view.lastSeq,
       });
       if (draftBackfilling.get(draftId) !== pending) return;
+      // A reload from the first record replaces what the view held
+      // (playbook-library-101).
+      if (fromStart) set({ draftViews: { ...get().draftViews, [draftId]: emptyDraftView() } });
       for (const entry of reply.records) foldDraftRecord(draftId, entry);
       for (const entry of pending) foldDraftRecord(draftId, entry);
       const view = get().draftViews[draftId] ?? emptyDraftView();
@@ -1282,6 +1285,16 @@ export const useAppStore = create<AppState>((set, get) => {
    * project the command addressed (playbook-library-98). */
   function stillNames(draftId: string, projectId: string): boolean {
     return get().drafts[draftId]?.projectId === projectId;
+  }
+
+  /** An act addressed to the session an id named settles for that
+   * session only: called as its reply lands, this throws the code
+   * "retired" once the id names another session, or none, so the act
+   * and its caller write nothing (playbook-library-98). */
+  function assertStillNames(draftId: string, projectId: string): void {
+    if (!stillNames(draftId, projectId)) {
+      throw Object.assign(new Error(i18n._("This draft now names another session.")), { code: "retired" });
+    }
   }
 
   /** The core names another project's session under an id held here
@@ -1426,6 +1439,18 @@ export const useAppStore = create<AppState>((set, get) => {
           updates.compileProgressAt = { ...get().compileProgressAt, [draft.id]: [] };
         }
         set(updates);
+        break;
+      }
+      case "draft.history-replaced": {
+        // A transcript the core read back changed: a held view is drawn
+        // anew from the records it carries, any buffered backfill emptied
+        // while an open in flight still stores its draft and source; the
+        // composer, Source edits and Enable form stay (playbook-library-101).
+        if (get().drafts[message.draftId]?.projectId !== message.projectId || !get().draftViews[message.draftId]) break;
+        const buffer = draftBackfilling.get(message.draftId);
+        if (buffer) buffer.length = 0;
+        set({ draftViews: { ...get().draftViews, [message.draftId]: emptyDraftView() } });
+        for (const entry of message.records) foldDraftRecord(message.draftId, entry);
         break;
       }
       case "draft.removed": {
@@ -1800,13 +1825,14 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const session of sessions.filter((item) => item.live || loaded.has(item.id))) {
         await ensureSubscribed(session.id).catch(() => {});
       }
-      // Drafts opened this launch re-subscribe and backfill the same
-      // way (playbook-library-62); the list itself re-pulls.
+      // Drafts opened this launch re-subscribe and reload from their
+      // first record the same way, keeping their composer, Source edits
+      // and Enable form (playbook-library-101); the list itself re-pulls.
       void get()
         .listDrafts()
         .catch(() => {});
       for (const draftId of Object.keys(get().draftViews)) {
-        await ensureDraftSubscribed(draftId).catch(() => {});
+        await ensureDraftSubscribed(draftId, true).catch(() => {});
       }
       // Boot the project context (DR-011): the persisted project when
       // it still exists, else the first live session's project, else
@@ -2556,6 +2582,10 @@ export const useAppStore = create<AppState>((set, get) => {
       const drafts = Object.fromEntries(
         (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
       );
+      // An id listed before and left out now names no session: nothing
+      // of the one it named stays (playbook-library-98).
+      const listedIds = new Set(Object.keys(drafts));
+      for (const draftId of Object.keys(get().drafts)) if (!listedIds.has(draftId)) forgetDraft(draftId);
       for (const draft of Object.values(drafts)) retireReassignedDraft(draft);
       set({ drafts, draftsLoaded: true });
     },
@@ -2583,20 +2613,33 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async sendDraft(draftId: string, text: string, attachments?: readonly MediaAsset[]): Promise<{ queued: boolean }> {
+      let projectId: string | undefined;
       try {
-        const reply = await getClient().command("draft.send", { projectId: draftProject(draftId), draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
+        const addressed = draftProject(draftId);
+        projectId = addressed;
+        let reply: CommandResults["draft.send"];
+        try {
+          reply = await getClient().command("draft.send", { projectId: addressed, draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
+        } finally {
+          assertStillNames(draftId, addressed);
+        }
         get().clearDraftError(draftId);
         return { queued: reply.queued };
       } catch (cause) {
-        setDraftError(draftId, (cause as Error).message);
+        // A refusal of the former session's message is not the one the
+        // id names now (playbook-library-98).
+        if (projectId === undefined || stillNames(draftId, projectId)) setDraftError(draftId, (cause as Error).message);
         throw cause;
       }
     },
 
     async abortDraft(draftId: string): Promise<void> {
+      let projectId: string | undefined;
       try {
-        await getClient().command("draft.abort", { projectId: draftProject(draftId), draftId });
+        projectId = draftProject(draftId);
+        await getClient().command("draft.abort", { projectId, draftId });
       } catch (cause) {
+        if (projectId !== undefined && !stillNames(draftId, projectId)) return;
         setDraftError(
           draftId,
           i18n._("abort failed: {reason}", {
@@ -2608,14 +2651,18 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async writeDraftSource(draftId, input) {
       const projectId = draftProject(draftId);
-      const reply = await getClient().command("draft.source.write", {
-        projectId,
-        draftId,
-        ...(input.content !== undefined ? { content: input.content } : {}),
-        ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
-        ...(input.baseVersion !== undefined ? { baseVersion: input.baseVersion } : {}),
-      });
-      if (!stillNames(draftId, projectId)) return reply;
+      let reply: CommandResults["draft.source.write"];
+      try {
+        reply = await getClient().command("draft.source.write", {
+          projectId,
+          draftId,
+          ...(input.content !== undefined ? { content: input.content } : {}),
+          ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
+          ...(input.baseVersion !== undefined ? { baseVersion: input.baseVersion } : {}),
+        });
+      } finally {
+        assertStillNames(draftId, projectId);
+      }
       // The broadcast follows; the Boss's own write is known to be theirs.
       const current = get().draftSources[draftId];
       if (input.content !== undefined || current) {
@@ -2637,17 +2684,21 @@ export const useAppStore = create<AppState>((set, get) => {
     async refreshDraftSource(draftId: string): Promise<DraftSourceState | null> {
       const view = get().draftViews[draftId];
       const projectId = draftProject(draftId);
-      const reply = await getClient().command("draft.open", {
-        projectId,
-        draftId,
-        // Only the source is wanted: records after the last seq are
-        // those the stream is already delivering.
-        afterSeq: view?.view.lastSeq ?? 0,
-      });
+      let reply: CommandResults["draft.open"];
+      try {
+        reply = await getClient().command("draft.open", {
+          projectId,
+          draftId,
+          // Only the source is wanted: records after the last seq are
+          // those the stream is already delivering.
+          afterSeq: view?.view.lastSeq ?? 0,
+        });
+      } finally {
+        assertStillNames(draftId, projectId);
+      }
       const source = reply.source
         ? { markdown: reply.source.markdown, version: reply.source.version, mtime: reply.source.mtime }
         : null;
-      if (!stillNames(draftId, projectId)) return source;
       set({
         drafts: { ...get().drafts, [draftId]: reply.draft },
         draftSources: { ...get().draftSources, [draftId]: source },
@@ -2660,13 +2711,17 @@ export const useAppStore = create<AppState>((set, get) => {
         compileProgress: { ...get().compileProgress, [draftId]: [] },
         compileProgressAt: { ...get().compileProgressAt, [draftId]: [] },
       });
+      let projectId: string | undefined;
       try {
+        projectId = draftProject(draftId);
         // Compiles run for minutes: no client timeout (DR-010 §5).
-        await getClient().command("draft.compile", { projectId: draftProject(draftId), draftId }, { timeoutMs: 0 });
+        await getClient().command("draft.compile", { projectId, draftId }, { timeoutMs: 0 });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         // A failed phase and a cancel are told by the band from the
-        // draft's state; a refusal is a message to show.
+        // draft's state; a refusal is a message to show, unless the id
+        // names another session by now (playbook-library-98).
+        if (projectId !== undefined && !stillNames(draftId, projectId)) return;
         if (error.code !== "aborted" && error.code !== "invalid_request") {
           setDraftError(draftId, error.message);
         }
@@ -2688,15 +2743,20 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async registerDraft(draftId, input): Promise<void> {
       const projectId = draftProject(draftId);
-      const configState = await getClient().command("draft.register", {
-        projectId,
-        draftId,
-        command: input.command,
-        intent: input.intent,
-        bindings: input.bindings,
-        ...(input.newPlayers ? { newPlayers: input.newPlayers } : {}),
-        ...(input.repository ? { repository: input.repository } : {}),
-      });
+      let configState: CommandResults["draft.register"];
+      try {
+        configState = await getClient().command("draft.register", {
+          projectId,
+          draftId,
+          command: input.command,
+          intent: input.intent,
+          bindings: input.bindings,
+          ...(input.newPlayers ? { newPlayers: input.newPlayers } : {}),
+          ...(input.repository ? { repository: input.repository } : {}),
+        });
+      } finally {
+        assertStillNames(draftId, projectId);
+      }
       // The session stays, to be worked on further and published; the
       // list opens on the side enabled in, with the new card in view
       // (playbook-library-61).
@@ -2708,8 +2768,13 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
       const projectId = draftProject(draftId);
-      const draft = await getClient().command("draft.player.set", { projectId, draftId, playerId });
-      if (stillNames(draftId, projectId)) set({ drafts: { ...get().drafts, [draftId]: draft } });
+      let draft: CommandResults["draft.player.set"];
+      try {
+        draft = await getClient().command("draft.player.set", { projectId, draftId, playerId });
+      } finally {
+        assertStillNames(draftId, projectId);
+      }
+      set({ drafts: { ...get().drafts, [draftId]: draft } });
     },
 
     async deleteDraft(draftId: string): Promise<void> {
@@ -2723,10 +2788,13 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts> {
       const projectId = draftProject(draftId);
-      const artifacts = await getClient().command("draft.artifacts", { projectId, draftId });
-      if (stillNames(draftId, projectId)) {
-        set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
+      let artifacts: PlaybookArtifacts;
+      try {
+        artifacts = await getClient().command("draft.artifacts", { projectId, draftId });
+      } finally {
+        assertStillNames(draftId, projectId);
       }
+      set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
       return artifacts;
     },
 

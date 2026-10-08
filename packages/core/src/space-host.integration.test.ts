@@ -97,7 +97,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const file = Home.load(home.dataDir).file;
   assert.deepEqual(file.host.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace" });
   assert.equal(file.host.signedOut, undefined);
-  assert.equal(file.own, LOGIN);
+  assert.equal(file.own, HOST_OWN);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // The app token, owner-only (storage-19).
   assert.equal(statSync(join(home.dataDir, "local", "credentials.yaml")).mode & 0o777, 0o600);
@@ -161,7 +161,7 @@ test("space-37: a login spelled with a capital or a dot names your own group's f
     assert.ok(existsSync(join(clonePath(home.dataDir, moved), ".git")), moved);
     assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
     const file = Home.load(home.dataDir).file;
-    assert.equal(file.own, login);
+    assert.equal(file.own, ownKey);
     assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
     // Your own group's spex repository stands on the stand-in as
     // `<login>-spex`, pushed (space-4, space-65).
@@ -205,7 +205,7 @@ test("space-59: a login differing from your own group's name only by case rename
   assert.deepEqual(readdirSync(join(workspace, "Ada")).sort(), ["Ada-spex", project].sort());
   assert.ok(existsSync(join(clonePath(home.dataDir, moved), ".git")), moved);
   const file = Home.load(home.dataDir).file;
-  assert.equal(file.own, "Ada");
+  assert.equal(file.own, ownKey);
   assert.deepEqual(file.folders.map((folder) => [folder.path, folder.repository]), [[home.projectDir, moved]]);
   // No move is left to retry: your own group's spex repository stands on
   // the stand-in as `Ada-spex`, pushed (space-4, space-65).

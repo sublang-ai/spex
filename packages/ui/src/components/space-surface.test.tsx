@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
+import { SpexCommandError } from "../lib/client.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   BRANCH,
@@ -804,6 +805,101 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
         { repository: KEY, choices: { "sessions/s1": "mine", "config/playbook.config.yaml": "mine" } },
       ]),
     );
+  });
+});
+
+describe("GROUPS: the sharing notice where the Sync tab starts a sync (space-67)", () => {
+  const REFUSAL = "Read the sharing notice before syncing academy-spex";
+  /** The core holds every sync not sent `noticed` for the notice, its
+   * facts saying so apart from its words (core-service-111). */
+  const holdForNotice = (visibility: string) =>
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.sync" && fields.noticed !== true) {
+        throw new SpexCommandError("invalid_request", REFUSAL, { notice: true, members: 2, visibility });
+      }
+      return (await import("../fixtures/groups.js")).answer(type, fields);
+    });
+  /** No refusal's words stand as a plain note. */
+  const noPlainNote = () =>
+    expect(screen.queryAllByRole("alert").filter((alert) => alert.textContent?.includes(REFUSAL))).toEqual([]);
+
+  test("space-67: a sync stopped at Check for the notice reads as attention; Retry the core holds says the notice in the tab, and Continue resends it noticed", async () => {
+    holdForNotice("private");
+    await renderGroups(
+      repoState({
+        members: 2,
+        noticed: false,
+        sync: { phase: "stopped", op: "sync", step: "check", cause: "notice", message: REFUSAL, guidance: "Sync says what goes there first.", retry: true },
+      }),
+    );
+    // The stopped card and the row's dot read attention, not a fault.
+    const card = screen.getByTestId("space-stopped");
+    expect(card.className).toContain("bg-amber-50");
+    expect(screen.getByTestId("space-stopped-title").textContent).toBe(`Check stopped — ${REFUSAL}`);
+    expect(card.textContent).toContain("Sync says what goes there first.");
+    expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("attention");
+    const announced = live();
+    fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    // The refusal opens the notice in the tab, Cancel focused, its words
+    // never standing as a note.
+    const notice = await screen.findByTestId("space-sync-notice");
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(notice.textContent).toContain("hidden parts and attachments included");
+    expect(notice.textContent).toContain("nothing recalls what others downloaded");
+    expect(notice.textContent).not.toContain("public");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    noPlainNote();
+    expect(live()).toBe(announced);
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }, { repository: KEY, noticed: true }]));
+    expect(screen.queryByTestId("space-sync-notice")).toBeNull();
+    noPlainNote();
+  });
+
+  test("space-67: Apply the core holds for the notice says it in the tab, Escape keeping the choices, and Continue resends the same choices noticed", async () => {
+    holdForNotice("public");
+    await renderGroups(
+      repoState({
+        members: 2,
+        noticed: false,
+        incoming: [SESSION_UNIT, SETTINGS_UNIT, INCOMING_INTENT],
+        conflicts: CONFLICTS,
+        sync: { phase: "choices", savedCommit: "abc123" },
+      }),
+    );
+    const choices = { "sessions/s1": "remote", "config/playbook.config.yaml": "mine" };
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take host's/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep mine/));
+    const apply = () => {
+      fireEvent.click(screen.getByTestId("space-apply"));
+      fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
+    };
+    apply();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, choices }]));
+    // A public repository's notice says its records are public.
+    let notice = await screen.findByTestId("space-sync-notice");
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(notice.textContent).toContain("its records are public");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    noPlainNote();
+    expect(live()).toBe("Needs your choice");
+    // Escape cancels, sending nothing and keeping the choices.
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByTestId("space-sync-notice")).toBeNull();
+    expect(calls("space.sync")).toHaveLength(1);
+    expect(screen.getByTestId("space-chosen").textContent).toBe("2 of 2 chosen");
+    apply();
+    notice = await screen.findByTestId("space-sync-notice");
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.sync")).toEqual([
+        { repository: KEY, choices },
+        { repository: KEY, choices },
+        { repository: KEY, choices, noticed: true },
+      ]),
+    );
+    expect(screen.queryByTestId("space-sync-notice")).toBeNull();
   });
 });
 

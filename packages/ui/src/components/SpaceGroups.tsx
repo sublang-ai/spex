@@ -40,7 +40,8 @@ type Group = GroupsState["groups"][number];
 type PickChoice = { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string };
 
 /** A repository's dot carries the status palette (DR-010 §8): neutral
- * idle, emerald running, amber choices and unrelated, red stopped. */
+ * idle, emerald running, amber choices, unrelated and a stop the reader
+ * answers — a rejected push, the sharing notice — red any other stop. */
 export function statusDot(repo: RepositoryState): { className: string; tone: string; word: string } {
   const sync = repo.sync;
   if (sync.phase === "running") {
@@ -57,10 +58,10 @@ export function statusDot(repo: RepositoryState): { className: string; tone: str
     };
   }
   if (sync.phase === "stopped") {
-    const rejected = sync.cause === "rejected";
+    const attention = sync.cause === "rejected" || sync.cause === "notice";
     return {
-      className: rejected ? "bg-amber-500" : "bg-red-500",
-      tone: rejected ? "attention" : "stopped",
+      className: attention ? "bg-amber-500" : "bg-red-500",
+      tone: attention ? "attention" : "stopped",
       word: i18n._({
         id: "{step} stopped",
         values: { step: STEP_NAMES[sync.step]() },
@@ -662,18 +663,9 @@ function RepositoryRow({
       ) : null}
       {opened === "notice" ? (
         <div data-testid="space-notice-confirm" className="pl-6">
-          <InlineConfirm
-            question={
-              owed.isPublic
-                ? i18n._(
-                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
-                  )
-                : i18n._(
-                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
-                  )
-            }
-            confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
-            onConfirm={() => {
+          <SharingNotice
+            isPublic={owed.isPublic}
+            onContinue={() => {
               setOpened(undefined);
               void start({ ...owed.input, noticed: true });
             }}
@@ -695,6 +687,38 @@ function RepositoryRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+/** The sharing notice before a sync sends where others read it
+ * (space-57): every session whole, nothing recalled, and a public
+ * repository's records public; Continue and Cancel, Cancel focused and
+ * Escape cancelling (DR-010 §4). Said by every control that starts a
+ * sync — the row's and the Sync tab's. */
+export function SharingNotice({
+  isPublic,
+  onContinue,
+  onCancel,
+}: {
+  isPublic: boolean;
+  onContinue(): void;
+  onCancel(): void;
+}) {
+  return (
+    <InlineConfirm
+      question={
+        isPublic
+          ? i18n._(
+              "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
+            )
+          : i18n._(
+              "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
+            )
+      }
+      confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
+      onConfirm={onContinue}
+      onCancel={onCancel}
+    />
   );
 }
 

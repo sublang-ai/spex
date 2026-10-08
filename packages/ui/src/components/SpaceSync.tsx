@@ -24,6 +24,7 @@ import type {
   SyncStep,
 } from "@sublang/spex-core/protocol";
 
+import type { SpexCommandError } from "../lib/client.js";
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { relativeAge } from "../lib/time.js";
@@ -38,9 +39,12 @@ import {
 import { Icon } from "./Icon.js";
 import { LINK } from "./SpaceSurface.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { SharingNotice } from "./SpaceGroups.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 type Side = SpaceChoice;
+/** What a sync the tab starts carries (space-29). */
+type SyncInput = { choices?: Record<string, Side>; join?: boolean; noticed?: boolean };
 
 /** One unit's line diff in place (space-10): the ancestor against this
  * device's version or the host's, `+` and `−` marking every line in
@@ -1144,7 +1148,12 @@ export function SyncTab({
   const [accepted, setAccepted] = useState<{ where: "check" | "apply" | "retry" | "stop"; key: string }>();
   const [error, setError] = useState<{ where: "check" | "apply" | "retry"; message: string }>();
   const [dismissed, setDismissed] = useState<string>();
-  const lastSyncInput = useRef<{ choices?: Record<string, Side>; join?: boolean }>({});
+  const lastSyncInput = useRef<SyncInput>({});
+  // A sync the core holds for the sharing notice, said in place of the
+  // control that started it: the repository, that control, the act
+  // Continue resends, and whether the repository is public (space-57).
+  const [owed, setOwed] = useState<{ repository: string; where: "apply" | "retry"; input: SyncInput; isPublic: boolean }>();
+  const notice = owed?.repository === key ? owed : undefined;
 
   // The picker's choices outlive a stop and a re-plan: a choice for a
   // unit that is no longer a conflict is dropped, the rest stand.
@@ -1167,6 +1176,9 @@ export function SyncTab({
   useEffect(() => {
     if (accepted && accepted.key !== phaseKey) setAccepted(undefined);
   }, [accepted, phaseKey]);
+  // A notice held for a sync closes once the machine's state moves, so
+  // its Continue never resends an act the state has left (space-57).
+  useEffect(() => setOwed(undefined), [phaseKey]);
   const showStopped = sync.phase === "stopped" && dismissed !== phaseKey;
   const showDone = sync.phase === "done" && dismissed !== phaseKey;
   const pickerStands =
@@ -1180,6 +1192,7 @@ export function SyncTab({
   const run = async (
     where: "check" | "apply" | "retry",
     action: () => Promise<unknown>,
+    held?: SyncInput,
   ) => {
     const phase = phaseKey;
     setBusy(where);
@@ -1188,6 +1201,14 @@ export function SyncTab({
       await action();
       setAccepted({ where, key: phase });
     } catch (cause) {
+      // A sync the core holds for the sharing notice says it here,
+      // Continue resending the same act noticed: the refusal's facts,
+      // never its words, say it is owed (space-57, core-service-111).
+      const details = (cause as SpexCommandError).details;
+      if (where !== "check" && held && held.noticed !== true && details?.notice === true) {
+        setOwed({ repository: key, where, input: held, isPublic: (details.visibility ?? repo.visibility) === "public" });
+        return;
+      }
       const message = (cause as Error).message;
       setError({ where, message });
       onNote(message);
@@ -1196,16 +1217,18 @@ export function SyncTab({
     }
   };
 
+  /** Start a sync carrying `input` from the tab's `where` (space-29). */
+  const send = (where: "apply" | "retry", input: SyncInput) => run(where, () => spaceSync(key, input), input);
+
   // While the histories are still unrelated — a join's merge has not
   // landed — every sync the tab starts is a join (space-13, space-18).
   const joinNeeded = branch?.unrelated === true || sync.phase === "unrelated";
 
-  const apply = () =>
-    run("apply", () => {
-      const input = { choices: chosenChoices, ...(joinNeeded ? { join: true } : {}) };
-      lastSyncInput.current = input;
-      return spaceSync(key, input);
-    });
+  const apply = () => {
+    const input = { choices: chosenChoices, ...(joinNeeded ? { join: true } : {}) };
+    lastSyncInput.current = input;
+    return send("apply", input);
+  };
 
   const retry = () => {
     if (sync.phase !== "stopped") return;
@@ -1213,8 +1236,24 @@ export function SyncTab({
     const input = { ...lastSyncInput.current };
     if (total > 0 && chosen.length === total) input.choices = chosenChoices;
     if (joinNeeded || sync.op === "join") input.join = true;
-    return run("retry", () => spaceSync(key, input));
+    return send("retry", input);
   };
+
+  /** The sharing notice in place of the control whose sync the core
+   * holds (space-57): Continue resends the same act noticed. */
+  const sharingNotice = (where: "apply" | "retry") =>
+    notice?.where === where ? (
+      <span data-testid="space-sync-notice">
+        <SharingNotice
+          isPublic={notice.isPublic}
+          onContinue={() => {
+            setOwed(undefined);
+            void send(where, { ...notice.input, noticed: true });
+          }}
+          onCancel={() => setOwed(undefined)}
+        />
+      </span>
+    ) : null;
 
   const stop = async () => {
     const phase = phaseKey;
@@ -1293,7 +1332,9 @@ export function SyncTab({
         </Card>
       ) : null}
       {showStopped && sync.phase === "stopped" ? (
-        <Card testId="space-stopped" tone={sync.cause === "rejected" ? "amber" : "red"}>
+        // A stop the reader answers — a rejected push, the sharing
+        // notice — reads as attention, not as a fault (space-15).
+        <Card testId="space-stopped" tone={sync.cause === "rejected" || sync.cause === "notice" ? "amber" : "red"}>
           <span className="font-medium" data-testid="space-stopped-title">
             {i18n._({
               id: "{step} stopped — {message}",
@@ -1340,6 +1381,7 @@ export function SyncTab({
               </span>
             ) : null}
           </div>
+          {sharingNotice("retry")}
         </Card>
       ) : null}
       {showDone && sync.phase === "done" ? (
@@ -1495,7 +1537,9 @@ export function SyncTab({
               {i18n._({ id: "All host's", comment: "choose the host's version for every conflict" })}
             </button>
             <span className="flex-1" />
-            {confirming ? (
+            {notice?.where === "apply" ? (
+              sharingNotice("apply")
+            ) : confirming ? (
               <span data-testid="space-apply-confirm">
                 <InlineConfirm
                   question={

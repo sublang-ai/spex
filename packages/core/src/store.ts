@@ -1353,7 +1353,7 @@ export class Store {
   /**
    * Clones the caller already moved on disk (space-59, space-60): every
    * pair naming a moved key names its new one in `home.yaml`, your own
-   * group's name follows where it was renamed, and the indexes — clones,
+   * group's spex repository's key follows where it moved, and the indexes — clones,
    * sessions, intents, the preferences keyed by repository — follow in
    * the same step, so no reader sees a key that names nothing.
    */

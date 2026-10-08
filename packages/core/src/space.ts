@@ -190,6 +190,21 @@ const syncLater = (): string => i18n._({
   comment: "Guidance under a sync stopped because a step at the Git host waits for a member with the rights",
 });
 
+/** A sync the sharing notice must precede, refused or stopped at its
+ * Check (space-57). */
+const noticeFirst = (name: string): string => i18n._({
+  id: "Read the sharing notice before syncing {name}",
+  values: { name },
+  comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
+});
+
+/** Guidance under a sync stopped at its Check for the sharing notice:
+ * the reader's Sync says it first (space-57, space-15). */
+const noticeThenSync = (): string => i18n._({
+  id: "Sync says what goes there first.",
+  comment: "Guidance under a sync stopped because the reader has not seen the privacy notice for a spex repository with other members; Sync is the control that shows the notice before sending",
+});
+
 /** A failure of a call to the host as the stopped state of space-15. */
 function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
   const message = relayHostError(error, host);
@@ -639,18 +654,24 @@ class RepositorySync {
     }
   }
 
+  /** The phase a hold set aside, given back when it lifts. */
+  private beforeHold?: SpaceSyncPhase;
+
   /** Hold the gate for an operation the manager runs beneath this clone
-   * — a rename or a join's code clone (space-21); false while another
-   * runs. */
+   * — a rename, a move or a join's code clone (space-21); false while
+   * another runs. */
   hold(op: SpaceOp, step: SyncStep): boolean {
     if (this.phase.phase === "running") return false;
+    this.beforeHold = this.phase;
     this.phase = { phase: "running", op, step, since: Date.now(), cancelable: false };
     return true;
   }
 
-  /** Lift a hold, or end it stopped. */
+  /** Lift a hold, the clone reading what it read before — a picker
+   * waiting still waits (space-21) — or end it stopped. */
   release(stopped?: { op: SpaceOp; step: SyncStep; failure: GitFailure }): void {
-    this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : { phase: "idle" };
+    this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : this.beforeHold ?? { phase: "idle" };
+    this.beforeHold = undefined;
   }
 
   // -- reads and moves (space-59, space-60) -----------------------------------
@@ -2216,19 +2237,24 @@ export class SpaceManager {
 
   /** Rename your own group's folder and its spex repository after the
    * account's login (space-59): every clone beneath it moves, every pair
-   * naming one is rewritten, in one step while nothing beneath runs. */
+   * naming one is rewritten, in one step while nothing beneath runs —
+   * only while your own group's spex repository is not on the host,
+   * whose moves it follows by the key it records (space-60). */
   private async renameOwn(account: HostAccount): Promise<"none" | "done" | "busy"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
     const current = store.home.ownName;
     if (!target || target === current) return "none";
+    const ownFrom = store.home.own();
     const keys = store.listRepositories().map((repository) => repository.key).filter((key) => key.startsWith(`${current}/`));
-    const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
+    // A clone on the host never turns local-only: facts already read
+    // settle it with no gate taken (space-60).
+    if (store.repository(ownFrom) && this.atHost(this.machine(ownFrom).facts)) return "none";
     // The home file the move leaves is checked before any clone moves:
     // a refusal leaves every folder and pair where it is.
-    store.home.checkMove(moves, target);
+    store.home.checkMove(moves, ownTo);
     // A destination taken by another entry collides; one that is the
     // source itself, as a case-insensitive filesystem reads a login
     // differing only by case, does not.
@@ -2246,6 +2272,9 @@ export class SpaceManager {
         if (!machine.hold("move", "apply")) return "busy";
         held.push(machine);
       }
+      // Your own group's spex repository on the host follows the host's
+      // moves alone (space-60): its clone's facts are read under the gate.
+      if (store.repository(ownFrom) && this.atHost(await this.machine(ownFrom).readFacts())) return "none";
       await this.publish();
       for (const key of keys) if (await this.host.blocker(key)) return "busy";
       // Reads in flight end where the clones lie, and what an
@@ -2260,7 +2289,7 @@ export class SpaceManager {
       // the filesystem reads both spellings as one, and each clone then
       // moves from where it now lies.
       for (const move of moves) moveClone(store.home.workspace, move.from, move.to);
-      this.relocate(moves, target);
+      this.relocate(moves, ownTo);
       for (const machine of moving.splice(0)) machine.endMove();
       await this.afterMove(moves);
       return "done";
@@ -2408,7 +2437,8 @@ export class SpaceManager {
 
   /** A sync the core starts itself — after a sign-in, a creation or a
    * retried step — admitted as the reader's (space-57): where the notice
-   * is owed it does not start, and the row stands with its Sync. */
+   * is owed it does not start, or its Check stops it, sending nothing,
+   * and the row stands with its Sync. */
   private startSync(key: string, input: { join?: boolean }): void {
     const machine = this.machines.get(key);
     if (!machine || this.stopping) return;
@@ -2440,7 +2470,7 @@ export class SpaceManager {
       if (choice.kind === "join") {
         const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
         if (!listing) throw new CoreError("not_found", noLongerShared());
-        if (!seen && !listing.readOnly && (listing.members ?? 0) > 1) {
+        if (this.noticeOwed(listing, key)) {
           throw new CoreError("invalid_request", i18n._({
             id: "Read the sharing notice before joining {name}",
             values: { name: listing.repository.path },
@@ -2650,7 +2680,7 @@ export class SpaceManager {
   // -- the sync against the host (space-11, space-12, space-60) ---------------
 
   /** The admission of space-11 the host decides: a clone on the host
-   * needs a sign-in, and its first push into a repository with other
+   * needs a sign-in, and a sync sending into a repository with other
    * members, or whose members the host has not told, needs the notice
    * seen (space-57). */
   async admit(machine: RepositorySync, input: { push: boolean; noticed: boolean }): Promise<void> {
@@ -2658,22 +2688,37 @@ export class SpaceManager {
     if (!this.atHost(facts)) return;
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     if (!input.push || input.noticed) return;
-    const store = this.host.store;
-    if (store.getPref<unknown>(noticedPref(machine.key)) === true || store.getPref<unknown>(lastSyncPref(machine.key)) !== undefined) return;
+    // Only the reader's having seen the notice is its evidence
+    // (storage-5); this asks it early on the facts at hand, and the
+    // sync's Check decides again on the answer it acts on.
+    if (this.host.store.getPref<unknown>(noticedPref(machine.key)) === true) return;
     // Unknown is not "only me": a repository the view read before it
     // existed, or whose members it lacks, is read again; still unknown,
-    // its first push waits for the notice.
+    // its push waits for the notice.
     let listing = listingFor(this.view, facts.id, facts.remote);
     if (!listing || listing.members === null) {
-      try { listing = listingFor(await this.readHost(), facts.id, facts.remote); } catch { listing = undefined; }
+      try { listing = listingFor(await this.readHost(), facts.id, facts.remote); }
+      catch {
+        // Unread: the sync's Check stops on the host's failure
+        // (space-15), or decides the notice on its own read (space-57).
+        return;
+      }
     }
+    if (listing && !this.noticeOwed(listing, machine.key)) return;
     const members = listing?.members ?? null;
-    if (listing && members !== null && (listing.readOnly || members <= 1)) return;
-    throw new CoreError("invalid_request", i18n._({
-      id: "Read the sharing notice before the first sync of {name}",
-      values: { name: splitKey(machine.key).name },
-      comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
-    }), { notice: true, members, visibility: listing && members !== null ? listing.repository.visibility : null });
+    throw new CoreError("invalid_request", noticeFirst(splitKey(machine.key).name),
+      { notice: true, members, visibility: listing && members !== null ? listing.repository.visibility : null });
+  }
+
+  /** Whether a sync sending into a listed spex repository owes the
+   * sharing notice first (space-57): the host lets the account push
+   * there, tells other members or none, and this device's reader has
+   * not seen the notice for it (storage-5). One rule for the admission,
+   * the Check step and the pick joining it. */
+  private noticeOwed(listing: HostListing, key: string): boolean {
+    return listing.readOnly === null
+      && (listing.members === null || listing.members > 1)
+      && this.host.store.getPref<unknown>(noticedPref(key)) !== true;
   }
 
   /** The Check step's read of the host for one clone (space-12): follow
@@ -2695,8 +2740,31 @@ export class SpaceManager {
     const repository = listing.repository;
     if (facts.id === null) await machine.recordIdNow(repository.id);
     const key = hostKey(repository);
+    // Your own group's spex repository the host lists outside the
+    // account's own group is not followed: that group would become your
+    // own (space-60). Without the account's own group in the view, the
+    // kind of the group the host lists decides.
+    const user = userGroup(view);
+    const outside = key !== null && (user
+      ? splitKey(key).group !== user.fullPath
+      : repository.group.kind !== "user" || splitKey(key).group.toLowerCase() !== splitKey(machine.key).group.toLowerCase());
+    if (key && key !== machine.key && machine.key === this.host.store.home.own() && outside) {
+      const name = splitKey(machine.key).name;
+      throw new SpaceStopped("check", {
+        cause: "git",
+        message: i18n._({ id: "{name} is no longer in your own group on {host}", values: { name, host: this.hostName() }, comment: "A stopped sync: the Git host lists your own group's spex repository in another group; {name} is its name, {host} the host's display name" }),
+        guidance: i18n._({ id: "Move it back to your own group on {host}, then Retry.", values: { host: this.hostName() }, comment: "Guidance where your own group's spex repository was moved out of your own group on the Git host; {host} is its display name" }),
+        retry: true,
+      });
+    }
     if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key);
     if (facts.remote !== repository.remoteUrl) await machine.setOrigin(repository.remoteUrl);
+    // The notice decided on the host's answer this sync acts on: owed,
+    // the sync stops before anything is prepared or sent, its Save
+    // commit standing, and its Sync asks the notice (space-57, space-15).
+    if (op === "sync" && this.noticeOwed(listing, machine.key)) {
+      throw new SpaceStopped("check", { cause: "notice", message: noticeFirst(splitKey(machine.key).name), guidance: noticeThenSync(), retry: true });
+    }
     const readOnly = listing.readOnly !== null;
     if (!readOnly && !listing.branchPresent) {
       // `spex` beside the default branch, never as it (git-host-7).
@@ -2734,32 +2802,87 @@ export class SpaceManager {
    * filesystem kind. A folder renamed in place carries the clones beneath
    * it: they stay where they lie, every path to them still read on the
    * filesystem that read both spellings as one, and their keys follow
-   * the folder's spelling in the same step. */
+   * the folder's spelling in the same step. Your own group's spex
+   * repository moving to another folder carries the local-only clones of
+   * its own, since what you add for yourself stays in your own group's
+   * folder. The move holds the gates of every clone it carries too, and
+   * runs only while nothing beneath any of them runs; otherwise the sync
+   * goes on where the clone lies and a later sync moves it. `home.yaml`
+   * follows in the same step, your own group's key among its pairs
+   * (storage-2). */
   private async moveInSync(machine: RepositorySync, to: string): Promise<void> {
     const store = this.host.store;
     const workspace = store.home.workspace;
     const from = machine.key;
-    if (moveCollides(workspace, from, to)) {
-      throw new SpaceStopped("check", {
-        cause: "git",
-        message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
-        guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where a renamed spex repository's new folder is taken" }),
-        retry: true,
-      });
-    }
-    const moves = [{ from, to }, ...carriedClones(workspace, from, to, store.listRepositories().map((repository) => repository.key))];
-    const moving = [machine, ...moves.slice(1).map((move) => this.machine(move.from))];
-    // Reads in flight end, and an environment's writes land, before the
-    // clones move; a read starting meanwhile reads them moved.
+    const taken = (path: string): SpaceStopped => new SpaceStopped("check", {
+      cause: "git",
+      message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${path}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
+      guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where a renamed spex repository's new folder is taken" }),
+      retry: true,
+    });
+    if (moveCollides(workspace, from, to)) throw taken(to);
+    const keys = store.listRepositories().map((repository) => repository.key);
+    const moves = [{ from, to }, ...carriedClones(workspace, from, to, keys)];
+    const carried = moves.slice(1).map((move) => move.from);
+    // Your own group's spex repository leaving its folder: every other
+    // clone of that folder is a candidate, carried where it is not on
+    // the host, which no sync of its own would move (space-60).
+    const group = splitKey(from).group;
+    const candidates = from === store.home.own() && splitKey(to).group !== group
+      ? keys.filter((key) => key !== from && !carried.includes(key) && splitKey(key).group === group)
+      : [];
+    // A pick in flight writes a clone's remote: it ends first.
+    if ([...carried, ...candidates].some((key) => this.picking.has(key))) return;
+    const held: RepositorySync[] = [];
     try {
-      for (const each of moving) await each.beginMove();
-      await this.host.settleBeneath?.(moves.map((move) => move.from));
-      moveClone(workspace, from, to);
-      this.relocate(moves);
+      // The gate of every clone the move may carry, in key order
+      // (space-21): held before the checks, and through the move until
+      // the store, the machines and the core read every clone where it
+      // now lies. One running, picked or not quiet defers the move.
+      for (const key of keys.filter((each) => carried.includes(each) || candidates.includes(each))) {
+        const each = this.machine(key);
+        if (!each.hold("move", "apply")) return;
+        held.push(each);
+      }
+      // Each candidate's clone is read under its gate: one on the host
+      // follows the host's moves on its own syncs and is let go.
+      for (const key of candidates) {
+        const each = this.machine(key);
+        if (this.atHost(await each.readFacts())) {
+          each.release();
+          held.splice(held.indexOf(each), 1);
+        } else moves.push({ from: key, to: `${splitKey(to).group}/${splitKey(key).name}` });
+      }
+      const local = moves.slice(1 + carried.length);
+      const collision = local.find((move) => moveCollides(workspace, move.from, move.to));
+      if (collision) throw taken(collision.to);
+      // The home file the move leaves is checked before any clone moves:
+      // a refusal leaves every folder and pair where it is.
+      try { store.home.checkMove(moves); }
+      catch (error) {
+        if (!(error instanceof StorageFormatError)) throw error;
+        throw new SpaceStopped("check", { cause: "git", message: error.reason, guidance: retryGuidance(), retry: true });
+      }
+      for (const { from: key } of moves.slice(1)) if (this.picking.has(key) || await this.host.blocker(key)) return;
+      const moving = [machine, ...held];
+      // Reads in flight end, and an environment's writes land, before the
+      // clones move; a read starting meanwhile reads them moved.
+      try {
+        for (const each of moving) await each.beginMove();
+        await this.host.settleBeneath?.(moves.map((move) => move.from));
+        // A clone added meanwhile beneath a folder renamed in place would
+        // move with no key of its own: a later sync moves them all.
+        if (carriedClones(workspace, from, to, store.listRepositories().map((repository) => repository.key)).some((move) => !carried.includes(move.from))) return;
+        moveClone(workspace, from, to);
+        for (const move of local) moveClone(workspace, move.from, move.to);
+        this.relocate(moves);
+      } finally {
+        for (const each of moving) each.endMove();
+      }
+      await this.afterMove(moves);
     } finally {
-      for (const each of moving) each.endMove();
+      for (const each of held) each.release();
     }
-    await this.afterMove(moves);
   }
 
   /** The store, the machines and the waiting steps follow moved clones. */

@@ -128,6 +128,8 @@ export interface AuthorManagerEvents {
   onSource: (message: DraftSourceMessage) => void;
   onProgress: (draftId: string, line: string) => void;
   onRemoved: (draftId: string, projectId: string) => void;
+  /** A re-read found the transcript changed: its records whole. */
+  onHistoryReplaced: (draftId: string, projectId: string, records: DraftRecord[]) => void;
 }
 
 type TurnOrigin =
@@ -338,22 +340,27 @@ export class AuthorManager {
     onSource: () => {},
     onProgress: () => {},
     onRemoved: () => {},
+    onHistoryReplaced: () => {},
   };
   private readonly live = new Map<string, LiveDraft>();
   private readonly problems = new Map<string, StorageDiagnostic>();
   private readonly now: () => number;
   private stopping = false;
+  /** The id a Delete is retiring: it announces its own departure. */
+  private deleting: string | undefined;
 
   constructor(private readonly options: AuthorManagerOptions) {
     this.now = options.now ?? Date.now;
-    options.drafts.onKeptChanged = (id) => this.forget(id);
+    options.drafts.onKeptChanged = (id, former) => this.forget(id, former);
   }
 
   /** A rescan gave the id another session, or none (storage-12): what
    * was read from the one before goes, and a turn, compile or enabling
    * re-package still running for it is aborted or canceled; nothing of
-   * it reaches the session the id now names (playbook-library-70). */
-  private forget(id: string): void {
+   * it reaches the session the id now names (playbook-library-70). The
+   * departure is announced naming the former session's project, then
+   * the session now holding the id (core-service-96). */
+  private forget(id: string, former: string): void {
     const live = this.live.get(id);
     live?.turn?.controller.abort();
     live?.compile?.controller.abort();
@@ -361,22 +368,36 @@ export class AuthorManager {
     this.options.activeCompiles.get(id)?.abort();
     this.live.delete(id);
     this.problems.delete(id);
+    if (this.deleting === id) return;
+    this.events.onRemoved(id, former);
+    if (this.drafts.exists(id)) this.publish(id);
   }
 
   /** A sync applied the spex repository (space-20): each of its
    * sessions' transcript, with the sequence it ends at, is read back
    * before anything appends; one the sync changed is one the provider
-   * conversation never saw, so the next turn reseeds (playbook-library-70,
-   * playbook-library-64). */
+   * conversation never saw, so the next turn reseeds, and its
+   * subscribers receive it whole; every session it holds is published
+   * (playbook-library-70, playbook-library-64, core-service-96). */
   reread(repository: string): void {
     for (const id of this.drafts.idsIn(repository)) {
       const live = this.live.get(id);
       const held = live?.records;
-      if (!live || !held) continue;
-      if (live.damaged) this.problems.delete(id);
-      live.records = undefined;
-      live.damaged = undefined;
-      if (JSON.stringify(this.recordsOf(id, live)) !== JSON.stringify(held)) live.resume = undefined;
+      if (live && held) {
+        // A damaged transcript withholds its records, as an open does:
+        // what the subscribers were served is what a replacement differs from.
+        const servedBefore = live.damaged ? [] : held;
+        if (live.damaged) this.problems.delete(id);
+        live.records = undefined;
+        live.damaged = undefined;
+        const records = this.recordsOf(id, live);
+        if (JSON.stringify(records) !== JSON.stringify(held)) live.resume = undefined;
+        const served = live.damaged ? [] : records;
+        if (JSON.stringify(served) !== JSON.stringify(servedBefore)) {
+          this.events.onHistoryReplaced(id, repository, [...served]);
+        }
+      }
+      this.publish(id);
     }
   }
 
@@ -784,8 +805,9 @@ export class AuthorManager {
     return info;
   }
 
-  /** A Boss message: dispatched at once while the draft is idle, else
-   * queued and dispatched in order when it is (core-service-96). */
+  /** A Boss message: dispatched at once while the draft is idle with
+   * nothing queued, else queued and dispatched in order when it is
+   * (core-service-96, playbook-library-102). */
   send(id: string, input: string | MessageContent): { accepted: true; queued: boolean } {
     const content: MessageContent = typeof input === "string" ? {text: input} : {
       text: input.text,
@@ -796,10 +818,14 @@ export class AuthorManager {
     const live = this.liveOf(id);
     // The Boss spoke: the relay count starts over (playbook-library-68).
     draft.failures = 0;
-    if (this.activity(id) !== "idle") {
+    // A message never overtakes one queued before it: while the queue
+    // holds any, this one joins its end and the oldest starts if the
+    // session is idle (playbook-library-102).
+    if (this.activity(id) !== "idle" || draft.queued.length > 0) {
       draft.queued.push(content);
       this.save(draft);
       this.publish(id);
+      this.afterSettle(id);
       return { accepted: true, queued: true };
     }
     this.save(draft);
@@ -958,7 +984,9 @@ export class AuthorManager {
       return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder });
     } finally {
       this.options.activeCompiles.delete(id);
-      this.publish(id);
+      // Whatever its outcome, the enabling's end frees the id: the
+      // session it names now dispatches its queue (playbook-library-102).
+      this.released(id);
     }
   }
 
@@ -1028,7 +1056,13 @@ export class AuthorManager {
   delete(id: string): void {
     this.assertDeletable(id);
     const projectId = this.drafts.projectOf(id) ?? "";
-    this.drafts.delete(id);
+    // Its departure is announced below, once the preference is gone.
+    this.deleting = id;
+    try {
+      this.drafts.delete(id);
+    } finally {
+      this.deleting = undefined;
+    }
     this.options.store.deletePref(`authoring:${id}:player`);
     this.live.delete(id);
     this.problems.delete(id);
@@ -1169,10 +1203,10 @@ export class AuthorManager {
       if (live.turn?.controller === controller) live.turn = undefined;
     }
     // The turn is over: its directives act (playbook-library-66), then
-    // the queue dispatches if nothing started (core-service-96).
+    // the queue dispatches if nothing started (playbook-library-102).
     if (reply !== undefined) this.actOnReply(id, live, reply);
     this.publish(id);
-    this.afterSettle(id, live);
+    this.afterSettle(id, { live });
   }
 
   private hasPriorTurns(id: string, live: LiveDraft, turnId: number): boolean {
@@ -1319,17 +1353,45 @@ export class AuthorManager {
     }
   }
 
-  /** Dispatch the queue when the draft is idle (core-service-96). */
-  private afterSettle(id: string, live: LiveDraft, preface?: string): void {
-    if (this.stopping || this.activity(id) !== "idle") return;
+  /** An activity of the id ended outside a settle of the session it
+   * names — an enabling, a `compile.run`, or a compile of a session the
+   * id no longer names: the state of the session it names now is
+   * announced and its queue dispatches (playbook-library-102). A failed
+   * dispatch never turns the finished activity into an error reply. */
+  released(id: string): void {
+    this.publish(id);
+    try {
+      this.afterSettle(id);
+    } catch (error) {
+      console.error(`spex: authoring dispatch failed: ${String(error)}`);
+    }
+  }
+
+  /** An activity outside this runner took the id: the session it names
+   * reads compiling (core-service-96). */
+  announce(id: string): void {
+    this.publish(id);
+  }
+
+  /** Start the oldest queued message of the session the id names now,
+   * once it is idle, on that session's own live state
+   * (playbook-library-102). The follow-up text rides only from a settle
+   * of that same session (playbook-library-68); an activity of one the
+   * id no longer names carries nothing to it (playbook-library-70). A
+   * damaged transcript dispatches nothing, as it accepts nothing. */
+  private afterSettle(id: string, settled?: { live: LiveDraft; preface?: string }): void {
+    if (this.stopping || !this.drafts.exists(id) || this.activity(id) !== "idle") return;
+    const live = this.liveOf(id);
     let draft: StoredDraft;
     try {
       draft = this.read(id);
+      this.assertReadable(id);
     } catch {
       return;
     }
     const content = draft.queued.shift();
     if (content === undefined) return;
+    const preface = settled?.live === live ? settled.preface : undefined;
     draft.failures = 0;
     this.save(draft);
     this.startTurn(id, live, { kind: "boss", ...content, ...(preface ? { preface } : {}) });
@@ -1587,7 +1649,9 @@ export class AuthorManager {
     // session's it no longer names and records nothing; the id's state
     // reads its compile over (playbook-library-70).
     if (this.live.get(id) !== live) {
-      this.publish(id);
+      // The id is free again: the session it names now dispatches its
+      // own queue, bare (playbook-library-102).
+      this.released(id);
       return settled;
     }
     this.settleCompile(id, live, settled, lines, startedAt);
@@ -1704,7 +1768,7 @@ export class AuthorManager {
     // A queued Boss message always goes first, carrying the follow-up
     // text as its preface (playbook-library-68).
     if (draft.queued.length > 0) {
-      this.afterSettle(id, live, preface);
+      this.afterSettle(id, { live, preface });
       return;
     }
     if (!relay || !preface) return;

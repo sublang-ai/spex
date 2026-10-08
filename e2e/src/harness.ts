@@ -219,20 +219,22 @@ export const HOST_LOGIN = "ada";
 export const HOST_GROUP = "acme";
 export const HOST_GROUP_ID = "2002";
 
-/** Your own group's name in a home: the one `home.yaml` records once
- * the home has written it — a sign-in renames it (space-59). */
-export function ownName(dataDir: string): string {
+/** Your own group's spex repository's key in a home (storage-1): the
+ * one `home.yaml` records once the home has written it — a sign-in
+ * renames it (space-59) (storage-2). */
+export function ownKey(dataDir: string): string {
+  const fallback = `${E2E_OWN}/${E2E_OWN}-spex`;
   try {
-    return /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? E2E_OWN;
+    return /^own: (\S+)$/m.exec(readFileSync(join(dataDir, "home.yaml"), "utf8"))?.[1] ?? fallback;
   } catch {
-    return E2E_OWN;
+    return fallback;
   }
 }
 
-/** Your own group's spex repository's key in a home (storage-1). */
-export function ownKey(dataDir: string): string {
-  const own = ownName(dataDir);
-  return `${own}/${own}-spex`;
+/** Your own group's name in a home: the group of its spex repository's
+ * key. */
+export function ownName(dataDir: string): string {
+  return ownKey(dataDir).split("/")[0];
 }
 
 /** A spex repository's clone under a journey home (storage-1). */

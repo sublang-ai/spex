@@ -4,7 +4,8 @@
 // Projects as working folders paired with spex repositories (projects-9,
 // projects-10, projects-21): removal forgets the pair and deletes the
 // clone, asking a second confirmation while the clone holds what has not
-// reached the host, and leaves the working folder exactly as it was.
+// reached the host, and leaves the working folder exactly as it was; a
+// config write never recreates a clone that is gone (playbook-library-104).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -15,10 +16,13 @@ import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
 
 import { CoreService } from "./service.js";
+import { defaultSpawner, type LineSpawner } from "./compile.js";
+import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import type { Command, CommandResults, ServerMessage } from "./protocol.js";
+import { STUB_SLC_RELEASE_FILE, stubSlcScriptedSource } from "./testing/stub-slc.js";
+import type { Command, CommandResults, DraftInfo, ServerMessage } from "./protocol.js";
 
 const CONFIG = `captain:
   adapter: claude
@@ -213,6 +217,172 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     await client.ok("project.remove", { projectId: again.id });
     assert.ok(!existsSync(join(dataDir, "workspace", "tester", "fixture-spex")));
     assert.notEqual(git(bare, "rev-parse", "spex"), "", "nothing on the host changed");
+  } finally {
+    client.close();
+    await service.stop();
+  }
+});
+
+test("projects-21: removal waits for an authoring session's turn, compile and enabling, naming it, and once idle removes the clone for good", async () => {
+  const scratch = scratchDir("spex-project-removal-authoring-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  // The stub slc holds each compile in its first phase until released.
+  const stub = join(scratch, "stub-slc.cjs");
+  writeFileSync(stub, stubSlcScriptedSource(["ok"], "['Triager', 'Verifier']", { hold: true }));
+  const authoring = authoringScript();
+  const { imports } = fakeAdapterImports({
+    rules: [{ match: "Boss: hold the turn", response: { deltas: ["working"], result: "", untilAborted: true } }, ...(authoring.rules ?? [])],
+    ...(authoring.fallback ? { fallback: authoring.fallback } : {}),
+  });
+  // The toolchain probe wants a system Node; the stub slc runs for real.
+  const spawner: LineSpawner = (command, args, cwd, onLine, signal, spawnEnv) => {
+    if (args.length === 1 && args[0] === "--version" && command !== process.execPath) {
+      onLine("v24.1.0");
+      return Promise.resolve(0);
+    }
+    return defaultSpawner(command, args, cwd, onLine, signal, spawnEnv);
+  };
+  const env = { PATH: process.env.PATH ?? "", HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", SPEX_SLC: `${process.execPath} ${stub}` };
+  const service = await CoreService.start({
+    token: "test", dataDir, own: "tester", env, home, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
+    watchConfig: false, compileSpawner: spawner,
+  });
+  const client = new Client(service.port());
+  await client.open();
+  try {
+    const projectId = (await client.ok("project.register", { path: folder })).id;
+    const clone = join(dataDir, "workspace", "tester", "fixture-spex");
+    const environmentIdle = async (): Promise<void> => {
+      const start = Date.now();
+      while ((await client.ok("environment.get", { repository: projectId })).busy !== null) {
+        if (Date.now() - start > 60_000) throw new Error("timeout waiting for the environment");
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    };
+    const latest = (id: string): DraftInfo | undefined => client.messages
+      .filter((m): m is Extract<ServerMessage, { type: "draft.state" }> => m.type === "draft.state" && m.draft.id === id).at(-1)?.draft;
+    const settled = async (id: string, check: (draft: DraftInfo) => boolean): Promise<void> => {
+      const start = Date.now();
+      for (let draft = latest(id); !(draft && check(draft)); draft = latest(id)) {
+        if (Date.now() - start > 60_000) throw new Error(`timeout waiting for ${id}`);
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    /** Removal is refused busy naming what runs, and the clone stays. */
+    const refusedNaming = async (id: string): Promise<void> => {
+      const reply = await client.command("project.remove", { projectId, confirm: true });
+      assert.ok(!reply.ok, `removal waits for ${id}`);
+      assert.equal(reply.error.code, "busy");
+      assert.match(reply.error.message, new RegExp(`\\b${id}\\b`), "the refusal names what runs");
+      assert.ok(existsSync(clone), "the clone stays");
+    };
+    await environmentIdle();
+
+    // An authoring turn held by the fake.
+    await client.ok("draft.create", { projectId, draftId: "held" });
+    await client.ok("draft.send", { projectId, draftId: "held", text: "hold the turn" });
+    await settled("held", (draft) => draft.activity === "turn");
+    await refusedNaming("held");
+    await client.ok("draft.abort", { projectId, draftId: "held" });
+    await settled("held", (draft) => draft.activity === "idle");
+
+    // A compile held by the stub slc in its first phase.
+    await client.ok("draft.create", { projectId, draftId: "slow" });
+    await client.ok("draft.source.write", { projectId, draftId: "slow", content: AUTHORING_SOURCE.replaceAll("<id>", "slow") });
+    const compiling = client.command("draft.compile", { projectId, draftId: "slow" });
+    await client.until((m) => m.type === "compile.progress" && m.playbookId === "slow" && m.line.startsWith("→ normalize"), 60_000);
+    await refusedNaming("slow");
+    await client.ok("compile.abort", { playbookId: "slow" });
+    const aborted = await compiling;
+    assert.ok(!aborted.ok && aborted.error.code === "aborted");
+    await settled("slow", (draft) => draft.activity === "idle");
+
+    // An enabling held at its re-package, where it loads the entry the
+    // compiler emitted (playbook-library-100).
+    await client.ok("draft.create", { projectId, draftId: "triage" });
+    await client.ok("draft.source.write", { projectId, draftId: "triage", content: AUTHORING_SOURCE.replaceAll("<id>", "triage") });
+    const artifactDir = join(folder, "spex-packages", "triage", "playbooks", "en", "triage");
+    writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
+    await client.ok("draft.compile", { projectId, draftId: "triage" });
+    await settled("triage", (draft) => draft.activity === "idle" && draft.proposal !== undefined);
+    const reached = join(scratch, "repackage-reached");
+    const release = join(scratch, "repackage-release");
+    const entry = join(artifactDir, "triage.ts");
+    writeFileSync(entry, [
+      'import { existsSync as heldExists, writeFileSync as heldWrite } from "node:fs";',
+      `heldWrite(${JSON.stringify(reached)}, "");`,
+      `while (!heldExists(${JSON.stringify(release)})) await new Promise((resolve) => setTimeout(resolve, 25));`,
+      readFileSync(entry, "utf8"),
+    ].join("\n"));
+    const registering = client.command("draft.register", {
+      projectId,
+      draftId: "triage",
+      command: "triage",
+      intent: "Label new issues",
+      bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+      newPlayers: { "dev.triager": { adapter: "claude" } },
+    });
+    const start = Date.now();
+    while (!existsSync(reached)) {
+      if (Date.now() - start > 60_000) throw new Error("timeout waiting for the held re-package");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    await refusedNaming("triage");
+    writeFileSync(release, "");
+    const enabled = await registering;
+    assert.ok(enabled.ok, `the enabling finishes: ${enabled.ok ? "" : enabled.error.message}`);
+    await settled("triage", (draft) => draft.activity === "idle");
+
+    // Once nothing runs, removal deletes the clone for good and
+    // announces each authoring session's departure.
+    await environmentIdle();
+    const from = client.messages.length;
+    await client.ok("project.remove", { projectId, confirm: true });
+    assert.ok(!existsSync(clone), "the clone is gone");
+    await client.until((m) => client.messages.indexOf(m) >= from && m.type === "draft.removed" && m.draftId === "triage");
+    const removed = client.messages.slice(from).filter((m): m is Extract<ServerMessage, { type: "draft.removed" }> => m.type === "draft.removed");
+    assert.deepEqual(removed.map((m) => `${m.draftId} ${m.projectId}`).sort(), ["held", "slow", "triage"].map((id) => `${id} ${projectId}`));
+    await new Promise((r) => setTimeout(r, 500));
+    assert.ok(!existsSync(clone), "nothing under workspace/ is recreated");
+    assert.deepEqual(readdirSync(join(dataDir, "workspace", "tester")), ["tester-spex"], "only your own group's spex repository stands");
+  } finally {
+    client.close();
+    await service.stop();
+  }
+});
+
+test("playbook-library-104: a config write to a project whose spex repository's clone is gone is refused, never recreating the clone", async () => {
+  const scratch = scratchDir("spex-project-config-gone-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  const { service, client } = await boot(dataDir, home);
+  try {
+    const project = await client.ok("project.register", { path: folder });
+    const clone = join(dataDir, "workspace", "tester", "fixture-spex");
+    const start = Date.now();
+    while ((await client.ok("environment.get", { repository: project.id })).busy !== null) {
+      if (Date.now() - start > 60_000) throw new Error("timeout waiting for the environment");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    // The clone leaves this device while its pair stands.
+    rmSync(clone, { recursive: true, force: true });
+    const refused = await client.command("config.edit", { repository: project.id, op: { kind: "playbook.add", playbookId: "code", roles: { coder: "dev.coder" } } });
+    assert.ok(!refused.ok, "the write is refused");
+    assert.match(refused.error.message, /no longer on this device/);
+    assert.ok(!existsSync(clone), "the clone is not recreated");
   } finally {
     client.close();
     await service.stop();

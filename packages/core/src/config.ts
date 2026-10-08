@@ -43,7 +43,7 @@ import {
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
-import { defaultOwnName, Home } from "./home.js";
+import { defaultOwnName, Home, ownKeyFor } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
@@ -488,12 +488,12 @@ export function resolveConfigPath(
 }
 
 /** Your own group's config inside its spex repository's clone
- * (storage-1, DR-103): the name `home.yaml` records, or this device's
- * user name for a home not yet written. */
+ * (storage-1, DR-103): the key `home.yaml` records, or the one named
+ * after this device's user name for a home not yet written. */
 export function ownConfigPath(root: string, env: NodeJS.ProcessEnv = process.env): string {
-  let own = defaultOwnName(env);
-  try { if (Home.exists(root)) own = Home.load(root).ownName; } catch { /* a damaged home reads as a new one */ }
-  return join(root, "workspace", own, `${own}-spex`, "config", "playbook.config.yaml");
+  let own = ownKeyFor(defaultOwnName(env));
+  try { if (Home.exists(root)) own = Home.load(root).own(); } catch { /* a damaged home reads as a new one */ }
+  return join(root, "workspace", ...own.split("/"), "config", "playbook.config.yaml");
 }
 
 /**

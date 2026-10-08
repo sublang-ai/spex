@@ -150,6 +150,7 @@ While the project palette is open, the palette shall stand inside the window at 
 Where the core manages projects, the home file shall pair each working folder with its spex repository's key [[storage-2](storage.md#storage-2)], the key being the clone's path under `workspace/` and no identity Spex mints [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - removing a project forgets the pair and deletes the clone; the working folder remains;
+- `project.remove` is refused `busy` while any work a sync of its spex repository waits for runs [[space-11](space.md#space-11)] — an authoring session's turn, compile or enabling among it — the refusal naming that work;
 - a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
 ### Repository State
@@ -251,7 +252,7 @@ Where the Overview tab renders a project whose GitHub binding names an unmet con
 
 #### projects-21
 
-Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session and the environment among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)]; that, the project registered again and synced to a host, a later turn whose push the host refuses still has the first confirm, after a core restart, ask the second naming the one unit the host lacks [[projects-9](#projects-9)]; and that, once a sync has pushed it, the project is removed on the first confirm alone [[projects-9](#projects-9)].
+Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session and the environment among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files and git state are identical to their state before removal [[projects-9](#projects-9)]; that, the project registered again and synced to a host, a later turn whose push the host refuses still has the first confirm, after a core restart, ask the second naming the one unit the host lacks [[projects-9](#projects-9)]; that, once a sync has pushed it, the project is removed on the first confirm alone [[projects-9](#projects-9)]; and that, with the project's authoring sessions holding a turn, a compile, and an enabling at its re-package, each in turn, the confirmed removal is refused `busy` naming the session with the clone standing, and once nothing runs it deletes the clone with nothing under `workspace/` recreated after it [[projects-10](#projects-10)].
 
 ### Label Coverage
 

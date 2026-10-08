@@ -681,6 +681,14 @@ export class CoreService {
         }
       }
     };
+    // A transcript a re-read found changed reaches the same audience as
+    // its records, whole, before anything appends (core-service-96).
+    this.authors.events.onHistoryReplaced = (draftId, projectId, records) => {
+      const key = `draft:${draftId}`;
+      for (const client of this.clients) {
+        if (client.channels.has(key)) this.send(client.socket, { type: "draft.history-replaced", draftId, projectId, records });
+      }
+    };
     this.authors.events.onState = (draft) => this.broadcast({ type: "draft.state", draft });
     this.authors.events.onSource = (message) => this.broadcast(message);
     this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
@@ -904,7 +912,9 @@ export class CoreService {
     });
     for (const playbookId of this.activeCompiles.keys()) {
       const holder = this.compileHolders.get(playbookId) ?? this.drafts.projectOf(playbookId) ?? this.store.home.own();
-      if (holder !== repository) continue;
+      // A compile.run holds the spex repository of the authoring session
+      // its id names as well as its own project's (space-11).
+      if (holder !== repository && this.drafts.projectOf(playbookId) !== repository) continue;
       return i18n._({
         id: "{playbookId} is compiling",
         comment: "What blocks a Space operation: a playbook compile is running",
@@ -2091,12 +2101,11 @@ export class CoreService {
         const key = command.projectId;
         if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
         if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
-        if (this.sessions.listSessions().some((session) => session.projectId === key && (session.live || session.turnActive))) {
-          throw new CoreError("busy", i18n._({
-            id: "wait for the project's running turn to finish, or abort it, before removing it",
-            comment: "Refusal: a turn is running in the project being removed",
-          }));
-        }
+        // Removal waits for what a sync of the spex repository waits
+        // for — an authoring session's turn, compile or enabling among
+        // it — naming it (projects-10, space-11).
+        const blocker = await this.spaceBlocker(key);
+        if (blocker !== undefined) throw new CoreError("busy", blocker);
         // What has not reached the host asks a second confirmation
         // naming the count (projects-9).
         if (command.confirm !== true) {
@@ -2386,6 +2395,9 @@ export class CoreService {
         const controller = new AbortController();
         this.activeCompiles.set(command.playbookId, controller);
         this.compileHolders.set(command.playbookId, project.id);
+        // A session of the id reads compiling while this compile holds
+        // it (core-service-96).
+        this.authors.announce(command.playbookId);
         try {
           const packagePath = draftPackagePath(command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
@@ -2454,6 +2466,9 @@ export class CoreService {
         } finally {
           this.activeCompiles.delete(command.playbookId);
           this.compileHolders.delete(command.playbookId);
+          // The id is free: a session of it reads idle again and
+          // dispatches its queue (playbook-library-102).
+          this.authors.released(command.playbookId);
         }
       }
       case "compile.abort": {

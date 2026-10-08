@@ -245,6 +245,11 @@ msgstr "{name} 正在加入；请等待其完成"
 msgid "{name} is moving; wait for it to finish"
 msgstr "{name} 正在移动；请等待其完成"
 
+#. A stopped sync: the Git host lists your own group's spex repository in another group; {name} is its name, {host} the host's display name
+#: src/space.ts
+msgid "{name} is no longer in your own group on {host}"
+msgstr "{name} 已不在 {host} 上你自己的群组中"
+
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
 msgid "{name} is not requested here"
@@ -1348,6 +1353,11 @@ msgstr "迁移目标已变动；已原样保留"
 msgid "migration output verification failed"
 msgstr "迁移输出校验失败"
 
+#. Guidance where your own group's spex repository was moved out of your own group on the Git host; {host} is its display name
+#: src/space.ts
+msgid "Move it back to your own group on {host}, then Retry."
+msgstr "请在 {host} 上将其移回你自己的群组，然后重试。"
+
 #. Guidance where a renamed spex repository's new folder is taken
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
@@ -1759,8 +1769,8 @@ msgstr "加入 {name} 之前，请先阅读共享说明"
 
 #. Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
-msgid "Read the sharing notice before the first sync of {name}"
-msgstr "首次同步 {name} 之前，请先阅读共享说明"
+msgid "Read the sharing notice before syncing {name}"
+msgstr "同步 {name} 之前，请先阅读共享说明"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
@@ -2009,6 +2019,11 @@ msgstr "请再次同步，以合并托管平台这期间收到的内容。"
 #: src/space.ts
 msgid "Sync rules updated"
 msgstr "同步规则已更新"
+
+#. Guidance under a sync stopped because the reader has not seen the privacy notice for a spex repository with other members; Sync is the control that shows the notice before sending
+#: src/space.ts
+msgid "Sync says what goes there first."
+msgstr "同步会先说明哪些内容将发往那里。"
 
 #. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
@@ -2276,6 +2291,11 @@ msgstr "同步期间空间被改动了两次"
 msgid "the spec package of {id} is missing from the working folder"
 msgstr "工作文件夹中缺少 {id} 的规约包"
 
+#. Refusal: a project's config write whose spex repository's clone was removed meanwhile
+#: src/config-edit.ts
+msgid "the spex repository holding {path} is no longer on this device"
+msgstr "存放 {path} 的 spex 仓库已不在本设备上"
+
 #. Guidance after a join's code clone failed
 #: src/space.ts
 msgid "The spex repository is here; choose a folder for its code to pair it."
@@ -2517,11 +2537,6 @@ msgstr "请等待媒体文件上传完成。"
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before rebinding"
 msgstr "请先等待该项目正在进行的轮次结束或将其中止，再重新绑定"
-
-#. Refusal: a turn is running in the project being removed
-#: src/service.ts
-msgid "wait for the project's running turn to finish, or abort it, before removing it"
-msgstr "请先等待该项目正在进行的轮次结束或将其中止，再移除项目"
 
 #. Refusal: the draft's agent is answering, so its agent cannot change now
 #: src/authoring.ts

@@ -251,8 +251,15 @@ export function AuthoringWorkspace({
     enable: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
+  // A file picked for this session lands nowhere once its id names
+  // another session (playbook-library-98): the project is captured
+  // before the pick.
   const pickFile = window.spexNative?.pickFile
-    ? () => window.spexNative!.pickFile!()
+    ? async () => {
+        const projectId = draft.projectId;
+        const picked = await window.spexNative!.pickFile!();
+        return useAppStore.getState().drafts[draftId]?.projectId === projectId ? picked : null;
+      }
     : undefined;
 
   const artifactPanel = (kind: "gears" | "machine", loaded: PlaybookArtifacts | undefined) => {
@@ -381,6 +388,8 @@ export function AuthoringWorkspace({
                   try {
                     await writeDraftSource(draftId, { sourcePath: picked });
                   } catch (cause) {
+                    // A write the id's next session retired places nothing.
+                    if ((cause as { code?: string }).code === "retired") return null;
                     reportDraftError(draftId, (cause as Error).message);
                   }
                   return "field";

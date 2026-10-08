@@ -5875,6 +5875,10 @@ msgstr "this device's sign-in to the Git host"
 msgid "This draft is no longer listed."
 msgstr "This draft is no longer listed."
 
+#: src/state/store.ts
+msgid "This draft now names another session."
+msgstr "This draft now names another session."
+
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "This file changed on disk since you opened it."

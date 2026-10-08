@@ -154,8 +154,8 @@ While an authoring session's workspace is open, the conversation pane shall rend
 
 While an authoring session's workspace is open, the composer beneath the conversation — of the house shape [[run-view-106](run-view.md#run-view-106)] with the placeholder "Describe the playbook…" and the caption "Enter sends" — shall dispatch or queue each Boss submission by the session's published state [[core-service-96](core-service.md#core-service-96)]:
 
-- while the session is idle a submission dispatches, the primary reading "Send";
-- while a turn or a compile runs a submission queues with the queued indicator, the primary reading "Send next" and the placeholder "Sends after the reply…" or "Sends after the compile…", and the queue dispatches in order when the session is idle [[playbook-library-68](#playbook-library-68)];
+- while the session is idle a submission dispatches, behind any message still queued [[playbook-library-102](#playbook-library-102)], the primary reading "Send";
+- while a turn or a compile runs a submission queues with the queued indicator, the primary reading "Send next" and the placeholder "Sends after the reply…" or "Sends after the compile…", and the queue dispatches in order when the session is idle [[playbook-library-102](#playbook-library-102)];
 - "Abort" stands in the action row while a turn runs and ends it, leaving the transcript as far as it got; a canceled turn leaves the queue standing;
 - a refused dispatch keeps the text with the refusal shown; the composer's draft and the queue survive leaving and reopening the workspace while the app runs.
 
@@ -255,12 +255,19 @@ While an authoring session's last compile succeeded and the home is signed in, t
 
 #### playbook-library-98
 
-When the core names another project's authoring session under an id the app holds a session's state for — in that session's state or a listing [[core-service-96](core-service.md#core-service-96)], the id freed by a deletion or reassigned by a rescan [[storage-12](storage.md#storage-12)] — the Playbooks surface shall hold under that id only the state of the session it now names:
+When the core names another project's authoring session, or none, under an id the app holds a session's state for — in that session's state, a listing that names another or leaves the id out, or an announced removal [[core-service-96](core-service.md#core-service-96)], the id freed by a deletion or reassigned by a rescan [[storage-12](storage.md#storage-12)] — the Playbooks surface shall hold under that id only the state of the session it now names:
 
 - the former session's transcript, source, compiled tabs, composer text, Source edits and Enable form go, and its open workspace returns to the list;
 - opening the id restores the session now holding it from its first record [[playbook-library-62](#playbook-library-62)];
-- a reply to a command addressed to the former session, arriving after, changes nothing;
+- a reply to a command addressed to the former session, arriving after, changes nothing, and no act the workspace started for it — Save, Reload, Paste, Send, a picked file, an enabling — writes anything under the id once it names another session or none;
 - the reply to the deletion that freed the id leaves the state of the session named in its place standing.
+
+#### playbook-library-101
+
+When the transcript of an authoring session the app holds may have changed out of its sight — the core replacing it [[core-service-96](core-service.md#core-service-96)] or the app reconnecting to the core — the Playbooks surface shall hold that transcript as the core now serves it, keeping the session's composer text, Source edits and Enable form:
+
+- a replaced transcript is drawn from the records the replacement carries, and the records that follow fold after them;
+- on a reconnect, each held transcript is reloaded from its first record [[playbook-library-62](#playbook-library-62)].
 
 ### Pipeline Artifacts
 
@@ -435,7 +442,9 @@ When playbook loading imports a module the environment exports from a file path,
 
 #### playbook-library-16
 
-When the config writer updates a config file — enabling or disabling [[playbook-library-3](#playbook-library-3)], role-binding edits [[playbook-library-4](#playbook-library-4)], or an enabling from the form [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config.
+When the config writer updates a config file — enabling or disabling [[playbook-library-3](#playbook-library-3)], role-binding edits [[playbook-library-4](#playbook-library-4)], or an enabling from the form [[playbook-library-7](#playbook-library-7)] — it shall preserve comments, key order, and formatting of untouched content byte-for-byte, shall modify only the targeted keys, and shall replace the file atomically so an interrupted write cannot leave a partially written config:
+
+- a write whose spex repository's clone is not on this device is refused, never recreating the clone.
 
 ### Authoring Conversation
 
@@ -511,6 +520,16 @@ When an authoring session's compile settles, the conversation runner shall start
 
 - a Boss message resets the consecutive-failure count; the count and the queue persist on the session.
 
+#### playbook-library-102
+
+When an act of an authoring session leaves it idle with its queue holding a message, the conversation runner shall start the oldest as the session's next Boss turn ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
+
+- an act is its turn, or a compile or an enabling of its id (a `compile.run` among them, and a compile of a session the id no longer names) ending in any outcome [[core-service-96](core-service.md#core-service-96)], or a Boss message sent to it, which joins the queue's end first [[core-service-96](core-service.md#core-service-96)];
+- the queue is that of the session the id names at that moment, an activity of a session the id no longer names carrying nothing to it [[playbook-library-70](#playbook-library-70)];
+- a preface rides only on that session's own compile settle [[playbook-library-68](#playbook-library-68)];
+- a damaged transcript dispatches nothing [[playbook-library-70](#playbook-library-70)];
+- while the core stops nothing dispatches; the core's start is no act, so a queue persisted on disk waits for the session's next act.
+
 #### playbook-library-69
 
 When an authoring session's playbook is enabled, the enabling path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], request the spec package by path from the chosen spex repository's environment where it is not requested yet and resolve and install it [[environments-15](environments.md#environments-15)], write any player the submission names but your own group's roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and mark the session enabled [[playbook-library-70](#playbook-library-70)]:
@@ -534,8 +553,8 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 | delete | remove the session file, its records, its assets and the preference, leaving the package folder |
 
 - an unreadable record or transcript is a scoped diagnostic that blocks that session alone;
-- the transcript of a session whose spex repository a sync applied [[space-20](space.md#space-20)] is read back before anything appends, so the next record continues the sequence on disk;
-- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile or an enabling re-package canceled, and nothing they later record or settle reaches the session the id now names.
+- the transcript of a session whose spex repository a sync applied [[space-20](space.md#space-20)] is read back before anything appends, so the next record continues the sequence on disk, a transcript the sync changed is sent whole to the session's subscribers as replaced [[core-service-96](core-service.md#core-service-96)], and the state of every session the sync leaves in the spex repository is published [[core-service-96](core-service.md#core-service-96)];
+- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile or an enabling re-package canceled, its departure is announced [[core-service-96](core-service.md#core-service-96)], and nothing they later record or settle reaches the session the id now names.
 
 #### playbook-library-71
 
@@ -603,6 +622,10 @@ When each built-in playbook's artifacts are requested, the test suite shall asse
 
 Where fresh file modules use the current artifact schema with absent or noncurrent markers, a file module has the current marker and the built-in spec package's module has none, when real config composition loads each entry in English and Chinese, the integration suite shall assert incompatible files are refused with the existing typed registry fault and truthful source-compilation guidance, while the current-marker and built-in entries remain accepted [[playbook-library-33](#playbook-library-33)].
 
+#### playbook-library-104
+
+Where a project's pair stands while its spex repository's clone is no longer on this device, when a playbook entry of the project's config is written over the protocol, the test suite shall assert that the write is refused and that the clone's path stays absent [[playbook-library-16](#playbook-library-16)].
+
 #### playbook-library-94
 
 Where a scratch home holds a project whose environment requests a spec package from the stand-in registry and your own group's environment requests the built-in spec package, when the Playbooks surface renders each side and the suite drives its controls, the test suite shall assert: each side lists its spec packages with versions, sources, artifacts with languages and fallback marks, and installed state [[playbook-library-92](#playbook-library-92)]; the playbooks of both environments list once per origin with their enabled state per config [[playbook-library-1](#playbook-library-1)]; Add from registry searches the stand-in and requests the chosen version, Resolve again stands while the lock is stale with the stale phrase, Remove asks Remove or Keep, and every control is disabled during that spex repository's sync naming it [[playbook-library-92](#playbook-library-92)]; and a playbook enabled in neither config, one enabled in the project's and one in your own group's each read so [[playbook-library-1](#playbook-library-1)].
@@ -651,7 +674,7 @@ Where the stub `slc` fails at `gears2fsm` on its first two runs and exits 2 with
 
 #### playbook-library-74
 
-Where the fake's run stays in flight until aborted and the compile spawner blocks until canceled, the test suite shall assert as an explicit matrix that `draft.send` during a turn and during a compile reply queued, `draft.compile` and `draft.delete` and `draft.register` during a turn reply `busy`, `draft.source.write` during a turn and a compile is refused, a second `draft.compile` during a compile replies `busy`, `draft.abort` ends the turn with an aborted record and leaves the queue standing, `compile.abort` cancels the compile with the canceled line last and no relay, and the queued message dispatched once the session was idle [[playbook-library-64](#playbook-library-64)] [[playbook-library-67](#playbook-library-67)] [[playbook-library-68](#playbook-library-68)] [[playbook-library-70](#playbook-library-70)].
+Where the fake's run stays in flight until aborted and the compile spawner blocks until canceled, the test suite shall assert as an explicit matrix that `draft.send` during a turn and during a compile reply queued, `draft.compile` and `draft.delete` and `draft.register` during a turn reply `busy`, `draft.source.write` during a turn and a compile is refused, a second `draft.compile` during a compile replies `busy`, `draft.abort` ends the turn with an aborted record and leaves the queue standing, `compile.abort` cancels the compile with the canceled line last and no relay, and the queued message dispatched once the session was idle [[playbook-library-102](#playbook-library-102)] [[playbook-library-64](#playbook-library-64)] [[playbook-library-67](#playbook-library-67)] [[playbook-library-68](#playbook-library-68)] [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-75
 
@@ -678,8 +701,10 @@ Where the Enable tab renders a compiled authoring session over a roster holding 
 Where an authoring session's transcript holds one record its manager has read and its project's spex repository syncs with a local bare remote a peer pushes to, when syncs apply the peer's changes between the session's records and turns, the test suite shall assert:
 
 - after a sync applying a second record of the session, the session's next record makes the transcript on disk and the reopened session read 1, 2, 3 with the peer's record second [[playbook-library-70](#playbook-library-70)];
-- after a sync applying only another file of the spex repository, the next turn passed the previous turn's token as `resume` [[playbook-library-64](#playbook-library-64)];
-- after a sync applying another record of the session, the next turn passed no `resume` and its prompt reseeded with the peer's record in the conversation so far, the transcript staying in sequence [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)] [[playbook-library-70](#playbook-library-70)].
+- after a sync applying only another file of the spex repository, the next turn passed the previous turn's token as `resume` [[playbook-library-64](#playbook-library-64)], and that sync, changing nothing of the transcript, sent the subscribed client no replacement [[playbook-library-70](#playbook-library-70)];
+- after a sync applying another record of the session, the next turn passed no `resume` and its prompt reseeded with the peer's record in the conversation so far, the transcript staying in sequence [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)] [[playbook-library-70](#playbook-library-70)];
+- after a sync applying the peer's recreation of the session under the same id in the same project with two records, the subscribed client received the transcript replaced by those two records before the next turn's records, which continue at 3 [[playbook-library-70](#playbook-library-70)];
+- after a sync taking the host's copy of a transcript held with a torn last line, served with no records beside its diagnostic, where that copy is the transcript's readable prefix, the subscribed client received the transcript replaced by that prefix [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-97
 
@@ -691,11 +716,25 @@ Where another project's spex repository holds a session of the same id and the e
 
 #### playbook-library-99
 
-Where a substitute client feeds the Playbooks surface holding an authoring session, when the client names another project's session under that session's id, the test suite shall assert, as an explicit case matrix, what the surface holds under the id:
+Where a substitute client feeds the Playbooks surface holding an authoring session, when the client changes the session that session's id names, or the transcript it serves, the test suite shall assert, as an explicit case matrix, what the surface holds under the id:
 
 - named by a state message, and by a listing, while the workspace stands open with a transcript, a source, compiled tabs, composer text, Source edits and an Enable form: every one of those is gone and the workspace returned to the list, and opening the id after a live record of the new session asks for its records from the first [[playbook-library-98](#playbook-library-98)];
+- left out of a listing, then another project's session named under it: every one of those is gone with the listing, and opening the id asks the named project for its records from the first [[playbook-library-98](#playbook-library-98)];
 - named before the reply to the held session's deletion: the named session's state stands, and opening the id asks its project for its records from the first [[playbook-library-98](#playbook-library-98)];
-- named while a source refresh, a source write, a player choice, or an artifacts read addressed to the held session awaits its reply: the reply writes nothing over the named session's state [[playbook-library-98](#playbook-library-98)].
+- named while a source refresh, a source write, a player choice, an artifacts read, or an enabling addressed to the held session awaits its reply: the act is told it retired and writes nothing over the named session's state [[playbook-library-98](#playbook-library-98)];
+- named while a Save, a Reload after a conflict, a Paste's "Use as source", a Send, a refused Send, or a refused compile or abort started in the workspace awaits its reply, the named session's own Source edit, Source mode, composer text and error set meanwhile: none of them changes [[playbook-library-98](#playbook-library-98)];
+- named while "Use a SKILL.md…" or "Pick file" awaits its pick: the picked file is neither written nor placed [[playbook-library-98](#playbook-library-98)];
+- the held transcript of records 1 to 9, with composer text and a Source edit, replaced by records 1 and 2: the thread shows exactly those two, the composer text, Source edit and Enable form stay, and a live record 3 folds after them [[playbook-library-101](#playbook-library-101)];
+- a reconnect: the held session is reopened from its first record and its thread drawn from the reply's records, the composer text, Source edit and Enable form staying [[playbook-library-101](#playbook-library-101)].
+
+#### playbook-library-103
+
+Where the fake replies at once, the entry the compiler emitted holds an enabling's re-package at its import until released, and the stub `slc` holds a compile in its first phase until released or blocks until killed, the test suite shall assert, as an explicit case matrix, that a `draft.send` during the activity replies accepted, queued, and that the session's next turn is that message, ahead of one sent after it, its prompt carrying no follow-up text, the session ending idle with an empty queue [[playbook-library-102](#playbook-library-102)]:
+
+- an enabling that succeeds, one refused `invalid_config` by a binding naming an absent player, and one ended by `compile.abort`, each starting the message at its release with no further command;
+- a `compile.run` of the session's id, starting the message at its release with no further command;
+- an enabling whose id a rescan gives another project's session: the session the id names read compiling, its own message runs as its next turn, started at the release with no further command [[playbook-library-102](#playbook-library-102)], and the session the id no longer names gains no record [[playbook-library-70](#playbook-library-70)];
+- a compile cut by a core stop with a message queued: after the restart the compile reads interrupted [[playbook-library-70](#playbook-library-70)] and the message is still queued with nothing started; a send then replies accepted, queued, and the turns on disk run the queued message first, then the new one [[playbook-library-102](#playbook-library-102)].
 
 ### Browser Journeys
 

@@ -213,7 +213,7 @@ test("storage-15: a former home of two projects and one unmatched session migrat
   const own = defaultOwnName();
   const file = parseYaml(readFileSync(join(home, "home.yaml"), "utf8")) as { format: number; own: string; folders: { path: string; repository: string; aliases?: string[] }[] };
   assert.equal(file.format, 1);
-  assert.equal(file.own, own);
+  assert.equal(file.own, `${own}/${own}-spex`);
   const keyA = `${own}/alpha-spex`; const keyB = `${own}/beta-spex`;
   assert.deepEqual(file.folders, [{ path: folderA, repository: keyA }, { path: folderB, repository: keyB, aliases: [formerB] }]);
 
@@ -352,6 +352,15 @@ test("storage-24: a group folder named like a clone is walked into, and every cl
     ownStore.close();
   }
   assert.ok(!existsSync(join(own, "workspace", "my-spex", "sessions")));
+  // A home file of an earlier form records `own` as one segment: it
+  // opens on `<value>/<value>-spex`, and its next write records the key.
+  writeFileSync(join(own, "home.yaml"), readFileSync(join(own, "home.yaml"), "utf8").replace(/^own: .*$/m, "own: my-spex"));
+  const earlier = await Store.open({ machineIdentity, dir: own, own: "other", env: gitEnv });
+  assert.equal(earlier.home.own(), "my-spex/my-spex-spex");
+  assert.deepEqual(keysOf(earlier), ["my-spex/my-spex-spex"]);
+  earlier.home.save();
+  earlier.close();
+  assert.equal((parseYaml(readFileSync(join(own, "home.yaml"), "utf8")) as { own: string }).own, "my-spex/my-spex-spex");
   // Where Git cannot run, your own group's clone holds only folders and
   // still lists on every open.
   const bare = join(scratch, "bare");

@@ -123,14 +123,14 @@ const describeExit = ({ code, signal, error }) =>
 
 /** A quick command; non-zero exit fails the stage. */
 /**
- * Your own group's config in a home (storage-1): the clone named by
- * `home.yaml`'s `own`, or a path that cannot exist where the home has
- * no home file yet.
+ * Your own group's config in a home (storage-1): the clone of the key
+ * `home.yaml`'s `own` records (storage-2), or a path that cannot exist
+ * where the home has no home file yet.
  */
 function ownConfigPath(home) {
   const file = join(home, "home.yaml");
-  const own = existsSync(file) ? /^own: ["']?([a-z0-9][a-z0-9-]*)["']?$/m.exec(readFileSync(file, "utf8"))?.[1] : undefined;
-  return join(home, "workspace", own ?? "(no home.yaml)", `${own}-spex`, "config", "playbook.config.yaml");
+  const own = existsSync(file) ? /^own: ["']?([^"'\s]+)["']?$/m.exec(readFileSync(file, "utf8"))?.[1] : undefined;
+  return join(home, "workspace", ...(own ?? "(no home.yaml)").split("/"), "config", "playbook.config.yaml");
 }
 
 function exec(command, args, options = {}) {

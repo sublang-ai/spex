@@ -5875,6 +5875,10 @@ msgstr "此设备在 Git 托管平台上的登录凭据"
 msgid "This draft is no longer listed."
 msgstr "该草稿已不在列表中。"
 
+#: src/state/store.ts
+msgid "This draft now names another session."
+msgstr "该草稿现已指向另一个会话。"
+
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
 msgstr "打开之后，此文件在磁盘上已更改。"

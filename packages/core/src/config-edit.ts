@@ -281,7 +281,20 @@ export async function editProjectConfigFile(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  mkdirSync(dirname(path), { recursive: true });
+  // The config folder is made inside its spex repository's clone, never
+  // the clone itself: a clone removed meanwhile stays removed (projects-10).
+  const configDir = dirname(path);
+  if (!existsSync(dirname(configDir))) {
+    return {
+      ok: false,
+      error: i18n._({
+        id: "the spex repository holding {path} is no longer on this device",
+        values: { path },
+        comment: "Refusal: a project's config write whose spex repository's clone was removed meanwhile",
+      }),
+    };
+  }
+  mkdirSync(configDir, { recursive: true });
   writeApplicationBytes(path, candidate);
   return { ok: true };
 }

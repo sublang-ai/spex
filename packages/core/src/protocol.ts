@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1684,6 +1684,8 @@ export type SyncCause =
   | "lease"
   | "writer"
   | "unrelated"
+  /** The sharing notice owed and not seen, found at Check (space-57). */
+  | "notice"
   | "git";
 
 export type SpaceOp = "sync" | "check" | "join" | "move";
@@ -1978,8 +1980,19 @@ export interface DraftSourceMessage {
   mtime: number;
 }
 
-/** A draft was retired by registration or deleted (playbook-library-70):
- * broadcast to every client, which drops every trace of it. */
+/** A re-read found the draft's transcript changed — a sync replaced it
+ * (playbook-library-70): its records whole, to the subscribers of the
+ * draft's channel, before anything appends (core-service-96). */
+export interface DraftHistoryReplacedMessage {
+  type: "draft.history-replaced";
+  draftId: string;
+  projectId: string;
+  records: DraftRecord[];
+}
+
+/** A draft left: deleted, its project removed, a sync removing it, or a
+ * rescan giving its id another session (core-service-96): broadcast to
+ * every client, which drops every trace of it. */
 export interface DraftRemovedMessage {
   type: "draft.removed";
   projectId: string;
@@ -2007,6 +2020,7 @@ export type ServerMessage =
   | DraftRecordMessage
   | DraftStateMessage
   | DraftSourceMessage
+  | DraftHistoryReplacedMessage
   | DraftRemovedMessage;
 
 // ---------------------------------------------------------------------------

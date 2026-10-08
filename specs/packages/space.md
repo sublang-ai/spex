@@ -79,12 +79,14 @@ When the reader activates Sign out, the core shall revoke this device at the hos
 
 #### space-57
 
-While a spex repository has never been pushed from this device, when a sync of it, a pick joining it, or a pick creating it [[space-58](#space-58)] is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While this device's reader has not seen the notice for a spex repository [[storage-5](storage.md#storage-5)], when a sync of it, a pick joining it, or a pick creating it [[space-58](#space-58)] is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync — a join of two histories among them [[space-13](#space-13)] — or the pick with `noticed`; Cancel starts nothing;
-- a sync or a join of a spex repository whose only member is the account says nothing, nor does a creation in your own group;
-- a first push into a spex repository whose members the host has not told, after the core reads the host again for them, says it too, as for one with other members;
-- a sync the core starts itself — after a sign-in [[space-4](#space-4)], a creation [[space-65](#space-65)] or a retried step [[space-64](#space-64)] — is admitted the same way: where the notice is owed, it does not start, and the row's Sync says the notice first;
+- the notice is decided on the host's answer the sync acts on, members and read-only as its Check step reads them [[space-12](#space-12)]: a sync admitted without it whose Check finds it owed stops there before anything is prepared or sent [[space-15](#space-15)], its Sync saying the notice first;
+- a sync or a join of a spex repository whose only member is the account says nothing, nor does a creation in your own group, nor a sync the host lets the account only read, which sends nothing; a repository that gains members says it at its next sync that sends;
+- a sync sending into a spex repository whose members the host has not told says it too, as for one with other members, after the core reads the host again for them; where that read fails, the sync goes on to its Check, which stops on the host's failure [[space-15](#space-15)];
+- a sync the core starts itself — after a sign-in [[space-4](#space-4)], a creation [[space-65](#space-65)] or a retried step [[space-64](#space-64)] — is admitted the same way: where the notice is owed, it sends nothing, and the row's Sync says the notice first;
+- every control that starts a sync — the row's Sync and its Join of two histories [[space-13](#space-13)], the Sync tab's Apply [[space-18](#space-18)] and Retry [[space-15](#space-15)] — says the notice where the core holds the sync for it, Continue resending the same act with `noticed`;
 - a creation in any other group says it whatever its members, unknown until it exists, and says nothing of public, the repository not existing yet.
 
 #### space-58
@@ -98,7 +100,7 @@ When a working folder is added while signed in [[storage-6](storage.md#storage-6
 
 #### space-59
 
-When the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While your own group's spex repository has no remote on the host, when the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - the rename runs only while no session beneath the folder has a turn in flight, and blocks writes beneath it only [[space-21](#space-21)];
 - a login differing from the folder's name only by case renames the folder and the repository in place, on a case-insensitive filesystem too.
@@ -107,9 +109,10 @@ When the account's login differs from the name your own group's folder bears, th
 
 When a host read [[git-host-5](git-host.md#git-host-5)] reports a spex repository, known by its id, under another name or group than its clone's path, the core shall move the clone to the new path on that repository's next sync, rewriting every pair that names it and the exports beneath it in the same step, so that its key and name follow the host ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the move runs within the sync, under its gate, only while nothing beneath the clone is running;
+- the move holds the gate of every clone whose key it changes [[space-21](#space-21)] — the synced clone's and each other one it carries — and runs only while no pick of any of them is in flight and nothing beneath any of them is running by the conditions a sync's admission checks [[space-11](#space-11)]; otherwise the sync goes on where the clone lies and a later sync moves it;
 - a rename or transfer differing only by case is followed on a case-insensitive filesystem too, the folders taking the host's spelling: where the filesystem reads both spellings as one folder, that folder is renamed where it lies, and every clone beneath it takes the new spelling in its key in the same step;
-- a group the host renamed still holds its spex repositories under their own names, since the host renames no repository with its group.
+- a group the host renamed still holds its spex repositories under their own names, since the host renames no repository with its group;
+- a move of your own group's spex repository, or one carrying it, rewrites the key `home.yaml` records for it in the same step [[storage-2](storage.md#storage-2)], carrying the local-only clones of your own group's folder with it, since what you add for yourself stays in your own group's folder ([DR-103](../decisions/103-the-home-and-its-groups.md)), and one the host lists outside the account's own group is not followed, nothing moved or pushed [[space-15](#space-15)] ([DR-109](../decisions/109-your-own-groups-spex-repository-stays-in-your-own-group.md)).
 
 #### space-61
 
@@ -288,7 +291,7 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 | no session of this spex repository has a turn in flight [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title>" |
 | no session of it is held, or unprovably held, by another host [[core-service-32](core-service.md#core-service-32)] | "<session title> is in use elsewhere" |
 | no authoring session of it has a turn in flight [[core-service-96](core-service.md#core-service-96)] | "Wait for <playbook id>" |
-| no compile of its authoring sessions is running | "<playbook> is compiling" |
+| no compile or enabling of its authoring sessions is running | "<playbook> is compiling" |
 | no media upload operation or attachment validation for content admission is in flight for it [[media-2](media.md#media-2)] [[media-5](media.md#media-5)] | "Wait for the media upload to finish." |
 | no sync of it is running | "Already syncing" |
 | no blocking storage diagnostic stands for it [[core-service-86](core-service.md#core-service-86)] | the file and reason |
@@ -303,7 +306,7 @@ When a sync is admitted, the core shall run these steps in order on the clone, t
 | Step | The core | The line reads |
 | --- | --- | --- |
 | 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)], stage the catalog files, refuse a staged ignored-family path, validate [[storage-12](storage.md#storage-12)], commit when anything is staged | "Saving changes…" |
-| 2 Check | read the host for this repository [[git-host-5](git-host.md#git-host-5)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], fetch the host's `spex` branch with the brokered credential [[git-host-9](git-host.md#git-host-9)] | "Checking host…" |
+| 2 Check | read the host for this repository [[git-host-5](git-host.md#git-host-5)], stop where the sharing notice is owed [[space-57](#space-57)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], fetch the host's `spex` branch with the brokered credential [[git-host-9](git-host.md#git-host-9)] | "Checking host…" |
 | 3 Compare | plan every unit against the common ancestor [[storage-11](storage.md#storage-11)] [[space-33](#space-33)]; nothing incoming skips to Push | "Comparing…" |
 | 4 Apply | write the selection and one merge commit, or fast-forward [[space-19](#space-19)] | "Applying…" |
 | 5 Refresh | re-validate and re-index [[space-20](#space-20)] | "Refreshing…" |
@@ -337,7 +340,9 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 | Check, Push | the host answering that this device must sign in again [[git-host-4](git-host.md#git-host-4)] | commits stand | "Sign in again"; the header's Sign in; Retry after |
 | Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the repository turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the repository turns unreachable; nothing deleted |
+| Check | the host listing your own group's spex repository outside the account's own group [[space-60](#space-60)] | commits stand; nothing moved | "<name> is no longer in your own group on <host>"; move it back there on the host; Retry |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Retry |
+| Check | the sharing notice owed and not seen [[space-57](#space-57)] | commits stand | the notice's words, read with attention; Sync asks the notice first; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation, a session lease held elsewhere, or a writer changing the tree twice | nothing written; the Save commit stands | the unit or session and reason; the picker stays with the unit marked; Retry |
 | Refresh | a diagnostic | the merge stands committed | the file and reason under issues |
@@ -554,7 +559,7 @@ interface RepositoryState {
 }
 type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";   // code: a join's code clone
 type SyncCause = "unreachable" | "reauth" | "refused" | "gone" | "timeout" | "stopped" | "rejected"
-  | "validation" | "lease" | "writer" | "unrelated" | "git";
+  | "validation" | "lease" | "writer" | "unrelated" | "notice" | "git";
 interface SpaceUnit {
   unit: string;   // "sessions/<id>" | "intents/<id>" | "authoring/<id>" | "environment" | "config/playbook.config.yaml" | "project.json" | ".gitignore" | path
   kind: "session" | "intent" | "authoring" | "environment" | "settings" | "code" | "rules" | "other";
@@ -583,7 +588,7 @@ idle ─sync/join→ save ─→ check ─→ compare ─→ apply ─→ refres
 idle ─fetch→ check ─→ idle
 idle ─move→ apply ─→ refresh ─→ idle
 save: ignored path staged | validation | commit error → stopped
-check: host refused | reauth | gone | transport | timeout | Stop → stopped;  host empty → push
+check: host refused | reauth | gone | notice owed | transport | timeout | Stop → stopped;  host empty → push
 compare: conflict without choice → choices;  no ancestor and not a join → unrelated;  nothing incoming → push
 apply: working tree ≠ HEAD (first) → save;  validation | lease | writer twice → stopped
 push: rejected (first) → check;  rejected twice | refused | transport | timeout | Stop → stopped;  read-only → done
@@ -673,13 +678,25 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group other than your own is refused until `noticed`, its details naming the notice with members and visibility null and nothing created or pushed at the stand-in [[space-57](#space-57)]; with `noticed` it records the notice [[space-57](#space-57)], creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; a pick in your own group creates and pushes with no notice [[space-57](#space-57)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
+- a sole-member repository joined, a session recorded there and a member added at the stand-in with no read since: `space.sync` without `noticed` is accepted and stops at Check with cause `notice` [[space-57](#space-57)] [[space-12](#space-12)] [[space-15](#space-15)] [[space-30](#space-30)], no push reaching the stand-in and its `spex` lacking the session, the row reading two members and no notice; the next `space.sync` is refused until `noticed`, its details naming two members and private visibility, and with it pushes and records the notice [[space-57](#space-57)];
+- a repository the account only reads, with another member: its first sync brings, sends nothing, records its last sync and asks no notice [[space-57](#space-57)] [[space-22](#space-22)]; the account then granted push with a session recorded and no read since, `space.sync` stops at Check with cause `notice` [[space-12](#space-12)] [[space-15](#space-15)] [[space-30](#space-30)], sending nothing, is then refused until `noticed`, and with it pushes [[space-57](#space-57)];
+- a second home signed in as the same account, whose first sync of a sole-member repository the first home pushed sends nothing and records its last sync: once the stand-in adds a member and the second home refreshes, its `space.sync` with a session is refused until `noticed`, nothing reaching the stand-in, and with it pushes [[space-57](#space-57)];
+- a group's own repository the last read listed with the account alone, a member added since: registering its working folder starts its join, which stops at Check with cause `notice` [[space-57](#space-57)] [[space-65](#space-65)] [[space-12](#space-12)] [[space-15](#space-15)] [[space-30](#space-30)], nothing prepared at the stand-in [[space-12](#space-12)], the stand-in's `spex` lacking the clone's file and no notice recorded; the row's sync with `noticed` then sends it [[space-57](#space-57)];
+- a repository pushed while the account was its only member, no notice asked: once the stand-in adds a member and a Refresh reads it, `space.sync` is refused until `noticed` and pushes with it [[space-57](#space-57)];
+- a sole-member repository synced once, the core restarted and the stand-in answering every host request unavailable: `space.sync` without `noticed` is accepted and stops at Check with cause `unreachable` [[space-57](#space-57)] [[space-12](#space-12)] [[space-15](#space-15)] [[space-30](#space-30)], no notice recorded [[space-57](#space-57)];
 - a sign-in while the stand-in lists your own group's `<login>-spex` with another member and your own clone holds a session pushes nothing, the row reading reachable and idle with two members and no notice recorded; `space.sync` is then refused until `noticed`, its details naming the notice, and with it pushes the session [[space-4](#space-4)] [[space-57](#space-57)];
 - a creation the stand-in leaves waiting while a session is recorded here, then grants with another member, ends a Refresh with the row reachable and idle with two members and nothing pushed; `space.sync` is then refused until `noticed`, its details naming the notice with two members, and with it pushes the session [[space-64](#space-64)] [[space-57](#space-57)];
 - the stand-in renaming a repository's path only by case, then moving it and another repository of its group to a group whose path differs only by case, moves the clones on their syncs with no stop, the folders on disk spelled as the stand-in spells them and every pair naming a clone after each sync, on either filesystem kind, and a restarted core lists both projects there [[space-60](#space-60)];
+- the stand-in renaming the person's namespace only by case, with a local-only project in your own group's folder, makes the sync of your own group's spex repository end done under the host's spelling and read as your own, `home.yaml` recording that key and the project's pair under the new spelling, the configuration read valid and nothing failed [[space-60](#space-60)]; a Refresh then moves nothing back [[space-59](#space-59)], and a restarted core starts on the home, reads the configuration valid and lists the project [[space-60](#space-60)];
+- the stand-in renaming the person's namespace to another name, such as `ada` to `ada2`, with a local-only project in your own group's folder, makes the sync of your own group's spex repository end done under the new name and read as your own, `home.yaml` recording that key and the project's pair under the new name, and nothing failed [[space-60](#space-60)];
+- after that namespace change, a project of your own group synced first leaves your own group's spex repository read as your own and `home.yaml` recording its key under the host's spelling, nothing failed, whether the folder renamed in place carried it or its own sync moved it [[space-60](#space-60)];
+- the stand-in transferring your own group's spex repository to another group stops its sync and its check at Check naming that, the clone, its remote and the key `home.yaml` records unchanged and the stand-in's `spex` unchanged [[space-60](#space-60)] [[space-15](#space-15)];
+- two repositories of one group whose path the stand-in respells only by case, one of them compiling or with a turn in flight: the other's sync ends done, moving neither clone where the filesystem reads both spellings as one folder and only its own elsewhere, the busy one's sync is refused by name, and once the compile is aborted or the turn has ended, the next syncs leave both under the host's spelling, every project naming a clone [[space-60](#space-60)] [[space-11](#space-11)] [[space-21](#space-21)];
+- two repositories of one group whose path the stand-in respells only by case, one of them waiting in choices: the other's sync ends done, and the waiting one still reads choices [[space-21](#space-21)] under the host's spelling where the filesystem reads both spellings as one folder, the move carrying it, and as it was elsewhere [[space-60](#space-60)], its picks then applying and leaving it under the host's spelling; a pick in flight on a local-only project of your own group's folder makes the sync of your own group's spex repository after the stand-in respells the person's namespace end done with neither key changed, and once the pick lands, the next sync of your own group's spex repository moves it [[space-60](#space-60)];
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
-- a session with a turn in flight, a session under a management lease taken out of band, an authoring session with a turn in flight, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds, the sync admitted once the authoring turn ends [[space-11](#space-11)] [[space-21](#space-21)];
+- a session with a turn in flight, a session under a management lease taken out of band, an authoring session with a turn in flight, an enabling of one at its re-package, a `compile.run` of one's id from another project, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds, the sync admitted once the authoring turn ends [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
 - `space.signout` revokes the device at the stand-in, every repository turns local only or unreachable with nothing deleted, and a later sign-in finds them reachable again [[space-6](#space-6)] [[space-61](#space-61)];
 - a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)].
@@ -754,6 +771,15 @@ Where the Groups surface renders over a signed-out home, when the reader signs i
 - where the core reports that the host signed this device out, the card reads "<host name> signed this device out. Sign in again to continue as @<login>." before "Until you do, everything stays on this device and nothing is contacted.", with "Sign in again" as its control, in English and in Chinese [[space-3](#space-3)];
 - signed in, the header reads "Signed in as @<login> at <host>" with Sign out, the read time with Refresh, and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
 - a group's own repository reads "Group records", a project's with no code remote "Code not on a remote", and a local-only one "On this device only" [[space-1](#space-1)] [[space-61](#space-61)].
+
+#### space-67
+
+Where the Groups surface renders a spex repository with two members and no notice seen, when the core refuses the Sync tab's Retry of a sync stopped at Check with cause `notice`, and its Apply after choices, with the notice's facts, the test suite shall assert through the surface:
+
+- the stopped card and the row's dot read attention [[space-15](#space-15)];
+- the notice opens in the tab with Cancel focused, its public line only for a public repository, and no note [[space-57](#space-57)];
+- Escape keeps the choices [[space-57](#space-57)];
+- Continue resends the same act with `noticed` [[space-57](#space-57)].
 
 ### Browser Journeys
 

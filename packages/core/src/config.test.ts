@@ -825,6 +825,9 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   const root = scratchDir("spex-config-path-");
   const home = Home.create(root, { own: "alice" }); home.save();
   assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));
+  // ...by the key it records, which follows a move the host made (storage-2).
+  home.move([{ from: "alice/alice-spex", to: "Alice/alice-spex" }]); home.save();
+  assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "Alice", "alice-spex", "config", "playbook.config.yaml"));
 });
 
 test("environments-9: an enabled playbook comes from the environments' modules, and one none exports is a config error naming both", async () => {

@@ -310,9 +310,10 @@ export class DraftStore {
    * repository's of the same id: the id is the home's, the one kept
    * staying kept while its file stands (storage-12). */
   private duplicates: ShadowedDraft[] = [];
-  /** Told of each id a rescan gave another session, or none, so state
-   * read from the one kept before is dropped (storage-12). */
-  onKeptChanged: (id: string) => void = () => {};
+  /** Told of each id a rescan gave another session, or none, with the
+   * spex repository that held the one kept before, so state read from it
+   * is dropped and its departure announced (storage-12, core-service-96). */
+  onKeptChanged: (id: string, former: string) => void = () => {};
 
   constructor(
     /** Every clone's `authoring/` directory, read on each rescan. */
@@ -347,11 +348,11 @@ export class DraftStore {
         if (location !== kept) duplicates.push({ id, kept: kept.key, other: location.key, file: join(location.authoringDir, `${id}.json`) });
       }
     }
-    const changed = [...this.locations].filter(([id, location]) => next.get(id)?.key !== location.key).map(([id]) => id);
+    const changed = [...this.locations].filter(([id, location]) => next.get(id)?.key !== location.key);
     this.locations = next;
     this.packages = packages;
     this.duplicates = duplicates;
-    for (const id of changed) this.onKeptChanged(id);
+    for (const [id, former] of changed) this.onKeptChanged(id, former.key);
   }
 
   /** Clones moved under `workspace/` (space-59, space-60): a kept

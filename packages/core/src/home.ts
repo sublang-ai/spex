@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The home file (storage-2, DR-103): this device, the Git host with
-// its account, your own group's folder name, and each working folder
-// paired with its spex repository's key — the clone's path under
+// its account, your own group's spex repository's key, and each working
+// folder paired with its spex repository's key — the clone's path under
 // `workspace/`.
 
 import { randomUUID } from "node:crypto";
@@ -76,11 +76,26 @@ export function splitKey(key: string): { group: string; name: string } {
 const invalidHome = (): string =>
   i18n._({ id: "invalid home file", comment: "Storage diagnostic: home.yaml's own fields are malformed" });
 
-export function parseHomeFile(value: unknown, file: string): HomeFile {
-  need(isObject(value), file, invalidHome());
-  knownFormat(value, file);
-  closed(value, ["format", "device", "host", "own", "folders"], [], file);
-  need(isUuid(value.device) && typeof value.own === "string" && isGroupName(value.own) && Array.isArray(value.folders), file, invalidHome());
+/** Your own group's spex repository's key for a group folder name. */
+export function ownKeyFor(name: string): string {
+  return `${name}/${name}-spex`;
+}
+
+/** Whether a value may stand as `own`: a repository key whose group is
+ * one key segment, your own group's folder (storage-2). */
+function isOwnKey(value: unknown): value is string {
+  return isRepositoryKey(value) && isGroupName(splitKey(value).group);
+}
+
+export function parseHomeFile(input: unknown, file: string): HomeFile {
+  need(isObject(input), file, invalidHome());
+  knownFormat(input, file);
+  closed(input, ["format", "device", "host", "own", "folders"], [], file);
+  // An earlier file recorded your own group's folder name alone: it
+  // reads as that group's spex repository's key, which the next write
+  // records (storage-2).
+  const value = typeof input.own === "string" && isGroupName(input.own) ? { ...input, own: ownKeyFor(input.own) } : input;
+  need(isUuid(value.device) && isOwnKey(value.own) && Array.isArray(value.folders), file, invalidHome());
   closed(value.host, ["url", "clientId"], ["account", "signedOut"], file);
   need(isText(value.host.url) && value.host.clientId === CLIENT_ID &&
     (value.host.signedOut === undefined || typeof value.host.signedOut === "boolean"), file, invalidHome());
@@ -124,14 +139,15 @@ export class Home {
   }
 
   /** A new home, not yet written: a fresh device id, the host the
-   * environment names, and this device's user name as your own group. */
+   * environment names, and your own group's spex repository named after
+   * this device's user name, or the group folder name `own` gives. */
   static create(root: string, options: { own?: string; env?: NodeJS.ProcessEnv } = {}): Home {
     const own = options.own ?? defaultOwnName(options.env);
     return new Home(resolve(root), {
       format: 1,
       device: randomUUID(),
       host: { url: hostUrlFor(options.env), clientId: CLIENT_ID },
-      own,
+      own: ownKeyFor(own),
       folders: [],
     });
   }
@@ -140,11 +156,12 @@ export class Home {
   get device(): string { return this.data.device; }
   get host(): HomeHost { return structuredClone(this.data.host); }
   get workspace(): string { return join(this.root, WORKSPACE); }
-  /** Your own group's folder name under `workspace/`. */
-  get ownName(): string { return this.data.own; }
+  /** Your own group's folder name under `workspace/`: the group of its
+   * spex repository's key. */
+  get ownName(): string { return splitKey(this.data.own).group; }
 
-  /** Your own group's spex repository: `<own>/<own>-spex`. */
-  own(): string { return `${this.data.own}/${this.data.own}-spex`; }
+  /** Your own group's spex repository: the key `home.yaml` records. */
+  own(): string { return this.data.own; }
 
   clonePath(key: string): string { return join(this.workspace, ...key.split("/")); }
 
@@ -189,18 +206,10 @@ export class Home {
     return this.data.folders.length !== before;
   }
 
-  /** A clone moved: every pair naming the old key names the new one. */
-  rename(oldKey: string, newKey: string): void {
-    this.data = { ...this.data, folders: this.data.folders.map((folder) => folder.repository === oldKey ? { ...folder, repository: newKey } : folder) };
-    if (oldKey === this.own()) {
-      const { group, name } = splitKey(newKey);
-      if (`${group}-spex` === name && isGroupName(group)) this.data = { ...this.data, own: group };
-    }
-  }
-
   /** Several clones moved in one step (space-59, space-60): every pair
-   * naming a moved key names its new one, and your own group's folder
-   * takes `own` where it was renamed. Validated before it is taken. */
+   * naming a moved key names its new one, and `own` its new key where it
+   * names a moved clone, unless `own` is given. Validated before it is
+   * taken. */
   move(moves: { from: string; to: string }[], own?: string): void {
     this.data = this.checkMove(moves, own);
   }
@@ -211,7 +220,7 @@ export class Home {
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
     const next: HomeFile = {
       ...this.data,
-      ...(own !== undefined ? { own } : {}),
+      own: own ?? to.get(this.data.own) ?? this.data.own,
       folders: this.data.folders.map((folder) => to.has(folder.repository) ? { ...folder, repository: to.get(folder.repository) as string } : folder),
     };
     return parseHomeFile(next, Home.file(this.root));

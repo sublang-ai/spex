@@ -642,7 +642,7 @@ test("storage-2: a new home writes home.yaml with this device, the host and your
   assert.deepEqual(Object.keys(file), ["format", "device", "host", "own", "folders"]);
   assert.match(String(file.device), /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   assert.deepEqual(file.host, { url: "https://host.test", clientId: "spex" });
-  assert.equal(file.own, "tester");
+  assert.equal(file.own, "tester/tester-spex");
   assert.equal(project.id, "tester/home-file-spex");
   assert.deepEqual(file.folders, [{ path: join(tmpdir(), "spex-home-file"), repository: "tester/home-file-spex" }]);
   assert.deepEqual(project.repository, { key: "tester/home-file-spex", name: "home-file-spex", group: "tester", own: true });

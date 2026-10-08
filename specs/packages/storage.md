@@ -52,10 +52,11 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 | --- | --- |
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
 | `host` | `{url, clientId, account?, signedOut?}`: the Git host's URL, the public client id `spex`, once signed in `{id, login, displayName}` as the host reported them, and `signedOut` true once the credential was removed while the account is kept [[git-host-4](git-host.md#git-host-4)] |
-| `own` | the folder name of your own group under `workspace/`, one key segment [[storage-1](#storage-1)]: this device's user name before sign-in, the account's login as the host spells it after [[storage-6](#storage-6)] |
+| `own` | the key of your own group's spex repository, its group one key segment naming your own group's folder under `workspace/` [[storage-1](#storage-1)]: `<user>/<user>-spex` for this device's user name `<user>` before sign-in, `<login>/<login>-spex` once sign-in renames it [[space-59](space.md#space-59)], and the host's key once a sync follows a move of it [[space-60](space.md#space-60)] ([DR-109](../decisions/109-your-own-groups-spex-repository-stays-in-your-own-group.md)) |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
+- a one-segment `own` an earlier file holds reads as `<value>/<value>-spex`, and the next write records the key;
 - a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either.
 
 ### storage-3
@@ -107,12 +108,12 @@ When a working folder is added, the core shall pair it with a spex repository an
 | --- | --- |
 | the reader picks one of the spex repositories the Git host lists whose `project.json` names the folder's remote [[space-58](space.md#space-58)] | cloned under `workspace/<group>/` from the host |
 | the reader picks a group to create one in | created on the host, then cloned |
-| no sign-in, or no pick | created locally under `workspace/<own>/<name>-spex/` with no remote, `<name>` being the folder's name, until the reader picks a group |
+| no sign-in, or no pick | created locally as `<name>-spex` under your own group's folder with no remote, `<name>` being the folder's name, until the reader picks a group |
 
 - a folder already paired selects its existing pair; a folder inside another working folder below its top level is refused;
 - the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and its environment requests the built-in spec package [[environments-11](environments.md#environments-11)];
 - a session is a project's by the clone that holds it, never by matching its working directory; its recorded working directory decides only where it may continue [[core-service-73](core-service.md#core-service-73)];
-- the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports [[space-60](space.md#space-60)] move the clone and rewrite every pair naming it in one step.
+- the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports [[space-60](space.md#space-60)] move the clone and rewrite in one step every pair naming it and `own` where it names the moved clone [[storage-2](#storage-2)].
 
 ### storage-7
 
@@ -131,9 +132,9 @@ The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{form
 Before admitting writers to the groups layout, when the core finds the former layout — `projects.json` at the home's root and no `home.yaml` — migration shall complete once under the home lease [[storage-14](#storage-14)] with old writers stopped, and leave a receipt ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 1. Preserve the original bytes of every file it rewrites or moves under `local/migrations/<migrationId>/inputs/<n>`, with `receipt.json` encoded as `{format: 1, id, kind: 'groups', inputs: [{path, sha256}], steps: [], complete}`; a restart verifies completed outputs or retries incomplete work without overwriting divergent destinations.
-2. Write `home.yaml` [[storage-2](#storage-2)] with `own` as this device's user name and one folder per entry of `projects.json` whose path `local/project-paths.json` records, keeping its aliases; an entry with no path becomes a repair the Groups surface lists [[space-46](space.md#space-46)].
-3. For each project, make `workspace/<own>/<name>-spex/` a repository on a new `spex` branch with no history from the former home, replay its act log once into one file per intent [[storage-4](#storage-4)] — ranks and links dropped, a removed or never-worked dropped intent written nowhere — move its asset directory beside the intents, move the sessions whose working directory resolves to the project into its `sessions/`, write `project.json` [[storage-3](#storage-3)], request the built-in spec package [[environments-11](environments.md#environments-11)], and commit.
-4. Make `workspace/<own>/<own>-spex/` your own group's repository the same way, moving `config/playbook.config.yaml` into it with every `playbooks.<id>.from` dropped and recorded in the receipt, and the sessions that resolve to no project into its `sessions/`.
+2. Write `home.yaml` [[storage-2](#storage-2)] with `own` as `<user>/<user>-spex` for this device's user name `<user>` and one folder per entry of `projects.json` whose path `local/project-paths.json` records, keeping its aliases; an entry with no path becomes a repair the Groups surface lists [[space-46](space.md#space-46)].
+3. For each project, make `workspace/<user>/<name>-spex/` a repository on a new `spex` branch with no history from the former home, replay its act log once into one file per intent [[storage-4](#storage-4)] — ranks and links dropped, a removed or never-worked dropped intent written nowhere — move its asset directory beside the intents, move the sessions whose working directory resolves to the project into its `sessions/`, write `project.json` [[storage-3](#storage-3)], request the built-in spec package [[environments-11](environments.md#environments-11)], and commit.
+4. Make `workspace/<user>/<user>-spex/` your own group's repository the same way, moving `config/playbook.config.yaml` into it with every `playbooks.<id>.from` dropped and recorded in the receipt, and the sessions that resolve to no project into its `sessions/`.
 5. Move `prefs.json` to `local/prefs.json` [[storage-5](#storage-5)], converting `space:lastSync` to no entry and `draft:<id>:player` to `authoring:<id>:player`; move the home's `.git`, where the home was a repository, to `local/former-home.git` unchanged, so the old remote is kept aside; leave `playbooks/<id>/` and `local/drafts/` in place, listed as retired.
 6. Validate every output [[storage-12](#storage-12)] before setting the receipt's `complete` to true.
 
@@ -246,7 +247,7 @@ When a home writer — the core or a mutating storage Git command — takes the 
 When an integration suite migrates a former-layout home of two projects and one unmatched session with writers stopped and opens it through desktop and CLI, it shall verify:
 
 - default and explicitly selected locations, and that nothing outside `workspace/` is a Git work tree afterwards [[storage-1](#storage-1)];
-- `home.yaml` carrying this device's user name as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
+- `home.yaml` carrying `<user>/<user>-spex` for this device's user name `<user>` as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
 - each project's clone on a `spex` branch with one commit, its `project.json` naming the folder's remote, one file per open or worked intent with ranks and links dropped, its asset directory beside them, and its sessions inside [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-9](#storage-9)];
 - your own group's clone holding the configuration with every `from` dropped and the unmatched session, the receipt naming the dropped entries [[storage-9](#storage-9)];
 - preferences moved with their viewed markers and session tuning, the former home's `.git` kept aside, the retired library folder in place [[storage-5](#storage-5)] [[storage-9](#storage-9)];
@@ -276,7 +277,8 @@ When an integration suite opens a store on a home whose group folders bear names
 - on each of two opens, each clone listed by its own key, such as `my-spex/my-spex-spex`, `acme/my-spex/backend/project-spex` and the one ten group levels down, and no group folder listed or written into [[storage-1](#storage-1)];
 - a clone Git has not made a repository listed where it holds only a file [[storage-1](#storage-1)];
 - a folder so named holding nothing, alone or as a group's only folder, listed on neither open and left empty [[storage-1](#storage-1)];
-- your own group so named listing its own spex repository `<own>/<own>-spex` on every open, as does your own group's clone holding only folders where Git cannot run [[storage-1](#storage-1)] [[storage-2](#storage-2)].
+- your own group so named listing the spex repository `home.yaml` records as your own group's on every open, as does your own group's clone holding only folders where Git cannot run [[storage-1](#storage-1)] [[storage-2](#storage-2)];
+- a home file recording `own` as one segment, as an earlier file did, opening on `<value>/<value>-spex` and recording that key at its next write [[storage-2](#storage-2)].
 
 ### storage-25
 

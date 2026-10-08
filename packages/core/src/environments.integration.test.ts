@@ -162,7 +162,7 @@ function probeSpawner(): LineSpawner {
 function signedInHome(dataDir: string, hostUrl: string, token: string): void {
   mkdirSync(join(dataDir, "local"), { recursive: true, mode: 0o700 });
   writeFileSync(join(dataDir, "home.yaml"), stringifyYaml({
-    format: 1, device: randomUUID(), own: OWN, folders: [],
+    format: 1, device: randomUUID(), own: `${OWN}/${OWN}-spex`, folders: [],
     host: { url: hostUrl, clientId: "spex", account: { id: "1", login: OWN, displayName: "Tester" } },
   }));
   writeFileSync(join(dataDir, "local", "credentials.yaml"), stringifyYaml({
