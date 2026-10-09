@@ -23,6 +23,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 Amended by [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md) in when Spex reads the host: also once when it starts signed in.
 Extended by [DR-108](108-the-root-lease-names-the-machine.md): beside `.lease/`, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`, its owner naming the machine by Playbook's machine identity; a `.lock/` of the former layout is read by the same rule before the migration.
 Amended by [DR-109](109-your-own-groups-spex-repository-stays-in-your-own-group.md) in the scope of your own group's spex repository's identity and host moves: `home.yaml` records it by key, a move within your own group is followed with the local-only clones of your own group's folder, and a move out of your own group is not followed.
+Amended by [DR-110](110-known-by-its-place-found-by-its-records.md) in how a group's own spex repository, your own group's included, is found on the host: by the records it holds, not by its name.
 
 ## Context
 

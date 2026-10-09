@@ -7,6 +7,7 @@
 
 Accepted (2026-10-08).
 Amends [DR-103](103-the-home-and-its-groups.md) in the scope of your own group's spex repository's identity and host moves: `home.yaml` records it by key, a move within your own group is followed with the local-only clones of your own group's folder, and a move out of your own group is not followed; every other spex repository's rename or transfer is still followed by id.
+Completed by [DR-110](110-known-by-its-place-found-by-its-records.md) in the one scope left for later: a device signing in after a namespace rename finds your own group's spex repository by the records it holds.
 
 ## Context
 
