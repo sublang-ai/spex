@@ -6,7 +6,7 @@
 ## Intent
 
 This package defines the Groups surface under [DR-103](../decisions/103-the-home-and-its-groups.md), the surface [DR-057](../decisions/057-space-surface.md) named Space: where the reader signs in to the Git host, sees their groups with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with the host between Boss turns, reads a spex repository's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree.
-A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)]; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, the environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from the host; a **local** unit is one this device changed and an **incoming** unit one the host's copy changed, each against their common ancestor.
+A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)]; a **group's own** spex repository holds a group's records and no `project.json`, your own group's among them, while a project's holds `project.json` [[storage-3](storage.md#storage-3)]; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, the environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from the host; a **local** unit is one this device changed and an **incoming** unit one the host's copy changed, each against their common ancestor.
 The core performs every Git operation and every call to the Git host; the surface renders the core's state and runs neither itself.
 
 ## External Behavior
@@ -53,7 +53,7 @@ When a sign-in completes [[git-host-2](git-host.md#git-host-2)] [[git-host-3](gi
 
 1. rename your own group's folder and its spex repository after the account's login where it bore this device's user name [[space-59](#space-59)];
 2. read the host [[git-host-5](git-host.md#git-host-5)];
-3. create your own group's spex repository on the host where the host lists none, and push it [[space-65](#space-65)]; where one exists, join the two histories as any two [[space-13](#space-13)], one the host lists with other members only after the notice on its row [[space-57](#space-57)];
+3. give your own group's clone its spex repository on the host as a group's own is found [[space-65](#space-65)]: joined where the host lists exactly one in the account's own group — one with other members only after the notice on its row [[space-57](#space-57)] — created and pushed where it lists none, and neither where it lists several, the choice standing [[space-69](#space-69)];
 4. list every local-only spex repository of a project with its "Pick a group" control [[space-58](#space-58)], creating nothing for them unasked.
 
 - a turn in flight refuses the rename as it refuses a sync [[space-11](#space-11)], the sign-in standing complete with the rename retried on the next read;
@@ -120,7 +120,7 @@ The Groups surface shall show each spex repository in exactly one of these state
 
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
-| local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], none while signed out |
+| local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], or the choice among the candidates for a group's own [[space-69](#space-69)]; none while signed out |
 | reachable | the home's current view lists it [[git-host-5](git-host.md#git-host-5)] and the clone is here, no join of it running [[space-63](#space-63)] | the last sync's time | Sync |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or the home is signed out while the clone has a remote | "Unreachable: <cause>" | Retry, none while signed out with the remote at the host |
@@ -151,9 +151,27 @@ When a step at the host — creating a spex repository [[git-host-6](git-host.md
 
 #### space-65
 
-When the first session of a group starts in the working folder paired with that group [[storage-6](storage.md#storage-6)], or sign-in finds your own group without a spex repository on the host [[space-4](#space-4)], the core shall create `<group>-spex` in that group on the host [[git-host-6](git-host.md#git-host-6)], prepare its branch [[git-host-7](git-host.md#git-host-7)], and push the local clone ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While a group's clone has no remote, when the first session of the group starts in the working folder paired with it [[storage-6](storage.md#storage-6)], or a sign-in sets your own group up [[space-4](#space-4)], the core shall give the clone the group's own spex repository on the host by what the host lists in that group [[git-host-5](git-host.md#git-host-5)] — a spex repository whose `spex` branch holds no `project.json`, or `<group>-spex` whose `spex` branch does not exist yet — never by its name alone ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
 
-- a refused creation leaves the clone local only and the session running [[space-64](#space-64)].
+| The host lists | The core |
+| --- | --- |
+| none | creates `<group>-spex` there [[git-host-6](git-host.md#git-host-6)], prepares its branch [[git-host-7](git-host.md#git-host-7)], and pushes the clone |
+| exactly one | joins the clone's history with it as any two [[space-13](#space-13)], the clone taking the host's key on that sync [[space-60](#space-60)] |
+| several | creates and joins nothing, the choice standing [[space-69](#space-69)] |
+
+- the account's own group is the group the host lists as the account's own [[git-host-5](git-host.md#git-host-5)], and its `<group>-spex` is `<login>-spex`;
+- a refused creation leaves the clone local only and the session running [[space-64](#space-64)];
+- a spex repository found under another name than `<group>-spex` keeps it: Spex renames nothing on the host.
+
+#### space-69
+
+While the host lists several candidates for a group's own spex repository and the group's clone has no remote [[space-65](#space-65)], the core shall report the choice in the Groups state as an issue the reader answers [[space-49](#space-49)], and the surface shall offer it on the clone's row ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
+
+- the row reads local only [[space-61](#space-61)] with "Which holds your own records?" for your own group and "Which holds <group>'s records?" for another, and one Use control per candidate, named by the repository's name and its members' count, in place of Pick a group; each candidate is also listed in the group as not on this device [[space-61](#space-61)];
+- Use is the pick of that listed spex repository [[space-58](#space-58)], joining the clone's history with it as any two [[space-13](#space-13)], the clone taking the host's key on that sync [[space-60](#space-60)]; the other candidates stay listed as the group's spex repositories not on this device;
+- the choice counts as an issue until the reader picks or sets it aside with Not now [[space-49](#space-49)]; set aside, the row keeps its controls and counts no more;
+- the choice lapses when the candidates the host lists change: one left is joined and none left created at the next read [[space-65](#space-65)];
+- Spex merges no two spex repositories: making one of several is done on the host.
 
 ### Repairs
 
@@ -685,6 +703,10 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a repository pushed while the account was its only member, no notice asked: once the stand-in adds a member and a Refresh reads it, `space.sync` is refused until `noticed` and pushes with it [[space-57](#space-57)];
 - a sole-member repository synced once, the core restarted and the stand-in answering every host request unavailable: `space.sync` without `noticed` is accepted and stops at Check with cause `unreachable` [[space-57](#space-57)] [[space-12](#space-12)] [[space-15](#space-15)] [[space-30](#space-30)], no notice recorded [[space-57](#space-57)];
 - a sign-in while the stand-in lists your own group's `<login>-spex` with another member and your own clone holds a session pushes nothing, the row reading reachable and idle with two members and no notice recorded; `space.sync` is then refused until `noticed`, its details naming the notice, and with it pushes the session [[space-4](#space-4)] [[space-57](#space-57)];
+- a sign-in while the stand-in lists in the person's namespace, renamed from `ada` to `ada2` since, the group's own repository still named `ada-spex` with its `spex` branch and no `project.json`, joins it as your own group's with no `ada2-spex` created at the stand-in, the clone moved to `ada2/ada-spex` on that sync with `home.yaml` recording that key and every pair rewritten, the row reading as your own and reachable, and a restarted core listing the same project [[space-4](#space-4)] [[space-65](#space-65)] [[space-60](#space-60)];
+- a sign-in while the stand-in lists `ada-spex` created in the person's namespace with no `spex` branch yet joins it, reporting no taken name [[space-65](#space-65)];
+- a sign-in while the stand-in lists two group's own repositories in the person's namespace, `ada-spex` and `notes-spex`, creates and joins nothing at the stand-in, the state carrying the choice with both candidates and counting one issue, your own group's clone local only and both listed not on this device [[space-65](#space-65)] [[space-69](#space-69)]; `space.pick` of `notes-spex` joins it, the clone moving to `ada/notes-spex` with `home.yaml` recording that key, `ada-spex` staying listed not on this device and the issue gone [[space-69](#space-69)] [[space-60](#space-60)]; declining the choice instead keeps the clone local only and the issue counting no more, and the stand-in deleting `notes-spex` makes the next Refresh join `ada-spex` [[space-69](#space-69)] [[space-49](#space-49)];
+- registering the working folder of a group whose own repository the stand-in lists as `old-spex`, with its `spex` branch and no `project.json`, joins it at the first session instead of creating `<group>-spex`, the clone lying at `<group>/old-spex` after that sync [[space-65](#space-65)] [[space-60](#space-60)];
 - a creation the stand-in leaves waiting while a session is recorded here, then grants with another member, ends a Refresh with the row reachable and idle with two members and nothing pushed; `space.sync` is then refused until `noticed`, its details naming the notice with two members, and with it pushes the session [[space-64](#space-64)] [[space-57](#space-57)];
 - the stand-in renaming a repository's path only by case, then moving it and another repository of its group to a group whose path differs only by case, moves the clones on their syncs with no stop, the folders on disk spelled as the stand-in spells them and every pair naming a clone after each sync, on either filesystem kind, and a restarted core lists both projects there [[space-60](#space-60)];
 - the stand-in renaming the person's namespace only by case, with a local-only project in your own group's folder, makes the sync of your own group's spex repository end done under the host's spelling and read as your own, `home.yaml` recording that key and the project's pair under the new spelling, the configuration read valid and nothing failed [[space-60](#space-60)]; a Refresh then moves nothing back [[space-59](#space-59)], and a restarted core starts on the home, reads the configuration valid and lists the project [[space-60](#space-60)];
@@ -780,6 +802,15 @@ Where the Groups surface renders a spex repository with two members and no notic
 - the notice opens in the tab with Cancel focused, its public line only for a public repository, and no note [[space-57](#space-57)];
 - Escape keeps the choices [[space-57](#space-57)];
 - Continue resends the same act with `noticed` [[space-57](#space-57)].
+
+#### space-68
+
+Where the Groups surface renders over a signed-in home whose state carries the choice between two candidates for your own group's spex repository, the test suite shall assert through the surface:
+
+- your own group's row reads "On this device only" with "Which holds your own records?", one Use control per candidate naming the repository and its members' count, Not now, and no Pick a group, the header counting one issue [[space-69](#space-69)] [[space-61](#space-61)] [[space-1](#space-1)];
+- both candidates list beneath it as "Not on this device" [[space-69](#space-69)] [[space-61](#space-61)];
+- Use sends the pick of that repository for your own group's clone, and Not now the decline, the row then counting no issue and keeping its controls [[space-69](#space-69)] [[space-49](#space-49)];
+- a group's own repository the state lists under a name other than its group's, holding no code remote, reads "Group records" first in its group [[space-1](#space-1)].
 
 ### Browser Journeys
 
