@@ -176,6 +176,8 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     conflicts: [],
     lastSync: null,
     noticed: true,
+    records: "project",
+    choice: null,
     sync: { phase: "idle" },
     ...over,
   };
@@ -187,6 +189,7 @@ export const OWN_REPO: RepositoryState = repo({
   name: "jane-spex",
   id: "7",
   own: true,
+  records: "group",
   remote: "https://gitlab.example/jane/jane-spex.git",
   code: null,
   folder: null,

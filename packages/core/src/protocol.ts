@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 24;
+export const PROTOCOL_VERSION = 25;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1788,6 +1788,19 @@ export interface RepositoryState {
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
   noticed: boolean;
+  /** What the `spex` branch holds (space-65): the group's records, holding
+   * no `project.json`, or a project's. A listing with no `spex` branch yet
+   * reads "group" where its name is `<group>-spex`. */
+  records: "group" | "project";
+  /** The standing choice among several candidates for a group's own spex
+   * repository, carried on the group's local-only clone (space-69), else
+   * null. */
+  choice: {
+    /** The repair key the reader's answer names (`space.repair.decline`). */
+    repair: string;
+    candidates: { hostId: string; name: string; members: number | null; visibility: string | null }[];
+    declined: boolean;
+  } | null;
   sync: SpaceSyncPhase;
 }
 

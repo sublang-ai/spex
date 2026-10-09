@@ -86,11 +86,18 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number): strin
   }
 }
 
-/** A group's own spex repository rather than a project's (DR-103):
- * your own group's, or the one named `<group>-spex` in its group — a
- * project of that name is refused at creation, the name being taken. */
-export function isGroupRepository(group: { name: string }, repo: RepositoryState): boolean {
-  return repo.own || repo.name === `${group.name}-spex`;
+/** A group's own spex repository rather than a project's (DR-110):
+ * your own group's, or one whose `spex` branch holds the group's
+ * records and no `project.json`, whatever its name (space-65). */
+export function isGroupRepository(repo: RepositoryState): boolean {
+  return repo.own || repo.records === "group";
+}
+
+/** A row's identity in the groups list: a standing choice's candidate
+ * not on this device may bear its clone's key (space-69), so a row
+ * not on this device is told apart by its host id. */
+export function rowId(repo: RepositoryState): string {
+  return repo.state === "absent" && repo.id !== null ? `${repo.key}#${repo.id}` : repo.key;
 }
 
 /** Two code remotes name the same repository (space-58): compared as

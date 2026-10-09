@@ -2518,6 +2518,11 @@ msgstr "Upload staging path is unsafe: {path}"
 msgid "Upload write made no progress."
 msgstr "Upload write made no progress."
 
+#. Refusal of a join: the listed spex repository bears the key of this device's local-only clone, among whose candidates it stands; that clone joins it by Use
+#: src/space.ts
+msgid "Use {name} where this device asks which holds the records"
+msgstr "Use {name} where this device asks which holds the records"
+
 #. What blocks a Space operation: a session of this project is working
 #: src/service.ts
 msgid "Wait for {name} in {project}"

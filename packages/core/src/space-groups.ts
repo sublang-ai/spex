@@ -128,6 +128,28 @@ export function userGroup(view: HostView | undefined): HostGroup | undefined {
   return view?.groups.find((group) => group.kind === "user");
 }
 
+/** The name creation gives a group's own spex repository (space-65):
+ * `<group>-spex` after the group's last path segment. */
+export function groupRepositoryName(group: string): string {
+  return `${group.split("/").pop() ?? group}-spex`;
+}
+
+/** What a listed spex repository's `spex` branch holds (space-65,
+ * DR-110): a project's where it holds `project.json`, else the group's
+ * records; one with no `spex` branch yet holds the group's only where
+ * it is named `<group>-spex`. */
+export function listedRecords(listing: HostListing): "group" | "project" {
+  const { repository } = listing;
+  if (repository.project !== null) return "project";
+  return repository.spexBranch || repository.path === groupRepositoryName(repository.group.fullPath) ? "group" : "project";
+}
+
+/** The spex repositories the host lists in a group that are the group's
+ * own (space-65): found by the records they hold, never by name alone. */
+export function candidatesOf(view: Pick<HostView, "listings">, group: string): HostListing[] {
+  return view.listings.filter((listing) => listing.repository.group.fullPath === group && listedRecords(listing) === "group");
+}
+
 /** Your own group's folder name for an account: its login as the host
  * spells it where that is a key segment (storage-2, space-59), else the
  * login kebab-cased. */

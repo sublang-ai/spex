@@ -2518,6 +2518,11 @@ msgstr "上传暂存路径不安全：{path}"
 msgid "Upload write made no progress."
 msgstr "无法继续写入上传文件。"
 
+#. Refusal of a join: the listed spex repository bears the key of this device's local-only clone, among whose candidates it stands; that clone joins it by Use
+#: src/space.ts
+msgid "Use {name} where this device asks which holds the records"
+msgstr "请在本设备询问哪个仓库存放记录时选用 {name}"
+
 #. What blocks a Space operation: a session of this project is working
 #: src/service.ts
 msgid "Wait for {name} in {project}"

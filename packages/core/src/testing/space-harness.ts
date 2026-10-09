@@ -167,7 +167,7 @@ function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) =>
 
 const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "signIn"];
 
-const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+const REPOSITORY_KEYS = ["branch", "choice", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "records", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
@@ -204,6 +204,11 @@ export function assertGroupsState(state: GroupsState): void {
         assert.ok(CHANGES.has(conflict.mine.change) && CHANGES.has(conflict.remote.change), JSON.stringify(conflict));
       }
       if (repository.lastSync !== null) assert.deepEqual(Object.keys(repository.lastSync).sort(), ["at", "received", "sent"]);
+      assert.ok(repository.records === "group" || repository.records === "project", `records ${String(repository.records)}`);
+      if (repository.choice !== null) {
+        assert.deepEqual(Object.keys(repository.choice).sort(), ["candidates", "declined", "repair"]);
+        for (const candidate of repository.choice.candidates) assert.deepEqual(Object.keys(candidate).sort(), ["hostId", "members", "name", "visibility"]);
+      }
     }
   }
 }

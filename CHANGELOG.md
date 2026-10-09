@@ -16,6 +16,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- A group's own spex repository is found by its records ([DR-110](specs/decisions/110-known-by-its-place-found-by-its-records.md)).
+  Sign-in and a group's first session look for the spex repository in
+  that group whose `spex` branch holds no `project.json`, never for the
+  name `<group>-spex` alone, so a renamed namespace or group no longer
+  gets a second repository beside the one holding the records: one
+  found is joined, none creates as before, and several stand as a
+  choice on the clone's row, one Use per candidate and Not now, counted
+  among the issues until answered. Each repository row tells the
+  group's records from a project's by what its branch holds. The
+  protocol version is 25.
 - The root lease names the machine ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md)).
   The core and the storage Git tool record Playbook's machine identity
   in the home's `.lease/owner.json` instead of the host name the network

@@ -39,8 +39,8 @@ import {
   signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun,
 } from "./space-git.js";
 import {
-  callbackPages, hostKey, listingFor, nameTaken, ownNameFor, readHostView, relayHostError, repositoryDescription, signInFailure,
-  underOrigin, userGroup, waitingPhrase, type HostListing, type HostView,
+  callbackPages, candidatesOf, groupRepositoryName, hostKey, listedRecords, listingFor, nameTaken, ownNameFor, readHostView, relayHostError,
+  repositoryDescription, signInFailure, underOrigin, userGroup, waitingPhrase, type HostListing, type HostView,
 } from "./space-groups.js";
 import {
   APPLY_MARKER,
@@ -536,6 +536,14 @@ function countIssues(diagnostics: StorageDiagnostic[]): number {
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
+/** The repair key of a standing choice among candidates for a group's
+ * own spex repository (space-69): the clone's key and the candidates'
+ * host ids, so an answer lapses when the candidates change (space-49). */
+const choiceRepair = (key: string, candidates: HostListing[]): string =>
+  `choice:${key}:${candidates.map((listing) => listing.repository.id).sort().join(",")}`;
+const CHOICE_PREFS = "space:repair:choice:";
+/** The clone a standing choice's answer names, out of its preference. */
+const choiceKeyOf = (pref: string): string => pref.slice(CHOICE_PREFS.length, pref.lastIndexOf(":"));
 /** A repository's last completed sync (space-22, storage-5). */
 const lastSyncPref = (key: string): string => `sync:${key}:last`;
 /** The privacy notice seen for a repository (storage-5, space-57). */
@@ -874,6 +882,9 @@ class RepositorySync {
       conflicts: this.lists.conflicts,
       lastSync,
       noticed: store.getPref<unknown>(noticedPref(this.key)) === true,
+      // A group's own holds no `project.json`, a project's does (space-65).
+      records: existsSync(this.repository.projectFile) ? "project" : "group",
+      choice: null,
       sync: this.phase,
     };
     this.cached = state;
@@ -1977,6 +1988,10 @@ export class SpaceManager {
   /** Steps at the host waiting for a member with the rights (space-64),
    * by the clone's key; asked again at the next read. */
   private readonly waiting = new Map<string, Waiting>();
+  /** The standing choice among several candidates for a group's own
+   * spex repository (space-69), by the local-only clone's key: asked
+   * again at every read the set-up makes. */
+  private readonly choices = new Map<string, HostListing[]>();
   /** Joins in flight or stopped, by the host's id (space-63). */
   private readonly joining = new Map<string, SpaceSyncPhase>();
   /** Picks being asked of the host, by key. */
@@ -2185,7 +2200,12 @@ export class SpaceManager {
     const renamed = await this.renameOwn(account);
     let view: HostView;
     try { view = await this.readHost(); } catch { return; }
-    if (renamed !== "busy") await this.ensureOwnOnHost(view);
+    if (renamed !== "busy") {
+      // One failed adopt leaves the rest of the set-up to run.
+      try { await this.ensureOwnOnHost(view); }
+      catch (error) { console.error(`spex: your own group's spex repository stays on this device: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+    await this.revisitChoices(renamed !== "busy");
     await this.retryWaiting(view);
     await this.publish();
   }
@@ -2208,6 +2228,14 @@ export class SpaceManager {
         this.attached.clear();
         this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
         this.readFailure = undefined;
+        // A read outside the set-up — a sync's Check, a pick's — that
+        // lists other candidates than a standing choice names asks the
+        // set-up again, which lapses it (space-69).
+        if (!this.settingUp && !this.stopping && this.choicesChanged(view)) {
+          void this.setUp().catch((error: unknown) => {
+            console.error(`spex: asking the choices again failed: ${error instanceof Error ? error.message : String(error)}`);
+          });
+        }
         // A clone matched by its remote records the host's id (git-host-5).
         for (const repository of this.host.store.listRepositories()) {
           if (!this.host.store.repository(repository.key)) continue;
@@ -2300,54 +2328,165 @@ export class SpaceManager {
   }
 
   /** Your own group's spex repository on the host (space-4, space-65):
-   * joined where the host lists one, else created and pushed. */
+   * found in the account's own group by its records — joined where the
+   * host lists one, created and pushed where it lists none, the choice
+   * standing where it lists several. */
   private async ensureOwnOnHost(view: HostView): Promise<void> {
     const store = this.host.store;
     const key = store.home.own();
     if (!store.repository(key) || this.waiting.has(key)) return;
     const machine = this.machine(key);
     const facts = await machine.readFacts();
-    if (facts.remote !== null) return;
+    if (facts.remote !== null) { this.dropChoice(key); return; }
     const user = userGroup(view);
-    const group = { id: user?.id ?? null, fullPath: user?.fullPath ?? store.home.ownName };
-    const name = splitKey(key).name;
-    const listed = view.listings.find((listing) => listing.repository.group.fullPath === group.fullPath && listing.repository.path === name);
-    if (listed) {
-      await this.adopt(machine, listed, true);
-      return;
-    }
-    await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
+    await this.giveGroupRepository(machine, view, user?.fullPath ?? store.home.ownName, { id: user?.id ?? null, name: splitKey(key).name });
   }
 
   /**
    * A group's spex repository on the host at its first session (space-65):
-   * joined where the host lists `<group>-spex` in that group, else created
-   * there and pushed. A refused creation leaves the clone local only with
-   * its waiting phrase (space-64); nothing here refuses the session.
+   * a clone holding no `project.json`, outside your own group's folder,
+   * given the group's own spex repository the host lists in that group by
+   * its records. A refused creation leaves the clone local only with its
+   * waiting phrase (space-64); nothing here refuses the session.
    */
   async ensureGroupRepository(key: string): Promise<"unchanged" | "local" | "joined" | "created" | "waiting"> {
     try {
       const store = this.host.store;
-      const { group, name } = splitKey(key);
-      if (name !== `${group.split("/").pop()}-spex` || key === store.home.own() || !store.repository(key)) return "unchanged";
+      const group = splitKey(key).group;
+      const repository = store.repository(key);
+      if (!repository || group === store.home.ownName || existsSync(repository.projectFile)) return "unchanged";
       if (this.waiting.has(key)) return "waiting";
       const machine = this.machine(key);
       const facts = await machine.readFacts();
-      if (facts.remote !== null) return "unchanged";
+      if (facts.remote !== null) { this.dropChoice(key); return "unchanged"; }
       if (!this.signedIn()) return "local";
       const view = this.view ?? await this.readHost();
-      const listed = view.listings.find((listing) => listing.repository.group.fullPath === group && listing.repository.path === name);
-      if (listed) {
-        await this.adopt(machine, listed, true);
-        return "joined";
-      }
       const hostGroup = view.groups.find((entry) => entry.fullPath === group);
-      if (!hostGroup) return "local";
-      return await this.create(machine, { id: hostGroup.id, fullPath: hostGroup.fullPath }, name, repositoryDescription({ kind: "group", group }), "quiet");
+      return await this.giveGroupRepository(machine, view, group, hostGroup ? { id: hostGroup.id, name: groupRepositoryName(group) } : null);
     } catch (error) {
       console.error(`spex: ${key} stays on this device: ${error instanceof Error ? error.message : String(error)}`);
       return "local";
     }
+  }
+
+  /** Give a group's local-only clone the group's own spex repository by
+   * what the host lists in that group (space-65): one is joined, the
+   * clone taking its key on that sync (space-60); none is created as
+   * `create` names it, where the group may be created in; several stand
+   * as the choice (space-69). One lookup or pick of a clone runs at a
+   * time: a lookup meanwhile acts on nothing, and a pick is refused
+   * busy (space-58). */
+  private async giveGroupRepository(
+    machine: RepositorySync,
+    view: HostView,
+    group: string,
+    create: { id: string | null; name: string } | null,
+  ): Promise<"joined" | "created" | "waiting" | "local"> {
+    if (this.picking.has(machine.key)) return "local";
+    this.picking.add(machine.key);
+    try {
+      // A clone given its remote while this waited joined already.
+      if ((await machine.readFacts()).remote !== null) {
+        this.dropChoice(machine.key);
+        return "joined";
+      }
+      const candidates = candidatesOf(view, group);
+      if (candidates.length > 1) {
+        this.standChoice(machine.key, candidates);
+        await this.publish();
+        return "local";
+      }
+      this.dropChoice(machine.key);
+      if (candidates.length === 1) {
+        await this.adopt(machine, candidates[0], true);
+        return "joined";
+      }
+      if (!create) return "local";
+      return await this.create(machine, { id: create.id, fullPath: group }, create.name, repositoryDescription({ kind: "group", group }), "quiet");
+    } finally {
+      this.picking.delete(machine.key);
+    }
+  }
+
+  /** The choice stands for a clone (space-69): an earlier answer naming
+   * other candidates lapses with them (space-49). */
+  private standChoice(key: string, candidates: HostListing[]): void {
+    const sorted = [...candidates].sort((a, b) => a.repository.path.localeCompare(b.repository.path) || a.repository.id.localeCompare(b.repository.id));
+    const before = this.choices.get(key);
+    if (before && choiceRepair(key, before) !== choiceRepair(key, sorted)) this.host.store.deletePref(repairPref(choiceRepair(key, before)));
+    this.choices.set(key, sorted);
+  }
+
+  /** A clone's choice no longer stands: picked, joined, created, or its
+   * clone gone; the reader's answer to it is discarded (space-54). */
+  private dropChoice(key: string): void {
+    const before = this.choices.get(key);
+    if (!before) return;
+    this.choices.delete(key);
+    this.host.store.deletePref(repairPref(choiceRepair(key, before)));
+  }
+
+  /** Every choice asked again at the set-up's read (space-69): each
+   * group's clone that may hold one — local only, holding no
+   * `project.json`, outside your own group's folder and paired with a
+   * working folder (space-65) — has the lookup run again. Where its
+   * choice stood, in this run or, as the reader's recorded answer tells,
+   * before a restart, the candidates changed replace it, one left is
+   * joined and none left created (space-65); elsewhere several stand as
+   * the choice. An answer is discarded only for a clone asked here that
+   * it no longer names, or one gone or on the host (space-54). Your own
+   * group's was asked just before, unless `ownAsked` is false. */
+  private async revisitChoices(ownAsked: boolean): Promise<void> {
+    const store = this.host.store;
+    const own = store.home.own();
+    const asked = new Set<string>(ownAsked ? [own] : []);
+    for (const repository of store.listRepositories()) {
+      const key = repository.key;
+      if (key === own || !store.repository(key) || splitKey(key).group === store.home.ownName) continue;
+      if (existsSync(repository.projectFile) || !store.home.folderOf(key) || this.waiting.has(key)) continue;
+      if ((await this.machine(key).readFacts()).remote !== null) continue;
+      asked.add(key);
+      if (this.choices.has(key) || store.prefKeys(`${CHOICE_PREFS}${key}:`).length > 0) {
+        await this.ensureGroupRepository(key);
+        continue;
+      }
+      const candidates = this.view ? candidatesOf(this.view, splitKey(key).group) : [];
+      if (candidates.length > 1) this.standChoice(key, candidates);
+    }
+    // A choice stands only on a clone that may hold one.
+    for (const key of [...this.choices.keys()]) if (key !== own && !asked.has(key)) this.dropChoice(key);
+    const standing = new Set([...this.choices].map(([key, candidates]) => repairPref(choiceRepair(key, candidates))));
+    for (const pref of store.prefKeys(CHOICE_PREFS)) {
+      if (standing.has(pref)) continue;
+      const key = choiceKeyOf(pref);
+      if (asked.has(key) || !store.repository(key) || (await this.machine(key).readFacts()).remote !== null) store.deletePref(pref);
+    }
+  }
+
+  /** Whether a read lists other candidates than a standing choice names
+   * (space-69): your own group's in the account's own group. */
+  private choicesChanged(view: HostView): boolean {
+    const store = this.host.store;
+    for (const [key, candidates] of this.choices) {
+      const group = key === store.home.own() ? userGroup(view)?.fullPath ?? store.home.ownName : splitKey(key).group;
+      if (choiceRepair(key, candidatesOf(view, group)) !== choiceRepair(key, candidates)) return true;
+    }
+    return false;
+  }
+
+  /** The choices the Groups state carries (space-69): on a group's clone
+   * still local only, while signed in. */
+  private standingChoices(): { key: string; candidates: HostListing[]; repair: string; declined: boolean }[] {
+    if (!this.signedIn()) return [];
+    const store = this.host.store;
+    const out: { key: string; candidates: HostListing[]; repair: string; declined: boolean }[] = [];
+    for (const [key, candidates] of this.choices) {
+      if (!store.repository(key) || this.machines.get(key)?.facts.remote !== null) continue;
+      const repair = choiceRepair(key, candidates);
+      const stored = store.getPref<{ declined?: unknown }>(repairPref(repair));
+      out.push({ key, candidates, repair, declined: typeof stored?.declined === "number" });
+    }
+    return out;
   }
 
   // -- picks, creations and joins (space-58, space-63, space-64) --------------
@@ -2367,6 +2506,7 @@ export class SpaceManager {
       throw error;
     }
     this.waiting.delete(machine.key);
+    this.dropChoice(machine.key);
     await this.publish();
     this.startSync(machine.key, { join });
   }
@@ -2414,8 +2554,14 @@ export class SpaceManager {
       const machine = this.machine(key);
       if (waiting.step === "create" && waiting.create) {
         const ask = waiting.create;
-        const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
         this.waiting.delete(key);
+        // A group's own creation joins the group's own spex repository the
+        // host lists meanwhile, under whatever name (space-65).
+        if (!existsSync(machine.repository.projectFile) && candidatesOf(view, waiting.group).length > 0) {
+          await this.giveGroupRepository(machine, view, waiting.group, { id: ask.groupId, name: ask.name });
+          continue;
+        }
+        const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
         if (found) await this.adopt(machine, found, true);
         else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
         continue;
@@ -2530,6 +2676,15 @@ export class SpaceManager {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
     const store = this.host.store;
+    // A candidate bearing the key of the clone whose choice it stands in
+    // is that clone's to join, by Use (space-69).
+    if (this.standingChoices().some((choice) => choice.key === key && choice.candidates.some((entry) => entry.repository.id === hostId))) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "Use {name} where this device asks which holds the records",
+        values: { name: listing.repository.path },
+        comment: "Refusal of a join: the listed spex repository bears the key of this device's local-only clone, among whose candidates it stands; that clone joins it by Use",
+      }));
+    }
     const here = store.listRepositories().some((repository) => {
       const facts = this.machine(repository.key).facts;
       return facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId;
@@ -2973,15 +3128,20 @@ export class SpaceManager {
     if (reported.some((entry) => entry.blocking)) return;
     const standing = new Set(reported.map((entry) => entry.repair?.key).filter(Boolean) as string[]);
     for (const key of this.host.store.prefKeys("space:repair:")) {
+      // A standing choice's answer lapses only with its candidates, as
+      // the set-up's read finds them (space-69).
+      if (key.startsWith(CHOICE_PREFS)) continue;
       if (!standing.has(key.slice("space:repair:".length))) this.host.store.deletePref(key);
     }
   }
 
   /** Only the reader's own act settles a repair (space-54): declining
    * says this is not a project on this device, and is a preference,
-   * which never syncs. Rendering never writes here. */
+   * which never syncs. Rendering never writes here. A standing choice is
+   * answered the same way (space-69). */
   async decline(repair: string, declined: boolean): Promise<GroupsState> {
-    const known = this.diagnostics().some((entry) => entry.repair?.key === repair);
+    const known = this.diagnostics().some((entry) => entry.repair?.key === repair)
+      || this.standingChoices().some((choice) => choice.repair === repair);
     if (!known) {
       throw new CoreError("invalid_request", i18n._({
         id: "no repair named {repair} stands",
@@ -3036,7 +3196,20 @@ export class SpaceManager {
       repositories.push(this.overlay(machine, base));
     }
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
-    repositories.push(...this.absentRows());
+    const choices = this.standingChoices();
+    for (const choice of choices) {
+      const index = repositories.findIndex((row) => row.key === choice.key);
+      if (index < 0 || repositories[index].state !== "local-only") continue;
+      repositories[index] = {
+        ...repositories[index],
+        choice: {
+          repair: choice.repair,
+          candidates: choice.candidates.map((listing) => ({ hostId: listing.repository.id, name: listing.repository.path, members: listing.members, visibility: listing.repository.visibility })),
+          declined: choice.declined,
+        },
+      };
+    }
+    repositories.push(...this.absentRows(new Set(choices.flatMap((choice) => choice.candidates.map((listing) => listing.repository.id)))));
     const diagnostics = await this.host.checkRepairs(this.diagnostics());
     const host = store.home.host;
     return {
@@ -3049,8 +3222,9 @@ export class SpaceManager {
       groups: this.groupsOf(repositories),
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
-      // what the reader has not answered, and everything unfolded.
-      issues: countIssues(diagnostics),
+      // what the reader has not answered — repairs and standing choices
+      // (space-69) — and everything unfolded.
+      issues: countIssues(diagnostics) + repositories.filter((row) => row.choice !== null && !row.choice.declined).length,
     };
   }
 
@@ -3091,8 +3265,10 @@ export class SpaceManager {
   }
 
   /** A row for every spex repository the host lists and this device
-   * lacks (space-61: "Not on this device"). */
-  private absentRows(): RepositoryState[] {
+   * lacks (space-61: "Not on this device"), each candidate of a standing
+   * choice among them even where a local-only clone bears its key
+   * (space-69). */
+  private absentRows(offered: Set<string>): RepositoryState[] {
     const view = this.view;
     if (!view || !this.signedIn()) return [];
     const store = this.host.store;
@@ -3106,7 +3282,7 @@ export class SpaceManager {
     for (const listing of view.listings) {
       const repository = listing.repository;
       const key = hostKey(repository);
-      if (!key || matched.has(repository.id) || store.repository(key)) continue;
+      if (!key || matched.has(repository.id) || (store.repository(key) && !offered.has(repository.id))) continue;
       const code = repository.project && typeof repository.project.remote === "string" ? displayRemote(repository.project.remote) : null;
       rows.push({
         key,
@@ -3127,6 +3303,8 @@ export class SpaceManager {
         conflicts: [],
         lastSync: null,
         noticed: false,
+        records: listedRecords(listing),
+        choice: null,
         sync: this.joining.get(repository.id) ?? { phase: "idle" },
       });
     }
@@ -3158,9 +3336,15 @@ export class SpaceManager {
       }
       entry.repositories.push(row);
     }
-    const groupsOwn = (entry: Entry, row: RepositoryState): boolean => row.name === `${entry.fullPath.split("/").pop()}-spex`;
+    // The group's own first by the records it holds, not by its name
+    // (space-65), your own group's clone and a clone whose choice stands
+    // before the candidates (space-69).
+    const groupsOwn = (row: RepositoryState): boolean => row.records === "group";
     for (const entry of entries.values()) {
-      entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
+      entry.repositories.sort((a, b) => Number(b.own) - Number(a.own)
+        || Number(b.choice !== null) - Number(a.choice !== null)
+        || Number(groupsOwn(b)) - Number(groupsOwn(a))
+        || a.key.localeCompare(b.key));
     }
     return [own, ...[...entries.values()].filter((entry) => entry !== own).sort((a, b) => a.fullPath.localeCompare(b.fullPath))];
   }

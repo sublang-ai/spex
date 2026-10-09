@@ -7,7 +7,9 @@
 // its code lives, its reachability, its local changes, ahead and behind
 // and its last sync, and carries the one control its state offers —
 // Sync, Join, Pick a group, Retry — with Members on a
-// reachable row. What a control opens stands in place beneath its row:
+// reachable row; a group's clone with several candidates on the host
+// carries the standing choice beneath it instead (space-69). What a
+// control opens stands in place beneath its row:
 // the group picker (space-58), the folder a Join clones into
 // (space-63), the members the host reports (space-62), the first-push
 // notice (space-57) and the joining of unrelated histories (space-13).
@@ -29,6 +31,7 @@ import {
   openExternalBridge,
   pickDirectoryBridge,
   repositoryStatePhrase,
+  rowId,
   sameRemote,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
@@ -36,6 +39,10 @@ import { InlineConfirm } from "./InlineConfirm.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
+/** A listed spex repository or group offered for a pick: a list row
+ * whose words are its own (space-28). */
+const PICK_OPTION =
+  "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
 /** What a pick asks of the core (space-58). */
 type PickChoice = { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string };
 
@@ -88,18 +95,33 @@ export function rowSyncRefusal(groups: GroupsState, repo: RepositoryState): stri
 }
 
 /** The control a row's state offers (space-61). */
-type RowControl = "sync" | "unrelated" | "pick" | "retry" | "join" | "none";
+type RowControl = "sync" | "unrelated" | "pick" | "choice" | "retry" | "join" | "none";
 
-function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): RowControl {
+function rowControl(groups: GroupsState, repo: RepositoryState): RowControl {
   switch (repo.state) {
     case "absent":
-      return "join";
+      // A candidate bearing its choice's clone key is joined by that
+      // clone's Use; the core refuses a Join of its own (space-69,
+      // space-29).
+      return groups.groups.some((group) =>
+        group.repositories.some(
+          (clone) =>
+            clone.state !== "absent" &&
+            clone.key === repo.key &&
+            clone.choice?.candidates.some((candidate) => candidate.hostId === repo.id) === true,
+        ),
+      )
+        ? "none"
+        : "join";
     case "local-only":
       // Signing in is the header's alone (space-3).
       if (!groups.account) return "none";
+      // Several candidates for a group's own: the reader's choice
+      // stands in place of Pick a group (space-69).
+      if (repo.choice) return "choice";
       // A group's own spex repository is made by sign-in or its first
       // session (space-4, space-65); only a project's is picked for.
-      return isGroupRepository(group, repo) ? "none" : "pick";
+      return isGroupRepository(repo) ? "none" : "pick";
     case "unreachable":
       // Signed out, a repository the host holds waits for the header's
       // Sign in; a path or a refused read is read once more.
@@ -129,7 +151,8 @@ export function GroupsList({
   connected: boolean;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
-  onSelect(key: string): void;
+  /** Called with the row's identity (rowId). */
+  onSelect(row: string): void;
   onNote: Note;
 }) {
   return (
@@ -168,15 +191,15 @@ export function GroupsList({
               <ul className="flex min-w-0 flex-col gap-0.5">
                 {group.repositories.map((repo) => (
                   <RepositoryRow
-                    key={repo.key}
+                    key={rowId(repo)}
                     groups={groups}
                     group={group}
                     repo={repo}
                     now={now}
-                    selected={repo.key === selected}
+                    selected={rowId(repo) === selected}
                     connected={connected}
                     refreshes={refreshes}
-                    onSelect={() => onSelect(repo.key)}
+                    onSelect={() => onSelect(rowId(repo))}
                     onNote={onNote}
                   />
                 ))}
@@ -232,6 +255,10 @@ function RepositoryRow({
   const controlRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
+  const rowButtonRef = useRef<HTMLButtonElement>(null);
+  // A standing choice's pick or decline in flight, held by the row so
+  // it outlives the choice's remount on changed candidates (space-69).
+  const [choiceBusy, setChoiceBusy] = useState(false);
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -240,8 +267,8 @@ function RepositoryRow({
     if (accepted && accepted.key !== machineKey) setAccepted(undefined);
   }, [accepted, machineKey]);
 
-  const control = rowControl(groups, group, repo);
-  const groupRepository = isGroupRepository(group, repo);
+  const control = rowControl(groups, repo);
+  const groupRepository = isGroupRepository(repo);
   const close = (focus: "control" | "members" | "folder" = "control") => {
     setOpened(undefined);
     const ref = focus === "members" ? membersRef : focus === "folder" ? folderRef : controlRef;
@@ -484,7 +511,7 @@ function RepositoryRow({
   // The row is named by the repository alone, its code, counts and
   // state describing it: a name that holds still while the state's age
   // ticks on (DR-041).
-  const describe = (part: string) => `space-repo-${part}-${repo.key}`;
+  const describe = (part: string) => `space-repo-${part}-${rowId(repo)}`;
   const describedBy = [
     code !== null && code !== state ? describe("code") : null,
     repo.local.length > 0 ? describe("changes") : null,
@@ -498,6 +525,7 @@ function RepositoryRow({
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state} className="@container flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 items-center gap-1">
         <button
+          ref={rowButtonRef}
           type="button"
           data-testid={`space-repo-${repo.key}`}
           data-state={repo.state}
@@ -628,6 +656,26 @@ function RepositoryRow({
         <p id={captionId} data-testid={captionId} role="alert" className="pl-6 text-xs text-red-600 dark:text-red-400">
           {error}
         </p>
+      ) : null}
+      {control === "choice" && repo.choice ? (
+        <StandingChoice
+          // Changed candidates are another choice (space-69): it starts
+          // afresh, holding no notice or refusal of the one before.
+          key={repo.choice.repair}
+          group={group}
+          repo={repo}
+          choice={repo.choice}
+          disabled={disabled || pending || choiceBusy}
+          onBusy={setChoiceBusy}
+          // Accepted, its controls hold until the machine's state moves
+          // (DR-010 §3, space-29), and focus lands on the row's control,
+          // which outlives the choice (DR-010 §6, space-69).
+          onAccepted={() => {
+            setAccepted({ op: "join", key: machineKey });
+            setTimeout(() => (controlRef.current ?? rowButtonRef.current)?.focus(), 0);
+          }}
+          onNote={onNote}
+        />
       ) : null}
       {opened === "pick" ? (
         <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close()} onNote={onNote} />
@@ -812,6 +860,72 @@ function FolderEditor({
   );
 }
 
+/** A pick of a local-only spex repository's home on the host
+ * (space-58), from the picker or the standing choice (space-69): a pick
+ * the core holds for the sharing notice says it in place, Continue
+ * resending it noticed and Cancel starting nothing (space-57). */
+function usePick(
+  repo: RepositoryState,
+  onNote: Note,
+  onPicked: () => void,
+  onRefused: (choice: PickChoice) => void = () => {},
+  onBusy: (busy: boolean) => void = () => {},
+) {
+  const spacePick = useAppStore((state) => state.spacePick);
+  const [busy, setBusy] = useState<string>();
+  const [refusal, setRefusal] = useState<string>();
+  // A pick the core holds for the sharing notice (space-57): the option
+  // it came from, its choice, and whether the repository is public.
+  const [notice, setNotice] = useState<{ option: string; choice: PickChoice; isPublic: boolean }>();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  /** Pick through the option whose test id is `option`. */
+  const pick = async (option: string, choice: PickChoice, noticed = false) => {
+    setBusy(option);
+    onBusy(true);
+    setRefusal(undefined);
+    try {
+      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      onPicked();
+    } catch (cause) {
+      // The refusal's facts, never its words, say the notice is owed
+      // (core-service-111); it is said in place.
+      const details = (cause as SpexCommandError).details;
+      if (!noticed && details?.notice === true) {
+        setNotice({ option, choice, isPublic: details.visibility === "public" });
+        return;
+      }
+      const message = (cause as Error).message;
+      setRefusal(message);
+      onNote(message);
+      onRefused(choice);
+    } finally {
+      setBusy(undefined);
+      onBusy(false);
+    }
+  };
+
+  /** Cancel on the notice starts nothing and hands focus back to the
+   * option it came from (DR-010 §6). */
+  const cancelNotice = () => {
+    const option = notice?.option;
+    setNotice(undefined);
+    setTimeout(() => {
+      const buttons = rootRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
+      [...buttons].find((button) => button.dataset.testid === option)?.focus();
+    }, 0);
+  };
+
+  /** Continue sends the same pick with the notice seen. */
+  const continueNotice = () => {
+    if (!notice) return;
+    setNotice(undefined);
+    void pick(notice.option, notice.choice, true);
+  };
+
+  return { rootRef, busy, refusal, setRefusal, notice, pick, cancelNotice, continueNotice };
+}
+
 /** Where a local-only project's records go on the host (space-58): in
  * one picker, the spex repositories the host lists for the same code —
  * each with its group and members' count — and, below them, every
@@ -830,7 +944,6 @@ export function GroupPicker({
   onClose(): void;
   onNote: Note;
 }) {
-  const spacePick = useAppStore((state) => state.spacePick);
   const code = repo.code;
   // The listed ones are the host's: a host id, a state the host read.
   const listed = groups.groups.flatMap((group) =>
@@ -851,42 +964,20 @@ export function GroupPicker({
   const creatable = groups.groups.filter((group) => group.id !== null || group.own);
   const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [name, setName] = useState(defaultName);
-  const [busy, setBusy] = useState<string>();
-  const [refusal, setRefusal] = useState<string>();
-  // A pick the core holds for the sharing notice (space-57): the option
-  // it came from, its choice, and whether the repository is public.
-  const [notice, setNotice] = useState<{ option: string; choice: PickChoice; isPublic: boolean }>();
-  const rootRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
+  const { rootRef, busy, refusal, setRefusal, notice, pick, cancelNotice, continueNotice } = usePick(
+    repo,
+    onNote,
+    onClose,
+    // A name the host refuses asks for another in place (space-58).
+    (choice) => {
+      if (choice.kind === "create") nameRef.current?.focus();
+    },
+  );
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
-
-  /** Pick through the option whose test id is `option`. */
-  const pick = async (option: string, choice: PickChoice, noticed = false) => {
-    setBusy(option);
-    setRefusal(undefined);
-    try {
-      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
-      onClose();
-    } catch (cause) {
-      // The refusal's facts, never its words, say the notice is owed
-      // (core-service-111); it is said here, in the picker.
-      const details = (cause as SpexCommandError).details;
-      if (!noticed && details?.notice === true) {
-        setNotice({ option, choice, isPublic: details.visibility === "public" });
-        return;
-      }
-      const message = (cause as Error).message;
-      setRefusal(message);
-      onNote(message);
-      // A name the host refuses asks for another in place (space-58).
-      if (choice.kind === "create") nameRef.current?.focus();
-    } finally {
-      setBusy(undefined);
-    }
-  };
 
   const create = (group: GroupsState["groups"][number]) => {
     const chosen = name.trim();
@@ -898,19 +989,7 @@ export function GroupPicker({
     void pick(`space-pick-group-${group.fullPath}`, { kind: "create", groupId: group.id, name: chosen });
   };
 
-  /** Cancel on the notice starts nothing and hands focus back to the
-   * option it came from (DR-010 §6). */
-  const cancelNotice = () => {
-    const option = notice?.option;
-    setNotice(undefined);
-    setTimeout(() => {
-      const buttons = rootRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
-      [...buttons].find((button) => button.dataset.testid === option)?.focus();
-    }, 0);
-  };
-
-  const option =
-    "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
+  const option = PICK_OPTION;
   const disabled = !connected || busy !== undefined || notice !== undefined;
   let first = true;
   const takeFirst = () => {
@@ -1017,11 +1096,7 @@ export function GroupPicker({
                   )
             }
             confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
-            onConfirm={() => {
-              const { option, choice } = notice;
-              setNotice(undefined);
-              void pick(option, choice, true);
-            }}
+            onConfirm={continueNotice}
             onCancel={cancelNotice}
           />
         </div>
@@ -1036,6 +1111,142 @@ export function GroupPicker({
           </span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** The choice among several candidates for a group's own spex
+ * repository, standing on the group's local-only row in place of Pick
+ * a group (space-69): the question, one Use per candidate — named by
+ * the repository's name and its members' count, the pick of that
+ * listed spex repository (space-58) — and Not now, which sets it aside
+ * (space-49). Set aside, the question and its candidates stand on, and
+ * the header counts it no more as the core's count says (space-1). */
+function StandingChoice({
+  group,
+  repo,
+  choice,
+  disabled,
+  onBusy,
+  onAccepted,
+  onNote,
+}: {
+  group: Group;
+  repo: RepositoryState;
+  choice: NonNullable<RepositoryState["choice"]>;
+  disabled: boolean;
+  /** Told while a pick or the decline is in flight, which the row holds
+   * past a remount of the choice. */
+  onBusy(busy: boolean): void;
+  onAccepted(): void;
+  onNote: Note;
+}) {
+  const spaceRepairDecline = useAppStore((state) => state.spaceRepairDecline);
+  const { rootRef, busy, refusal, setRefusal, notice, pick, cancelNotice, continueNotice } = usePick(
+    repo,
+    onNote,
+    onAccepted,
+    undefined,
+    onBusy,
+  );
+  const [declining, setDeclining] = useState(false);
+  const firstRef = useRef<HTMLButtonElement>(null);
+  const questionId = `space-choice-question-${repo.key}`;
+  const off = disabled || busy !== undefined || notice !== undefined || declining;
+
+  /** Not now: the reader's own act settles it (space-49), the reply
+   * the new state; focus stays on the choice (DR-010 §6). */
+  const decline = async () => {
+    setDeclining(true);
+    onBusy(true);
+    setRefusal(undefined);
+    try {
+      await spaceRepairDecline(choice.repair, true);
+      setTimeout(() => firstRef.current?.focus(), 0);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setRefusal(message);
+      onNote(message);
+    } finally {
+      setDeclining(false);
+      onBusy(false);
+    }
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      id={`space-choice-${repo.key}`}
+      role="group"
+      // The header's issues control lands here while every control is
+      // held (space-1).
+      tabIndex={-1}
+      aria-labelledby={questionId}
+      data-testid={`space-choice-${repo.key}`}
+      className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
+    >
+      <p id={questionId} className="text-xs font-medium">
+        {repo.own
+          ? i18n._("Which holds your own records?")
+          : i18n._("Which holds {group}'s records?", { group: group.name })}
+      </p>
+      <ul className="flex min-w-0 flex-col gap-1">
+        {choice.candidates.map((candidate, index) => (
+          <li key={candidate.hostId} className="min-w-0">
+            <button
+              ref={index === 0 ? firstRef : undefined}
+              type="button"
+              data-testid={`space-choice-use-${candidate.hostId}`}
+              className={PICK_OPTION}
+              disabled={off}
+              onClick={() =>
+                void pick(`space-choice-use-${candidate.hostId}`, { kind: "join", hostId: candidate.hostId })
+              }
+            >
+              <span className="shrink-0 font-medium">
+                {i18n._({ id: "Use", comment: "the standing choice: join your records with this spex repository" })}
+              </span>{" "}
+              <span className="min-w-0 flex-1 truncate" title={candidate.name}>
+                {candidate.name}
+              </span>
+              {candidate.members !== null ? (
+                <>
+                  {" "}
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {i18n._("{count, plural, one {# member} other {# members}}", { count: candidate.members })}
+                  </span>
+                </>
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {notice ? (
+        <div data-testid={`space-pick-notice-${repo.key}`}>
+          <SharingNotice isPublic={notice.isPublic} onContinue={continueNotice} onCancel={cancelNotice} />
+        </div>
+      ) : null}
+      {!choice.declined || refusal ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Set aside, it is answered: what stands is a Use (space-49). */}
+          {!choice.declined ? (
+            <button
+              type="button"
+              data-testid={`space-choice-decline-${repo.key}`}
+              className={SECONDARY}
+              disabled={off}
+              onClick={() => void decline()}
+            >
+              {i18n._({ id: "Not now", comment: "set the choice of a group's spex repository aside" })}
+            </button>
+          ) : null}
+          {refusal ? (
+            <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
+              {refusal}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

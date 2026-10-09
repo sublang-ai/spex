@@ -3702,6 +3702,11 @@ msgstr "Not in this runtime's list. Check the model ID."
 msgid "Not installed"
 msgstr "Not installed"
 
+#. set the choice of a group's spex repository aside
+#: src/components/SpaceGroups.tsx
+msgid "Not now"
+msgstr "Not now"
+
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -6151,6 +6156,11 @@ msgstr "Uploading {progress}%"
 msgid "Uploading…"
 msgstr "Uploading…"
 
+#. the standing choice: join your records with this spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Use"
+msgstr "Use"
+
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
 msgid "Use a SKILL.md…"
@@ -6278,6 +6288,14 @@ msgstr "where your working folders are on this machine, in the home file"
 #: src/components/SpaceSync.tsx
 msgid "Which folder on this device is {name}?"
 msgstr "Which folder on this device is {name}?"
+
+#: src/components/SpaceGroups.tsx
+msgid "Which holds {group}'s records?"
+msgstr "Which holds {group}'s records?"
+
+#: src/components/SpaceGroups.tsx
+msgid "Which holds your own records?"
+msgstr "Which holds your own records?"
 
 #: src/lib/space.ts
 msgid "which process is writing right now"

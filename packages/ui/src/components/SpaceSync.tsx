@@ -37,7 +37,7 @@ import {
   groupUnits,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
-import { LINK } from "./SpaceSurface.js";
+import { LINK, allRepositories } from "./SpaceSurface.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { SharingNotice } from "./SpaceGroups.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
@@ -965,8 +965,11 @@ export function IssuesList({
 
   const busy = runningRepositories(groups);
   // The core carries the count (space-1): what the reader has not
-  // answered. Rows he has set aside stand on, quietly.
-  const issueCount = groups.issues;
+  // answered. Rows he has set aside stand on, quietly. A standing
+  // choice counts there but stands on its row, never in this list
+  // (space-69), so the list counts the rest (space-55).
+  const choices = allRepositories(groups).filter((repo) => repo.choice !== null && !repo.choice.declined).length;
+  const listCount = groups.issues - choices;
   const declinedCount = groups.diagnostics.filter((entry) => entry.repair?.declined !== undefined).length;
   const blocking = groups.diagnostics.some((entry) => entry.blocking);
   // The rows as a fresh layout orders them: the core's order, a
@@ -1006,9 +1009,12 @@ export function IssuesList({
       entry.repair.key !== key &&
       entry.repair.declined === undefined &&
       !done[entry.repair.key];
-    // What the header will count: the other unanswered repairs, and
-    // every diagnostic no repair folds (space-1).
-    const left = state.diagnostics.filter((entry) => !entry.repair || unanswered(entry)).length;
+    // What the header will count: the other unanswered repairs, every
+    // diagnostic no repair folds, and every standing choice not set
+    // aside (space-1, space-69).
+    const left =
+      state.diagnostics.filter((entry) => !entry.repair || unanswered(entry)).length +
+      allRepositories(state).filter((repo) => repo.choice !== null && !repo.choice.declined).length;
     // Focus moves to the next unanswered repair below, wrapping to the
     // top, or else onto this outcome's Open project. The layout still
     // holds the row's place even where its report is gone.
@@ -1040,19 +1046,19 @@ export function IssuesList({
       // Amber is attention. With nothing unanswered there is none to
       // pay, so the card stands neutral and the rows stay readable.
       className={`flex flex-col gap-1 rounded-lg border p-3 text-sm ${
-        issueCount > 0
+        listCount > 0
           ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
           : "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
       }`}
     >
       <h2
         className={`text-xs font-medium ${
-          issueCount > 0
+          listCount > 0
             ? "text-amber-800 dark:text-amber-200"
             : "text-neutral-500"
         }`}
       >
-        {i18n._("Issues ({count})", { count: issueCount })}
+        {i18n._("Issues ({count})", { count: listCount })}
         {declinedCount > 0
           ? i18n._({
               id: " · {count} not added",

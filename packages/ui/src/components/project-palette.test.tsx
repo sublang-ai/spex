@@ -263,7 +263,8 @@ describe("projects-33: a folder added or created while signed in asks for its gr
   const row = (key: string, extra: object = {}) => ({
     key, name: key.split("/").pop(), id: null, own: false, code: null, folder: "/tmp/gamma",
     remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
-    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" }, ...extra,
+    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, records: "project", choice: null,
+    sync: { phase: "idle" }, ...extra,
   });
   const groups = (account: boolean, repositories: object[]) => ({
     home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },

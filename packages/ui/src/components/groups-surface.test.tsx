@@ -6,13 +6,14 @@
 // host's last read (space-1, space-2), signing in through the browser
 // flow and the device flow, its failure, Cancel, the host's sign-out
 // and Sign out (space-3, space-6), every row state with its control and phrase (space-61,
-// space-64), Pick a group with its sharing notice (space-58, space-57), Join (space-63), Members
+// space-64), the standing choice of a group's own spex repository (space-68),
+// Pick a group with its sharing notice (space-58, space-57), Join (space-63), Members
 // (space-62), the vocabulary (space-27) and the label budget and the
 // container steps the fit rests on (space-28). Each act is checked by
 // the command it sends; its outcome arrives as state.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -63,7 +64,7 @@ function teamGroup(repos?: RepositoryState[]): GroupsState["groups"][number] {
     url: "https://gitlab.example/acme/team",
     own: false,
     repositories: repos ?? [
-      repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
+      repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", records: "group", code: null, folder: null, members: 4 }),
       repo({ key: "acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
       repo({ key: "acme/team/docs-spex", name: "docs-spex", id: "52", code: "git@github.com:acme/docs.git", folder: null, state: "absent", branch: null }),
       repo({ key: "acme/team/old-spex", name: "old-spex", id: "53", code: "git@github.com:acme/old.git", state: "read-only", reason: "archived", lastSync: { at: NOW - 30 * MIN, sent: 0, received: 2 } }),
@@ -469,6 +470,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
         key: "acme/team/team-spex",
         name: "team-spex",
         id: null,
+        records: "group",
         code: null,
         folder: null,
         state: "local-only",
@@ -549,6 +551,248 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/Users/jane/code/academy" }]));
     await waitFor(() => expect(screen.queryByTestId(`space-folder-${KEY}`)).toBeNull());
+  });
+});
+
+/** The choice standing between two candidates the host lists in your
+ * own group for your own group's spex repository (space-69): the clone
+ * stays local only, carrying the choice, and the candidates list
+ * beneath it as not on this device. */
+const CHOICE_KEY = `choice:${OWN}:61,62`;
+/** `names` are the two candidates'; one named as the clone is listed
+ * under the clone's own key, as the core lists it. */
+function standingChoice(declined = false, names: [string, string] = ["ada-spex", "records-spex"]): GroupsState {
+  const candidate = (hostId: string, name: string, members: number) =>
+    repo({ key: `jane/${name}`, name, id: hostId, records: "group", code: null, folder: null, members, state: "absent", branch: null, remote: `https://gitlab.example/jane/${name}.git` });
+  const own: RepositoryState = {
+    ...OWN_REPO,
+    state: "local-only",
+    remote: null,
+    id: null,
+    lastSync: null,
+    choice: {
+      repair: CHOICE_KEY,
+      candidates: [
+        { hostId: "61", name: names[0], members: 1, visibility: "private" },
+        { hostId: "62", name: names[1], members: 2, visibility: "private" },
+      ],
+      declined,
+    },
+  };
+  // The core counts the choice until it is set aside (space-1).
+  const state = base({ issues: declined ? 0 : 1 });
+  return {
+    ...state,
+    groups: [{ ...state.groups[0]!, repositories: [own, candidate("61", names[0], 1), candidate("62", names[1], 2)] }],
+  };
+}
+
+/** A row's controls, apart from the row itself, by their accessible names. */
+const rowControls = (key: string): string[] =>
+  within(screen.getByTestId(`space-row-${key}`))
+    .getAllByRole("button")
+    .filter((button) => !button.dataset.testid?.startsWith("space-repo-"))
+    .map((button) => button.getAttribute("aria-label") ?? (button.textContent ?? "").replace(/\s+/g, " ").trim());
+
+describe("GROUPS: the standing choice (space-68)", () => {
+  test("space-68: your own group's row reads On this device only with the question, one Use per candidate naming it and its members' count, and Not now, no Pick a group; the header counts one issue", async () => {
+    await renderGroups(standingChoice(), { open: false });
+    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this device only");
+    const row = screen.getByTestId(`space-row-${OWN}`);
+    const choice = within(row).getByRole("group", { name: "Which holds your own records?" });
+    expect(choice.textContent).toContain("Which holds your own records?");
+    expect(within(choice).getByRole("button", { name: "Use ada-spex 1 member" })).toBeTruthy();
+    expect(within(choice).getByRole("button", { name: "Use records-spex 2 members" })).toBeTruthy();
+    expect(rowControls(OWN)).toEqual(["Use ada-spex 1 member", "Use records-spex 2 members", "Not now"]);
+    expect(within(row).queryByRole("button", { name: "Pick a group" })).toBeNull();
+    // The header reads the count the core carries (space-1); the choice
+    // stands on its row, where the control takes the reader.
+    const issues = screen.getByTestId("space-issues");
+    expect(issues.textContent).toBe("⚠1 issue");
+    fireEvent.click(issues);
+    await waitFor(() => expect(document.activeElement).toBe(within(choice).getByRole("button", { name: "Use ada-spex 1 member" })));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    // Another group's clone asks after that group's records (space-69).
+    cleanup();
+    const team: RepositoryState = repo({
+      key: "acme/team/team-spex", name: "team-spex", id: null, records: "group", code: null, folder: null, remote: null,
+      state: "local-only", branch: null, members: null,
+      choice: { repair: "choice:acme/team/team-spex:70,71", candidates: [{ hostId: "70", name: "team-spex", members: 4, visibility: null }, { hostId: "71", name: "notes-spex", members: null, visibility: null }], declined: false },
+    });
+    await renderGroups({ ...base({ issues: 1 }), groups: [...base().groups, { id: "2", fullPath: "acme/team", name: "team", url: null, own: false, repositories: [team] }] }, { open: false });
+    expect(rowControls("acme/team/team-spex")).toEqual(["Use team-spex 4 members", "Use notes-spex", "Not now"]);
+    expect(within(screen.getByTestId("space-row-acme/team/team-spex")).getByRole("group", { name: "Which holds team's records?" })).toBeTruthy();
+  });
+
+  test("space-68: both candidates list beneath it as Not on this device, one sharing the clone's name offering no Join and opening alone", async () => {
+    // One candidate is named as the clone, so the core lists it under
+    // the clone's own key (space-69).
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    let sameKey: string[];
+    try {
+      await renderGroups(standingChoice(false, ["jane-spex", "records-spex"]), { open: false });
+      sameKey = errors.mock.calls.map((call) => call.join(" ")).filter((line) => /same key/.test(line));
+    } finally {
+      errors.mockRestore();
+    }
+    const items = within(screen.getByTestId("space-group-jane"))
+      .getAllByRole("listitem")
+      .filter((item) => item.dataset.testid?.startsWith("space-row-"));
+    expect(items.map((item) => [item.dataset.testid, item.dataset.state])).toEqual([
+      [`space-row-${OWN}`, "local-only"],
+      [`space-row-${OWN}`, "absent"],
+      ["space-row-jane/records-spex", "absent"],
+    ]);
+    const [clone, same, other] = items.map((item) => within(item).getByTestId(item.dataset.testid!.replace("space-row-", "space-repo-")));
+    // Each row is described by its own state, as assistive technology
+    // resolves the ids (space-61).
+    const describedState = (row: HTMLElement) =>
+      (row.getAttribute("aria-describedby") ?? "")
+        .split(" ")
+        .map((id) => document.getElementById(id))
+        .find((element) => element?.dataset.testid?.startsWith("space-repo-state-"))?.textContent;
+    expect(describedState(clone!)).toBe("On this device only");
+    expect(describedState(same!)).toBe("Not on this device");
+    expect(describedState(other!)).toBe("Not on this device");
+    // The one bearing the clone's key is joined by the clone's Use
+    // (space-69); the other offers its Join.
+    expect(within(items[1]!).queryByRole("button", { name: "Join" })).toBeNull();
+    expect(within(items[2]!).getByRole("button", { name: "Join" })).toBeTruthy();
+    // React names no two rows alike.
+    expect(sameKey).toEqual([]);
+    // Activated, the candidate opens its own tabs, the clone's row
+    // staying closed (space-1).
+    fireEvent.click(same!);
+    await screen.findByTestId("space-repository");
+    expect(same!.getAttribute("aria-expanded")).toBe("true");
+    expect(clone!.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("space-repository-name").textContent).toContain("Not on this device");
+    expect(screen.queryByTestId("space-clone-path")).toBeNull();
+  });
+
+  test("space-68: Not now sends the decline, the row then counting no issue and keeping its controls, and Use sends the pick of that repository for your own group's clone", async () => {
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.repair.decline") return standingChoice(fields.declined === true);
+      // The facts, apart from the words, say the sharing notice is owed
+      // for the candidate others share (space-57).
+      if (type === "space.pick" && fields.noticed !== true && (fields.choice as { hostId: string }).hostId === "62") {
+        throw new SpexCommandError("invalid_request", "Held", { notice: true, members: 2, visibility: "private" });
+      }
+      return answer(type, fields);
+    });
+    await renderGroups(standingChoice(), { open: false });
+    const row = screen.getByTestId(`space-row-${OWN}`);
+    fireEvent.click(within(row).getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(calls("space.repair.decline")).toEqual([{ repair: CHOICE_KEY, declined: true }]));
+    // Set aside, the header counts it no more and the row keeps the
+    // question and its candidates.
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("issues"));
+    expect(within(row).getByRole("group", { name: "Which holds your own records?" })).toBeTruthy();
+    expect(rowControls(OWN)).toEqual(["Use ada-spex 1 member", "Use records-spex 2 members"]);
+    // Use is the pick of that listed spex repository, joining the clone.
+    fireEvent.click(within(row).getByRole("button", { name: "Use records-spex 2 members" }));
+    await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: OWN, choice: { kind: "join", hostId: "62" } }]));
+    // Held for the notice, it says it in place, Cancel focused, and
+    // Continue sends the same pick noticed.
+    const notice = await within(row).findByTestId(`space-pick-notice-${OWN}`);
+    expect(notice.textContent).toContain("Every session goes there whole");
+    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(calls("space.pick")).toEqual([
+        { repository: OWN, choice: { kind: "join", hostId: "62" } },
+        { repository: OWN, choice: { kind: "join", hostId: "62" }, noticed: true },
+      ]),
+    );
+    expect(within(row).queryByTestId(`space-pick-notice-${OWN}`)).toBeNull();
+    // Accepted, focus lands on the row's control and stays there once
+    // the core's next state, the join running, drops the choice
+    // (space-69).
+    const was = standingChoice(true);
+    const [own, ...candidates] = was.groups[0]!.repositories;
+    deliver({
+      ...was,
+      issues: 0,
+      groups: [{
+        ...was.groups[0]!,
+        repositories: [{ ...own!, choice: null, sync: { phase: "running", op: "join", step: "check", since: NOW, cancelable: false } }, ...candidates],
+      }],
+    });
+    await waitFor(() => expect(within(row).queryByTestId(`space-choice-${OWN}`)).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${OWN}`)));
+  });
+
+  test("space-68: a group's own repository listed under a name other than its group's, holding no code remote, reads Group records first in its group", async () => {
+    const team = teamGroup([
+      repo({ key: "acme/team/records-spex", name: "records-spex", id: "55", records: "group", code: null, folder: null, members: 4 }),
+      repo({ key: "acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
+    ]);
+    await renderGroups({ ...base(), groups: [...base().groups, team] }, { open: false });
+    const rows = within(screen.getByTestId("space-group-acme/team")).getAllByRole("listitem");
+    expect(rows[0]!.dataset.testid).toBe("space-row-acme/team/records-spex");
+    expect(screen.getByTestId("space-repo-code-acme/team/records-spex").textContent).toBe("Group records");
+    // A group's own repository is never picked for (space-61).
+    expect(rowControls("acme/team/records-spex")).not.toContain("Pick a group");
+  });
+});
+
+/** The standing choice's implementation across a host read: keyed by
+ * its choice, so changed candidates mount it afresh, while the act in
+ * flight is held by its row and outlives the remount. */
+describe("GROUPS: StandingChoice keyed by its choice, its act in flight held by the row", () => {
+  test("a choice whose candidates change starts afresh, a notice held for a candidate gone with them, its controls held while the first pick is in flight", async () => {
+    let settle: ((refusal?: Error) => void) | undefined;
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.pick" && fields.noticed !== true) {
+        if ((fields.choice as { hostId: string }).hostId === "61") {
+          // Held in flight until the test settles it.
+          await new Promise<void>((resolve, reject) => {
+            settle = (refusal) => (refusal ? reject(refusal) : resolve());
+          });
+          return { accepted: true };
+        }
+        throw new SpexCommandError("invalid_request", "Held", { notice: true, members: 2, visibility: "private" });
+      }
+      return answer(type, fields);
+    });
+    await renderGroups(standingChoice(), { open: false });
+    const row = screen.getByTestId(`space-row-${OWN}`);
+    fireEvent.click(within(row).getByRole("button", { name: "Use records-spex 2 members" }));
+    await within(row).findByTestId(`space-pick-notice-${OWN}`);
+    // A host read lists another set: the choice lapses and forms again
+    // under its own key, with no notice for the one gone.
+    const was = standingChoice();
+    const own = was.groups[0]!.repositories[0]!;
+    const withCandidates = (ids: string, candidates: NonNullable<RepositoryState["choice"]>["candidates"]): GroupsState => ({
+      ...was,
+      groups: [{
+        ...was.groups[0]!,
+        repositories: [
+          { ...own, choice: { repair: `choice:${OWN}:${ids}`, candidates, declined: false } },
+          ...was.groups[0]!.repositories.slice(1),
+        ],
+      }],
+    });
+    const ada = own.choice!.candidates[0]!;
+    const notes = { hostId: "63", name: "notes-spex", members: 3, visibility: "private" };
+    deliver(withCandidates("61,63", [ada, notes]));
+    await waitFor(() => expect(within(row).queryByTestId(`space-pick-notice-${OWN}`)).toBeNull());
+    expect(rowControls(OWN)).toEqual(["Use ada-spex 1 member", "Use notes-spex 3 members", "Not now"]);
+    const controls = () =>
+      within(screen.getByTestId(`space-choice-${OWN}`))
+        .getAllByRole("button")
+        .map((control) => (control as HTMLButtonElement).disabled);
+    expect(controls()).toEqual([false, false, false]);
+    // A pick in flight when the set changes again: the choice mounts
+    // afresh, its controls held until that pick settles.
+    fireEvent.click(within(row).getByRole("button", { name: "Use ada-spex 1 member" }));
+    await waitFor(() => expect(settle).toBeDefined());
+    expect(controls()).toEqual([true, true, true]);
+    deliver(withCandidates("61,63,64", [ada, notes, { hostId: "64", name: "team-spex", members: null, visibility: null }]));
+    await waitFor(() => expect(rowControls(OWN)).toEqual(["Use ada-spex 1 member", "Use notes-spex 3 members", "Use team-spex", "Not now"]));
+    expect(controls()).toEqual([true, true, true, true]);
+    act(() => settle!(new Error("The host refused the join")));
+    await waitFor(() => expect(controls()).toEqual([false, false, false, false]));
   });
 });
 
@@ -702,7 +946,7 @@ describe("GROUPS: Join (space-63)", () => {
 
   test("a group's own spex repository asks for the folder its sessions run in", async () => {
     await renderGroups(
-      { ...base(), groups: [...base().groups, teamGroup([repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, state: "absent", branch: null })])] },
+      { ...base(), groups: [...base().groups, teamGroup([repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", records: "group", code: null, folder: null, state: "absent", branch: null })])] },
       { open: false },
     );
     fireEvent.click(screen.getByTestId("space-row-join-acme/team/team-spex"));
@@ -795,6 +1039,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     base({}, [repo({ state: "unreachable", reason: "the device is offline", folder: null })]),
     base({}, [repo({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true }, branch: { ...BRANCH, ahead: 1 } })]),
     base({}, [repo({ sync: { phase: "unrelated" }, branch: { ...BRANCH, unrelated: true } })]),
+    standingChoice(),
   ];
 
   test("no visible text says ours, theirs, HEAD, origin/spex, space or namespace, and remote only for the code's", async () => {
@@ -834,7 +1079,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
         // A row, and a picker's option, is a list row whose words are
         // its own (space-28).
         const id = button.dataset.testid ?? "";
-        if (id.startsWith("space-repo-") || id.startsWith("space-pick-repo-") || id.startsWith("space-pick-group-")) continue;
+        if (id.startsWith("space-repo-") || id.startsWith("space-pick-repo-") || id.startsWith("space-pick-group-") || id.startsWith("space-choice-use-")) continue;
         const text = (button.textContent ?? "").trim();
         expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
         // A control whose words yield keeps its accessible name.

@@ -3702,6 +3702,11 @@ msgstr "不在此运行时的列表中。请检查模型 ID。"
 msgid "Not installed"
 msgstr "未安装"
 
+#. set the choice of a group's spex repository aside
+#: src/components/SpaceGroups.tsx
+msgid "Not now"
+msgstr "暂不"
+
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -6151,6 +6156,11 @@ msgstr "上传中 {progress}%"
 msgid "Uploading…"
 msgstr "上传中…"
 
+#. the standing choice: join your records with this spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Use"
+msgstr "使用"
+
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
 msgid "Use a SKILL.md…"
@@ -6278,6 +6288,14 @@ msgstr "你的工作文件夹在本机的位置，记在主目录文件中"
 #: src/components/SpaceSync.tsx
 msgid "Which folder on this device is {name}?"
 msgstr "本设备上哪个文件夹是 {name}？"
+
+#: src/components/SpaceGroups.tsx
+msgid "Which holds {group}'s records?"
+msgstr "哪个仓库存放 {group} 的记录？"
+
+#: src/components/SpaceGroups.tsx
+msgid "Which holds your own records?"
+msgstr "哪个仓库存放你自己的记录？"
 
 #: src/lib/space.ts
 msgid "which process is writing right now"

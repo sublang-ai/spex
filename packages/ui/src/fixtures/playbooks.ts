@@ -98,6 +98,8 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
     conflicts: [],
     lastSync: null,
     noticed: true,
+    records: "project",
+    choice: null,
     sync: { phase: "idle" },
     ...over,
   };
@@ -127,7 +129,7 @@ export function home(
         url: null,
         own: true,
         repositories: [
-          repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) }),
+          repository({ key: OWN_KEY, name: "me-spex", own: true, records: "group", folder: null, sync: sync(OWN_KEY) }),
           repository({ sync: sync(PROJECT_ID) }),
         ],
       },
