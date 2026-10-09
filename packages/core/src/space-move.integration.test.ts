@@ -207,6 +207,11 @@ test("space-37: a namespace the host renames moves your own group's spex reposit
   const folder = gitFolder("mine");
   const { key: local } = await addFolder(home, folder);
   assert.equal(local, "ada/mine-spex");
+  // An authoring session of the carried project: the same instance
+  // after the move, at its new address (core-service-96).
+  const moved = await home.client.expectOk("draft.create", { projectId: local, draftId: "moved" });
+  await home.client.expectOk("subscribe", { channel: { kind: "draft", draftId: "moved", instance: moved.instance } });
+  const beforeMove = home.client.mark();
   respellPerson(host, "ada2");
   const synced = await syncEnd(home, "ada/ada-spex", "ada2/ada-spex");
   assert.equal(synced.key, "ada2/ada-spex");
@@ -220,6 +225,17 @@ test("space-37: a namespace the host renames moves your own group's spex reposit
   assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[folder, "ada2/mine-spex"]]);
   assert.ok(!existsSync(join(home.dataDir, "workspace", "ada")), "the former folder left with its clones");
   assert.equal((await home.client.expectOk("config.get", {})).status, "valid");
+  // The session moved with its clone: announced under its new project
+  // with the instance it had, never as a departure; a command naming
+  // that instance at the new address is admitted, and its records still
+  // reach the channel subscribed before the move (core-service-96).
+  const announced = await home.client.waitFor((m) => m.type === "draft.state" && m.draft.id === "moved" && m.draft.projectId === "ada2/mine-spex");
+  assert.ok(announced.type === "draft.state" && announced.draft.instance === moved.instance, "the moved session keeps its instance");
+  assert.ok(!home.client.messages.slice(beforeMove).some((m) => m.type === "draft.removed" && m.draftId === "moved"), "a move is no departure");
+  const reopened = await home.client.expectOk("draft.open", { projectId: "ada2/mine-spex", draftId: "moved" });
+  assert.equal(reopened.draft.instance, moved.instance);
+  await home.client.expectOk("draft.player.set", { projectId: "ada2/mine-spex", draftId: "moved", instance: moved.instance, playerId: null });
+  await home.client.waitFor((m) => m.type === "draft.record" && m.draftId === "moved" && m.instance === moved.instance);
   assert.deepEqual(failures(errors), []);
   await assertProjectsNameClones(home);
 });

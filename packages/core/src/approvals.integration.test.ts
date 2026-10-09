@@ -160,9 +160,10 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
   const f = await fixture();
   try {
     await f.first.command("turn.submit", {sessionId: f.session.id, text: "session"});
+    const instances: Record<string, string> = {};
     for (const draftId of ["one", "two"]) {
-      await f.first.command("draft.create", {projectId: f.projectId, draftId});
-      await f.first.command("draft.send", {projectId: f.projectId, draftId, text: "approval-fixture"});
+      instances[draftId] = (await f.first.command("draft.create", {projectId: f.projectId, draftId})).instance;
+      await f.first.command("draft.send", {projectId: f.projectId, draftId, instance: instances[draftId], text: "approval-fixture"});
     }
     const state = await f.first.pending(3);
     assert.equal(new Set(state.pending.map((request) => request.id)).size, 3);
@@ -171,7 +172,7 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
     const one = state.pending.find((request) => request.owner.kind === "draft" && request.owner.id === "one")!;
     await f.first.answer(state, one, "deny");
     assert.equal((await f.first.pending(2)).pending.some((request) => request.id === one.id), false);
-    await f.first.command("draft.abort", {projectId: f.projectId, draftId: "two"});
+    await f.first.command("draft.abort", {projectId: f.projectId, draftId: "two", instance: instances.two});
     assert.equal((await f.first.pending()).pending[0].owner.kind, "session");
     const restarted = await f.restart();
     assert.deepEqual((await restarted.pending(0)).pending, []);

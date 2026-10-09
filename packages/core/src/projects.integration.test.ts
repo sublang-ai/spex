@@ -286,17 +286,17 @@ test("projects-21: removal waits for an authoring session's turn, compile and en
     await environmentIdle();
 
     // An authoring turn held by the fake.
-    await client.ok("draft.create", { projectId, draftId: "held" });
-    await client.ok("draft.send", { projectId, draftId: "held", text: "hold the turn" });
+    const held = await client.ok("draft.create", { projectId, draftId: "held" });
+    await client.ok("draft.send", { projectId, draftId: "held", instance: held.instance, text: "hold the turn" });
     await settled("held", (draft) => draft.activity === "turn");
     await refusedNaming("held");
-    await client.ok("draft.abort", { projectId, draftId: "held" });
+    await client.ok("draft.abort", { projectId, draftId: "held", instance: held.instance });
     await settled("held", (draft) => draft.activity === "idle");
 
     // A compile held by the stub slc in its first phase.
-    await client.ok("draft.create", { projectId, draftId: "slow" });
-    await client.ok("draft.source.write", { projectId, draftId: "slow", content: AUTHORING_SOURCE.replaceAll("<id>", "slow") });
-    const compiling = client.command("draft.compile", { projectId, draftId: "slow" });
+    const slow = await client.ok("draft.create", { projectId, draftId: "slow" });
+    await client.ok("draft.source.write", { projectId, draftId: "slow", instance: slow.instance, content: AUTHORING_SOURCE.replaceAll("<id>", "slow") });
+    const compiling = client.command("draft.compile", { projectId, draftId: "slow", instance: slow.instance });
     await client.until((m) => m.type === "compile.progress" && m.playbookId === "slow" && m.line.startsWith("→ normalize"), 60_000);
     await refusedNaming("slow");
     await client.ok("compile.abort", { playbookId: "slow" });
@@ -306,11 +306,11 @@ test("projects-21: removal waits for an authoring session's turn, compile and en
 
     // An enabling held at its re-package, where it loads the entry the
     // compiler emitted (playbook-library-100).
-    await client.ok("draft.create", { projectId, draftId: "triage" });
-    await client.ok("draft.source.write", { projectId, draftId: "triage", content: AUTHORING_SOURCE.replaceAll("<id>", "triage") });
+    const triage = await client.ok("draft.create", { projectId, draftId: "triage" });
+    await client.ok("draft.source.write", { projectId, draftId: "triage", instance: triage.instance, content: AUTHORING_SOURCE.replaceAll("<id>", "triage") });
     const artifactDir = join(folder, "spex-packages", "triage", "playbooks", "en", "triage");
     writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
-    await client.ok("draft.compile", { projectId, draftId: "triage" });
+    await client.ok("draft.compile", { projectId, draftId: "triage", instance: triage.instance });
     await settled("triage", (draft) => draft.activity === "idle" && draft.proposal !== undefined);
     const reached = join(scratch, "repackage-reached");
     const release = join(scratch, "repackage-release");
@@ -324,6 +324,7 @@ test("projects-21: removal waits for an authoring session's turn, compile and en
     const registering = client.command("draft.register", {
       projectId,
       draftId: "triage",
+      instance: triage.instance,
       command: "triage",
       intent: "Label new issues",
       bindings: { Triager: "dev.triager", Verifier: "dev.coder" },

@@ -303,7 +303,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage" });
   assert.equal(created.package, `${OWN}/triage`, "the account's login is the org (playbook-library-70)");
   const folder = join(working, "spex-packages", "triage");
-  await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", text: "I want a playbook that triages new issues." });
+  await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance: created.instance, text: "I want a playbook that triages new issues." });
   const latest = () => core.client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
   await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
   assert.equal(latest()?.state, "compiled");
@@ -313,7 +313,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 
   // Enabling requests it by path, installs and writes the project's entry.
   await core.client.expectOk("draft.register", {
-    projectId: project.id, draftId: "triage", command: "triage", intent: "Label new issues",
+    projectId: project.id, draftId: "triage", instance: created.instance, command: "triage", intent: "Label new issues",
     bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
   });
   assert.equal((parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${OWN}/triage`] !== undefined, true);

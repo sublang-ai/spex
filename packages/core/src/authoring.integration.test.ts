@@ -22,6 +22,7 @@ import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { repositoryOf } from "./testing/space-harness.js";
+import { DraftAddresses, type DraftFields } from "./testing/draft-address.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import type {
   Command,
@@ -64,12 +65,17 @@ playbooks:
 class Client {
   private readonly socket: WebSocket;
   readonly messages: ServerMessage[] = [];
+  /** The instance held under each id, as the interface holds it: a
+   * command sent without one names it (core-service-96). */
+  readonly addresses = new DraftAddresses();
   private nextId = 0;
 
   constructor(port: number) {
     this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
     this.socket.on("message", (data) => {
-      this.messages.push(JSON.parse(String(data)) as ServerMessage);
+      const message = JSON.parse(String(data)) as ServerMessage;
+      this.messages.push(message);
+      this.addresses.observe(message);
     });
   }
 
@@ -95,15 +101,16 @@ class Client {
 
   async command<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: DraftFields<T>,
   ): Promise<
     | { ok: true; result: CommandResults[T] }
     | { ok: false; error: { code: string; message: string } }
   > {
     const id = `c${(this.nextId += 1)}`;
-    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    this.socket.send(JSON.stringify({ type, id, ...this.addresses.address(type, fields as Record<string, unknown>) }));
     const reply = await this.waitFor((m) => m.type === "reply" && m.id === id, 120_000);
     if (reply.type !== "reply") throw new Error("unreachable");
+    if (reply.ok) this.addresses.learn(type, reply.result);
     return reply.ok
       ? { ok: true, result: reply.result as CommandResults[T] }
       : { ok: false, error: reply.error };
@@ -111,7 +118,7 @@ class Client {
 
   async expectOk<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: DraftFields<T>,
   ): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
@@ -120,7 +127,7 @@ class Client {
 
   async expectError<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: DraftFields<T>,
     code: string,
   ): Promise<{ code: string; message: string }> {
     const reply = await this.command(type, fields);
@@ -694,8 +701,11 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const second = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client2 = new Client(second.service.port());
   await client2.open();
-  await client2.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
+  // The open is the bootstrap that hands a client the instance its
+  // channel names (core-service-96); the records it replays are
+  // what the open serves.
   const opened = await client2.expectOk("draft.open", { projectId, draftId: "persist" });
+  await client2.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
   assert.equal(opened.draft.state, "interrupted");
   assert.equal(opened.draft.compile?.outcome, "interrupted");
   assert.equal(opened.draft.activity, "idle");
@@ -892,37 +902,49 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
 
   // not_found for an unknown draft, on every command — the channel
   // subscription included.
-  await a.expectError("subscribe", { channel: { kind: "draft", draftId: "ghost" } }, "not_found");
+  const ghost = { projectId, draftId: "ghost", instance: "never-minted" };
+  await a.expectError("subscribe", { channel: { kind: "draft", draftId: "ghost", instance: ghost.instance } }, "not_found");
   await a.expectError("draft.open", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.send", { projectId, draftId: "ghost", text: "x" }, "not_found");
-  await a.expectError("draft.abort", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.source.write", { projectId, draftId: "ghost", content: "x" }, "not_found");
-  await a.expectError("draft.compile", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.register", { projectId, draftId: "ghost", command: "g", intent: "g", bindings: {} }, "not_found");
-  await a.expectError("draft.player.set", { projectId, draftId: "ghost", playerId: null }, "not_found");
-  await a.expectError("draft.delete", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.artifacts", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.send", { ...ghost, text: "x" }, "not_found");
+  await a.expectError("draft.abort", ghost, "not_found");
+  await a.expectError("draft.source.write", { ...ghost, content: "x" }, "not_found");
+  await a.expectError("draft.compile", ghost, "not_found");
+  await a.expectError("draft.register", { ...ghost, command: "g", intent: "g", bindings: {} }, "not_found");
+  await a.expectError("draft.player.set", { ...ghost, playerId: null }, "not_found");
+  await a.expectError("draft.delete", ghost, "not_found");
+  await a.expectError("draft.artifacts", ghost, "not_found");
   // invalid_request for a reserved id, and for a project with no
   // working folder on this device.
   await a.expectError("draft.create", { projectId, draftId: "review" }, "invalid_request");
   await a.expectError("draft.create", { projectId, draftId: "dev" }, "invalid_request");
   await a.expectError("draft.create", { projectId: "tester/elsewhere-spex", draftId: "iso" }, "invalid_request");
 
-  await a.expectOk("draft.create", { projectId, draftId: "iso" });
+  const iso = await a.expectOk("draft.create", { projectId, draftId: "iso" });
   // The session's files land in the project's clone (storage-23); its
   // id is the home's, so another project neither takes it nor reaches it.
   assert.ok(existsSync(authoringFiles(clone, "iso").record), "the record is in the project's clone");
   await a.expectError("draft.create", { projectId: other, draftId: "iso" }, "invalid_request");
   await a.expectError("draft.open", { projectId: other, draftId: "iso" }, "not_found");
-  await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "iso" } });
-  await b.waitFor((m) => m.type === "draft.state" && m.draft.id === "iso");
+  // A command or a subscription naming an instance the session does not
+  // hold is refused at admission, naming the id as another session's
+  // (core-service-96); the bootstrap's instance is admitted.
+  assert.equal(typeof iso.instance, "string");
+  const stale = { projectId, draftId: "iso", instance: `${iso.instance}-stale` };
+  for (const command of ["draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.player.set", "draft.delete", "draft.artifacts"] as const) {
+    const refused = await a.expectError(command, { ...stale, text: "x", content: "x", playerId: null } as never, "not_found");
+    assert.equal(refused.message, "iso now names another authoring session", command);
+  }
+  await a.expectError("draft.register", { ...stale, command: "iso", intent: "x", bindings: {} }, "not_found");
+  await a.expectError("subscribe", { channel: { kind: "draft", draftId: "iso", instance: stale.instance } }, "not_found");
+  await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "iso", instance: iso.instance } });
+  await b.waitFor((m) => m.type === "draft.state" && m.draft.id === "iso" && m.draft.instance === iso.instance);
 
   // A malformed draft command is rejected with no state change.
   const statesBefore = a.states("iso").length;
   a.sendRaw(JSON.stringify({ type: "draft.send", id: "bad-1", projectId, draftId: "Not Valid", text: "x" }));
   const rejected = await a.waitFor((m) => m.type === "reply" && m.id === "bad-1");
   assert.ok(rejected.type === "reply" && !rejected.ok && rejected.error.code === "invalid_message");
-  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", projectId, draftId: "iso" }));
+  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", projectId, draftId: "iso", instance: iso.instance }));
   const noSource = await a.waitFor((m) => m.type === "reply" && m.id === "bad-2");
   assert.ok(noSource.type === "reply" && !noSource.ok && noSource.error.code === "invalid_request");
   await sleep(50);
@@ -1104,6 +1126,47 @@ test("core-service-97: every departure reaches each client as draft.removed nami
 });
 
 
+test("core-service-97: a session created again under its id in the same project is another instance; the former's commands and channel are refused, and its records reach no one", async () => {
+  const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcSource() });
+  const { projectId } = harness;
+  const a = new Client(harness.service.port());
+  const b = new Client(harness.service.port());
+  try {
+    await a.open();
+    await b.open();
+    const first = await a.expectOk("draft.create", { projectId, draftId: "again" });
+    await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "again", instance: first.instance } });
+    await a.expectOk("draft.delete", { projectId, draftId: "again", instance: first.instance });
+    const removed = await b.waitFor((m) => m.type === "draft.removed" && m.draftId === "again");
+    assert.ok(removed.type === "draft.removed" && removed.instance === first.instance, "the departure names the instance that left");
+    const second = await a.expectOk("draft.create", { projectId, draftId: "again" });
+    assert.equal(second.projectId, projectId);
+    assert.notEqual(second.instance, first.instance, "a session created again is another instance");
+    assert.equal(b.latest("again")?.instance, second.instance, "every client reads the new instance in the state");
+    // A delayed command of the former instance is refused at admission,
+    // and so is a subscription to its channel (core-service-96).
+    const refused = await a.expectError("draft.send", { projectId, draftId: "again", instance: first.instance, text: "late" }, "not_found");
+    assert.equal(refused.message, "again now names another authoring session");
+    await a.expectError("draft.player.set", { projectId, draftId: "again", instance: first.instance, playerId: null }, "not_found");
+    await a.expectError("subscribe", { channel: { kind: "draft", draftId: "again", instance: first.instance } }, "not_found");
+    // The new instance's command is admitted; its record carries its
+    // instance and reaches the new channel's subscriber, never the
+    // former channel's.
+    await b.expectOk("subscribe", { channel: { kind: "draft", draftId: "again", instance: second.instance } });
+    await a.expectOk("draft.player.set", { projectId, draftId: "again", instance: second.instance, playerId: null });
+    await b.waitFor((m) => m.type === "draft.record" && m.draftId === "again");
+    assert.ok(b.records("again").every((m) => m.instance === second.instance));
+    assert.equal(a.records("again").length, 0, "the former instance's channel receives nothing of the new session");
+    const opened = await a.expectOk("draft.open", { projectId, draftId: "again" });
+    assert.equal(opened.draft.instance, second.instance, "the bootstrap hands out the current instance");
+    assert.deepEqual(opened.records.map((entry) => entry.seq), [1], "the new session's transcript starts at its first record");
+  } finally {
+    a.close();
+    b.close();
+    await harness.service.stop();
+  }
+});
+
 test("draft media preserves file-only input, native bytes, owned output and text-only later turns", {timeout: 30_000}, async () => {
   const image = Buffer.from("real owned fixture image bytes");
   const output = Buffer.from("native screenshot bytes");
@@ -1236,6 +1299,11 @@ test("storage-25: two spex repositories holding one authoring session id are rep
     rmSync(kept.record);
     await client.expectOk("project.register", { path: workingFolder(join(dir, "theta")) });
     await client.expectError("draft.open", { projectId, draftId: "triage" }, "not_found");
+    // The session now holding the id is another instance: its channel is
+    // its own, so the client subscribes to it as the interface does on an
+    // open (core-service-96).
+    await client.waitFor((message) => message.type === "draft.state" && message.draft.id === "triage" && message.draft.projectId === first);
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
     await client.expectOk("draft.send", { projectId: first, draftId: "triage", text: "hello again" });
     await until(() => finished() === 2 && client.latest("triage")?.activity === "idle", 10_000, "the second turn");
     const lines = readFileSync(arrived.records, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { seq: number });
@@ -1488,8 +1556,11 @@ test("playbook-library-97: a compile running for a session its id no longer name
 // playbook-library-100: an enabling re-package of a session its id no longer names
 // ---------------------------------------------------------------------------
 
-test("playbook-library-100: an enabling re-package for a session its id no longer names is refused, and nothing of it is committed", async () => {
-  const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+test("playbook-library-100: an enabling re-package for a session its id no longer names is refused, nothing of it is committed, and its late cleanup leaves the newcomer's own compile standing", async () => {
+  // The stub holds every compile in its first phase until released
+  // beside the source: the kept session's is released up front, the
+  // newcomer's never, so a cancel ends it.
+  const harness = await startHarness({ script: authoringScript(), slc: stubSlcScriptedSource(["ok"], "['Triager', 'Verifier']", { hold: true }) });
   const { projectId, clone, dir, dataDir, configPath } = harness;
   const kept = authoringFiles(clone, "triage");
   const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
@@ -1497,6 +1568,7 @@ test("playbook-library-100: an enabling re-package for a session its id no longe
   try {
     await client.open();
     await client.expectOk("draft.create", { projectId, draftId: "triage" });
+    writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
     await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
     // Another project holds a session of the id, shadowed while this one stands.
     const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
@@ -1540,10 +1612,20 @@ test("playbook-library-100: an enabling re-package for a session its id no longe
     });
     await until(() => existsSync(reached), 60_000, "the held re-package");
 
-    // The kept session's file goes, and a rescan gives the id to the other project's session.
+    // The kept session's file goes, and a rescan gives the id to the
+    // other project's session: the enabling is canceled and the id
+    // freed, so the newcomer starts its own compile, held by the stub.
     rmSync(kept.record);
     await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
     const keptTranscript = readFileSync(kept.records, "utf8");
+    await until(() => client.latest("triage")?.projectId === other, 10_000, "the newcomer's state");
+    assert.equal(client.latest("triage")?.activity, "idle", "the id is free once the enabling is canceled");
+    await client.expectOk("draft.source.write", { projectId: other, draftId: "triage", content: SOURCE });
+    const theirs = client.command("draft.compile", { projectId: other, draftId: "triage" });
+    const theirArtifacts = join(dir, "zeta", "spex-packages", "triage", "playbooks", "en", "triage");
+    await until(() => existsSync(join(theirArtifacts, ".stub-slc-runs")), 60_000, "the newcomer's compile to reach the stub");
+    assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling");
+    assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "first while compiling" }), { accepted: true, queued: true });
     writeFileSync(release, "");
 
     // Refused: nothing of the enabling is committed.
@@ -1556,13 +1638,33 @@ test("playbook-library-100: an enabling re-package for a session its id no longe
     assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
     assert.equal(contents(join(clone, "spex.yaml")), requestsBefore, "no spec package is requested");
     assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
-    // The session the id now names is untouched.
-    assert.equal(readFileSync(promoted.record, "utf8"), promotedRecord);
-    assert.equal(readFileSync(promoted.records, "utf8"), promotedRecords);
-    const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
-    assert.equal(opened.draft.enabled, false);
-    assert.equal(opened.draft.activity, "idle");
-    assert.deepEqual(opened.records.map((record) => record.seq), [1]);
+    // The retired enabling's cleanup cleared only its own hold on the
+    // id: the newcomer still reads compiling, a message sent to it
+    // queues, and only its own cancel ends its compile.
+    await sleep(300);
+    assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling", "the newcomer's compile stands after the release");
+    assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "second while compiling" }), { accepted: true, queued: true });
+    await client.expectOk("compile.abort", { playbookId: "triage" });
+    const canceled = await theirs;
+    assert.ok(!canceled.ok && canceled.error.code === "aborted", "the newcomer's compile ended by its own cancel");
+    // Its queued messages then run as its turns, in order.
+    const turnsOnDisk = (): string[] => readFileSync(promoted.records, "utf8").split("\n").filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { record: { type: string; turn?: { prompt: string } } })
+      .filter((line) => line.record.type === "turn_started").map((line) => line.record.turn!.prompt);
+    await until(() => turnsOnDisk().length === 2, 30_000, "both queued messages to run");
+    assert.deepEqual(turnsOnDisk(), ["first while compiling", "second while compiling"]);
+    const start = Date.now();
+    for (;;) {
+      const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+      if (opened.draft.activity === "idle" && opened.draft.queued.length === 0 && opened.records.filter((entry) => entry.record.type === "turn_finished").length === 2) {
+        assert.equal(opened.draft.enabled, false);
+        assert.equal(opened.draft.compile?.outcome, "canceled");
+        break;
+      }
+      if (Date.now() - start > 30_000) throw new Error("timeout waiting for the newcomer to end idle");
+      await sleep(25);
+    }
+    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named still records nothing");
   } finally {
     client.close();
     await harness.service.stop();

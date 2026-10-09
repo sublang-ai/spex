@@ -255,19 +255,19 @@ While an authoring session's last compile succeeded and the home is signed in, t
 
 #### playbook-library-98
 
-When the core names another project's authoring session, or none, under an id the app holds a session's state for — in that session's state, a listing that names another or leaves the id out, or an announced removal [[core-service-96](core-service.md#core-service-96)], the id freed by a deletion or reassigned by a rescan [[storage-12](storage.md#storage-12)] — the Playbooks surface shall hold under that id only the state of the session it now names:
+When the core announces the departure of the authoring session instance the app holds under an id [[core-service-96](core-service.md#core-service-96)] — the id freed by a deletion or reassigned by a rescan [[storage-12](storage.md#storage-12)] — or a listing leaves the id out or names another instance under it, the Playbooks surface shall hold under that id only the state of the instance the core now names, adopting an instance from the bootstrap alone — a creation, a listing, the open of a workspace, and the state announced for an id it holds nothing under:
 
-- the former session's transcript, source, compiled tabs, composer text, Source edits and Enable form go, and its open workspace returns to the list;
+- the former instance's transcript, source, compiled tabs, composer text, Source edits and Enable form go, and its open workspace returns to the list;
 - opening the id restores the session now holding it from its first record [[playbook-library-62](#playbook-library-62)];
-- a reply to a command addressed to the former session, arriving after, changes nothing, and no act the workspace started for it — Save, Reload, Paste, Send, a picked file, an enabling — writes anything under the id once it names another session or none;
-- the reply to the deletion that freed the id leaves the state of the session named in its place standing.
+- every command the surface sends names the instance it holds, and a record, a source, a replacement, a reply, a refusal or a picked file of an instance the surface no longer holds under the id changes nothing — Save, Reload, Paste, Send, a compile, an enabling, a file pick among the acts — so a session deleted and created again under its id in the same project inherits nothing of the former;
+- a state naming the held instance under another project is the same session moved: the project the surface addresses updates and everything else stays.
 
 #### playbook-library-101
 
-When the transcript of an authoring session the app holds may have changed out of its sight — the core replacing it [[core-service-96](core-service.md#core-service-96)] or the app reconnecting to the core — the Playbooks surface shall hold that transcript as the core now serves it, keeping the session's composer text, Source edits and Enable form:
+When the transcript of an authoring session the app holds may have changed out of its sight — the core replacing it under the instance the app holds [[core-service-96](core-service.md#core-service-96)] or the app reconnecting to the core — the Playbooks surface shall hold that transcript as the core now serves it, keeping the session's composer text, Source edits and Enable form:
 
-- a replaced transcript is drawn from the records the replacement carries, and the records that follow fold after them;
-- on a reconnect, each held transcript is reloaded from its first record [[playbook-library-62](#playbook-library-62)].
+- a replaced transcript is drawn from the records the replacement carries, and the records that follow fold after them; a replacement ends no instance;
+- on a reconnect, the listing's instances are adopted, a session it names under the project the app holds it in being the held session continued, and each held transcript is reloaded from its first record [[playbook-library-62](#playbook-library-62)].
 
 ### Pipeline Artifacts
 
@@ -554,7 +554,8 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 - an unreadable record or transcript is a scoped diagnostic that blocks that session alone;
 - the transcript of a session whose spex repository a sync applied [[space-20](space.md#space-20)] is read back before anything appends, so the next record continues the sequence on disk, a transcript the sync changed is sent whole to the session's subscribers as replaced [[core-service-96](core-service.md#core-service-96)], and the state of every session the sync leaves in the spex repository is published [[core-service-96](core-service.md#core-service-96)];
-- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], a turn running for the session it named is aborted and a compile or an enabling re-package canceled, its departure is announced [[core-service-96](core-service.md#core-service-96)], and nothing they later record or settle reaches the session the id now names.
+- a session's instance [[core-service-96](core-service.md#core-service-96)] is minted when it is created and when a rescan gives its id another session [[storage-12](storage.md#storage-12)], and stands across a transcript a sync replaced and a clone that moved, which is the same session at a new address;
+- where a rescan leaves an id naming another project's session or none [[storage-12](storage.md#storage-12)], the session it named departs: a turn running for it is aborted, a compile or an enabling re-package of it canceled and the id freed, its departure announced [[core-service-96](core-service.md#core-service-96)], and nothing it later records or settles reaches the session the id now names, whose queue dispatches as after any act of its id [[playbook-library-102](#playbook-library-102)]; a compile or an enabling that ends clears only its own hold on the id, never one the session now named took.
 
 #### playbook-library-71
 
@@ -712,20 +713,23 @@ Where another project's spex repository holds a session of the same id and the s
 
 #### playbook-library-100
 
-Where another project's spex repository holds a session of the same id and the entry the compiler emitted holds its import until released, when an enabling of the compiled session is requested, the kept session's file is removed and a rescan follows while the re-package runs, and the entry is then released, the test suite shall assert that the enabling is refused `invalid_request` naming the id as another session's, both configs and the spex repository's requests are unchanged, the removed session's transcript gained no record, and the session the id now names kept its file and transcript unchanged and reads not enabled [[playbook-library-70](#playbook-library-70)].
+Where another project's spex repository holds a session of the same id and the entry the compiler emitted holds its import until released, when an enabling of the compiled session is requested, the kept session's file is removed and a rescan follows while the re-package runs, the session the id now names is given a source and starts its own compile, held by the stub `slc`, and the entry is then released, the test suite shall assert that the enabling is refused `invalid_request` naming the id as another session's, both configs and the spex repository's requests are unchanged, the removed session's transcript gained no record, and the session the id now names reads not enabled and still reads compiling after the release — a message sent to it queuing — until its own compile is canceled, its queued messages then running as its turns [[playbook-library-70](#playbook-library-70)] [[playbook-library-102](#playbook-library-102)].
 
 #### playbook-library-99
 
-Where a substitute client feeds the Playbooks surface holding an authoring session, when the client changes the session that session's id names, or the transcript it serves, the test suite shall assert, as an explicit case matrix, what the surface holds under the id:
+Where a substitute client feeds the Playbooks surface holding an authoring session instance, when the client ends that instance, moves it, or replaces the transcript it serves, the test suite shall assert, as an explicit case matrix, what the surface holds under the id:
 
-- named by a state message, and by a listing, while the workspace stands open with a transcript, a source, compiled tabs, composer text, Source edits and an Enable form: every one of those is gone and the workspace returned to the list, and opening the id after a live record of the new session asks for its records from the first [[playbook-library-98](#playbook-library-98)];
-- left out of a listing, then another project's session named under it: every one of those is gone with the listing, and opening the id asks the named project for its records from the first [[playbook-library-98](#playbook-library-98)];
-- named before the reply to the held session's deletion: the named session's state stands, and opening the id asks its project for its records from the first [[playbook-library-98](#playbook-library-98)];
-- named while a source refresh, a source write, a player choice, an artifacts read, or an enabling addressed to the held session awaits its reply: the act is told it retired and writes nothing over the named session's state [[playbook-library-98](#playbook-library-98)];
-- named while a Save, a Reload after a conflict, a Paste's "Use as source", a Send, a refused Send, or a refused compile or abort started in the workspace awaits its reply, the named session's own Source edit, Source mode, composer text and error set meanwhile: none of them changes [[playbook-library-98](#playbook-library-98)];
-- named while "Use a SKILL.md…" or "Pick file" awaits its pick: the picked file is neither written nor placed [[playbook-library-98](#playbook-library-98)];
-- the held transcript of records 1 to 9, with composer text and a Source edit, replaced by records 1 and 2: the thread shows exactly those two, the composer text, Source edit and Enable form stay, and a live record 3 folds after them [[playbook-library-101](#playbook-library-101)];
-- a reconnect: the held session is reopened from its first record and its thread drawn from the reply's records, the composer text, Source edit and Enable form staying [[playbook-library-101](#playbook-library-101)].
+- the held instance's removal followed by another project's instance named in its state, and a listing naming another instance, while the workspace stands open with a transcript, a source, compiled tabs, composer text, Source edits and an Enable form: every one of those is gone and the workspace returned to the list, a live record of the new instance folds into no view, and opening the id asks the named project for its records from the first with every later command naming the new instance [[playbook-library-98](#playbook-library-98)];
+- the held instance deleted and created again under its id in the same project, announced as its removal then the new instance's state: every one of those is gone, a record, a source and a replacement naming the former instance change nothing, and a reply or a refusal to a command sent with the former instance — a source write, a player choice, a compile — writes nothing over the new instance's state [[playbook-library-98](#playbook-library-98)];
+- left out of a listing, then another project's instance named under it: every one of those is gone with the listing, and opening the id asks the named project for its records from the first [[playbook-library-98](#playbook-library-98)];
+- a state naming another instance under the id while the held one was never announced gone: it is dropped, the held state standing [[playbook-library-98](#playbook-library-98)];
+- the deletion's own reply after the removal and the state of the session named in the id's place: the named session's state stands, only the deleted instance's channel is left [[playbook-library-98](#playbook-library-98)];
+- the held instance gone while a source refresh, a source write, a player choice, an artifacts read, or an enabling addressed to it awaits its reply: the act is told it retired and writes nothing over the named instance's state [[playbook-library-98](#playbook-library-98)];
+- gone while a Save, a Reload after a conflict, a Paste's "Use as source", a Send, a refused Send, or a refused compile or abort started in the workspace awaits its reply, the named instance's own Source edit, Source mode, composer text and error set meanwhile: none of them changes [[playbook-library-98](#playbook-library-98)];
+- gone while "Use a SKILL.md…" or "Pick file" awaits its pick: the picked file is neither written nor placed [[playbook-library-98](#playbook-library-98)];
+- a state naming the held instance under another project, the workspace open with its transcript, composer text, Source edit and Enable form: all of them stay, the workspace stays open, and the next command names the new project [[playbook-library-98](#playbook-library-98)];
+- the held transcript of records 1 to 9, with composer text and a Source edit, replaced by records 1 and 2 under the held instance: the thread shows exactly those two, the composer text, Source edit and Enable form stay, and a live record 3 folds after them [[playbook-library-101](#playbook-library-101)];
+- a reconnect, the listing naming the session under its project with another instance: the held session is reopened from its first record and its thread drawn from the reply's records, the composer text, Source edit and Enable form staying, and later commands name the new instance [[playbook-library-101](#playbook-library-101)].
 
 #### playbook-library-103
 
@@ -733,7 +737,7 @@ Where the fake replies at once, the entry the compiler emitted holds an enabling
 
 - an enabling that succeeds, one refused `invalid_config` by a binding naming an absent player, and one ended by `compile.abort`, each starting the message at its release with no further command;
 - a `compile.run` of the session's id, starting the message at its release with no further command;
-- an enabling whose id a rescan gives another project's session: the session the id names read compiling, its own message runs as its next turn, started at the release with no further command [[playbook-library-102](#playbook-library-102)], and the session the id no longer names gains no record [[playbook-library-70](#playbook-library-70)];
+- an enabling whose id a rescan gives another project's session: the enabling is canceled and the id freed at the rescan, the session the id names reading idle, a message sent to it then running at once as its turn [[playbook-library-102](#playbook-library-102)], the enabling refused at its release, and the session the id no longer names gaining no record [[playbook-library-70](#playbook-library-70)];
 - a compile cut by a core stop with a message queued: after the restart the compile reads interrupted [[playbook-library-70](#playbook-library-70)] and the message is still queued with nothing started; a send then replies accepted, queued, and the turns on disk run the queued message first, then the new one [[playbook-library-102](#playbook-library-102)].
 
 ### Browser Journeys

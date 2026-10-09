@@ -214,9 +214,9 @@ test("space-37: a turn in flight, an out-of-band lease, an authoring turn and a 
     await proceeds(other.key, "a lease in one clone holds no other");
   } finally { await lease.release(); }
   // An authoring session's turn in flight, admitted once it ends.
-  await home.client.expectOk("draft.create", { projectId: key, draftId: "drafting" });
+  const drafting = await home.client.expectOk("draft.create", { projectId: key, draftId: "drafting" });
   const turning = home.client.mark();
-  await home.client.expectOk("draft.send", { projectId: key, draftId: "drafting", text: "slow: keep drafting" });
+  await home.client.expectOk("draft.send", { projectId: key, draftId: "drafting", instance: drafting.instance, text: "slow: keep drafting" });
   await home.client.waitFor((m) => m.type === "draft.state" && m.draft.id === "drafting" && m.draft.activity === "turn");
   await home.client.expectError("space.sync", { repository: key }, "busy", /Wait for drafting/);
   await proceeds(other.key, "an authoring turn holds only its own repository");

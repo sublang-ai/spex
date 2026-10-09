@@ -140,18 +140,18 @@ test("projects-9: removal takes an optional confirmation; rebind names a key and
 });
 // Playbook drafts (DR-058): the draft channel and the draft.* family.
 
-test("parseCommand accepts subscribe with a draft channel", () => {
+test("parseCommand accepts subscribe with a draft channel naming its instance", () => {
   const parsed = parseCommand({
     type: "subscribe",
     id: "d1",
-    channel: { kind: "draft", draftId: "triage" },
+    channel: { kind: "draft", draftId: "triage", instance: "i-1" },
   });
   assert.ok(parsed.ok);
 });
 
-test("parseCommand rejects a draft channel without a draft id", () => {
-  const parsed = parseCommand({ type: "subscribe", id: "d2", channel: { kind: "draft" } });
-  assert.ok(!parsed.ok);
+test("parseCommand rejects a draft channel without a draft id or an instance", () => {
+  assert.ok(!parseCommand({ type: "subscribe", id: "d2", channel: { kind: "draft", instance: "i-1" } }).ok);
+  assert.ok(!parseCommand({ type: "subscribe", id: "d2b", channel: { kind: "draft", draftId: "triage" } }).ok);
 });
 
 test("parseCommand accepts every draft command", () => {
@@ -159,24 +159,24 @@ test("parseCommand accepts every draft command", () => {
     { type: "draft.list", id: "d3" },
     { type: "draft.create", id: "d4", projectId: "alice/a-spex", draftId: "triage" },
     { type: "draft.open", id: "d5", projectId: "alice/a-spex", draftId: "triage", afterSeq: 4 },
-    { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", text: "Compile it." },
-    { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage" },
-    { type: "draft.source.write", id: "d8", projectId: "alice/a-spex", draftId: "triage", content: "# Triage", baseVersion: "v1" },
-    { type: "draft.source.write", id: "d9", projectId: "alice/a-spex", draftId: "triage", sourcePath: "/tmp/triage.md" },
-    { type: "draft.compile", id: "d10", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", instance: "i-1", text: "Compile it." },
+    { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage", instance: "i-1" },
+    { type: "draft.source.write", id: "d8", projectId: "alice/a-spex", draftId: "triage", instance: "i-1", content: "# Triage", baseVersion: "v1" },
+    { type: "draft.source.write", id: "d9", projectId: "alice/a-spex", draftId: "triage", instance: "i-1", sourcePath: "/tmp/triage.md" },
+    { type: "draft.compile", id: "d10", projectId: "alice/a-spex", draftId: "triage", instance: "i-1" },
     {
       type: "draft.register",
       id: "d11",
-      projectId: "alice/a-spex", draftId: "triage",
+      projectId: "alice/a-spex", draftId: "triage", instance: "i-1",
       command: "triage",
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
       newPlayers: { "dev.triager": { adapter: "claude", model: "opus" } },
     },
-    { type: "draft.player.set", id: "d12", projectId: "alice/a-spex", draftId: "triage", playerId: "dev.reviewer" },
-    { type: "draft.player.set", id: "d13", projectId: "alice/a-spex", draftId: "triage", playerId: null },
-    { type: "draft.delete", id: "d14", projectId: "alice/a-spex", draftId: "triage" },
-    { type: "draft.artifacts", id: "d15", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.player.set", id: "d12", projectId: "alice/a-spex", draftId: "triage", instance: "i-1", playerId: "dev.reviewer" },
+    { type: "draft.player.set", id: "d13", projectId: "alice/a-spex", draftId: "triage", instance: "i-1", playerId: null },
+    { type: "draft.delete", id: "d14", projectId: "alice/a-spex", draftId: "triage", instance: "i-1" },
+    { type: "draft.artifacts", id: "d15", projectId: "alice/a-spex", draftId: "triage", instance: "i-1" },
   ];
   for (const command of commands) {
     const parsed = parseCommand(command);
@@ -184,6 +184,31 @@ test("parseCommand accepts every draft command", () => {
     if (parsed.ok) assert.equal(parsed.command.type, command.type);
   }
 });
+
+test("parseCommand rejects a session command without its instance; the bootstrap needs none (core-service-96)", () => {
+  for (const command of commands_without_instance()) {
+    const parsed = parseCommand(command);
+    assert.ok(!parsed.ok, String(command.type));
+    if (!parsed.ok) assert.match(parsed.error, /instance/);
+  }
+  assert.ok(parseCommand({ type: "draft.open", id: "b1", projectId: "alice/a-spex", draftId: "triage" }).ok);
+  assert.ok(parseCommand({ type: "draft.create", id: "b2", projectId: "alice/a-spex", draftId: "triage" }).ok);
+  assert.ok(parseCommand({ type: "draft.list", id: "b3" }).ok);
+});
+
+function commands_without_instance(): Record<string, unknown>[] {
+  const at = { projectId: "alice/a-spex", draftId: "triage" };
+  return [
+    { type: "draft.send", id: "n1", ...at, text: "x" },
+    { type: "draft.abort", id: "n2", ...at },
+    { type: "draft.source.write", id: "n3", ...at, content: "# x" },
+    { type: "draft.compile", id: "n4", ...at },
+    { type: "draft.register", id: "n5", ...at, command: "triage", intent: "x", bindings: {} },
+    { type: "draft.player.set", id: "n6", ...at, playerId: null },
+    { type: "draft.delete", id: "n7", ...at },
+    { type: "draft.artifacts", id: "n8", ...at },
+  ];
+}
 
 test("parseCommand rejects a draft id outside the Agent Skills name rule", () => {
   for (const draftId of ["Triage", "with space", "", "a_b", "-lead", "trail-", "dou--ble", "x".repeat(65)]) {

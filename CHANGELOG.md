@@ -233,6 +233,22 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- An authoring session's lifetime is owned once, by an instance token
+  ([core-service-96](specs/packages/core-service.md#core-service-96)).
+  The core mints the token when a session is created or when a rescan
+  gives its id another project's session, keeps it across a replaced
+  transcript and a moved clone, and names it in every draft message and
+  reply; every command of a session but `draft.create`, `draft.list` and
+  `draft.open` names the token it expects and is refused when the session
+  the id names holds another. A session's departure cancels its turn,
+  compile and enabling and frees the id at once; an operation that ends
+  clears only its own hold on the id, never a successor's. The interface
+  adopts a token only from a creation, a listing, an open or the state
+  that follows a removal, drops every record, source, replacement and late
+  reply of a token it does not hold, keeps an open workspace across a
+  move, and no longer loses a session's composer text and edits when its
+  clone is renamed. The protocol version bumps to 25. The audit behind
+  the change is `docs/authoring-session-lifetime.md`.
 - Every record lives in a spex repository ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Each project's sessions, intents and authoring sessions live in its own
   clone, `workspace/<group>/<name>-spex/`, synced on its `spex` branch; your

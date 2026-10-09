@@ -110,7 +110,7 @@ test("run-view-161: reopened authoring figures retain recorded identity without 
     }} as TmuxPlayRecord,
   }];
   const conversation = () => <DraftConversation
-    draft={{id: "authoring", projectId: "me/demo-spex", createdAt: 1, touchedAt: 2, firstLine: null, activity: "idle", state: "draft", queued: [], player: "current-selection", agent: {adapter: "claude"}, ready: true, failures: 0}}
+    draft={{id: "authoring", projectId: "me/demo-spex", instance: "i-1", createdAt: 1, touchedAt: 2, firstLine: null, activity: "idle", state: "draft", queued: [], player: "current-selection", agent: {adapter: "claude"}, ready: true, failures: 0}}
     draftView={{view: applyRecords(initialSessionView([{id: "author"}]), records), lineSeqs: []}}
     players={[]} readiness={[]} connected={false} composerText=""
     onComposerChange={() => {}} onSend={async () => {}} onAbort={() => {}} onPickAgent={async () => {}}

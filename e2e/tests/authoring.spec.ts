@@ -266,9 +266,11 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   // Overwrite; Reload takes the disk's text.
   await page.getByTestId("source-edit").click();
   await editor.fill(`${FIXED_SOURCE}\nEdited while another write landed.\n`);
+  const triage = (await app.core.command("draft.list", {})).find((draft) => draft.id === "triage")!;
   await app.core.command("draft.source.write", {
     projectId: app.projectId!,
     draftId: "triage",
+    instance: triage.instance,
     content: "# triage\n\nForced from outside the editor.\n",
   });
   await page.getByTestId("editor-save").click();
