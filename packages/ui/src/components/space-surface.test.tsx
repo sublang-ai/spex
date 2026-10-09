@@ -32,6 +32,8 @@ import {
   KEY,
   MERGE_DIAGNOSTIC,
   NOW,
+  OWN,
+  OWN_REPO,
   SESSION_UNIT,
   SETTINGS_UNIT,
   base,
@@ -360,6 +362,77 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     expect(items()).toHaveLength(2);
     fireEvent.click(screen.getByTestId("space-refresh"));
     await waitFor(() => expect(screen.queryByTestId("space-issues-list")).toBeNull());
+  });
+
+  test("space-70: a standing choice counts in the header and the live region, never in the list's heading or its attention", async () => {
+    const pair = (name: string, declined?: number) => ({
+      file: `workspace/jane/${name}-spex`,
+      reason: `${name}-spex has no working folder here`,
+      blocking: false,
+      repair: unpaired({
+        repository: `jane/${name}-spex`,
+        name: `${name}-spex`,
+        directories: [`/code/${name}`],
+        key: `jane/${name}-spex|/code/${name}`,
+        checked: [{ path: `/code/${name}`, here: true, repo: true }],
+        proposal: { path: `/code/${name}`, from: "recorded" as const },
+        ...(declined === undefined ? {} : { declined }),
+      }),
+    });
+    // Your own group's clone carries the choice between two candidates
+    // (space-69); the core counts it until it is set aside (space-1).
+    const own: RepositoryState = {
+      ...OWN_REPO,
+      state: "local-only",
+      remote: null,
+      id: null,
+      lastSync: null,
+      choice: {
+        repair: `choice:${OWN}:61,62`,
+        candidates: [
+          { hostId: "61", name: "ada-spex", members: 1, visibility: "private" },
+          { hostId: "62", name: "records-spex", members: 2, visibility: "private" },
+        ],
+        declined: false,
+      },
+    };
+    let paired = false;
+    const report = (): GroupsState => {
+      const diagnostics = paired ? [pair("slc", NOW)] : [pair("infra"), pair("slc", NOW)];
+      const state = base({ diagnostics, issues: (paired ? 0 : 1) + 1 });
+      return { ...state, groups: [{ ...state.groups[0]!, repositories: [own, repo()] }] };
+    };
+    const { answer } = await import("../fixtures/groups.js");
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      switch (type) {
+        case "project.rebind":
+          paired = true;
+          home.current = report();
+          return { id: fields.projectId, name: "infra", path: fields.path, registeredAt: 1 };
+        case "project.list":
+          return [];
+        default:
+          return answer(type, fields);
+      }
+    });
+    await renderGroups(report(), { open: false });
+    const issues = screen.getByTestId("space-issues");
+    expect(issues.textContent).toBe("⚠2 issues");
+    fireEvent.click(issues);
+    const list = () => screen.getByTestId("space-issues-list");
+    // The list counts the repairs it lists; the choice stands on its row.
+    expect(list().querySelector("h2")!.textContent).toBe("Issues (1) · 1 not added");
+    expect(list().className).toContain("amber");
+
+    fireEvent.click(within(screen.getByTestId("space-repair")).getByRole("button", { name: "Add project" }));
+    await screen.findByTestId("space-repair-resolved");
+    // The header and the live region count the choice still standing;
+    // the list, with no repair unanswered, reads as settled.
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 issue"));
+    expect(screen.getByTestId("space-issues").className).toContain("amber");
+    expect(live()).toBe("1 issue left.");
+    expect(list().querySelector("h2")!.textContent).toBe("Issues (0) · 1 not added");
+    expect(list().className).not.toContain("amber");
   });
 });
 

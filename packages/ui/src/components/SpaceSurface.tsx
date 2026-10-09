@@ -33,6 +33,7 @@ import {
   repositoryStatePhrase,
   revealBridge,
   revealLabel,
+  rowId,
   tildify,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
@@ -283,7 +284,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
     }
   };
 
-  const repo = groups ? allRepositories(groups).find((entry) => entry.key === selected) : undefined;
+  // Selected by the row's identity: a candidate may bear its clone's
+  // key (space-69).
+  const repo = groups ? allRepositories(groups).find((entry) => rowId(entry) === selected) : undefined;
 
   // The polite live region narrates the open repository's steps
   // (DR-010 §7).
@@ -366,13 +369,13 @@ export function SpaceSurface({ onOpenSession, onOpenProject }: SpaceSurfaceProps
               selected={selected}
               connected={connected}
               refreshes={refreshes}
-              onSelect={(key) => setSelected((current) => (current === key ? undefined : key))}
+              onSelect={(row) => setSelected((current) => (current === row ? undefined : row))}
               onNote={onNote}
             />
           ) : null}
           {repo && groups.git.ok ? (
             <RepositoryPanel
-              key={repo.key}
+              key={rowId(repo)}
               groups={groups}
               repo={repo}
               now={now}
@@ -433,19 +436,36 @@ function HomeHeader({
   const issueCount = groups.issues;
   const readAt = groups.readAt;
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
+  // A standing choice is answered on its row, not in the list
+  // (space-69): with nothing listed, the control takes the reader to the
+  // first one the rows show, an unanswered one before one set aside.
+  const listed = groups.diagnostics.length > 0;
+  const shown = (repo: RepositoryState) =>
+    repo.choice !== null && repo.state === "local-only" && groups.account !== null;
+  const choice =
+    allRepositories(groups).find((repo) => shown(repo) && !repo.choice!.declined) ??
+    allRepositories(groups).find(shown);
   const issues =
-    groups.diagnostics.length > 0 ? (
+    listed || choice ? (
       <button
         type="button"
         data-testid="space-issues"
-        aria-expanded={issuesOpen}
+        aria-expanded={listed ? issuesOpen : undefined}
         // Amber and the warning glyph say attention is owed. With
         // nothing unanswered none is, so the control stays reachable
         // while reading as settled.
         className={`flex items-center gap-1 text-sm hover:underline ${
           issueCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
         }`}
-        onClick={() => onIssuesOpen(!issuesOpen)}
+        onClick={() => {
+          if (listed) onIssuesOpen(!issuesOpen);
+          else if (choice) {
+            // Its first enabled control, else the choice itself while
+            // every control is held.
+            const group = document.getElementById(`space-choice-${choice.key}`);
+            (group?.querySelector<HTMLButtonElement>("button:not(:disabled)") ?? group)?.focus();
+          }
+        }}
       >
         {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
         {issueCount > 0

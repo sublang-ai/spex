@@ -744,7 +744,8 @@ describe("space-59, space-60, space-63: the page follows a project a move re-key
   const repo = (key: string, folder: string | null) => ({
     key, name: key.split("/").pop(), id: null, own: false, code: null, folder,
     remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
-    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" },
+    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, records: "project", choice: null,
+    sync: { phase: "idle" },
   });
   const groups = (...repositories: object[]) => ({
     home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: null },
@@ -868,7 +869,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     const row = (state: string, extra: object = {}) => ({
       key: "p1", name: "alpha-spex", id: null, own: false, code: null, folder: "/tmp/alpha",
       remote: null, state, reason: null, waiting: null, members: null, visibility: null,
-      branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false,
+      branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, records: "project", choice: null,
       sync: { phase: "idle" }, ...extra,
     });
     const groups = (repository: object) => ({

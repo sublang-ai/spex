@@ -12,7 +12,7 @@
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -102,6 +102,10 @@ export interface StandinScript {
     group: string;
     name: string;
     project?: Record<string, unknown>;
+    /** Files its `spex` branch holds beside any `project.json`, by name:
+     * a group's own records, with no `project.json` where `project` is
+     * absent (DR-110). */
+    records?: Record<string, string>;
     archived?: boolean;
     visibility?: string;
     members?: StandinMember[];
@@ -112,6 +116,9 @@ export interface StandinScript {
   /** Rename or transfer a repository: its bare repository moves and its
    * `path` and `remote_url` change; its id stays. */
   rename(id: string, change: { name?: string; group?: string }): void;
+  /** Delete a repository on the host: gone from listings, reads and its
+   * transport, its bare repository removed. */
+  remove(id: string): void;
   archive(id: string): void;
   /** Remove the person from a repository's members. */
   removeMember(id: string): void;
@@ -135,6 +142,9 @@ export interface StandinScript {
    * the listing taken as the request arrives — a read begun before a
    * change answering after it; 0 stops delaying. */
   sleepListing(ms: number): void;
+  /** Delay every answer to a creation by this long, the creation taken
+   * as the sleep ends; 0 stops delaying. */
+  sleepCreate(ms: number): void;
   /** Answer the next `count` admitted host requests 429 with `Retry-After`. */
   rateLimit(count: number, retryAfter: string): void;
   /** Answer the next `count` admitted host requests 503 `provider_unavailable`. */
@@ -217,18 +227,22 @@ function gitAsync(args: string[]): Promise<{ code: number; stdout: string }> {
 }
 
 /** A bare repository with `http.receivepack` on and, unless empty, the
- * host's README on `main`; a seeded `project.json` on an orphan `spex`. */
-function initBare(bare: string, options: { name: string; empty: boolean; project?: Record<string, unknown> }): void {
+ * host's README on `main`; a seeded `project.json` and seeded records on
+ * an orphan `spex`. */
+function initBare(bare: string, options: { name: string; empty: boolean; project?: Record<string, unknown>; records?: Record<string, string> }): void {
   mkdirSync(dirname(bare), { recursive: true });
   gitSync(["init", "-q", "--bare", "-b", "main", bare]);
   gitSync(["-C", bare, "config", "http.receivepack", "true"]);
-  if (!options.empty) commitFile(bare, "refs/heads/main", "README.md", `# ${options.name}\n`, "Initial commit");
-  if (options.project) commitFile(bare, "refs/heads/spex", "project.json", `${JSON.stringify(options.project, null, 2)}\n`, "Records");
+  if (!options.empty) commitFiles(bare, "refs/heads/main", { "README.md": `# ${options.name}\n` }, "Initial commit");
+  const records = { ...options.records, ...(options.project ? { "project.json": `${JSON.stringify(options.project, null, 2)}\n` } : {}) };
+  if (Object.keys(records).length > 0) commitFiles(bare, "refs/heads/spex", records, "Records");
 }
 
-function commitFile(bare: string, ref: string, name: string, content: string, message: string): void {
-  const blob = gitSync(["-C", bare, "hash-object", "-w", "--stdin"], content);
-  const tree = gitSync(["-C", bare, "mktree"], `100644 blob ${blob}\t${name}\n`);
+/** One commit on `ref` holding `files`, each a top-level file by name. */
+function commitFiles(bare: string, ref: string, files: Record<string, string>, message: string): void {
+  const entries = Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, content]) => `100644 blob ${gitSync(["-C", bare, "hash-object", "-w", "--stdin"], content)}\t${name}\n`);
+  const tree = gitSync(["-C", bare, "mktree"], entries.join(""));
   const commit = gitSync(["-C", bare, "commit-tree", tree, "-m", message]);
   gitSync(["-C", bare, "update-ref", ref, commit]);
 }
@@ -326,6 +340,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let transportUnauthorized = false;
   let transportSleepMs = 0;
   let listingSleepMs = 0;
+  let createSleepMs = 0;
   const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
   await new Promise<void>((resolveListen, rejectListen) => {
@@ -524,7 +539,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       const group = findGroup(input.group);
       const bare = bareFor(group, input.name);
       if (existsSync(bare)) throw new Error(`stand-in: ${group.fullPath}/${input.name} exists`);
-      initBare(bare, { name: input.name, empty: input.empty === true, project: input.project });
+      initBare(bare, { name: input.name, empty: input.empty === true, project: input.project, records: input.records });
       const repo: StandinRepository = {
         id: String(nextId++),
         name: input.name,
@@ -560,6 +575,11 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       repo.group = group;
       repo.bare = bare;
     },
+    remove: (id) => {
+      const repo = findRepository(id);
+      script.repositories.splice(script.repositories.indexOf(repo), 1);
+      rmSync(repo.bare, { recursive: true, force: true });
+    },
     archive: (id) => { findRepository(id).archived = true; },
     removeMember: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => { findRepository(id).role = role; },
@@ -570,6 +590,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
     sleepTransport: (ms) => { transportSleepMs = Math.max(0, ms); },
     sleepListing: (ms) => { listingSleepMs = Math.max(0, ms); },
+    sleepCreate: (ms) => { createSleepMs = Math.max(0, ms); },
     rateLimit: (count, retryAfter) => {
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "rate", retryAfter });
     },
@@ -838,6 +859,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   async function create(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const body = await readJson(req);
+    if (createSleepMs > 0) await sleep(createSleepMs);
     if (!isRecord(body)) return envelope(res, 400, "bad_request", "The body must be a JSON object.");
     const { group_id: groupId, name, description } = body;
     if (typeof name !== "string" || !SPEX_NAME.test(name)) return envelope(res, 400, "bad_request", "The name must be a project path ending in -spex.");
