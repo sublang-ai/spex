@@ -216,15 +216,33 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
 
 export interface EditResult {
   ok: boolean;
-  /** Composition error when the candidate failed validation. */
+  /** A prepared edit no longer matches the files it composed. */
+  code?: "conflict";
+  /** Composition or publication refusal. */
   error?: string;
+}
+
+function configBytes(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, "utf8") : null;
+}
+
+function configChanged(): EditResult {
+  return {
+    ok: false,
+    code: "conflict",
+    error: i18n._({
+      id: "the configuration changed while this edit was being checked; retry",
+      comment: "Refusal: another writer changed a config used to validate a pending settings edit",
+    }),
+  };
 }
 
 /**
  * Apply an operation to the config file: validate the candidate via
  * composition first; only write when it passes (SET-3). `beforeWrite`
  * runs once the candidate composed, right before the write; its throw
- * refuses the write and propagates (core-service-96).
+ * refuses the write and propagates. The inputs must still match at
+ * this synchronous publication boundary (shared-config-roundtrip-6).
  */
 export async function editConfigFile(
   path: string,
@@ -244,6 +262,7 @@ export async function editConfigFile(
     };
   }
   options.beforeWrite?.();
+  if (configBytes(path) !== text) return configChanged();
   writeApplicationBytes(path, candidate);
   return { ok: true };
 }
@@ -276,16 +295,20 @@ export async function editProjectConfigFile(
       }),
     };
   }
-  const text = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const candidate = applyConfigOp(text, op);
+  const text = configBytes(path);
+  const candidate = applyConfigOp(text ?? "", op);
+  let ownText: string;
   try {
     const projectTop = parseDocument(candidate).toJS() as unknown;
     validateProjectConfig(projectTop, path);
-    const ownTop = parseDocument(readFileSync(ownPath, "utf8")).toJS() as unknown;
+    ownText = readFileSync(ownPath, "utf8");
+    const ownTop = parseDocument(ownText).toJS() as unknown;
     await composeConfig(ownTop, loadModule, ownPath, { modules, project: { top: projectTop, path } });
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+  options.beforeWrite?.();
+  if (configBytes(path) !== text || configBytes(ownPath) !== ownText) return configChanged();
   // The config folder is made inside its spex repository's clone, never
   // the clone itself: a clone removed meanwhile stays removed (projects-10).
   const configDir = dirname(path);
@@ -299,7 +322,6 @@ export async function editProjectConfigFile(
       }),
     };
   }
-  options.beforeWrite?.();
   mkdirSync(configDir, { recursive: true });
   writeApplicationBytes(path, candidate);
   return { ok: true };

@@ -1292,7 +1292,7 @@ export class Store {
 
   /** Pair a working folder with a new local spex repository in your own
    * group, or select the pair it already has (storage-6). */
-  registerProject(path: string, name: string, _at?: number): ProjectInfo {
+  registerProject(path: string, name: string, _at?: number, occupied?: (key: string) => boolean): ProjectInfo {
     this.assertProjectsWritable();
     const normalized = resolve(path);
     const paired = this.homeFile.keyForFolder(normalized);
@@ -1301,7 +1301,8 @@ export class Store {
       comment: "Refusal: the folder is recorded for a project already, so Add cannot claim it", values: { path: normalized } }));
     const base = repositoryNameFor(name || basename(normalized)).slice(0, -"-spex".length);
     let key = `${this.homeFile.ownName}/${base}-spex`;
-    for (let n = 2; this.repositories.has(key) || existsSync(this.homeFile.clonePath(key)) || this.homeFile.folderOf(key); n += 1) {
+    // A Join or move can own a destination before its directory exists.
+    for (let n = 2; occupied?.(key) || this.repositories.has(key) || existsSync(this.homeFile.clonePath(key)) || this.homeFile.folderOf(key); n += 1) {
       key = `${this.homeFile.ownName}/${base}-${n}-spex`;
     }
     const dir = this.homeFile.clonePath(key);

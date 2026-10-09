@@ -235,6 +235,11 @@ function userFolder(userHome: string, folder: string): string {
 
 /** Export an installed environment (environments-8). */
 export async function exportEnvironment(options: ExportOptions): Promise<ExportReport> {
+  return exportEnvironmentSync(options);
+}
+
+/** Publish exports as part of an environment's synchronous commit. */
+export function exportEnvironmentSync(options: ExportOptions): ExportReport {
   const { cloneDir, lock, workingFolder, userHome, packagesDir } = options;
   const report: ExportReport = { skills: [], folders: [], unsupportedAgents: [], removed: [], skipped: [], missing: [] };
   const skillsDir = join(cloneDir, "skills");
@@ -297,6 +302,26 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
   return report;
 }
 
+/** The exact paths an export may replace, for its synchronous commit's undo. */
+export function exportTargets(options: ExportOptions): string[] {
+  const paths = [join(options.cloneDir, "skills")];
+  const names = Object.values(options.lock.packages).flatMap((resolution) => Object.keys(resolution.exports));
+  const folders = new Set<string>();
+  for (const agent of options.agents) {
+    const entry = AGENT_FOLDERS[agent];
+    if (!entry) continue;
+    if (options.workingFolder !== null) folders.add(join(options.workingFolder, ...entry.project.split("/")));
+    if (options.userHome !== null) folders.add(userFolder(options.userHome, entry.user));
+  }
+  for (const dir of folders) {
+    paths.push(join(dir, EXPORTS_MANIFEST));
+    for (const name of new Set([...readExportsManifest(dir), ...names])) paths.push(join(dir, name));
+  }
+  const exclude = options.workingFolder === null ? null : gitExcludeFile(options.workingFolder);
+  if (exclude !== null) paths.push(exclude);
+  return paths;
+}
+
 export interface ModuleLocation {
   /** The playbook's registry module, absolute; relative to the working
    * folder where a path source has no working folder on this device. */
@@ -331,9 +356,8 @@ export function playbookModuleCandidates(folder: string, id: string): string[] {
  * its `id`, never by its alias. A path source whose folder this device
  * lacks still locates its playbooks, not present and naming the folder,
  * so no other environment's copy stands in for them. */
-export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: string | null): Map<string, ModuleLocation> {
+export function moduleLocations(lock: Lock, cloneDir: string, workingFolder: string | null, packagesDir = join(cloneDir, "packages")): Map<string, ModuleLocation> {
   const out = new Map<string, ModuleLocation>();
-  const packagesDir = join(cloneDir, "packages");
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     const source = resolution.source;

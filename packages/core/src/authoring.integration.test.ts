@@ -2109,8 +2109,8 @@ test("playbook-library-100: an activity of a session its id no longer names comm
     const { projectId, clone, configPath } = harness;
     const kept = authoringFiles(clone, "triage");
     const client = new Client(harness.service.port());
-    // The environments' own seam: the real request and install runs and
-    // writes; only its reply waits for the test's release.
+    // Hold configuration preparation while the staged environment is
+    // still private, then retire the admitted authoring session.
     const environments = Reflect.get(harness.service, "environments") as EnvironmentManager;
     const requestAndInstall = environments.requestAndInstall.bind(environments);
     let release = (): void => {};
@@ -2129,14 +2129,21 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       const installed = new Promise<void>((resolve) => { entered = resolve; });
       const barrier = new Promise<void>((resolve) => { release = resolve; });
       environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
+        const prepare = args[4]!;
+        args[4] = async (modules) => {
+          const config = await prepare(modules);
+          entered();
+          await barrier;
+          return config;
+        };
         await requestAndInstall(...args);
-        entered();
-        await barrier;
       };
       const projectConfig = join(clone, "config", "playbook.config.yaml");
       const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
       const configBefore = contents(configPath);
       const projectConfigBefore = contents(projectConfig);
+      const requestsBefore = contents(join(clone, "spex.yaml"));
+      const lockBefore = contents(join(clone, "spex.lock"));
       registering = client.command("draft.register", {
         projectId,
         draftId: "triage",
@@ -2158,6 +2165,8 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       assert.equal(reply.error.message, "triage now names another authoring session");
       assert.equal(contents(configPath), configBefore, "your own group's config is unchanged: no player added");
       assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
+      assert.equal(contents(join(clone, "spex.yaml")), requestsBefore, "the environment request is unchanged");
+      assert.equal(contents(join(clone, "spex.lock")), lockBefore, "the environment lock is unchanged");
       const named = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
       assert.equal(named.draft.enabled, false, "the newcomer reads not enabled");
       assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session the id no longer names records nothing more");
@@ -2175,9 +2184,8 @@ test("playbook-library-100: an activity of a session its id no longer names comm
     const { projectId, clone, configPath } = harness;
     const kept = authoringFiles(clone, "triage");
     const client = new Client(harness.service.port());
-    // The service's own seams: once the spec package is installed, only
-    // the entry edit's composition loads the compiled entry's module,
-    // and that load waits for the test's release, then runs as it would.
+    // Hold the candidate config's module load while the staged
+    // environment is private, then retire its authoring session.
     const environments = Reflect.get(harness.service, "environments") as EnvironmentManager;
     const requestAndInstall = environments.requestAndInstall.bind(environments);
     const options = Reflect.get(harness.service, "options") as { loadModule: LoadModule };
@@ -2199,8 +2207,8 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       const loading = new Promise<void>((resolve) => { entered = resolve; });
       const barrier = new Promise<void>((resolve) => { release = resolve; });
       environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
-        await requestAndInstall(...args);
         installed = true;
+        await requestAndInstall(...args);
       };
       let held = false;
       options.loadModule = async (specifier) => {

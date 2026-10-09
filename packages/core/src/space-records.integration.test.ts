@@ -233,7 +233,13 @@ test("space-37: two group's own repositories leave your own group's clone local 
   const before = declined.readAt ?? 0;
   const fromRefresh = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
-  const refreshed = await home.client.waitSpace(fromRefresh, (state) => (state.readAt ?? 0) > before);
+  await home.client.waitSpace(fromRefresh, (state) => (state.readAt ?? 0) > before);
+  // readAt announces the host answer before the asynchronous candidate
+  // checks finish. These notice assertions exercise the settled choice,
+  // not the busy refusal while Refresh still owns that lookup.
+  await (home.service as unknown as { space: { settingUp?: Promise<void> } }).space.settingUp;
+  const refreshed = await home.client.expectOk("space.get", {});
+  assert.equal(ownRow(refreshed).sync.phase, "idle", "a settled choice holds no operation reservation");
   assert.deepEqual([refreshed.issues, ownRow(refreshed).state, ownRow(refreshed).choice?.repair, ownRow(refreshed).choice?.declined], [0, "local-only", repair, true]);
   const answered = await home.client.expectOk("space.repair.decline", { repair, declined: false });
   assert.deepEqual([answered.issues, ownRow(answered).choice?.declined], [1, false]);

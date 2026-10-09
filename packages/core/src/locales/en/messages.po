@@ -846,18 +846,8 @@ msgstr "compile the draft successfully before registering it"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
-msgstr "compiled, but creating session player \"{playerId}\" was refused: {error}"
-
-#. Refusal after a successful compile; `error` is the config validation's own words
-#: src/service.ts
 msgid "compiled, but enabling was refused: {error}"
 msgstr "compiled, but enabling was refused: {error}"
-
-#. Refusal after a successful compile; `error` is the config validation's own words
-#: src/service.ts
-msgid "compiled, but registration was refused: {error}"
-msgstr "compiled, but registration was refused: {error}"
 
 #. Refusal after a successful compile; the role ids are the manifest's own
 #: src/service.ts
@@ -1497,6 +1487,7 @@ msgstr "no spec file at specs/{path}"
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
 #: src/environments.ts
 #: src/space.ts
 #: src/store.ts
@@ -2123,10 +2114,40 @@ msgstr "The compile's agent runs on {adapter}, which the compiler cannot drive; 
 msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
+#. Refusal: a config edit raced with preparation of an enabling
+#: src/service.ts
+msgid "the configuration changed while enabling; retry"
+msgstr "the configuration changed while enabling; retry"
+
+#. Refusal: another writer changed a config used to validate a pending settings edit
+#: src/config-edit.ts
+msgid "the configuration changed while this edit was being checked; retry"
+msgstr "the configuration changed while this edit was being checked; retry"
+
+#. Refusal: the repository holding a pending settings edit is no longer at its captured destination
+#: src/service.ts
+msgid "the configuration destination moved or was removed while this edit was being checked; retry"
+msgstr "the configuration destination moved or was removed while this edit was being checked; retry"
+
+#. Refusal: the prepared enabling no longer targets the same repositories
+#: src/service.ts
+msgid "the configuration destination moved while enabling; retry"
+msgstr "the configuration destination moved while enabling; retry"
+
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "The core is stopping."
+
+#. Refusal: an environment request or lock changed during preparation
+#: src/environments.ts
+msgid "the environment of {key} changed while it was prepared; retry"
+msgstr "the environment of {key} changed while it was prepared; retry"
+
+#. Refusal: a prepared environment no longer has its original destination
+#: src/environments.ts
+msgid "the environment of {key} moved or left while it was prepared"
+msgstr "the environment of {key} moved or left while it was prepared"
 
 #. Refusal: a request by path names a folder inside the repository's working folder (environments-2)
 #: src/service.ts

@@ -220,6 +220,14 @@ The core shall expose environments through these commands and one message, each 
 
 The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, with scripted yank, suppression, private namespaces honouring the stand-in host's app tokens, and a publish endpoint that validates as the core does and stores the archive.
 
+#### environments-26
+
+The core shall serialize each spex repository's environment writes from queue admission through completion, including an enabling's request, resolution, install, exports and config publication [[playbook-library-7](playbook-library.md#playbook-library-7)]:
+
+- an enabling prepares without changing the active requests, lock, installed files, exports or config, then validates the admitted authoring session, current destinations and unchanged inputs, including the path sources’ manifest requirements, at one synchronous publication boundary;
+- a refused preparation discards its staged changes, and a failure during publication restores only that publication's write set before another queued operation can run;
+- an ordinary resolution still publishes its lock before installing, so a failed install keeps the earlier files and reports them as not installed for that resolution [[environments-14](#environments-14)].
+
 ## Verification
 
 #### environments-19
@@ -270,6 +278,10 @@ When an integration suite runs an authoring session that writes a spec package i
 #### environments-25
 
 When an integration suite drives the environment commands over the protocol, it shall assert each command's reply and refusal of the table, the `environment.state` broadcast after resolve, install and a sync-applied lock, `environment.get` carrying every field the surface lists and reading a spec package whose update failed to install as not installed until an install succeeds, and `busy` during that spex repository's sync [[environments-17](#environments-17)] [[environments-14](#environments-14)] [[environments-15](#environments-15)].
+
+#### environments-27
+
+When an integration suite overlaps enabling with authoring retirement or another environment request, it shall assert that the retired session publishes no request, lock, installed files, exports or config, including when its request was already present, and that a failed enabling does not erase an independently accepted request [[environments-26](#environments-26)]; it shall also inject a config publication failure and assert that the prior environment, agent exports and config remain whole, refuse a path-source manifest changed during preparation, and validate a successful candidate config against a newly installed transitive playbook before publication [[environments-9](#environments-9)] [[environments-26](#environments-26)] ([integration coverage](../../packages/core/src/environment.integration.test.ts)).
 
 ## References
 

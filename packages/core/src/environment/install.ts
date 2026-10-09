@@ -246,15 +246,26 @@ function linkOrCopy(from: string, to: string, executable: boolean): void {
   }
 }
 
-/** Install a lock's selected files (environments-7). */
-export async function install(options: InstallOptions): Promise<InstallReport> {
+export interface PreparedInstall {
+  report: InstallReport;
+  /** Modules can be checked here before the prepared tree is published. */
+  packagesDir: string;
+  commit(): void;
+  rollback(): void;
+  dispose(): void;
+}
+
+/** Fetch and stage a lock without changing its installed files. */
+export async function prepareInstall(options: InstallOptions): Promise<PreparedInstall> {
   const { cloneDir, lock, store, workingFolder } = options;
+  const target = join(cloneDir, "packages");
+  const unchanged = (report: InstallReport): PreparedInstall => ({ report, packagesDir: target, commit() {}, rollback() {}, dispose() {} });
   const missingPaths = missingPathSources(lock, workingFolder);
   const requestsText = options.requestsText !== undefined
     ? options.requestsText
     : existsSync(join(cloneDir, "spex.yaml")) ? readFileSync(join(cloneDir, "spex.yaml"), "utf8") : null;
   const staleness = lockStaleness(lock, requestsText, (path) => (workingFolder === null ? null : readPathManifest(join(workingFolder, ...path.split("/")))));
-  if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true };
+  if (staleness.stale) return unchanged({ installed: [], missingPaths, stale: staleness.reasons, unchanged: true });
 
   const names = Object.keys(lock.packages).sort().filter((name) => !isPathSource(lock.packages[name]!.source));
   for (const name of names) {
@@ -262,9 +273,8 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     if (issues.length > 0) throw new InstallError(name, `${name}: ${issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
   }
 
-  const target = join(cloneDir, "packages");
   const record = installRecord(lock);
-  if (treeMatches(target, lock, record)) return { installed: [], missingPaths, unchanged: true };
+  if (treeMatches(target, lock, record)) return unchanged({ installed: [], missingPaths, unchanged: true });
 
   for (const name of names) {
     try {
@@ -294,18 +304,40 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
       }
     }
     writeFileSync(join(staging, INSTALL_RECORD), JSON.stringify(record));
-    await options.beforeReplace?.();
-    replaceTree(staging, target, join(options.cache, "trash", id));
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
     if (error instanceof InstallError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
-  return { installed: names, missingPaths, unchanged: false };
+  let replacement: ReturnType<typeof replaceTree> | undefined;
+  return {
+    report: { installed: names, missingPaths, unchanged: false },
+    packagesDir: staging,
+    commit() { replacement = replaceTree(staging, target, join(options.cache, "trash", id)); },
+    rollback() { replacement?.rollback(); },
+    dispose() {
+      rmSync(staging, { recursive: true, force: true });
+      replacement?.dispose();
+    },
+  };
+}
+
+/** Install a lock's selected files (environments-7). */
+export async function install(options: InstallOptions): Promise<InstallReport> {
+  const prepared = await prepareInstall(options);
+  try {
+    if (!prepared.report.unchanged) await options.beforeReplace?.();
+    prepared.commit();
+    return prepared.report;
+  } catch (error) {
+    prepared.rollback();
+    if (error instanceof InstallError) throw error;
+    throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
+  } finally { prepared.dispose(); }
 }
 
 /** Swap a complete staged tree in for the installed one. */
-function replaceTree(staging: string, target: string, trash: string): void {
+function replaceTree(staging: string, target: string, trash: string): { rollback(): void; dispose(): void } {
   let source = staging;
   const hadOld = existsSync(target);
   if (hadOld) {
@@ -335,7 +367,16 @@ function replaceTree(staging: string, target: string, trash: string): void {
     if (hadOld) renameSync(trash, target);
     throw error;
   }
-  if (hadOld) rmSync(trash, { recursive: true, force: true });
+  let rolledBack = false;
+  return {
+    rollback() {
+      if (rolledBack) return;
+      rmSync(target, { recursive: true, force: true });
+      if (hadOld) renameSync(trash, target);
+      rolledBack = true;
+    },
+    dispose() { if (hadOld) rmSync(trash, { recursive: true, force: true }); },
+  };
 }
 
 /** Remove every installed file of a clone (an environment emptied). */

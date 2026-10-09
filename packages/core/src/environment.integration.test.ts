@@ -1117,3 +1117,158 @@ test("environments-22: a path source's playbook whose folder this device lacks i
   const found = environmentsOver(home, ownKey, { [projectKey]: { dir: home.clone, workingFolder: lacking }, [ownKey]: { dir: ownClone, workingFolder: null } }).modulesFor(projectKey).find("walk");
   assert.deepEqual(found, { module: join(lacking, "tools/walk/playbooks/en/walk/walk.playbook/walk.registry.mjs"), builtin: false });
 });
+
+// Enabling publishes a whole prepared environment with its config in
+// one queue turn (environments-26..27, playbook-library-100).
+test("environment enabling owns preparation, publication and rollback", async (t) => {
+  const deferred = () => {
+    let release!: () => void;
+    return { promise: new Promise<void>((resolve) => { release = resolve; }), release: () => release() };
+  };
+  const fixture = () => {
+    const home = makeHome();
+    const key = "me/me-spex";
+    const working = join(home.root, "working");
+    mkdirSync(home.clone, { recursive: true });
+    mkdirSync(working, { recursive: true });
+    mkdirSync(join(home.root, ".claude"), { recursive: true });
+    return { home, key, working, manager: environmentsOver(home, key, { [key]: { dir: home.clone, workingFolder: working } }) };
+  };
+
+  await t.test("an unchanged request cannot install or export for a departed owner", async () => {
+    await publishSimple("tx-retired/tool", "1.0.0");
+    const { home, key, working, manager } = fixture();
+    await makeRelease(join(working, "draft"), manifestOf("tx-retired/draft", "1.0.0", { draft: { kind: "skill", language: "en" } }, { "tx-retired/tool": "1.0.0" }), skillFiles("draft"));
+    const text = "format: 1\npackages:\n  tx-retired/draft:\n    path: draft\n";
+    const lock = locked(await resolveText(home.clone, text, { workingFolder: working }));
+    await writeLock(join(home.clone, "spex.lock"), lock);
+    const before = snapshot(home.clone);
+    const entered = deferred();
+    const release = deferred();
+    const source = manager.registry();
+    const archive = source.archive.bind(source);
+    source.archive = async (...args) => { entered.release(); await release.promise; return archive(...args); };
+    let alive = true;
+    const enabling = manager.requestAndInstall(key, "tx-retired/draft", { path: "draft" }, () => {
+      if (!alive) throw new Error("the authoring session departed");
+    });
+    const refused = assert.rejects(enabling, /the authoring session departed/);
+    await entered.promise;
+    alive = false;
+    release.release();
+    await refused;
+    assert.deepEqual(snapshot(home.clone), before, "the old request and lock remain; no packages or exports become visible");
+    assert.equal(existsSync(join(working, ".claude", "skills")), false);
+    assert.equal(manager.busyFor(key), undefined);
+  });
+
+  await t.test("a failed enabling cannot erase the independent request queued behind it", async () => {
+    await publishSimple("tx-queued/accepted", "1.0.0");
+    const { home, key, manager } = fixture();
+    const entered = deferred();
+    const release = deferred();
+    const source = manager.registry();
+    const index = source.index.bind(source);
+    source.index = async (name) => {
+      if (name === "tx-queued/failed") {
+        entered.release();
+        await release.promise;
+        throw new Error("the release could not be read");
+      }
+      return index(name);
+    };
+    const enabling = manager.requestAndInstall(key, "tx-queued/failed", { version: "1.0.0" });
+    const refused = assert.rejects(enabling, /the release could not be read/);
+    await entered.promise;
+    const accepted = manager.request(key, "tx-queued/accepted", { version: "1.0.0" });
+    assert.ok(manager.busyFor(key), "the clone remains owned through queued work");
+    release.release();
+    await refused;
+    await (await accepted).done;
+    const requests = parseRequests(readFileSync(join(home.clone, "spex.yaml"), "utf8"));
+    assert.deepEqual(plain(requests.packages), { "tx-queued/accepted": { version: "1.0.0" } });
+    assert.ok(existsSync(join(home.clone, "packages", "tx-queued", "accepted", "meta.yaml")));
+    assert.equal(manager.busyFor(key), undefined);
+  });
+
+  await t.test("a config publication failure restores only that synchronous commit", async () => {
+    await publishSimple("tx-rollback/previous", "1.0.0");
+    await publishSimple("tx-rollback/proposed", "1.0.0");
+    const { home, key, working, manager } = fixture();
+    await (await manager.request(key, "tx-rollback/previous", { version: "1.0.0" })).done;
+    const config = join(home.clone, "config.yaml");
+    writeFileSync(config, "previous config\n");
+    const before = snapshot(home.clone);
+    const exportsBefore = snapshot(join(working, ".claude"));
+    await assert.rejects(manager.requestAndInstall(key, "tx-rollback/proposed", { version: "1.0.0" }, undefined, async () => ({
+      files: [config], validate() {}, commit() {
+        writeFileSync(config, "part of the proposed config\n");
+        throw new Error("the second config destination is not writable");
+      },
+    })), /the second config destination is not writable/);
+    assert.deepEqual(snapshot(home.clone), before, "requests, lock, installed files, exports and config are restored");
+    assert.deepEqual(snapshot(join(working, ".claude")), exportsBefore, "agent exports are restored too");
+  });
+
+  await t.test("config preparation can load a newly installed transitive playbook", async () => {
+    await publish(manifestOf("tx-candidate/helper", "1.0.0", { helper: { kind: "playbook", language: "en" } }), launchablePlaybookFiles("helper"));
+    const { home, key, working, manager } = fixture();
+    await makeRelease(join(working, "draft"), manifestOf("tx-candidate/draft", "1.0.0", { draft: { kind: "skill", language: "en" } }, { "tx-candidate/helper": "1.0.0" }), skillFiles("draft"));
+    const config = join(home.clone, "config.yaml");
+    let prepared = false;
+    await manager.requestAndInstall(key, "tx-candidate/draft", { path: "draft" }, undefined, async (modules) => {
+      assert.equal(existsSync(join(home.clone, "spex.yaml")), false, "the proposed request is not visible during preparation");
+      assert.equal(existsSync(join(home.clone, "packages")), false, "the candidate tree is private");
+      await composeConfig(sessionConfig("helper"), (specifier) => import(pathToFileURL(specifier).href), config, { modules });
+      prepared = true;
+      return { files: [config], validate() {}, commit() { writeFileSync(config, "accepted config\n"); } };
+    });
+    assert.equal(prepared, true);
+    assert.equal(readFileSync(config, "utf8"), "accepted config\n");
+    assert.ok(existsSync(join(home.clone, "packages", "tx-candidate", "helper", "meta.yaml")));
+    assert.ok(existsSync(join(working, ".claude", "skills", "helper", "SKILL.md")));
+  });
+
+  await t.test("a path manifest changed during resolution cannot supply an unstaged candidate", async () => {
+    await publishSimple("tx-resolving/tool", "1.0.0");
+    const { home, key, working, manager } = fixture();
+    const folder = join(working, "draft");
+    const artifacts = { draft: { kind: "skill", language: "en" } };
+    const dependencies = { "tx-resolving/tool": "1.0.0" };
+    await makeRelease(folder, manifestOf("tx-resolving/draft", "1.0.0", artifacts, dependencies), skillFiles("draft"));
+    const source = manager.registry();
+    const index = source.index.bind(source);
+    source.index = async (name) => {
+      await makeRelease(folder, manifestOf("tx-resolving/draft", "2.0.0", artifacts, dependencies), skillFiles("draft"));
+      return index(name);
+    };
+    await assert.rejects(manager.requestAndInstall(key, "tx-resolving/draft", { path: "draft" }, undefined, async () => {
+      assert.fail("a stale install supplies no candidate config");
+    }), /changed in draft; resolve again/);
+    assert.deepEqual(snapshot(home.clone), {});
+  });
+
+  await t.test("a path manifest changed during config preparation refuses publication", async () => {
+    const { home, key, working, manager } = fixture();
+    const folder = join(working, "draft");
+    const artifacts = { draft: { kind: "skill", language: "en" } };
+    await makeRelease(folder, manifestOf("tx-changed/draft", "1.0.0", artifacts), skillFiles("draft"));
+    await assert.rejects(manager.requestAndInstall(key, "tx-changed/draft", { path: "draft" }, undefined, async () => {
+      await makeRelease(folder, manifestOf("tx-changed/draft", "2.0.0", artifacts), skillFiles("draft"));
+      return { files: [], validate() {}, commit() { assert.fail("a stale candidate must not commit its config"); } };
+    }), /changed in draft; resolve again/);
+    assert.deepEqual(snapshot(home.clone), {}, "no stale request, lock, installed files or exports became visible");
+  });
+
+  await t.test("an ordinary resolution still publishes its lock when downloading fails", async () => {
+    await publishSimple("tx-ordinary/tool", "1.0.0");
+    const { home, key, manager } = fixture();
+    const source = manager.registry();
+    source.archive = async () => { throw new Error("the download stopped"); };
+    source.file = async () => { throw new Error("the download stopped"); };
+    await (await manager.request(key, "tx-ordinary/tool", { version: "1.0.0" })).done;
+    const lock = await readLock(join(home.clone, "spex.lock"));
+    assert.ok(lock?.packages["tx-ordinary/tool"], "resolution is durable even though the files are unavailable");
+    assert.equal(manager.state(key).packages.find((entry) => entry.name === "tx-ordinary/tool")?.installed, false);
+  });
+});

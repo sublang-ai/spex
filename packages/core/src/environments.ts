@@ -12,8 +12,9 @@
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
 
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { writeApplicationBytes } from "./app-storage.js";
 import {
@@ -22,10 +23,10 @@ import {
   builtinRegistrySource,
   compositeRegistry,
   ContentStore,
-  exportEnvironment,
+  exportEnvironmentSync,
+  exportTargets,
   FormatError,
   gitSource,
-  install,
   installedPackages,
   InstallError,
   isGitSource,
@@ -41,6 +42,8 @@ import {
   parseManifestText,
   placeOf,
   prepareBuiltinEnvironment,
+  prepareInstall,
+  prepareRequest,
   publishRelease,
   readRelease,
   readRequestsFile,
@@ -53,8 +56,7 @@ import {
   resolutionVersion,
   resolve,
   seedBuiltinPackage,
-  setRequest,
-  writeLock,
+  serializeLock,
   type BuiltinPackage,
   type Conflict,
   type CredentialArgs,
@@ -66,6 +68,7 @@ import {
   type RegistrySource,
   type Request,
   type Requests,
+  type PreparedInstall,
 } from "./environment/index.js";
 import { i18n } from "./i18n.js";
 import type { PlaybookModules } from "./config.js";
@@ -110,7 +113,43 @@ interface CloneState {
   published?: { name: string; version: string; url: string };
   /** Operations on this clone, one at a time. */
   chain: Promise<void>;
+  pending: number;
 }
+
+/** The config half of an enabling is prepared asynchronously and
+ * published in the environment's synchronous commit. */
+export interface PreparedEnvironmentCommit {
+  files: string[];
+  validate(): void;
+  commit(): void;
+}
+
+/** Undo only this commit's write set, captured immediately before its
+ * synchronous publication. No other core write can interleave here. */
+function snapshotPaths(paths: string[], backup: string): { restore(): void; dispose(): void } {
+  const unique = [...new Set(paths)].filter((path, _index, all) => !all.some((parent) => parent !== path && path.startsWith(`${parent}${sep}`)));
+  const entries = unique.map((path, index) => ({ path, saved: join(backup, String(index)), existed: lstatSync(path, { throwIfNoEntry: false }) !== undefined }));
+  try {
+    for (const entry of entries) if (entry.existed) {
+      mkdirSync(dirname(entry.saved), { recursive: true });
+      cpSync(entry.path, entry.saved, { recursive: true, verbatimSymlinks: true });
+    }
+  } catch (error) { rmSync(backup, { recursive: true, force: true }); throw error; }
+  return {
+    restore() {
+      for (const entry of entries) {
+        rmSync(entry.path, { recursive: true, force: true });
+        if (entry.existed) {
+          mkdirSync(dirname(entry.path), { recursive: true });
+          cpSync(entry.saved, entry.path, { recursive: true, verbatimSymlinks: true });
+        }
+      }
+    },
+    dispose() { rmSync(backup, { recursive: true, force: true }); },
+  };
+}
+
+const readBytes = (file: string): string | null => existsSync(file) ? readFileSync(file, "utf8") : null;
 
 /** What one settle does: resolve where needed, or always, then install
  * and export. */
@@ -265,7 +304,7 @@ export class EnvironmentManager {
   private cloneState(key: string): CloneState {
     let state = this.clones.get(key);
     if (!state) {
-      state = { busy: null, conflicts: null, error: null, chain: Promise.resolve() };
+      state = { busy: null, conflicts: null, error: null, chain: Promise.resolve(), pending: 0 };
       this.clones.set(key, state);
     }
     return state;
@@ -355,7 +394,12 @@ export class EnvironmentManager {
   /** Run one operation on a clone after those before it. */
   private enqueue<T>(key: string, work: () => Promise<T>): Promise<T> {
     const state = this.cloneState(key);
-    const next = state.chain.then(work, work);
+    state.pending++;
+    const run = async (): Promise<T> => {
+      try { return await work(); }
+      finally { state.pending--; }
+    };
+    const next = state.chain.then(run, run);
     state.chain = next.then(() => undefined, () => undefined);
     return next;
   }
@@ -386,110 +430,145 @@ export class EnvironmentManager {
     return this.enqueue(key, () => this.settleNow(key, mode, strict, held));
   }
 
-  /** With `held`, the caller's owner is checked again before the lock
-   * is written and before the install: its throw ends the settle there,
-   * the clone no longer busy (core-service-96). */
-  private async settleNow(key: string, mode: SettleMode, strict: boolean, held?: () => void): Promise<void> {
+  /** One queue turn owns preparation and publication. All potentially
+   * asynchronous work is private; the held owner and captured inputs
+   * are checked once at the synchronous publication boundary. */
+  private async settleNow(key: string, mode: SettleMode, strict: boolean, held?: () => void, enabling?: {
+    name: string;
+    request: Request;
+    prepare?: (modules: PlaybookModules) => Promise<PreparedEnvironmentCommit>;
+  }): Promise<void> {
     if (this.stopped) return;
     const dir = this.store.repository(key)?.dir;
-    if (!dir) return;
+    if (!dir) {
+      if (strict) this.cloneDir(key);
+      return;
+    }
     const state = this.cloneState(key);
-    const stillHeld = (): void => {
-      try { held?.(); }
-      catch (error) {
-        this.setBusy(key, null);
-        throw error;
-      }
-    };
     const workingFolder = this.workingFolder(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
-    let lock: Lock | null;
-    let requestsText: string | null;
-    let requests: Requests | null;
+    let prepared: PreparedInstall | undefined;
+    let phase: "resolve" | "install" = "resolve";
     try {
+      held?.();
+      const requestsBefore = readBytes(requestsPath);
+      let lockBefore = readBytes(lockPath);
+      const validateInputs = (): void => {
+        held?.();
+        if (this.stopped || this.store.repository(key)?.dir !== dir || !existsSync(dir) || this.workingFolder(key) !== workingFolder) {
+          throw new CoreError("not_found", i18n._({
+            id: "the environment of {key} moved or left while it was prepared",
+            comment: "Refusal: a prepared environment no longer has its original destination",
+            values: { key },
+          }));
+        }
+        if (readBytes(requestsPath) !== requestsBefore || readBytes(lockPath) !== lockBefore) {
+          throw new CoreError("conflict", i18n._({
+            id: "the environment of {key} changed while it was prepared; retry",
+            comment: "Refusal: an environment request or lock changed during preparation",
+            values: { key },
+          }));
+        }
+      };
       const read = readRequestsFile(requestsPath);
-      requests = read?.requests ?? null;
-      requestsText = read?.text ?? null;
-      lock = readLockSync(lockPath);
-    } catch (error) {
-      state.error = failurePhrase("resolve", error);
-      this.announce(key);
-      if (strict) throw new CoreError("invalid_request", state.error);
-      return;
-    }
-    if (requests === null) {
-      // No requests: nothing to install, and no exports to keep.
-      if (lock === null) return;
-    }
-    const registry = this.registry();
-    const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && requests !== null);
-    if (needsResolve && requests !== null) {
-      this.setBusy(key, "resolving");
-      try {
+      let requests = read?.requests ?? null;
+      let requestsText = read?.text ?? null;
+      let lock = lockBefore === null ? null : parseLock(lockBefore);
+      let writeRequests = false;
+      if (enabling) {
+        this.refuseRequest(enabling.name, enabling.request, workingFolder);
+        const current = requests?.packages[enabling.name];
+        if (current === undefined || toRequestValue(current) !== toRequestValue(enabling.request)) {
+          const next = prepareRequest(requestsText, enabling.name, enabling.request);
+          requests = next.requests;
+          requestsText = next.text;
+          writeRequests = true;
+          mode = "resolve";
+        } else if (!lock || stalePhrases(lock, requestsText, workingFolder)) mode = "resolve";
+      }
+      if (requests === null && lock === null) return;
+      const registry = this.registry();
+      let lockText: string | undefined;
+      if ((mode === "resolve" || (mode === "auto" && lock === null)) && requests !== null) {
+        this.setBusy(key, "resolving");
         const result = await resolve({ requests, requestsText: requestsText ?? undefined, registry, workingFolder, git: this.git, gitCredential: this.options.gitCredential });
         if (!result.ok) {
           state.conflicts = result.conflicts;
           state.error = null;
-          this.setBusy(key, null);
           if (strict) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
           return;
         }
-        stillHeld();
         state.conflicts = null;
-        await writeLock(lockPath, result.lock);
         lock = result.lock;
-      } catch (error) {
-        if (error instanceof CoreError) throw error;
-        state.error = failurePhrase("resolve", error);
-        this.setBusy(key, null);
-        if (strict) throw new CoreError("invalid_request", state.error);
-        return;
+        lockText = serializeLock(lock);
+        // An ordinary resolution publishes its new lock even when the
+        // subsequent install fails (environments-14). Enabling keeps
+        // its candidate private until its config can commit with it.
+        if (!enabling && held === undefined) {
+          validateInputs();
+          writeApplicationBytes(lockPath, lockText);
+          lockBefore = lockText;
+          lockText = undefined;
+        }
       }
-    }
-    if (lock === null) {
-      this.setBusy(key, null);
-      return;
-    }
-    stillHeld();
-    this.setBusy(key, "installing");
-    try {
-      await install({
-        cloneDir: dir,
-        lock,
-        store: this.contentStore,
-        cache: this.cacheDir,
-        registry,
-        git: this.git,
-        gitCredential: this.options.gitCredential,
-        workingFolder,
-        requestsText,
+      if (lock === null) return;
+      phase = "install";
+      this.setBusy(key, "installing");
+      prepared = await prepareInstall({
+        cloneDir: dir, lock, store: this.contentStore, cache: this.cacheDir,
+        registry, git: this.git, gitCredential: this.options.gitCredential,
+        workingFolder, requestsText,
         ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
       });
-      await this.exportNow(key, lock);
+      if (enabling && prepared.report.stale) {
+        throw new CoreError("conflict", listed(stalePhrases(lock, requestsText, workingFolder) ?? prepared.report.stale));
+      }
+      const own = this.store.home.own();
+      const candidate = moduleLocations(lock, dir, workingFolder, prepared.packagesDir);
+      const modules = this.modulesFromLocations(key === own ? null : key,
+        key === own ? candidate : this.locations(own), key === own ? null : candidate);
+      const extra = await enabling?.prepare?.(modules);
+      const exports = {
+        cloneDir: dir, lock, workingFolder,
+        userHome: this.isOwn(key) ? this.options.userHome : null,
+        agents: this.agents(), packagesDir: join(dir, "packages"),
+      };
+      // No await follows these checks until the entire commit (or its
+      // undo) finishes. Cache downloads and discarded staging are not
+      // part of the environment's published state.
+      validateInputs();
+      if (enabling) {
+        const stale = stalePhrases(lock, requestsText, workingFolder);
+        if (stale) throw new CoreError("conflict", listed(stale));
+      }
+      extra?.validate();
+      const snapshot = snapshotPaths([requestsPath, lockPath, ...exportTargets(exports), ...(extra?.files ?? [])], join(this.cacheDir, "transactions", randomUUID()));
+      try {
+        if (writeRequests) writeApplicationBytes(requestsPath, requestsText!);
+        if (lockText !== undefined) writeApplicationBytes(lockPath, lockText);
+        prepared.commit();
+        exportEnvironmentSync(exports);
+        extra?.commit();
+      } catch (error) {
+        prepared.rollback();
+        snapshot.restore();
+        throw error;
+      } finally { snapshot.dispose(); }
       state.error = null;
+      this.options.changed?.(key);
     } catch (error) {
-      state.error = failurePhrase("install", error);
+      if (error instanceof CoreError) {
+        if (strict) throw error;
+        state.error = error.message;
+      } else {
+        state.error = failurePhrase(phase, error);
+        if (strict) throw new CoreError("invalid_request", state.error);
+      }
+    } finally {
+      prepared?.dispose();
       this.setBusy(key, null);
-      if (strict) throw new CoreError("invalid_request", state.error);
-      return;
     }
-    this.setBusy(key, null);
-    this.options.changed?.(key);
-  }
-
-  /** Export the installed environment into its working folder and, for
-   * your own group, your agents' home folders (environments-8). */
-  private async exportNow(key: string, lock: Lock): Promise<void> {
-    const dir = this.cloneDir(key);
-    await exportEnvironment({
-      cloneDir: dir,
-      lock,
-      workingFolder: this.workingFolder(key),
-      userHome: this.isOwn(key) ? this.options.userHome : null,
-      agents: this.agents(),
-      packagesDir: join(dir, "packages"),
-    });
   }
 
   private conflictPhrase(conflicts: readonly Conflict[]): string {
@@ -529,10 +608,12 @@ export class EnvironmentManager {
    * written; then resolved and installed, the outcome broadcast. The
    * returned promise settles once installed; the reply does not wait. */
   async request(key: string, name: string, request: Request): Promise<{ done: Promise<void> }> {
-    const dir = this.cloneDir(key);
+    this.cloneDir(key);
     this.refuseRequest(name, request, this.workingFolder(key));
     await this.enqueue(key, async () => {
-      try { await setRequest(join(dir, "spex.yaml"), name, request); }
+      const path = join(this.cloneDir(key), "spex.yaml");
+      this.refuseRequest(name, request, this.workingFolder(key));
+      try { writeApplicationBytes(path, prepareRequest(readBytes(path), name, request).text); }
       catch (error) {
         if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
         throw error;
@@ -544,60 +625,32 @@ export class EnvironmentManager {
 
   /** `environment.remove` (environments-15). */
   async remove(key: string, name: string): Promise<{ done: Promise<void> }> {
-    const dir = this.cloneDir(key);
-    const current = readRequestsFile(join(dir, "spex.yaml"));
-    if (!current?.requests.packages[name]) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "{name} is not requested here",
-        comment: "Refusal: removing a spec package this environment does not request",
-        values: { name },
-      }));
-    }
-    await this.enqueue(key, async () => { await setRequest(join(dir, "spex.yaml"), name, null); });
+    this.cloneDir(key);
+    await this.enqueue(key, async () => {
+      const path = join(this.cloneDir(key), "spex.yaml");
+      const current = readRequestsFile(path);
+      if (!current?.requests.packages[name]) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "{name} is not requested here",
+          comment: "Refusal: removing a spec package this environment does not request",
+          values: { name },
+        }));
+      }
+      writeApplicationBytes(path, prepareRequest(current.text, name, null).text);
+    });
     this.announce(key);
     return { done: this.settle(key, "resolve", false) };
   }
 
-  /** Request a spec package unless it is requested so already, then
-   * resolve where needed and install, awaited: the enabling path
-   * (playbook-library-69) writes no config before the module is there.
-   * With `held`, the enabling's owner is checked again before the
-   * request, the lock and the install are written; its throw after the
-   * request was written returns the requests and the lock as they were
-   * (core-service-96). */
-  async requestAndInstall(key: string, name: string, request: Request, held?: () => void): Promise<void> {
-    const dir = this.cloneDir(key);
+  /** An enabling is one queue turn: prepare its environment and config,
+   * then publish both synchronously. A refused preparation changes no
+   * active files, so it cannot roll back somebody else's request. */
+  requestAndInstall(key: string, name: string, request: Request, held?: () => void,
+    prepare?: (modules: PlaybookModules) => Promise<PreparedEnvironmentCommit>): Promise<void> {
+    this.cloneDir(key);
     this.refuseRequest(name, request, this.workingFolder(key));
-    const requestsPath = join(dir, "spex.yaml");
-    const current = readRequestsFile(requestsPath)?.requests.packages[name];
-    const same = current !== undefined && toRequestValue(current) === toRequestValue(request);
-    if (!same) {
-      // A refused enabling leaves no environment write behind
-      // (playbook-library-7): the requests return as they were.
-      const lockPath = join(dir, "spex.lock");
-      const before = existsSync(requestsPath) ? readFileSync(requestsPath) : null;
-      const lockBefore = existsSync(lockPath) ? readFileSync(lockPath) : null;
-      await this.enqueue(key, async () => {
-        held?.();
-        await setRequest(requestsPath, name, request);
-      });
-      try {
-        await this.settle(key, "resolve", true, held);
-      } catch (error) {
-        await this.enqueue(key, async () => {
-          if (before === null) rmSync(requestsPath, { force: true });
-          else writeApplicationBytes(requestsPath, before);
-          if (lockBefore === null) rmSync(lockPath, { force: true });
-          else writeApplicationBytes(lockPath, lockBefore);
-        });
-        this.announce(key);
-        throw error;
-      }
-      return;
-    }
-    const lock = readLockSync(join(dir, "spex.lock"));
-    const stale = lock ? stalePhrases(lock, readRequestsFile(join(dir, "spex.yaml"))?.text ?? null, this.workingFolder(key)) : ["none"];
-    await this.settle(key, stale ? "resolve" : "install", true, held);
+    this.settled.add(key);
+    return this.enqueue(key, () => this.settleNow(key, "install", true, held, { name, request, prepare }));
   }
 
   /** Settle every clone this run has not settled yet — one the store
@@ -660,8 +713,8 @@ export class EnvironmentManager {
 
   /** The named blocker of a sync while an environment operation runs. */
   busyFor(key: string): string | undefined {
-    const busy = this.clones.get(key)?.busy;
-    if (!busy) return undefined;
+    const state = this.clones.get(key);
+    if (!state?.busy && !state?.pending) return undefined;
     return i18n._({
       id: "Wait for the spec packages of {repository} to finish installing",
       comment: "What blocks a Space operation: the spex repository's environment is resolving, installing or publishing",
@@ -769,6 +822,11 @@ export class EnvironmentManager {
     const own = this.store.home.own();
     const ownLocations = this.locations(own);
     const project = projectKey !== null && projectKey !== own ? this.locations(projectKey) : null;
+    return this.modulesFromLocations(projectKey, ownLocations, project);
+  }
+
+  private modulesFromLocations(projectKey: string | null, ownLocations: Map<string, ModuleLocation>, project: Map<string, ModuleLocation> | null): PlaybookModules {
+    const own = this.store.home.own();
     const pick = (locations: Map<string, ModuleLocation> | null, id: string): ModuleLocation | undefined => {
       if (!locations) return undefined;
       for (const location of locations.values()) if (location.id === id) return location;

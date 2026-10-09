@@ -22,6 +22,13 @@ While the config file carries user comments, when different packages write it in
 
 Where any Spex surface submits a shared-config change that violates the shared fail-closed rule set, the receiving surface shall reject it naming the violated rule and the shared config file's bytes shall remain unchanged — no surface writes a config another surface would refuse.
 
+### shared-config-roundtrip-6
+
+When a prepared shared-config change reaches publication, the receiving surface shall reject it without writing if its destination is no longer current, an operation holds a repository whose config it used [[space-21](space.md#space-21)], or any config bytes used to prepare it have changed, requiring the caller to retry from current state:
+
+- a project's edit checks both its own file and the own-group configuration used to validate it;
+- validation of these conditions and publication have no asynchronous work between them.
+
 ## Verification
 
 ### shared-config-roundtrip-3
@@ -33,3 +40,7 @@ Where a commented fixture config is edited through the Settings protocol command
 Where a client submits a config edit that violates a shared-config rule, the integration suite shall assert the receiving surface rejects it naming the rule while the config file remains unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface:
 
 - Captain and player writable-path edits cover every refusal class, retain prior bytes on rejection, and reload accepted paths with the same canonical runtime value [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], [[shared-config-roundtrip-5](#shared-config-roundtrip-5)].
+
+### shared-config-roundtrip-7
+
+Where real core commands pause a config edit during module loading, the integration suite shall assert that a competing accepted edit, a sync holding the destination, and removal or movement of the destination each refuse the paused edit without overwriting current bytes or creating files at the departed destination, with project edits also refused after their own-group input changes [[shared-config-roundtrip-6](#shared-config-roundtrip-6)].

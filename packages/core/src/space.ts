@@ -60,7 +60,7 @@ import {
   type StorageTree,
   type StorageTrees,
 } from "./storage-git.js";
-import { prefsFileOf, type SpexRepository, type Store } from "./store.js";
+import { prefsFileOf, spexRepository, type SpexRepository, type Store } from "./store.js";
 import { foldTurnEvent } from "./stream-fold.js";
 
 /** What the core lends the Groups engine: the home, its indexes, the
@@ -119,6 +119,21 @@ export interface SpaceHost {
 /** What a spex repository's clone says of its host: its origin URL and
  * the host's id recorded beside it (git-host-5). */
 interface CloneFacts { remote: string | null; id: string | null }
+
+/** A reservation belongs to one invocation, independently of the phase
+ * shown to clients. Only that invocation can finish or restore it. */
+interface RepositoryReservation {
+  readonly op: SpaceOp;
+  readonly done: Promise<void>;
+  phase(phase: SpaceSyncPhase): void;
+  release(phase?: SpaceSyncPhase): void;
+}
+
+interface HostReservation {
+  readonly id: string;
+  key: string;
+  release(): void;
+}
 
 /** A step at the host waiting for a member with the rights (space-64). */
 interface Waiting {
@@ -589,7 +604,8 @@ const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "
  * at a time on this clone, any number of clones at once. */
 class RepositorySync {
   git: SpaceGit;
-  phase: SpaceSyncPhase = { phase: "idle" };
+  private currentPhase: SpaceSyncPhase = { phase: "idle" };
+  get phase(): SpaceSyncPhase { return this.currentPhase; }
   /** The clone's remote and recorded id, as last read. */
   facts: CloneFacts = { remote: null, id: null };
   /** What the last transport learnt of the host before the next read
@@ -610,6 +626,7 @@ class RepositorySync {
   private repairFailure?: string;
   private refreshProblem?: StorageDiagnostic;
   private mergePending = false;
+  private reservation?: RepositoryReservation;
 
   constructor(private readonly host: SpaceHost, private readonly owner: SpaceManager, public repository: SpexRepository) {
     this.git = this.makeGit(repository.dir);
@@ -629,7 +646,7 @@ class RepositorySync {
   private transportStarted(): void {
     if (this.phase.phase !== "running" || this.phase.cancelable) return;
     if (this.phase.step !== "check" && this.phase.step !== "push") return;
-    this.phase = { ...this.phase, cancelable: true };
+    this.currentPhase = { ...this.phase, cancelable: true };
     void this.broadcast(false).catch((error: unknown) => {
       console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`);
     });
@@ -649,11 +666,11 @@ class RepositorySync {
 
   /** The busy message while an operation runs, else undefined. */
   busy(): string | undefined {
-    if (this.phase.phase !== "running") return undefined;
+    if (!this.reservation) return undefined;
     // One whole sentence per operation: a verb dropped into a frame
     // carries to no other language (core-service-111).
     const name = splitKey(this.key).name;
-    switch (this.phase.op) {
+    switch (this.reservation.op) {
       case "sync":
         return i18n._({ id: "{name} is syncing; wait for it to finish", values: { name }, comment: "Refusal while a spex repository syncs; {name} is its name" });
       case "join":
@@ -668,29 +685,48 @@ class RepositorySync {
   }
 
   assertNotRunning(): void {
-    if (this.phase.phase === "running") {
-      throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
+    if (this.reservation) {
+      throw new CoreError("busy", this.reservation.op === "remove" || this.reservation.op === "move"
+        ? this.busy()!
+        : i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
     }
   }
 
-  /** The phase a hold set aside, given back when it lifts. */
-  private beforeHold?: SpaceSyncPhase;
-
   /** Hold the gate for an operation run beneath this clone — a rename,
-   * a move, a join's code clone or a project's removal (space-21); false
+   * a move, a join's code clone or a project's removal (space-21); absent
    * while another runs. */
-  hold(op: SpaceOp, step: SyncStep): boolean {
-    if (this.phase.phase === "running") return false;
-    this.beforeHold = this.phase;
-    this.phase = { phase: "running", op, step, since: Date.now(), cancelable: false };
-    return true;
+  hold(op: SpaceOp, step: SyncStep): RepositoryReservation | undefined {
+    if (!this.owner.isCurrent(this)) throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device", comment: "Refusal: the key names no clone under workspace/", values: { key: this.key } }));
+    if (this.reservation) return undefined;
+    const before = this.phase;
+    let finish!: () => void;
+    const done = new Promise<void>((resolveDone) => { finish = resolveDone; });
+    const reservation: RepositoryReservation = {
+      op, done,
+      phase: (phase) => {
+        this.assertOwner(reservation);
+        this.currentPhase = phase;
+      },
+      release: (phase = before) => {
+        if (this.reservation !== reservation) return;
+        this.currentPhase = phase;
+        this.reservation = undefined;
+        finish();
+      },
+    };
+    this.reservation = reservation;
+    this.currentPhase = { phase: "running", op, step, since: Date.now(), cancelable: false };
+    return reservation;
   }
 
-  /** Lift a hold, the clone reading what it read before — a picker
-   * waiting still waits (space-21) — or end it stopped. */
-  release(stopped?: { op: SpaceOp; step: SyncStep; failure: GitFailure }): void {
-    this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : this.beforeHold ?? { phase: "idle" };
-    this.beforeHold = undefined;
+  private reserve(op: SpaceOp, step: SyncStep): RepositoryReservation {
+    this.assertNotRunning();
+    return this.hold(op, step)!;
+  }
+
+  /** Internal writes must belong to the operation that admitted them. */
+  assertOwner(reservation: RepositoryReservation): void {
+    if (this.reservation !== reservation) throw new CoreError("busy", this.busy() ?? i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
   }
 
   // -- reads and moves (space-59, space-60) -----------------------------------
@@ -749,7 +785,8 @@ class RepositorySync {
 
   /** Give the clone the host's own remote and id (space-58, space-63):
    * the URL the host handed over, used as given (space-5). */
-  async attachHost(url: string, id: string): Promise<void> {
+  async attachHost(url: string, id: string, reservation: RepositoryReservation): Promise<void> {
+    this.assertOwner(reservation);
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
@@ -770,18 +807,23 @@ class RepositorySync {
   /** Record the host's id beside a clone matched by its remote URL
    * (git-host-5). */
   async recordId(id: string): Promise<void> {
-    if (this.phase.phase === "running" || this.facts.id === id) return;
-    await this.reading(() => this.recordIdNow(id));
+    if (this.facts.id === id) return;
+    const reservation = this.hold("check", "check");
+    if (!reservation) return;
+    try { await this.reading(() => this.recordIdNow(id, reservation)); }
+    finally { reservation.release(); }
   }
 
   /** The same, inside this clone's own operation. */
-  async recordIdNow(id: string): Promise<void> {
+  async recordIdNow(id: string, reservation: RepositoryReservation): Promise<void> {
+    this.assertOwner(reservation);
     if ((await this.git.run(["config", "spex.repositoryId", id])).code === 0) this.facts = { ...this.facts, id };
   }
 
   /** The URL the host hands over after a rename or a transfer
    * (space-60), used as given, inside this clone's own operation. */
-  async setOrigin(url: string): Promise<void> {
+  async setOrigin(url: string, reservation: RepositoryReservation): Promise<void> {
+    this.assertOwner(reservation);
     await this.git.ok(["remote", "set-url", "origin", url]);
     this.facts = { ...this.facts, remote: url };
   }
@@ -832,12 +874,12 @@ class RepositorySync {
   /** The repository's state, recomputing the lists from the working
    * tree when asked (space-33: mine is the working tree outside a sync). */
   async state(recompute: boolean): Promise<RepositoryState> {
-    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
+    if (this.reservation && this.cached) return { ...this.cached, sync: this.phase };
     return this.reading(() => this.readState(recompute));
   }
 
   private async readState(recompute: boolean): Promise<RepositoryState> {
-    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
+    if (this.reservation && this.cached) return { ...this.cached, sync: this.phase };
     const repo = await this.readRepository();
     if (recompute && repo.root && repo.head !== null && this.phase.phase !== "choices") {
       try { await this.computeWorkingLists(repo.head, repo.originSpex); }
@@ -1130,59 +1172,65 @@ class RepositorySync {
   /** Give the clone a remote, or take it away (space-5): the way a
    * reader or a test reaches a host this wave. */
   async setRemote(url: string | null): Promise<void> {
-    this.assertNotRunning();
-    const repo = await this.readRepository();
-    this.requireGit(repo);
-    if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
-    if (url === null) {
-      if (repo.remote !== null) await this.git.ok(["remote", "remove", "origin"]);
-    } else {
-      const checked = validateRemoteUrl(url);
-      if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
-      // The Git host's own remote URLs are those it hands over, used as
-      // given and never named by the reader (space-5).
-      if (await this.owner.atHostOrigin(url)) {
-        throw new CoreError("invalid_request", i18n._({
-          id: "The Git host's own URLs are used as the host gives them; pick a group instead.",
-          comment: "Refusal of a remote the reader named under the Git host's own origin",
-        }));
+    const reservation = this.reserve("check", "check");
+    let completed: SpaceSyncPhase | undefined;
+    try {
+      const repo = await this.readRepository();
+      this.requireGit(repo);
+      if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
+      if (url === null) {
+        if (repo.remote !== null) await this.git.ok(["remote", "remove", "origin"]);
+      } else {
+        const checked = validateRemoteUrl(url);
+        if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
+        // The Git host's own remote URLs are those it hands over, used as
+        // given and never named by the reader (space-5).
+        if (await this.owner.atHostOrigin(url)) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "The Git host's own URLs are used as the host gives them; pick a group instead.",
+            comment: "Refusal of a remote the reader named under the Git host's own origin",
+          }));
+        }
+        if (url !== repo.remote) await this.git.ok(repo.remote === null ? ["remote", "add", "origin", url] : ["remote", "set-url", "origin", url]);
       }
-      if (url !== repo.remote) await this.git.ok(repo.remote === null ? ["remote", "add", "origin", url] : ["remote", "set-url", "origin", url]);
-    }
-    if (url !== repo.remote) {
-      // A changed remote clears the last check and the last sync (space-5):
-      // what the old remote held says nothing about the new one.
-      await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
-      await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
-      // A remote the reader names is no repository the host listed.
-      await this.git.run(["config", "--unset", "spex.repositoryId"]);
-      this.checkedAt = null;
-      this.host.store.deletePref(lastSyncPref(this.key));
-      this.remoteEmpty = false;
-      this.unrelated = false;
-      this.hostOverride = undefined;
-      this.phase = { phase: "idle" };
-    }
+      if (url !== repo.remote) {
+        // A changed remote clears the last check and the last sync (space-5):
+        // what the old remote held says nothing about the new one.
+        await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
+        await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
+        // A remote the reader names is no repository the host listed.
+        await this.git.run(["config", "--unset", "spex.repositoryId"]);
+        this.checkedAt = null;
+        this.host.store.deletePref(lastSyncPref(this.key));
+        this.remoteEmpty = false;
+        this.unrelated = false;
+        this.hostOverride = undefined;
+        completed = { phase: "idle" };
+      }
+      await this.readFacts();
+    } finally { reservation.release(completed); }
     await this.state(true);
   }
 
   // -- operations (space-31) -------------------------------------------------
 
-  private runOperation(op: SpaceOp, body: () => Promise<void>): Promise<void> {
+  private runOperation(reservation: RepositoryReservation, body: () => Promise<void>): Promise<void> {
+    const op = reservation.op;
     const work = (async () => {
       try { await body(); }
       catch (error) {
         const step = this.phase.phase === "running" ? this.phase.step : "save";
-        if (error instanceof SpaceStopped) this.phase = { phase: "stopped", op, step: error.step, ...error.failure };
+        if (error instanceof SpaceStopped) this.currentPhase = { phase: "stopped", op, step: error.step, ...error.failure };
         else {
           const message = error instanceof Error ? error.message : String(error);
-          this.phase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: i18n._({
+          this.currentPhase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: i18n._({
             id: "Retry; if it fails again, run the step in a terminal for detail.",
             comment: "Guidance under a step that stopped for a reason the app does not classify",
           }), retry: true };
         }
       } finally {
-        await this.releaseHoldings();
+        try { await this.releaseHoldings(); }
+        finally { reservation.release(this.phase); }
         try { await this.broadcast(this.phase.phase !== "choices"); }
         catch (error) { console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`); }
       }
@@ -1195,33 +1243,29 @@ class RepositorySync {
   /** Enter a step. Check enters with no Stop: its host read comes
    * first, and Stop is offered once its Git child runs (space-16). */
   private async enter(op: SpaceOp, step: SyncStep, cancelable: boolean): Promise<void> {
-    this.phase = { phase: "running", op, step, since: Date.now(), cancelable };
+    this.currentPhase = { phase: "running", op, step, since: Date.now(), cancelable };
     await this.broadcast(false);
     await this.host.beforeStep?.({ op, step, repository: this.key });
   }
 
   async fetch(): Promise<{ accepted: true }> {
-    this.assertNotRunning();
-    const previous = this.phase;
-    this.phase = { phase: "running", op: "check", step: "check", since: Date.now(), cancelable: false };
+    const reservation = this.reserve("check", "check");
     let repo: ReadyRepository;
     try {
       repo = await this.requireReady();
       await this.owner.admit(this, { push: false, noticed: true });
-    } catch (error) { this.phase = previous; throw error; }
-    void this.runOperation("check", async () => {
+    } catch (error) { reservation.release(); throw error; }
+    void this.runOperation(reservation, async () => {
       await this.enter("check", "check", false);
-      await this.check(repo.remote, "check");
-      this.phase = { phase: "idle" };
+      await this.check(repo.remote, "check", reservation);
+      this.currentPhase = { phase: "idle" };
     });
     return { accepted: true };
   }
 
   async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean }): Promise<{ accepted: true }> {
-    this.assertNotRunning();
-    const previous = this.phase;
     // The gate is set before the admission checks (space-21).
-    this.phase = { phase: "running", op: "sync", step: "save", since: Date.now(), cancelable: false };
+    const reservation = this.reserve("sync", "save");
     let repo: ReadyRepository;
     const choices: Record<string, StorageChoice> = {};
     try {
@@ -1250,10 +1294,10 @@ class RepositorySync {
       if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
       await this.owner.admit(this, { push: true, noticed: input.noticed === true });
     } catch (error) {
-      this.phase = previous;
+      reservation.release();
       throw error;
     }
-    void this.runOperation("sync", () => this.syncBody(repo, choices, input.join === true));
+    void this.runOperation(reservation, () => this.syncBody(repo, choices, input.join === true, reservation));
     return { accepted: true };
   }
 
@@ -1265,11 +1309,12 @@ class RepositorySync {
   async stop(): Promise<void> {
     this.git.cancel();
     try { await this.operation; } catch { /* reported as state */ }
+    await this.reservation?.done;
   }
 
   // -- the steps (space-12, space-15) ----------------------------------------
 
-  private async syncBody(repo: ReadyRepository, choices: Record<string, StorageChoice>, join: boolean): Promise<void> {
+  private async syncBody(repo: ReadyRepository, choices: Record<string, StorageChoice>, join: boolean, reservation: RepositoryReservation): Promise<void> {
     const op: SpaceOp = "sync";
     let restarts = 0;
     let rechecks = 0;
@@ -1293,7 +1338,7 @@ class RepositorySync {
         }
         case "check": {
           await this.enter(op, "check", false);
-          const checked = await this.check(remote, "sync");
+          const checked = await this.check(remote, "sync", reservation);
           remote = checked.remote;
           readOnly = checked.readOnly;
           atHost = checked.atHost;
@@ -1307,8 +1352,8 @@ class RepositorySync {
         case "compare": {
           await this.enter(op, "compare", false);
           const result = await this.compare(choices, join);
-          if (result.outcome === "unrelated") { this.phase = { phase: "unrelated" }; return; }
-          if (result.outcome === "choices") { this.phase = { phase: "choices", savedCommit }; return; }
+          if (result.outcome === "unrelated") { this.currentPhase = { phase: "unrelated" }; return; }
+          if (result.outcome === "choices") { this.currentPhase = { phase: "choices", savedCommit }; return; }
           if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
           pending = result.pending;
           counts = pending.counts;
@@ -1352,7 +1397,7 @@ class RepositorySync {
             // new sessions stay on this device (space-12, space-61).
             const at = Date.now();
             this.host.store.setPref(lastSyncPref(this.key), { at, sent: 0, received: counts.received });
-            this.phase = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
+            this.currentPhase = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
             next = "done";
             break;
           }
@@ -1380,7 +1425,7 @@ class RepositorySync {
           upstream = true;
           const at = Date.now();
           this.host.store.setPref(lastSyncPref(this.key), { at, sent: counts.sent, received: counts.received });
-          this.phase = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
+          this.currentPhase = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
           next = "done";
           break;
         }
@@ -1451,8 +1496,8 @@ class RepositorySync {
    * the Git host, prepare its branch before a first push, then fetch the
    * host's `spex` without merging with the brokered credential;
    * `empty` where the host holds no `spex` (space-8, space-12). */
-  private async check(remote: string, op: SpaceOp): Promise<{ empty: boolean; readOnly: boolean; atHost: boolean; remote: string }> {
-    const host = await this.owner.hostCheck(this, op);
+  private async check(remote: string, op: SpaceOp, reservation: RepositoryReservation): Promise<{ empty: boolean; readOnly: boolean; atHost: boolean; remote: string }> {
+    const host = await this.owner.hostCheck(this, op, reservation);
     const target = host?.remote ?? remote;
     const credential = host ? await this.owner.credentialFor(target, "check") : null;
     const options = { transport: true, ...(credential ? { credential } : {}) };
@@ -1692,12 +1737,13 @@ class RepositorySync {
    * reopens the clone; a failure stands as a blocking issue. */
   async repairAtStartup(): Promise<void> {
     if (!existsSync(this.markerPath())) return;
+    const reservation = this.reserve("sync", "apply");
     try {
       await this.repair();
       this.host.store.reload();
     } catch (error) {
       this.repairFailure = error instanceof Error ? error.message : String(error);
-    }
+    } finally { reservation.release(); }
   }
 
   private async repairIfMarked(): Promise<void> {
@@ -2010,8 +2056,11 @@ export class SpaceManager {
   private readonly heldHere = new Map<string, string>();
   /** Joins in flight or stopped, by the host's id (space-63). */
   private readonly joining = new Map<string, SpaceSyncPhase>();
-  /** Picks being asked of the host, by key. */
-  private readonly picking = new Set<string>();
+  /** Ownership of a host repository is separate from the last host
+   * view: reads may clear `attached`, but cannot release these claims. */
+  private readonly hostReservations = new Map<string, HostReservation>();
+  /** A moving clone owns its future key as well as its current key. */
+  private readonly destinations = new Map<string, { machine: RepositorySync }>();
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
 
@@ -2294,7 +2343,8 @@ export class SpaceManager {
     const current = store.home.ownName;
     if (!target || target === current) return "none";
     const ownFrom = store.home.own();
-    const keys = store.listRepositories().map((repository) => repository.key).filter((key) => key.startsWith(`${current}/`));
+    const keys = this.occupiedKeys().filter((key) => key.startsWith(`${current}/`));
+    if (keys.some((key) => !store.repository(key) && this.busyFor(key))) return "busy";
     const ownTo = `${target}/${target}-spex`;
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
     // A clone on the host never turns local-only: facts already read
@@ -2307,19 +2357,21 @@ export class SpaceManager {
     // source itself, as a case-insensitive filesystem reads a login
     // differing only by case, does not.
     if (moves.some((move) => moveCollides(store.home.workspace, move.from, move.to))) return "busy";
-    // A pick in flight writes the clone's remote: it ends first.
-    if (keys.some((key) => this.picking.has(key))) return "busy";
-    const held: RepositorySync[] = [];
+    const held = new Map<RepositorySync, RepositoryReservation>();
     const moving: RepositorySync[] = [];
+    let releaseDestinations: (() => void) | undefined;
     try {
       // The gate of every clone beneath, old key and new (space-21):
       // held before the checks, and through the move until the store,
       // the machines and the core read every clone where it now lies.
       for (const key of keys) {
         const machine = this.machine(key);
-        if (!machine.hold("move", "apply")) return "busy";
-        held.push(machine);
+        const reservation = machine.hold("move", "apply");
+        if (!reservation) return "busy";
+        held.set(machine, reservation);
       }
+      releaseDestinations = this.reserveDestinations(moves);
+      if (!releaseDestinations) return "busy";
       // Your own group's spex repository on the host follows the host's
       // moves alone (space-60): its clone's facts are read under the gate.
       if (store.repository(ownFrom) && this.atHost(await this.machine(ownFrom).readFacts())) return "none";
@@ -2328,11 +2380,14 @@ export class SpaceManager {
       // Reads in flight end where the clones lie, and what an
       // environment is writing beneath them lands, before the folders
       // move; a read starting meanwhile waits and reads them moved.
-      for (const machine of held) {
+      for (const machine of held.keys()) {
         moving.push(machine);
         await machine.beginMove();
       }
       await this.host.settleBeneath?.(keys);
+      // Registration or Join may have acquired another key while the
+      // move drained. Never carry a clone whose reservation we lack.
+      if (this.occupiedKeys().some((key) => key.startsWith(`${current}/`) && !keys.includes(key))) return "busy";
       // A login differing only by case renames the folder in place where
       // the filesystem reads both spellings as one, and each clone then
       // moves from where it now lies.
@@ -2343,7 +2398,8 @@ export class SpaceManager {
       return "done";
     } finally {
       for (const machine of moving) machine.endMove();
-      for (const machine of held) machine.release();
+      releaseDestinations?.();
+      for (const reservation of held.values()) reservation.release();
     }
   }
 
@@ -2404,9 +2460,10 @@ export class SpaceManager {
     group: string,
     create: { id: string | null; name: string } | null,
   ): Promise<"joined" | "created" | "waiting" | "local"> {
-    if (this.picking.has(machine.key)) return "local";
-    this.picking.add(machine.key);
+    const reservation = machine.hold("join", "check");
+    if (!reservation) return "local";
     try {
+      if (await this.host.blocker(machine.key)) return "local";
       this.heldHere.delete(machine.key);
       // A clone given its remote while this waited joined already.
       if ((await machine.readFacts()).remote !== null) {
@@ -2418,24 +2475,58 @@ export class SpaceManager {
       if (this.holderOf(view, group, held) !== undefined) {
         this.dropChoice(machine.key);
         this.heldHere.set(machine.key, group);
+        reservation.release();
         await this.publish();
         return "local";
       }
       if (candidates.length > 1) {
         this.standChoice(machine.key, candidates);
+        // The choice is settled and actionable. Publishing it owns no
+        // clone writes; a Use admitted now owns its own reservation.
+        reservation.release();
         await this.publish();
         return "local";
       }
       this.dropChoice(machine.key);
       if (candidates.length === 1) {
-        await this.adopt(machine, candidates[0], true);
+        await this.adopt(machine, candidates[0], true, reservation);
         return "joined";
       }
       if (!create) return "local";
-      return await this.create(machine, { id: create.id, fullPath: group }, create.name, repositoryDescription({ kind: "group", group }), "quiet");
+      return await this.create(machine, { id: create.id, fullPath: group }, create.name, repositoryDescription({ kind: "group", group }), "quiet", reservation);
     } finally {
-      this.picking.delete(machine.key);
+      reservation.release();
     }
+  }
+
+  private alreadyHeld(name: string, key: string): CoreError {
+    return new CoreError("invalid_request", i18n._({
+      id: "{name} is on this device already as {key}",
+      values: { name, key },
+      comment: "Refusal of a pick joining a spex repository another clone on this device already stands for, or a group's own while another of its group's own is here; {name} is the repository that clone stands for, {key} that clone's path under the workspace",
+    }));
+  }
+
+  /** Claim before the first await, then inspect durable clone facts
+   * while every competing entry point sees this assignment in flight. */
+  private reserveHost(id: string, key: string): HostReservation {
+    const held = this.hostReservations.get(id);
+    if (held) throw this.alreadyHeld(this.view?.listings.find((entry) => entry.repository.id === id)?.repository.path ?? id, held.key);
+    const reservation: HostReservation = {
+      id, key,
+      release: () => {
+        if (this.hostReservations.get(id) === reservation) this.hostReservations.delete(id);
+      },
+    };
+    this.hostReservations.set(id, reservation);
+    return reservation;
+  }
+
+  private async assertHostAvailable(view: HostView, listing: HostListing, key: string, siblings = true): Promise<void> {
+    const held = await this.heldAfresh(view, key);
+    const holding = [listing, ...(siblings && listedRecords(listing) === "group" ? candidatesOf(view, listing.repository.group.fullPath) : [])]
+      .find((entry) => held.has(entry.repository.id));
+    if (holding) throw this.alreadyHeld(holding.repository.path, held.get(holding.repository.id)!);
   }
 
   /** The host's ids this device's other clones stand for, each with its
@@ -2452,11 +2543,8 @@ export class SpaceManager {
       const id = facts ? listingFor(view, facts.id, facts.remote)?.repository.id ?? facts.id : null;
       if (id !== null) held.set(id, repository.key);
     }
-    for (const [id, phase] of this.joining) {
-      if (phase.phase !== "running" || held.has(id)) continue;
-      const listing = view.listings.find((entry) => entry.repository.id === id);
-      const key = listing ? hostKey(listing.repository) : null;
-      if (key) held.set(id, key);
+    for (const [id, reservation] of this.hostReservations) {
+      if (reservation.key !== except) held.set(id, reservation.key);
     }
     return held;
   }
@@ -2591,20 +2679,37 @@ export class SpaceManager {
    * first write of its remote, the repository counts as listed as the
    * host answered it until a read begun after this is held (git-host-5),
    * so its row goes straight to its sync. */
-  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean): Promise<void> {
+  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, held?: RepositoryReservation): Promise<void> {
+    const reservation = held ?? machine.hold("join", "check");
+    if (!reservation) { machine.assertNotRunning(); return; }
+    machine.assertOwner(reservation);
     const { repository } = listing;
-    this.attachedAfter = this.readsBegun;
-    this.attached.set(repository.id, listing);
-    try { await machine.attachHost(repository.remoteUrl, repository.id); }
-    catch (error) {
-      this.attached.delete(repository.id);
-      throw error;
+    let claim: HostReservation | undefined;
+    try {
+      claim = this.reserveHost(repository.id, machine.key);
+      const view = this.view ?? await this.readHost();
+      await this.assertHostAvailable(view, listing, machine.key);
+      const blocker = await this.host.blocker(machine.key);
+      if (blocker) throw new CoreError("busy", blocker);
+      this.attachedAfter = this.readsBegun;
+      this.attached.set(repository.id, listing);
+      try { await machine.attachHost(repository.remoteUrl, repository.id, reservation); }
+      catch (error) {
+        this.attached.delete(repository.id);
+        throw error;
+      }
+      this.waiting.delete(machine.key);
+      this.dropChoice(machine.key);
+      this.heldHere.delete(machine.key);
+      await this.publish();
+      // The durable id now holds the host repository. Hand the clone
+      // directly to Sync; an older caller's finally owns neither gate.
+      reservation.release();
+      this.startSync(machine.key, { join });
+    } finally {
+      claim?.release();
+      reservation.release();
     }
-    this.waiting.delete(machine.key);
-    this.dropChoice(machine.key);
-    this.heldHere.delete(machine.key);
-    await this.publish();
-    this.startSync(machine.key, { join });
   }
 
   /** Ask the host to create `name` in a group for a clone (git-host-6). */
@@ -2614,32 +2719,43 @@ export class SpaceManager {
     name: string,
     description: string,
     mode: "refuse" | "quiet",
+    held?: RepositoryReservation,
   ): Promise<"created" | "waiting" | "local"> {
-    const key = machine.key;
-    const ask = { groupId: group.id, name, description };
-    let answer: Awaited<ReturnType<GitHostClient["create"]>>;
+    const reservation = held ?? machine.hold("join", "check");
+    if (!reservation) { machine.assertNotRunning(); return "local"; }
+    machine.assertOwner(reservation);
     try {
-      answer = await this.host.client.create(ask);
-    } catch (error) {
-      if (mode === "refuse") {
-        throw new CoreError("invalid_request", error instanceof HostError && error.kind === "name_taken"
-          ? nameTaken(name, group.fullPath)
-          : relayHostError(error, this.hostName()));
+      const blocker = await this.host.blocker(machine.key);
+      if (blocker) {
+        if (mode === "quiet") return "local";
+        throw new CoreError("busy", blocker);
       }
-      // The refusal stands on the row with the host's words, and the
-      // creation is asked again at the next read (space-4, space-64).
-      this.waiting.set(key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
-      await this.publish();
-      return "waiting";
-    }
-    if (answer.status === "pending") {
-      this.waiting.set(key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
-      await this.publish();
-      return "waiting";
-    }
-    // As the host answered: no `spex` branch yet, nor a members' count.
-    await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false);
-    return "created";
+      const key = machine.key;
+      const ask = { groupId: group.id, name, description };
+      let answer: Awaited<ReturnType<GitHostClient["create"]>>;
+      try {
+        answer = await this.host.client.create(ask);
+      } catch (error) {
+        if (mode === "refuse") {
+          throw new CoreError("invalid_request", error instanceof HostError && error.kind === "name_taken"
+            ? nameTaken(name, group.fullPath)
+            : relayHostError(error, this.hostName()));
+        }
+        // The refusal stands on the row with the host's words, and the
+        // creation is asked again at the next read (space-4, space-64).
+        this.waiting.set(key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
+        await this.publish();
+        return "waiting";
+      }
+      if (answer.status === "pending") {
+        this.waiting.set(key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
+        await this.publish();
+        return "waiting";
+      }
+      // As the host answered: no `spex` branch yet, nor a members' count.
+      await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false, reservation);
+      return "created";
+    } finally { reservation.release(); }
   }
 
   /** Every step left waiting before this read, asked again at it
@@ -2662,8 +2778,15 @@ export class SpaceManager {
         }
         // A project's creation its pick asked is found by that name (space-58).
         const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
-        if (found) await this.adopt(machine, found, true);
-        else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
+        try {
+          if (found) await this.adopt(machine, found, true);
+          else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
+        } catch (error) {
+          // One clone's refused assignment must not stop the remaining
+          // waiting clones from being considered at this read.
+          if (error instanceof CoreError && error.code === "busy") this.waiting.set(key, waiting);
+          else console.error(`spex: ${key} stays on this device: ${error instanceof Error ? error.message : String(error)}`);
+        }
         continue;
       }
       const listing = listingFor(view, machine.facts.id, machine.facts.remote);
@@ -2699,9 +2822,10 @@ export class SpaceManager {
   async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
     const machine = this.machine(key);
     machine.assertNotRunning();
-    if (this.picking.has(key)) throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
-    this.picking.add(key);
+    const reservation = machine.hold("join", "check")!;
     try {
+      const blocker = await this.host.blocker(key);
+      if (blocker) throw new CoreError("busy", blocker);
       const facts = await machine.readFacts();
       if (facts.remote !== null) {
         throw new CoreError("invalid_request", i18n._({ id: "{name} is on the host already", values: { name: splitKey(key).name }, comment: "Refusal of a pick: the spex repository is not local only" }));
@@ -2716,19 +2840,6 @@ export class SpaceManager {
       if (choice.kind === "join") {
         const listing = view.listings.find((entry) => entry.repository.id === choice.hostId);
         if (!listing) throw new CoreError("not_found", noLongerShared());
-        // A spex repository on this device as another clone is never
-        // joined again, nor a group's own while another of its group's
-        // own is: Spex merges no two (space-58, DR-110).
-        const held = await this.heldAfresh(view, key);
-        const holding = [listing, ...(listedRecords(listing) === "group" ? candidatesOf(view, listing.repository.group.fullPath) : [])]
-          .find((entry) => held.has(entry.repository.id));
-        if (holding !== undefined) {
-          throw new CoreError("invalid_request", i18n._({
-            id: "{name} is on this device already as {key}",
-            values: { name: holding.repository.path, key: held.get(holding.repository.id) },
-            comment: "Refusal of a pick joining a spex repository another clone on this device already stands for, or a group's own while another of its group's own is here; {name} is the repository that clone stands for, {key} that clone's path under the workspace",
-          }));
-        }
         if (this.noticeOwed(listing, key)) {
           throw new CoreError("invalid_request", i18n._({
             id: "Read the sharing notice before joining {name}",
@@ -2736,7 +2847,7 @@ export class SpaceManager {
             comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
           }), { notice: true, members: listing.members, visibility: listing.repository.visibility });
         }
-        await this.adopt(machine, listing, true);
+        await this.adopt(machine, listing, true, reservation);
         return { accepted: true };
       }
       const base = kebab(choice.name.trim().replace(/-spex$/i, ""));
@@ -2761,10 +2872,10 @@ export class SpaceManager {
       }
       const project = this.projectFile(machine.repository);
       await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
-        repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse");
+        repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse", reservation);
       return { accepted: true };
     } finally {
-      this.picking.delete(key);
+      reservation.release();
     }
   }
 
@@ -2781,48 +2892,70 @@ export class SpaceManager {
    * `folder`, and pair the two. */
   async join(hostId: string, folder?: string): Promise<{ accepted: true }> {
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
-    const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
-    const listing = view.listings.find((entry) => entry.repository.id === hostId);
-    if (!listing) throw new CoreError("not_found", noLongerShared());
-    const key = hostKey(listing.repository);
-    if (!key) {
-      throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
+    if (this.hostReservations.has(hostId) && this.joining.get(hostId)?.phase === "running") throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
+    const claim = this.reserveHost(hostId, this.view?.listings.find((entry) => entry.repository.id === hostId)?.repository.path ?? hostId);
+    let machine: RepositorySync | undefined;
+    let reservation: RepositoryReservation | undefined;
+    let launched = false;
+    try {
+      const view = this.view ?? await this.readHost().catch((error: unknown) => { throw new CoreError("invalid_request", relayHostError(error, this.hostName())); });
+      const listing = view.listings.find((entry) => entry.repository.id === hostId);
+      if (!listing) throw new CoreError("not_found", noLongerShared());
+      const key = hostKey(listing.repository);
+      if (!key) {
+        throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
+      }
+      claim.key = key;
+      const store = this.host.store;
+      // A clone here holds it, its remote written or, by a pick or a
+      // lookup, being written (space-63, space-65).
+      const here = store.listRepositories().some((repository) => {
+        const facts = this.machine(repository.key).facts;
+        return facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId;
+      });
+      // A group's own spex repository its group's local-only clone here is
+      // given — by a standing choice's Use, or by its lookup at the next
+      // read, whether or not that has run — is the clone's to take: as a
+      // clone of its own it would hold the group's records beside that
+      // clone (space-65, space-69).
+      const choice = this.standingChoices().some((entry) => entry.candidates.some((candidate) => candidate.repository.id === hostId));
+      if (!here && (choice || this.givenHere(view, listing))) {
+        // Where no choice stands because the group's records are held
+        // here, the refusal says so, as the clone's row does (space-61).
+        const held = choice ? undefined : this.heldFor(listing.repository.group.fullPath);
+        throw new CoreError("invalid_request", held ? recordsHere(held.group, held.name) : i18n._({
+          id: "Use {name} where this device asks which holds the records",
+          values: { name: listing.repository.path },
+          comment: "Refusal of a join: the listed spex repository is a group's own that this device's local-only clone of that group is given, by a standing choice's Use or by its lookup at the next read",
+        }));
+      }
+      if (here || store.repository(key) || existsSync(store.home.clonePath(key))) {
+        throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
+      }
+      const path = folder === undefined ? undefined : resolve(folder);
+      if (path !== undefined && store.home.keyForFolder(path)) {
+        throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
+      }
+      // Own the destination even before its clone is indexed: another
+      // join's rescan must not expose a half-cloned repository as writable.
+      const occupied = this.busyFor(key);
+      if (occupied) throw new CoreError("busy", occupied);
+      machine = new RepositorySync(this.host, this, spexRepository(key, store.home.clonePath(key)));
+      this.machines.set(key, machine);
+      reservation = machine.hold("join", "check")!;
+      await this.assertHostAvailable(view, listing, key, false);
+      this.joining.set(hostId, machine.phase);
+      await this.publish();
+      void this.runJoin(listing, machine, path, reservation, claim);
+      launched = true;
+      return { accepted: true };
+    } finally {
+      if (!launched) {
+        reservation?.release();
+        claim.release();
+        if (machine && !this.host.store.repository(machine.key) && this.machines.get(machine.key) === machine) this.machines.delete(machine.key);
+      }
     }
-    const store = this.host.store;
-    // A clone here holds it, its remote written or, by a pick or a
-    // lookup, being written (space-63, space-65).
-    const here = this.attached.has(hostId) || store.listRepositories().some((repository) => {
-      const facts = this.machine(repository.key).facts;
-      return facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId;
-    });
-    // A group's own spex repository its group's local-only clone here is
-    // given — by a standing choice's Use, or by its lookup at the next
-    // read, whether or not that has run — is the clone's to take: as a
-    // clone of its own it would hold the group's records beside that
-    // clone (space-65, space-69).
-    const choice = this.standingChoices().some((entry) => entry.candidates.some((candidate) => candidate.repository.id === hostId));
-    if (!here && (choice || this.givenHere(view, listing))) {
-      // Where no choice stands because the group's records are held
-      // here, the refusal says so, as the clone's row does (space-61).
-      const held = choice ? undefined : this.heldFor(listing.repository.group.fullPath);
-      throw new CoreError("invalid_request", held ? recordsHere(held.group, held.name) : i18n._({
-        id: "Use {name} where this device asks which holds the records",
-        values: { name: listing.repository.path },
-        comment: "Refusal of a join: the listed spex repository is a group's own that this device's local-only clone of that group is given, by a standing choice's Use or by its lookup at the next read",
-      }));
-    }
-    if (here || store.repository(key) || existsSync(store.home.clonePath(key))) {
-      throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
-    }
-    if (this.joining.get(hostId)?.phase === "running") throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
-    const path = folder === undefined ? undefined : resolve(folder);
-    if (path !== undefined && store.home.keyForFolder(path)) {
-      throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
-    }
-    this.joining.set(hostId, { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false });
-    await this.publish();
-    void this.runJoin(listing, key, path);
-    return { accepted: true };
   }
 
   /** Whether a listed spex repository is a group's own that a local-only
@@ -2855,8 +2988,9 @@ export class SpaceManager {
     return undefined;
   }
 
-  private async runJoin(listing: HostListing, key: string, folder: string | undefined): Promise<void> {
+  private async runJoin(listing: HostListing, machine: RepositorySync, folder: string | undefined, reservation: RepositoryReservation, claim: HostReservation): Promise<void> {
     const store = this.host.store;
+    const key = machine.key;
     const id = listing.repository.id;
     const url = listing.repository.remoteUrl;
     const dir = store.home.clonePath(key);
@@ -2896,17 +3030,20 @@ export class SpaceManager {
       await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
       store.adoptRepositories();
       this.host.repositoriesChanged();
-      const machine = this.machine(key);
+      machine.rebind(store.repository(key)!);
       await machine.readFacts();
       await this.host.rescanSessions(key);
       this.host.ledgerChanged([key]);
-      if (folder !== undefined) await this.pairJoined(machine, id, folder);
+      if (folder !== undefined) await this.pairJoined(machine, id, folder, reservation);
       // The join ends once its code is here or its clone failed; only
       // then does its row read the clone's state (space-61, space-63).
       this.joining.delete(id);
     } catch (error) {
       stop({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
+      reservation.release(machine.phase.phase === "stopped" ? machine.phase : { phase: "idle" });
+      claim.release();
+      if (!store.repository(key) && this.machines.get(key) === machine) this.machines.delete(key);
       await this.publish();
       // A join that stopped holds its group's records here no more: a
       // lookup it held is asked again (space-65).
@@ -2919,12 +3056,13 @@ export class SpaceManager {
    * credentials, or a folder already holding it, paired with the clone;
    * a group's own spex repository pairs the folder its sessions run in.
    * The join's Code step runs while the code clones (space-63). */
-  private async pairJoined(machine: RepositorySync, id: string, folder: string): Promise<void> {
+  private async pairJoined(machine: RepositorySync, id: string, folder: string, reservation: RepositoryReservation): Promise<void> {
+    machine.assertOwner(reservation);
     const project = this.projectFile(machine.repository);
     const root = existsSync(folder) && await this.workTreeRoot(folder);
     const remote = !root && project?.remote ? project.remote : undefined;
     const step: SyncStep = remote ? "code" : "check";
-    if (!machine.hold("join", step)) return;
+    reservation.phase({ phase: "running", op: "join", step, since: Date.now(), cancelable: false });
     this.joining.set(id, machine.phase);
     await this.publish();
     let failure: GitFailure | undefined;
@@ -2950,7 +3088,7 @@ export class SpaceManager {
     } catch (error) {
       failure = { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false };
     } finally {
-      machine.release(failure ? { op: "join", step, failure } : undefined);
+      if (failure) reservation.phase({ phase: "stopped", op: "join", step, ...failure });
     }
   }
 
@@ -3035,7 +3173,8 @@ export class SpaceManager {
    * a rename or a transfer on a sync (space-60), take the URL the host
    * hands over, and prepare the branch before a first push (git-host-7).
    * Undefined for a clone whose remote is not on the host. */
-  async hostCheck(machine: RepositorySync, op: SpaceOp): Promise<{ remote: string; readOnly: boolean } | undefined> {
+  async hostCheck(machine: RepositorySync, op: SpaceOp, reservation: RepositoryReservation): Promise<{ remote: string; readOnly: boolean } | undefined> {
+    machine.assertOwner(reservation);
     const facts = await machine.readFacts();
     if (!this.atHost(facts)) return undefined;
     if (!this.signedIn()) throw new SpaceStopped("check", { cause: "reauth", message: signInAgain(), guidance: signInThenRetry(), retry: true });
@@ -3048,7 +3187,7 @@ export class SpaceManager {
       throw new SpaceStopped("check", { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
     }
     const repository = listing.repository;
-    if (facts.id === null) await machine.recordIdNow(repository.id);
+    if (facts.id === null) await machine.recordIdNow(repository.id, reservation);
     const key = hostKey(repository);
     // Your own group's spex repository the host lists outside the
     // account's own group is not followed: that group would become your
@@ -3068,7 +3207,7 @@ export class SpaceManager {
       });
     }
     if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key);
-    if (facts.remote !== repository.remoteUrl) await machine.setOrigin(repository.remoteUrl);
+    if (facts.remote !== repository.remoteUrl) await machine.setOrigin(repository.remoteUrl, reservation);
     // The notice decided on the host's answer this sync acts on: owed,
     // the sync stops before anything is prepared or sent, its Save
     // commit standing, and its Sync asks the notice (space-57, space-15).
@@ -3131,36 +3270,38 @@ export class SpaceManager {
       retry: true,
     });
     if (moveCollides(workspace, from, to)) throw taken(to);
-    const keys = store.listRepositories().map((repository) => repository.key);
+    const keys = this.occupiedKeys();
     const moves = [{ from, to }, ...carriedClones(workspace, from, to, keys)];
     const carried = moves.slice(1).map((move) => move.from);
     // Your own group's spex repository leaving its folder: every other
     // clone of that folder is a candidate, carried where it is not on
     // the host, which no sync of its own would move (space-60).
     const group = splitKey(from).group;
-    const candidates = from === store.home.own() && splitKey(to).group !== group
+    const movingOwnGroup = from === store.home.own() && splitKey(to).group !== group;
+    const candidates = movingOwnGroup
       ? keys.filter((key) => key !== from && !carried.includes(key) && splitKey(key).group === group)
       : [];
-    // A pick in flight writes a clone's remote: it ends first.
-    if ([...carried, ...candidates].some((key) => this.picking.has(key))) return;
-    const held: RepositorySync[] = [];
+    const held = new Map<RepositorySync, RepositoryReservation>();
+    let releaseDestinations: (() => void) | undefined;
     try {
       // The gate of every clone the move may carry, in key order
       // (space-21): held before the checks, and through the move until
       // the store, the machines and the core read every clone where it
       // now lies. One running, picked or not quiet defers the move.
       for (const key of keys.filter((each) => carried.includes(each) || candidates.includes(each))) {
+        if (!store.repository(key) && this.busyFor(key)) return;
         const each = this.machine(key);
-        if (!each.hold("move", "apply")) return;
-        held.push(each);
+        const reservation = each.hold("move", "apply");
+        if (!reservation) return;
+        held.set(each, reservation);
       }
       // Each candidate's clone is read under its gate: one on the host
       // follows the host's moves on its own syncs and is let go.
       for (const key of candidates) {
         const each = this.machine(key);
         if (this.atHost(await each.readFacts())) {
-          each.release();
-          held.splice(held.indexOf(each), 1);
+          held.get(each)!.release();
+          held.delete(each);
         } else moves.push({ from: key, to: `${splitKey(to).group}/${splitKey(key).name}` });
       }
       const local = moves.slice(1 + carried.length);
@@ -3173,8 +3314,10 @@ export class SpaceManager {
         if (!(error instanceof StorageFormatError)) throw error;
         throw new SpaceStopped("check", { cause: "git", message: error.reason, guidance: retryGuidance(), retry: true });
       }
-      for (const { from: key } of moves.slice(1)) if (this.picking.has(key) || await this.host.blocker(key)) return;
-      const moving = [machine, ...held];
+      releaseDestinations = this.reserveDestinations(moves);
+      if (!releaseDestinations) return;
+      for (const { from: key } of moves.slice(1)) if (await this.host.blocker(key)) return;
+      const moving = [machine, ...held.keys()];
       // Reads in flight end, and an environment's writes land, before the
       // clones move; a read starting meanwhile reads them moved.
       try {
@@ -3182,7 +3325,9 @@ export class SpaceManager {
         await this.host.settleBeneath?.(moves.map((move) => move.from));
         // A clone added meanwhile beneath a folder renamed in place would
         // move with no key of its own: a later sync moves them all.
-        if (carriedClones(workspace, from, to, store.listRepositories().map((repository) => repository.key)).some((move) => !carried.includes(move.from))) return;
+        const occupied = this.occupiedKeys();
+        if (carriedClones(workspace, from, to, occupied).some((move) => !carried.includes(move.from))) return;
+        if (movingOwnGroup && occupied.some((key) => splitKey(key).group === group && !keys.includes(key))) return;
         moveClone(workspace, from, to);
         for (const move of local) moveClone(workspace, move.from, move.to);
         this.relocate(moves);
@@ -3191,8 +3336,34 @@ export class SpaceManager {
       }
       await this.afterMove(moves);
     } finally {
-      for (const each of held) each.release();
+      releaseDestinations?.();
+      for (const reservation of held.values()) reservation.release();
     }
+  }
+
+  /** Indexed clones and paths already owned by joins or moves whose
+   * store update has not landed yet. */
+  private occupiedKeys(): string[] {
+    return [...new Set([
+      ...this.host.store.listRepositories().map((repository) => repository.key),
+      ...[...this.machines].filter(([, machine]) => machine.busy()).map(([key]) => key),
+      ...this.destinations.keys(),
+    ])];
+  }
+
+  /** Claim each destination without replacing another operation's
+   * machine. The same clone reservation protects both keys until the
+   * move and its refresh finish. */
+  private reserveDestinations(moves: { from: string; to: string }[]): (() => void) | undefined {
+    const claims = moves.map(({ from, to }) => ({ key: to, value: { machine: this.machines.get(from)! } }));
+    if (claims.some(({ key, value }) => {
+      const at = this.machines.get(key);
+      return this.destinations.has(key) || (at !== undefined && at !== value.machine && at.busy() !== undefined);
+    })) return undefined;
+    for (const { key, value } of claims) this.destinations.set(key, value);
+    return () => {
+      for (const { key, value } of claims) if (this.destinations.get(key) === value) this.destinations.delete(key);
+    };
   }
 
   /** The store, the machines and the waiting steps follow moved clones. */
@@ -3238,6 +3409,8 @@ export class SpaceManager {
     return machine;
   }
 
+  isCurrent(machine: RepositorySync): boolean { return this.machines.get(machine.key) === machine; }
+
   /** Reserve a clone for its project's removal (projects-10): its gate
    * held as an operation's (space-21) until the removal ends — lifted
    * where the removal is refused or keeps the clone (your own group's),
@@ -3247,18 +3420,19 @@ export class SpaceManager {
   holdRemoval(key: string): { refused(): void; removed(): void } | undefined {
     if (!this.host.store.repository(key)) return undefined;
     const machine = this.machine(key);
-    if (!machine.hold("remove", "apply")) throw new CoreError("busy", machine.busy() as string);
+    const reservation = machine.hold("remove", "apply");
+    if (!reservation) throw new CoreError("busy", machine.busy() as string);
     // Each transition is announced (space-29); a deleted clone's
     // departure is the groups' own announcement.
     void this.publish().catch(() => {});
     return {
       refused: () => {
-        machine.release();
+        reservation.release();
         void this.publish().catch(() => {});
       },
       removed: () => {
+        reservation.release();
         if (this.host.store.repository(key)) {
-          machine.release();
           void this.publish().catch(() => {});
         } else if (this.machines.get(key) === machine) this.machines.delete(key);
       },
@@ -3268,7 +3442,7 @@ export class SpaceManager {
   /** The busy message while an operation runs on this clone (space-21);
    * other clones stay writable. */
   busyFor(key: string | undefined): string | undefined {
-    return key === undefined ? undefined : this.machines.get(key)?.busy();
+    return key === undefined ? undefined : this.machines.get(key)?.busy() ?? this.destinations.get(key)?.machine.busy();
   }
 
   /** Whether any clone's operation runs. */
@@ -3377,7 +3551,7 @@ export class SpaceManager {
       const base = recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase };
       repositories.push(this.overlay(machine, base));
     }
-    for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
+    for (const [key, machine] of this.machines) if (!store.repository(key) && !machine.busy()) this.machines.delete(key);
     const choices = this.standingChoices();
     for (const choice of choices) {
       const index = repositories.findIndex((row) => row.key === choice.key);

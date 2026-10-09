@@ -73,7 +73,7 @@ import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "
 import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
-import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
+import { foldDiagnostics, StorageFormatError, writeApplicationBytes, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -2034,7 +2034,7 @@ export class CoreService {
         }
         // The folder pairs with a local spex repository in your own group
         // until a group is picked (storage-6).
-        const registered = this.store.registerProject(path, basename(path), Date.now());
+        const registered = this.store.registerProject(path, basename(path), Date.now(), (key) => Boolean(this.space.busyFor(key)));
         this.afterRepositoriesChanged();
         await this.syncForeignSessions();
         // A folder paired with a group's own spex repository brings that
@@ -2044,6 +2044,8 @@ export class CoreService {
         return registered;
       }
       case "project.rebind": {
+        const dir = this.store.repository(command.projectId)?.dir;
+        if (!dir) throw noProject(command.projectId);
         const path = expandPath(command.path, this.home);
         if (!(await isWorkTreeRoot(path, this.runCommand))) {
           throw new CoreError("invalid_request", i18n._({
@@ -2058,6 +2060,9 @@ export class CoreService {
             comment: "Refusal: a turn is running in the project being rebound",
           }));
         }
+        const gate = this.space.busyFor(command.projectId);
+        if (gate) throw new CoreError("busy", gate);
+        if (this.store.repository(command.projectId)?.dir !== dir) throw noProject(command.projectId);
         const project = this.store.rebindProject({ id: command.projectId, path,
           ...(command.aliases ? { aliases: command.aliases } : {}) });
         await this.syncForeignSessions();
@@ -2109,7 +2114,7 @@ export class CoreService {
           const message = error instanceof Error ? error.message : String(error);
           throw new CoreError("invalid_request", message);
         }
-        const created = this.store.registerProject(path, basename(path), Date.now());
+        const created = this.store.registerProject(path, basename(path), Date.now(), (key) => Boolean(this.space.busyFor(key)));
         this.afterRepositoriesChanged();
         this.announceGroups();
         return created;
@@ -2212,14 +2217,15 @@ export class CoreService {
         if (!project) {
           throw noProject(command.projectId);
         }
-        // A project's group gains its own spex repository at session
-        // start where it has none (DR-103); it checks for itself and
-        // never throws.
-        void this.ensureGroupRepository(project.id).catch(() => {});
         // Being created from here, the session holds off an operation on
-        // its spex repository (space-11) until it opens, live.
+        // its spex repository (space-11) until it opens, live. Publish
+        // that ownership before opportunistic host setup can begin.
         this.creating.set(project.id, (this.creating.get(project.id) ?? 0) + 1);
         try {
+          // A project's group gains its own spex repository at session
+          // start where it has none (DR-103); setup yields to work
+          // already admitted beneath a clone.
+          void this.ensureGroupRepository(project.id).catch(() => {});
           // Yours with the project.s own on top (core-service-2).
           return await this.sessions.createSession(project, await this.composedFor(project.id));
         } finally {
@@ -2380,24 +2386,40 @@ export class CoreService {
           }));
         }
         const op = command.op as ConfigEditOp;
+        const own = this.store.home.own();
+        const ownConfig = this.configPath;
+        const ownDir = this.store.ownRepository().dir;
         // A project's or another group's file (playbook-library-3): its
         // playbook entries alone, composed on top of yours with the
         // modules its environment exports before yours.
-        const target = command.repository !== undefined && command.repository !== this.store.home.own()
+        const target = command.repository !== undefined && command.repository !== own
           ? this.store.repository(command.repository)
           : undefined;
-        if (command.repository !== undefined && command.repository !== this.store.home.own() && !target) throw noProject(command.repository);
+        if (command.repository !== undefined && command.repository !== own && !target) throw noProject(command.repository);
+        const beforeWrite = (): void => {
+          for (const key of new Set([own, target?.key ?? own])) {
+            const gate = this.space.busyFor(key);
+            if (gate) throw new CoreError("busy", gate);
+          }
+          if (this.store.home.own() !== own || this.configPath !== ownConfig || this.store.repository(own)?.dir !== ownDir
+            || (target && this.store.repository(target.key)?.dir !== target.dir)) {
+            throw new CoreError("not_found", i18n._({
+              id: "the configuration destination moved or was removed while this edit was being checked; retry",
+              comment: "Refusal: the repository holding a pending settings edit is no longer at its captured destination",
+            }));
+          }
+        };
         const result = target
-          ? await editProjectConfigFile(target.configPath, this.configPath, op, this.options.loadModule, this.modules(target.key))
+          ? await editProjectConfigFile(target.configPath, ownConfig, op, this.options.loadModule, this.modules(target.key), { beforeWrite })
           : await editConfigFile(
-            this.configPath,
+            ownConfig,
             op,
             this.options.loadModule,
-            { modules: this.modules(null) },
+            { modules: this.modules(null), beforeWrite },
           );
         if (!result.ok) {
           throw new CoreError(
-            "invalid_config",
+            result.code ?? "invalid_config",
             // The composition's own words where it gave any, relayed.
             result.error ?? i18n._({
               id: "edit rejected",
@@ -3217,8 +3239,8 @@ export class CoreService {
     /** The spex repository to enable in: the project's, by default, or your own group's. */
     repository?: string;
     packageDir: string;
-    /** An authoring session's enabling: refuses once the instance it was
-     * admitted under departed, called after each await before a write
+    /** An authoring session's enabling: admission and synchronous
+     * publication both require the instance it was admitted under
      * (core-service-96). */
     held?: () => void;
   }): Promise<ConfigState> {
@@ -3246,65 +3268,67 @@ export class CoreService {
     const entryOp: ConfigEditOp = { kind: "playbook.add", playbookId, roles };
     const playerOps: ConfigEditOp[] = Object.entries(input.newPlayers ?? {}).map(([playerId, block]) => ({ kind: "player.set", playerId, patch: block }));
 
-    // Nothing is written until the whole enabling passes the config's
-    // own rules, the new module standing in for the one the environment
-    // will export (playbook-library-15).
-    const base = this.modules(targetKey === own ? null : targetKey);
-    const overlay: PlaybookModules = {
-      repository: base.repository,
-      find: (id) => (id === playbookId ? { module: result.from, builtin: false } : base.find(id)),
-    };
-    try {
-      let ownText = readFileSync(this.configPath, "utf8");
+    // The environment and both config files are prepared in one queue
+    // turn. Module loading may await; publication cannot. The exact
+    // destinations and inputs are validated at that shared boundary.
+    await this.environments.requestAndInstall(targetKey, name, { path: packagePath }, input.held, async (candidateModules) => {
+      const ownConfig = this.configPath;
+      const ownBefore = readFileSync(ownConfig, "utf8");
+      const projectBefore = targetKey === own ? null : existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : null;
+      let ownText = ownBefore;
       for (const op of playerOps) ownText = applyConfigOp(ownText, op);
       if (targetKey === own) ownText = applyConfigOp(ownText, entryOp);
-      const ownTop = parseYaml(ownText) as unknown;
-      if (targetKey === own) {
-        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay });
-      } else {
-        const projectText = applyConfigOp(existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "", entryOp);
-        const projectTop = parseYaml(projectText) as unknown;
-        validateProjectConfig(projectTop, target.configPath);
-        await composeConfig(ownTop, this.options.loadModule, this.configPath, { modules: overlay, project: { top: projectTop, path: target.configPath } });
-      }
-    } catch (error) {
-      throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but enabling was refused: {error}",
-        comment: "Refusal after a successful compile; `error` is the config validation's own words",
-        values: { error: error instanceof Error ? error.message : String(error) },
-      }));
-    }
-
-    // The spec package is requested by path and installed before the
-    // config names its playbook (playbook-library-69, environments-15).
-    input.held?.();
-    await this.environments.requestAndInstall(targetKey, name, { path: packagePath }, input.held);
-
-    // Lanes the bindings name but the roster lacks are created first,
-    // so the binding never dangles (DR-032, playbook-library-3).
-    for (const op of playerOps) {
-      input.held?.();
-      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null), beforeWrite: input.held });
-      if (!minted.ok) {
+      const projectText = targetKey === own ? null : applyConfigOp(projectBefore ?? "", entryOp);
+      const modules: PlaybookModules = {
+        repository: candidateModules.repository,
+        find: (id) => id === playbookId ? { module: result.from, builtin: false } : candidateModules.find(id),
+      };
+      try {
+        const ownTop = parseYaml(ownText) as unknown;
+        const projectTop = projectText === null ? undefined : parseYaml(projectText) as unknown;
+        if (projectTop !== undefined) validateProjectConfig(projectTop, target.configPath);
+        await composeConfig(ownTop, this.options.loadModule, ownConfig, {
+          modules,
+          ...(projectTop !== undefined ? { project: { top: projectTop, path: target.configPath } } : {}),
+        });
+      } catch (error) {
         throw new CoreError("invalid_config", i18n._({
-          id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
+          id: "compiled, but enabling was refused: {error}",
           comment: "Refusal after a successful compile; `error` is the config validation's own words",
-          values: { playerId: (op as { playerId: string }).playerId, error: minted.error },
+          values: { error: error instanceof Error ? error.message : String(error) },
         }));
       }
-    }
-    input.held?.();
-    const edit = targetKey === own
-      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null), beforeWrite: input.held })
-      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey), { beforeWrite: input.held });
-    if (!edit.ok) {
-      throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but registration was refused: {error}",
-        comment:
-          "Refusal after a successful compile; `error` is the config validation's own words",
-        values: { error: edit.error },
-      }));
-    }
+      return {
+        files: [ownConfig, ...(projectText !== null ? [target.configPath] : [])],
+        validate: () => {
+          for (const key of new Set([own, targetKey])) {
+            const gate = this.space.busyFor(key);
+            if (gate) throw new CoreError("busy", gate);
+          }
+          if (this.store.home.own() !== own || this.configPath !== ownConfig || this.store.repository(targetKey)?.dir !== target.dir) {
+            throw new CoreError("not_found", i18n._({
+              id: "the configuration destination moved while enabling; retry",
+              comment: "Refusal: the prepared enabling no longer targets the same repositories",
+            }));
+          }
+          const currentOwn = existsSync(ownConfig) ? readFileSync(ownConfig, "utf8") : null;
+          const currentProject = targetKey === own ? null : existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : null;
+          if (currentOwn !== ownBefore || currentProject !== projectBefore) {
+            throw new CoreError("conflict", i18n._({
+              id: "the configuration changed while enabling; retry",
+              comment: "Refusal: a config edit raced with preparation of an enabling",
+            }));
+          }
+        },
+        commit: () => {
+          if (ownText !== ownBefore) writeApplicationBytes(ownConfig, ownText);
+          if (projectText !== null) {
+            mkdirSync(dirname(target.configPath), { recursive: true });
+            writeApplicationBytes(target.configPath, projectText);
+          }
+        },
+      };
+    });
     await this.reloadConfig();
     this.authors.republish();
     return this.configState;

@@ -255,6 +255,22 @@ function documentOf(file: string): Document {
   return new Document({ format: 1, packages: {} });
 }
 
+/** Prepare a request edit without changing the environment it belongs to. */
+export function prepareRequest(text: string | null, name: string, request: Request | null): { requests: Requests; text: string } {
+  if (request !== null) {
+    const issues = requestIssues(name, request);
+    if (issues.length > 0) throw new RequestsError(issues);
+  }
+  const doc = text === null ? new Document({ format: 1, packages: {} }) : parseDocument(text, { uniqueKeys: true });
+  if (doc.errors.length > 0) throw new RequestsError(doc.errors.map((error) => ({ rule: "yaml", message: error.message })));
+  if (!doc.has("packages") || !isMap(doc.get("packages", true))) doc.set("packages", doc.createNode({}));
+  if (request === null) doc.deleteIn(["packages", name]);
+  else if (doc.hasIn(["packages", name])) syncNode(doc, ["packages", name], requestValue(request));
+  else doc.setIn(["packages", name], doc.createNode(requestValue(request)));
+  const next = doc.toString({ lineWidth: 0 });
+  return { requests: parseRequests(next), text: next };
+}
+
 async function writeText(file: string, text: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
   writeApplicationBytes(file, text);

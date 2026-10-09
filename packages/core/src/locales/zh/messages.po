@@ -846,18 +846,8 @@ msgstr "注册前请先成功编译该草稿"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
-msgstr "已编译，但创建会话 Player“{playerId}”被拒绝：{error}"
-
-#. Refusal after a successful compile; `error` is the config validation's own words
-#: src/service.ts
 msgid "compiled, but enabling was refused: {error}"
 msgstr "已编译，但启用被拒绝：{error}"
-
-#. Refusal after a successful compile; `error` is the config validation's own words
-#: src/service.ts
-msgid "compiled, but registration was refused: {error}"
-msgstr "已编译，但注册被拒绝：{error}"
 
 #. Refusal after a successful compile; the role ids are the manifest's own
 #: src/service.ts
@@ -1497,6 +1487,7 @@ msgstr "specs/{path} 处没有规约文件"
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
 #. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
 #: src/environments.ts
 #: src/space.ts
 #: src/store.ts
@@ -2123,10 +2114,40 @@ msgstr "编译所用的智能体运行在 {adapter} 上，而编译器无法驱�
 msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
+#. Refusal: a config edit raced with preparation of an enabling
+#: src/service.ts
+msgid "the configuration changed while enabling; retry"
+msgstr "启用期间配置已更改；请重试"
+
+#. Refusal: another writer changed a config used to validate a pending settings edit
+#: src/config-edit.ts
+msgid "the configuration changed while this edit was being checked; retry"
+msgstr "检查此编辑期间配置已更改；请重试"
+
+#. Refusal: the repository holding a pending settings edit is no longer at its captured destination
+#: src/service.ts
+msgid "the configuration destination moved or was removed while this edit was being checked; retry"
+msgstr "检查此编辑期间配置所在的位置已移动或移除；请重试"
+
+#. Refusal: the prepared enabling no longer targets the same repositories
+#: src/service.ts
+msgid "the configuration destination moved while enabling; retry"
+msgstr "启用期间配置所在的位置已移动；请重试"
+
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
+
+#. Refusal: an environment request or lock changed during preparation
+#: src/environments.ts
+msgid "the environment of {key} changed while it was prepared; retry"
+msgstr "准备期间 {key} 的环境已更改；请重试"
+
+#. Refusal: a prepared environment no longer has its original destination
+#: src/environments.ts
+msgid "the environment of {key} moved or left while it was prepared"
+msgstr "准备期间 {key} 的环境已移动或移除"
 
 #. Refusal: a request by path names a folder inside the repository's working folder (environments-2)
 #: src/service.ts

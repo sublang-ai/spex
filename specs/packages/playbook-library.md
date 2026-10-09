@@ -93,7 +93,7 @@ While a compile is running, the Playbooks surface shall display each phase of th
 When an authoring session's compile succeeds, the Playbooks surface shall present the Enable tab [[playbook-library-61](#playbook-library-61)] as the form with fields for command and intent, a player per derived role, and the spex repository to enable it in — the project by default, or your own group where its working folder holds the package, since a path request lives inside the requesting repository's working folder [[environments-2](environments.md#environments-2)] — prefilled where derivable from the playbook source and compiled output, and shall resolve each submission of the form by the cases below:
 
 - Submission passes registry validation [[playbook-library-15](#playbook-library-15)]: the surface packages the entry [[playbook-library-14](#playbook-library-14)], requests the spec package by path from the chosen spex repository's environment where it is not yet requested [[environments-15](environments.md#environments-15)], and enables the playbook by writing its entry — including a role binding per required role [[playbook-library-4](#playbook-library-4)], with any player the submission names but the roster lacks written first — into that config's `playbooks` map.
-- Submission rejected: the rejection names the violated rule and causes no config or environment write.
+- Submission rejected: the rejection names the violated rule and causes no config or environment write; another accepted submission or environment edit [[environments-15](environments.md#environments-15)] keeps its changes.
 
 #### playbook-library-8
 
