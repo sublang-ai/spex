@@ -400,10 +400,9 @@ export interface AppState extends AttachmentState {
   publishSpecPackage(repository: string, path: string): Promise<void>;
 
   /** Read the authoring sessions: the bootstrap that adopts each one's
-   * instance (playbook-library-98); `restarted` names a reconnection to
-   * a restarted core, whose listing continues a held session under the
-   * instance the new run minted (playbook-library-101). */
-  listDrafts(options?: { restarted?: boolean }): Promise<void>;
+   * instance (playbook-library-98); a session named under the instance
+   * held is the held session continued (playbook-library-101). */
+  listDrafts(): Promise<void>;
   /** Create a draft in the spex repository of the workspace's current
    * project, else the first registered one, and open its workspace;
    * the core refuses an id a configured playbook or built-in holds.
@@ -844,13 +843,6 @@ const refoldPending = new Set<string>();
 /** Drafts with a draft.open replay in flight: live draft.record
  * messages buffer here and apply after the replay, in seq order. */
 const draftBackfilling = new Map<string, DraftRecord[]>();
-
-/** The run of the core the last hello named (core-service-1), and
- * whether the current connection's hello named another: a reconnection
- * to a restarted core, whose listing continues each held authoring
- * session under a new instance (playbook-library-101). */
-let coreRun: string | undefined;
-let coreRestarted = false;
 
 export function getClient(): SpexClient {
   if (!client) throw new Error(i18n._("client not connected"));
@@ -1359,10 +1351,6 @@ export const useAppStore = create<AppState>((set, get) => {
         // A new authenticated connection establishes which core generation
         // may publish authority; history and old sockets establish none.
         set({approvals: undefined});
-        // The run the hello names tells a reconnection to a restarted
-        // core from one to the same run (playbook-library-101).
-        coreRestarted = coreRun !== undefined && coreRun !== message.bootId;
-        coreRun = message.bootId;
         break;
       case "approval.state": {
         const previous = get().approvals;
@@ -1852,15 +1840,14 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const session of sessions.filter((item) => item.live || loaded.has(item.id))) {
         await ensureSubscribed(session.id).catch(() => {});
       }
-      // The listing adopts each session's instance first — a core that
-      // restarted minted new ones — then every draft opened this launch
-      // re-subscribes under it and reloads from its first record,
-      // keeping its composer, Source edits and Enable form
-      // (playbook-library-101).
-      const restarted = coreRestarted;
-      coreRestarted = false;
+      // The listing first — a session named under the instance held is
+      // the held session continued, another instance the former's
+      // departure, whatever run the core is in — then every draft
+      // opened this launch re-subscribes under its instance and reloads
+      // from its first record, keeping its composer, Source edits and
+      // Enable form (playbook-library-101).
       await get()
-        .listDrafts({ restarted })
+        .listDrafts()
         .catch(() => {});
       for (const draftId of Object.keys(get().draftViews)) {
         await ensureDraftSubscribed(draftId, true).catch(() => {});
@@ -2608,22 +2595,19 @@ export const useAppStore = create<AppState>((set, get) => {
     // Playbook drafts (DR-058)
     // -----------------------------------------------------------------
 
-    async listDrafts(options): Promise<void> {
+    async listDrafts(): Promise<void> {
       const listed = await getClient().command("draft.list", {});
       const drafts = Object.fromEntries(
         (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
       );
       // The listing is a bootstrap (playbook-library-98): an id left
       // out names no session, and nothing of the one it named stays;
-      // another instance under a held id is the former's departure —
-      // except, on a reconnection to a restarted core, a session named
-      // under the project the store holds it in, which is the held
-      // session continued under the instance the new run minted
+      // the instance held, named, is the held session continued, and
+      // another instance under a held id is the former's departure
       // (playbook-library-101).
       for (const [draftId, held] of Object.entries(get().drafts)) {
         const named = drafts[draftId];
-        const continued = options?.restarted === true && named?.projectId === held.projectId;
-        if (!named || (named.instance !== held.instance && !continued)) forgetDraft(draftId);
+        if (!named || named.instance !== held.instance) forgetDraft(draftId);
       }
       set({ drafts, draftsLoaded: true });
     },

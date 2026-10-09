@@ -2169,17 +2169,18 @@ describe("playbook-library-101: the transcript the core now serves", () => {
     expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toContain("◇ Next on this device");
   });
 
-  /** The hello a connection opens with (core-service-1): the run it names
-   * tells a reconnection to a restarted core from one to the same run. */
+  /** The hello a connection opens with (core-service-1): the run it
+   * names decides nothing about a held session (playbook-library-101). */
   function hello(bootId: string): void {
     deliverServerMessageForTests({ type: "hello", protocolVersion: 25, coreVersion: "test", bootId });
   }
 
-  test("a reconnect to a restarted core adopts the listing's instance for the held session, reloads its transcript from the first record, and keeps the composer, Source edit and Enable form", async () => {
+  test("a reconnect to a restarted core whose listing names the held instance reloads its transcript from the first record and keeps the composer, Source edit and Enable form", async () => {
     act(() => hello("run-1"));
     holdWithEdits();
-    /** The core restarted: the same session under a new instance. */
-    const restarted = { ...COMPILED, instance: "inst-9" };
+    /** The core restarted: the same session under the instance it
+     * recorded. */
+    const restarted = { ...COMPILED, instance: INSTANCE };
     act(() => hello("run-2"));
     const subscribe = vi.fn(async () => null);
     setClientForTests({ command: commandMock, subscribe, unsubscribe: async () => null } as unknown as Parameters<typeof setClientForTests>[0]);
@@ -2204,26 +2205,27 @@ describe("playbook-library-101: the transcript the core now serves", () => {
     await act(async () => {
       await useAppStore.getState().refresh();
     });
-    expect(subscribe).toHaveBeenCalledWith({ kind: "draft", draftId: "triage", instance: "inst-9" });
+    expect(subscribe).toHaveBeenCalledWith({ kind: "draft", draftId: "triage", instance: INSTANCE });
     expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: PROJECT_ID, draftId: "triage", afterSeq: 0 });
-    expect(useAppStore.getState().drafts.triage.instance).toBe("inst-9");
+    expect(useAppStore.getState().drafts.triage.instance).toBe(INSTANCE);
     expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(2);
     expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toEqual([
       "◇ Recreated on another device",
       "◇ Recreated, second line",
     ]);
     expectEditsKept();
-    // Later commands name the new instance.
+    // Later commands name the held instance.
     await act(() => useAppStore.getState().abortDraft("triage"));
-    expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, instance: "inst-9", draftId: "triage" });
+    expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, instance: INSTANCE, draftId: "triage" });
   });
 
-  test("a reconnect to the same run whose listing names another instance in the same project is the former's departure", async () => {
+  test("a reconnect to a restarted core whose listing names another instance in the same project is the former's departure", async () => {
     act(() => hello("run-1"));
     holdWithEdits();
-    /** The session deleted and made again while the socket was down. */
+    /** The session deleted and made again while the socket was down,
+     * the core restarting after. */
     const remade = { ...draftInfo({ instance: "inst-3", state: "no-source", firstLine: null, touchedAt: now }) };
-    act(() => hello("run-1"));
+    act(() => hello("run-2"));
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       switch (type) {
@@ -2249,12 +2251,15 @@ describe("playbook-library-101: the transcript the core now serves", () => {
     expect(state.drafts.triage).toEqual(remade);
     expect(state.draftComposers.triage).toBeUndefined();
     expect(state.draftEditors.triage).toBeUndefined();
+    expect(state.draftSourceModes.triage).toBeUndefined();
     expect(state.draftForms.triage).toBeUndefined();
     expect(state.draftViews.triage).toBeUndefined();
     expect(state.openDraftId).toBeUndefined();
     commandMock.mockClear();
     await act(() => useAppStore.getState().openDraft("triage"));
     expect(commandMock).toHaveBeenCalledWith("draft.open", { projectId: PROJECT_ID, draftId: "triage", afterSeq: 0 });
+    await act(() => useAppStore.getState().abortDraft("triage"));
+    expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, instance: "inst-3", draftId: "triage" });
   });
 });
 

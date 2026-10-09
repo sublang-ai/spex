@@ -381,16 +381,26 @@ export class EnvironmentManager {
    * install and export (environments-5, environments-7, environments-8).
    * Errors land in the clone's state; with `strict` they are thrown too.
    */
-  settle(key: string, mode: SettleMode, strict: boolean): Promise<void> {
+  settle(key: string, mode: SettleMode, strict: boolean, held?: () => void): Promise<void> {
     this.settled.add(key);
-    return this.enqueue(key, () => this.settleNow(key, mode, strict));
+    return this.enqueue(key, () => this.settleNow(key, mode, strict, held));
   }
 
-  private async settleNow(key: string, mode: SettleMode, strict: boolean): Promise<void> {
+  /** With `held`, the caller's owner is checked again before the lock
+   * is written and before the install: its throw ends the settle there,
+   * the clone no longer busy (core-service-96). */
+  private async settleNow(key: string, mode: SettleMode, strict: boolean, held?: () => void): Promise<void> {
     if (this.stopped) return;
     const dir = this.store.repository(key)?.dir;
     if (!dir) return;
     const state = this.cloneState(key);
+    const stillHeld = (): void => {
+      try { held?.(); }
+      catch (error) {
+        this.setBusy(key, null);
+        throw error;
+      }
+    };
     const workingFolder = this.workingFolder(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
@@ -425,6 +435,7 @@ export class EnvironmentManager {
           if (strict) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
           return;
         }
+        stillHeld();
         state.conflicts = null;
         await writeLock(lockPath, result.lock);
         lock = result.lock;
@@ -440,6 +451,7 @@ export class EnvironmentManager {
       this.setBusy(key, null);
       return;
     }
+    stillHeld();
     this.setBusy(key, "installing");
     try {
       await install({
@@ -548,8 +560,12 @@ export class EnvironmentManager {
 
   /** Request a spec package unless it is requested so already, then
    * resolve where needed and install, awaited: the enabling path
-   * (playbook-library-69) writes no config before the module is there. */
-  async requestAndInstall(key: string, name: string, request: Request): Promise<void> {
+   * (playbook-library-69) writes no config before the module is there.
+   * With `held`, the enabling's owner is checked again before the
+   * request, the lock and the install are written; its throw after the
+   * request was written returns the requests and the lock as they were
+   * (core-service-96). */
+  async requestAndInstall(key: string, name: string, request: Request, held?: () => void): Promise<void> {
     const dir = this.cloneDir(key);
     this.refuseRequest(name, request, this.workingFolder(key));
     const requestsPath = join(dir, "spex.yaml");
@@ -561,9 +577,12 @@ export class EnvironmentManager {
       const lockPath = join(dir, "spex.lock");
       const before = existsSync(requestsPath) ? readFileSync(requestsPath) : null;
       const lockBefore = existsSync(lockPath) ? readFileSync(lockPath) : null;
-      await this.enqueue(key, async () => { await setRequest(requestsPath, name, request); });
+      await this.enqueue(key, async () => {
+        held?.();
+        await setRequest(requestsPath, name, request);
+      });
       try {
-        await this.settle(key, "resolve", true);
+        await this.settle(key, "resolve", true, held);
       } catch (error) {
         await this.enqueue(key, async () => {
           if (before === null) rmSync(requestsPath, { force: true });
@@ -578,7 +597,7 @@ export class EnvironmentManager {
     }
     const lock = readLockSync(join(dir, "spex.lock"));
     const stale = lock ? stalePhrases(lock, readRequestsFile(join(dir, "spex.yaml"))?.text ?? null, this.workingFolder(key)) : ["none"];
-    await this.settle(key, stale ? "resolve" : "install", true);
+    await this.settle(key, stale ? "resolve" : "install", true, held);
   }
 
   /** Settle every clone this run has not settled yet — one the store

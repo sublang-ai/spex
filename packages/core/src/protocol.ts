@@ -891,10 +891,11 @@ export const playbookIdSchema = z.string().max(64).regex(/^[a-z0-9]+(-[a-z0-9]+)
 /** An authoring session's id is its playbook's (DR-058). */
 export const draftIdSchema = playbookIdSchema;
 /** An authoring session's instance (core-service-96): the token the
- * core mints when the session is created and when a rescan gives its
- * id another session, kept across a replaced transcript and a moved
- * clone. Every command of a session but the bootstrap names the one it
- * expects; every message about a session carries it. */
+ * core mints once, when the session is created, and records with it
+ * (storage-23), so it stands across the core's restarts, a replaced
+ * transcript and a moved clone. Every command of a session but the
+ * bootstrap names the one it expects; every message about a session
+ * carries it. */
 export const draftInstanceSchema = z.string().min(1);
 
 /** Session channels carry a session's records; the draft channel
@@ -1708,7 +1709,8 @@ export type SyncCause =
   | "notice"
   | "git";
 
-export type SpaceOp = "sync" | "check" | "join" | "move";
+/** remove: a project's removal holding its clone's gate (projects-10). */
+export type SpaceOp = "sync" | "check" | "join" | "move" | "remove";
 
 export type SpaceChange = "new" | "updated" | "deleted";
 
@@ -1790,7 +1792,9 @@ export interface RepositoryState {
   /** The clone's origin URL, null while local only. */
   remote: string | null;
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
-  /** The host's words for read-only or unreachable. */
+  /** The host's words for read-only or unreachable; on a group's
+   * local-only clone, the phrase naming the clone its records are on
+   * (space-65). */
   reason: string | null;
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null;
@@ -1894,9 +1898,8 @@ export interface HelloMessage {
   type: "hello";
   protocolVersion: number;
   coreVersion: string;
-  /** A token naming this run of the core (core-service-1): a client
-   * reconnecting under another one knows the core restarted and every
-   * authoring session instance it held was minted again. */
+  /** A token naming this run of the core (core-service-1); an
+   * authoring session's instance outlives it (core-service-96). */
   bootId: string;
 }
 

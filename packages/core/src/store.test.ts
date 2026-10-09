@@ -848,7 +848,8 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.match(readFileSync(join(packageDir, "meta.yaml"), "utf8"), /^format: 2\norg: local\nname: triage\nversion: 0\.1\.0\n/);
   assert.equal(drafts.recordFile("triage"), join(authoringDir, "triage.json"));
   assert.equal(drafts.projectOf("triage"), "tester/proj-spex");
-  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
+  assert.match(draft.instance, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
   const full: StoredDraft = {
     ...draft, touchedAt: 2000, queued: [{text: "next"}, {text: "after"}], failures: 2,
     compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], relay: "stopped", roles: ["Coder"], sourceSha256: "ab".repeat(32) },
@@ -856,7 +857,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   };
   drafts.write(full);
   const bytes = JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(bytes), ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures", "compile", "proposal"]);
+  assert.deepEqual(Object.keys(bytes), ["format", "id", "instance", "createdAt", "touchedAt", "package", "queued", "failures", "compile", "proposal"]);
   assert.deepEqual(bytes, full);
   assert.deepEqual(drafts.read("triage"), full);
   assert.deepEqual(drafts.ids(), ["triage"]);
@@ -878,7 +879,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.equal(drafts.records("triage").incompleteAfterSeq, 2);
   // Every key is closed: a stray field, an unknown format or a wrong id is a scoped diagnostic.
   const base = '"id":"triage","createdAt":1,"touchedAt":1,"package":"spex-packages/triage","queued":[],"failures":0';
-  for (const damaged of [`{"format":2,${base}}`, `{"format":1,${base},"token":"x"}`, `{"format":1,${base.replace('"triage"', '"other"')}}`, `{"format":1,${base},"compile":{"at":1,"by":"boss","outcome":"failed","relay":"lost"}}`, `{"format":1,${base.replace('"spex-packages/triage"', '"../out"')}}`, `{"v":2,${base}}`, "{broken"]) {
+  for (const damaged of [`{"format":2,${base}}`, `{"format":1,${base},"token":"x"}`, `{"format":1,${base},"instance":"not-a-uuid"}`, `{"format":1,${base.replace('"triage"', '"other"')}}`, `{"format":1,${base},"compile":{"at":1,"by":"boss","outcome":"failed","relay":"lost"}}`, `{"format":1,${base.replace('"spex-packages/triage"', '"../out"')}}`, `{"v":2,${base}}`, "{broken"]) {
     writeFileSync(drafts.recordFile("triage"), damaged);
     assert.throws(() => drafts.read("triage"), StorageFormatError, damaged);
   }

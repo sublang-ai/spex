@@ -149,8 +149,9 @@ type TurnOrigin =
  * names now. */
 interface LiveDraft {
   /** The instance token every command of the session names and every
-   * message about it carries: minted with the entry, kept across a
-   * replaced transcript and a moved clone. */
+   * message about it carries: the one its file records, minted once
+   * when the session was created, so it stands across the core's
+   * restarts, a replaced transcript and a moved clone. */
   instance: string;
   records?: DraftRecord[];
   seq: number;
@@ -381,8 +382,9 @@ export class AuthorManager {
    * dispatches its queue, the id being free (playbook-library-102). */
   private forget(id: string, former: string): void {
     // A session never described in this run still departs under an
-    // instance, so the announcement names one.
-    const live = this.liveOf(id);
+    // instance, so the announcement names one; the file the id names
+    // now is another session's, so it is not read for it.
+    const live = this.live.get(id) ?? { instance: randomUUID(), seq: 0, changes: [], malformed: [] };
     this.live.delete(id);
     this.problems.delete(id);
     live.turn?.controller.abort();
@@ -419,6 +421,16 @@ export class AuthorManager {
     }
   }
 
+  /** The live entry of the instance a command was admitted under, taken
+   * by the act itself: an instance that departed while the command
+   * awaited is refused `not_found`, naming the id as another session's,
+   * and the act touches nothing (core-service-96). */
+  private holder(id: string, instance: string | undefined): LiveDraft {
+    const live = this.liveOf(id);
+    if (instance !== undefined && live.instance !== instance) throw new CoreError("not_found", nowNamesAnother(id));
+    return live;
+  }
+
   /** A sync applied the spex repository (space-20): each of its
    * sessions' transcript, with the sequence it ends at, is read back
    * before anything appends; one the sync changed is one the provider
@@ -428,6 +440,15 @@ export class AuthorManager {
   reread(repository: string): void {
     for (const id of this.drafts.idsIn(repository)) {
       const live = this.live.get(id);
+      // A file the sync brought under another instance — the session
+      // deleted and made again elsewhere — is another session: the one
+      // held departs, and the one the file names is published under its
+      // own instance (core-service-96).
+      const recorded = live ? this.recorded(id) : undefined;
+      if (live && recorded !== undefined && recorded !== live.instance) {
+        this.forget(id, repository);
+        continue;
+      }
       const held = live?.records;
       if (live && held) {
         // A damaged transcript withholds its records, as an open does:
@@ -471,7 +492,7 @@ export class AuthorManager {
         this.problems.set(id, this.drafts.diagnostic(error, id));
         continue;
       }
-      const live = this.liveOf(id);
+      const live = this.liveOf(id, draft);
       this.closeDanglingTurn(id, live);
       if (draft.compile?.outcome === "running") {
         draft.compile = { ...draft.compile, outcome: "interrupted" };
@@ -579,7 +600,7 @@ export class AuthorManager {
 
   private info(draft: StoredDraft): DraftInfo {
     const id = draft.id;
-    const live = this.liveOf(id);
+    const live = this.liveOf(id, draft);
     // The transcript's state is part of the draft's: a damaged one is
     // known before the draft is described.
     this.recordsOf(id, live);
@@ -677,17 +698,29 @@ export class AuthorManager {
     };
   }
 
-  /** The live entry of the session the id names, made with a fresh
-   * instance where none stands: at a creation, at the first description
-   * of a session found on disk, and for the session a rescan promoted
-   * once the former's entry went (core-service-96). */
-  private liveOf(id: string): LiveDraft {
+  /** The live entry of the session the id names, made where none
+   * stands — at a creation, at the first description of a session found
+   * on disk, and for the session a rescan promoted once the former's
+   * entry went — under the instance the session's file records, never
+   * one minted for this run (core-service-96). */
+  private liveOf(id: string, draft?: StoredDraft): LiveDraft {
     let live = this.live.get(id);
     if (!live) {
-      live = { instance: randomUUID(), seq: 0, changes: [], malformed: [] };
+      // A file that will not read names no instance: the session, which
+      // refuses everything but Delete, stands under one for this run.
+      live = { instance: draft?.instance ?? this.recorded(id) ?? randomUUID(), seq: 0, changes: [], malformed: [] };
       this.live.set(id, live);
     }
     return live;
+  }
+
+  /** The instance the session's file records, if it reads. */
+  private recorded(id: string): string | undefined {
+    try {
+      return this.drafts.read(id).instance;
+    } catch {
+      return undefined;
+    }
   }
 
   private recordsOf(id: string, live: LiveDraft): DraftRecord[] {
@@ -863,8 +896,9 @@ export class AuthorManager {
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));
     }
-    // A new session is a new instance (core-service-96).
-    const live = this.liveOf(id);
+    // A new session is a new instance, the one its file records
+    // (core-service-96).
+    const live = this.liveOf(id, draft);
     live.records = [];
     live.seq = 0;
     live.lastSourceDigest = this.drafts.readSource(id)?.sha256 ?? null;
@@ -875,15 +909,16 @@ export class AuthorManager {
 
   /** A Boss message: dispatched at once while the draft is idle with
    * nothing queued, else queued and dispatched in order when it is
-   * (core-service-96, playbook-library-102). */
-  send(id: string, input: string | MessageContent): { accepted: true; queued: boolean } {
+   * (core-service-96, playbook-library-102). The message goes to the
+   * instance it was admitted under, or nowhere. */
+  send(id: string, input: string | MessageContent, instance?: string): { accepted: true; queued: boolean } {
     const content: MessageContent = typeof input === "string" ? {text: input} : {
       text: input.text,
       ...(input.attachments?.length ? {attachments: input.attachments.map((asset) => ({...asset}))} : {}),
     };
     const draft = this.read(id);
+    const live = this.holder(id, instance);
     this.assertReadable(id);
-    const live = this.liveOf(id);
     // The Boss spoke: the relay count starts over (playbook-library-68).
     draft.failures = 0;
     // A message never overtakes one queued before it: while the queue
@@ -990,13 +1025,15 @@ export class AuthorManager {
    * worked on further and published (playbook-library-61). The id's
    * compile marker is held throughout, so a Boss message arriving
    * meanwhile queues (core-service-96); a refused commit leaves the
-   * session standing with its artifacts.
+   * session standing with its artifacts. The enabling holds the
+   * instance it was admitted under through every await: `commit` calls
+   * `held` before each write, which refuses once that instance departed.
    */
   async register(
     id: string,
     command: string,
     intent: string,
-    commit: (result: CompileResult, location: { packageDir: string; packagePath: string; workingFolder: string }) => Promise<ConfigState>,
+    commit: (result: CompileResult, location: { packageDir: string; packagePath: string; workingFolder: string }, held: () => void) => Promise<ConfigState>,
   ): Promise<ConfigState> {
     const draft = this.read(id);
     this.assertReadable(id);
@@ -1044,11 +1081,15 @@ export class AuthorManager {
       } catch (error) {
         failure = error;
       }
-      // The instance departed while it re-packaged — canceled by forget:
-      // nothing is committed (playbook-library-70).
-      if (!this.owns(id, live)) throw new CoreError("invalid_request", nowNamesAnother(id));
+      // The instance departed while it re-packaged, or departs while
+      // the commit awaits — canceled by forget: nothing more is
+      // committed (playbook-library-70, core-service-96).
+      const held = (): void => {
+        if (!this.owns(id, live)) throw new CoreError("not_found", nowNamesAnother(id));
+      };
+      held();
       if (result === undefined) throw new CoreError("invalid_request", failure instanceof Error ? failure.message : String(failure));
-      return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder });
+      return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder }, held);
     } finally {
       // Only this enabling's hold on the id goes: the session the id
       // names now may hold it itself (playbook-library-70).
@@ -1128,13 +1169,19 @@ export class AuthorManager {
    * is described without it; the rescan ends the instance and announces
    * its departure (forget), then the session now holding the id
    * (storage-12, core-service-96). */
-  delete(id: string): void {
+  delete(id: string, instance?: string): void {
+    // The deletion removes the instance it was admitted under, or
+    // nothing (core-service-96).
+    if (instance !== undefined) this.admit(id, { instance });
     this.assertDeletable(id);
     this.options.store.deletePref(`authoring:${id}:player`);
     this.drafts.delete(id);
   }
 
-  private assertIdle(id: string): void {
+  /** Refuse `busy` while the session the id names has a turn or a
+   * compile running: its acts, and a `compile.run` of its id, wait for
+   * it (core-service-96). */
+  assertIdle(id: string): void {
     const activity = this.activity(id);
     if (activity === "turn") {
       throw new CoreError(

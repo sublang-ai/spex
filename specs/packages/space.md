@@ -53,7 +53,7 @@ When a sign-in completes [[git-host-2](git-host.md#git-host-2)] [[git-host-3](gi
 
 1. rename your own group's folder and its spex repository after the account's login where it bore this device's user name [[space-59](#space-59)];
 2. read the host [[git-host-5](git-host.md#git-host-5)];
-3. give your own group's clone its spex repository on the host as a group's own is found [[space-65](#space-65)]: joined where the host lists exactly one in the account's own group — one with other members only after the notice on its row [[space-57](#space-57)] — created and pushed where it lists none, and neither where it lists several, the choice standing [[space-69](#space-69)];
+3. give your own group's clone its spex repository on the host as a group's own is found in the account's own group [[space-65](#space-65)], joining one with other members only after the notice on its row [[space-57](#space-57)];
 4. list every local-only spex repository of a project with its "Pick a group" control [[space-58](#space-58)], creating nothing for them unasked.
 
 - a turn in flight refuses the rename as it refuses a sync [[space-11](#space-11)], the sign-in standing complete with the rename retried on the next read;
@@ -93,14 +93,14 @@ While this device's reader has not seen the notice for a spex repository [[stora
 
 When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)];
+- picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], one already on this device as another clone, or being joined to it [[space-63](#space-63)], or a group's own while another of its group's own is, being refused with that clone's key [[space-29](#space-29)];
 - picking a group creates `<name>-spex` there [[git-host-6](git-host.md#git-host-6)] and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
 - a creation the host refuses for the account's rights leaves the repository local only with "Waiting for a member who can create it in <group>" on its row [[space-64](#space-64)];
 - Cancel leaves the repository local only, under your own group's folder, with "Pick a group" offered again.
 
 #### space-59
 
-While your own group's spex repository has no remote on the host, when the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While your own group's spex repository has no remote on the host, when the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - the rename runs only while no session beneath the folder has a turn in flight, and blocks writes beneath it only [[space-21](#space-21)];
 - a login differing from the folder's name only by case renames the folder and the repository in place, on a case-insensitive filesystem too.
@@ -120,11 +120,11 @@ The Groups surface shall show each spex repository in exactly one of these state
 
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
-| local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)] | Pick a group [[space-58](#space-58)], or the choice among the candidates for a group's own [[space-69](#space-69)]; none while signed out |
+| local only | the clone has no remote on the host | "On this device only", your own group's reading "On this device only — shared once you sign in" while signed out [[space-3](#space-3)], and a group's clone whose own spex repository is on this device as another clone [[space-65](#space-65)] reading "<group>'s records are on this device as <name>", <name> being that clone's | Pick a group [[space-58](#space-58)], or the choice among the candidates for a group's own [[space-69](#space-69)]; none while signed out |
 | reachable | the home's current view lists it [[git-host-5](git-host.md#git-host-5)] and the clone is here, no join of it running [[space-63](#space-63)] | the last sync's time | Sync |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push | "Read-only: <the host's reason>"; new sessions stay on this device, said so | Sync, bringing only |
 | unreachable | the host stopped listing it, refused the read, the device is offline, or the home is signed out while the clone has a remote | "Unreachable: <cause>" | Retry, none while signed out with the remote at the host |
-| not on this device | the host listed it and no clone is here, or its join still runs [[space-63](#space-63)] | "Not on this device" | Join [[space-63](#space-63)] |
+| not on this device | the host listed it and no clone is here, or its join still runs [[space-63](#space-63)] | "Not on this device" | Join [[space-63](#space-63)], none on a group's own spex repository the group's local-only clone here is given [[space-65](#space-65)] |
 
 - nothing on this device is deleted because the host refused or stopped listing;
 - a waiting creation or branch preparation [[space-64](#space-64)] shows its phrase on the row in place of the state's; the wait is held for the app's run alone, so after a restart the row offers its control again and the next attempt finds what a member did meanwhile.
@@ -151,27 +151,30 @@ When a step at the host — creating a spex repository [[git-host-6](git-host.md
 
 #### space-65
 
-While a group's clone has no remote, when the first session of the group starts in the working folder paired with it [[storage-6](storage.md#storage-6)], or a sign-in sets your own group up [[space-4](#space-4)], the core shall give the clone the group's own spex repository on the host by what the host lists in that group [[git-host-5](git-host.md#git-host-5)] — a spex repository whose `spex` branch holds no `project.json`, or `<group>-spex` whose `spex` branch does not exist yet — never by its name alone ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
+While a group's clone has no remote — your own group's, or another group's paired with a working folder [[storage-6](storage.md#storage-6)] — when the core sets the home up at a read of the host — a sign-in's [[space-4](#space-4)], a Refresh's [[space-2](#space-2)] or a signed-in start's first [[git-host-5](git-host.md#git-host-5)] — or the first session of another group starts in that folder, the core shall give the clone the group's own spex repository on the host by what the host lists in that group [[git-host-5](git-host.md#git-host-5)] — a spex repository whose `spex` branch holds no `project.json`, or `<group>-spex` whose `spex` branch does not exist yet — never by its name alone ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
 
 | The host lists | The core |
 | --- | --- |
+| any one already on this device as another clone [[git-host-5](git-host.md#git-host-5)] or being joined to it [[space-63](#space-63)] | creates and joins nothing, since Spex merges no two spex repositories, the clone staying local only with that other clone named on its row [[space-61](#space-61)] |
 | none | creates `<group>-spex` there [[git-host-6](git-host.md#git-host-6)], prepares its branch [[git-host-7](git-host.md#git-host-7)], and pushes the clone |
-| exactly one | joins the clone's history with it as any two [[space-13](#space-13)], the clone taking the host's key on that sync [[space-60](#space-60)] |
-| several | creates and joins nothing, the choice standing [[space-69](#space-69)] |
+| otherwise exactly one | joins the clone's history with it as any two [[space-13](#space-13)], the clone taking the host's key on that sync [[space-60](#space-60)] |
+| otherwise several | creates and joins nothing, the choice standing [[space-69](#space-69)] |
 
 - the account's own group is the group the host lists as the account's own [[git-host-5](git-host.md#git-host-5)], and its `<group>-spex` is `<login>-spex`;
-- a refused creation leaves the clone local only and the session running [[space-64](#space-64)];
+- a group's own spex repository the host lists in that group is the clone's alone to take;
+- once the other clone or join holding the group's own holds it no more — the join stopping [[space-63](#space-63)] or the clone removed [[projects-9](projects.md#projects-9)] — the clone's row names it no more, and the core gives the clone its spex repository by this rule again then, or at the next read of the host finding it so [[git-host-5](git-host.md#git-host-5)];
+- a creation the host refuses — for the account's rights, or for its name taken by a spex repository that is not the group's own — leaves the clone local only, waiting with the host's words on its row [[space-64](#space-64)] and the session running, and each later read gives the clone its spex repository by this rule again, never taking the one bearing that name;
 - a spex repository found under another name than `<group>-spex` keeps it: Spex renames nothing on the host.
 
 #### space-69
 
-While the host lists several candidates for a group's own spex repository and the group's clone has no remote [[space-65](#space-65)], the core shall report the choice in the Groups state as an issue the reader answers [[space-49](#space-49)], and the surface shall offer it on the clone's row ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
+While the host lists several candidates for a group's own spex repository, none of them on this device as another clone, and the group's clone has no remote [[space-65](#space-65)], the core shall report the choice in the Groups state as an issue the reader answers [[space-49](#space-49)], and the surface shall offer it on the clone's row ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-110](../decisions/110-known-by-its-place-found-by-its-records.md)):
 
-- the row reads local only [[space-61](#space-61)] with "Which holds your own records?" for your own group and "Which holds <group>'s records?" for another, and one Use control per candidate, named by the repository's name and its members' count, in place of Pick a group; each candidate is also listed in the group, after the clone's row, as not on this device [[space-61](#space-61)], one bearing the clone's key offering no Join of its own, the clone's Use joining it [[space-29](#space-29)];
+- the row reads local only [[space-61](#space-61)] with "Which holds your own records?" for your own group and "Which holds <group>'s records?" for another, and one Use control per candidate, named by the repository's name and its members' count, in place of Pick a group; each candidate is also listed in the group, after the clone's row, as not on this device [[space-61](#space-61)], offering no Join of its own [[space-65](#space-65)], the clone's Use joining it;
 - Use is the pick of that listed spex repository [[space-58](#space-58)], joining the clone's history with it as any two [[space-13](#space-13)], the clone taking the host's key on that sync [[space-60](#space-60)], focus landing on the row's control once accepted ([DR-010](../decisions/010-interface-craft.md) §6); the other candidates stay listed as the group's spex repositories not on this device;
 - the choice counts as an issue until the reader picks or sets it aside with Not now [[space-49](#space-49)], that answer held as a repair's answer is [[space-54](#space-54)]; set aside, the row keeps its controls and counts no more;
 - the choice lapses when the candidates the host lists change: one left is joined and none left created at the next read [[space-65](#space-65)];
-- Spex merges no two spex repositories: making one of several is done on the host.
+- Spex merges no two spex repositories: making one of several is done on the host, and with one of them on this device as another clone no choice stands [[space-65](#space-65)], a pick of any of them being refused [[space-58](#space-58)].
 
 ### Repairs
 
@@ -306,7 +309,7 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 | the home is signed in, or the spex repository's remote is a path this device can reach | "Sign in first" |
 | the spex repository is reachable or read-only [[space-61](#space-61)] | the state's phrase |
 | no Git merge is pending from a terminal in the clone | "Finish or abort the merge in your terminal" |
-| no session of this spex repository has a turn in flight [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title>" |
+| no session of this spex repository has a turn in flight or is being created [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title>" |
 | no session of it is held, or unprovably held, by another host [[core-service-32](core-service.md#core-service-32)] | "<session title> is in use elsewhere" |
 | no authoring session of it has a turn in flight [[core-service-96](core-service.md#core-service-96)] | "Wait for <playbook id>" |
 | no compile or enabling of its authoring sessions is running | "<playbook> is compiling" |
@@ -422,7 +425,7 @@ When a sync's Apply step has changed the working tree — by merge or fast-forwa
 
 #### space-21
 
-While a sync, check, join, rename or move of a spex repository is running, the core shall refuse `busy`, naming the operation, every command that writes beneath that clone — turn submission, session creation, restore, discard, deletion and viewed markers of its sessions, pairing changes, every intent command of it, its configuration and environment edits, and its compiles — and a second operation on it, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation while other spex repositories stay writable:
+While a sync, check, join, rename, move or removal of a spex repository is running, the core shall refuse `busy`, naming the operation, every command that writes beneath that clone — turn submission, session creation, restore, discard, deletion and viewed markers of its sessions, pairing changes, every intent command of it, its configuration and environment edits, and its compiles — and a second operation on it, so the sole-writer rule [[storage-14](storage.md#storage-14)] holds through the operation while other spex repositories stay writable:
 
 - the gate is set before the admission checks [[space-11](#space-11)], so a turn admitted after it is refused and one admitted before it fails the check;
 - choices needed and stopped are not running states: nothing is refused while the picker waits.
@@ -517,8 +520,8 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.signin.start` | — | `{ flow: "browser", url } \| { flow: "device", userCode, verificationUri, expiresAt }` | `busy` (a sign-in in flight) |
 | `space.signin.cancel` | — | `{ stopped: boolean }` | — |
 | `space.signout` | — | `GroupsState` | `busy` (a sync running) |
-| `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members or a creation in a group other than your own [[space-57](#space-57)], with `details` `{ notice: true, members, visibility }`, both null for a creation), `busy` |
-| `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here; a standing choice's candidate bearing its clone's key, which Use joins [[space-69](#space-69)]), `busy` |
+| `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; a join of a spex repository already on this device as another clone, or of a group's own while another of its group's own is, naming that clone's key [[space-58](#space-58)]; the notice not seen for a join into a repository with other members or a creation in a group other than your own [[space-57](#space-57)], with `details` `{ notice: true, members, visibility }`, both null for a creation), `busy` |
+| `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here, or being attached to a clone here; a group's own spex repository its group's local-only clone is given [[space-65](#space-65)], a standing choice's candidate among them [[space-69](#space-69)], saying "Use <name> where this device asks which holds the records", or that clone's row's words where it names another clone holding the group's records [[space-61](#space-61)]), `busy` |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only), `busy` |
 | `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `busy` naming the blocker [[space-11](#space-11)], `invalid_request` (local only, merge pending, blocking diagnostic; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)], with `details` `{ notice: true, members, visibility }`, both null where the host has not told the members) |
@@ -559,7 +562,7 @@ interface RepositoryState {
   key: string; name: string; id: string | null; own: boolean; code: string | null; folder: string | null;
   remote: string | null;                 // the clone's origin URL, null while local only
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
-  reason: string | null;                 // the host's words for read-only or unreachable
+  reason: string | null;                 // the host's words for read-only or unreachable; a group's local-only clone's phrase naming the clone its records are on (space-65)
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null; visibility: string | null;
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
@@ -573,7 +576,7 @@ interface RepositoryState {
             declined: boolean } | null;
   sync:
     | { phase: "idle" }
-    | { phase: "running"; op: "sync" | "check" | "join" | "move"; step: SyncStep; since: number; cancelable: boolean }
+    | { phase: "running"; op: "sync" | "check" | "join" | "move" | "remove"; step: SyncStep; since: number; cancelable: boolean }
     | { phase: "choices"; savedCommit: string | null }
     | { phase: "unrelated" }
     | { phase: "stopped"; op: "sync" | "check" | "join" | "move"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean }
@@ -609,6 +612,7 @@ The core shall run every operation of one spex repository on one state machine p
 idle ─sync/join→ save ─→ check ─→ compare ─→ apply ─→ refresh ─→ push ─→ done ─→ idle
 idle ─fetch→ check ─→ idle
 idle ─move→ apply ─→ refresh ─→ idle
+any phase but running ─remove→ apply ─→ the phase it left, or the machine forgotten with its deleted clone
 save: ignored path staged | validation | commit error → stopped
 check: host refused | reauth | gone | notice owed | transport | timeout | Stop → stopped;  host empty → push
 compare: conflict without choice → choices;  no ancestor and not a join → unrelated;  nothing incoming → push
@@ -617,7 +621,7 @@ push: rejected (first) → check;  rejected twice | refused | transport | timeou
 choices ─sync with choices→ save;  unrelated ─sync with join→ save;  stopped ─Dismiss or next→ idle
 ```
 
-- the write gate [[space-21](#space-21)] is set on entering `save`, `check` or a move's `apply` and lifted on `choices`, `unrelated`, `stopped`, `done` and `idle`;
+- the write gate [[space-21](#space-21)] is set on entering `save`, `check`, or a move's or a removal's `apply` and lifted on `choices`, `unrelated`, `stopped`, `done` and `idle`;
 - every session's management lease is taken through Playbook's shared store at the start of `apply` and released when `refresh` ends or `apply` stops, so a terminal writer is refused for exactly the writing steps and a held lease stops the sync naming its session;
 - the clone's watchers are paused from `apply` through `refresh`, and one full rescan of the clone runs as `refresh`;
 - before the first file is replaced, `apply` records the plan's revisions, ancestor and choices in an ignored `<clone>/.spex-apply.json` and removes it after the ref update lands; a marker found at startup or admission is re-applied — same blobs, same tree, same parents — before any other operation on that clone;
@@ -714,7 +718,15 @@ When an integration suite starts a real core with substitute agents on a scratch
 - registering the working folder of a group whose clone is local only while the stand-in lists two group's own repositories in that group stands the choice on that clone's row, creating and joining nothing and counting one issue [[space-65](#space-65)] [[space-69](#space-69)]; declined, a restarted core's first read keeps the choice declined and counting no issue [[space-69](#space-69)] [[space-54](#space-54)]; the stand-in deleting one, the next Refresh joins the other, the clone lying at its key and the answer discarded [[space-69](#space-69)] [[space-60](#space-60)];
 - registering the working folder of a group whose own repository the stand-in lists as `old-spex`, with its `spex` branch and no `project.json`, joins it at the first session instead of creating `<group>-spex`, the clone lying at `<group>/old-spex` after that sync [[space-65](#space-65)] [[space-60](#space-60)];
 - a group's own repository the stand-in lists as `old-spex` beside a project's `aaa-spex` in one group reads `records` `group` and first in that group, the project's reading `project`, and your own group's clone and a project clone of yours read `group` and `project` [[space-30](#space-30)] [[space-1](#space-1)] [[space-65](#space-65)]; a group's local-only clone `zed-spex` whose choice stands between `a-spex` and `b-spex` lists first in its group, before both [[space-69](#space-69)];
-- a creation of your own group's spex repository the stand-in leaves waiting at sign-in, then the stand-in granting creations and listing a group's own repository `notes-spex` in the person's namespace: the next Refresh joins `notes-spex`, the clone lying at `ada/notes-spex` after that sync with no step waiting, nothing created [[space-64](#space-64)] [[space-65](#space-65)] [[space-60](#space-60)];
+- a creation of your own group's spex repository the stand-in leaves waiting at sign-in, that set-up asking it once [[space-64](#space-64)], then the stand-in granting creations and listing a group's own repository `notes-spex` in the person's namespace: the next Refresh joins `notes-spex`, the clone lying at `ada/notes-spex` after that sync with no step waiting, nothing created [[space-64](#space-64)] [[space-65](#space-65)] [[space-60](#space-60)];
+- a sign-in while the stand-in lists in the person's namespace a project's `ada-spex`, holding `project.json`, leaves your own group's clone local only with no choice, its creation, asked once by that set-up, meeting the taken name and waiting with the host's words, and the next Refresh asks the creation once again [[space-64](#space-64)], adopting nothing by its name: the clone stays local only and waiting, and the stand-in's `ada-spex` unchanged [[space-65](#space-65)] [[space-64](#space-64)];
+- registering the working folder of a group whose clone is local only while the stand-in lists that group's `<group>-spex` holding `project.json` leaves the clone local only, its creation waiting with the host's words, and the next Refresh adopts nothing by its name, the clone staying local only and waiting and the stand-in's repository unchanged [[space-65](#space-65)] [[space-64](#space-64)];
+- while the choice between `ada-spex` and `notes-spex` stands on your own group's clone, `space.join` of `notes-spex` with a working folder is refused for Use, nothing cloned or paired [[space-65](#space-65)] [[space-69](#space-69)] [[space-29](#space-29)];
+- a group's own repository the reader joined with a working folder, beside another group's own repository the stand-in lists in that group, then another working folder registered for that group's local-only clone: nothing is created or joined, the clone staying local only with its row naming the joined clone [[space-65](#space-65)] [[space-61](#space-61)] and counting no issue, and its `space.pick` of that repository or of the other is refused naming the joined clone's key [[space-58](#space-58)] [[space-29](#space-29)], `space.join` of the other being refused with the row's words [[space-29](#space-29)];
+- a Refresh while the reader's Join of a group's sole own repository runs against a stand-in whose Git transport sleeps, the group's local-only clone paired with a working folder since that Join began: nothing is created or joined, the clone staying local only with its row naming the clone being joined while that Join runs [[space-65](#space-65)] [[space-61](#space-61)], and once the Join ends one row stands per host id, the clone still local only and no sync stopped [[space-65](#space-65)] [[space-63](#space-63)];
+- a Join of a group's sole own repository begun against a stand-in whose Git transport sleeps, before the group's local-only clone was paired with a working folder, a Refresh's lookup then naming the clone being joined, and the stand-in refusing its transport: once the Join stops, the clone's row names it no more [[space-65](#space-65)], and by the next host read, a sync's Check, the clone has joined that repository, lying at its key [[space-60](#space-60)] with one row per host id and nothing created [[space-65](#space-65)];
+- a group's local-only clone whose creation the stand-in leaves waiting, then the stand-in listing a group's own repository `notes-spex` in that group, read by a sync's Check with no choice standing: `space.join` of `notes-spex` with a working folder is refused for Use, nothing cloned or paired [[space-65](#space-65)] [[space-29](#space-29)];
+- two groups' clones whose choices stand unanswered, the core stopped and the stand-in deleting one of the first group's candidates and both of the second's: the restarted core's first read joins the first group's one left and creates the second's `<group>-spex`, each clone pushed and no issue counted [[space-65](#space-65)] [[space-69](#space-69)];
 - while the set-up's lookup for your own group's clone awaits the stand-in's creation, `space.pick` of that clone is refused `busy` [[space-29](#space-29)] [[space-58](#space-58)]; while a pick creating a group's spex repository for that group's local-only clone awaits the stand-in's creation, the group's lookup at a session's start acts on nothing; each time one creation reaches the stand-in [[space-65](#space-65)];
 - a creation the stand-in leaves waiting while a session is recorded here, then grants with another member, ends a Refresh with the row reachable and idle with two members and nothing pushed; `space.sync` is then refused until `noticed`, its details naming the notice with two members, and with it pushes the session [[space-64](#space-64)] [[space-57](#space-57)];
 - the stand-in renaming a repository's path only by case, then moving it and another repository of its group to a group whose path differs only by case, moves the clones on their syncs with no stop, the folders on disk spelled as the stand-in spells them and every pair naming a clone after each sync, on either filesystem kind, and a restarted core lists both projects there [[space-60](#space-60)];
@@ -727,7 +739,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
-- a session with a turn in flight, a session under a management lease taken out of band, an authoring session with a turn in flight, an enabling of one at its re-package, a `compile.run` of one's id from another project, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds, the sync admitted once the authoring turn ends [[space-11](#space-11)] [[space-21](#space-21)];
+- a session with a turn in flight, a session being created, a session under a management lease taken out of band, an authoring session with a turn in flight, an enabling of one at its re-package, a `compile.run` of one's id from another project, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds, the sync admitted once the authoring turn ends [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
 - `space.signout` revokes the device at the stand-in, every repository turns local only or unreachable with nothing deleted, and a later sign-in finds them reachable again [[space-6](#space-6)] [[space-61](#space-61)];
 - a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)].
@@ -817,7 +829,7 @@ Where the Groups surface renders a spex repository with two members and no notic
 Where the Groups surface renders over a signed-in home whose state carries the choice between two candidates for your own group's spex repository, the test suite shall assert through the surface:
 
 - your own group's row reads "On this device only" with "Which holds your own records?", one Use control per candidate naming the repository and its members' count, Not now, and no Pick a group, the header counting one issue and its control moving focus to the first Use [[space-69](#space-69)] [[space-61](#space-61)] [[space-1](#space-1)];
-- both candidates list beneath it as "Not on this device" [[space-69](#space-69)] [[space-61](#space-61)], one sharing the clone's name offering no Join [[space-69](#space-69)] and, activated, opening its own tabs alone [[space-1](#space-1)];
+- both candidates list beneath it as "Not on this device" [[space-69](#space-69)] [[space-61](#space-61)], neither offering Join [[space-69](#space-69)], and the one sharing the clone's name, activated, opening its own tabs alone [[space-1](#space-1)];
 - Use sends the pick of that repository for your own group's clone, focus landing on the row's control [[space-69](#space-69)], and Not now the decline, the row then counting no issue and keeping its controls [[space-69](#space-69)] [[space-49](#space-49)];
 - a group's own repository the state lists under a name other than its group's, holding no code remote, reads "Group records" first in its group [[space-1](#space-1)].
 
@@ -827,6 +839,18 @@ Where the Groups surface renders over a home whose state carries a standing choi
 
 - before the add, the header reads two issues and the list's heading "Issues (1) · 1 not added", the list wearing attention [[space-1](#space-1)] [[space-55](#space-55)];
 - after it, the header reads one issue, still wearing attention, the live region "1 issue left.", and the list reads as settled [[space-48](#space-48)] [[space-55](#space-55)].
+
+#### space-71
+
+Where the Groups surface renders over a signed-in home whose state lists a spex repository not on this device in a group holding a clone of this device, with no choice standing, the test suite shall assert through the surface, per case, whether that row offers Join:
+
+| Row not on this device | The group's clone | Join |
+| --- | --- | --- |
+| a group's own | another group's, local only, paired with a working folder, its creation waiting | none [[space-65](#space-65)] [[space-61](#space-61)] |
+| a project's | the same | offered [[space-61](#space-61)] |
+| a group's own | your own group's, local only | none [[space-65](#space-65)] [[space-61](#space-61)] |
+| a group's own | another group's, local only, paired with no working folder | offered [[space-61](#space-61)] |
+| a group's own | another group's, on the host | offered [[space-61](#space-61)] |
 
 ### Browser Journeys
 

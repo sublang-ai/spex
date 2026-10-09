@@ -31,11 +31,15 @@ import type {
   DraftHistoryReplacedMessage,
   DraftInfo,
   DraftRecordMessage,
+  DraftRemovedMessage,
   DraftSourceMessage,
   DraftStateMessage,
   ServerMessage,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
+import type { ApplicationMedia } from "./media.js";
+import type { EnvironmentManager } from "./environments.js";
+import type { LoadModule } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -281,6 +285,23 @@ function authoringFiles(clone: string, id: string): { record: string; records: s
   };
 }
 
+/** A copy of a session's file standing for another session of its id —
+ * one another device made — under an instance of its own (storage-23). */
+function anotherSession(record: string | Buffer): string {
+  return JSON.stringify({ ...(JSON.parse(String(record)) as Record<string, unknown>), instance: randomUUID() });
+}
+
+/** The instance a session file naming none is given at its first read
+ * (playbook-library-70): sha256 of its id and creation time, formatted
+ * as a lowercase UUID with the version and variant set. */
+function derivedInstance(id: string, createdAt: number): string {
+  const hex = createHash("sha256").update(`${id}\n${createdAt}`).digest("hex").slice(0, 32).split("");
+  hex[12] = "8";
+  hex[16] = (0x8 | (parseInt(hex[16]!, 16) & 0x3)).toString(16);
+  const text = hex.join("");
+  return `${text.slice(0, 8)}-${text.slice(8, 12)}-${text.slice(12, 16)}-${text.slice(16, 20)}-${text.slice(20)}`;
+}
+
 const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
 
 // ---------------------------------------------------------------------------
@@ -320,9 +341,10 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   });
   // storage-23: the record lands in the project's spex repository.
   const record = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "package", "queued", "touchedAt"]);
+  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "instance", "package", "queued", "touchedAt"]);
   assert.equal(record.format, 1);
   assert.equal(record.id, "triage");
+  assert.equal(record.instance, created.instance, "the instance is recorded with the session");
   assert.equal(record.package, "spex-packages/triage");
   assert.deepEqual(record.queued, []);
   assert.equal(record.failures, 0);
@@ -758,10 +780,19 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   client2.close();
   await second.service.stop();
   appendFileSync(files.records, '{"seq":999,"record":{"type":"junk"}}\n{not json');
+  // playbook-library-70: a session file naming no instance, as an
+  // earlier build wrote it, is given one derived from its id and
+  // creation time at its first read.
+  const { instance: _stripped, ...earlier } = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
+  writeFileSync(files.record, JSON.stringify(earlier));
   const third = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client3 = new Client(third.service.port());
   await client3.open();
   const damaged = await client3.expectOk("draft.open", { projectId, draftId: "persist" });
+  const given = (JSON.parse(readFileSync(files.record, "utf8")) as { instance?: string }).instance;
+  assert.match(given ?? "", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, "the file is given an instance, written back");
+  assert.equal(given, derivedInstance("persist", earlier.createdAt as number), "the instance given is derived from the id and creation time");
+  assert.equal(damaged.draft.instance, given, "the session's state names the instance its file now holds");
   assert.match(damaged.draft.diagnostic ?? "", /records\.jsonl: damaged transcript after record \d+$/);
   assert.deepEqual(damaged.records, [], "the records are withheld");
   assert.equal(damaged.source?.markdown, "# Persist\n\nRoles:\n\n- Helper\n", "the source stands");
@@ -1048,7 +1079,7 @@ test("core-service-97: every departure reaches each client as draft.removed nami
     const other = (await a.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
     const shadowed = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "dup");
     mkdirSync(dirname(shadowed.record), { recursive: true });
-    writeFileSync(shadowed.record, readFileSync(authoringFiles(clone, "dup").record));
+    writeFileSync(shadowed.record, anotherSession(readFileSync(authoringFiles(clone, "dup").record)));
     const reassigning = b.messages.length;
     rmSync(authoringFiles(clone, "dup").record);
     await a.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
@@ -1058,12 +1089,14 @@ test("core-service-97: every departure reaches each client as draft.removed nami
       [`removed ${projectId}`, `state ${other}`],
       "the departure names the former project, then the session now holding the id",
     );
+    const [left, holder] = about("dup", reassigning);
+    assert.ok(left.type === "draft.removed" && holder.type === "draft.state" && holder.draft.instance !== left.instance, "the new holder's state names another instance");
 
     // A deletion of a session another project's session of its id
     // shadows: the departure names the deleted session's project once,
     // then the session now holding the id.
     await a.expectOk("draft.create", { projectId, draftId: "twin" });
-    writeFileSync(authoringFiles(join(dataDir, "workspace", ...other.split("/")), "twin").record, readFileSync(authoringFiles(clone, "twin").record));
+    writeFileSync(authoringFiles(join(dataDir, "workspace", ...other.split("/")), "twin").record, anotherSession(readFileSync(authoringFiles(clone, "twin").record)));
     await b.expectOk("draft.list", {});
     const deleting = b.messages.length;
     await a.expectOk("draft.delete", { projectId, draftId: "twin" });
@@ -1074,6 +1107,8 @@ test("core-service-97: every departure reaches each client as draft.removed nami
       [`removed ${projectId}`, `state ${other}`],
       "the deletion is announced once, naming the deleted session's project, then the session now holding the id",
     );
+    const [deleted, successor] = about("twin", deleting);
+    assert.ok(deleted.type === "draft.removed" && successor.type === "draft.state" && successor.draft.instance !== deleted.instance, "the new holder's state names another instance");
 
     // Its project's removal: the departure names the removed project.
     const doomed = (await a.expectOk("project.register", { path: workingFolder(join(dir, "doomed")) })).id;
@@ -1110,6 +1145,26 @@ test("core-service-97: every departure reaches each client as draft.removed nami
     assert.equal(a.latest("shared")?.instance, shared.instance, "the state after the sync names the same instance");
     assert.deepEqual(replaced.records.map((entry) => entry.seq), [1, 2]);
     assert.ok(!b.messages.some((m) => m.type === "draft.history-replaced"), "a client not subscribed receives no replacement");
+
+    // A sync bringing the session's file under another instance — the
+    // peer deleted it and made it again — is its departure, then the
+    // session under the instance its file names.
+    const remade = randomUUID();
+    peerGit(peer, "fetch", "-q", "origin");
+    peerGit(peer, "reset", "-q", "--hard", "origin/spex");
+    const peerRecord = join(peer, "authoring", "shared.json");
+    writeFileSync(peerRecord, JSON.stringify({ ...(JSON.parse(readFileSync(peerRecord, "utf8")) as Record<string, unknown>), instance: remade }));
+    peerGit(peer, "add", "-A", "--", ".");
+    peerGit(peer, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer makes the session again");
+    peerGit(peer, "push", "-q", "origin", "HEAD:spex");
+    const resynced = b.messages.length;
+    assert.equal(await sync(a, projectId), "done");
+    await until(() => about("shared", resynced).some((m) => m.type === "draft.state" && m.draft.instance === remade), 10_000, "the state under the file's instance");
+    await sleep(200);
+    const brought = about("shared", resynced);
+    assert.deepEqual(brought.slice(0, 2).map(label), [`removed ${projectId}`, `state ${projectId}`], "the departure, then the session the file names");
+    assert.ok(brought[0].type === "draft.removed" && brought[0].instance === shared.instance, "the departure names the instance that left");
+    assert.ok(brought.slice(1).every((m) => m.type === "draft.state" && m.draft.instance === remade), "every state after it names the file's instance");
 
     // A sync removing a session: the departure names its project once.
     const unsynced = b.messages.length;
@@ -1172,6 +1227,186 @@ test("core-service-97: a session created again under its id in the same project 
   } finally {
     a.close();
     b.close();
+    await harness.service.stop();
+  }
+});
+
+test("core-service-97: a session's instance stands across a reconnect and a restart, while one made again while a client was away reaches it under another instance", async () => {
+  const script: FakeScript = { fallback: { result: "Noted." } };
+  const slc = stubSlcSource();
+  const first = await startHarness({ script, slc });
+  const { dir, projectId, clone } = first;
+  let service = first.service;
+  const clients: Client[] = [];
+  const connect = async (): Promise<Client> => {
+    const client = new Client(service.port());
+    clients.push(client);
+    await client.open();
+    return client;
+  };
+  try {
+    const away = await connect();
+    const kept = await away.expectOk("draft.create", { projectId, draftId: "kept" });
+    const remade = await away.expectOk("draft.create", { projectId, draftId: "remade" });
+    away.close();
+
+    // A reconnect to the same run: the listing names the instances held.
+    const back = await connect();
+    const relisted = new Map((await back.expectOk("draft.list", {})).map((draft) => [draft.id, draft.instance]));
+    assert.equal(relisted.get("kept"), kept.instance, "a reconnect reads the instance held");
+    assert.equal(relisted.get("remade"), remade.instance);
+    back.close();
+
+    // While that client is away, another deletes `remade` and creates
+    // it again in the same project, and the core restarts on the same home.
+    const other = await connect();
+    await other.expectOk("draft.delete", { projectId, draftId: "remade", instance: remade.instance });
+    const made = await other.expectOk("draft.create", { projectId, draftId: "remade" });
+    assert.notEqual(made.instance, remade.instance);
+    other.close();
+    await service.stop();
+    service = (await startHarness({ dir, script, slc })).service;
+
+    // The reconnecting client: the session it held stands under its
+    // instance; the one made again reaches it under another.
+    const returning = await connect();
+    const listed = new Map((await returning.expectOk("draft.list", {})).map((draft) => [draft.id, draft.instance]));
+    assert.equal(listed.get("kept"), kept.instance, "the instance stands across a restart of the core");
+    assert.equal(listed.get("remade"), made.instance, "the session made again is named under the instance its creation minted");
+    assert.notEqual(listed.get("remade"), remade.instance);
+    // The instance is recorded with the session (storage-23).
+    assert.equal((JSON.parse(readFileSync(authoringFiles(clone, "kept").record, "utf8")) as { instance?: string }).instance, kept.instance);
+    // The held instance is admitted; the former's is refused.
+    await returning.expectOk("subscribe", { channel: { kind: "draft", draftId: "kept", instance: kept.instance } });
+    const opened = await returning.expectOk("draft.player.set", { projectId, draftId: "kept", instance: kept.instance, playerId: null });
+    assert.equal(opened.instance, kept.instance);
+    const refused = await returning.expectError("draft.player.set", { projectId, draftId: "remade", instance: remade.instance, playerId: null }, "not_found");
+    assert.equal(refused.message, "remade now names another authoring session");
+    await returning.expectError("subscribe", { channel: { kind: "draft", draftId: "remade", instance: remade.instance } }, "not_found");
+  } finally {
+    for (const client of clients) client.close();
+    await service.stop();
+  }
+});
+
+test("core-service-97: a draft.send whose media validation outlasts its session's departure and a creation again is refused, and the new session records nothing", async () => {
+  const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcSource() });
+  const { projectId, clone, stats } = harness;
+  const files = authoringFiles(clone, "held");
+  const client = new Client(harness.service.port());
+  // The media's own seam, as the media suite holds it: the real
+  // validation runs and verifies the bytes; only its reader's close
+  // waits for the test's release.
+  const media = Reflect.get(harness.service, "media") as ApplicationMedia;
+  const ownerStore = media.ownerStore.bind(media);
+  let release = (): void => {};
+  let sending: ReturnType<Client["command"]> | undefined;
+  try {
+    await client.open();
+    const former = await client.expectOk("draft.create", { projectId, draftId: "held" });
+    const owner = { kind: "draft" as const, projectId, id: "held" };
+    const uploadId = randomUUID();
+    await client.expectOk("media.begin", { uploadId, owner, name: "note.txt", mimeType: "text/plain", byteLength: 4 });
+    await client.expectOk("media.chunk", { uploadId, offset: 0, data: Buffer.from("kept").toString("base64") });
+    const { asset } = await client.expectOk("media.finish", { uploadId });
+    let entered!: () => void;
+    const validating = new Promise<void>((resolve) => { entered = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    let pause = true;
+    media.ownerStore = (value, write = false) => {
+      const store = ownerStore(value, write);
+      if (!pause || write || value.kind !== "draft" || value.id !== "held") return store;
+      return {
+        ...store,
+        openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+          const reader = await store.openAsset(...args);
+          return { ...reader, close: async () => {
+            if (pause) { pause = false; entered(); await barrier; }
+            await reader.close();
+          } };
+        },
+      };
+    };
+    sending = client.command("draft.send", { projectId, draftId: "held", instance: former.instance, text: "late", attachments: [asset] });
+    await validating;
+
+    // While the message is validated, the session departs — its file
+    // removed — and is created again under its id in the same project.
+    rmSync(files.record);
+    const made = await client.expectOk("draft.create", { projectId, draftId: "held" });
+    assert.notEqual(made.instance, former.instance);
+    release();
+    const reply = await sending;
+    assert.ok(!reply.ok, "the message admitted under the former instance is refused");
+    if (reply.ok) throw new Error("unreachable");
+    assert.equal(reply.error.code, "not_found");
+    assert.equal(reply.error.message, "held now names another authoring session");
+    await sleep(200);
+    assert.equal(stats.runs.length, 0, "no turn ran");
+    const opened = await client.expectOk("draft.open", { projectId, draftId: "held" });
+    assert.equal(opened.draft.instance, made.instance);
+    assert.deepEqual(opened.records, [], "the new session records nothing");
+    assert.deepEqual(opened.draft.queued, [], "nothing queued for it");
+    assert.deepEqual(turnsOnDisk(files.records), []);
+  } finally {
+    release();
+    await sending?.catch(() => undefined);
+    media.ownerStore = ownerStore;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("core-service-97: a compile.run of a session's id while its turn or its compile runs is refused busy and leaves the session's source unchanged", async () => {
+  const script: FakeScript = {
+    rules: [{ match: "slow:", response: { deltas: ["working"], result: "", untilAborted: true } }],
+    fallback: { result: "Noted." },
+  };
+  // The stub holds every compile in its first phase until released.
+  const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { projectId, dir } = harness;
+  const source = join(dir, "project", "spex-packages", "busy", "playbooks", "en", "busy", "busy.md");
+  const client = new Client(harness.service.port());
+  /** A one-shot compile of the session's id, overwriting its source;
+   * what it replied, or undefined while it runs. */
+  const oneShot = async (): Promise<Awaited<ReturnType<Client["command"]>> | undefined> => Promise.race([
+    client.command("compile.run", { playbookId: "busy", sourceText: "# Overwritten\n\nRoles:\n\n- Helper\n", roles: ["helper"], command: "busy", intent: "x", bindings: { helper: "dev.coder" }, projectId }),
+    sleep(10_000).then(() => undefined),
+  ]);
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "busy" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "busy" } });
+    await client.expectOk("draft.source.write", { projectId, draftId: "busy", content: "# Busy\n\nRoles:\n\n- Helper\n" });
+    const before = readFileSync(source, "utf8");
+
+    // While its turn runs.
+    await client.expectOk("draft.send", { projectId, draftId: "busy", text: "slow: keep drafting" });
+    await until(() => client.latest("busy")?.activity === "turn", 10_000, "the turn");
+    const duringTurn = await oneShot();
+    assert.ok(duringTurn !== undefined && !duringTurn.ok, `the one-shot compile is refused during the turn: ${JSON.stringify(duringTurn)}`);
+    if (duringTurn.ok) throw new Error("unreachable");
+    assert.equal(duringTurn.error.code, "busy");
+    assert.equal(duringTurn.error.message, "wait for the reply, or abort it, first");
+    assert.equal(readFileSync(source, "utf8"), before, "the session's source is unchanged");
+    await client.expectOk("draft.abort", { projectId, draftId: "busy" });
+    await until(() => client.latest("busy")?.activity === "idle", 10_000, "idle after the turn");
+
+    // While its compile runs.
+    const compiling = client.command("draft.compile", { projectId, draftId: "busy" });
+    await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "busy" && m.line.startsWith("→ normalize"), 20_000);
+    const duringCompile = await oneShot();
+    assert.ok(duringCompile !== undefined && !duringCompile.ok, `the one-shot compile is refused during the compile: ${JSON.stringify(duringCompile)}`);
+    if (duringCompile.ok) throw new Error("unreachable");
+    assert.equal(duringCompile.error.code, "busy");
+    assert.equal(duringCompile.error.message, "a compile is already running for busy");
+    assert.equal(readFileSync(source, "utf8"), before, "the session's source is unchanged");
+    await client.expectOk("compile.abort", { playbookId: "busy", projectId, instance: client.addresses.of("busy") });
+    const canceled = await compiling;
+    assert.ok(!canceled.ok && canceled.error.code === "aborted");
+  } finally {
+    await client.command("compile.abort", { playbookId: "busy" }).catch(() => undefined);
+    client.close();
     await harness.service.stop();
   }
 });
@@ -1254,7 +1489,7 @@ test("storage-25: two spex repositories holding one authoring session id are rep
     const authoring = join(dataDir, "workspace", ...other.split("/"), "authoring");
     mkdirSync(authoring, { recursive: true });
     const shadowed = join(authoring, "triage.json");
-    writeFileSync(shadowed, readFileSync(authoringFiles(clone, "triage").record));
+    writeFileSync(shadowed, anotherSession(readFileSync(authoringFiles(clone, "triage").record)));
     client.close();
     await service.stop();
     service = (await startHarness({ dir, script, slc })).service;
@@ -1293,7 +1528,7 @@ test("storage-25: two spex repositories holding one authoring session id are rep
     assert.ok(first.localeCompare(projectId) < 0, `${first} sorts before ${projectId}`);
     const arrived = authoringFiles(join(dataDir, "workspace", ...first.split("/")), "triage");
     mkdirSync(dirname(arrived.record), { recursive: true });
-    writeFileSync(arrived.record, readFileSync(kept.record));
+    writeFileSync(arrived.record, anotherSession(readFileSync(kept.record)));
     writeFileSync(arrived.records, `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`);
     mkdirSync(join(dir, "alpha", "spex-packages", "triage", "playbooks", "en", "triage"), { recursive: true });
     await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
@@ -1363,7 +1598,7 @@ async function sync(client: Client, repository: string): Promise<string> {
 
 test("playbook-library-96: a sync bringing a peer's records is read back before the session records again", async () => {
   const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcSource() });
-  const { projectId, clone, dir, stats } = harness;
+  const { projectId, clone, dir, dataDir, stats } = harness;
   const files = authoringFiles(clone, "synced");
   const client = new Client(harness.service.port());
   try {
@@ -1450,17 +1685,17 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     const all = seqs();
     assert.deepEqual(all, all.map((_seq, index) => index + 1), "the transcript stays in sequence");
 
-    // The peer recreates the session under the same id in the same
-    // project: the subscribed client receives the peer's transcript
-    // whole before anything appends, and the next turn's records
-    // continue it at 3.
+    // The peer rewrites the session's transcript to two records under
+    // the session's own instance: the subscribed client receives the
+    // peer's transcript whole before anything appends, and the next
+    // turn's records continue it at 3.
     await synced();
-    const recreated = [1, 2].map((seq) => ({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message: `◇ Recreated on another device, line ${seq}` } }));
+    const rewritten = [1, 2].map((seq) => ({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message: `◇ Rewritten on another device, line ${seq}` } }));
     peerPush(() => {
       const file = join(peer, "authoring", "synced.json");
-      const stored = JSON.parse(readFileSync(file, "utf8")) as { createdAt: number; touchedAt: number };
-      writeFileSync(file, JSON.stringify({ ...stored, createdAt: stored.createdAt + 1, touchedAt: stored.touchedAt + 1, queued: [], failures: 0 }));
-      writeFileSync(join(peer, "authoring", "synced.records.jsonl"), recreated.map((line) => `${JSON.stringify(line)}\n`).join(""));
+      const stored = JSON.parse(readFileSync(file, "utf8")) as { touchedAt: number };
+      writeFileSync(file, JSON.stringify({ ...stored, instance: created.instance, touchedAt: stored.touchedAt + 1, queued: [], failures: 0 }));
+      writeFileSync(join(peer, "authoring", "synced.records.jsonl"), rewritten.map((line) => `${JSON.stringify(line)}\n`).join(""));
     });
     const from = client.messages.length;
     await synced();
@@ -1468,7 +1703,7 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     assert.ok(replacedAt >= 0, "the subscribed client receives the replaced transcript");
     const replaced = client.messages[replacedAt] as DraftHistoryReplacedMessage;
     assert.equal(replaced.projectId, projectId);
-    assert.deepEqual(replaced.records, recreated, "the replacement carries the peer's records whole");
+    assert.deepEqual(replaced.records, rewritten, "the replacement carries the peer's records whole");
     await client.expectOk("draft.send", { projectId, draftId: "synced", text: "fresh" });
     await turns(4);
     const next = client.messages.slice(from).filter((m): m is DraftRecordMessage => m.type === "draft.record" && m.draftId === "synced");
@@ -1497,6 +1732,54 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
       prefix.trim().split("\n").map((line) => JSON.parse(line) as unknown),
       "the replacement carries the transcript's readable prefix",
     );
+
+    // The peer recreates the session under the same id in the same
+    // project, its file under another instance with two records, after
+    // a player preference was stored: the session held departs — its
+    // preference with it — and the one the file names stands under its
+    // own instance, a message running as its turn after the peer's two
+    // records (playbook-library-70).
+    await client.expectOk("draft.player.set", { projectId, draftId: "synced", playerId: "dev.coder" });
+    const prefsFile = join(dataDir, "local", "prefs.json");
+    const prefs = (): Record<string, unknown> => (JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> }).prefs;
+    assert.equal(prefs()["authoring:synced:player"], "dev.coder");
+    await synced();
+    const remade = randomUUID();
+    const recreated = [1, 2].map((seq) => ({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message: `◇ Recreated on another device, line ${seq}` } }));
+    peerPush(() => {
+      const file = join(peer, "authoring", "synced.json");
+      const stored = JSON.parse(readFileSync(file, "utf8")) as { createdAt: number; touchedAt: number };
+      writeFileSync(file, JSON.stringify({ ...stored, instance: remade, createdAt: stored.createdAt + 1, touchedAt: stored.touchedAt + 1, queued: [], failures: 0 }));
+      writeFileSync(join(peer, "authoring", "synced.records.jsonl"), recreated.map((line) => `${JSON.stringify(line)}\n`).join(""));
+    });
+    const recreating = client.messages.length;
+    assert.equal(await sync(client, projectId), "done");
+    await until(() => client.latest("synced")?.instance === remade, 10_000, "the state under the file's instance");
+    const brought = client.messages.slice(recreating);
+    const departed = brought.filter((m): m is DraftRemovedMessage => m.type === "draft.removed" && m.draftId === "synced");
+    assert.equal(departed.length, 1, "the departure is announced once");
+    assert.equal(departed[0].instance, created.instance, "the departure names the former instance");
+    assert.equal(departed[0].projectId, projectId);
+    assert.ok(!brought.some((m) => m.type === "draft.history-replaced" && m.draftId === "synced"), "the subscribed client receives no replacement");
+    assert.equal(prefs()["authoring:synced:player"], undefined, "the former's player preference is gone");
+    // A message runs as the newcomer's turn, its records after the peer's two.
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "synced" } });
+    const onDisk = (): { seq: number; record: { type: string } }[] =>
+      readFileSync(files.records, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { seq: number; record: { type: string } });
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "newcomer" });
+    await until(() => client.latest("synced")?.activity === "idle" && onDisk().some(({ record }) => record.type === "turn_finished"), 20_000, "the newcomer's turn");
+    const newcomer = stats.runs[stats.runs.length - 1];
+    assert.equal(newcomer.resume, undefined, "the newcomer's turn starts its own conversation");
+    assert.match(newcomer.prompt, /Boss: newcomer$/);
+    assert.doesNotMatch(newcomer.prompt, /Boss: (hello|again|after|fresh)\n/, "nothing of the former's conversation reaches the newcomer's turn");
+    const transcript = onDisk();
+    assert.deepEqual(transcript.slice(0, 2), recreated, "the peer's two records stand first");
+    assert.ok(transcript.length > 2, "the newcomer's turn recorded");
+    assert.deepEqual(transcript.map((line) => line.seq), transcript.map((_line, index) => index + 1), "the newcomer's records follow them in sequence");
+    const streamed = client.messages.slice(recreating).filter((m): m is DraftRecordMessage => m.type === "draft.record" && m.draftId === "synced");
+    assert.ok(streamed.length > 0 && streamed.every((m) => m.instance === remade), "the newcomer's records stream under its instance");
+    assert.equal(streamed[0].seq, 3, "the newcomer's records continue at 3");
+    assert.equal((await client.expectOk("draft.open", { projectId, draftId: "synced" })).draft.instance, remade, "the session reads under the file's instance");
   } finally {
     client.close();
     await harness.service.stop();
@@ -1527,7 +1810,7 @@ test("playbook-library-97: a compile running for a session its id no longer name
     const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
     const promoted = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "triage");
     mkdirSync(dirname(promoted.record), { recursive: true });
-    const promotedRecord = JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 });
+    const promotedRecord = JSON.stringify({ format: 1, id: "triage", instance: randomUUID(), createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 });
     const promotedRecords = `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`;
     writeFileSync(promoted.record, promotedRecord);
     writeFileSync(promoted.records, promotedRecords);
@@ -1590,7 +1873,7 @@ async function shadowedByKept(client: Client, harness: Harness): Promise<{ other
   const other = (await client.expectOk("project.register", { path: workingFolder(join(harness.dir, "zeta")) })).id;
   const promoted = authoringFiles(join(harness.dataDir, "workspace", ...other.split("/")), "triage");
   mkdirSync(dirname(promoted.record), { recursive: true });
-  writeFileSync(promoted.record, JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 }));
+  writeFileSync(promoted.record, JSON.stringify({ format: 1, id: "triage", instance: randomUUID(), createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 }));
   writeFileSync(promoted.records, `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`);
   return { other, promoted, artifacts: join(harness.dir, "zeta", "spex-packages", "triage", "playbooks", "en", "triage") };
 }
@@ -1689,7 +1972,7 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       const reply = await registering;
       assert.ok(!reply.ok, "the enabling is refused");
       if (reply.ok) throw new Error("unreachable");
-      assert.equal(reply.error.code, "invalid_request");
+      assert.equal(reply.error.code, "not_found");
       assert.equal(reply.error.message, "triage now names another authoring session");
       assert.equal(contents(configPath), configBefore, "your own group's config is unchanged");
       assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
@@ -1816,6 +2099,149 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       assert.deepEqual(turnsOnDisk(promoted.records), ["queued during the activity"], "nothing else started");
       assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session the id no longer names records nothing more");
     } finally {
+      client.close();
+      await harness.service.stop();
+    }
+  });
+
+  await t.test("an enabling's request and install released after the rescan, with a new player to add", async () => {
+    const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+    const { projectId, clone, configPath } = harness;
+    const kept = authoringFiles(clone, "triage");
+    const client = new Client(harness.service.port());
+    // The environments' own seam: the real request and install runs and
+    // writes; only its reply waits for the test's release.
+    const environments = Reflect.get(harness.service, "environments") as EnvironmentManager;
+    const requestAndInstall = environments.requestAndInstall.bind(environments);
+    let release = (): void => {};
+    let registering: ReturnType<Client["command"]> | undefined;
+    try {
+      await client.open();
+      await client.expectOk("draft.create", { projectId, draftId: "triage" });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+      const { other } = await shadowedByKept(client, harness);
+      await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+      await until(() => {
+        const draft = client.latest("triage");
+        return draft?.activity === "idle" && draft.proposal !== undefined && draft.queued.length === 0;
+      }, 120_000, "the proposal");
+      let entered!: () => void;
+      const installed = new Promise<void>((resolve) => { entered = resolve; });
+      const barrier = new Promise<void>((resolve) => { release = resolve; });
+      environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
+        await requestAndInstall(...args);
+        entered();
+        await barrier;
+      };
+      const projectConfig = join(clone, "config", "playbook.config.yaml");
+      const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
+      const configBefore = contents(configPath);
+      const projectConfigBefore = contents(projectConfig);
+      registering = client.command("draft.register", {
+        projectId,
+        draftId: "triage",
+        command: "triage",
+        intent: "Label new issues",
+        bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+        newPlayers: { "dev.triager": { adapter: "claude" } },
+      });
+      await installed;
+
+      // The session departs while the enabling awaits its install: the
+      // enabling writes nothing after it left.
+      const keptTranscript = await promoteOther(client, harness, kept, other);
+      release();
+      const reply = await registering;
+      assert.ok(!reply.ok, "the enabling is refused");
+      if (reply.ok) throw new Error("unreachable");
+      assert.equal(reply.error.code, "not_found");
+      assert.equal(reply.error.message, "triage now names another authoring session");
+      assert.equal(contents(configPath), configBefore, "your own group's config is unchanged: no player added");
+      assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
+      const named = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+      assert.equal(named.draft.enabled, false, "the newcomer reads not enabled");
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session the id no longer names records nothing more");
+    } finally {
+      release();
+      await registering?.catch(() => undefined);
+      environments.requestAndInstall = requestAndInstall;
+      client.close();
+      await harness.service.stop();
+    }
+  });
+
+  await t.test("an enabling's entry edit released after the rescan, every role bound to a player the roster holds", async () => {
+    const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+    const { projectId, clone, configPath } = harness;
+    const kept = authoringFiles(clone, "triage");
+    const client = new Client(harness.service.port());
+    // The service's own seams: once the spec package is installed, only
+    // the entry edit's composition loads the compiled entry's module,
+    // and that load waits for the test's release, then runs as it would.
+    const environments = Reflect.get(harness.service, "environments") as EnvironmentManager;
+    const requestAndInstall = environments.requestAndInstall.bind(environments);
+    const options = Reflect.get(harness.service, "options") as { loadModule: LoadModule };
+    const loadModule = options.loadModule;
+    let release = (): void => {};
+    let registering: ReturnType<Client["command"]> | undefined;
+    try {
+      await client.open();
+      await client.expectOk("draft.create", { projectId, draftId: "triage" });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+      const { other } = await shadowedByKept(client, harness);
+      await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+      await until(() => {
+        const draft = client.latest("triage");
+        return draft?.activity === "idle" && draft.proposal !== undefined && draft.queued.length === 0;
+      }, 120_000, "the proposal");
+      let installed = false;
+      let entered!: () => void;
+      const loading = new Promise<void>((resolve) => { entered = resolve; });
+      const barrier = new Promise<void>((resolve) => { release = resolve; });
+      environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
+        await requestAndInstall(...args);
+        installed = true;
+      };
+      let held = false;
+      options.loadModule = async (specifier) => {
+        if (installed && !held && specifier.endsWith("triage.registry.mjs")) {
+          held = true;
+          entered();
+          await barrier;
+        }
+        return loadModule(specifier);
+      };
+      const projectConfig = join(clone, "config", "playbook.config.yaml");
+      const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
+      const configBefore = contents(configPath);
+      const projectConfigBefore = contents(projectConfig);
+      // Every role is bound to a player the roster holds: the entry is
+      // the enabling's only config write.
+      registering = client.command("draft.register", {
+        projectId,
+        draftId: "triage",
+        command: "triage",
+        intent: "Label new issues",
+        bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
+      });
+      await loading;
+
+      // The session departs while the entry edit composes: the entry is
+      // not written after it left.
+      await promoteOther(client, harness, kept, other);
+      release();
+      const reply = await registering;
+      assert.ok(!reply.ok, "the enabling is refused");
+      if (reply.ok) throw new Error("unreachable");
+      assert.equal(reply.error.code, "not_found");
+      assert.equal(reply.error.message, "triage now names another authoring session");
+      assert.equal(contents(configPath), configBefore, "your own group's config is unchanged");
+      assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
+    } finally {
+      release();
+      await registering?.catch(() => undefined);
+      environments.requestAndInstall = requestAndInstall;
+      options.loadModule = loadModule;
       client.close();
       await harness.service.stop();
     }

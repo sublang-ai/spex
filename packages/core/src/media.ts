@@ -18,6 +18,8 @@ export interface ApplicationMediaOptions {
   directoryOf(owner: MediaUploadOwner): string;
   /** Session storage remains entirely behind the shared Playbook facade. */
   openSessionAsset(sessionId: string, assetId: MediaAsset["assetId"]): Promise<AssetReader>;
+  /** Test seam: awaited as an owner's retirement begins its drain. */
+  beforeDrain?: (owner: MediaOwner) => void | Promise<void>;
 }
 
 interface ReaderEntry {
@@ -138,18 +140,19 @@ export class ApplicationMedia {
    * between that check, invalidating the owner's upload identities, and
    * starting the removal, so a removal refused by work its owner admitted
    * during the drain leaves the surviving owner's uploads resumable. */
-  async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
+  async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void | Promise<void>): Promise<T> {
     mediaOwnerSchema.parse(owner);
     this.assertAvailable(owner);
     const key = mediaOwnerKey(owner);
     this.retiring.add(key);
     try {
       return await this.writing(async () => {
+        await this.options.beforeDrain?.(owner);
         if (owner.kind !== "session") await this.uploads.settleOwner(owner);
         await this.drainOwner(key);
         await Promise.all([...this.readers].filter(([name]) => name.startsWith(`${key}:`)).map(([name, entry]) => this.release(name, entry)));
         await this.drainOwner(key);
-        assert?.();
+        await assert?.();
         const cleanup = owner.kind !== "session" ? this.uploads.retireOwner(owner) : undefined;
         if (owner.kind !== "session") this.prepared.delete(this.ownerDirectory(owner));
         try { return await remove(); } finally { await cleanup; }

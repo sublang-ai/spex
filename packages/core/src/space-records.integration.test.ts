@@ -5,8 +5,12 @@
 // holds, never by its name (space-65, space-69, DR-110): your own
 // group's after a namespace rename, one with no `spex` branch yet, the
 // choice among several, a renamed group's first session, the row's
-// "Group records", a creation left waiting, and one lookup or pick of a
-// clone at a time — against the stand-in Git host (git-host-12),
+// "Group records", a creation left waiting, one lookup or pick of a
+// clone at a time, a name taken by a project's repository, a candidate
+// already on this device or being joined to it, a Join that stops
+// ending that hold, a candidate's Join refused with no choice standing,
+// and unanswered choices across a restart —
+// against the stand-in Git host (git-host-12),
 // hermetic, on loopback alone, in a file budget of its own (space-37).
 
 import { test } from "node:test";
@@ -93,6 +97,49 @@ function ownRow(state: GroupsState): RepositoryState {
   const rows = state.groups[0].repositories.filter((row) => row.own);
   assert.equal(rows.length, 1, JSON.stringify(state.groups[0].repositories.map((row) => [row.key, row.state])));
   return rows[0];
+}
+
+/** A clone's origin URL, null while it has none. */
+function originOf(clone: string): string | null {
+  try { return git(clone, "remote", "get-url", "origin"); } catch { return null; }
+}
+
+/** The state asked for until `done` holds of one asked after
+ * `happened` held, polled: a state assembled before the act it waits
+ * for is never taken. */
+async function stateAfter(home: Awaited<ReturnType<typeof startHome>>, happened: () => boolean, done: (state: GroupsState) => boolean, what: string, ms = 10_000): Promise<GroupsState> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const seen = happened();
+    const state = await home.client.expectOk("space.get", {});
+    if (seen && done(state)) return state;
+    if (Date.now() > end) throw new Error(`timeout waiting for ${what}`);
+    await delay(20);
+  }
+}
+
+/** A group's own clone on this device under the group's name, on no
+ * host yet. */
+function groupClone(dataDir: string, key: string): string {
+  const clone = clonePath(dataDir, key);
+  mkdirSync(clone, { recursive: true });
+  git(clone, "init", "-q", "-b", "spex");
+  git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "Start");
+  return clone;
+}
+
+/** A home whose own group's spex repository the stand-in holds,
+ * stopped: the scratch home a later start reuses. */
+async function signedHome(name: string, host: StandinHost): Promise<string> {
+  const first = await startHome(name, { host, project: false, extra: { signIn: "browser" } });
+  try {
+    const from = first.client.mark();
+    await signIn(first, host);
+    await first.client.waitRepository(from, "ada/ada-spex", (repository) => repository.sync.phase === "done");
+  } finally {
+    await first.stop();
+  }
+  return first.dataDir;
 }
 
 test("space-37: a sign-in after a namespace rename joins the group's own repository under its former name, nothing created", async (t) => {
@@ -454,6 +501,7 @@ test("space-37: a creation of your own group's left waiting joins the group's ow
   // The creation is left waiting, the clone local only (space-64).
   assert.deepEqual([ownRow(signed).state, ownRow(signed).waiting], ["local-only", { step: "create", group: "ada", message: words }]);
   const asked = creations(host);
+  assert.equal(asked, 1, "one set-up asks the creation once");
   // The host grants creations and lists the group's own under another
   // name: the next read joins it, the clone taking its key on that sync
   // and nothing created (space-64, space-65, space-60).
@@ -507,4 +555,300 @@ test("space-37: a lookup and a pick of one clone run one at a time: a pick durin
   assert.ok(created.sync.phase === "done" && created.sync.pushed, JSON.stringify(created.sync));
   assert.deepEqual([created.state, created.waiting, created.choice], ["reachable", null, null]);
   assert.deepEqual([hostKeys(host), creations(host)], [["acme/acme-spex", "ada/ada-spex"], 2]);
+});
+
+test("space-37: your own group's creation meeting its name taken by a project's repository waits, and the next Refresh adopts nothing by that name", async (t) => {
+  const host = await startHost();
+  const taken = host.script.addRepository({ group: "ada", name: "ada-spex", project: { format: 1, name: "ada", remote: null } });
+  const branch = git(taken.bare, "rev-parse", "spex");
+  const home = await startHome("records-taken", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signed = await signIn(home, host);
+  // The project's repository is no candidate: the creation meets the
+  // taken name and waits with the host's words (space-65, space-64).
+  const own = ownRow(signed);
+  assert.deepEqual([own.key, own.state, own.remote, own.choice, own.waiting], ["ada/ada-spex", "local-only", null, null, { step: "create", group: "ada", message: "The name is taken" }]);
+  const asked = creations(host);
+  assert.equal(asked, 1, "one set-up asks the creation once");
+  // The next Refresh asks the creation again by the records rule, never
+  // adopting the repository that bears the name (space-65).
+  const clone = clonePath(home.dataDir, "ada/ada-spex");
+  await refreshAfter(home, signed.readAt ?? 0);
+  const after = ownRow(await stateAfter(home, () => creations(host) > asked || originOf(clone) !== null,
+    (state) => ownRow(state).remote !== null || ownRow(state).waiting !== null, "the creation asked again"));
+  assert.deepEqual([after.state, after.remote, after.choice, after.waiting], ["local-only", null, null, { step: "create", group: "ada", message: "The name is taken" }]);
+  assert.equal(originOf(clone), null);
+  assert.deepEqual([hostKeys(host), creations(host)], [["ada/ada-spex"], asked + 1]);
+  assert.equal(git(taken.bare, "rev-parse", "spex"), branch, "nothing of your own group's records reaches the project's repository");
+});
+
+test("space-37: a group's creation meeting its name taken by a project's repository waits, and the next Refresh adopts nothing by that name", async (t) => {
+  const host = await startHost();
+  const dataDir = await signedHome("records-taken-group", host);
+  const taken = host.script.addRepository({ group: "acme", name: "acme-spex", project: { format: 1, name: "acme", remote: null } });
+  const branch = git(taken.bare, "rev-parse", "spex");
+  const key = "acme/acme-spex";
+  const clone = groupClone(dataDir, key);
+  const home = await startHome("records-taken-group-again", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const folder = gitFolder("acme-taken");
+  await home.client.expectOk("project.rebind", { projectId: key, path: folder });
+  const asked = creations(host);
+  const from = home.client.mark();
+  assert.equal((await home.client.expectOk("project.register", { path: folder })).id, key);
+  // The project's repository is no candidate: the first session's
+  // creation meets the taken name and waits (space-65, space-64).
+  const waited = await home.client.waitRepository(from, key, (repository) => repository.waiting !== null);
+  assert.deepEqual([waited.state, waited.remote, waited.choice, waited.waiting], ["local-only", null, null, { step: "create", group: "acme", message: "The name is taken" }]);
+  assert.equal(creations(host), asked + 1);
+  // The next Refresh adopts nothing by that name (space-65).
+  await refreshAfter(home, (await home.client.expectOk("space.get", {})).readAt ?? 0);
+  const after = repositoryOf(await stateAfter(home, () => creations(host) > asked + 1 || originOf(clone) !== null,
+    (state) => repositoryOf(state, key).remote !== null || repositoryOf(state, key).waiting !== null, "the creation asked again"), key);
+  assert.deepEqual([after.state, after.remote, after.choice, after.waiting], ["local-only", null, null, { step: "create", group: "acme", message: "The name is taken" }]);
+  assert.equal(originOf(clone), null);
+  assert.deepEqual([hostKeys(host), creations(host)], [["acme/acme-spex", "ada/ada-spex"], asked + 2]);
+  assert.equal(git(taken.bare, "rev-parse", "spex"), branch, "nothing of the group's records reaches the project's repository");
+});
+
+test("space-37: a standing choice's candidates are joined by Use alone: space.join of one not bearing the clone's key is refused", async (t) => {
+  const host = await startHost();
+  host.script.addRepository({ group: "ada", name: "ada-spex", records: GROUP_RECORDS });
+  const notes = host.script.addRepository({ group: "ada", name: "notes-spex", records: GROUP_RECORDS });
+  const home = await startHome("records-join-candidate", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signed = await signIn(home, host);
+  assert.equal(ownRow(signed).choice?.candidates.length, 2);
+  // Joined as a clone of its own, the candidate would stand for your own
+  // group's records beside the clone the choice stands on (space-69,
+  // space-29).
+  const folder = gitFolder("notes-work");
+  await home.client.expectError("space.join", { hostId: notes.id, folder }, "invalid_request", /^Use notes-spex where this device asks which holds the records$/);
+  const after = await home.client.expectOk("space.get", {});
+  assert.deepEqual([ownRow(after).state, ownRow(after).choice?.candidates.length, after.issues], ["local-only", 2, 1]);
+  assert.ok(!existsSync(clonePath(home.dataDir, "ada/notes-spex")), "nothing is cloned");
+  assert.ok(!(homeFile(home.dataDir).folders ?? []).some((entry) => entry.path === folder), "nothing is paired");
+});
+
+test("space-37: a group's own repository on this device as another clone is never joined again, nor another beside it: the group's clone stays local only naming it, and a pick of it is refused", async (t) => {
+  const host = await startHost();
+  const notes = host.script.addRepository({ group: "acme", name: "notes-spex", records: GROUP_RECORDS });
+  const first = await startHome("records-held", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => first.stop());
+  const fromSignIn = first.client.mark();
+  await signIn(first, host);
+  await first.client.waitRepository(fromSignIn, "ada/ada-spex", (repository) => repository.sync.phase === "done");
+  // The reader joins the group's own repository with a working folder
+  // of its own (space-63).
+  const joinedFolder = gitFolder("acme-notes");
+  const fromJoin = first.client.mark();
+  assert.deepEqual(await first.client.expectOk("space.join", { hostId: notes.id, folder: joinedFolder }), { accepted: true });
+  const joined = await first.client.waitRepository(fromJoin, "acme/notes-spex", (repository) => repository.state === "reachable" && repository.folder === joinedFolder && repository.sync.phase === "idle");
+  assert.equal(joined.id, notes.id);
+  await first.stop();
+  // Another of the group's own beside it: one on this device leaves the
+  // clone with nothing to choose (space-65).
+  const other = host.script.addRepository({ group: "acme", name: "other-spex", records: GROUP_RECORDS });
+  const key = "acme/acme-spex";
+  const clone = groupClone(first.dataDir, key);
+  const home = await startHome("records-held-again", { dataDir: first.dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const folder = gitFolder("acme-work");
+  await home.client.expectOk("project.rebind", { projectId: key, path: folder });
+  const asked = creations(host);
+  const from = home.client.mark();
+  assert.equal((await home.client.expectOk("project.register", { path: folder })).id, key);
+  // One of the group's own repositories is on this device already:
+  // nothing is created or joined, the other included, and the row names
+  // the clone holding it (space-65, space-61).
+  const held = await home.client.waitRepository(from, key, (repository) => repository.reason !== null || repository.remote !== null);
+  assert.deepEqual([held.state, held.remote, held.id, held.choice, held.waiting, held.reason], ["local-only", null, null, null, null, "acme's records are on this device as notes-spex"]);
+  const state = await home.client.expectOk("space.get", {});
+  assert.equal(state.issues, 0);
+  assert.deepEqual(rowsOf(state, "acme").map((row) => [row.key, row.state, row.id]), [[key, "local-only", null], ["acme/notes-spex", "reachable", notes.id], ["acme/other-spex", "absent", other.id]]);
+  // A pick of it is refused, naming the clone (space-58, space-29).
+  await home.client.expectError("space.pick", { repository: key, choice: { kind: "join", hostId: notes.id } }, "invalid_request", /^notes-spex is on this device already as acme\/notes-spex$/);
+  // Nor is the other joined beside it: its Join is refused with the
+  // row's words, and its pick naming the joined clone (space-29,
+  // space-58).
+  await home.client.expectError("space.join", { hostId: other.id, folder: gitFolder("acme-other") }, "invalid_request", /^acme's records are on this device as notes-spex$/);
+  await home.client.expectError("space.pick", { repository: key, choice: { kind: "join", hostId: other.id } }, "invalid_request", /^notes-spex is on this device already as acme\/notes-spex$/);
+  assert.equal(creations(host), asked);
+  assert.equal(originOf(clone), null);
+  assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), "acme/notes-spex").state, "reachable");
+});
+
+test("space-37: a Refresh while the reader's Join of a group's sole own repository runs leaves the group's clone local only naming it, one row per host id once the Join ends", async (t) => {
+  const host = await startHost();
+  const dataDir = await signedHome("records-joining", host);
+  const notes = host.script.addRepository({ group: "acme", name: "notes-spex", records: GROUP_RECORDS });
+  const key = "acme/acme-spex";
+  const clone = groupClone(dataDir, key);
+  const home = await startHome("records-joining-again", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  // The start's read lists the group's own repository not on this
+  // device; the group's clone, paired with no working folder, is given
+  // nothing (space-65).
+  const fromStart = home.client.mark();
+  await home.client.expectOk("space.get", {});
+  await home.client.waitSpace(fromStart, (state) => state.groups.some((group) => group.repositories.some((row) => row.id === notes.id && row.state === "absent")));
+  const asked = creations(host);
+  // The reader joins it while the stand-in's Git transport sleeps.
+  host.script.sleepTransport(3_000);
+  t.after(() => host.script.sleepTransport(0));
+  const joinedFolder = gitFolder("acme-joining");
+  const fromJoin = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.join", { hostId: notes.id, folder: joinedFolder }), { accepted: true });
+  // Meanwhile the group's clone is paired and a Refresh sets the home
+  // up: the repository being joined is on this device for its lookup
+  // (space-65, space-63).
+  const folder = gitFolder("acme-joining-work");
+  await home.client.expectOk("project.rebind", { projectId: key, path: folder });
+  await refreshAfter(home, (await home.client.expectOk("space.get", {})).readAt ?? 0);
+  const looked = await stateAfter(home, () => true,
+    (state) => repositoryOf(state, key).reason !== null || repositoryOf(state, key).remote !== null, "the group's clone given its spex repository");
+  const held = repositoryOf(looked, key);
+  assert.deepEqual([held.state, held.remote, held.id, held.choice, held.waiting, held.reason], ["local-only", null, null, null, null, "acme's records are on this device as notes-spex"]);
+  const joining = looked.groups.flatMap((group) => group.repositories).filter((row) => row.id === notes.id);
+  assert.deepEqual(joining.map((row) => [row.key, row.state, row.sync.phase]), [["acme/notes-spex", "absent", "running"]], "the lookup ran while the Join did");
+  // Once the Join ends, one row stands per host id and no sync stopped
+  // (space-63, space-65).
+  host.script.sleepTransport(0);
+  await home.client.waitRepository(fromJoin, "acme/notes-spex", (repository) => repository.state === "reachable" && repository.folder === joinedFolder && repository.sync.phase === "idle");
+  await delay(500);
+  const state = await home.client.expectOk("space.get", {});
+  const rows = state.groups.flatMap((group) => group.repositories);
+  assert.deepEqual(rows.filter((row) => row.id === notes.id).map((row) => [row.key, row.state]), [["acme/notes-spex", "reachable"]]);
+  const after = repositoryOf(state, key);
+  assert.deepEqual([after.state, after.remote, after.reason, after.sync.phase], ["local-only", null, "acme's records are on this device as notes-spex", "idle"]);
+  assert.deepEqual(rows.filter((row) => row.sync.phase === "stopped").map((row) => row.key), []);
+  assert.equal(originOf(clone), null);
+  assert.equal(creations(host), asked);
+});
+
+test("space-37: a Join of a group's sole own repository stopped after the lookup named it ends the hold: the group's clone's row names it no more, and the next host read joins it to the clone", async (t) => {
+  const host = await startHost();
+  const dataDir = await signedHome("records-join-stopped", host);
+  const notes = host.script.addRepository({ group: "acme", name: "notes-spex", records: GROUP_RECORDS });
+  const key = "acme/acme-spex";
+  groupClone(dataDir, key);
+  const home = await startHome("records-join-stopped-again", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const fromStart = home.client.mark();
+  await home.client.expectOk("space.get", {});
+  await home.client.waitSpace(fromStart, (state) => state.groups.some((group) => group.repositories.some((row) => row.id === notes.id && row.state === "absent")));
+  const asked = creations(host);
+  // The reader joins it while the stand-in's Git transport sleeps,
+  // before the group's clone is paired (space-63).
+  host.script.sleepTransport(3_000);
+  t.after(() => { host.script.refuseTransport(null); host.script.sleepTransport(0); });
+  assert.deepEqual(await home.client.expectOk("space.join", { hostId: notes.id, folder: gitFolder("acme-stopping") }), { accepted: true });
+  // The group's clone paired, a Refresh's lookup names the clone being
+  // joined (space-65, space-61).
+  const folder = gitFolder("acme-stopping-work");
+  await home.client.expectOk("project.rebind", { projectId: key, path: folder });
+  await refreshAfter(home, (await home.client.expectOk("space.get", {})).readAt ?? 0);
+  const looked = await stateAfter(home, () => true,
+    (state) => repositoryOf(state, key).reason !== null || repositoryOf(state, key).remote !== null, "the group's clone given its spex repository");
+  assert.deepEqual([repositoryOf(looked, key).remote, repositoryOf(looked, key).reason], [null, "acme's records are on this device as notes-spex"]);
+  // The stand-in refuses the Join's transport: the Join stops, and the
+  // hold with it, so the row names the clone being joined no more
+  // (space-65, space-61).
+  const fromStop = home.client.mark();
+  host.script.refuseTransport("Access denied");
+  const stopped = await home.client.waitSpace(fromStop, (state) => {
+    const row = state.groups.flatMap((group) => group.repositories).find((entry) => entry.key === key);
+    return row !== undefined && row.reason === null;
+  }, 15_000);
+  assert.equal(repositoryOf(stopped, key).choice, null);
+  host.script.refuseTransport(null);
+  host.script.sleepTransport(0);
+  // By the next host read, a sync's Check, the group's own repository is
+  // joined to the group's clone, which takes its key on that sync: one
+  // row per host id, nothing created (space-65, space-60).
+  const from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: "ada/ada-spex" });
+  const joined = await home.client.waitRepository(from, "acme/notes-spex", (repository) => repository.state === "reachable" && repository.sync.phase === "done");
+  assert.deepEqual([joined.id, joined.folder, joined.waiting, joined.choice, joined.reason], [notes.id, folder, null, null, null]);
+  const state = await home.client.expectOk("space.get", {});
+  assert.deepEqual(state.groups.flatMap((group) => group.repositories).filter((row) => row.id === notes.id).map((row) => [row.key, row.state]), [["acme/notes-spex", "reachable"]]);
+  assert.ok(!existsSync(clonePath(home.dataDir, key)), "the clone left its former folder");
+  assert.equal(git(notes.bare, "rev-parse", "spex"), git(clonePath(home.dataDir, "acme/notes-spex"), "rev-parse", "spex"));
+  assert.equal(creations(host), asked);
+});
+
+test("space-37: a group's sole own repository listed while its local-only clone's creation waits offers no Join of its own, no choice standing: space.join is refused for Use", async (t) => {
+  const host = await startHost();
+  const dataDir = await signedHome("records-given", host);
+  const key = "acme/acme-spex";
+  groupClone(dataDir, key);
+  const home = await startHome("records-given-again", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const folder = gitFolder("acme-given");
+  await home.client.expectOk("project.rebind", { projectId: key, path: folder });
+  host.script.refuseCreate("Ask an owner");
+  let from = home.client.mark();
+  assert.equal((await home.client.expectOk("project.register", { path: folder })).id, key);
+  await home.client.waitRepository(from, key, (repository) => repository.waiting !== null);
+  host.script.refuseCreate(null);
+  const notes = host.script.addRepository({ group: "acme", name: "notes-spex", records: GROUP_RECORDS });
+  // A sync's Check reads the host outside the set-up: the group's own
+  // repository lists not on this device, no lookup running (space-65).
+  from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: "ada/ada-spex" });
+  const listed = await home.client.waitSpace(from, (state) => state.groups.some((group) => group.repositories.some((row) => row.id === notes.id && row.state === "absent")));
+  assert.equal(repositoryOf(listed, key).choice, null);
+  // It is the group's clone's to take (space-65, space-29).
+  const joinFolder = gitFolder("notes-given");
+  await home.client.expectError("space.join", { hostId: notes.id, folder: joinFolder }, "invalid_request", /^Use notes-spex where this device asks which holds the records$/);
+  assert.ok(!existsSync(clonePath(home.dataDir, "acme/notes-spex")), "nothing is cloned");
+  assert.ok(!(homeFile(home.dataDir).folders ?? []).some((entry) => entry.path === joinFolder), "nothing is paired");
+});
+
+test("space-37: unanswered choices of other groups are asked again at a restarted core's first read: the one left is joined, none left created", async (t) => {
+  const host = await startHost();
+  host.script.groups.push({ id: "2009", fullPath: "zed", name: "Zed", kind: "group" });
+  const old = host.script.addRepository({ group: "acme", name: "old-spex", records: GROUP_RECORDS });
+  const other = host.script.addRepository({ group: "acme", name: "other-spex", records: GROUP_RECORDS });
+  const a = host.script.addRepository({ group: "zed", name: "a-spex", records: GROUP_RECORDS });
+  const b = host.script.addRepository({ group: "zed", name: "b-spex", records: GROUP_RECORDS });
+  const dataDir = await signedHome("records-unanswered", host);
+  const acme = "acme/acme-spex";
+  const zed = "zed/zed-spex";
+  groupClone(dataDir, acme);
+  const zedClone = groupClone(dataDir, zed);
+  const home = await startHome("records-unanswered-again", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const folders: Record<string, string> = { [acme]: gitFolder("acme-unanswered"), [zed]: gitFolder("zed-unanswered") };
+  for (const key of [acme, zed]) {
+    await home.client.expectOk("project.rebind", { projectId: key, path: folders[key] });
+    const from = home.client.mark();
+    assert.equal((await home.client.expectOk("project.register", { path: folders[key] })).id, key);
+    await home.client.waitRepository(from, key, (repository) => repository.choice !== null);
+  }
+  // Both choices stand unanswered, nothing recorded of them (space-69).
+  const stood = await home.client.expectOk("space.get", {});
+  assert.deepEqual([stood.issues, repositoryOf(stood, acme).choice?.declined, repositoryOf(stood, zed).choice?.declined], [2, false, false]);
+  const asked = creations(host);
+  await home.stop();
+  // While the core is down, the host deletes one of acme's candidates
+  // and both of zed's: the restarted core's first read joins the one
+  // left and creates zed's own (space-65, space-69).
+  host.script.remove(other.id);
+  host.script.remove(a.id);
+  host.script.remove(b.id);
+  const again = await startHome("records-unanswered-restart", { dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => again.stop());
+  const fromRead = again.client.mark();
+  await again.client.expectOk("space.get", {});
+  const joined = await again.client.waitRepository(fromRead, "acme/old-spex", (repository) => repository.sync.phase === "done");
+  assert.ok(joined.sync.phase === "done" && joined.sync.pushed, JSON.stringify(joined.sync));
+  assert.deepEqual([joined.state, joined.id, joined.folder, joined.choice], ["reachable", old.id, folders[acme], null]);
+  const created = await again.client.waitRepository(fromRead, zed, (repository) => repository.sync.phase === "done");
+  assert.ok(created.sync.phase === "done" && created.sync.pushed, JSON.stringify(created.sync));
+  assert.deepEqual([created.state, created.folder, created.choice], ["reachable", folders[zed], null]);
+  assert.deepEqual([hostKeys(host), creations(host)], [["acme/old-spex", "ada/ada-spex", "zed/zed-spex"], asked + 1]);
+  assert.equal((await again.client.expectOk("space.get", {})).issues, 0);
+  assert.equal(git(old.bare, "rev-parse", "spex"), git(clonePath(dataDir, "acme/old-spex"), "rev-parse", "spex"));
+  assert.equal(git(bareOf(host, zed), "rev-parse", "spex"), git(zedClone, "rev-parse", "spex"));
 });

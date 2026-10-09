@@ -421,6 +421,14 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", false],
       [{ state: "absent", folder: null, branch: null }, "Not on this device", "Join", false],
       [{ state: "local-only", remote: null, id: null, branch: null }, "On this device only", "Pick a group", false],
+      // A group's clone whose records another clone here holds reads the
+      // core's phrase naming it (space-61, space-65).
+      [
+        { state: "local-only", remote: null, id: null, branch: null, records: "group", code: null, reason: "acme's records are on this device as notes-spex" },
+        "acme's records are on this device as notes-spex",
+        null,
+        false,
+      ],
     ];
     for (const [over, phrase, controlName, members] of cases) {
       await renderGroups(base({}, [repo(over)]), { open: false });
@@ -624,7 +632,7 @@ describe("GROUPS: the standing choice (space-68)", () => {
     expect(within(screen.getByTestId("space-row-acme/team/team-spex")).getByRole("group", { name: "Which holds team's records?" })).toBeTruthy();
   });
 
-  test("space-68: both candidates list beneath it as Not on this device, one sharing the clone's name offering no Join and opening alone", async () => {
+  test("space-68: both candidates list beneath it as Not on this device, neither offering Join, the one sharing the clone's name opening alone", async () => {
     // One candidate is named as the clone, so the core lists it under
     // the clone's own key (space-69).
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -654,10 +662,10 @@ describe("GROUPS: the standing choice (space-68)", () => {
     expect(describedState(clone!)).toBe("On this device only");
     expect(describedState(same!)).toBe("Not on this device");
     expect(describedState(other!)).toBe("Not on this device");
-    // The one bearing the clone's key is joined by the clone's Use
-    // (space-69); the other offers its Join.
+    // Each candidate is joined by the clone's Use alone, the one bearing
+    // the clone's key and the other alike (space-69).
     expect(within(items[1]!).queryByRole("button", { name: "Join" })).toBeNull();
-    expect(within(items[2]!).getByRole("button", { name: "Join" })).toBeTruthy();
+    expect(within(items[2]!).queryByRole("button", { name: "Join" })).toBeNull();
     // React names no two rows alike.
     expect(sameKey).toEqual([]);
     // Activated, the candidate opens its own tabs, the clone's row
@@ -733,6 +741,41 @@ describe("GROUPS: the standing choice (space-68)", () => {
     expect(screen.getByTestId("space-repo-code-acme/team/records-spex").textContent).toBe("Group records");
     // A group's own repository is never picked for (space-61).
     expect(rowControls("acme/team/records-spex")).not.toContain("Pick a group");
+  });
+});
+
+describe("GROUPS: Join beside a group's clone (space-71)", () => {
+  test("space-71: a group's own spex repository not on this device offers Join only where no local-only clone of its group is given it, no choice standing", async () => {
+    const groupsOwn = (hostId: string, group: string) =>
+      repo({ key: `${group}/notes-spex`, name: "notes-spex", id: hostId, records: "group", code: null, folder: null, members: 1, state: "absent", branch: null, remote: `https://gitlab.example/${group}/notes-spex.git` });
+    const teamClone = (over: Partial<RepositoryState>) =>
+      repo({ key: "acme/team/team-spex", name: "team-spex", id: null, records: "group", code: null, folder: "/Users/jane/code/team", remote: null, state: "local-only", branch: null, members: null, ...over });
+    const team = (clone: RepositoryState, rows: RepositoryState[]): GroupsState => ({
+      ...base(),
+      groups: [...base().groups, { id: "2", fullPath: "acme/team", name: "team", url: null, own: false, repositories: [clone, ...rows] }],
+    });
+    const joinOf = (key: string) => screen.queryByTestId(`space-row-join-${key}`);
+    // Another group's clone local only, paired, its creation waiting:
+    // the group's own is the clone's to take, a project's offers Join
+    // (space-65, space-61).
+    const project = repo({ key: "acme/team/docs-spex", name: "docs-spex", id: "52", code: "git@github.com:acme/docs.git", folder: null, state: "absent", branch: null });
+    await renderGroups(team(teamClone({ waiting: { step: "create", group: "acme/team", message: "Ask an owner" } }), [groupsOwn("80", "acme/team"), project]), { open: false });
+    expect(joinOf("acme/team/notes-spex")).toBeNull();
+    expect(joinOf("acme/team/docs-spex")?.textContent).toBe("Join");
+    cleanup();
+    // Your own group's clone local only, no choice standing yet.
+    const own = base({}, [groupsOwn("81", "jane")]);
+    const local: RepositoryState = { ...OWN_REPO, state: "local-only", remote: null, id: null, lastSync: null };
+    await renderGroups({ ...own, groups: [{ ...own.groups[0]!, repositories: [local, ...own.groups[0]!.repositories.slice(1)] }] }, { open: false });
+    expect(joinOf("jane/notes-spex")).toBeNull();
+    cleanup();
+    // Paired with no working folder, or on the host: Join is offered.
+    const onHost = teamClone({ state: "reachable", remote: "https://gitlab.example/acme/team/team-spex.git", id: "50", branch: BRANCH });
+    for (const clone of [teamClone({ folder: null }), onHost]) {
+      await renderGroups(team(clone, [groupsOwn("80", "acme/team")]), { open: false });
+      expect(joinOf("acme/team/notes-spex")?.textContent).toBe("Join");
+      cleanup();
+    }
   });
 });
 

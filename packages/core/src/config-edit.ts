@@ -222,13 +222,15 @@ export interface EditResult {
 
 /**
  * Apply an operation to the config file: validate the candidate via
- * composition first; only write when it passes (SET-3).
+ * composition first; only write when it passes (SET-3). `beforeWrite`
+ * runs once the candidate composed, right before the write; its throw
+ * refuses the write and propagates (core-service-96).
  */
 export async function editConfigFile(
   path: string,
   op: ConfigEditOp,
   loadModule?: LoadModule,
-  options: { modules?: PlaybookModules } = {},
+  options: { modules?: PlaybookModules; beforeWrite?: () => void } = {},
 ): Promise<EditResult> {
   const text = readFileSync(path, "utf8");
   const candidate = applyConfigOp(text, op);
@@ -241,6 +243,7 @@ export async function editConfigFile(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+  options.beforeWrite?.();
   writeApplicationBytes(path, candidate);
   return { ok: true };
 }
@@ -254,6 +257,7 @@ const PROJECT_OPS = new Set<ConfigEditOp["kind"]>(["playbook.add", "playbook.del
  * playbook-library-16): the operation applied comment-preservingly, the
  * candidate checked as a project's file and composed on top of your own
  * group's, written only when both pass. A missing file starts empty.
+ * `beforeWrite` runs as `editConfigFile`'s does.
  */
 export async function editProjectConfigFile(
   path: string,
@@ -261,6 +265,7 @@ export async function editProjectConfigFile(
   op: ConfigEditOp,
   loadModule: LoadModule | undefined,
   modules: PlaybookModules,
+  options: { beforeWrite?: () => void } = {},
 ): Promise<EditResult> {
   if (!PROJECT_OPS.has(op.kind)) {
     return {
@@ -294,6 +299,7 @@ export async function editProjectConfigFile(
       }),
     };
   }
+  options.beforeWrite?.();
   mkdirSync(configDir, { recursive: true });
   writeApplicationBytes(path, candidate);
   return { ok: true };

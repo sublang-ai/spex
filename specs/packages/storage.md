@@ -121,9 +121,9 @@ Where a spex repository's clone holds `config/playbook.config.yaml`, the config 
 
 ### storage-23
 
-The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
+The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, instance, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
 
-- `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`; `proposal` is `{command, intent, players}`;
+- `instance` is the session's instance [[core-service-96](core-service.md#core-service-96)], a lowercase UUID, absent only from a file an earlier build wrote; `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`; `proposal` is `{command, intent, players}`;
 - timestamps use Unix milliseconds; no provider token enters either file; an incomplete final record line is not a record;
 - the session with its records and assets is one unit [[storage-11](#storage-11)], shared with the spex repository like any session.
 

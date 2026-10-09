@@ -56,12 +56,14 @@ export function waitingPhrase(waiting: NonNullable<RepositoryState["waiting"]>):
 }
 
 /** What a spex repository's row reads for its state (space-61): a
- * waiting step's phrase stands in place of the state's (space-64). */
+ * waiting step's phrase stands in place of the state's (space-64), and
+ * a group's local-only clone whose records another clone here holds
+ * reads the core's phrase naming it (space-65). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
   if (repo.waiting) return waitingPhrase(repo.waiting);
   switch (repo.state) {
     case "local-only":
-      return i18n._("On this device only");
+      return repo.reason ?? i18n._("On this device only");
     case "reachable":
       return repo.lastSync
         ? i18n._({

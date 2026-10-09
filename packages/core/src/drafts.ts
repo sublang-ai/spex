@@ -22,7 +22,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
 import { knownFormat, StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
@@ -59,6 +59,10 @@ export interface StoredDraftCompile {
 export interface StoredDraft {
   format: 1;
   id: string;
+  /** The session's instance (core-service-96): minted once, when the
+   * session is created, and kept with it, so it names one lifetime
+   * across the core's restarts, a replaced transcript and a move. */
+  instance: string;
   createdAt: number;
   touchedAt: number;
   /** The spec package under development, relative to the working folder. */
@@ -87,6 +91,24 @@ function readPackagePath(file: string, id: string): string {
 const OUTCOMES: readonly string[] = ["running", "ok", "failed", "canceled", "interrupted"];
 const RELAYS: readonly string[] = ["sent", "stopped", "queued"];
 const DRAFT_ID = /^[a-z][a-z0-9_-]*$/;
+const INSTANCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A session file as it reads: one an earlier build wrote names no
+ * instance until its first read gives it one (playbook-library-70). */
+export type ReadStoredDraft = Omit<StoredDraft, "instance"> & { instance?: string };
+
+/** The instance a file an earlier build wrote is given: derived from
+ * the session's id and creation time, so devices reading the same file
+ * give it the same one and write the same bytes (playbook-library-70).
+ * The sha256 of both, formatted as a lowercase UUID with the version (8)
+ * and variant set. */
+function derivedInstance(id: string, createdAt: number): string {
+  const bytes = createHash("sha256").update(`${id}\n${createdAt}`).digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x80;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -141,8 +163,9 @@ function validateQuestion(value: unknown, file: string): asserts value is Clarif
   }
 }
 
-/** Validate one `draft.json` document against storage-23 exactly. */
-export function parseStoredDraft(value: unknown, file: string, id?: string): StoredDraft {
+/** Validate one `draft.json` document against storage-23 exactly; the
+ * instance may be absent only from a file an earlier build wrote. */
+export function parseStoredDraft(value: unknown, file: string, id?: string): ReadStoredDraft {
   // Each reason is the reader's: it stands in the draft's row as the
   // diagnostic that blocks it (playbook-library-70, DR-079).
   const invalidCompile = (): string =>
@@ -161,7 +184,12 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     i18n._({ id: "expected an object", comment: "Diagnostic for a damaged file: its top level is not an object" }),
   );
   knownFormat(value, file);
-  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["compile", "proposal"], file);
+  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["instance", "compile", "proposal"], file);
+  need(
+    value.instance === undefined || (isText(value.instance) && INSTANCE.test(value.instance)),
+    file,
+    i18n._({ id: "invalid instance", comment: "Diagnostic for a damaged authoring file: the instance naming the session's lifetime will not read" }),
+  );
   need(
     typeof value.package === "string" && value.package.length > 0 && !value.package.startsWith("/") && !value.package.split("/").includes(".."),
     file,
@@ -253,7 +281,7 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     closedKeys(proposal, ["command", "intent", "players"], [], file);
     need(isText(proposal.command) && isText(proposal.intent) && isObject(proposal.players) && Object.values(proposal.players).every(isText), file, invalidProposal());
   }
-  return value as unknown as StoredDraft;
+  return value as unknown as ReadStoredDraft;
 }
 
 /** The version token of a source's bytes: a digest prefix, as the
@@ -451,7 +479,10 @@ export class DraftStore {
     return this.locations.has(id) && existsSync(this.recordFile(id));
   }
 
-  /** Read one record; a damaged file throws a StorageFormatError. */
+  /** Read one record; a damaged file throws a StorageFormatError. A
+   * file an earlier build wrote names no instance: its first read gives
+   * it the one derived from its id and creation time and writes it
+   * back, so every later read names that one (playbook-library-70). */
   read(id: string): StoredDraft {
     const file = this.recordFile(id);
     let value: unknown;
@@ -460,7 +491,12 @@ export class DraftStore {
     } catch (error) {
       throw new StorageFormatError(file, (error as Error).message);
     }
-    return parseStoredDraft(value, file, id);
+    const draft = parseStoredDraft(value, file, id);
+    if (draft.instance !== undefined) return draft as StoredDraft;
+    const { format, id: named, ...rest } = draft;
+    const given: StoredDraft = { format, id: named, instance: derivedInstance(named, rest.createdAt), ...rest };
+    this.write(given);
+    return given;
   }
 
   /** Replace the authoring file atomically. */
@@ -509,7 +545,9 @@ export class DraftStore {
     // A transcript left behind without its record would put the new
     // draft's first records after a stranger's; it goes first.
     rmSync(this.recordsFile(id), { force: true });
-    const draft: StoredDraft = { format: 1, id, createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
+    // The session's instance is minted here, once, and kept with it
+    // (core-service-96).
+    const draft: StoredDraft = { format: 1, id, instance: randomUUID(), createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
     this.write(draft);
     return draft;
   }

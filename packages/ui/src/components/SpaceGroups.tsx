@@ -97,20 +97,28 @@ export function rowSyncRefusal(groups: GroupsState, repo: RepositoryState): stri
 /** The control a row's state offers (space-61). */
 type RowControl = "sync" | "unrelated" | "pick" | "choice" | "retry" | "join" | "none";
 
-function rowControl(groups: GroupsState, repo: RepositoryState): RowControl {
+function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): RowControl {
   switch (repo.state) {
     case "absent":
-      // A candidate bearing its choice's clone key is joined by that
-      // clone's Use; the core refuses a Join of its own (space-69,
-      // space-29).
-      return groups.groups.some((group) =>
-        group.repositories.some(
+      // A group's own spex repository its group's local-only clone is
+      // given — your own group's clone, or another group's paired with
+      // a working folder — is that clone's to take, by a standing
+      // choice's Use or its lookup; the core refuses a Join of its own
+      // (space-65, space-69, space-29).
+      return groups.groups.some((entry) =>
+        entry.repositories.some(
           (clone) =>
             clone.state !== "absent" &&
-            clone.key === repo.key &&
             clone.choice?.candidates.some((candidate) => candidate.hostId === repo.id) === true,
         ),
-      )
+      ) ||
+        (repo.records === "group" &&
+          group.repositories.some(
+            (clone) =>
+              clone.state === "local-only" &&
+              clone.records === "group" &&
+              (group.own ? clone.own : clone.folder !== null),
+          ))
         ? "none"
         : "join";
     case "local-only":
@@ -267,7 +275,7 @@ function RepositoryRow({
     if (accepted && accepted.key !== machineKey) setAccepted(undefined);
   }, [accepted, machineKey]);
 
-  const control = rowControl(groups, repo);
+  const control = rowControl(groups, group, repo);
   const groupRepository = isGroupRepository(repo);
   const close = (focus: "control" | "members" | "folder" = "control") => {
     setOpened(undefined);

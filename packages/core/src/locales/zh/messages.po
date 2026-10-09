@@ -155,6 +155,11 @@ msgstr "{file}：{reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}：记录 {seq} 之后的对话记录已损坏"
 
+#. A group's local-only spex repository whose group's own spex repository this device already holds as another clone, read on its row and as the refusal of a Join of another of the group's own; {group} is the group's full path, {name} that clone's name
+#: src/space.ts
+msgid "{group}'s records are on this device as {name}"
+msgstr "{group} 的记录已在本设备上，存放于 {name}"
+
 #. The Git host's rate limit; {retry} is its own Retry-After value, kept as given
 #: src/space-groups.ts
 msgid "{host} asks to wait; try again after {retry}"
@@ -220,6 +225,11 @@ msgstr "{name} 在 {path} 中已更改；请重新解析后再安装"
 msgid "{name} has no folder on this device"
 msgstr "{name} 在本设备上没有文件夹"
 
+#. Refusal while a spex repository's clone is deleted with its project's removal; {name} is its name
+#: src/space.ts
+msgid "{name} is being removed"
+msgstr "{name} 正在移除"
+
 #. Refusal while a spex repository checks the Git host; {name} is its name
 #: src/space.ts
 msgid "{name} is checking the host; wait for it to finish"
@@ -264,6 +274,11 @@ msgstr "{name} 已在托管平台上"
 #: src/space.ts
 msgid "{name} is on this device already"
 msgstr "{name} 已在本设备上"
+
+#. Refusal of a pick joining a spex repository another clone on this device already stands for, or a group's own while another of its group's own is here; {name} is the repository that clone stands for, {key} that clone's path under the workspace
+#: src/space.ts
+msgid "{name} is on this device already as {key}"
+msgstr "{name} 已在本设备上，位于 {key}"
 
 #. Refusal: a request by path needs the repository's working folder here
 #: src/environments.ts
@@ -628,6 +643,8 @@ msgstr "已派发的意图无法再修改文本"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同步"
 
+#. Stands in for the title of a session that has none yet
+#. Stands in for the title of a session that has none yet
 #. Stands in for the title of a session that has none yet
 #: src/service.ts
 msgid "a new session"
@@ -1167,6 +1184,11 @@ msgstr "失败次数无效"
 #: src/home.ts
 msgid "invalid home file"
 msgstr "主目录文件无效"
+
+#. Diagnostic for a damaged authoring file: the instance naming the session's lifetime will not read
+#: src/drafts.ts
+msgid "invalid instance"
+msgstr "实例标识无效"
 
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
@@ -2214,6 +2236,8 @@ msgid "the path must be relative to the home"
 msgstr "路径必须相对于空间目录"
 
 #. Stands in for a project's name where the core has none
+#. Stands in for a project's name where the core has none
+#. Stands in for a project's name where the core has none
 #: src/service.ts
 msgid "the project"
 msgstr "该项目"
@@ -2518,11 +2542,13 @@ msgstr "上传暂存路径不安全：{path}"
 msgid "Upload write made no progress."
 msgstr "无法继续写入上传文件。"
 
-#. Refusal of a join: the listed spex repository bears the key of this device's local-only clone, among whose candidates it stands; that clone joins it by Use
+#. Refusal of a join: the listed spex repository is a group's own that this device's local-only clone of that group is given, by a standing choice's Use or by its lookup at the next read
 #: src/space.ts
 msgid "Use {name} where this device asks which holds the records"
 msgstr "请在本设备询问哪个仓库存放记录时选用 {name}"
 
+#. What blocks a Space operation: a session of this project is working
+#. What blocks a Space operation: a session of this project is working
 #. What blocks a Space operation: a session of this project is working
 #: src/service.ts
 msgid "Wait for {name} in {project}"

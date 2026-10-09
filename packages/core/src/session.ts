@@ -369,7 +369,8 @@ export class SessionManager {
   // Settlement outlives the runtime: admission must also wait for the
   // released checkpoint's refreshed metadata and publication.
   private readonly settling = new Map<string, {projectId: string; done: Promise<void>}>();
-  private readonly opening = new Set<string>();
+  /** The session opening in each project, by project. */
+  private readonly opening = new Map<string, string>();
   private readonly recovering = new Map<string, string>();
   /** Sessions whose active turn is being stopped intentionally. */
   private readonly intentionalStops = new Set<string>();
@@ -414,6 +415,10 @@ export class SessionManager {
     return lanes;
   }
   getLive(sessionId: string): LiveSession | undefined { return this.live.get(sessionId); }
+  /** The session opening in a project — from its admission until it
+   * reads live or fails — as an operation on its spex repository waits
+   * for it (space-11). */
+  openingSession(projectId: string): string | undefined { return this.opening.get(projectId); }
   /** Wait out a settling turn's release, so a caller sees the session
    * either held or released — never in between (core-service-91). */
   async settled(sessionId: string): Promise<void> {
@@ -512,7 +517,7 @@ export class SessionManager {
       id: "the session is recovering",
       comment: "Refusal: a Restore or Discard of this session is still running",
     }));
-    this.opening.add(project.id);
+    this.opening.set(project.id, sessionId);
     let ownsLocalReservation = false;
     let entry: LiveSession | undefined;
     let controller: SessionHostController | undefined;

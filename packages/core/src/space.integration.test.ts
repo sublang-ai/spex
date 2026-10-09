@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFil
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
+import { createModuleLoader } from "./config.js";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
 import type { Command } from "./protocol.js";
@@ -186,8 +187,27 @@ test("space-37: the first sync pushes spex to the empty host, sets the upstream 
   assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));
 });
 
-test("space-37: a turn in flight, an out-of-band lease, an authoring turn and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
-  const home = await startHome("blockers", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
+test("space-37: a turn in flight, a session being created, an out-of-band lease, an authoring turn and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
+  // The next module load once asked is held, so a session being created
+  // waits in the composition of its configuration.
+  const load = createModuleLoader({});
+  let holdLoad = false;
+  let loadReached!: () => void;
+  const reachedLoad = new Promise<void>((resolveReached) => { loadReached = resolveReached; });
+  let releaseLoad!: () => void;
+  const loadReleased = new Promise<void>((resolveReleased) => { releaseLoad = resolveReleased; });
+  const home = await startHome("blockers", { env: { SPEX_SLC: "fake-slc" }, extra: {
+    compileSpawner: hangingCompileSpawner(),
+    loadModule: async (specifier) => {
+      if (holdLoad) {
+        holdLoad = false;
+        loadReached();
+        await loadReleased;
+      }
+      return load(specifier);
+    },
+  } });
+  t.after(() => releaseLoad());
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
   const other = await addFolder(home, gitFolder("blockers-other"));
@@ -205,6 +225,16 @@ test("space-37: a turn in flight, an out-of-band lease, an authoring turn and a 
   await home.client.expectError("space.sync", { repository: key }, "busy", /Wait for “Settle first” in/);
   await proceeds(other.key, "another repository's sync never waits for this one's turn");
   await home.client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.live && (m.session.turns ?? 0) >= 2, 20_000);
+  // A session being created, held in its composition.
+  holdLoad = true;
+  const creating = home.client.command("session.create", { projectId: key });
+  await reachedLoad;
+  await home.client.expectError("space.sync", { repository: key }, "busy", new RegExp(`^Wait for a new session in ${basename(home.projectDir)}$`));
+  await proceeds(other.key, "a session being created holds only its own repository");
+  releaseLoad();
+  const created = await creating;
+  assert.ok(created.ok, `the session opens: ${created.ok ? "" : created.error.message}`);
+  await home.client.expectOk("session.dispose", { sessionId: created.result.id });
   // A management lease taken out of band.
   const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
   await shared.prepare();

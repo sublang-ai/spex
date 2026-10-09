@@ -10,15 +10,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
+import { executionConfigFromPlan, loadLaunchPlan, openSessionHost } from "@sublang/playbook/session-host";
+import { createSessionStore } from "@sublang/playbook/session-store";
 
 import { CoreService } from "./service.js";
+import { createModuleLoader } from "./config.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
+import { builtinLaunchModules } from "./testing/launch-modules.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcScriptedSource } from "./testing/stub-slc.js";
@@ -250,12 +255,25 @@ test("projects-21: removal waits for an authoring session's turn, compile and en
     return defaultSpawner(command, args, cwd, onLine, signal, spawnEnv);
   };
   const env = { PATH: process.env.PATH ?? "", HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", SPEX_SLC: `${process.execPath} ${stub}` };
+  // The last removal is held in its media drain until released.
+  let holdDrain = false;
+  let drainReached!: () => void;
+  const reachedDrain = new Promise<void>((resolveReached) => { drainReached = resolveReached; });
+  let releaseDrain!: () => void;
+  const drainReleased = new Promise<void>((resolveReleased) => { releaseDrain = resolveReleased; });
   const service = await CoreService.start({
     token: "test", dataDir, own: "tester", env, home, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
     watchConfig: false, compileSpawner: spawner,
+    mediaBeforeDrain: async (owner) => {
+      if (!holdDrain || owner.kind !== "project") return;
+      drainReached();
+      await drainReleased;
+    },
   });
   const client = new Client(service.port());
   await client.open();
+  const other = new Client(service.port());
+  await other.open();
   try {
     const projectId = (await client.ok("project.register", { path: folder })).id;
     const clone = join(dataDir, "workspace", "tester", "fixture-spex");
@@ -342,17 +360,333 @@ test("projects-21: removal waits for an authoring session's turn, compile and en
     await settled("triage", (draft) => draft.activity === "idle");
 
     // Once nothing runs, removal deletes the clone for good and
-    // announces each authoring session's departure.
+    // announces each authoring session's departure. Held in its media
+    // drain, it keeps the clone's gate: another client's writes beneath
+    // it are refused naming the removal, and once it ends, refused for
+    // want of the project (projects-10, space-21).
     await environmentIdle();
     const from = client.messages.length;
-    await client.ok("project.remove", { projectId, confirm: true });
+    holdDrain = true;
+    const removing = client.command("project.remove", { projectId, confirm: true });
+    await reachedDrain;
+    const attempts = {
+      "draft.create": () => other.command("draft.create", { projectId, draftId: "late" }),
+      "draft.send": () => other.command("draft.send", { projectId, draftId: "held", instance: held.instance, text: "one more turn" }),
+      "session.create": () => other.command("session.create", { projectId }),
+    };
+    for (const [type, attempt] of Object.entries(attempts)) {
+      const reply = await attempt();
+      assert.ok(!reply.ok, `${type} is refused while the removal runs`);
+      assert.equal(reply.error.code, "busy", `${type}: ${reply.error.message}`);
+      assert.equal(reply.error.message, "fixture-spex is being removed");
+    }
+    assert.ok(existsSync(clone), "the clone stands while the removal drains");
+    releaseDrain();
+    const removal = await removing;
+    assert.ok(removal.ok, `the removal ends: ${removal.ok ? "" : removal.error.message}`);
     assert.ok(!existsSync(clone), "the clone is gone");
+    // draft.create's refusal for a project with no working folder on
+    // this device is its existing `invalid_request`; the others find no
+    // project and answer `not_found`.
+    const gone = { "draft.create": "invalid_request", "draft.send": "not_found", "session.create": "not_found" };
+    for (const [type, attempt] of Object.entries(attempts)) {
+      const reply = await attempt();
+      assert.ok(!reply.ok, `${type} is refused once the project is gone`);
+      assert.equal(reply.error.code, gone[type as keyof typeof gone], `${type}: ${reply.error.message}`);
+    }
     await client.until((m) => client.messages.indexOf(m) >= from && m.type === "draft.removed" && m.draftId === "triage");
     const removed = client.messages.slice(from).filter((m): m is Extract<ServerMessage, { type: "draft.removed" }> => m.type === "draft.removed");
     assert.deepEqual(removed.map((m) => `${m.draftId} ${m.projectId}`).sort(), ["held", "slow", "triage"].map((id) => `${id} ${projectId}`));
     await new Promise((r) => setTimeout(r, 500));
     assert.ok(!existsSync(clone), "nothing under workspace/ is recreated");
     assert.deepEqual(readdirSync(join(dataDir, "workspace", "tester")), ["tester-spex"], "only your own group's spex repository stands");
+  } finally {
+    releaseDrain();
+    other.close();
+    client.close();
+    await service.stop();
+  }
+});
+
+test("projects-21: removal waits for a session being created in the project, and no session is filed in your own group's spex repository", async () => {
+  const scratch = scratchDir("spex-project-removal-creating-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  const env = { PATH: process.env.PATH ?? "", HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  // Module loads are held while asked to be, so a session being created
+  // waits in the composition of its configuration.
+  const load = createModuleLoader(env);
+  let holdLoads = false;
+  let loadReached!: () => void;
+  const reachedLoad = new Promise<void>((resolveReached) => { loadReached = resolveReached; });
+  let releaseLoads!: () => void;
+  const loadsReleased = new Promise<void>((resolveReleased) => { releaseLoads = resolveReleased; });
+  const { imports } = fakeAdapterImports({ rules: [], fallback: { result: "done" } });
+  const service = await CoreService.start({
+    token: "test", dataDir, own: "tester", env, home, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
+    watchConfig: false,
+    loadModule: async (specifier) => {
+      if (holdLoads) {
+        loadReached();
+        await loadsReleased;
+      }
+      return load(specifier);
+    },
+  });
+  const client = new Client(service.port());
+  await client.open();
+  try {
+    const projectId = (await client.ok("project.register", { path: folder })).id;
+    const clone = join(dataDir, "workspace", "tester", "fixture-spex");
+    const start = Date.now();
+    while ((await client.ok("environment.get", { repository: projectId })).busy !== null) {
+      if (Date.now() - start > 60_000) throw new Error("timeout waiting for the environment");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+
+    // A session held in its composition makes the removal refuse,
+    // naming it, with the clone standing (projects-10, space-11).
+    holdLoads = true;
+    let created = false;
+    const creating = client.command("session.create", { projectId });
+    void creating.then(() => { created = true; });
+    await reachedLoad;
+    const refused = await client.command("project.remove", { projectId, confirm: true });
+    assert.ok(!created, "the session is still being created");
+    assert.ok(!refused.ok, "the removal waits for the session being created");
+    assert.equal(refused.error.code, "busy");
+    assert.equal(refused.error.message, "Wait for a new session in fixture");
+    assert.ok(existsSync(clone), "the clone stays");
+
+    // Once it opens in the project's own spex repository and is let go,
+    // the removal takes it with the clone.
+    holdLoads = false;
+    releaseLoads();
+    const session = await creating;
+    if (!session.ok) throw new Error(`the session opens: ${session.error.message}`);
+    await client.ok("session.dispose", { sessionId: session.result.id });
+    await client.ok("project.remove", { projectId, confirm: true });
+    await client.until((m) => m.type === "session.removed" && m.sessionId === session.result.id);
+    assert.ok(!existsSync(clone), "the clone is gone");
+    assert.deepEqual(await client.ok("session.list", {}), [], "no session is filed in your own group's spex repository");
+  } finally {
+    releaseLoads();
+    client.close();
+    await service.stop();
+  }
+});
+
+test("projects-21: a session's lease taken out of band while the removal drains refuses it with the clone standing, and once released the next removal deletes the clone", async () => {
+  const scratch = scratchDir("spex-project-removal-lease-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  const env = { PATH: process.env.PATH ?? "", HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  // The removal is held in its media drain until released.
+  let holdDrain = false;
+  let drainReached!: () => void;
+  const reachedDrain = new Promise<void>((resolveReached) => { drainReached = resolveReached; });
+  let releaseDrain!: () => void;
+  const drainReleased = new Promise<void>((resolveReleased) => { releaseDrain = resolveReleased; });
+  const { imports } = fakeAdapterImports({ rules: [], fallback: { result: "done" } });
+  const service = await CoreService.start({
+    token: "test", dataDir, own: "tester", env, home, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
+    watchConfig: false,
+    mediaBeforeDrain: async (owner) => {
+      if (!holdDrain || owner.kind !== "project") return;
+      drainReached();
+      await drainReleased;
+    },
+  });
+  const client = new Client(service.port());
+  await client.open();
+  let lease: { release(): Promise<void> } | undefined;
+  try {
+    const projectId = (await client.ok("project.register", { path: folder })).id;
+    const clone = join(dataDir, "workspace", "tester", "fixture-spex");
+    const start = Date.now();
+    while ((await client.ok("environment.get", { repository: projectId })).busy !== null) {
+      if (Date.now() - start > 60_000) throw new Error("timeout waiting for the environment");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    const session = await client.ok("session.create", { projectId });
+    await client.ok("session.dispose", { sessionId: session.id });
+
+    // Nothing holds the session when the removal first looks; a lease
+    // taken out of band while it drains is read again under its gate
+    // just before the clone goes, and refuses it (projects-10).
+    holdDrain = true;
+    const removing = client.command("project.remove", { projectId, confirm: true });
+    await reachedDrain;
+    const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
+    await shared.prepare();
+    lease = await shared.acquireManagement(session.id);
+    holdDrain = false;
+    releaseDrain();
+    const refused = await removing;
+    assert.ok(!refused.ok, "the lease taken during the drain refuses the removal");
+    assert.equal(refused.error.code, "busy");
+    assert.match(refused.error.message, /in use elsewhere|ownership cannot be verified/);
+    assert.ok(existsSync(clone), "the clone stays");
+
+    // Once the lease is released and read so, the next removal deletes
+    // the clone.
+    await lease.release();
+    lease = undefined;
+    for (const waited = Date.now(); ;) {
+      const listed = (await client.ok("session.list", {})).find((entry) => entry.id === session.id);
+      if (listed && !listed.externalWriter) break;
+      if (Date.now() - waited > 20_000) throw new Error("timeout waiting for the lease's release to be read");
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await client.ok("project.remove", { projectId, confirm: true });
+    assert.ok(!existsSync(clone), "the clone is gone");
+  } finally {
+    releaseDrain();
+    // A clone deleted under the lease takes its lease with it.
+    await lease?.release().catch(() => {});
+    client.close();
+    await service.stop();
+  }
+});
+
+test("projects-21: removal waits for an interrupted session being restored, and once it has reported removes the clone", async () => {
+  const scratch = scratchDir("spex-project-removal-restoring-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  const configPath = join(config, "playbook.config.yaml");
+  writeFileSync(configPath, CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  const env = { PATH: process.env.PATH ?? "", HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const { imports } = fakeAdapterImports({ fallback: { result: "unused fixture answer" } });
+  const start = () => CoreService.start({
+    token: "test", dataDir, own: "tester", env, home, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
+    watchConfig: false,
+  });
+  let service = await start();
+  let client = new Client(service.port());
+  await client.open();
+  let release!: () => void;
+  const released = new Promise<void>((resolveReleased) => { release = resolveReleased; });
+  try {
+    const projectId = (await client.ok("project.register", { path: folder })).id;
+    const clone = join(dataDir, "workspace", "tester", "fixture-spex");
+    const waited = Date.now();
+    while ((await client.ok("environment.get", { repository: projectId })).busy !== null) {
+      if (Date.now() - waited > 60_000) throw new Error("timeout waiting for the environment");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+
+    // A writer stopped mid-turn, as the CLI leaves one in the project's
+    // spex repository, and a restarted core reading it interrupted.
+    const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
+    await shared.prepare();
+    const execution = executionConfigFromPlan(await loadLaunchPlan({ userConfigPath: configPath, modules: builtinLaunchModules(configPath) }));
+    const cli = await openSessionHost({ store: shared, mode: "new", cwd: folder, config: execution, adapterImports: imports });
+    const sessionId = cli.sessionId;
+    await cli.lease.beginTurn({ input: "saved fixture input", attemptId: randomUUID(), attemptedExecutionProjection: execution });
+    await cli.lease.recordProgress({ snapshot: null, step: { id: randomUUID(), kind: "player", stateId: "firstPhase", runtimeSessionId: randomUUID(), playbookId: "code" } });
+    await cli.dispose();
+    client.close();
+    await service.stop();
+    service = await start();
+    client = new Client(service.port());
+    await client.open();
+    const interrupted = (await client.ok("session.list", {})).find((entry) => entry.id === sessionId);
+    assert.ok(interrupted?.recovery, "the session reads interrupted");
+
+    // The restore is held in its open before it takes the session's
+    // lease: the removal is refused naming that session, with the clone
+    // standing (projects-10).
+    const store = service["store"];
+    const original = store.sessionStore.bind(store);
+    const facade = original(projectId);
+    let hold = true;
+    let acquireReached!: () => void;
+    const reachedAcquire = new Promise<void>((resolveReached) => { acquireReached = resolveReached; });
+    store.sessionStore = (key?: string) => key !== projectId ? original(key) : {
+      ...facade,
+      acquire: async (...args: Parameters<typeof facade.acquire>) => {
+        if (hold) {
+          hold = false;
+          acquireReached();
+          await released;
+        }
+        return facade.acquire(...args);
+      },
+    };
+    const restoring = client.command("session.restore", { sessionId });
+    await reachedAcquire;
+    const refused = await client.command("project.remove", { projectId, confirm: true });
+    assert.ok(!refused.ok, "the removal waits for the session being restored");
+    assert.equal(refused.error.code, "busy");
+    assert.equal(refused.error.message, `Wait for ${interrupted.title ? `“${interrupted.title}”` : "a new session"} in fixture`);
+    assert.ok(existsSync(clone), "the clone stays");
+
+    // Once the restore has reported, the removal takes the clone.
+    release();
+    const restored = await restoring;
+    assert.ok(restored.ok, `the restore runs: ${restored.ok ? "" : restored.error.message}`);
+    await client.until((m) => m.type === "session.state" && m.session.id === sessionId &&
+      !m.session.recovery && !m.session.live && !m.session.turnActive, 60_000);
+    await client.ok("project.remove", { projectId, confirm: true });
+    assert.ok(!existsSync(clone), "the clone is gone");
+  } finally {
+    release();
+    client.close();
+    await service.stop();
+  }
+});
+
+test("projects-21: removing your own group's project pair keeps its clone's stopped sync and lifts its gate", async () => {
+  const scratch = scratchDir("spex-project-removal-own-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "own");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  // A remote that is no repository stops the sync at its check.
+  const notRepository = join(scratch, "not-a-repository");
+  mkdirSync(notRepository);
+  const { service, client } = await boot(dataDir, home);
+  try {
+    const own = "tester/tester-spex";
+    const row = async () => (await client.ok("space.get", {})).groups
+      .flatMap((group) => group.repositories).find((repository) => repository.key === own)?.sync;
+    await client.ok("project.rebind", { projectId: own, path: folder });
+    await client.ok("space.remote.set", { repository: own, url: notRepository });
+    await client.ok("space.sync", { repository: own });
+    const start = Date.now();
+    while ((await row())?.phase !== "stopped") {
+      if (Date.now() - start > 30_000) throw new Error("timeout waiting for the sync to stop");
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const stopped = await row();
+
+    // Removing the pair keeps the clone, and the gate the removal held
+    // lifts back to the stopped sync (projects-10).
+    await client.ok("project.remove", { projectId: own, confirm: true });
+    assert.ok(existsSync(join(dataDir, "workspace", "tester", "tester-spex")), "your own group's clone stays");
+    assert.deepEqual(await row(), stopped, "its sync still reads stopped");
+    await client.ok("config.edit", { op: { kind: "captain.set", patch: { instruction: "After the removal" } } });
   } finally {
     client.close();
     await service.stop();

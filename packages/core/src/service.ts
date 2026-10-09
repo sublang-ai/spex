@@ -128,7 +128,7 @@ import { GitHostClient, fileCredentialStore } from "./git-host.js";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { validateRemoteUrl } from "./space-git.js";
-import type { SpaceOp, SyncStep } from "./protocol.js";
+import type { MediaOwner, SpaceOp, SyncStep } from "./protocol.js";
 import { isFastModeSupported, isSubagentModelSupported } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 
@@ -213,6 +213,9 @@ export interface CoreServiceOptions {
   /** Test seam: awaited before each Space step runs, so a suite can act
    * between steps deterministically. */
   spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** Test seam: awaited as a media owner's retirement begins its
+   * drain, so a suite can act while a removal drains. */
+  mediaBeforeDrain?: (owner: MediaOwner) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -482,6 +485,9 @@ export class CoreService {
   private readonly handoffs = new Map<string, string>();
   /** Manual and automatic sends share one admission per conversation. */
   private readonly submitting = new Map<string, Promise<void>>();
+  /** Sessions being created, counted per project, from admission until
+   * they open (space-11). */
+  private readonly creating = new Map<string, number>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
   /** Every spex repository's environment (DR-104). */
@@ -722,6 +728,7 @@ export class CoreService {
         } else if (!this.store.describeSession(owner.id)) throw noSession(owner.id);
       },
       openSessionAsset: (sessionId, assetId) => this.store.sessionStoreFor(sessionId).openAsset(sessionId, assetId),
+      ...(options.mediaBeforeDrain ? { beforeDrain: options.mediaBeforeDrain } : {}),
     });
     // The core speaks before it composes its first text (core-service-111):
     // the config error a start may raise, and the readiness requirement
@@ -882,8 +889,10 @@ export class CoreService {
    * its shared store, a turn of one of its authoring sessions, or a
    * running compile of them.
    */
-  private async spaceBlocker(repository: string): Promise<string | undefined> {
-    if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
+  private async spaceBlocker(repository: string, draining = false): Promise<string | undefined> {
+    // A removal asking from inside its own media drain reads that drain's
+    // writing as its own, not as an upload in flight (projects-10).
+    if (!draining && this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
     // An environment resolving or installing writes beneath the clone.
     const installing = this.environments.busyFor(repository);
     if (installing) return installing;
@@ -904,6 +913,43 @@ export class CoreService {
         comment:
           "What blocks a Space operation: a session of this project is working",
         values: { name, project },
+      });
+    }
+    // A session being created writes beneath the clone once it opens.
+    if (this.creating.has(repository)) return i18n._({
+      id: "Wait for {name} in {project}",
+      comment:
+        "What blocks a Space operation: a session of this project is working",
+      values: {
+        name: i18n._({
+          id: "a new session",
+          comment: "Stands in for the title of a session that has none yet",
+        }),
+        project: this.store.getProject(repository)?.name ?? i18n._({
+          id: "the project",
+          comment: "Stands in for a project's name where the core has none",
+        }),
+      },
+    });
+    // A session opening — a restore admitted before an operation's gate
+    // among them — writes beneath the clone once it takes its lease.
+    const opening = this.sessions.openingSession(repository);
+    if (opening !== undefined) {
+      const title = this.store.describeSession(opening)?.title;
+      return i18n._({
+        id: "Wait for {name} in {project}",
+        comment:
+          "What blocks a Space operation: a session of this project is working",
+        values: {
+          name: title ? titled(title) : i18n._({
+            id: "a new session",
+            comment: "Stands in for the title of a session that has none yet",
+          }),
+          project: this.store.getProject(repository)?.name ?? i18n._({
+            id: "the project",
+            comment: "Stands in for a project's name where the core has none",
+          }),
+        },
       });
     }
     if ([...this.submitting.keys()].some((sessionId) => this.store.sessionRepository(sessionId) === repository)) return i18n._({
@@ -2108,33 +2154,54 @@ export class CoreService {
         const key = command.projectId;
         if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
         if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
-        // Removal waits for what a sync of the spex repository waits
-        // for — an authoring session's turn, compile or enabling among
-        // it — naming it (projects-10, space-11).
-        const blocker = await this.spaceBlocker(key);
-        if (blocker !== undefined) throw new CoreError("busy", blocker);
-        // What has not reached the host asks a second confirmation
-        // naming the count (projects-9).
-        if (command.confirm !== true) {
-          const units = await this.space.pendingUnits(key);
-          if (units > 0) {
-            throw new CoreError("conflict", i18n._({
-              id: "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway",
-              comment: "Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent",
-              values: { count: units },
-            }), { units });
+        // Removal reserves its spex repository as a sync does: the
+        // clone's gate is held from here to the removal's end, every
+        // write beneath it refused naming the removal (projects-10,
+        // space-21).
+        const gate = this.space.holdRemoval(key);
+        let removed: string[];
+        try {
+          // Removal waits for what a sync of the spex repository waits
+          // for — an authoring session's turn, compile or enabling among
+          // it — naming it (projects-10, space-11).
+          const blocker = await this.spaceBlocker(key);
+          if (blocker !== undefined) throw new CoreError("busy", blocker);
+          // What has not reached the host asks a second confirmation
+          // naming the count (projects-9).
+          if (command.confirm !== true) {
+            const units = await this.space.pendingUnits(key);
+            if (units > 0) {
+              throw new CoreError("conflict", i18n._({
+                id: "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway",
+                comment: "Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent",
+                values: { count: units },
+              }), { units });
+            }
           }
+          removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
+          await this.media.retireOwner({kind: "project", id: key}, () => {
+            if (!this.store.removeProject(key)) throw noProject(key);
+          }, async () => {
+            // What was admitted before the gate, or is held elsewhere,
+            // is read again under it just before the clone goes
+            // (projects-10); the removal's own refusals come last, with
+            // nothing awaited before its start (media-17).
+            const again = await this.spaceBlocker(key, true);
+            if (again !== undefined) throw new CoreError("busy", again);
+            if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
+            this.store.assertProjectsWritable();
+          });
+        } catch (error) {
+          gate?.refused();
+          throw error;
         }
-        const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
-        await this.media.retireOwner({kind: "project", id: key}, () => {
-          if (!this.store.removeProject(key)) throw noProject(key);
-        }, () => {
-          if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
-          this.store.assertProjectsWritable();
-        });
+        gate?.removed();
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
+        // A group's records the removed clone held here are asked for
+        // again by the clone that found them held (space-65).
+        this.space.cloneRemoved();
         this.announceGroups();
         return null;
       }
@@ -2149,8 +2216,17 @@ export class CoreService {
         // start where it has none (DR-103); it checks for itself and
         // never throws.
         void this.ensureGroupRepository(project.id).catch(() => {});
-        // Yours with the project.s own on top (core-service-2).
-        return this.sessions.createSession(project, await this.composedFor(project.id));
+        // Being created from here, the session holds off an operation on
+        // its spex repository (space-11) until it opens, live.
+        this.creating.set(project.id, (this.creating.get(project.id) ?? 0) + 1);
+        try {
+          // Yours with the project.s own on top (core-service-2).
+          return await this.sessions.createSession(project, await this.composedFor(project.id));
+        } finally {
+          const left = (this.creating.get(project.id) ?? 1) - 1;
+          if (left > 0) this.creating.set(project.id, left);
+          else this.creating.delete(project.id);
+        }
       }
       case "session.dispose":
         await this.sessions.disposeSession(command.sessionId);
@@ -2398,6 +2474,11 @@ export class CoreService {
             }),
           );
         }
+        // The authoring session of the id holds it while its turn runs,
+        // its agent editing the source this compile writes: refused as
+        // the session's own acts are (core-service-96). Nothing awaits
+        // between this check, the take below and the source's write.
+        this.authors.assertIdle(command.playbookId);
         const controller = new AbortController();
         this.activeCompiles.set(command.playbookId, controller);
         this.compileHolders.set(command.playbookId, project.id);
@@ -2850,8 +2931,12 @@ export class CoreService {
         this.requireDraft(command.projectId, command.draftId, command.instance);
         const owner = {kind: "draft" as const, projectId: command.projectId, id: command.draftId};
         await this.media.validate(owner, command.attachments ?? []);
+        // The validation is an await the message crosses: the instance
+        // is admitted again, and the message goes to it or nowhere
+        // (core-service-96).
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         this.media.ownerStore(owner, true);
-        return this.authors.send(command.draftId, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})});
+        return this.authors.send(command.draftId, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})}, command.instance);
       }
       case "draft.abort":
         this.requireDraft(command.projectId, command.draftId, command.instance);
@@ -2882,7 +2967,7 @@ export class CoreService {
           command.draftId,
           command.command,
           command.intent,
-          (result, location) => this.enableCompiled({
+          (result, location, held) => this.enableCompiled({
             playbookId: command.draftId,
             result,
             bindings: command.bindings,
@@ -2890,6 +2975,7 @@ export class CoreService {
             projectId: command.projectId,
             ...(command.repository !== undefined ? { repository: command.repository } : {}),
             packageDir: location.packageDir,
+            held,
           }),
         );
       }
@@ -2901,7 +2987,7 @@ export class CoreService {
         this.authors.assertDeletable(command.draftId);
         // The drain is an await the deletion's write crosses: the
         // instance is admitted again after it (core-service-96).
-        await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId}, () => this.authors.delete(command.draftId),
+        await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId}, () => this.authors.delete(command.draftId, command.instance),
           () => {
             this.requireDraft(command.projectId, command.draftId, command.instance);
             this.authors.assertDeletable(command.draftId);
@@ -2912,10 +2998,14 @@ export class CoreService {
         // The compiled stages in the playbook artifact's folder of the
         // spec package under development (playbook-library-24).
         const artifactDir = this.drafts.artifactDir(command.draftId) ?? join(this.store.dir, "missing");
-        return resolveArtifacts(
+        const artifacts = await resolveArtifacts(
           { id: command.draftId, from: join(artifactDir, `${command.draftId}.registry.mjs`) },
           this.env,
         );
+        // The read is an await the reply crosses: it answers the
+        // instance it was admitted under, or nothing (core-service-96).
+        this.requireDraft(command.projectId, command.draftId, command.instance);
+        return artifacts;
       }
       // Environments (environments-14, environments-15, environments-17).
       case "environment.get":
@@ -3127,6 +3217,10 @@ export class CoreService {
     /** The spex repository to enable in: the project's, by default, or your own group's. */
     repository?: string;
     packageDir: string;
+    /** An authoring session's enabling: refuses once the instance it was
+     * admitted under departed, called after each await before a write
+     * (core-service-96). */
+    held?: () => void;
   }): Promise<ConfigState> {
     const { playbookId, result } = input;
     const roles = this.rekeyRoles(result, input.bindings);
@@ -3183,12 +3277,14 @@ export class CoreService {
 
     // The spec package is requested by path and installed before the
     // config names its playbook (playbook-library-69, environments-15).
-    await this.environments.requestAndInstall(targetKey, name, { path: packagePath });
+    input.held?.();
+    await this.environments.requestAndInstall(targetKey, name, { path: packagePath }, input.held);
 
     // Lanes the bindings name but the roster lacks are created first,
     // so the binding never dangles (DR-032, playbook-library-3).
     for (const op of playerOps) {
-      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
+      input.held?.();
+      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null), beforeWrite: input.held });
       if (!minted.ok) {
         throw new CoreError("invalid_config", i18n._({
           id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
@@ -3197,9 +3293,10 @@ export class CoreService {
         }));
       }
     }
+    input.held?.();
     const edit = targetKey === own
-      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
-      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null), beforeWrite: input.held })
+      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey), { beforeWrite: input.held });
     if (!edit.ok) {
       throw new CoreError("invalid_config", i18n._({
         id: "compiled, but registration was refused: {error}",
