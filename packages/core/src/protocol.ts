@@ -1070,6 +1070,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("compile.abort"),
     id,
     playbookId: z.string().min(1),
+    /** A cancel of an authoring session's compile names the session
+     * (core-service-96): admitted as its other commands are. With
+     * neither, the cancel ends whatever compile holds the id. */
+    projectId: repositoryKeySchema.optional(),
+    instance: draftInstanceSchema.optional(),
   }),
   z.object({ type: z.literal("library.builtins"), id }),
   z.object({ type: z.literal("specs.get"), id, projectId: z.string().min(1) }),
@@ -1876,6 +1881,10 @@ export interface HelloMessage {
   type: "hello";
   protocolVersion: number;
   coreVersion: string;
+  /** A token naming this run of the core (core-service-1): a client
+   * reconnecting under another one knows the core restarted and every
+   * authoring session instance it held was minted again. */
+  bootId: string;
 }
 
 export type ReplyMessage =
@@ -1935,6 +1944,9 @@ export interface CompileProgressMessage {
   type: "compile.progress";
   playbookId: string;
   line: string;
+  /** The authoring session instance whose compile wrote the line
+   * (core-service-96); absent on a `compile.run`'s lines. */
+  instance?: string;
 }
 
 /** The ledger changed for these projects: an intents write landed, or

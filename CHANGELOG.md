@@ -244,11 +244,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   compile and enabling and frees the id at once; an operation that ends
   clears only its own hold on the id, never a successor's. The interface
   adopts a token only from a creation, a listing, an open or the state
-  that follows a removal, drops every record, source, replacement and late
-  reply of a token it does not hold, keeps an open workspace across a
-  move, and no longer loses a session's composer text and edits when its
-  clone is renamed. The protocol version bumps to 25. The audit behind
-  the change is `docs/authoring-session-lifetime.md`.
+  that follows a removal, drops every record, source, progress line,
+  replacement and late reply of a token it does not hold, keeps an open
+  workspace across a move, continues a session across a reconnect only
+  when the core restarted — the hello now names the core's run — and no
+  longer loses a session's composer text and edits when its clone is
+  renamed. Cancel names the session's project and instance, so a stale
+  cancel ends nobody else's compile. The protocol version bumps to 25.
+  The audit behind the change is `docs/authoring-session-lifetime.md`.
 - Every record lives in a spex repository ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Each project's sessions, intents and authoring sessions live in its own
   clone, `workspace/<group>/<name>-spex/`, synced on its `spex` branch; your

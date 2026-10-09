@@ -990,7 +990,14 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
   await a.expectError("draft.delete", { projectId, draftId: "iso" }, "busy");
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: false });
-  await a.expectOk("compile.abort", { playbookId: "iso" });
+  // A cancel naming a former instance is refused at admission and the
+  // compile runs on; one naming the held instance ends it (core-service-96).
+  const staleCancel = await a.expectError("compile.abort", { playbookId: "iso", projectId, instance: stale.instance }, "not_found");
+  assert.equal(staleCancel.message, "iso now names another authoring session");
+  await sleep(100);
+  assert.equal(a.latest("iso")?.activity, "compiling", "the compile runs on after the refused cancel");
+  assert.ok(!a.progress("iso").includes("◇ compile canceled"), "nothing was canceled");
+  await a.expectOk("compile.abort", { playbookId: "iso", projectId, instance: iso.instance });
   const reply = await compiling;
   assert.ok(!reply.ok && reply.error.code === "aborted");
   await until(() => a.turnStarts("iso").includes("later"), 10_000, "the message queued during the compile");
@@ -1078,7 +1085,7 @@ test("core-service-97: every departure reaches each client as draft.removed nami
     assert.deepEqual(about("gone", removing).map(label), [`removed ${doomed}`]);
 
     // A replaced transcript reaches the draft channel's subscribers only.
-    await a.expectOk("draft.create", { projectId, draftId: "shared" });
+    const shared = await a.expectOk("draft.create", { projectId, draftId: "shared" });
     await a.expectOk("subscribe", { channel: { kind: "draft", draftId: "shared" } });
     await a.expectOk("draft.player.set", { projectId, draftId: "shared", playerId: null });
     const bare = join(dir, "remote.git");
@@ -1099,6 +1106,8 @@ test("core-service-97: every departure reaches each client as draft.removed nami
     const replaced = a.messages.find((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "shared");
     assert.ok(replaced, "the subscriber receives the replaced transcript");
     assert.equal(replaced.projectId, projectId);
+    assert.equal(replaced.instance, shared.instance, "a replaced transcript keeps the instance");
+    assert.equal(a.latest("shared")?.instance, shared.instance, "the state after the sync names the same instance");
     assert.deepEqual(replaced.records.map((entry) => entry.seq), [1, 2]);
     assert.ok(!b.messages.some((m) => m.type === "draft.history-replaced"), "a client not subscribed receives no replacement");
 
@@ -1359,7 +1368,17 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
   const client = new Client(harness.service.port());
   try {
     await client.open();
-    await client.expectOk("draft.create", { projectId, draftId: "synced" });
+    const created = await client.expectOk("draft.create", { projectId, draftId: "synced" });
+    /** A sync done, the session's instance standing: the state after it
+     * and every replacement name the instance the creation minted
+     * (core-service-96). */
+    const synced = async (): Promise<void> => {
+      assert.equal(await sync(client, projectId), "done");
+      assert.equal(client.latest("synced")?.instance, created.instance, "the instance stands across the sync");
+      for (const message of client.messages) {
+        if (message.type === "draft.history-replaced" && message.draftId === "synced") assert.equal(message.instance, created.instance, "a replacement names the instance that stands");
+      }
+    };
     await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "synced" } });
     // One record the manager has read: the transcript holds seq 1.
     await client.expectOk("draft.player.set", { projectId, draftId: "synced", playerId: null });
@@ -1371,7 +1390,7 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     mkdirSync(bare);
     peerGit(bare, "init", "-q", "--bare", "-b", "spex");
     await client.expectOk("space.remote.set", { repository: projectId, url: bare });
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     const peer = join(dir, "peer");
     peerGit(dir, "clone", "-q", "--branch", "spex", bare, peer);
     /** The peer changes the spex repository and pushes it. */
@@ -1392,7 +1411,7 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
 
     // A sync applies a peer's record; the session records again after it.
     peerRecords("◇ Recorded on another device");
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     assert.deepEqual(seqs(), [1, 2], "the sync applied the peer's record");
     await client.expectOk("draft.player.set", { projectId, draftId: "synced", playerId: null });
     assert.deepEqual(seqs(), [1, 2, 3], "the next record continues the sequence on disk");
@@ -1410,17 +1429,17 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     const replacements = (): DraftHistoryReplacedMessage[] =>
       client.messages.filter((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "synced");
     const replacedBefore = replacements().length;
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     peerPush(() => writeFileSync(join(peer, "notes.md"), "# Notes from another device\n"));
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     assert.ok(existsSync(join(clone, "notes.md")), "the sync applied the peer's other change");
     assert.equal(replacements().length, replacedBefore, "a sync that changed nothing of the transcript sends no replacement");
     await client.expectOk("draft.send", { projectId, draftId: "synced", text: "again" });
     await turns(2);
     assert.match(stats.runs[1].resume ?? "", /^fake-resume-/, "a sync that changed nothing keeps the conversation");
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     peerRecords("◇ Recorded on another device again");
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     await client.expectOk("draft.send", { projectId, draftId: "synced", text: "after" });
     await turns(3);
     const after = stats.runs[2];
@@ -1435,7 +1454,7 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     // project: the subscribed client receives the peer's transcript
     // whole before anything appends, and the next turn's records
     // continue it at 3.
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     const recreated = [1, 2].map((seq) => ({ seq, record: { type: "captain_status", turnId: null, timestamp: seq, message: `◇ Recreated on another device, line ${seq}` } }));
     peerPush(() => {
       const file = join(peer, "authoring", "synced.json");
@@ -1444,7 +1463,7 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
       writeFileSync(join(peer, "authoring", "synced.records.jsonl"), recreated.map((line) => `${JSON.stringify(line)}\n`).join(""));
     });
     const from = client.messages.length;
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     const replacedAt = client.messages.findIndex((m, index) => index >= from && m.type === "draft.history-replaced" && m.draftId === "synced");
     assert.ok(replacedAt >= 0, "the subscribed client receives the replaced transcript");
     const replaced = client.messages[replacedAt] as DraftHistoryReplacedMessage;
@@ -1463,13 +1482,13 @@ test("playbook-library-96: a sync bringing a peer's records is read back before 
     const prefix = readFileSync(files.records, "utf8");
     appendFileSync(files.records, `{"seq":${prefix.trim().split("\n").length + 1},"rec`);
     peerPush(() => writeFileSync(join(peer, "notes.md"), "# Notes from another device, again\n"));
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     const torn = await client.expectOk("draft.open", { projectId, draftId: "synced" });
     assert.ok(torn.draft.diagnostic, "the torn transcript is held with its diagnostic");
     assert.deepEqual(torn.records, [], "and served with no records");
     peerPush(() => writeFileSync(join(peer, "authoring", "synced.records.jsonl"), prefix));
     const repairing = client.messages.length;
-    assert.equal(await sync(client, projectId), "done");
+    await synced();
     assert.equal(readFileSync(files.records, "utf8"), prefix, "the sync took the host's copy");
     const repaired = client.messages.slice(repairing).find((m): m is DraftHistoryReplacedMessage => m.type === "draft.history-replaced" && m.draftId === "synced");
     assert.ok(repaired, "the subscribed client receives the repaired transcript");
@@ -1553,120 +1572,252 @@ test("playbook-library-97: a compile running for a session its id no longer name
 });
 
 // ---------------------------------------------------------------------------
-// playbook-library-100: an enabling re-package of a session its id no longer names
+// playbook-library-100: the activity of a session its id no longer names
 // ---------------------------------------------------------------------------
 
-test("playbook-library-100: an enabling re-package for a session its id no longer names is refused, nothing of it is committed, and its late cleanup leaves the newcomer's own compile standing", async () => {
-  // The stub holds every compile in its first phase until released
-  // beside the source: the kept session's is released up front, the
-  // newcomer's never, so a cancel ends it.
-  const harness = await startHarness({ script: authoringScript(), slc: stubSlcScriptedSource(["ok"], "['Triager', 'Verifier']", { hold: true }) });
-  const { projectId, clone, dir, dataDir, configPath } = harness;
-  const kept = authoringFiles(clone, "triage");
-  const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
-  const client = new Client(harness.service.port());
-  try {
-    await client.open();
-    await client.expectOk("draft.create", { projectId, draftId: "triage" });
-    writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
-    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
-    // Another project holds a session of the id, shadowed while this one stands.
-    const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
-    const promoted = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "triage");
-    mkdirSync(dirname(promoted.record), { recursive: true });
-    const promotedRecord = JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 });
-    const promotedRecords = `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`;
-    writeFileSync(promoted.record, promotedRecord);
-    writeFileSync(promoted.records, promotedRecords);
+/** The prompts of the turns a transcript on disk started, in order. */
+function turnsOnDisk(records: string): string[] {
+  if (!existsSync(records)) return [];
+  return readFileSync(records, "utf8").split("\n").filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as { record: { type: string; turn?: { prompt: string } } })
+    .filter((line) => line.record.type === "turn_started").map((line) => line.record.turn!.prompt);
+}
 
-    // The session compiles and its agent proposes the enabling.
-    await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
-    await until(() => {
-      const draft = client.latest("triage");
-      return draft?.activity === "idle" && draft.proposal !== undefined;
-    }, 120_000, "the proposal");
+/** Another project's session of `triage`, shadowed while the kept one
+ * stands (storage-12): its files, its project's id, and the artifact
+ * folder its compile runs in. */
+async function shadowedByKept(client: Client, harness: Harness): Promise<{ other: string; promoted: ReturnType<typeof authoringFiles>; artifacts: string }> {
+  const other = (await client.expectOk("project.register", { path: workingFolder(join(harness.dir, "zeta")) })).id;
+  const promoted = authoringFiles(join(harness.dataDir, "workspace", ...other.split("/")), "triage");
+  mkdirSync(dirname(promoted.record), { recursive: true });
+  writeFileSync(promoted.record, JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 }));
+  writeFileSync(promoted.records, `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`);
+  return { other, promoted, artifacts: join(harness.dir, "zeta", "spex-packages", "triage", "playbooks", "en", "triage") };
+}
 
-    // The re-package is held where it loads the entry the compiler
-    // emitted: the entry waits, at import, for the test's release.
-    const reached = join(dir, "repackage-reached");
-    const release = join(dir, "repackage-release");
-    const entry = join(artifactDir, "triage.ts");
-    writeFileSync(entry, [
-      'import { existsSync as heldExists, writeFileSync as heldWrite } from "node:fs";',
-      `heldWrite(${JSON.stringify(reached)}, "");`,
-      `while (!heldExists(${JSON.stringify(release)})) await new Promise((resolve) => setTimeout(resolve, 25));`,
-      readFileSync(entry, "utf8"),
-    ].join("\n"));
-    const projectConfig = join(clone, "config", "playbook.config.yaml");
-    const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
-    const configBefore = contents(configPath);
-    const projectConfigBefore = contents(projectConfig);
-    const requestsBefore = contents(join(clone, "spex.yaml"));
-    const registering = client.command("draft.register", {
-      projectId,
-      draftId: "triage",
-      command: "triage",
-      intent: "Label new issues",
-      bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
-      newPlayers: { "dev.triager": { adapter: "claude" } },
-    });
-    await until(() => existsSync(reached), 60_000, "the held re-package");
+/** The kept session's file goes and a rescan gives the id to the other
+ * project's session; the kept transcript as it stands then. */
+async function promoteOther(client: Client, harness: Harness, kept: ReturnType<typeof authoringFiles>, other: string): Promise<string> {
+  rmSync(kept.record);
+  await client.expectOk("project.register", { path: workingFolder(join(harness.dir, "omega")) });
+  await until(() => client.latest("triage")?.projectId === other, 10_000, "the newcomer's state");
+  return readFileSync(kept.records, "utf8");
+}
 
-    // The kept session's file goes, and a rescan gives the id to the
-    // other project's session: the enabling is canceled and the id
-    // freed, so the newcomer starts its own compile, held by the stub.
-    rmSync(kept.record);
-    await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
-    const keptTranscript = readFileSync(kept.records, "utf8");
-    await until(() => client.latest("triage")?.projectId === other, 10_000, "the newcomer's state");
-    assert.equal(client.latest("triage")?.activity, "idle", "the id is free once the enabling is canceled");
-    await client.expectOk("draft.source.write", { projectId: other, draftId: "triage", content: SOURCE });
-    const theirs = client.command("draft.compile", { projectId: other, draftId: "triage" });
-    const theirArtifacts = join(dir, "zeta", "spex-packages", "triage", "playbooks", "en", "triage");
-    await until(() => existsSync(join(theirArtifacts, ".stub-slc-runs")), 60_000, "the newcomer's compile to reach the stub");
-    assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling");
-    assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "first while compiling" }), { accepted: true, queued: true });
-    writeFileSync(release, "");
+/** Hold an enabling's re-package where it loads the entry the compiler
+ * emitted: the entry waits, at its import, for the test's release. */
+function holdRepackage(dir: string, artifactDir: string): { reached: string; release: string } {
+  const reached = join(dir, "repackage-reached");
+  const release = join(dir, "repackage-release");
+  const entry = join(artifactDir, "triage.ts");
+  writeFileSync(entry, [
+    'import { existsSync as heldExists, writeFileSync as heldWrite } from "node:fs";',
+    `heldWrite(${JSON.stringify(reached)}, "");`,
+    `while (!heldExists(${JSON.stringify(release)})) await new Promise((resolve) => setTimeout(resolve, 25));`,
+    readFileSync(entry, "utf8"),
+  ].join("\n"));
+  return { reached, release };
+}
 
-    // Refused: nothing of the enabling is committed.
-    const reply = await registering;
-    assert.ok(!reply.ok, "the enabling is refused");
-    if (reply.ok) throw new Error("unreachable");
-    assert.equal(reply.error.code, "invalid_request");
-    assert.equal(reply.error.message, "triage now names another authoring session");
-    assert.equal(contents(configPath), configBefore, "your own group's config is unchanged");
-    assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
-    assert.equal(contents(join(clone, "spex.yaml")), requestsBefore, "no spec package is requested");
-    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
-    // The retired enabling's cleanup cleared only its own hold on the
-    // id: the newcomer still reads compiling, a message sent to it
-    // queues, and only its own cancel ends its compile.
-    await sleep(300);
-    assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling", "the newcomer's compile stands after the release");
-    assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "second while compiling" }), { accepted: true, queued: true });
-    await client.expectOk("compile.abort", { playbookId: "triage" });
-    const canceled = await theirs;
-    assert.ok(!canceled.ok && canceled.error.code === "aborted", "the newcomer's compile ended by its own cancel");
-    // Its queued messages then run as its turns, in order.
-    const turnsOnDisk = (): string[] => readFileSync(promoted.records, "utf8").split("\n").filter((line) => line.trim() !== "")
-      .map((line) => JSON.parse(line) as { record: { type: string; turn?: { prompt: string } } })
-      .filter((line) => line.record.type === "turn_started").map((line) => line.record.turn!.prompt);
-    await until(() => turnsOnDisk().length === 2, 30_000, "both queued messages to run");
-    assert.deepEqual(turnsOnDisk(), ["first while compiling", "second while compiling"]);
-    const start = Date.now();
-    for (;;) {
-      const opened = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
-      if (opened.draft.activity === "idle" && opened.draft.queued.length === 0 && opened.records.filter((entry) => entry.record.type === "turn_finished").length === 2) {
-        assert.equal(opened.draft.enabled, false);
-        assert.equal(opened.draft.compile?.outcome, "canceled");
-        break;
-      }
-      if (Date.now() - start > 30_000) throw new Error("timeout waiting for the newcomer to end idle");
-      await sleep(25);
+/** The session the id names, once it stands idle with an empty queue
+ * and this many finished turns. */
+async function endsIdle(client: Client, projectId: string, finishedTurns: number): Promise<DraftInfo> {
+  const start = Date.now();
+  for (;;) {
+    const opened = await client.expectOk("draft.open", { projectId, draftId: "triage" });
+    const finished = opened.records.filter((entry) => entry.record.type === "turn_finished" || entry.record.type === "turn_aborted").length;
+    if (opened.draft.activity === "idle" && finished === finishedTurns) {
+      assert.deepEqual(opened.draft.queued, [], "the queue is empty");
+      return opened.draft;
     }
-    assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named still records nothing");
-  } finally {
-    client.close();
-    await harness.service.stop();
+    if (Date.now() - start > 30_000) throw new Error(`timeout waiting for the session the id names to end idle after ${finishedTurns} turns`);
+    await sleep(25);
   }
+}
+
+test("playbook-library-100: an activity of a session its id no longer names commits and records nothing, and the newcomer holds the id for its own activity alone", async (t) => {
+  await t.test("an enabling re-package released after the newcomer started its own held compile", async () => {
+    // The stub holds every compile in its first phase until released
+    // beside the source: the kept session's is released up front, the
+    // newcomer's never, so a cancel ends it.
+    const harness = await startHarness({ script: authoringScript(), slc: stubSlcScriptedSource(["ok"], "['Triager', 'Verifier']", { hold: true }) });
+    const { projectId, clone, dir, configPath } = harness;
+    const kept = authoringFiles(clone, "triage");
+    const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
+    const client = new Client(harness.service.port());
+    try {
+      await client.open();
+      await client.expectOk("draft.create", { projectId, draftId: "triage" });
+      writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+      const { other, promoted, artifacts: theirArtifacts } = await shadowedByKept(client, harness);
+
+      // The session compiles and its agent proposes the enabling.
+      await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+      await until(() => {
+        const draft = client.latest("triage");
+        return draft?.activity === "idle" && draft.proposal !== undefined;
+      }, 120_000, "the proposal");
+      const { reached, release } = holdRepackage(dir, artifactDir);
+      const projectConfig = join(clone, "config", "playbook.config.yaml");
+      const contents = (path: string): string | null => (existsSync(path) ? readFileSync(path, "utf8") : null);
+      const configBefore = contents(configPath);
+      const projectConfigBefore = contents(projectConfig);
+      const requestsBefore = contents(join(clone, "spex.yaml"));
+      const registering = client.command("draft.register", {
+        projectId,
+        draftId: "triage",
+        command: "triage",
+        intent: "Label new issues",
+        bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+        newPlayers: { "dev.triager": { adapter: "claude" } },
+      });
+      await until(() => existsSync(reached), 60_000, "the held re-package");
+
+      // The enabling is canceled and the id freed at the rescan, so the
+      // newcomer starts its own compile, held by the stub.
+      const keptTranscript = await promoteOther(client, harness, kept, other);
+      assert.equal(client.latest("triage")?.activity, "idle", "the id is free once the enabling is canceled");
+      await client.expectOk("draft.source.write", { projectId: other, draftId: "triage", content: SOURCE });
+      const theirs = client.command("draft.compile", { projectId: other, draftId: "triage" });
+      await until(() => existsSync(join(theirArtifacts, ".stub-slc-runs")), 60_000, "the newcomer's compile to reach the stub");
+      assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling");
+      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "first while compiling" }), { accepted: true, queued: true });
+      writeFileSync(release, "");
+
+      // Refused: nothing of the enabling is committed.
+      const reply = await registering;
+      assert.ok(!reply.ok, "the enabling is refused");
+      if (reply.ok) throw new Error("unreachable");
+      assert.equal(reply.error.code, "invalid_request");
+      assert.equal(reply.error.message, "triage now names another authoring session");
+      assert.equal(contents(configPath), configBefore, "your own group's config is unchanged");
+      assert.equal(contents(projectConfig), projectConfigBefore, "the project's config is unchanged");
+      assert.equal(contents(join(clone, "spex.yaml")), requestsBefore, "no spec package is requested");
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
+      // The retired enabling's cleanup cleared only its own hold on the
+      // id: the newcomer still reads compiling, a message sent to it
+      // queues, and only its own cancel ends its compile.
+      await sleep(300);
+      assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling", "the newcomer's compile stands after the release");
+      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "second while compiling" }), { accepted: true, queued: true });
+      await client.expectOk("compile.abort", { playbookId: "triage", projectId: other, instance: client.addresses.of("triage") });
+      const canceled = await theirs;
+      assert.ok(!canceled.ok && canceled.error.code === "aborted", "the newcomer's compile ended by its own cancel");
+      // Its queued messages then run as its turns, in order.
+      const ended = await endsIdle(client, other, 2);
+      assert.deepEqual(turnsOnDisk(promoted.records), ["first while compiling", "second while compiling"]);
+      assert.equal(ended.enabled, false);
+      assert.equal(ended.compile?.outcome, "canceled");
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named still records nothing");
+    } finally {
+      client.close();
+      await harness.service.stop();
+    }
+  });
+
+  await t.test("a compile whose process outlives its kill, released after the newcomer started its own held compile", async () => {
+    // The stub ignores its kill and ends, failed, only when released
+    // beside its source: the former's compile outlives the departure.
+    const harness = await startHarness({ script: { fallback: { result: "Noted." } }, slc: stubSlcScriptedSource(["linger"], "['Triager', 'Verifier']") });
+    const { projectId, clone, dir } = harness;
+    const kept = authoringFiles(clone, "triage");
+    const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
+    const client = new Client(harness.service.port());
+    try {
+      await client.open();
+      await client.expectOk("draft.create", { projectId, draftId: "triage" });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+      const { other, promoted, artifacts: theirArtifacts } = await shadowedByKept(client, harness);
+      await client.expectOk("draft.source.write", { projectId, draftId: "triage", content: SOURCE });
+      const formers = client.command("draft.compile", { projectId, draftId: "triage" });
+      await until(() => existsSync(join(artifactDir, ".stub-slc-runs")), 60_000, "the former's compile to reach the stub");
+      await until(() => client.latest("triage")?.activity === "compiling", 10_000, "the former compiling");
+
+      // The departure cancels the compile and frees the id; the stub's
+      // process ignores the kill, so the compile's end is still to come.
+      const keptTranscript = await promoteOther(client, harness, kept, other);
+      assert.equal(client.latest("triage")?.activity, "idle", "the id is free once the former's compile is canceled");
+      await client.expectOk("draft.source.write", { projectId: other, draftId: "triage", content: SOURCE });
+      const theirs = client.command("draft.compile", { projectId: other, draftId: "triage" });
+      await until(() => existsSync(join(theirArtifacts, ".stub-slc-runs")), 60_000, "the newcomer's compile to reach the stub");
+      assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling");
+      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "first while compiling" }), { accepted: true, queued: true });
+
+      // The former's process ends now: its cleanup clears only its own
+      // hold on the id.
+      writeFileSync(join(artifactDir, STUB_SLC_RELEASE_FILE), "");
+      const former = await formers;
+      assert.ok(!former.ok && former.error.code === "aborted", "the former's compile ended canceled");
+      await sleep(300);
+      assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.activity, "compiling", "the newcomer still reads compiling once the former's process ended");
+      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "second while compiling" }), { accepted: true, queued: true });
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named records nothing more");
+
+      // Only the newcomer's own cancel ends its compile; its process,
+      // too, ends when released.
+      await client.expectOk("compile.abort", { playbookId: "triage", projectId: other, instance: client.addresses.of("triage") });
+      writeFileSync(join(theirArtifacts, STUB_SLC_RELEASE_FILE), "");
+      const canceled = await theirs;
+      assert.ok(!canceled.ok && canceled.error.code === "aborted", "the newcomer's compile ended by its own cancel");
+      const ended = await endsIdle(client, other, 2);
+      assert.deepEqual(turnsOnDisk(promoted.records), ["first while compiling", "second while compiling"]);
+      assert.equal(ended.compile?.outcome, "canceled");
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session it named still records nothing");
+    } finally {
+      client.close();
+      await harness.service.stop();
+    }
+  });
+
+  await t.test("an enabling re-package released after the rescan with the newcomer idle", async () => {
+    const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+    const { projectId, clone, dir } = harness;
+    const kept = authoringFiles(clone, "triage");
+    const artifactDir = join(dir, "project", "spex-packages", "triage", "playbooks", "en", "triage");
+    const client = new Client(harness.service.port());
+    try {
+      await client.open();
+      await client.expectOk("draft.create", { projectId, draftId: "triage" });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+      const { other, promoted } = await shadowedByKept(client, harness);
+      await client.expectOk("draft.send", { projectId, draftId: "triage", text: "I want a playbook that triages new issues into labels." });
+      await until(() => {
+        const draft = client.latest("triage");
+        return draft?.activity === "idle" && draft.proposal !== undefined && draft.queued.length === 0;
+      }, 120_000, "the proposal");
+      const { reached, release } = holdRepackage(dir, artifactDir);
+      const registering = client.command("draft.register", {
+        projectId,
+        draftId: "triage",
+        command: "triage",
+        intent: "Label new issues",
+        bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
+        newPlayers: { "dev.triager": { adapter: "claude" } },
+      });
+      await until(() => existsSync(reached), 60_000, "the held re-package");
+
+      // The enabling is canceled and the id freed at the rescan: the
+      // newcomer reads idle and a message sent to it runs at once.
+      const keptTranscript = await promoteOther(client, harness, kept, other);
+      const named = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
+      assert.equal(named.draft.activity, "idle", "the id is free once the enabling of the session it no longer names is canceled");
+      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: "queued during the activity" }), { accepted: true, queued: false });
+      await until(() => turnsOnDisk(promoted.records).length > 0, 15_000, "the message to start at once");
+      assert.deepEqual(turnsOnDisk(promoted.records), ["queued during the activity"]);
+      writeFileSync(release, "");
+      const reply = await registering;
+      assert.equal(reply.ok ? "ok" : reply.error.message, "triage now names another authoring session");
+
+      // The release changes nothing for the newcomer: its turn ends and
+      // it stands idle with an empty queue, not enabled.
+      const ended = await endsIdle(client, other, 1);
+      assert.equal(ended.enabled, false);
+      assert.deepEqual(turnsOnDisk(promoted.records), ["queued during the activity"], "nothing else started");
+      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session the id no longer names records nothing more");
+    } finally {
+      client.close();
+      await harness.service.stop();
+    }
+  });
 });

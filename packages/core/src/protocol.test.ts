@@ -185,8 +185,15 @@ test("parseCommand accepts every draft command", () => {
   }
 });
 
+test("parseCommand accepts compile.abort bare or naming a session's project and instance (core-service-96)", () => {
+  assert.ok(parseCommand({ type: "compile.abort", id: "a1", playbookId: "triage" }).ok);
+  assert.ok(parseCommand({ type: "compile.abort", id: "a2", playbookId: "triage", projectId: "alice/a-spex", instance: "i-1" }).ok);
+  assert.ok(!parseCommand({ type: "compile.abort", id: "a3", playbookId: "triage", projectId: "not a key", instance: "i-1" }).ok);
+  assert.ok(!parseCommand({ type: "compile.abort", id: "a4", playbookId: "triage", instance: "" }).ok);
+});
+
 test("parseCommand rejects a session command without its instance; the bootstrap needs none (core-service-96)", () => {
-  for (const command of commands_without_instance()) {
+  for (const command of commandsWithoutInstance()) {
     const parsed = parseCommand(command);
     assert.ok(!parsed.ok, String(command.type));
     if (!parsed.ok) assert.match(parsed.error, /instance/);
@@ -196,7 +203,7 @@ test("parseCommand rejects a session command without its instance; the bootstrap
   assert.ok(parseCommand({ type: "draft.list", id: "b3" }).ok);
 });
 
-function commands_without_instance(): Record<string, unknown>[] {
+function commandsWithoutInstance(): Record<string, unknown>[] {
   const at = { projectId: "alice/a-spex", draftId: "triage" };
   return [
     { type: "draft.send", id: "n1", ...at, text: "x" },

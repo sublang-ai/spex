@@ -436,6 +436,10 @@ export class CoreService {
   private readonly store: Store;
   private readonly approvals = new ApprovalBroker((state) => this.broadcast({type: "approval.state", state}));
   private readonly sessions: SessionManager;
+  /** This run of the core, named in every hello (core-service-1): a
+   * client reconnecting under another knows the core restarted and every
+   * authoring session instance was minted again. */
+  private readonly bootId = randomUUID();
   /** Authoring sessions and their conversations (DR-058). */
   private readonly authors: AuthorManager;
   private readonly drafts: DraftStore;
@@ -693,7 +697,7 @@ export class CoreService {
     };
     this.authors.events.onState = (draft) => this.broadcast({ type: "draft.state", draft });
     this.authors.events.onSource = (message) => this.broadcast(message);
-    this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
+    this.authors.events.onProgress = (draftId, line, instance) => this.broadcast({ type: "compile.progress", playbookId: draftId, line, ...(instance !== undefined ? { instance } : {}) });
     this.authors.events.onRemoved = (draftId, projectId, instance) => this.broadcast({ type: "draft.removed", draftId, projectId, instance });
     this.media = new ApplicationMedia({
       home: this.store.dir,
@@ -1781,6 +1785,7 @@ export class CoreService {
         type: "hello",
         protocolVersion: PROTOCOL_VERSION,
         coreVersion: CORE_VERSION,
+        bootId: this.bootId,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
     });
@@ -2476,6 +2481,15 @@ export class CoreService {
         }
       }
       case "compile.abort": {
+        // A cancel of an authoring session's compile names the session
+        // and is admitted by its instance (core-service-96); a bare one
+        // ends whatever compile holds the id.
+        if (command.projectId !== undefined || command.instance !== undefined) {
+          this.authors.admit(command.playbookId, {
+            ...(command.projectId !== undefined ? { projectId: command.projectId } : {}),
+            ...(command.instance !== undefined ? { instance: command.instance } : {}),
+          });
+        }
         const controller = this.activeCompiles.get(command.playbookId);
         if (!controller) {
           throw new CoreError(
@@ -2495,6 +2509,7 @@ export class CoreService {
           type: "compile.progress",
           playbookId: command.playbookId,
           line: "◇ compile canceled",
+          ...(command.instance !== undefined ? { instance: command.instance } : {}),
         });
         return null;
       }
@@ -2884,8 +2899,13 @@ export class CoreService {
       case "draft.delete":
         this.requireDraft(command.projectId, command.draftId, command.instance);
         this.authors.assertDeletable(command.draftId);
+        // The drain is an await the deletion's write crosses: the
+        // instance is admitted again after it (core-service-96).
         await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId}, () => this.authors.delete(command.draftId),
-          () => this.authors.assertDeletable(command.draftId));
+          () => {
+            this.requireDraft(command.projectId, command.draftId, command.instance);
+            this.authors.assertDeletable(command.draftId);
+          });
         return null;
       case "draft.artifacts": {
         this.requireDraft(command.projectId, command.draftId, command.instance);

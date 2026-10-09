@@ -126,7 +126,9 @@ export interface AuthorManagerEvents {
   onRecord: (draftId: string, instance: string, record: DraftRecord) => void;
   onState: (draft: DraftInfo) => void;
   onSource: (message: DraftSourceMessage) => void;
-  onProgress: (draftId: string, line: string) => void;
+  /** A compile's progress line, with the instance whose compile wrote
+   * it; a `compile.run`'s lines name none. */
+  onProgress: (draftId: string, line: string, instance?: string) => void;
   /** An instance left (core-service-96): the id, the project that held
    * it, and the instance itself. */
   onRemoved: (draftId: string, projectId: string, instance: string) => void;
@@ -390,6 +392,9 @@ export class AuthorManager {
     if (held !== undefined && (held === live.compile?.controller || held === live.enabling?.controller)) {
       this.options.activeCompiles.delete(id);
     }
+    // The player preference is keyed by the bare id: it leaves with the
+    // instance, so a successor never answers as the former's player.
+    this.options.store.deletePref(`authoring:${id}:player`);
     this.events.onRemoved(id, former, live.instance);
     if (this.drafts.exists(id)) this.released(id);
   }
@@ -848,6 +853,10 @@ export class AuthorManager {
         }),
       );
     }
+    // A live entry still standing under the id — its record gone out of
+    // band, no rescan yet — departs first, through the one path
+    // (playbook-library-70).
+    if (this.live.has(id)) this.forget(id, this.drafts.projectOf(id) ?? location.key);
     let draft: StoredDraft;
     try {
       draft = this.drafts.create(id, this.now(), location, this.options.org());
@@ -855,7 +864,6 @@ export class AuthorManager {
       throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));
     }
     // A new session is a new instance (core-service-96).
-    this.live.delete(id);
     const live = this.liveOf(id);
     live.records = [];
     live.seq = 0;
@@ -1671,7 +1679,7 @@ export class AuthorManager {
           if (line.startsWith("running:")) sawCompiler = true;
           if (line.startsWith("packaging:")) sawPackaging = true;
           lines.push(line);
-          this.events.onProgress(id, line);
+          this.events.onProgress(id, line, live.instance);
         },
       });
       settled = { outcome: "ok", roles: result.roles };

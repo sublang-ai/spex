@@ -399,7 +399,11 @@ export interface AppState extends AttachmentState {
   previewPublish(repository: string, path: string): Promise<PublishPreview>;
   publishSpecPackage(repository: string, path: string): Promise<void>;
 
-  listDrafts(): Promise<void>;
+  /** Read the authoring sessions: the bootstrap that adopts each one's
+   * instance (playbook-library-98); `restarted` names a reconnection to
+   * a restarted core, whose listing continues a held session under the
+   * instance the new run minted (playbook-library-101). */
+  listDrafts(options?: { restarted?: boolean }): Promise<void>;
   /** Create a draft in the spex repository of the workspace's current
    * project, else the first registered one, and open its workspace;
    * the core refuses an id a configured playbook or built-in holds.
@@ -840,6 +844,13 @@ const refoldPending = new Set<string>();
 /** Drafts with a draft.open replay in flight: live draft.record
  * messages buffer here and apply after the replay, in seq order. */
 const draftBackfilling = new Map<string, DraftRecord[]>();
+
+/** The run of the core the last hello named (core-service-1), and
+ * whether the current connection's hello named another: a reconnection
+ * to a restarted core, whose listing continues each held authoring
+ * session under a new instance (playbook-library-101). */
+let coreRun: string | undefined;
+let coreRestarted = false;
 
 export function getClient(): SpexClient {
   if (!client) throw new Error(i18n._("client not connected"));
@@ -1299,9 +1310,12 @@ export const useAppStore = create<AppState>((set, get) => {
    * store no longer holds the instance under the id, so the act and its
    * caller write nothing (playbook-library-98). */
   function assertHeld(draftId: string, instance: string): void {
-    if (!holds(draftId, instance)) {
-      throw Object.assign(new Error(i18n._("This draft now names another session.")), { code: "retired" });
-    }
+    if (!holds(draftId, instance)) throw retired();
+  }
+
+  /** The error an act is told once its instance is no longer held. */
+  function retired(): Error {
+    return Object.assign(new Error(i18n._("This draft now names another session.")), { code: "retired" });
   }
 
   /** Read the playbook lists again where they were read before. */
@@ -1345,6 +1359,10 @@ export const useAppStore = create<AppState>((set, get) => {
         // A new authenticated connection establishes which core generation
         // may publish authority; history and old sockets establish none.
         set({approvals: undefined});
+        // The run the hello names tells a reconnection to a restarted
+        // core from one to the same run (playbook-library-101).
+        coreRestarted = coreRun !== undefined && coreRun !== message.bootId;
+        coreRun = message.bootId;
         break;
       case "approval.state": {
         const previous = get().approvals;
@@ -1391,6 +1409,9 @@ export const useAppStore = create<AppState>((set, get) => {
         applyLanguageChoice(message.language);
         break;
       case "compile.progress": {
+        // A draft compile's line names its instance: one not held under
+        // the id is dropped at the boundary (playbook-library-98).
+        if (message.instance !== undefined && !holds(message.playbookId, message.instance)) break;
         const progress = get().compileProgress;
         const times = get().compileProgressAt;
         set({
@@ -1836,8 +1857,10 @@ export const useAppStore = create<AppState>((set, get) => {
       // re-subscribes under it and reloads from its first record,
       // keeping its composer, Source edits and Enable form
       // (playbook-library-101).
+      const restarted = coreRestarted;
+      coreRestarted = false;
       await get()
-        .listDrafts()
+        .listDrafts({ restarted })
         .catch(() => {});
       for (const draftId of Object.keys(get().draftViews)) {
         await ensureDraftSubscribed(draftId, true).catch(() => {});
@@ -2585,20 +2608,22 @@ export const useAppStore = create<AppState>((set, get) => {
     // Playbook drafts (DR-058)
     // -----------------------------------------------------------------
 
-    async listDrafts(): Promise<void> {
+    async listDrafts(options): Promise<void> {
       const listed = await getClient().command("draft.list", {});
       const drafts = Object.fromEntries(
         (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
       );
       // The listing is a bootstrap (playbook-library-98): an id left
-      // out names no session, and nothing of the one it named stays; an
-      // id named under another project with another instance is another
-      // session; one named under the project the store holds it in is
-      // the held session continued — across a reconnect its instance is
-      // new and its state stays (playbook-library-101).
+      // out names no session, and nothing of the one it named stays;
+      // another instance under a held id is the former's departure —
+      // except, on a reconnection to a restarted core, a session named
+      // under the project the store holds it in, which is the held
+      // session continued under the instance the new run minted
+      // (playbook-library-101).
       for (const [draftId, held] of Object.entries(get().drafts)) {
         const named = drafts[draftId];
-        if (!named || (named.instance !== held.instance && named.projectId !== held.projectId)) forgetDraft(draftId);
+        const continued = options?.restarted === true && named?.projectId === held.projectId;
+        if (!named || (named.instance !== held.instance && !continued)) forgetDraft(draftId);
       }
       set({ drafts, draftsLoaded: true });
     },
@@ -2607,6 +2632,10 @@ export const useAppStore = create<AppState>((set, get) => {
       const projectId = workingProject(get());
       if (!projectId) throw new Error(draftNeedsProject());
       const draft = await getClient().command("draft.create", { projectId, draftId });
+      // A creation is a bootstrap: an instance held under the id before
+      // it departs first (playbook-library-98).
+      const held = get().drafts[draft.id];
+      if (held && held.instance !== draft.instance) forgetDraft(draft.id);
       set({ drafts: { ...get().drafts, [draft.id]: draft } });
       await get().openDraft(draft.id);
       return draft;
@@ -2710,6 +2739,7 @@ export const useAppStore = create<AppState>((set, get) => {
         // applies only while that instance is held.
         assertHeld(draftId, instance);
       }
+      if (reply.draft.instance !== instance) throw retired();
       const source = reply.source
         ? { markdown: reply.source.markdown, version: reply.source.version, mtime: reply.source.mtime }
         : null;
@@ -2743,11 +2773,12 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async abortDraftCompile(draftId: string): Promise<void> {
-      const instance = get().drafts[draftId]?.instance;
+      // The cancel names the session it is for (core-service-96).
+      const address = addressOf(draftId);
       try {
-        await getClient().command("compile.abort", { playbookId: draftId });
+        await getClient().command("compile.abort", { playbookId: draftId, ...address });
       } catch (cause) {
-        if (instance !== undefined && !holds(draftId, instance)) return;
+        if (!holds(draftId, address.instance)) return;
         setDraftError(
           draftId,
           i18n._("cancel failed: {reason}", {
