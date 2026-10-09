@@ -123,25 +123,42 @@ export interface AuthorManagerOptions {
 }
 
 export interface AuthorManagerEvents {
-  onRecord: (draftId: string, record: DraftRecord) => void;
+  onRecord: (draftId: string, instance: string, record: DraftRecord) => void;
   onState: (draft: DraftInfo) => void;
   onSource: (message: DraftSourceMessage) => void;
-  onProgress: (draftId: string, line: string) => void;
-  onRemoved: (draftId: string, projectId: string) => void;
-  /** A re-read found the transcript changed: its records whole. */
-  onHistoryReplaced: (draftId: string, projectId: string, records: DraftRecord[]) => void;
+  /** A compile's progress line, with the instance whose compile wrote
+   * it; a `compile.run`'s lines name none. */
+  onProgress: (draftId: string, line: string, instance?: string) => void;
+  /** An instance left (core-service-96): the id, the project that held
+   * it, and the instance itself. */
+  onRemoved: (draftId: string, projectId: string, instance: string) => void;
+  /** A re-read found the transcript changed: its records whole, under
+   * the instance that stands. */
+  onHistoryReplaced: (draftId: string, instance: string, projectId: string, records: DraftRecord[]) => void;
 }
 
 type TurnOrigin =
   | ({ kind: "boss"; preface?: string } & MessageContent)
   | { kind: "system"; label: string; text: string };
 
+/** One live authoring session: the owner of its lifetime (core-service-96).
+ * The manager holds one per id while the id names a session; the entry
+ * is made when the session is created or first described and deleted
+ * when the session departs, so holding the entry is holding the
+ * instance, and `owns` tells a departed instance from the one the id
+ * names now. */
 interface LiveDraft {
+  /** The instance token every command of the session names and every
+   * message about it carries: minted with the entry, kept across a
+   * replaced transcript and a moved clone. */
+  instance: string;
   records?: DraftRecord[];
   seq: number;
   /** Set before the runner starts, so a message arriving next queues. */
   turn?: { controller: AbortController; done?: Promise<void> };
   compile?: { controller: AbortController; done?: Promise<CompileSettled>; by: "boss" | "agent" };
+  /** The enabling's re-package, holding the id as a compile does. */
+  enabling?: { controller: AbortController };
   /** The provider token the previous turn of this run returned, with
    * the agent it belongs to — never written (playbook-library-64). */
   resume?: { key: string; token: string };
@@ -346,31 +363,60 @@ export class AuthorManager {
   private readonly problems = new Map<string, StorageDiagnostic>();
   private readonly now: () => number;
   private stopping = false;
-  /** The id a Delete is retiring: it announces its own departure. */
-  private deleting: string | undefined;
 
   constructor(private readonly options: AuthorManagerOptions) {
     this.now = options.now ?? Date.now;
     options.drafts.onKeptChanged = (id, former) => this.forget(id, former);
   }
 
-  /** A rescan gave the id another session, or none (storage-12): what
-   * was read from the one before goes, and a turn, compile or enabling
-   * re-package still running for it is aborted or canceled; nothing of
-   * it reaches the session the id now names (playbook-library-70). The
-   * departure is announced naming the former session's project, then
-   * the session now holding the id (core-service-96). */
+  /** The one departure of an instance (core-service-96): a rescan — one
+   * follows every deletion, a project's removal and a sync — left the
+   * id naming another session or none (storage-12). The instance ends:
+   * a turn running for it is aborted, a compile or an enabling
+   * re-package of it canceled and its hold on the id released — never a
+   * `compile.run`'s — so nothing it later records or settles reaches the
+   * session the id now names (playbook-library-70). The departure is
+   * announced naming the former project and instance, then the session
+   * now holding the id is published under its own instance and
+   * dispatches its queue, the id being free (playbook-library-102). */
   private forget(id: string, former: string): void {
-    const live = this.live.get(id);
-    live?.turn?.controller.abort();
-    live?.compile?.controller.abort();
-    // The enabling re-package holds its marker alone (register).
-    this.options.activeCompiles.get(id)?.abort();
+    // A session never described in this run still departs under an
+    // instance, so the announcement names one.
+    const live = this.liveOf(id);
     this.live.delete(id);
     this.problems.delete(id);
-    if (this.deleting === id) return;
-    this.events.onRemoved(id, former);
-    if (this.drafts.exists(id)) this.publish(id);
+    live.turn?.controller.abort();
+    live.compile?.controller.abort();
+    live.enabling?.controller.abort();
+    const held = this.options.activeCompiles.get(id);
+    if (held !== undefined && (held === live.compile?.controller || held === live.enabling?.controller)) {
+      this.options.activeCompiles.delete(id);
+    }
+    // The player preference is keyed by the bare id: it leaves with the
+    // instance, so a successor never answers as the former's player.
+    this.options.store.deletePref(`authoring:${id}:player`);
+    this.events.onRemoved(id, former, live.instance);
+    if (this.drafts.exists(id)) this.released(id);
+  }
+
+  /** Whether `live` is the instance the id names now: every write and
+   * settle of an operation re-checks this across its awaits, so an
+   * operation of a departed instance touches nothing (core-service-96). */
+  private owns(id: string, live: LiveDraft): boolean {
+    return this.live.get(id) === live;
+  }
+
+  /** Admit a command or a subscription addressed to a session
+   * (core-service-96): `not_found` for an id no session of the named
+   * project holds, and `not_found` naming the id as another session's
+   * for an instance the session the id names does not hold. */
+  admit(id: string, address: { projectId?: string; instance?: string }): void {
+    if (!this.drafts.exists(id) || (address.projectId !== undefined && this.drafts.projectOf(id) !== address.projectId)) {
+      throw new CoreError("not_found", noDraft(id));
+    }
+    if (address.instance !== undefined && this.liveOf(id).instance !== address.instance) {
+      throw new CoreError("not_found", nowNamesAnother(id));
+    }
   }
 
   /** A sync applied the spex repository (space-20): each of its
@@ -394,7 +440,7 @@ export class AuthorManager {
         if (JSON.stringify(records) !== JSON.stringify(held)) live.resume = undefined;
         const served = live.damaged ? [] : records;
         if (JSON.stringify(served) !== JSON.stringify(servedBefore)) {
-          this.events.onHistoryReplaced(id, repository, [...served]);
+          this.events.onHistoryReplaced(id, live.instance, repository, [...served]);
         }
       }
       this.publish(id);
@@ -489,7 +535,7 @@ export class AuthorManager {
 
   activity(id: string): DraftInfo["activity"] {
     const live = this.live.get(id);
-    return live?.turn ? "turn" : live?.compile || this.options.activeCompiles.has(id) ? "compiling" : "idle";
+    return live?.turn ? "turn" : live?.compile || live?.enabling || this.options.activeCompiles.has(id) ? "compiling" : "idle";
   }
 
   describe(id: string): DraftInfo {
@@ -557,6 +603,7 @@ export class AuthorManager {
     return {
       id,
       projectId: this.drafts.projectOf(id) ?? "",
+      instance: live.instance,
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
       firstLine: source ? firstLineOf(source.markdown) : null,
@@ -612,6 +659,7 @@ export class AuthorManager {
     return {
       id,
       projectId: this.drafts.projectOf(id) ?? "",
+      instance: this.liveOf(id).instance,
       createdAt: at,
       touchedAt: at,
       firstLine: source ? firstLineOf(source.markdown) : null,
@@ -629,10 +677,14 @@ export class AuthorManager {
     };
   }
 
+  /** The live entry of the session the id names, made with a fresh
+   * instance where none stands: at a creation, at the first description
+   * of a session found on disk, and for the session a rescan promoted
+   * once the former's entry went (core-service-96). */
   private liveOf(id: string): LiveDraft {
     let live = this.live.get(id);
     if (!live) {
-      live = { seq: 0, changes: [], malformed: [] };
+      live = { instance: randomUUID(), seq: 0, changes: [], malformed: [] };
       this.live.set(id, live);
     }
     return live;
@@ -697,14 +749,14 @@ export class AuthorManager {
   // -- records --------------------------------------------------------------
 
   private append(id: string, live: LiveDraft, record: TmuxPlayRecord): DraftRecord {
-    // State the id no longer names records nothing (storage-12).
-    if (this.live.get(id) !== live) throw new Error(nowNamesAnother(id));
+    // An instance that departed records nothing (playbook-library-70).
+    if (!this.owns(id, live)) throw new Error(nowNamesAnother(id));
     this.recordsOf(id, live);
     if (live.damaged) throw new CoreError("invalid_request", live.damaged);
     live.seq += 1;
     const stored = this.drafts.append(id, live.seq, record);
     live.records?.push(stored);
-    this.events.onRecord(id, stored);
+    this.events.onRecord(id, live.instance, stored);
     return stored;
   }
 
@@ -754,12 +806,15 @@ export class AuthorManager {
   /** Read `<id>.md` and, when its digest differs from the last one
    * streamed, broadcast it (playbook-library-71). */
   refreshSource(id: string, live: LiveDraft = this.liveOf(id)): void {
+    // A departed instance never reads the file of the session the id
+    // names now.
+    if (!this.owns(id, live)) return;
     const source = this.drafts.readSource(id);
     const digest = source?.sha256 ?? null;
     if (live.lastSourceDigest === digest) return;
     live.lastSourceDigest = digest;
     if (source) {
-      this.events.onSource({ type: "draft.source", draftId: id, markdown: source.markdown, version: source.version, mtime: source.mtime });
+      this.events.onSource({ type: "draft.source", draftId: id, instance: live.instance, markdown: source.markdown, version: source.version, mtime: source.mtime });
     }
     // The chip may have moved: no source → draft, compiled → changed.
     this.publish(id);
@@ -768,9 +823,17 @@ export class AuthorManager {
   // -- commands -------------------------------------------------------------
 
   create(id: string, location: { key: string; authoringDir: string; workingFolder: string | null }): DraftInfo {
-    // An id naming a session already standing opens it: the page reads
-    // the conflict as "open it" (playbook-library-51).
+    // The id is the home's (storage-12): another project's session keeps
+    // it, and one of this project standing already opens — the page
+    // reads the conflict as "open it" (playbook-library-51).
     if (this.drafts.exists(id)) {
+      if (this.drafts.projectOf(id) !== location.key) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "{id} is already an authoring session of another project; pick another id",
+          values: { id },
+          comment: "Refusal: the id offered for a new playbook is another project's authoring session",
+        }));
+      }
       throw new CoreError(
         "conflict",
         i18n._({
@@ -790,12 +853,17 @@ export class AuthorManager {
         }),
       );
     }
+    // A live entry still standing under the id — its record gone out of
+    // band, no rescan yet — departs first, through the one path
+    // (playbook-library-70).
+    if (this.live.has(id)) this.forget(id, this.drafts.projectOf(id) ?? location.key);
     let draft: StoredDraft;
     try {
       draft = this.drafts.create(id, this.now(), location, this.options.org());
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));
     }
+    // A new session is a new instance (core-service-96).
     const live = this.liveOf(id);
     live.records = [];
     live.seq = 0;
@@ -952,10 +1020,10 @@ export class AuthorManager {
       }));
     }
     if (this.options.activeCompiles.has(id)) throw new CoreError("busy", compileRunning(id));
-    // The spex repository of the session this enabling serves.
-    const holder = this.drafts.projectOf(id);
+    const live = this.liveOf(id);
     const controller = new AbortController();
     this.options.activeCompiles.set(id, controller);
+    live.enabling = { controller };
     this.publish(id);
     try {
       let result: CompileResult | undefined;
@@ -976,14 +1044,16 @@ export class AuthorManager {
       } catch (error) {
         failure = error;
       }
-      // A rescan gave the id another session, or none, while it
-      // re-packaged, canceling it (forget): nothing is committed
-      // (playbook-library-70).
-      if (this.drafts.projectOf(id) !== holder) throw new CoreError("invalid_request", nowNamesAnother(id));
+      // The instance departed while it re-packaged — canceled by forget:
+      // nothing is committed (playbook-library-70).
+      if (!this.owns(id, live)) throw new CoreError("invalid_request", nowNamesAnother(id));
       if (result === undefined) throw new CoreError("invalid_request", failure instanceof Error ? failure.message : String(failure));
       return await commit(result, { packageDir, packagePath: this.drafts.packagePath(id), workingFolder });
     } finally {
-      this.options.activeCompiles.delete(id);
+      // Only this enabling's hold on the id goes: the session the id
+      // names now may hold it itself (playbook-library-70).
+      if (this.options.activeCompiles.get(id) === controller) this.options.activeCompiles.delete(id);
+      if (live.enabling?.controller === controller) live.enabling = undefined;
       // Whatever its outcome, the enabling's end frees the id: the
       // session it names now dispatches its queue (playbook-library-102).
       this.released(id);
@@ -1053,23 +1123,15 @@ export class AuthorManager {
     this.assertIdle(id);
   }
 
+  /** Remove the session: its preference first, so the session another
+   * project's clone holds under the id, promoted by the store's rescan,
+   * is described without it; the rescan ends the instance and announces
+   * its departure (forget), then the session now holding the id
+   * (storage-12, core-service-96). */
   delete(id: string): void {
     this.assertDeletable(id);
-    const projectId = this.drafts.projectOf(id) ?? "";
-    // Its departure is announced below, once the preference is gone.
-    this.deleting = id;
-    try {
-      this.drafts.delete(id);
-    } finally {
-      this.deleting = undefined;
-    }
     this.options.store.deletePref(`authoring:${id}:player`);
-    this.live.delete(id);
-    this.problems.delete(id);
-    this.events.onRemoved(id, projectId);
-    // Another project's session of the id, shadowed until now, is
-    // listed in its place (storage-12).
-    if (this.drafts.exists(id)) this.publish(id);
+    this.drafts.delete(id);
   }
 
   private assertIdle(id: string): void {
@@ -1191,17 +1253,25 @@ export class AuthorManager {
         break;
       }
     } catch (error) {
-      this.runtimeError(id, live, error instanceof Error ? error.message : String(error), turnId);
-    } finally {
-      this.refreshSource(id, live);
-      // The Boss's Abort and the core's own stop both end the turn; the
-      // record says which (DR-051).
-      const reason = this.stopping ? "interrupted when Spex closed" : "aborted by the Boss";
-      this.append(id, live, aborted
-        ? ({ type: "turn_aborted", turnId, timestamp: this.now(), reason } as TmuxPlayRecord)
-        : ({ type: "turn_finished", turnId, timestamp: this.now() } as TmuxPlayRecord));
-      if (live.turn?.controller === controller) live.turn = undefined;
+      try {
+        if (this.owns(id, live)) this.runtimeError(id, live, error instanceof Error ? error.message : String(error), turnId);
+      } catch {
+        // A transcript that will not take the line: the closing record
+        // below reports the same failure.
+      }
     }
+    if (live.turn?.controller === controller) live.turn = undefined;
+    // A turn of an instance that departed closes quietly: its records
+    // went with it, and the session the id names now is not its to
+    // touch (playbook-library-70).
+    if (!this.owns(id, live)) return;
+    this.refreshSource(id, live);
+    // The Boss's Abort and the core's own stop both end the turn; the
+    // record says which (DR-051).
+    const reason = this.stopping ? "interrupted when Spex closed" : "aborted by the Boss";
+    this.append(id, live, aborted
+      ? ({ type: "turn_aborted", turnId, timestamp: this.now(), reason } as TmuxPlayRecord)
+      : ({ type: "turn_finished", turnId, timestamp: this.now() } as TmuxPlayRecord));
     // The turn is over: its directives act (playbook-library-66), then
     // the queue dispatches if nothing started (playbook-library-102).
     if (reply !== undefined) this.actOnReply(id, live, reply);
@@ -1609,7 +1679,7 @@ export class AuthorManager {
           if (line.startsWith("running:")) sawCompiler = true;
           if (line.startsWith("packaging:")) sawPackaging = true;
           lines.push(line);
-          this.events.onProgress(id, line);
+          this.events.onProgress(id, line, live.instance);
         },
       });
       settled = { outcome: "ok", roles: result.roles };
@@ -1641,14 +1711,15 @@ export class AuthorManager {
         };
       }
     } finally {
-      this.options.activeCompiles.delete(id);
+      // Only this compile's hold on the id goes (playbook-library-70).
+      if (this.options.activeCompiles.get(id) === controller) this.options.activeCompiles.delete(id);
       if (live.compile?.controller === controller) live.compile = undefined;
     }
     if (this.stopping) return settled;
-    // A rescan gave the id another session, or none: the outcome is the
-    // session's it no longer names and records nothing; the id's state
-    // reads its compile over (playbook-library-70).
-    if (this.live.get(id) !== live) {
+    // The instance departed: the outcome is a session's the id no longer
+    // names and records nothing; the id's state reads its compile over
+    // (playbook-library-70).
+    if (!this.owns(id, live)) {
       // The id is free again: the session it names now dispatches its
       // own queue, bare (playbook-library-102).
       this.released(id);

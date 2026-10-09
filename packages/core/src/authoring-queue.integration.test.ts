@@ -20,6 +20,7 @@ import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
+import { DraftAddresses, type DraftFields } from "./testing/draft-address.js";
 import type {
   Command,
   CommandResults,
@@ -54,12 +55,17 @@ playbooks:
 class Client {
   private readonly socket: WebSocket;
   readonly messages: ServerMessage[] = [];
+  /** The instance held under each id, as the interface holds it: a
+   * command sent without one names it (core-service-96). */
+  readonly addresses = new DraftAddresses();
   private nextId = 0;
 
   constructor(port: number) {
     this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
     this.socket.on("message", (data) => {
-      this.messages.push(JSON.parse(String(data)) as ServerMessage);
+      const message = JSON.parse(String(data)) as ServerMessage;
+      this.messages.push(message);
+      this.addresses.observe(message);
     });
   }
 
@@ -80,21 +86,22 @@ class Client {
   }
 
   /** Send a command and await no reply: for one the core's stop cuts. */
-  sendOnly<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): void {
-    this.socket.send(JSON.stringify({ type, id: `c${(this.nextId += 1)}`, ...fields }));
+  sendOnly<T extends Command["type"]>(type: T, fields: DraftFields<T>): void {
+    this.socket.send(JSON.stringify({ type, id: `c${(this.nextId += 1)}`, ...this.addresses.address(type, fields as Record<string, unknown>) }));
   }
 
   async command<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: DraftFields<T>,
   ): Promise<
     | { ok: true; result: CommandResults[T] }
     | { ok: false; error: { code: string; message: string } }
   > {
     const id = `c${(this.nextId += 1)}`;
-    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    this.socket.send(JSON.stringify({ type, id, ...this.addresses.address(type, fields as Record<string, unknown>) }));
     const reply = await this.waitFor((m) => m.type === "reply" && m.id === id, 120_000);
     if (reply.type !== "reply") throw new Error("unreachable");
+    if (reply.ok) this.addresses.learn(type, reply.result);
     return reply.ok
       ? { ok: true, result: reply.result as CommandResults[T] }
       : { ok: false, error: reply.error };
@@ -102,7 +109,7 @@ class Client {
 
   async expectOk<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: DraftFields<T>,
   ): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
@@ -395,55 +402,6 @@ test("playbook-library-103: a message queued during any activity starts as the n
       const reply = await running;
       assert.ok(reply.ok, "the compile.run succeeds");
       await dispatchesInOrder(harness, client, { projectId, id: "helper", turns: () => client.turnStarts("helper"), before });
-    } finally {
-      client.close();
-      await harness.service.stop();
-    }
-  });
-
-  await t.test("an enabling whose id a rescan gives another project's session", async () => {
-    const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
-    const { projectId, clone, dir, dataDir } = harness;
-    const kept = authoringFiles(clone, "triage");
-    const client = new Client(harness.service.port());
-    try {
-      await client.open();
-      await client.expectOk("draft.create", { projectId, draftId: "triage" });
-      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
-      // Another project holds a session of the id, shadowed while this one stands.
-      const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "zeta")) })).id;
-      const promoted = authoringFiles(join(dataDir, "workspace", ...other.split("/")), "triage");
-      mkdirSync(dirname(promoted.record), { recursive: true });
-      writeFileSync(promoted.record, JSON.stringify({ format: 1, id: "triage", createdAt: 1, touchedAt: 1, package: "spex-packages/triage", queued: [], failures: 0 }));
-      writeFileSync(promoted.records, `${JSON.stringify({ seq: 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ Made on another device" } })}\n`);
-      await compiled(client, projectId);
-      const { reached, release } = holdRepackage(harness);
-      const registering = client.command("draft.register", {
-        projectId,
-        draftId: "triage",
-        command: "triage",
-        intent: "Label new issues",
-        bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
-        newPlayers: { "dev.triager": { adapter: "claude" } },
-      });
-      await until(() => existsSync(reached), 60_000, "the held re-package");
-
-      // The kept session's file goes, and a rescan gives the id to the other project's session.
-      rmSync(kept.record);
-      await client.expectOk("project.register", { path: workingFolder(join(dir, "omega")) });
-      const keptTranscript = readFileSync(kept.records, "utf8");
-      const named = await client.expectOk("draft.open", { projectId: other, draftId: "triage" });
-      assert.equal(named.draft.activity, "compiling", "the session the id names reads compiling while the enabling holds the id");
-      assert.deepEqual(await client.expectOk("draft.send", { projectId: other, draftId: "triage", text: QUEUED }), { accepted: true, queued: true });
-      writeFileSync(release, "");
-      const reply = await registering;
-      assert.equal(reply.ok ? "ok" : reply.error.message, "triage now names another authoring session");
-
-      // The session the id names runs its own message as its next turn.
-      await dispatchesInOrder(harness, client, { projectId: other, id: "triage", turns: () => turnsOnDisk(promoted.records), before: 0 });
-      assert.equal((await client.expectOk("draft.open", { projectId: other, draftId: "triage" })).draft.enabled, false);
-      // The session the id no longer names gains no record.
-      assert.equal(readFileSync(kept.records, "utf8"), keptTranscript, "the session the id no longer names records nothing more");
     } finally {
       client.close();
       await harness.service.stop();

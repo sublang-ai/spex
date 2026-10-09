@@ -282,7 +282,7 @@ interface QueueHandoff {
 
 function channelKey(channel: Channel): string {
   return channel.kind === "draft"
-    ? `draft:${channel.draftId}`
+    ? `draft:${channel.draftId}:${channel.instance}`
     : `${channel.kind}:${channel.sessionId}`;
 }
 
@@ -436,6 +436,10 @@ export class CoreService {
   private readonly store: Store;
   private readonly approvals = new ApprovalBroker((state) => this.broadcast({type: "approval.state", state}));
   private readonly sessions: SessionManager;
+  /** This run of the core, named in every hello (core-service-1): a
+   * client reconnecting under another knows the core restarted and every
+   * authoring session instance was minted again. */
+  private readonly bootId = randomUUID();
   /** Authoring sessions and their conversations (DR-058). */
   private readonly authors: AuthorManager;
   private readonly drafts: DraftStore;
@@ -673,26 +677,28 @@ export class CoreService {
       enabled: (id) => this.draftEnabled(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
     });
-    this.authors.events.onRecord = (draftId, record) => {
-      const key = `draft:${draftId}`;
+    // A draft channel names an instance (core-service-96): a subscriber
+    // of an instance that left receives nothing of its successor.
+    this.authors.events.onRecord = (draftId, instance, record) => {
+      const key = `draft:${draftId}:${instance}`;
       for (const client of this.clients) {
         if (client.channels.has(key)) {
-          this.send(client.socket, { type: "draft.record", draftId, seq: record.seq, record: record.record });
+          this.send(client.socket, { type: "draft.record", draftId, instance, seq: record.seq, record: record.record });
         }
       }
     };
     // A transcript a re-read found changed reaches the same audience as
     // its records, whole, before anything appends (core-service-96).
-    this.authors.events.onHistoryReplaced = (draftId, projectId, records) => {
-      const key = `draft:${draftId}`;
+    this.authors.events.onHistoryReplaced = (draftId, instance, projectId, records) => {
+      const key = `draft:${draftId}:${instance}`;
       for (const client of this.clients) {
-        if (client.channels.has(key)) this.send(client.socket, { type: "draft.history-replaced", draftId, projectId, records });
+        if (client.channels.has(key)) this.send(client.socket, { type: "draft.history-replaced", draftId, instance, projectId, records });
       }
     };
     this.authors.events.onState = (draft) => this.broadcast({ type: "draft.state", draft });
     this.authors.events.onSource = (message) => this.broadcast(message);
-    this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
-    this.authors.events.onRemoved = (draftId, projectId) => this.broadcast({ type: "draft.removed", draftId, projectId });
+    this.authors.events.onProgress = (draftId, line, instance) => this.broadcast({ type: "compile.progress", playbookId: draftId, line, ...(instance !== undefined ? { instance } : {}) });
+    this.authors.events.onRemoved = (draftId, projectId, instance) => this.broadcast({ type: "draft.removed", draftId, projectId, instance });
     this.media = new ApplicationMedia({
       home: this.store.dir,
       directoryOf: (owner) => this.mediaDirectory(owner),
@@ -1779,6 +1785,7 @@ export class CoreService {
         type: "hello",
         protocolVersion: PROTOCOL_VERSION,
         coreVersion: CORE_VERSION,
+        bootId: this.bootId,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
     });
@@ -2264,11 +2271,10 @@ export class CoreService {
         return { aborted: this.sessions.abortTurn(command.sessionId) };
       case "subscribe": {
         if (command.channel.kind === "draft") {
-          // An unknown draft is refused as every draft command refuses
-          // it (core-service-96), never subscribed to in advance.
-          if (!this.authors.has(command.channel.draftId)) {
-            throw noDraft(command.channel.draftId);
-          }
+          // An unknown draft, or an instance the session the id names
+          // does not hold, is refused as every draft command refuses it
+          // (core-service-96), never subscribed to in advance.
+          this.authors.admit(command.channel.draftId, { instance: command.channel.instance });
         } else {
           this.requireKnownSession(command.channel.sessionId);
         }
@@ -2464,14 +2470,26 @@ export class CoreService {
             packageDir,
           });
         } finally {
-          this.activeCompiles.delete(command.playbookId);
-          this.compileHolders.delete(command.playbookId);
+          // Only this compile's hold on the id goes (playbook-library-70).
+          if (this.activeCompiles.get(command.playbookId) === controller) {
+            this.activeCompiles.delete(command.playbookId);
+            this.compileHolders.delete(command.playbookId);
+          }
           // The id is free: a session of it reads idle again and
           // dispatches its queue (playbook-library-102).
           this.authors.released(command.playbookId);
         }
       }
       case "compile.abort": {
+        // A cancel of an authoring session's compile names the session
+        // and is admitted by its instance (core-service-96); a bare one
+        // ends whatever compile holds the id.
+        if (command.projectId !== undefined || command.instance !== undefined) {
+          this.authors.admit(command.playbookId, {
+            ...(command.projectId !== undefined ? { projectId: command.projectId } : {}),
+            ...(command.instance !== undefined ? { instance: command.instance } : {}),
+          });
+        }
         const controller = this.activeCompiles.get(command.playbookId);
         if (!controller) {
           throw new CoreError(
@@ -2491,6 +2509,7 @@ export class CoreService {
           type: "compile.progress",
           playbookId: command.playbookId,
           line: "◇ compile canceled",
+          ...(command.instance !== undefined ? { instance: command.instance } : {}),
         });
         return null;
       }
@@ -2821,40 +2840,34 @@ export class CoreService {
         // The id names the spec package, the file and the command: the
         // Agent Skills name rule (playbook-library-51).
         if (!isSkillName(command.draftId)) throw invalidPlaybookId(command.draftId);
-        if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== project.id) {
-          throw new CoreError("invalid_request", i18n._({
-            id: "{id} is already an authoring session of another project; pick another id",
-            values: { id: command.draftId },
-            comment: "Refusal: the id offered for a new playbook is another project's authoring session",
-          }));
-        }
         return this.authors.create(command.draftId, { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path });
       }
       case "draft.open":
+        // The bootstrap: it hands the client the session's instance.
         this.requireDraft(command.projectId, command.draftId);
         return this.authors.open(command.draftId, command.afterSeq);
       case "draft.send": {
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         const owner = {kind: "draft" as const, projectId: command.projectId, id: command.draftId};
         await this.media.validate(owner, command.attachments ?? []);
         this.media.ownerStore(owner, true);
         return this.authors.send(command.draftId, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})});
       }
       case "draft.abort":
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         return this.authors.abort(command.draftId);
       case "draft.source.write":
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         return this.authors.writeSource(command.draftId, {
           ...(command.content !== undefined ? { content: command.content } : {}),
           ...(command.sourcePath !== undefined ? { sourcePath: command.sourcePath } : {}),
           ...(command.baseVersion !== undefined ? { baseVersion: command.baseVersion } : {}),
         });
       case "draft.compile":
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         return this.authors.compile(command.draftId);
       case "draft.register": {
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         if (!existsSync(this.configPath)) {
           throw new CoreError("invalid_config", i18n._({
             id: "config file is missing",
@@ -2881,16 +2894,21 @@ export class CoreService {
         );
       }
       case "draft.player.set":
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         return this.authors.setPlayer(command.draftId, command.playerId);
       case "draft.delete":
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         this.authors.assertDeletable(command.draftId);
+        // The drain is an await the deletion's write crosses: the
+        // instance is admitted again after it (core-service-96).
         await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId}, () => this.authors.delete(command.draftId),
-          () => this.authors.assertDeletable(command.draftId));
+          () => {
+            this.requireDraft(command.projectId, command.draftId, command.instance);
+            this.authors.assertDeletable(command.draftId);
+          });
         return null;
       case "draft.artifacts": {
-        this.requireDraft(command.projectId, command.draftId);
+        this.requireDraft(command.projectId, command.draftId, command.instance);
         // The compiled stages in the playbook artifact's folder of the
         // spec package under development (playbook-library-24).
         const artifactDir = this.drafts.artifactDir(command.draftId) ?? join(this.store.dir, "missing");
@@ -3195,10 +3213,11 @@ export class CoreService {
     return this.configState;
   }
 
-  /** An authoring session of the named project, or `not_found`
-   * (core-service-96). */
-  private requireDraft(projectId: string, draftId: string): void {
-    if (!this.authors.has(draftId) || this.drafts.projectOf(draftId) !== projectId) throw noDraft(draftId);
+  /** An authoring session of the named project, or `not_found`; with
+   * an instance, the one the session holds, else `not_found` naming the
+   * id as another session's (core-service-96). */
+  private requireDraft(projectId: string, draftId: string, instance?: string): void {
+    this.authors.admit(draftId, { projectId, ...(instance !== undefined ? { instance } : {}) });
   }
 
   /**
@@ -3226,6 +3245,9 @@ export class CoreService {
     for (const session of this.sessions.listSessions()) {
       if (moved.has(session.projectId)) this.broadcast({ type: "session.state", session });
     }
+    // A moved authoring session is the same instance at a new address:
+    // its state is announced under its new project (core-service-96).
+    this.authors.republish();
     this.queueLedgerChange(moves.flatMap((move) => [move.from, move.to]));
   }
 

@@ -890,6 +890,12 @@ export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
 export const playbookIdSchema = z.string().max(64).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 /** An authoring session's id is its playbook's (DR-058). */
 export const draftIdSchema = playbookIdSchema;
+/** An authoring session's instance (core-service-96): the token the
+ * core mints when the session is created and when a rescan gives its
+ * id another session, kept across a replaced transcript and a moved
+ * clone. Every command of a session but the bootstrap names the one it
+ * expects; every message about a session carries it. */
+export const draftInstanceSchema = z.string().min(1);
 
 /** Session channels carry a session's records; the draft channel
  * carries one draft's authoring records (DR-058). Drafts never enter
@@ -899,7 +905,7 @@ export const channelSchema = z.union([
     kind: z.enum(["session", "debug"]),
     sessionId: z.string().min(1),
   }),
-  z.object({ kind: z.literal("draft"), draftId: z.string().min(1) }),
+  z.object({ kind: z.literal("draft"), draftId: z.string().min(1), instance: draftInstanceSchema }),
 ]);
 export type Channel = z.infer<typeof channelSchema>;
 
@@ -1064,6 +1070,11 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("compile.abort"),
     id,
     playbookId: z.string().min(1),
+    /** A cancel of an authoring session's compile names the session
+     * (core-service-96): admitted as its other commands are. With
+     * neither, the cancel ends whatever compile holds the id. */
+    projectId: repositoryKeySchema.optional(),
+    instance: draftInstanceSchema.optional(),
   }),
   z.object({ type: z.literal("library.builtins"), id }),
   z.object({ type: z.literal("specs.get"), id, projectId: z.string().min(1) }),
@@ -1232,15 +1243,17 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     text: z.string(),
     attachments: mediaAttachmentsSchema.optional(),
   }),
-  z.object({ type: z.literal("draft.abort"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.abort"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
   z.object({
     type: z.literal("draft.source.write"),
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     /** In-app markdown text, or a picked file's path — one of the two. */
     content: z.string().optional(),
     sourcePath: z.string().min(1).optional(),
@@ -1248,12 +1261,13 @@ export const commandSchema = z.discriminatedUnion("type", [
      * mismatch is a conflict, and no token writes unconditionally. */
     baseVersion: z.string().min(1).optional(),
   }),
-  z.object({ type: z.literal("draft.compile"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.compile"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
   z.object({
     type: z.literal("draft.register"),
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     command: z.string().min(1),
     intent: z.string().min(1),
     /** derived role -> the session player that answers it (DR-032). */
@@ -1269,11 +1283,12 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     /** The roster player answering this draft; null = the Captain's block. */
     playerId: playerIdSchema.nullable(),
   }),
-  z.object({ type: z.literal("draft.delete"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
-  z.object({ type: z.literal("draft.artifacts"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.delete"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
+  z.object({ type: z.literal("draft.artifacts"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -1463,6 +1478,11 @@ export interface DraftInfo {
   /** The project whose spex repository holds this authoring session
    * (storage-23), named by its key. */
   projectId: string;
+  /** This session's instance (core-service-96): what every command of
+   * it names, and what tells a session deleted and created again
+   * under its id from the one before. A move keeps it; a replaced
+   * transcript keeps it. */
+  instance: string;
   createdAt: number;
   touchedAt: number;
   /** The source's first line, null with no source. */
@@ -1874,6 +1894,10 @@ export interface HelloMessage {
   type: "hello";
   protocolVersion: number;
   coreVersion: string;
+  /** A token naming this run of the core (core-service-1): a client
+   * reconnecting under another one knows the core restarted and every
+   * authoring session instance it held was minted again. */
+  bootId: string;
 }
 
 export type ReplyMessage =
@@ -1933,6 +1957,9 @@ export interface CompileProgressMessage {
   type: "compile.progress";
   playbookId: string;
   line: string;
+  /** The authoring session instance whose compile wrote the line
+   * (core-service-96); absent on a `compile.run`'s lines. */
+  instance?: string;
 }
 
 /** The ledger changed for these projects: an intents write landed, or
@@ -1972,6 +1999,7 @@ export interface SpaceStateMessage {
 export interface DraftRecordMessage {
   type: "draft.record";
   draftId: string;
+  instance: string;
   seq: number;
   record: TmuxPlayRecord;
 }
@@ -1988,6 +2016,7 @@ export interface DraftStateMessage {
 export interface DraftSourceMessage {
   type: "draft.source";
   draftId: string;
+  instance: string;
   markdown: string;
   version: string;
   mtime: number;
@@ -1999,17 +2028,21 @@ export interface DraftSourceMessage {
 export interface DraftHistoryReplacedMessage {
   type: "draft.history-replaced";
   draftId: string;
+  instance: string;
   projectId: string;
   records: DraftRecord[];
 }
 
 /** A draft left: deleted, its project removed, a sync removing it, or a
  * rescan giving its id another session (core-service-96): broadcast to
- * every client, which drops every trace of it. */
+ * every client, which drops every trace of that instance. */
 export interface DraftRemovedMessage {
   type: "draft.removed";
   projectId: string;
   draftId: string;
+  /** The instance that left; the session now holding the id, if any,
+   * follows as its own draft.state under another. */
+  instance: string;
 }
 
 export interface BrowserProgressMessage { type: "browser.progress"; operationId: string; progress: BrowserSetupProgress }

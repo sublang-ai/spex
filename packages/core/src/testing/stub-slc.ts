@@ -21,7 +21,7 @@ export const SLC_PHASES = ["normalize", "text2gears", "optimize", "prefix", "gea
 
 /** One scripted run's behavior: pass, fail at a phase, ask for
  * clarification, or stay in flight until killed. */
-export type StubSlcStep = "ok" | `fail:${string}` | "clarify" | "block";
+export type StubSlcStep = "ok" | `fail:${string}` | "clarify" | "block" | "linger";
 
 /** The release token a held stub waits for, beside the source: a
  * journey writes it to let the run past its first phase, and the stub
@@ -207,6 +207,19 @@ async function runStep(step) {
     progress("→ gears2fsm (writing " + base + ".playbook/" + base + ".fsm.ts)");
     setInterval(() => {}, 1000);
     return;
+  }
+  // A process that outlives its kill: the first phase opens, the
+  // kill is ignored, and the run ends — failed — only once the release
+  // token lands beside the source (playbook-library-100).
+  if (step === "linger") {
+    process.on("SIGTERM", () => {});
+    process.on("SIGINT", () => {});
+    progress("→ " + PHASES[0] + " (writing " + base + ".playbook/" + base + "." + PHASES[0] + ")");
+    const token = path.join(srcDir, RELEASE_FILE);
+    while (!fs.existsSync(token)) await wait(50);
+    fs.rmSync(token, { force: true });
+    progress("✗ " + PHASES[0] + " failed at " + base + ".playbook/" + base + "." + PHASES[0] + " (9s)");
+    process.exit(1);
   }
   throw new Error("unknown stub step " + step);
 }

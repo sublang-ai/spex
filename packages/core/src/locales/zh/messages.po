@@ -191,7 +191,7 @@ msgid "{id} is already a playbook of this project's or your own environment; pic
 msgstr "{id} 已是本项目或你自己的环境中的规程；请换一个 id"
 
 #. Refusal: the id offered for a new playbook is another project's authoring session
-#: src/service.ts
+#: src/authoring.ts
 msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} 已是另一个项目的编写会话；请换一个 id"
 

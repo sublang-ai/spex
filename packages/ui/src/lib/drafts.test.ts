@@ -22,6 +22,7 @@ function draft(overrides: Partial<DraftInfo>): DraftInfo {
   return {
     id: "triage",
     projectId: "me/demo-spex",
+    instance: "i-1",
     createdAt: t,
     touchedAt: t,
     firstLine: null,

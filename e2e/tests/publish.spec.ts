@@ -33,13 +33,14 @@ const PACKAGE = `${HOST_LOGIN}/${ID}`;
  * per role. */
 async function arrangeEnabled(app: App): Promise<void> {
   const projectId = app.projectId!;
-  await app.core.command("draft.create", { projectId, draftId: ID });
+  const { instance } = await app.core.command("draft.create", { projectId, draftId: ID });
   await app.core.command("draft.source.write", {
     projectId,
     draftId: ID,
+    instance,
     content: AUTHORING_SOURCE.replaceAll("<id>", ID),
   });
-  await app.core.command("draft.compile", { projectId, draftId: ID });
+  await app.core.command("draft.compile", { projectId, draftId: ID, instance });
   await expect
     .poll(async () => (await app.core.command("draft.list", {})).find((draft) => draft.id === ID)?.state, {
       timeout: 60_000,
@@ -48,6 +49,7 @@ async function arrangeEnabled(app: App): Promise<void> {
   await app.core.command("draft.register", {
     projectId,
     draftId: ID,
+    instance,
     command: ID,
     intent: "Triage a new issue into the repository's labels",
     bindings: { Triager: "dev.coder", Verifier: "dev.reviewer" },

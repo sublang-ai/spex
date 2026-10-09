@@ -251,14 +251,14 @@ export function AuthoringWorkspace({
     enable: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
-  // A file picked for this session lands nowhere once its id names
-  // another session (playbook-library-98): the project is captured
-  // before the pick.
+  // A file picked for this instance lands nowhere once the store no
+  // longer holds it under the id (playbook-library-98): the act holds
+  // its owner instance from before the pick.
   const pickFile = window.spexNative?.pickFile
     ? async () => {
-        const projectId = draft.projectId;
+        const instance = draft.instance;
         const picked = await window.spexNative!.pickFile!();
-        return useAppStore.getState().drafts[draftId]?.projectId === projectId ? picked : null;
+        return useAppStore.getState().drafts[draftId]?.instance === instance ? picked : null;
       }
     : undefined;
 

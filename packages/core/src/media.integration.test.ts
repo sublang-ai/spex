@@ -208,14 +208,14 @@ test("media-18: deleting and recreating a draft invalidates completed and incomp
     const project = await client.command("project.register", {path: f.project});
     owner = {...owner, projectId: project.id};
     const completed = request(), incomplete = request();
-    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
+    const made = await client.command("draft.create", {projectId: project.id, draftId: owner.id});
     for (const upload of [completed, incomplete]) {
       await client.command("media.begin", upload);
       await client.command("media.chunk", {uploadId: upload.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
     }
     const prior = await client.command("media.finish", {uploadId: completed.uploadId});
     await client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1});
-    await client.command("draft.delete", {projectId: project.id, draftId: owner.id});
+    await client.command("draft.delete", {projectId: project.id, draftId: owner.id, instance: made.instance});
     await client.command("draft.create", {projectId: project.id, draftId: owner.id});
     for (const upload of [completed, incomplete]) {
       await assert.rejects(client.command("media.begin", upload), /canceled|expired/);
