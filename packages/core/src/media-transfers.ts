@@ -58,11 +58,6 @@ export class MediaTransfers {
     this.timer.unref();
   }
 
-  /** The owner an upload in flight publishes into, for the write gate. */
-  ownerOf(uploadId: string): MediaUploadOwner | undefined {
-    return this.uploads.get(uploadId)?.request.owner;
-  }
-
   async begin(request: UploadRequest): Promise<MediaUploadState> {
     this.assertOpen();
     this.validate(request);
@@ -169,18 +164,9 @@ export class MediaTransfers {
     });
   }
 
-  /** Called under the application's owner-retirement gate, once the owner
-   * admits no new publication: wait for this owner's running transfers
-   * without invalidating them, so a refused removal leaves them resumable. */
-  async settleOwner(owner: MediaUploadOwner): Promise<void> {
-    await Promise.all([...this.uploads.values()]
-      .filter(({request}) => mediaOwnerKey(request.owner) === mediaOwnerKey(owner))
-      .map((upload) => upload.tail));
-  }
-
-  /** Called under the application's owner-retirement gate as its removal
-   * starts. Invalidation is synchronous; the returned promise drains any
-   * transfer still queued and removes its staging. */
+  /** Called as an owner's removal starts (media-17). Invalidation is
+   * synchronous; the returned promise removes each upload's staging once
+   * its queued transfer step ends, which the removal never waits for. */
   async retireOwner(owner: MediaUploadOwner): Promise<void> {
     const retiring = [...this.uploads.values()].filter(({request}) => mediaOwnerKey(request.owner) === mediaOwnerKey(owner));
     for (const upload of retiring) {

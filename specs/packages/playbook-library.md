@@ -36,7 +36,7 @@ While a spex repository's side of the Playbooks surface is shown, the surface sh
 | Install | `environment.install`, offered while files are missing |
 | Remove | removes a direct request behind an inline confirm reading "Remove" and "Keep" |
 
-- a change the core refuses shows its cause in place; every control is disabled while that spex repository syncs, naming the sync;
+- a change the core refuses shows its cause in place; a sync of that spex repository, or a resolve or install the core runs, disables no control, the core's own work reading in place as progress ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a stale lock reads "Requests changed; resolve again to install" and the last installed files stay in use.
 
 ### Enable and Disable
@@ -449,7 +449,7 @@ When an authoring turn starts, the conversation runner shall run the session's a
 
 - the block's `instruction` is not carried; the prompt composition carries everything [[playbook-library-65](#playbook-library-65)];
 - no instance outlives the turn ([DR-051](../decisions/051-runtime-held-for-a-turn.md)); the token is held in memory for the app's run and never written;
-- native media and large tool results are externalized through the shared owned-asset ingestion before recording [[media-6](media.md#media-6)]; earlier input files stay in the visible transcript and are not automatically resent on later turns;
+- native media and large tool results are externalized through the shared owned-asset ingestion [[media-17](media.md#media-17)] before recording [[media-6](media.md#media-6)]; earlier input files stay in the visible transcript and are not automatically resent on later turns;
 - a run ending in an error coded `SESSION_RESUME_REJECTED` is re-run once as a reseed;
 - legacy `permission_request` telemetry is recorded as a failure line and never answered, while a live `approval_request` on an authoring turn is answered only through the core's approval broker [[approvals-1](approvals.md#approvals-1)] and recorded as history;
 - the turn is recorded and streamed as `turn_started` carrying the Boss or system text, `player_prompt` with the exact prompt, one `player_event` per event, `player_finished`, and `turn_finished` or `turn_aborted`, every player record naming the player `author`, so the run view's transcript folds read them unchanged [[playbook-library-70](#playbook-library-70)].
@@ -603,7 +603,7 @@ Where fresh file modules use the current artifact schema with absent or noncurre
 
 #### playbook-library-94
 
-Where a scratch home holds a project whose environment requests a spec package from the stand-in registry and your own group's environment requests the built-in spec package, when the Playbooks surface renders each side and the suite drives its controls, the test suite shall assert: each side lists its spec packages with versions, sources, artifacts with languages and fallback marks, and installed state [[playbook-library-92](#playbook-library-92)]; the playbooks of both environments list once per origin with their enabled state per config [[playbook-library-1](#playbook-library-1)]; Add from registry searches the stand-in and requests the chosen version, Resolve again stands while the lock is stale with the stale phrase, Remove asks Remove or Keep, and every control is disabled during that spex repository's sync naming it [[playbook-library-92](#playbook-library-92)]; and a playbook enabled in neither config, one enabled in the project's and one in your own group's each read so [[playbook-library-1](#playbook-library-1)].
+Where a scratch home holds a project whose environment requests a spec package from the stand-in registry and your own group's environment requests the built-in spec package, when the Playbooks surface renders each side and the suite drives its controls, the test suite shall assert: each side lists its spec packages with versions, sources, artifacts with languages and fallback marks, and installed state [[playbook-library-92](#playbook-library-92)]; the playbooks of both environments list once per origin with their enabled state per config [[playbook-library-1](#playbook-library-1)]; Add from registry searches the stand-in and requests the chosen version, Resolve again stands while the lock is stale with the stale phrase, Remove asks Remove or Keep, and every control stays enabled during that spex repository's sync and while the core installs, its install reading as progress [[playbook-library-92](#playbook-library-92)]; and a playbook enabled in neither config, one enabled in the project's and one in your own group's each read so [[playbook-library-1](#playbook-library-1)].
 
 ### Binding Coverage
 

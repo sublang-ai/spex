@@ -153,9 +153,12 @@ export function readIntentFiles(intentsDir: string): { intents: IntentFile[]; pr
   return { intents, problems };
 }
 
-/** Write one intent file atomically, validating it first. */
+/** Write one intent file atomically, validating it first. The folder
+ * holding `intents/` must stand: a write never recreates a clone that
+ * moved or was removed (DR-111). */
 export function writeIntentFile(intentsDir: string, intent: IntentFile): void {
-  mkdirSync(intentsDir, { recursive: true });
+  try { mkdirSync(intentsDir); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const file = join(intentsDir, `${intent.id}.json`);
   writeApplicationFile(file, parseIntentFile(intent, file, intent.id));
 }

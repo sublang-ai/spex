@@ -6,7 +6,7 @@
 ## Status
 
 In progress (2026-10-10).
-DR-111 accepted; tasks 2 and 3 delivered, task 3 with the authoring sessions' busy refusals of task 4.
+DR-111 accepted; tasks 2, 3 and 4 delivered, task 3 with the authoring sessions' busy refusals of task 4; the environment's busy refusals wait for task 5.
 
 ## Intent
 

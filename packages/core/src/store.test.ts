@@ -189,6 +189,55 @@ test("usage totals aggregate per session", () => {
   store.close();
 });
 
+test("storage-2: a change to home.yaml applies to the file as it stands; a deleted one is refused, never restored", () => {
+  const dir = tempRoot();
+  const store = new Store({ machineIdentity, dir, own: "tester" });
+  const project = store.registerProject(join(tmpdir(), "spex-store-home"), "home", 1);
+  const file = join(dir, "home.yaml");
+  // An editor's change since the store last wrote it is kept by the next write.
+  const edited = parseYaml(readFileSync(file, "utf8")) as { folders: { path: string; repository: string; aliases?: string[] }[] };
+  edited.folders[0].aliases = ["/elsewhere/recorded"];
+  writeFileSync(file, stringifyYaml(edited));
+  store.signIn({ id: "1", login: "ada", displayName: null });
+  const after = parseYaml(readFileSync(file, "utf8")) as { folders: { aliases?: string[] }[]; host: { account?: { login: string } } };
+  assert.deepEqual(after.folders[0].aliases, ["/elsewhere/recorded"], "the editor's change stands");
+  assert.equal(after.host.account?.login, "ada");
+  // Deleted once read, the file is not written back from memory.
+  rmSync(file);
+  assert.throws(() => store.rebindProject({ id: project.id, path: join(tmpdir(), "spex-store-home") }), (error: unknown) => error instanceof StorageFormatError && /changed meanwhile/.test(error.reason));
+  assert.equal(existsSync(file), false, "the deleted home is not restored");
+  store.close();
+});
+
+test("storage-4: an intent write never recreates a clone gone from under the store", () => {
+  const dir = tempRoot();
+  const store = new Store({ machineIdentity, dir, own: "tester" });
+  const project = store.registerProject(join(tmpdir(), "spex-store-gone"), "gone", 1);
+  const clone = join(dir, "workspace", ...project.id.split("/"));
+  rmSync(clone, { recursive: true, force: true });
+  assert.throws(() => store.addIntent({ id: "72000000-0000-4000-8000-000000000001", projectId: project.id, text: "late", createdAt: 1 }));
+  assert.equal(existsSync(clone), false, "the clone is not recreated");
+  store.close();
+});
+
+test("storage-5: a preference write keeps what another writer wrote to the file meanwhile", () => {
+  const dir = tempRoot();
+  const store = new Store({ machineIdentity, dir, own: "tester" });
+  store.setPref("viewed:a", 3);
+  store.setPref("viewed:b", 4);
+  // Another writer — a sync's Apply — clears a viewed marker in the file.
+  const file = join(dir, "local", "prefs.json");
+  const held = JSON.parse(readFileSync(file, "utf8")) as { format: 1; prefs: Record<string, unknown> };
+  delete held.prefs["viewed:a"];
+  writeFileSync(`${file}.next`, JSON.stringify(held));
+  renameSync(`${file}.next`, file);
+  assert.equal(store.getPref("viewed:a"), undefined, "a read follows the file");
+  store.setPref("language", "zh");
+  const prefs = (JSON.parse(readFileSync(file, "utf8")) as { prefs: Record<string, unknown> }).prefs;
+  assert.deepEqual(prefs, { "viewed:b": 4, language: "zh" }, "the cleared marker is not restored");
+  store.close();
+});
+
 test("prefs round-trip JSON values", () => {
   const store = new Store({ machineIdentity, dir: tempRoot(), own: "tester" });
   store.setPref("ui", { theme: "dark" });

@@ -365,10 +365,9 @@ describe("playbook-library-94: the environment's controls", () => {
     );
   });
 
-  test("every control waits while that spex repository syncs, naming the sync", async () => {
+  test("every control stays available while that spex repository syncs: the sync refuses nothing", async () => {
     await renderSurface({ space: home({ syncing: PROJECT_ID }) });
-    const naming = `Waits for the sync of ${PROJECT_ID}`;
-    expect(screen.getByTestId("environment-hold").textContent).toBe(naming);
+    expect(screen.queryByTestId("environment-progress")).toBeNull();
     const controls = [
       "env-remove-acme/triage",
       "env-remove-acme/local-tools",
@@ -378,21 +377,20 @@ describe("playbook-library-94: the environment's controls", () => {
       "add-from-git",
     ].map((id) => screen.getByTestId(id) as HTMLButtonElement);
     for (const control of controls) {
-      expect(control.disabled, control.dataset.testid).toBe(true);
-      expect(control.title, control.dataset.testid).toBe(naming);
+      expect(control.disabled, control.dataset.testid).toBe(false);
+      expect(control.title, control.dataset.testid).not.toMatch(/sync/i);
     }
-    // The other spex repository is not syncing: its controls stand.
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    expect((screen.getByTestId("env-remove-sublang/playbooks") as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    // An act during the sync reaches the core, which answers it as any.
+    fireEvent.click(screen.getByTestId("environment-install"));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("environment.install", { repository: PROJECT_ID }));
   });
 
-  test("the core's work on an environment holds the controls and reads in place; a failure shows its cause", async () => {
+  test("the core's work on an environment reads in place as progress, holding no control; a failure shows its cause", async () => {
     environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, busy: "installing" };
     await renderSurface();
-    expect(screen.getByTestId("environment-hold").textContent).toBe("Installing…");
-    expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("environment-progress").textContent).toBe("Installing…");
+    expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId("env-remove-acme/triage") as HTMLButtonElement).disabled).toBe(false);
     act(() => {
       deliverServerMessageForTests({
         type: "environment.state",
@@ -400,7 +398,7 @@ describe("playbook-library-94: the environment's controls", () => {
         state: { ...PROJECT_ENVIRONMENT, error: "acme/labels 0.4.0: a file's digest does not match the lock" },
       });
     });
-    expect(screen.queryByTestId("environment-hold")).toBeNull();
+    expect(screen.queryByTestId("environment-progress")).toBeNull();
     expect(screen.getByTestId("environment-error").textContent).toBe(
       "acme/labels 0.4.0: a file's digest does not match the lock",
     );

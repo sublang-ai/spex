@@ -14,6 +14,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -22,6 +23,7 @@ import {
   type FSWatcher,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
@@ -51,7 +53,6 @@ import {
 } from "./config.js";
 import {
   CAPTAIN_AGENT_ID,
-  mediaOwnerRepository,
   parseCommand,
   PROTOCOL_VERSION,
   type AdapterName,
@@ -74,6 +75,7 @@ import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
+import { UUID } from "./files.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -109,8 +111,8 @@ import {
   writeExcludeBlock,
   type BuiltinPackage,
 } from "./environment/index.js";
-import { kebab } from "./home.js";
-import type { CommandResults, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
+import { kebab, splitKey } from "./home.js";
+import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -238,19 +240,6 @@ export interface CoreServiceOptions {
   registryFetch?: typeof fetch;
 }
 
-/** Commands that write beneath a clone (space-21): refused `busy` while
- * an operation runs on that spex repository, so the core stays the sole
- * writer through it while every other clone stays writable. */
-const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
-  "turn.submit", "session.control", "session.create", "session.restore", "session.discard", "session.delete", "session.viewed",
-  "project.rebind", "project.remove",
-  "intent.queue", "intent.edit", "intent.close", "intent.remove",
-  "config.edit", "compile.run", "media.begin", "media.chunk", "media.finish", "media.cancel",
-  "draft.create", "draft.open", "draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.register", "draft.player.set", "draft.delete", "draft.artifacts",
-  // An environment's writes (environments-15, environments-17).
-  "environment.request", "environment.remove", "environment.resolve", "environment.install", "environment.publish",
-]);
-
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
 
@@ -286,23 +275,6 @@ function channelKey(channel: Channel): string {
     ? `draft:${channel.draftId}`
     : `${channel.kind}:${channel.sessionId}`;
 }
-
-/** A session named as the reader sees it, so a language can quote its
- * own way (core-service-111). */
-const titled = (title: string): string =>
-  i18n._({ id: "“{title}”", comment: "A session's own title, quoted", values: { title } });
-const inUseElsewhere = (name: string): string =>
-  i18n._({
-    id: "{name} is in use elsewhere",
-    comment: "A session another host is writing right now",
-    values: { name },
-  });
-const unverifiedOwner = (name: string): string =>
-  i18n._({
-    id: "{name} ownership cannot be verified",
-    comment: "A session whose lease this host cannot read",
-    values: { name },
-  });
 
 /** The not-found refusals the command paths share, each phrased when
  * it is raised (core-service-111); the id itself is never translated. */
@@ -460,10 +432,10 @@ export class CoreService {
   private seeded = false;
   private readonly runCommand: RunCommand;
   private readonly forge: ForgeAdapter;
-  /** One in-flight compile per playbook id; abort via compile.abort. */
-  private readonly activeCompiles = new Map<string, AbortController>();
-  /** The project a one-shot compile writes its spec package in. */
-  private readonly compileHolders = new Map<string, string>();
+  /** Each running one-shot compile's own cancel handle, by playbook id:
+   * cancellation and progress only, admitting or refusing nothing
+   * (core-service-25). */
+  private readonly standaloneCompiles = new Map<string, Set<AbortController>>();
   /** Projects whose ledger changed since the last broadcast (DR-035). */
   private readonly ledgerChanged = new Set<string>();
   private ledgerTimer?: NodeJS.Timeout;
@@ -596,7 +568,6 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
-      settleBeneath: (repositories: string[]) => this.environments.idle(repositories),
       home: this.store.dir,
       env: this.env,
       store: this.store,
@@ -607,7 +578,6 @@ export class CoreService {
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
         this.runCommand,
       ),
-      blocker: (repository) => this.spaceBlocker(repository),
       broadcast: (state) => this.broadcast({ type: "space.state", state }),
       reloadConfig: () => this.reloadConfig(),
       rescanSessions: async (repository) => {
@@ -660,6 +630,7 @@ export class CoreService {
       enabled: (id) => this.draftEnabled(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
       device: () => this.store.home.device,
+      importInto: (prepare, place) => this.media.importInto(prepare, place),
     });
     this.authors.events.onRecord = (draftId, instance, record) => {
       const key = `draft:${draftId}`;
@@ -677,11 +648,14 @@ export class CoreService {
     this.media = new ApplicationMedia({
       home: this.store.dir,
       directoryOf: (owner) => this.mediaDirectory(owner),
+      rootOf: (owner) => {
+        const key = owner.kind === "project" ? owner.id : owner.projectId;
+        const repository = this.store.repository(key);
+        if (!repository) throw noProject(key);
+        return repository.dir;
+      },
       assertOwner: (owner, write) => {
         if (this.stopping) throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during attachment admission"}));
-        const repository = mediaOwnerRepository(owner);
-        const gate = this.space.busyFor(repository ?? (owner.kind === "session" ? this.store.sessionRepository(owner.id) : undefined));
-        if (write && gate) throw new CoreError("busy", gate);
         if (owner.kind === "project") {
           if (!this.store.getProject(owner.id)) throw noProject(owner.id);
           if (write) this.store.assertWritable({ projectId: owner.id });
@@ -853,99 +827,61 @@ export class CoreService {
     return this.options.systemLanguages ?? [Intl.DateTimeFormat().resolvedOptions().locale];
   }
 
-  /**
-   * The named blocker of an operation on one clone (space-11): a turn
-   * in flight or being admitted in one of its sessions, a session of it
-   * held — or unprovably held — by another host, observed live through
-   * its shared store, or a running compile of its authoring sessions.
-   */
-  private async spaceBlocker(repository: string): Promise<string | undefined> {
-    if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
-    // An environment resolving or installing writes beneath the clone.
-    const installing = this.environments.busyFor(repository);
-    if (installing) return installing;
-    const sessions = this.sessions.listSessions().filter((session) => session.projectId === repository);
-    for (const session of sessions) {
-      const project = this.store.getProject(session.projectId)?.name ?? i18n._({
-        id: "the project",
-        comment: "Stands in for a project's name where the core has none",
-      });
-      const name = session.title ? titled(session.title) : i18n._({
-        id: "a new session",
-        comment: "Stands in for the title of a session that has none yet",
-      });
-      if (session.externalWriter === "active") return inUseElsewhere(name);
-      if (session.externalWriter === "unknown") return unverifiedOwner(name);
-      if (session.live || session.turnActive || this.submitting.has(session.id)) return i18n._({
-        id: "Wait for {name} in {project}",
-        comment:
-          "What blocks a Space operation: a session of this project is working",
-        values: { name, project },
-      });
-    }
-    if ([...this.submitting.keys()].some((sessionId) => this.store.sessionRepository(sessionId) === repository)) return i18n._({
-      id: "Wait for the turn being submitted",
-      comment: "What blocks a Space operation: a turn is being admitted",
-    });
-    for (const playbookId of this.activeCompiles.keys()) {
-      const holder = this.compileHolders.get(playbookId) ?? this.drafts.projectOf(playbookId) ?? this.store.home.own();
-      if (holder !== repository) continue;
-      return i18n._({
-        id: "{playbookId} is compiling",
-        comment: "What blocks a Space operation: a playbook compile is running",
-        values: { playbookId },
-      });
-    }
-    // A lease taken since the last rescan is still a held session.
-    const shared = this.store.sessionStore(repository);
-    for (const session of sessions) {
-      if (this.sessions.getLive(session.id)) continue;
-      const name = session.title ? titled(session.title) : i18n._({
-        id: "a session",
-        comment: "Stands in for the title of a session that has none",
-      });
-      let lease: "active" | "idle" | "unknown";
-      try { lease = await shared.readLeaseState(session.id); } catch { lease = "unknown"; }
-      if (lease === "active") return inUseElsewhere(name);
-      if (lease === "unknown") return unverifiedOwner(name);
-    }
-    return undefined;
-  }
-
   private requireSpace(): SpaceManager {
     return this.space;
   }
 
-  /** The spex repository a command writes beneath, for the write gate
-   * (space-21); undefined where it writes beneath none. */
-  private commandRepository(command: Command): string | undefined {
-    switch (command.type) {
-      case "turn.submit": case "session.control": case "session.restore": case "session.discard": case "session.delete": case "session.viewed":
-        return this.store.sessionRepository(command.sessionId);
-      case "session.create": case "project.rebind": case "project.remove": case "intent.queue":
-        return command.projectId;
-      case "intent.edit": case "intent.close": case "intent.remove":
-        return this.store.getIntent(command.intentId)?.projectId;
-      case "config.edit":
-        return command.repository ?? this.store.home.own();
-      case "compile.run":
-        return command.projectId;
-      case "environment.request": case "environment.remove": case "environment.resolve": case "environment.install": case "environment.publish":
-        return command.repository;
-      case "draft.open": case "draft.artifacts":
-        return command.projectId;
-      case "media.begin":
-        return mediaOwnerRepository(command.owner);
-      case "media.chunk": case "media.finish": case "media.cancel": {
-        const owner = this.media.uploads.ownerOf(command.uploadId);
-        return owner ? mediaOwnerRepository(owner) : undefined;
+  /**
+   * Every session of a clone a removal deletes, held under Playbook's
+   * management lease (projects-10): a lease another writer holds — a
+   * running turn here or a terminal's — refuses the removal `busy`.
+   * `check` is the removal's own instant: called synchronously inside
+   * the removal itself, with nothing awaited before the deletion, it
+   * refuses as a change meanwhile a session that appeared while the
+   * leases were taken, or a clone moved or replaced since. Your own
+   * group's clone is never deleted.
+   */
+  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void }> {
+    const repository = this.store.repository(key);
+    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined };
+    const identity = (): string | undefined => {
+      try { const info = statSync(repository.dir); return `${info.dev}:${info.ino}`; } catch { return undefined; }
+    };
+    // A session stands on disk by any of its files: Playbook publishes
+    // its lease `.<id>.lock` before it writes `<id>.json`, and lists a
+    // session by its records too.
+    const sessionIds = (): string[] => {
+      if (!existsSync(repository.sessionsDir)) return [];
+      const ids = new Set<string>();
+      for (const file of readdirSync(repository.sessionsDir)) {
+        const id = /^\.(.+)\.lock$/.exec(file)?.[1] ?? /^(.+?)(?:\.records\.jsonl|\.json)$/.exec(file)?.[1];
+        if (id && UUID.test(id)) ids.add(id);
       }
-      case "draft.create": case "draft.send": case "draft.abort": case "draft.source.write": case "draft.compile":
-      case "draft.register": case "draft.player.set": case "draft.delete":
-        return command.projectId;
-      default:
-        return undefined;
+      return [...ids].sort();
+    };
+    const clone = identity();
+    const held: { sessionId: string; release(): Promise<unknown> }[] = [];
+    try {
+      for (const id of sessionIds()) held.push(await repository.store.acquireManagement(id));
+    } catch {
+      await Promise.allSettled(held.map((lease) => lease.release()));
+      throw new CoreError("busy", i18n._({
+        id: "wait for the project's running turn to finish, or abort it, before removing it",
+        comment: "Refusal: a turn is running in the project being removed",
+      }));
     }
+    const leased = new Set(held.map((lease) => lease.sessionId));
+    return {
+      leases: held,
+      check: () => {
+        if (this.store.repository(key)?.dir === repository.dir && identity() === clone && sessionIds().every((id) => leased.has(id))) return;
+        throw new CoreError("conflict", i18n._({
+          id: "{what} changed meanwhile; retry",
+          values: { what: splitKey(key).name },
+          comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+        }));
+      },
+    };
   }
 
   /** Announce ledger changes debounced (DR-035): session records land
@@ -1379,7 +1315,7 @@ export class CoreService {
     // abort and are awaited so no Cligent outlives the core (DR-051).
     this.authors.markStopping();
     // Kill any in-flight compile child so shutdown never orphans slc.
-    for (const controller of this.activeCompiles.values()) controller.abort();
+    for (const handles of this.standaloneCompiles.values()) for (const controller of handles) controller.abort();
     // A disposal failure must not leave the endpoint or the store open
     // (CORE-39): finish the shutdown, then report it to the host.
     let failure: { error: unknown } | undefined;
@@ -1854,27 +1790,23 @@ export class CoreService {
     client: ClientState,
     command: Command,
   ): Promise<unknown> {
-    // The write gate (space-21): while an operation runs on a spex
-    // repository, every command writing beneath its clone is refused
-    // naming the operation; other clones stay writable.
-    const gate = SPACE_GATED_COMMANDS.has(command.type) ? this.space.busyFor(this.commandRepository(command)) : undefined;
-    if (gate) throw new CoreError("busy", gate);
+    // No operation refuses a command (space-21): each write is checked
+    // at its own instant, against its file's version or its session's
+    // lease.
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
     if (command.type === "session.restore" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
     switch (command.type) {
       case "approval.list": return this.approvals.snapshot();
       case "approval.respond": return this.approvals.respond(command.generation, command.requestId, command.owner, command.decision);
-      case "media.begin": {
-        this.media.ownerStore(command.owner, true);
-        return this.media.writing(() => this.media.uploads.begin(command));
-      }
+      case "media.begin":
+        return this.media.begin(command);
       case "media.chunk":
-        return this.media.writing(() => this.media.uploads.chunk(command.uploadId, command.offset, command.data));
+        return this.media.uploads.chunk(command.uploadId, command.offset, command.data);
       case "media.finish":
-        return this.media.writing(() => this.media.uploads.finish(command.uploadId));
+        return this.media.uploads.finish(command.uploadId);
       case "media.cancel":
-        return this.media.writing(() => this.media.uploads.cancel(command.uploadId));
+        return this.media.uploads.cancel(command.uploadId);
       case "media.read":
         return this.media.read(command.owner, command.assetId, command.offset, command.length);
       case "agent.capabilities": {
@@ -1885,10 +1817,9 @@ export class CoreService {
         if (this.stopping || client.socket.readyState !== WebSocket.OPEN) {
           return {status: "cancelled"};
         }
-        if (this.browserPreparations.has(command.operationId) ||
-            [...this.browserPreparations.values()].some((entry) => entry.client === client)) {
-          throw new CoreError("busy", i18n._({id: "Browser preparation is already running.", comment: "Refusal: this client already owns browser preparation"}));
-        }
+        // The same preparation asked again joins the one running.
+        const running = this.browserPreparations.get(command.operationId);
+        if (running) return await running.done;
         const controller = new AbortController();
         const done = (async () => {
           const agent = await this.contextualBrowserAgent(command);
@@ -2067,14 +1998,11 @@ export class CoreService {
         // repository's clone; the folder and the host stay untouched
         // (projects-9, projects-10).
         const key = command.projectId;
-        if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
-        if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
-        if (this.sessions.listSessions().some((session) => session.projectId === key && (session.live || session.turnActive))) {
-          throw new CoreError("busy", i18n._({
-            id: "wait for the project's running turn to finish, or abort it, before removing it",
-            comment: "Refusal: a turn is running in the project being removed",
-          }));
-        }
+        const assertProject = (): void => {
+          if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
+          if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
+        };
+        assertProject();
         // What has not reached the host asks a second confirmation
         // naming the count (projects-9).
         if (command.confirm !== true) {
@@ -2087,13 +2015,29 @@ export class CoreService {
             }), { units });
           }
         }
+        // The removal is one write at its instant (projects-10): every
+        // session of the clone held under its Playbook lease — a live
+        // writer's refuses it — then, with nothing awaited, the pair
+        // forgotten and the clone deleted. No other work is waited for.
+        const { leases, check } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
-        await this.media.retireOwner({kind: "project", id: key}, () => {
-          if (!this.store.removeProject(key)) throw noProject(key);
-        }, () => {
-          if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
-          this.store.assertProjectsWritable();
-        });
+        try {
+          // retireOwner runs the final check, then invalidates the
+          // project's uploads and readers, then the removal, with nothing
+          // awaited between them: a refusal at the check invalidates
+          // nothing (media-17). The project is read first, so a home
+          // that query finds changed is refused next, before the check.
+          await this.media.retireOwner({kind: "project", id: key}, () => {
+            if (!this.store.removeProject(key)) throw noProject(key);
+          }, () => {
+            assertProject();
+            this.store.assertProjectsWritable();
+            check();
+          });
+        } finally {
+          // The leases went with the clone; what stands is released.
+          await Promise.allSettled(leases.map((lease) => lease.release()));
+        }
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
@@ -2349,21 +2293,12 @@ export class CoreService {
         const project = this.store.getProject(command.projectId);
         if (!project) throw noProject(command.projectId);
         if (!isSkillName(command.playbookId)) throw invalidPlaybookId(command.playbookId);
-        // One compile per playbook id, fail-closed (DR-010 §5): a
-        // duplicate submission is rejected, never queued or merged.
-        if (this.activeCompiles.has(command.playbookId)) {
-          throw new CoreError(
-            "busy",
-            i18n._({
-              id: "a compile is already running for {playbookId}",
-              comment: "Refusal: one compile per playbook at a time",
-              values: { playbookId: command.playbookId },
-            }),
-          );
-        }
+        // A compile is an independent process (DR-111): a second one of
+        // the same id runs beside it, each with its own cancel handle.
         const controller = new AbortController();
-        this.activeCompiles.set(command.playbookId, controller);
-        this.compileHolders.set(command.playbookId, project.id);
+        const handles = this.standaloneCompiles.get(command.playbookId) ?? new Set<AbortController>();
+        handles.add(controller);
+        this.standaloneCompiles.set(command.playbookId, handles);
         try {
           const packagePath = draftPackagePath(command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
@@ -2430,15 +2365,16 @@ export class CoreService {
             packageDir,
           });
         } finally {
-          this.activeCompiles.delete(command.playbookId);
-          this.compileHolders.delete(command.playbookId);
+          handles.delete(controller);
+          if (handles.size === 0 && this.standaloneCompiles.get(command.playbookId) === handles) this.standaloneCompiles.delete(command.playbookId);
         }
       }
       case "compile.abort": {
         // Naming an authoring session's instance cancels every compile
-        // of that session: a successor under the id is not it.
-        const controller = command.instance === undefined ? this.activeCompiles.get(command.playbookId) : undefined;
-        const canceled = command.instance !== undefined ? this.authors.cancelCompiles(command.instance) : controller !== undefined;
+        // of that session: a successor under the id is not it. Without
+        // one, every running one-shot compile of the id.
+        const controllers = command.instance === undefined ? [...(this.standaloneCompiles.get(command.playbookId) ?? [])] : [];
+        const canceled = command.instance !== undefined ? this.authors.cancelCompiles(command.instance) : controllers.length > 0;
         if (!canceled) {
           throw new CoreError(
             "not_found",
@@ -2449,7 +2385,7 @@ export class CoreService {
             }),
           );
         }
-        controller?.abort();
+        for (const controller of controllers) controller.abort();
         this.broadcast({
           // English, deliberately (core-service-111): the page reads the
           // compile's progress lines, and this one tells it the run was
@@ -2542,7 +2478,8 @@ export class CoreService {
           await this.media.adopt(owner, [staging], command.attachments ?? []);
           this.store.addIntent(intent);
         } catch (error) {
-          rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });
+          // The project may have left meanwhile: only its own folder goes.
+          if (this.store.repository(project.id)) rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });
           throw error;
         }
         this.queueLedgerChange([project.id]);
@@ -2565,7 +2502,7 @@ export class CoreService {
         // from the spex repository's staging owner (media-4).
         const owner: MediaUploadOwner = {kind: "intent", projectId: intent.projectId, intentId: intent.id};
         await this.media.adopt(owner, [{kind: "project", id: intent.projectId}], attachments);
-        this.requireOpenIntent(intent.id);
+        this.assertIntentUnchanged(intent);
         if (this.deriveIntentState(intent.id) !== "queued") throw new CoreError("conflict", i18n._({id: "A dispatched intent's content is history.", comment: "Refusal during attachment admission"}));
         this.store.editIntent(intent.id, command.text, command.attachments);
         this.queueLedgerChange([intent.projectId]);
@@ -3469,7 +3406,8 @@ export class CoreService {
 
   /** The intent named must exist and still be open (DR-035). */
   private requireOpenIntent(intentId: string) {
-    const intent = this.store.getIntent(intentId);
+    // Read from its file now (DR-111), as a sync may have changed it.
+    const intent = this.store.currentIntent(intentId);
     if (!intent) throw noIntent(intentId);
     this.store.assertWritable({projectId:intent.projectId});
     if (intent.closedAt !== undefined) {
@@ -3479,6 +3417,21 @@ export class CoreService {
       }));
     }
     return intent;
+  }
+
+  /** An intent read before an await, refused as changed meanwhile where
+   * its file no longer reads the same (DR-111); the write that follows
+   * lands in the same synchronous step. */
+  private assertIntentUnchanged(read: IntentInfo): void {
+    const now = this.store.currentIntent(read.id);
+    if (!now) throw noIntent(read.id);
+    if (!isDeepStrictEqual(now, read)) {
+      throw new CoreError("conflict", i18n._({
+        id: "{what} changed meanwhile; retry",
+        values: { what: intentTitle(now) },
+        comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+      }));
+    }
   }
 
   /** One intent's derived state, read from the one fold (DR-035). */

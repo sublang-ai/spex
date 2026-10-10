@@ -10,7 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
@@ -28,6 +28,7 @@ import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import { DraftChangedError, DraftStore, legacyInstance } from "./drafts.js";
 import { Home } from "./home.js";
+import type { ApplicationMedia } from "./media.js";
 import type {
   Command,
   CommandResults,
@@ -1122,6 +1123,53 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const retained = await client.expectOk("media.read", {owner, assetId: asset.assetId, offset: 0, length: 65536});
     assert.deepEqual(Buffer.from(retained.data, "base64"), image);
   } finally { client.close(); await harness.service.stop(); }
+});
+
+test("media-18: an authoring turn's output whose session was replaced while it was prepared is refused, the successor untouched", {timeout: 30_000}, async () => {
+  const output = Buffer.from("native screenshot bytes of the former session");
+  const harness = await startHarness({script: {fallback: {
+    result: "Observed.",
+    media: [{mimeType: "image/png", source: {type: "base64", data: output.toString("base64")}, name: "screen.png", toolUseId: "screenshot-1"}],
+  }}, slc: stubSlcSource("['Inspector']")});
+  // The core's own private publication, held once its content is prepared.
+  const media = (harness.service as unknown as {media: ApplicationMedia}).media;
+  const importInto = media.importInto;
+  let entered!: () => void;
+  const prepared = new Promise<void>((resolve) => { entered = resolve; });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let publication: Promise<unknown> | undefined;
+  media.importInto = (prepare, place) => {
+    if (publication) return importInto.call(media, prepare, place);
+    const result = importInto.call(media, async (stage) => { const reference = await prepare(stage); entered(); await held; return reference; }, place);
+    publication = result;
+    return result;
+  };
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    const {projectId, clone} = harness;
+    const files = authoringFiles(clone, "replaced");
+    await client.expectOk("draft.create", {projectId, draftId: "replaced"});
+    await client.expectOk("subscribe", {channel: {kind: "draft", draftId: "replaced"}});
+    const former = client.instance("replaced");
+    await client.expectOk("draft.send", {projectId, draftId: "replaced", text: "Look"});
+    await prepared;
+    // The session is deleted and made again under its id while the
+    // former's output stands prepared.
+    await client.expectOk("draft.delete", {projectId, draftId: "replaced", instance: former});
+    const successor = (await client.expectOk("draft.create", {projectId, draftId: "replaced"})).instance!;
+    assert.notEqual(successor, former);
+    release();
+    const refused = await publication!.then(() => undefined, (error: unknown) => error);
+    assert.ok(refused instanceof DraftChangedError && !refused.gone, String(refused));
+    assert.ok(!existsSync(join(files.assets, createHash("sha256").update(output).digest("hex"))), "nothing lands in the successor");
+    assert.deepEqual(readdirSync(join(harness.dataDir, "local", "asset-staging")), [], "the private stage is gone");
+    client.close();
+    await harness.service.stop();
+    // The former run's later records reach no file of the successor.
+    assert.ok(!existsSync(files.records) || !readFileSync(files.records, "utf8").includes("\"media\""));
+  } finally { media.importInto = importInto; client.close(); await harness.service.stop(); }
 });
 
 // ---------------------------------------------------------------------------

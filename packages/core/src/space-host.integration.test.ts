@@ -11,7 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
 import { Home } from "./home.js";
@@ -20,7 +20,7 @@ import type { StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, runTurn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn } = fixture;
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
@@ -174,20 +174,22 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   assert.ok(host.script.repositories.some((repository) => repository.id === own.id && repository.path === `${LOGIN}-spex`));
 });
 
-/** A `git` on the core's PATH that holds the command whose arguments
- * hold `args` — one clone's `rev-parse --git-dir`, the read a Groups
- * state makes of it, or a join's code clone — while the test holds it,
- * then runs the real Git: a command caught in flight. */
+/** A `git` on the core's PATH that holds the first command whose
+ * arguments hold `args` after `hold()` — one clone's `rev-parse
+ * --git-dir`, the read a Groups state makes of it, or a join's clone —
+ * until `release()`, then runs the real Git: a command caught in flight.
+ * Later matching commands run at once. */
 function holdingGit(args: string): { path: string; hold(): void; held(): Promise<void>; release(): void } {
   const dir = mkdtempSync(join(scratch, "holding-git-"));
   const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
   const hold = join(dir, "hold");
+  const claimed = join(dir, "claimed");
   const held = join(dir, "held");
   writeFileSync(join(dir, "git"), [
     "#!/bin/sh",
     'case " $* " in',
     `  *" ${args} "*)`,
-    `    if [ -e "${hold}" ]; then : > "${held}"; while [ -e "${hold}" ]; do sleep 0.05; done; fi ;;`,
+    `    if mv "${hold}" "${claimed}" 2>/dev/null; then : > "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done; fi ;;`,
     "esac",
     `exec "${real}" "$@"`,
     "",
@@ -200,11 +202,11 @@ function holdingGit(args: string): { path: string; hold(): void; held(): Promise
       for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
       assert.ok(existsSync(held), "the command reached Git");
     },
-    release: () => rmSync(hold, { force: true }),
+    release: () => { rmSync(hold, { force: true }); rmSync(claimed, { force: true }); },
   };
 }
 
-test("space-59: a sign-in while a read of your own group is in flight moves the folder once the read ends, then pushes it", async (t) => {
+test("space-59: a sign-in moves your own group's folder at its instant while a read of it is in flight; a write naming the old key is refused and recreates nothing", async (t) => {
   const host = await startHost();
   const dataDir = mkdtempSync(join(scratch, "signin-reading-"));
   const shim = holdingGit(`${ownClone(dataDir)} rev-parse --git-dir`);
@@ -221,34 +223,34 @@ test("space-59: a sign-in while a read of your own group is in flight moves the 
   const reading = home.client.command("space.get", {});
   await shim.held();
 
-  // The account arrives meanwhile; the set-up's rename waits for the
-  // read, the gate held for every clone beneath (space-59, space-21).
+  // The account arrives meanwhile; the set-up's rename waits for no read
+  // (space-59, space-21): the folder moves with the read still in flight.
   const from = home.client.mark();
   const started = await home.client.expectOk("space.signin.start", {});
   assert.ok(started.flow === "device", JSON.stringify(started));
   host.script.approveDevice(started.userCode);
-  for (let i = 0; i < 400 && Home.load(dataDir).file.host.account === undefined; i += 1) await sleep(25);
-  assert.equal(Home.load(dataDir).file.host.account?.login, LOGIN);
-  await sleep(400);
-  assert.ok(existsSync(ownClone(dataDir)), "the folder stays while the read is in flight");
-  const refused = await home.client.command("intent.queue", { projectId: key, text: "written mid-move" });
-  assert.ok(!refused.ok && refused.error.code === "busy", JSON.stringify(refused));
+  for (let i = 0; i < 400 && existsSync(join(dataDir, "workspace", OWN)); i += 1) await sleep(25);
+  assert.ok(!existsSync(join(dataDir, "workspace", OWN)), "the former folder left with its clones while the read was held");
+  const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
+  // A write resolving the old key at its instant finds nothing there.
+  const refused = await home.client.command("intent.queue", { projectId: key, text: "written after the move" });
+  assert.ok(!refused.ok && refused.error.code !== "busy", JSON.stringify(refused));
+  assert.ok(!existsSync(join(dataDir, "workspace", OWN)), "nor does it recreate the former folder");
+  await home.client.expectOk("intent.queue", { projectId: moved, text: "written where it lies" });
 
-  // The read ends where the clone lay; the folder then moves, and your
-  // own group's spex repository is created and pushed.
+  // The held read ends against a path that moved: it reads or fails, and
+  // recreates nothing.
   shim.release();
-  const read = await reading;
-  assert.ok(read.ok, JSON.stringify(read));
-  assert.ok(read.result.groups.some((group) => group.repositories.some((repository) => repository.key === OWN_KEY)));
+  await reading;
+  assert.ok(!existsSync(join(dataDir, "workspace", OWN)), "the held read recreated nothing");
   const signed = await home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
   assert.equal(signed.account?.login, LOGIN);
-  assert.ok(!existsSync(join(dataDir, "workspace", OWN)), "the former folder left with its clones");
-  assert.equal(repositoryOf(signed, `${LOGIN}/${basename(home.projectDir)}-spex`).folder, home.projectDir);
   const own = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   assert.equal(own.state, "reachable");
   assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(clonePath(dataDir, HOST_OWN), "rev-parse", "spex"));
   // A read after the move finds every clone where it lies.
   const after = await home.client.expectOk("space.get", {});
+  assert.equal(repositoryOf(after, moved).folder, home.projectDir);
   assert.deepEqual(after.groups.flatMap((group) => group.repositories.map((repository) => repository.key)).filter((repoKey) => repoKey.startsWith(`${OWN}/`)), []);
 });
 
@@ -458,6 +460,34 @@ test("space-37: a join reads not on this device, running at its Code step, until
   assert.deepEqual(readings.slice(0, first).map((repository) => repository.state).filter((state) => state !== "absent"), []);
 });
 
+test("space-63: two joins of one repository publish one clone; the later finds it standing, removes only its own stage, and the clone stays whole", async (t) => {
+  const host = await startHost();
+  const listed = host.script.addRepository({ group: "acme", name: "twice-spex" });
+  const key = "acme/twice-spex";
+  const shim = holdingGit("clone -q --branch spex");
+  const home = await startHome("join-twice", { host, project: false, env: { PATH: shim.path }, extra: { signIn: "browser" } });
+  t.after(() => { shim.release(); return home.stop(); });
+  await signIn(home, host);
+  // The first join's clone stands held; the second is refused nothing.
+  shim.hold();
+  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  await shim.held();
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  await home.client.waitRepository(from, key, (repository) => repository.state === "reachable");
+  const clone = clonePath(home.dataDir, key);
+  writeFileSync(join(clone, "mine.txt"), "written after the publication\n");
+  // Released, the first finds the place taken and leaves it as it is.
+  shim.release();
+  const group = join(home.dataDir, "workspace", "acme");
+  const stages = (): string[] => readdirSync(group).filter((name) => name.includes(".join-"));
+  for (let i = 0; i < 400 && stages().length > 0; i += 1) await sleep(25);
+  assert.deepEqual(stages(), [], "each join's stage is gone");
+  assert.equal(readFileSync(join(clone, "mine.txt"), "utf8"), "written after the publication\n", "the published clone is untouched");
+  assert.equal(git(clone, "config", "--get", "spex.repositoryId"), listed.id);
+  assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
+});
+
 test("space-37: Sign out revokes this device and keeps every clone, its repositories unreachable until the next sign-in", async (t) => {
   const host = await startHost();
   const home = await startHome("signout", { host, project: false, extra: { signIn: "browser" } });
@@ -540,7 +570,7 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   assert.deepEqual((await home.client.expectOk("space.signout", {})).signIn, { phase: "idle" });
 });
 
-test("space-37: while a check sleeps on the stand-in's transport, writes beneath that clone are refused naming the sync, another's admitted, and Stop ends it", async (t) => {
+test("space-37: while a check sleeps on the stand-in's transport, writes beneath that clone are admitted, a second Sync joins it, and Stop ends it", async (t) => {
   const host = await startHost();
   const home = await startHome("host-gate", { host, project: false, extra: { signIn: "browser", spaceTransportTimeoutMs: 60_000 } });
   t.after(() => home.stop());
@@ -568,15 +598,120 @@ test("space-37: while a check sleeps on the stand-in's transport, writes beneath
   await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
   for (let i = 0; i < 400 && !host.script.requests.slice(requests).some((request) => request.path.startsWith("/git/")); i += 1) await sleep(25);
   assert.ok(host.script.requests.slice(requests).some((request) => request.path.startsWith("/git/")), "the transport is in flight");
-  const blocked = await home.client.command("intent.queue", { projectId: key, text: "blocked" });
-  assert.ok(!blocked.ok && blocked.error.code === "busy" && /gated-spex is syncing/.test(blocked.error.message), JSON.stringify(blocked));
-  await home.client.expectError("space.sync", { repository: key }, "busy", /Already syncing/);
+  // The check refuses nothing beneath its clone (space-21): a write is
+  // admitted, and a second Sync joins the one running.
+  await home.client.expectOk("intent.queue", { projectId: key, text: "admitted beside the check" });
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
   await home.client.expectOk("intent.queue", { projectId: `${LOGIN}/elsewhere-spex`, text: "elsewhere" });
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
   const stopped = await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "stopped");
   assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "stopped", JSON.stringify(stopped.sync));
   assert.notEqual(git(clone, "rev-parse", "HEAD"), head, "the Save commit stands");
   await home.client.expectOk("intent.queue", { projectId: key, text: "after the stop" });
+});
+
+test("space-60: a remote changed while the Check step reads the host stands; the host's new URL is not written over it", async (t) => {
+  const host = await startHost();
+  const home = await startHome("origin-read", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await addFolder(home, gitFolder("guarded"));
+  await signIn(home, host);
+  const from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/guarded-spex`, choice: { kind: "create", groupId: "2002", name: "guarded" } });
+  const key = "acme/guarded-spex";
+  const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  const clone = clonePath(home.dataDir, key);
+  // The host renames the repository, so its next read hands a new URL.
+  host.script.rename(created.id ?? "", { name: "renamed-spex" });
+  host.script.sleepListing(1_500);
+  t.after(() => host.script.sleepListing(0));
+  const requests = host.script.requests.length;
+  const fromCheck = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.fetch", { repository: key }), { accepted: true });
+  for (let i = 0; i < 400 && !host.script.requests.slice(requests).some((request) => request.path.includes("/repositories")); i += 1) await sleep(25);
+  // A terminal sets the remote while the host's read is in flight.
+  git(clone, "remote", "set-url", "origin", "/elsewhere/terminal.git");
+  const stopped = await home.client.waitRepository(fromCheck, key, (repository) => repository.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && /changed meanwhile/.test(stopped.sync.message), JSON.stringify(stopped.sync));
+  assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git", "the terminal's remote stands alone");
+});
+
+test("space-60: a remote set while a sync's Check step reads a renamed repository stops the move; the new remote stands", async (t) => {
+  const host = await startHost();
+  const home = await startHome("move-origin", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await addFolder(home, gitFolder("moving"));
+  await signIn(home, host);
+  const from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/moving-spex`, choice: { kind: "create", groupId: "2002", name: "moving" } });
+  const key = "acme/moving-spex";
+  const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  const clone = clonePath(home.dataDir, key);
+  // The host renames the repository, so the sync's next read would move
+  // the clone to acme/renamed-spex.
+  host.script.rename(created.id ?? "", { name: "renamed-spex" });
+  host.script.sleepListing(3_000);
+  t.after(() => host.script.sleepListing(0));
+  const requests = host.script.requests.length;
+  const fromSync = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  for (let i = 0; i < 400 && !host.script.requests.slice(requests).some((request) => request.path.includes("/repositories")); i += 1) await sleep(25);
+  // The core's own command gives the clone another remote, clearing its
+  // recorded id, while the host's read is in flight.
+  const remote = bareRepo();
+  const set = home.client.command("space.remote.set", { repository: key, url: remote });
+  for (let i = 0; i < 400 && git(clone, "config", "--get-all", "remote.origin.url") !== remote; i += 1) await sleep(10);
+  assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), remote, "the remote is set while the read is held");
+  const stopped = await home.client.waitRepository(fromSync, key, (repository) => repository.sync.phase === "stopped", 30_000);
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && /changed meanwhile/.test(stopped.sync.message), JSON.stringify(stopped.sync));
+  assert.ok((await set).ok);
+  assert.ok(existsSync(clone) && !existsSync(clonePath(home.dataDir, "acme/renamed-spex")), "the clone was not moved");
+  assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), remote, "the new remote stands");
+});
+
+test("space-5: a remote set while space.remote.set read the clone is refused, never replaced", async (t) => {
+  const host = await startHost();
+  const dataDir = mkdtempSync(join(scratch, "remote-race-"));
+  const key = `${OWN}/remote-race-spex`;
+  const clone = clonePath(dataDir, key);
+  const shim = holdingGit(`${clone} config --get spex.repositoryId`);
+  const home = await startHome("remote-race", { host, dataDir, project: false, env: { PATH: shim.path } });
+  t.after(() => { shim.release(); return home.stop(); });
+  assert.equal((await addFolder(home, gitFolder("remote-race"))).key, key);
+  await sleep(200);
+  shim.hold();
+  const reply = home.client.command("space.remote.set", { repository: key, url: bareRepo() });
+  await shim.held();
+  // The command read the clone with no remote; a terminal sets one.
+  git(clone, "remote", "add", "origin", "/elsewhere/terminal.git");
+  shim.release();
+  const set = await reply;
+  assert.ok(!set.ok && set.error.code === "conflict" && /changed meanwhile/.test(set.error.message), JSON.stringify(set));
+  assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
+});
+
+test("space-58: a remote set while a pick asked the host is refused, never replaced", async (t) => {
+  const host = await startHost();
+  const dataDir = mkdtempSync(join(scratch, "pick-origin-"));
+  const key = `${LOGIN}/raced-spex`;
+  const clone = clonePath(dataDir, key);
+  // The pick's own read of the clone, held after it read the remote.
+  const shim = holdingGit(`${clone} config --get spex.repositoryId`);
+  const home = await startHome("pick-origin", { host, dataDir, project: false, env: { PATH: shim.path }, extra: { signIn: "browser" } });
+  t.after(() => { shim.release(); return home.stop(); });
+  await signIn(home, host);
+  assert.equal((await addFolder(home, gitFolder("raced"))).key, key);
+  await sleep(200);
+  shim.hold();
+  const reply = home.client.command("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "raced" } });
+  await shim.held();
+  // The pick read the clone local only; a terminal sets a remote before
+  // the pick writes the host's.
+  git(clone, "remote", "add", "origin", "/elsewhere/terminal.git");
+  shim.release();
+  const picked = await reply;
+  assert.ok(!picked.ok && picked.error.code === "conflict" && /changed meanwhile/.test(picked.error.message), JSON.stringify(picked));
+  assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
 });
 
 test("space-38: a second home joins a project from the stand-in with its code; a rename moves both clones; an archive turns it read-only; a removed membership unreachable", async (t) => {

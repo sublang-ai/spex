@@ -26,7 +26,7 @@ import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./r
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
-  intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
+  intentFileOf, intentInfoOf, parseIntentFile, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, writeApplicationFile } from "./files.js";
@@ -677,12 +677,64 @@ export class Store {
     this.homeFile.save();
   }
 
+  /** Before a change to `home.yaml`, the file as it stands now: a change
+   * made since this store last read or wrote it — an editor's — is read
+   * first, so the change applies to it rather than replacing it (DR-111).
+   * Each caller reads, changes and writes within one synchronous step. */
+  private refreshHome(): void {
+    if (this.homeProblem) return;
+    if (this.homeFile.refresh()) this.refreshProjects();
+  }
+
+  /** The file the preferences were last read from or written to, by its
+   * inode, size and change time: a write by anyone else — a sync's Apply
+   * clearing viewed markers — reads as a different stamp. */
+  private prefsStamp?: string;
+
+  private stampOf(file: string): string {
+    try { const info = statSync(file); return `${info.ino}:${info.size}:${info.mtimeMs}`; }
+    catch { return "absent"; }
+  }
+
+  /** The preferences as `local/prefs.json` holds them now (storage-5):
+   * the in-memory copy is a cache validated by the file's stamp at each
+   * use, read again where the file changed (DR-111). */
+  private currentPrefs(): Map<string, unknown> {
+    const file = prefsFileOf(this.dir);
+    const stamp = this.stampOf(file);
+    if (stamp !== this.prefsStamp) this.loadPrefs();
+    return this.prefs;
+  }
+
+  private loadPrefs(): void {
+    const prefsFile = prefsFileOf(this.dir);
+    this.prefs.clear();
+    this.prefsProblem = undefined;
+    this.prefsStamp = this.stampOf(prefsFile);
+    try {
+      for (const [key, value] of Object.entries(existsSync(prefsFile) ? parsePrefs(readJsonFile(prefsFile), prefsFile) : {})) this.prefs.set(key, value);
+    } catch (error) {
+      if (!(error instanceof StorageFormatError)) throw error;
+      this.prefsProblem = {file:error.file, reason:error.reason, blocking:true};
+    }
+  }
+
+  /** Change the preferences in one synchronous step: read as the file
+   * holds them now, changed, and written whole (storage-5). */
+  private changePrefs(change: (prefs: Map<string, unknown>) => boolean): void {
+    const prefs = this.currentPrefs();
+    if (!change(prefs)) return;
+    this.savePrefs();
+  }
+
   private savePrefs(): void {
     if (this.prefsProblem) return;
+    const file = prefsFileOf(this.dir);
     writeAtomic(
-      prefsFileOf(this.dir),
+      file,
       JSON.stringify({ format: 1, prefs: Object.fromEntries(this.prefs) }),
     );
+    this.prefsStamp = this.stampOf(file);
   }
 
   private saveForgeCache(): void {
@@ -702,8 +754,6 @@ export class Store {
    * uses; sessions re-index through their own rescan.
    */
   reload(): void {
-    this.prefs.clear();
-    this.prefsProblem = undefined;
     this.forgeCache.clear();
     this.cacheProblem = undefined;
     this.intents.clear();
@@ -713,13 +763,7 @@ export class Store {
   }
 
   private loadApplication(): void {
-    const prefsFile = prefsFileOf(this.dir);
-    try {
-      for (const [key, value] of Object.entries(existsSync(prefsFile) ? parsePrefs(readJsonFile(prefsFile), prefsFile) : {})) this.prefs.set(key, value);
-    } catch (error) {
-      if (!(error instanceof StorageFormatError)) throw error;
-      this.prefsProblem = {file:error.file, reason:error.reason, blocking:true};
-    }
+    this.loadPrefs();
     const cacheFile = forgeCacheFileOf(this.dir);
     try {
       for (const [projectId, entry] of Object.entries(
@@ -945,7 +989,7 @@ export class Store {
     const previous = this.records.get(id) ?? [];
     const prefix = previous.every((entry,index) => isDeepStrictEqual(entry, stored[index]));
     if (prefix && previous.length === stored.length && JSON.stringify(prior) === JSON.stringify(meta)) return;
-    if (!prefix && this.prefs.delete(`viewed:${id}`)) this.savePrefs();
+    if (!prefix) this.changePrefs((prefs) => prefs.delete(`viewed:${id}`));
     this.sessions.set(id, meta);
     this.records.set(id, stored);
     this.turns.delete(id);
@@ -998,6 +1042,7 @@ export class Store {
    * so a blocking problem in either refuses every answer a summons
    * could have. */
   ledgerActable(projectId: string): boolean {
+    this.currentPrefs();
     if (this.prefsProblem) return false;
     try {
       this.assertWritable({ projectId });
@@ -1275,6 +1320,7 @@ export class Store {
    * group, or select the pair it already has (storage-6). */
   registerProject(path: string, name: string, _at?: number): ProjectInfo {
     this.assertProjectsWritable();
+    this.refreshHome();
     const normalized = resolve(path);
     const paired = this.homeFile.keyForFolder(normalized);
     if (paired && this.projects.has(paired)) return this.projects.get(paired)!;
@@ -1300,6 +1346,7 @@ export class Store {
    * aliases replace the list, omitted ones keep it. */
   rebindProject(options: { id: string; path: string; aliases?: string[] }): ProjectInfo {
     this.assertProjectsWritable();
+    this.refreshHome();
     const repository = this.requireRepository(options.id);
     const normalized = resolve(options.path);
     const other = this.homeFile.keyForFolder(normalized);
@@ -1319,6 +1366,7 @@ export class Store {
   /** The account a sign-in read, written into `home.yaml` (storage-2). */
   signIn(account: { id: string; login: string; displayName: string | null }): void {
     this.assertProjectsWritable();
+    this.refreshHome();
     this.homeFile.signIn(account);
     this.saveHome();
   }
@@ -1327,6 +1375,7 @@ export class Store {
    * (git-host-4, git-host-10). */
   signOut(): void {
     if (this.homeProblem) return;
+    this.refreshHome();
     this.homeFile.signOut();
     this.saveHome();
   }
@@ -1341,6 +1390,7 @@ export class Store {
   moveRepositories(moves: { from: string; to: string }[], own?: string): void {
     this.assertProjectsWritable();
     if (moves.length === 0 && own === undefined) return;
+    this.refreshHome();
     this.homeFile.move(moves, own);
     this.saveHome();
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
@@ -1360,17 +1410,21 @@ export class Store {
       const next = to.get(intent.projectId);
       if (next) this.intents.set(id, { ...intent, projectId: next });
     }
-    let prefsChanged = false;
-    for (const { from, to: next } of moves) {
-      for (const key of this.prefKeys(`sync:${from}:`)) {
-        this.prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, this.prefs.get(key));
-        this.prefs.delete(key);
-        prefsChanged = true;
+    this.changePrefs((prefs) => {
+      let changed = false;
+      for (const { from, to: next } of moves) {
+        for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`))) {
+          prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, prefs.get(key));
+          prefs.delete(key);
+          changed = true;
+        }
       }
+      return changed;
+    });
+    for (const { from, to: next } of moves) {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
-    if (prefsChanged) this.savePrefs();
     for (const { from } of moves) {
       const gone = `${this.homeFile.clonePath(from)}/`;
       for (const file of [...this.intentProblems.keys()]) if (file.startsWith(gone)) this.intentProblems.delete(file);
@@ -1391,6 +1445,7 @@ export class Store {
    * working folder stays as it is. */
   removeProject(key: string): boolean {
     this.assertProjectsWritable();
+    this.refreshHome();
     const folder = this.homeFile.folderOf(key);
     const repository = this.repositories.get(key);
     if (!folder && !repository) return false;
@@ -1408,6 +1463,7 @@ export class Store {
   }
 
   storageDiagnostics(): StorageDiagnostic[] {
+    this.currentPrefs();
     const reports: StorageDiagnostic[] = [
       ...(this.homeProblem ? [this.homeProblem] : []),
       ...this.intentProblems.values(),
@@ -1514,7 +1570,7 @@ export class Store {
     this.records.delete(id);
     this.turns.delete(id);
     this.usage.delete(id);
-    if ([this.prefs.delete(`viewed:${id}`), this.prefs.delete(agentSettingsKey(id)), this.prefs.delete(parkedRunKey(id))].some(Boolean)) this.savePrefs();
+    this.changePrefs((prefs) => [prefs.delete(`viewed:${id}`), prefs.delete(agentSettingsKey(id)), prefs.delete(parkedRunKey(id))].some(Boolean));
   }
 
   /** Local runtime liveness is never restored from stored history. */
@@ -1778,11 +1834,30 @@ export class Store {
 
   // -- intents, one file each (storage-4, core-service-52) ------------------
 
+  /** One intent as its file reads at this instant (DR-111): a change a
+   * sync applied since the index read it is taken, and a file gone
+   * meanwhile names no intent. Each write that follows lands in the same
+   * synchronous step. */
   private requireIntent(id: string): { intent: IntentInfo; repository: SpexRepository } {
-    const intent = this.intents.get(id);
-    if (!intent) throw new StorageFormatError(join("intents", `${id}.json`), i18n._({
+    const noIntent = (): StorageFormatError => new StorageFormatError(join("intents", `${id}.json`), i18n._({
       id: "no intent {intentId}", comment: "Refusal: no intent of this id is in the ledger", values: { intentId: id } }));
-    return { intent, repository: this.requireRepository(intent.projectId) };
+    const indexed = this.intents.get(id);
+    if (!indexed) throw noIntent();
+    const repository = this.requireRepository(indexed.projectId);
+    const file = join(repository.intentsDir, `${id}.json`);
+    if (!existsSync(file)) { this.intents.delete(id); throw noIntent(); }
+    const intent = intentInfoOf(parseIntentFile(readJsonFile(file), file, id), repository.key);
+    this.intents.set(id, intent);
+    return { intent, repository };
+  }
+
+  /** An intent as its file reads now, or undefined where none stands. */
+  currentIntent(id: string): IntentInfo | undefined {
+    try { return structuredClone(this.requireIntent(id).intent); }
+    catch (error) {
+      if (error instanceof StorageFormatError && !this.intents.has(id)) return undefined;
+      throw error;
+    }
   }
 
   /** Rewrite one intent's file whole (storage-4). */
@@ -1969,19 +2044,20 @@ export class Store {
   // -- prefs ----------------------------------------------------------------
 
   setPref(key: string, value: unknown): void {
+    this.currentPrefs();
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
-    this.prefs.set(key, value);
-    this.savePrefs();
+    this.changePrefs((prefs) => { prefs.set(key, value); return true; });
   }
 
   getPref<T>(key: string): T | undefined {
-    return this.prefs.has(key) ? (this.prefs.get(key) as T) : undefined;
+    const prefs = this.currentPrefs();
+    return prefs.has(key) ? (prefs.get(key) as T) : undefined;
   }
 
   /** The preference keys under one prefix, so a family can be pruned
    * of records naming things that no longer stand (space-54). */
   prefKeys(prefix: string): string[] {
-    return [...this.prefs.keys()].filter((key) => key.startsWith(prefix));
+    return [...this.currentPrefs().keys()].filter((key) => key.startsWith(prefix));
   }
 
   /** A session's own tuning (core-service-100, DR-067): what its
@@ -2037,8 +2113,9 @@ export class Store {
 
   /** Forget a preference; a key never set is no error. */
   deletePref(key: string): void {
+    this.currentPrefs();
     if (this.prefsProblem) throw new StorageFormatError(this.prefsProblem.file, this.prefsProblem.reason);
-    if (this.prefs.delete(key)) this.savePrefs();
+    this.changePrefs((prefs) => prefs.delete(key));
   }
 
   // -- forge cache (dashboard-14) -------------------------------------------
