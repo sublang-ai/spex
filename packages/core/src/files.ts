@@ -7,7 +7,7 @@
 // storage fault a reader reports.
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, fchmodSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, posix, resolve, win32 } from "node:path";
 import { i18n } from "./i18n.js";
 import { UUID_PATTERN } from "./protocol.js";
@@ -116,7 +116,8 @@ export const fileVersion = (file: string): FileVersion => readVersioned(file).ve
 
 /** Atomic same-directory replacement under a version: the file is
  * checked at the instant before the rename and the write refused as a
- * conflict where it no longer stands at `expected`. No folder is made:
+ * conflict where it no longer stands at `expected`. It is published
+ * with `mode` exactly, the umask applying to none of it. No folder is made:
  * a write whose folder is gone is refused the same way. The temporary
  * file never outlives a refusal or a failure. */
 export function writeVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion, mode = 0o600): void {
@@ -128,7 +129,7 @@ export function writeVersionedBytes(file: string, bytes: Buffer | string, expect
     throw error;
   }
   try {
-    try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
+    try { writeFileSync(fd, bytes); fchmodSync(fd, mode); fsyncSync(fd); } finally { closeSync(fd); }
     if (fileVersion(file) !== expected) throw new VersionConflictError(file);
     renameSync(temporary, file);
   } catch (error) {

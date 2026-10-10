@@ -257,6 +257,12 @@ const repairFailureReason = (cause: string): string => i18n._({
   comment: "A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed",
 });
 
+/** A system call's own failure — a clone gone meanwhile, a full disk —
+ * as Node reports it: an ordinary error Retry may clear, never a file
+ * the reader must fix (space-15). */
+const systemFailure = (error: unknown): boolean =>
+  !(error instanceof StorageFormatError) && typeof (error as NodeJS.ErrnoException | null)?.syscall === "string";
+
 type RepositoryInfo =
   | { git: { ok: false; guidance: string }; root: false }
   | { git: { ok: true; version: string }; root: false }
@@ -1281,13 +1287,16 @@ class RepositorySync {
   /** Step 1 — Save: refresh the rules, stage, refuse a leak, validate,
    * commit when anything is staged (space-12). */
   private async save(): Promise<string | null> {
-    const dir = this.dir;
     const stop = (message: string, guidance: string): SpaceStopped => new SpaceStopped("save", { cause: "validation", message, guidance, retry: false });
     // The HEAD this Save stages against, read before anything is staged:
     // the commit's parent and the version its ref update names.
     const head = await this.git.ok(["rev-parse", "HEAD"]);
-    try { prepareStorageGitFiles(dir, this.host.store.untrackedSessionPaths(this.key)); }
-    catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
+    // The clone's address is read at each write, as Apply's is (DR-111):
+    // a clone moved meanwhile is written where it lies, and one removed
+    // meanwhile refuses with nothing made where it stood, as any failing
+    // system call does, through the retryable stop.
+    try { prepareStorageGitFiles(this.dir, this.host.store.untrackedSessionPaths(this.key)); }
+    catch (error) { if (systemFailure(error)) throw error; throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
       comment: "Guidance where the sync rules file could not be refreshed",
     })); }
@@ -1314,9 +1323,10 @@ class RepositorySync {
     // refuses the commit as Git's conditional ref write does.
     const tree = await this.git.ok(["write-tree"]);
     // The staged files validated whole supersede a refresh's earlier finding.
-    try { await validateStorageSnapshot(dir, tree, this.validation()); this.refreshProblem = undefined; }
+    try { await validateStorageSnapshot(this.dir, tree, this.validation()); this.refreshProblem = undefined; }
     catch (error) {
       await this.git.run(["reset", "-q"]);
+      if (systemFailure(error)) throw error;
       throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
         id: "Nothing was saved. Fix or remove the file, then sync again.",
         comment: "Guidance where a file under the home failed validation before the save",
@@ -1394,7 +1404,6 @@ class RepositorySync {
   /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
    * their ancestor, or the empty tree for a join (space-13, space-14). */
   private async compare(choices: Record<string, StorageChoice>, join: boolean): Promise<CompareResult> {
-    const dir = this.dir;
     const originRef = `refs/remotes/origin/${SPEX_BRANCH}`;
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.ok(["rev-parse", originRef]);
@@ -1402,7 +1411,8 @@ class RepositorySync {
     this.unrelated = merged.code !== 0;
     if (this.unrelated && !join) return { outcome: "unrelated" };
     const base = this.unrelated ? EMPTY_TREE : merged.stdout.toString("utf8").trim();
-    const trees: StorageTrees = { ours: readStorageTree(dir, head), theirs: readStorageTree(dir, origin), base: readStorageTree(dir, base) };
+    // The trees are read where the clone lies now (DR-111).
+    const trees: StorageTrees = { ours: readStorageTree(this.dir, head), theirs: readStorageTree(this.dir, origin), base: readStorageTree(this.dir, base) };
     const units = planStorageUnits(trees);
     this.lastPlan = { ours: head, oursTree: head, theirs: origin, base, units };
     this.lists = await this.describe(units, trees, { ours: head, theirs: origin, base });
@@ -1587,19 +1597,27 @@ class RepositorySync {
 
   private async repairIfMarked(): Promise<void> {
     if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
-    try {
-      const written = await this.repair();
-      this.repairFailure = undefined;
-      await this.reindex(written.includes("config/playbook.config.yaml"));
-    } catch (error) {
-      this.repairFailure = error instanceof Error ? error.message : String(error);
-      throw new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
+    let written: string[];
+    try { written = await this.repair(); }
+    catch (error) {
+      // A second admission repairing the same marker loses its lease or
+      // its ref update to the first; the marker gone, that one finished
+      // the selection and nothing failed here (space-31).
+      if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
+      throw this.repairFailed(error);
     }
+    this.repairFailure = undefined;
+    try { await this.reindex(written.includes("config/playbook.config.yaml")); }
+    catch (error) { throw this.repairFailed(error); }
+  }
+
+  private repairFailed(error: unknown): CoreError {
+    this.repairFailure = error instanceof Error ? error.message : String(error);
+    return new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
   }
 
   /** Finish an interrupted apply from its marker; the units written. */
   private async repair(): Promise<string[]> {
-    const dir = this.dir;
     const marker = readJsonFile(this.markerPath()) as Partial<ApplyMarker>;
     if (marker.v !== 1 || typeof marker.ours !== "string" || typeof marker.theirs !== "string" || typeof marker.base !== "string" || typeof marker.choices !== "object" || marker.choices === null) {
       // Both failures below reach the reader as the cause inside the
@@ -1622,7 +1640,8 @@ class RepositorySync {
       rmSync(this.markerPath(), { force: true });
       return [];
     }
-    const trees: StorageTrees = { ours: readStorageTree(dir, marker.ours), theirs: readStorageTree(dir, marker.theirs), base: readStorageTree(dir, marker.base) };
+    // Read and written where the clone lies now, as Save and Apply are (DR-111).
+    const trees: StorageTrees = { ours: readStorageTree(this.dir, marker.ours), theirs: readStorageTree(this.dir, marker.theirs), base: readStorageTree(this.dir, marker.base) };
     const units = planStorageUnits(trees);
     const choices = marker.choices as Record<string, StorageChoice>;
     // Each unit is finished as Apply writes it, a file already holding
@@ -1632,7 +1651,7 @@ class RepositorySync {
     // leaves the marker for a later repair.
     let applied: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
-      applied = await applyStorageSelection(dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
+      applied = await applyStorageSelection(this.dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
         sessions: this.repository.store, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
       });
     } catch (error) {

@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
@@ -125,6 +125,9 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   writeFileSync(join(folder, "README.md"), "# Fixture\n");
   git(folder, "add", "-A");
   git(folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture");
+  // Git's exclude file with a mode of the reader's own, which the
+  // exports' writes to it keep.
+  chmodSync(join(folder, ".git", "info", "exclude"), 0o640);
   // The folder as it stood before Spex paired it: removal leaves it so,
   // the skills the environment exported there gone with the pair
   // (projects-9, environments-8).

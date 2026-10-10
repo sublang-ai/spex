@@ -4,8 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, rename, rm, readdir, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { mkdtemp, mkdir, rename, rm, readdir, stat, writeFile } from "node:fs/promises";
+import { existsSync, type BigIntStats } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationMedia } from "./media.js";
@@ -29,12 +29,24 @@ function fixture(home: string) {
     options: {
       home,
       directoryOf: (owner: MediaUploadOwner): string => {
-        if (owner.kind !== "draft") throw new Error("Only authoring owners in this fixture");
-        return assetsDir(home, owner.id, place.moved);
+        if (owner.kind === "draft") return assetsDir(home, owner.id, place.moved);
+        if (owner.kind === "intent") return join(cloneOf(home, place.moved), "intents", `${owner.intentId}.assets`);
+        throw new Error("Only authoring and intent owners in this fixture");
       },
       rootOf: () => cloneOf(home, place.moved),
     },
   };
+}
+
+/** The folder standing at `path` replaced by a successor holding one
+ * file of its own, as `rm -rf` then `mkdir` do: the identities of both. */
+async function replace(path: string): Promise<{original: string; successor: string}> {
+  const identity = (info: BigIntStats) => `${info.dev}:${info.ino}`;
+  const original = identity(await stat(path, {bigint: true}));
+  await rm(path, {recursive: true, force: true});
+  await mkdir(path, {recursive: true});
+  await writeFile(join(path, "successor"), "mine");
+  return {original, successor: identity(await stat(path, {bigint: true}))};
 }
 
 /** Media one of whose steps waits while a gate is armed — a
@@ -148,9 +160,8 @@ test("media-18: a publication prepared privately lands where its clone now lies,
     const held = arm();
     const refused = media.uploads.finish(replaced.uploadId);
     await held.reached;
-    await rm(cloneOf(home, true), {recursive: true, force: true});
-    await mkdir(cloneOf(home, true), {recursive: true});
-    await writeFile(join(cloneOf(home, true), "successor"), "mine");
+    const {original, successor} = await replace(cloneOf(home, true));
+    assert.notEqual(successor, original, "the clone the upload began in stays held, so its successor is another folder");
     held.release();
     await assert.rejects(refused, /unavailable/);
     assert.deepEqual(await readdir(cloneOf(home, true)), ["successor"], "the successor is untouched");
@@ -158,6 +169,56 @@ test("media-18: a publication prepared privately lands where its clone now lies,
     await rm(cloneOf(home, true), {recursive: true, force: true});
     await assert.rejects(media.uploads.finish(gone.uploadId), /unavailable/);
     assert.equal(existsSync(cloneOf(home, true)), false, "nor is the removed one");
+  } finally { releaseAll(); await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: an upload whose clone was replaced before its finish is refused, a repeated begin resuming it and a retried finish refused alike, the successor untouched", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-early-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const owner = draft("early");
+  const {options} = fixture(home);
+  const media = new ApplicationMedia({...options, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  const early = request(owner);
+  try {
+    await media.prepare();
+    await media.begin(early);
+    await media.uploads.chunk(early.uploadId, 0, Buffer.from("kept").toString("base64"));
+    // Replaced between the begin and the finish, with no step in flight.
+    const {original, successor} = await replace(cloneOf(home));
+    assert.notEqual(successor, original, "the clone the upload began in stays held, so its successor is another folder");
+    assert.equal((await media.begin(early)).offset, 4, "a repeated begin resumes the upload it began");
+    await assert.rejects(media.uploads.finish(early.uploadId), /unavailable/);
+    await assert.rejects(media.uploads.finish(early.uploadId), /unavailable/, "a retried finish is refused alike");
+    assert.deepEqual(await readdir(cloneOf(home)), ["successor"], "the successor is untouched");
+    // Canceled, it is let go; an upload begun now publishes into the successor.
+    assert.equal((await media.uploads.cancel(early.uploadId)).canceled, true);
+    const fresh = request(owner);
+    await media.begin(fresh);
+    await media.uploads.chunk(fresh.uploadId, 0, Buffer.from("kept").toString("base64"));
+    const landed = await media.uploads.finish(fresh.uploadId);
+    assert.ok(existsSync(join(assetsDir(home, owner.id), landed.asset.assetId.slice("sha256:".length))), "published in the clone standing at its begin");
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: an adoption into an intent whose clone was replaced while its copy was prepared is refused, the successor untouched", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-adopt-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const source = draft("staged");
+  const destination = {kind: "intent" as const, projectId: PROJECT, intentId: randomUUID()};
+  const {PausedMedia, arm, releaseAll} = pausing();
+  const {options} = fixture(home);
+  const media = new PausedMedia({...options, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(source, true).importAsset({bytes: Buffer.from("kept"), mimeType: "text/plain", name: "evidence.txt"});
+    const held = arm();
+    const adoption = media.adopt(destination, [source], [asset]);
+    await held.reached;
+    const {original, successor} = await replace(cloneOf(home));
+    assert.notEqual(successor, original, "the clone the adoption began in stays held, so its successor is another folder");
+    held.release();
+    await assert.rejects(adoption, /unavailable/);
+    assert.deepEqual(await readdir(cloneOf(home)), ["successor"], "the successor is untouched");
   } finally { releaseAll(); await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 

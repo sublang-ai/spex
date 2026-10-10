@@ -11,8 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { CredentialChanged, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
@@ -22,7 +21,7 @@ import type { StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn, holdingGit } = fixture;
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
@@ -176,40 +175,6 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
   assert.ok(host.script.repositories.some((repository) => repository.id === own.id && repository.path === `${LOGIN}-spex`));
 });
 
-/** A `git` on the core's PATH that holds the first command whose
- * arguments hold `args` after `hold()` — one clone's `rev-parse
- * --git-dir`, the read a Groups state makes of it, or a join's clone —
- * until `release()`, then runs the real Git: a command caught in flight.
- * Later matching commands run at once. */
-function holdingGit(args: string): { path: string; hold(): void; held(): Promise<string>; release(): void } {
-  const dir = mkdtempSync(join(scratch, "holding-git-"));
-  const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
-  const hold = join(dir, "hold");
-  const claimed = join(dir, "claimed");
-  const held = join(dir, "held");
-  writeFileSync(join(dir, "git"), [
-    "#!/bin/sh",
-    'case " $* " in',
-    `  *" ${args} "*)`,
-    // The held marker records the umask the command was spawned under.
-    `    if mv "${hold}" "${claimed}" 2>/dev/null; then umask > "${held}.tmp"; mv "${held}.tmp" "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done; fi ;;`,
-    "esac",
-    `exec "${real}" "$@"`,
-    "",
-  ].join("\n"));
-  chmodSync(join(dir, "git"), 0o755);
-  return {
-    path: `${dir}:${process.env.PATH ?? ""}`,
-    hold: () => writeFileSync(hold, ""),
-    held: async () => {
-      for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
-      assert.ok(existsSync(held), "the command reached Git");
-      return readFileSync(held, "utf8").trim();
-    },
-    release: () => { rmSync(hold, { force: true }); rmSync(claimed, { force: true }); },
-  };
-}
-
 test("space-59: a sign-in moves your own group's folder at its instant while a read of it is in flight; a write naming the old key is refused and recreates nothing", async (t) => {
   const host = await startHost();
   const dataDir = mkdtempSync(join(scratch, "signin-reading-"));
@@ -256,6 +221,57 @@ test("space-59: a sign-in moves your own group's folder at its instant while a r
   const after = await home.client.expectOk("space.get", {});
   assert.equal(repositoryOf(after, moved).folder, home.projectDir);
   assert.deepEqual(after.groups.flatMap((group) => group.repositories.map((repository) => repository.key)).filter((repoKey) => repoKey.startsWith(`${OWN}/`)), []);
+});
+
+test("space-37: a Save held after its own read of HEAD writes where its clone lies: removed, it makes nothing; moved by a sign-in, it saves and syncs there", async (t) => {
+  const host = await startHost();
+  // The Save's own read of HEAD has run, its answer held: the Save awaits it.
+  const shim = holdingGit("rev-parse HEAD", { after: true });
+  const home = await startHome("save-held", { host, project: false, env: { PATH: shim.path } });
+  t.after(() => { shim.release(); return home.stop(); });
+  const own = join(home.dataDir, "workspace", OWN);
+
+  // Removed meanwhile: the resumed Save refuses, its folder never made again.
+  const removed = await addFolder(home, gitFolder("save-removed"));
+  await home.client.expectOk("space.remote.set", { repository: removed.key, url: bareRepo() });
+  writeFileSync(join(removed.clone, "notes.txt"), "never saved\n");
+  await sleep(200);
+  shim.hold();
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: removed.key }), { accepted: true });
+  await shim.held();
+  assert.equal(await home.client.expectOk("project.remove", { projectId: removed.key, confirm: true }), null);
+  assert.ok(!existsSync(removed.clone), "the clone is gone");
+  await sleep(200);
+  const ended = home.client.mark();
+  shim.release();
+  // Nothing else runs: the next state is the one the stopped Save publishes.
+  const after = await home.client.waitSpace(ended, () => true, 30_000);
+  assert.ok(!existsSync(removed.clone), "the resumed Save made nothing where the clone stood");
+  assert.ok(!after.groups.some((group) => group.repositories.some((repository) => repository.key === removed.key)), "and lists no row for it");
+
+  // Moved meanwhile by the sign-in's rename of your own group's folder:
+  // the resumed Save refreshes the rules, validates and commits where
+  // the clone lies, and the sync goes through there.
+  const { key, clone } = await addFolder(home, gitFolder("save-moved"));
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  writeFileSync(join(clone, "notes.txt"), "saved where it lies\n");
+  await sleep(200);
+  shim.hold();
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  await shim.held();
+  await signIn(home, host);
+  for (let i = 0; i < 400 && existsSync(own); i += 1) await sleep(25);
+  assert.ok(!existsSync(own), "your own group's folder moved while the Save was held");
+  const moved = `${LOGIN}/save-moved-spex`;
+  const movedClone = clonePath(home.dataDir, moved);
+  const resumed = home.client.mark();
+  shim.release();
+  const synced = await home.client.waitRepository(resumed, moved, (repository) => repository.sync.phase !== "running", 30_000);
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.ok(!existsSync(own), "the former folder is not made again");
+  assert.equal(git(movedClone, "show", "HEAD:notes.txt"), "saved where it lies");
+  assert.equal(git(bare, "rev-parse", "spex"), git(movedClone, "rev-parse", "spex"));
 });
 
 test("space-37: Pick a group creates <name>-spex there and pushes; a taken name is refused; a refused creation waits until a Refresh finds it", async (t) => {

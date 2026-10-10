@@ -511,7 +511,8 @@ export async function selectStorageMerge(home_: string, key: string, choices: Re
 }
 
 /** Install a clone's managed Git rules before its first commit and
- * before each sync, keeping authored rules (storage-17). */
+ * before each sync, keeping authored rules (storage-17). The clone must
+ * stand: a folder moved or removed meanwhile is never made again. */
 export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] = []): void {
   const ignores = [
     // `local/` holds what Playbook's guarded migration keeps of a legacy
@@ -529,7 +530,6 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
   const attributes = ["*.json -text", "*.jsonl -text", "/intents/*.assets/** -text", "/sessions/*.assets/** -text", "/authoring/*.assets/** -text"];
   const begin = "# BEGIN Spex managed storage rules";
   const end = "# END Spex managed storage rules";
-  mkdirSync(dir, { recursive: true });
   for (const [name, generated] of [[".gitignore", ignores], [".gitattributes", attributes]] as const) {
     const file = join(dir, name); const prior = existsSync(file) ? readFileSync(file, "utf8") : "";
     const lines = prior.split("\n"); if (lines.at(-1) === "") lines.pop();

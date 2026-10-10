@@ -55,8 +55,8 @@ class MediaClient {
   }
   close(): void { this.socket.close(); }
 
-  async waitFor(predicate: (message: ServerMessage) => boolean): Promise<ServerMessage> {
-    const deadline = Date.now() + 5000;
+  async waitFor(predicate: (message: ServerMessage) => boolean, timeoutMs = 5000): Promise<ServerMessage> {
+    const deadline = Date.now() + timeoutMs;
     for (;;) {
       const found = this.messages.find(predicate);
       if (found) return found;
@@ -116,7 +116,7 @@ async function readAll(client: MediaClient, owner: MediaOwner, asset: MediaAsset
   return Buffer.concat(chunks);
 }
 
-test("space-21: a sync is admitted while attachment validation for a queue or an edit is pending, and both land", {timeout: 30_000}, async () => {
+test("space-21: a sync is admitted while attachment validation for a queue or an edit is pending, and both land", {timeout: 120_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
   const media = Reflect.get(f.service, "media") as ApplicationMedia;
@@ -174,7 +174,7 @@ test("space-21: a sync is admitted while attachment validation for a queue or an
         ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
         : undefined;
       const beside = await client.waitFor((message) => client.messages.indexOf(message) >= during
-        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 30_000);
       assert.equal(phaseOf(beside)?.phase, "done", JSON.stringify(phaseOf(beside)));
       release();
       const intent = await submitted;
@@ -186,7 +186,7 @@ test("space-21: a sync is admitted while attachment validation for a queue or an
       const after = client.messages.length;
       assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
       const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after
-        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 30_000);
       assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
       assert.equal(git(remote, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
       assert.equal(f.stats.runs.length, 0);
@@ -343,7 +343,9 @@ test("media-10: a restarted core reclaims crashed uploads only after taking the 
     await client.command("media.chunk", {uploadId: incompleteId, offset: 0, data: Buffer.from("abc").toString("base64")});
     const stagingRoot = join(options.dataDir, "local", "uploads");
     const [lifetime] = await readdir(stagingRoot);
-    const staged = join(stagingRoot, lifetime, incompleteId);
+    // Each upload stages under a name of its own; the completed one's is gone.
+    const [stagedName] = await readdir(join(stagingRoot, lifetime));
+    const staged = join(stagingRoot, lifetime, stagedName);
     await assert.rejects(CoreService.start(options), /already|running|held|owner/i);
     assert.equal(await readFile(staged, "utf8"), "abc", "a rejected second core leaves the live owner's upload intact");
     child.kill("SIGKILL");

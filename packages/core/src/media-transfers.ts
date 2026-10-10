@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { randomUUID } from "node:crypto";
 import { open, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { i18n } from "./i18n.js";
@@ -14,21 +15,30 @@ export interface UploadRequest {
   byteLength: number;
 }
 
+/** What an upload keeps from its begin until it ends, released once. */
+export interface UploadHold { release(): void }
+
 /** The publication callback binds the transfer to the application-owned
  * Playbook asset store. A transfer never accepts a client filesystem path. */
-export interface MediaTransferOptions {
+export interface MediaTransferOptions<Hold extends UploadHold = UploadHold> {
   directory: string;
-  publish(request: UploadRequest, path: string): Promise<MediaAsset>;
+  /** Taken as a new upload begins, throwing to refuse it; kept through a
+   * failed publication for its retry, and released by that upload alone
+   * once it completes, fails to begin, is canceled or retired, expires,
+   * or the transfers close — a running publication first settling. */
+  hold?(request: UploadRequest): Hold;
+  publish(request: UploadRequest, path: string, hold: Hold | undefined): Promise<MediaAsset>;
   now?: () => number;
 }
 
-interface Upload {
+interface Upload<Hold> {
   request: UploadRequest;
   path: string;
   offset: number;
   touchedAt: number;
   asset?: MediaAsset;
   canceled: boolean;
+  hold?: Hold;
   tail: Promise<void>;
 }
 
@@ -46,13 +56,13 @@ export class MediaTransferError extends Error {
 
 /** One private staging directory per core lifetime, under its home lease.
  * Operations for a given upload are serialized, including finish/cancel. */
-export class MediaTransfers {
-  private readonly uploads = new Map<string, Upload>();
+export class MediaTransfers<Hold extends UploadHold = UploadHold> {
+  private readonly uploads = new Map<string, Upload<Hold>>();
   private readonly now: () => number;
   private readonly timer: ReturnType<typeof setInterval>;
   private closed = false;
 
-  constructor(private readonly options: MediaTransferOptions) {
+  constructor(private readonly options: MediaTransferOptions<Hold>) {
     this.now = options.now ?? Date.now;
     this.timer = setInterval(() => { void this.expire().catch(() => {}); }, 60_000);
     this.timer.unref();
@@ -72,12 +82,15 @@ export class MediaTransfers {
     if (incomplete.length >= MAX_UPLOADS || incomplete.reduce((total, upload) => total + upload.request.byteLength, 0) + request.byteLength > MAX_RESERVED_BYTES) {
       throw new MediaTransferError("limit", i18n._({id: "Too many files are uploading. Finish or cancel an upload, then retry.", comment: "Media transfer refusal"}));
     }
-    const upload: Upload = {
+    const upload: Upload<Hold> = {
       request: { ...request, owner: { ...request.owner } },
-      path: join(this.options.directory, request.uploadId),
+      // Its own staging file: a later upload under the client's ID never
+      // shares it, so this one's cleanup removes only its own bytes.
+      path: join(this.options.directory, randomUUID()),
       offset: 0,
       touchedAt: this.now(),
       canceled: false,
+      hold: this.options.hold?.(request),
       tail: Promise.resolve(),
     };
     // Reserve before any filesystem wait so simultaneous begins cannot win twice.
@@ -89,8 +102,9 @@ export class MediaTransfers {
         await file.close();
         return this.state(upload);
       } catch (error) {
-        this.uploads.delete(request.uploadId);
+        this.forget(upload);
         upload.canceled = true;
+        this.release(upload);
         throw error;
       }
     });
@@ -142,9 +156,10 @@ export class MediaTransfers {
         }
         const file = await open(upload.path, "r");
         try { await file.sync(); } finally { await file.close(); }
-        const asset = await this.options.publish(upload.request, upload.path);
+        const asset = await this.options.publish(upload.request, upload.path, upload.hold);
         if (asset.byteLength !== upload.request.byteLength) throw new Error(i18n._({id: "Published upload has a different byte length.", comment: "Media storage failure"}));
         upload.asset = asset;
+        this.release(upload);
         await rm(upload.path, { force: true });
       }
       return { ...this.state(upload), asset: upload.asset };
@@ -159,14 +174,16 @@ export class MediaTransfers {
       if (upload.asset) return { canceled: false };
       await rm(upload.path, { force: true });
       upload.canceled = true;
-      this.uploads.delete(uploadId);
+      this.release(upload);
+      this.forget(upload);
       return { canceled: true };
     });
   }
 
   /** Called as an owner's removal starts (media-17). Invalidation is
-   * synchronous; the returned promise removes each upload's staging once
-   * its queued transfer step ends, which the removal never waits for. */
+   * synchronous; the returned promise releases each upload's hold and
+   * removes its staging once its queued transfer step ends, which the
+   * removal never waits for. */
   async retireOwner(owner: MediaUploadOwner): Promise<void> {
     const retiring = [...this.uploads.values()].filter(({request}) => mediaOwnerKey(request.owner) === mediaOwnerKey(owner));
     for (const upload of retiring) {
@@ -176,6 +193,7 @@ export class MediaTransfers {
     }
     await Promise.all(retiring.map(async (upload) => {
       await upload.tail;
+      this.release(upload);
       await rm(upload.path, {force: true});
     }));
   }
@@ -184,15 +202,16 @@ export class MediaTransfers {
    * from memory only, leaving their durable asset in its owner's store. */
   async expire(): Promise<void> {
     if (this.closed) return;
-    for (const [id, upload] of this.uploads) {
+    for (const upload of this.uploads.values()) {
       if (this.now() - upload.touchedAt < IDLE_MS) continue;
-      if (upload.canceled) { this.uploads.delete(id); continue; }
+      if (upload.canceled) { this.forget(upload); continue; }
       await this.withUpload(upload, async () => {
         // Queued activity can refresh the upload before expiry gets its turn.
         if (this.now() - upload.touchedAt < IDLE_MS) return;
         await rm(upload.path, { force: true });
         upload.canceled = true;
-        this.uploads.delete(id);
+        this.release(upload);
+        this.forget(upload);
       }, false).catch((error: unknown) => {
         if (!(error instanceof MediaTransferError && error.reason === "unavailable")) throw error;
       });
@@ -205,6 +224,7 @@ export class MediaTransfers {
     clearInterval(this.timer);
     await Promise.all([...this.uploads.values()].map(async (upload) => {
       await upload.tail;
+      this.release(upload);
       await rm(upload.path, { force: true });
       upload.canceled = true;
     }));
@@ -221,18 +241,32 @@ export class MediaTransfers {
     if (this.closed) throw new MediaTransferError("unavailable", i18n._({id: "The upload service has stopped.", comment: "Media transfer refusal"}));
   }
 
-  private require(uploadId: string): Upload {
+  private require(uploadId: string): Upload<Hold> {
     this.assertOpen();
     const upload = this.uploads.get(uploadId);
     if (!upload) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
     return upload;
   }
 
-  private state(upload: Upload): MediaUploadState {
+  private state(upload: Upload<Hold>): MediaUploadState {
     return { uploadId: upload.request.uploadId, offset: upload.offset, ...(upload.asset ? { asset: upload.asset } : {}) };
   }
 
-  private withUpload<T>(upload: Upload, operation: () => T | Promise<T>, touch = true): Promise<T> {
+  /** An upload's hold, released once and only by the upload that took
+   * it: a later upload under the same id holds its own. */
+  private release(upload: Upload<Hold>): void {
+    const hold = upload.hold;
+    upload.hold = undefined;
+    hold?.release();
+  }
+
+  /** Drop an upload from the map only while it is still the entry for
+   * its ID, never a later upload begun under that ID. */
+  private forget(upload: Upload<Hold>): void {
+    if (this.uploads.get(upload.request.uploadId) === upload) this.uploads.delete(upload.request.uploadId);
+  }
+
+  private withUpload<T>(upload: Upload<Hold>, operation: () => T | Promise<T>, touch = true): Promise<T> {
     const result = upload.tail.then(async () => {
       if (upload.canceled) throw new MediaTransferError("unavailable", i18n._({id: "This upload was canceled or expired. Retry the file upload.", comment: "Media transfer refusal"}));
       if (touch) upload.touchedAt = this.now();

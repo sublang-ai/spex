@@ -3,12 +3,12 @@
 
 import { randomUUID } from "node:crypto";
 import { dirname, join, relative, sep } from "node:path";
-import { closeSync, constants, copyFileSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, statSync, unlinkSync, type Stats } from "node:fs";
+import { closeSync, constants, copyFileSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, statSync, unlinkSync, type BigIntStats, type Stats } from "node:fs";
 import { lstat, mkdir, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { createAssetStore, type AssetReader, type OwnerAssetStore } from "@sublang/playbook/session-assets";
 import { i18n } from "./i18n.js";
 import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
-import { MediaTransferError, MediaTransfers, type UploadRequest } from "./media-transfers.js";
+import { MediaTransferError, MediaTransfers, type UploadHold, type UploadRequest } from "./media-transfers.js";
 
 export interface ApplicationMediaOptions {
   home: string;
@@ -37,6 +37,12 @@ const STAGING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * — the owner's clone — must stand, and only folders beneath it are made
  * to reach `directory`. */
 export interface AssetPlace { root: string; directory: string }
+
+/** An owner's clone held open from an upload's begin, or for an
+ * adoption, until it ends: while held its folder is not freed, so no
+ * successor at its place can take its identity, while a move or removal
+ * proceeds as ever (media-17). */
+interface ClonePin extends UploadHold { id: string }
 
 const unavailableUpload = (): MediaTransferError =>
   new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
@@ -96,7 +102,7 @@ function publishFile(from: string, to: string): void {
 
 /** Application owners reuse Playbook's portable asset primitives. */
 export class ApplicationMedia {
-  readonly uploads: MediaTransfers;
+  readonly uploads: MediaTransfers<ClonePin>;
   private readonly staging: string;
   /** Where content is prepared before its publication: this lifetime's
    * own, private, emptied at start under the home lease. */
@@ -104,10 +110,6 @@ export class ApplicationMedia {
   private readonly readers = new Map<string, ReaderEntry>();
   private readonly timer: ReturnType<typeof setInterval>;
   private readonly prepared = new Map<string, Promise<void>>();
-  /** The clone each upload's owner lay in at its begin, by upload id: a
-   * publication into any other — the owner removed, or its key reused —
-   * is refused (media-17). */
-  private readonly places = new Map<string, string>();
   private closed = false;
   private stagingReady = false;
 
@@ -127,9 +129,10 @@ export class ApplicationMedia {
   constructor(private readonly options: ApplicationMediaOptions) {
     this.staging = join(options.home, "local", "uploads", randomUUID());
     this.assetStaging = join(options.home, "local", "asset-staging");
-    this.uploads = new MediaTransfers({
+    this.uploads = new MediaTransfers<ClonePin>({
       directory: this.staging,
-      publish: (request, path) => this.publish(request, path),
+      hold: (request) => this.pin(request.owner),
+      publish: (request, path, clone) => this.publish(request, path, clone),
     });
     this.timer = setInterval(() => {
       for (const [key, entry] of this.readers) {
@@ -192,15 +195,12 @@ export class ApplicationMedia {
     return createAssetStore({ directory: this.ownerDirectory(owner), maxAssetBytes: MEDIA_MAX_FILE_BYTES });
   }
 
-  /** Begin an upload (media-2) for an owner standing now, remembering
-   * the clone it lies in. */
+  /** Begin an upload (media-2) for an owner standing now, a new upload
+   * holding the clone it lies in until it ends. */
   async begin(request: UploadRequest): ReturnType<MediaTransfers["begin"]> {
     this.assertOpen();
     this.ownerStore(request.owner, true);
-    const place = this.placeOf(request.owner);
-    const state = await this.uploads.begin(request);
-    if (place !== undefined && !this.places.has(request.uploadId)) this.places.set(request.uploadId, place);
-    return state;
+    return this.uploads.begin(request);
   }
 
   /** Import content into an owner through the private publication of
@@ -211,35 +211,36 @@ export class ApplicationMedia {
     return importOwnedAsset(this.assetStaging, prepare, place);
   }
 
-  /** Where an owner standing now publishes, or `unavailable`. */
-  private placeFor(owner: MediaUploadOwner, uploadId?: string): AssetPlace {
-    let store: OwnerAssetStore;
-    try { store = this.ownerStore(owner, true); } catch { throw unavailableUpload(); }
-    const begun = uploadId === undefined ? undefined : this.places.get(uploadId);
-    if (begun !== undefined && this.placeOf(owner) !== begun) throw unavailableUpload();
-    return { root: this.options.rootOf(owner), directory: store.directory };
+  /** Where an owner standing now publishes — in the clone `clone`
+   * holds, wherever it now lies — or `unavailable`. */
+  private placeFor(owner: MediaUploadOwner, clone: ClonePin): AssetPlace {
+    let store: OwnerAssetStore, root: string;
+    try { store = this.ownerStore(owner, true); root = this.options.rootOf(owner); } catch { throw unavailableUpload(); }
+    if (identityOf(root) !== clone.id) throw unavailableUpload();
+    return { root, directory: store.directory };
+  }
+
+  /** The clone an owner lies in now, held open, or `unavailable`. */
+  private pin(owner: MediaUploadOwner): ClonePin {
+    let root: string;
+    try { root = this.options.rootOf(owner); } catch { throw unavailableUpload(); }
+    const clone = holdDirectory(root);
+    if (!clone) throw unavailableUpload();
+    return clone;
   }
 
   /** Publish a staged upload into its owner (media-2, media-17): the
    * owner resolved and checked at the publication's own instant — still
-   * standing, in the clone it lay in at the begin — so a publication
-   * after a removal or a move is refused and recreates nothing. */
-  private async publish(request: UploadRequest, path: string): Promise<MediaAsset> {
-    this.placeFor(request.owner, request.uploadId);
-    const asset = await this.importInto(
+   * standing, in the clone held since the begin — so a publication
+   * follows a moved clone to where it lies now, and one whose owner or
+   * clone was removed or replaced is refused and recreates nothing. */
+  private async publish(request: UploadRequest, path: string, clone: ClonePin | undefined): Promise<MediaAsset> {
+    if (!clone) throw unavailableUpload();
+    this.placeFor(request.owner, clone);
+    return this.importInto(
       (stage) => stage.importAsset({ path, mimeType: request.mimeType, name: request.name }),
-      () => this.placeFor(request.owner, request.uploadId),
+      () => this.placeFor(request.owner, clone),
     );
-    this.places.delete(request.uploadId);
-    return asset;
-  }
-
-  /** The identity of the clone an owner lies in now, if it stands. */
-  private placeOf(owner: MediaUploadOwner): string | undefined {
-    try {
-      const info = statSync(this.options.rootOf(owner));
-      return `${info.dev}:${info.ino}`;
-    } catch { return undefined; }
   }
 
   /** Remove an owner (media-17): its upload identities invalidated and
@@ -283,22 +284,27 @@ export class ApplicationMedia {
   async adopt(destination: MediaUploadOwner, sources: readonly MediaUploadOwner[], assets: readonly MediaAsset[]): Promise<void> {
     if (assets.length === 0) return;
     this.assertOpen();
-    this.placeFor(destination);
-    const held = this.ownerStore(destination, true);
-    for (const asset of assets) {
-      try { const reader = await held.openAsset(asset); await reader.close(); continue; } catch { /* not here yet */ }
-      let copied = false;
-      for (const source of sources) {
-        const from = this.ownerStore(source);
-        try {
-          await this.prepareStore(from);
-          await this.importInto((stage) => stage.copyAsset(from, asset), () => this.placeFor(destination));
-          copied = true;
-          break;
-        } catch { /* try the next */ }
+    // The destination's clone is held for the whole adoption, each
+    // publication landing only in that clone (media-17).
+    const clone = this.pin(destination);
+    try {
+      this.placeFor(destination, clone);
+      const held = this.ownerStore(destination, true);
+      for (const asset of assets) {
+        try { const reader = await held.openAsset(asset); await reader.close(); continue; } catch { /* not here yet */ }
+        let copied = false;
+        for (const source of sources) {
+          const from = this.ownerStore(source);
+          try {
+            await this.prepareStore(from);
+            await this.importInto((stage) => stage.copyAsset(from, asset), () => this.placeFor(destination, clone));
+            copied = true;
+            break;
+          } catch { /* try the next */ }
+        }
+        if (!copied) throw unavailableUpload();
       }
-      if (!copied) throw unavailableUpload();
-    }
+    } finally { clone.release(); }
   }
 
   async read(owner: MediaOwner, assetId: MediaAsset["assetId"], offset: number, length: number): Promise<{asset: MediaAsset; offset: number; data: string; eof: boolean}> {
@@ -421,6 +427,36 @@ function ensureBeneath(root: string, directory: string): boolean {
     }
   }
   return true;
+}
+
+/** The directory at `path` held open until released, once; `undefined`
+ * where none stands there. */
+function holdDirectory(path: string): ClonePin | undefined {
+  let handle: number;
+  try { handle = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY); }
+  catch (error) { if (absent(error)) return undefined; throw error; }
+  let info: BigIntStats;
+  try { info = fstatSync(handle, { bigint: true }); }
+  catch (error) { closeSync(handle); throw error; }
+  let open = true;
+  return {
+    id: `${info.dev}:${info.ino}`,
+    release: () => { if (open) { open = false; closeSync(handle); } },
+  };
+}
+
+/** The identity of whatever stands at `path` now, `undefined` where
+ * nothing does. */
+function identityOf(path: string): string | undefined {
+  let info: BigIntStats;
+  try { info = statSync(path, { bigint: true }); }
+  catch (error) { if (absent(error)) return undefined; throw error; }
+  return `${info.dev}:${info.ino}`;
+}
+
+function absent(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "ENOENT" || code === "ENOTDIR";
 }
 
 function unsafeStaging(path: string): Error {

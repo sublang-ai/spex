@@ -185,7 +185,8 @@ export function gitExcludeFile(workingFolder: string): string | null {
 
 /** Replace a managed block of a working folder's `info/exclude`, under
  * the version read: the file changed meanwhile is refused as a conflict,
- * never overwritten (DR-111). */
+ * never overwritten (DR-111). The file is the folder's, so its mode is
+ * kept; one made new is 0644. */
 export function writeExcludeBlock(workingFolder: string, entries: string[], block: ExcludeBlock = "exports"): void {
   const file = gitExcludeFile(workingFolder);
   if (!file) return;
@@ -206,8 +207,11 @@ export function writeExcludeBlock(workingFolder: string, entries: string[], bloc
   const out = [...kept, ...managed].join("\n");
   const next = out.length > 0 ? `${out}\n` : "";
   if (next === text) return;
+  let mode = 0o644;
+  try { mode = statSync(file).mode & 0o7777; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   mkdirSync(dirname(file), { recursive: true });
-  writeVersionedBytes(file, next, read.version, 0o644);
+  writeVersionedBytes(file, next, read.version, mode);
 }
 
 /**

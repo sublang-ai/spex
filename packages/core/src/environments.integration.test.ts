@@ -856,23 +856,34 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.equal(statSync(exported).ino, exportedBefore, "no export of the stale lock");
 
     // A clone removed while the download is held is never made again,
-    // by the install or its exports.
-    held.arm(download("1.3.0"));
-    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.3.0" } });
+    // by the install or its exports. The request's own operation is
+    // awaited to its end: a missing clone is announced nowhere and read
+    // as not found.
+    const manager = managerOf(core);
+    const original = manager.request;
+    let done = undefined as Promise<void> | undefined;
+    manager.request = async (...args) => {
+      const admitted = await original.apply(manager, args);
+      done = admitted.done;
+      return admitted;
+    };
+    try {
+      held.arm(download("1.3.0"));
+      await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.3.0" } });
+    } finally {
+      manager.request = original;
+    }
+    assert.ok(done, "the request's operation was admitted");
     await until(held.reached, 30_000, "the held download of 1.3.0");
     rmSync(clone, { recursive: true, force: true });
     held.release();
-    const start = Date.now();
-    while ((await client.expectOk("environment.get", { repository: key })).busy !== null) {
-      if (Date.now() - start > 30_000) throw new Error("timeout waiting for the held install to end");
-      await sleep(25);
-    }
+    await done;
     assert.equal(existsSync(clone), false, "the install made no folder at the clone's address");
     assert.deepEqual(existsSync(join(core.dataDir, "cache", "staging")) ? readdirSync(join(core.dataDir, "cache", "staging")) : [], [], "no staged tree outlives the refusal");
+    await client.expectError("environment.get", { repository: key }, "not_found");
     // The enabling path's strict steps are refused there, no folder made.
-    const manager = managerOf(core);
     await assert.rejects(manager.installNow(key, false, { lockWritten: false, installed: false }), refusedWith("not_found"));
-    await assert.rejects(manager.ensureRequested(key, "acme/kit", { version: "1.0.0" }), refusedWith("conflict"));
+    await assert.rejects(manager.ensureRequested(key, "acme/kit", { version: "1.0.0" }), refusedWith("not_found"));
     assert.equal(existsSync(clone), false);
   } finally {
     held.release();
