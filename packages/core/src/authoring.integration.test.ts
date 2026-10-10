@@ -14,6 +14,11 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writ
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
+import type { PermissionPolicy } from "@sublang/cligent";
+import { mapPermissionsToClaudeOptions } from "@sublang/cligent/adapters/claude-code";
+import { mapPermissionsToCodexOptions } from "@sublang/cligent/adapters/codex";
+import { mapPermissionsToGeminiToolConfig } from "@sublang/cligent/adapters/gemini";
+import { mapPermissionsToOpenCodeOptions } from "@sublang/cligent/adapters/opencode";
 
 import { CoreService } from "./service.js";
 import { authoringDocuments } from "./authoring.js";
@@ -273,12 +278,44 @@ function authoringFiles(clone: string, id: string): { record: string; records: s
 
 const SOURCE = AUTHORING_SOURCE.replaceAll("<id>", "triage");
 
+/** Check the options captured from real authoring turns at Cligent's
+ * native permission boundary; the scripted adapter alone accepts even
+ * invalid absolute writable paths. No SDK or model call is needed. */
+function assertAuthoringPermissions(runs: FakeAdapterStats["runs"], packageDir: string): void {
+  assert.ok(runs.length > 0, "at least one authoring call reached the adapter");
+  for (const run of runs) {
+    assert.equal(run.cwd, packageDir, "all calls use the same package working directory");
+    const policy = run.permissions as PermissionPolicy | undefined;
+    assert.doesNotThrow(() => mapPermissionsToClaudeOptions(policy));
+    assert.doesNotThrow(() => mapPermissionsToGeminiToolConfig(policy));
+    assert.doesNotThrow(() => mapPermissionsToOpenCodeOptions(policy));
+    // Cligent explicitly refuses Codex permission isolation on native
+    // Windows; Spex app hosts are macOS and Linux (DR-049).
+    if (process.platform !== "win32") {
+      const mapped = mapPermissionsToCodexOptions(policy);
+      assert.equal(mapped.codexOptions?.config?.default_permissions, ":workspace");
+      assert.equal(mapped.codexOptions?.config?.approvals_reviewer, "auto_review");
+      assert.equal(mapped.codexCliConfigOverrides, undefined, "no extra write grants");
+    }
+    assert.deepEqual(policy, { mode: "auto" });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // playbook-library-72: the happy path through registration
 // ---------------------------------------------------------------------------
 
-test("playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol", async () => {
-  const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
+for (const language of ["en", "zh"]) test(`playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol (${language})`, async () => {
+  const script = authoringScript();
+  if (language === "zh") {
+    for (const rule of script.rules ?? []) {
+      const writes = rule.response.writes;
+      for (const [path, source] of Object.entries(writes ?? {})) {
+        writes![path] = source.replace("Read the issue and the repository's labels with gh.", "用 gh 阅读问题和仓库的标签。");
+      }
+    }
+  }
+  const harness = await startHarness({ script, slc: stubSlcSource("['Triager', 'Verifier']") });
   const { stats, configPath, projectId, clone } = harness;
   const files = authoringFiles(clone, "triage");
   const client = new Client(harness.service.port());
@@ -329,11 +366,13 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   }, 120_000, "the proposal");
 
   // playbook-library-64: the fake ran in the spec package's folder with
-  // `{ mode: "auto" }` and that folder as its one writable path, no tool
-  // lists, no resume.
+  // `{ mode: "auto" }` with no extra writable paths, no tool lists,
+  // no resume. Both the initial chat and the proposal turn must pass
+  // the real adapters' permission mapping.
+  assertAuthoringPermissions(stats.runs, draftDir);
   const first = stats.runs[0];
   assert.equal(first.cwd, draftDir);
-  assert.deepEqual(first.permissions, { mode: "auto", writablePaths: [draftDir] });
+  assert.deepEqual(first.permissions, { mode: "auto" });
   assert.equal(first.allowedTools, undefined);
   assert.equal(first.disallowedTools, undefined);
   assert.equal(first.resume, undefined);
@@ -370,6 +409,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.ok(sourceIndex >= 0 && sourceIndex < finishedIndex, "the source streamed before the turn ended");
   const source = client.messages[sourceIndex] as DraftSourceMessage;
   assert.match(source.markdown, /^# triage\n\nRoles:/);
+  assert.ok(source.markdown.includes(language === "zh" ? "用 gh 阅读问题和仓库的标签。" : "Read the issue and the repository's labels with gh."));
   assert.equal(source.version.length, 16);
 
   // playbook-library-66/67: the compile started without a further
@@ -539,6 +579,7 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
 
   // runs: relay, relay, Boss, relay with questions, prefaced Boss, success.
   assert.equal(stats.runs.length, 6);
+  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "triage"));
   assert.match(stats.runs[2].prompt, /Boss: Ask me what you need/);
   assert.match(stats.runs[2].prompt, /Since your last reply: .*a compile failed at text2gears/);
   const questions = stats.runs[3].prompt;
@@ -664,6 +705,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   await idle(client, 3);
   const runs = first.stats.runs;
   assert.equal(runs.length, 4);
+  assertAuthoringPermissions(runs, join(dir, "project", "spex-packages", "persist"));
   assert.equal(runs[0].resume, undefined, "the first turn has no resume");
   assert.match(runs[0].prompt, /You are helping the Boss/);
   assert.match(runs[1].resume ?? "", /^fake-resume-/, "the second turn passed the first's token");
@@ -729,6 +771,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   await client2.expectOk("draft.send", { projectId, draftId: "persist", text: "switch" });
   await idle(client2, 2);
   const onReviewer = second.stats.runs[1];
+  assertAuthoringPermissions(second.stats.runs, join(dir, "project", "spex-packages", "persist"));
   assert.equal(onReviewer.resume, undefined, "a switched agent starts fresh");
   assert.equal(onReviewer.model, "codex-test");
   assert.match(onReviewer.prompt, /Conversation so far:/);
