@@ -10,14 +10,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { appendHistorySession, seedHistorySession } from "./testing/demo.js";
 import { clonePath, createSpaceHarness, OWN_KEY, ownClone, prefsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, bareRepo, otherDevice, sameNameFolder, addFolder, sleepingSsh, sleep, joinRemote, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, otherDevice, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, joinRemote, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
@@ -236,13 +236,14 @@ test("space-38: the same session changed on both homes is one choice; the host's
   assert.ok(a.client.messages.some((m) => m.type === "session.removed" && m.sessionId === doomed));
 });
 
-test("space-38: a marker with a half-written selection is repaired at startup into the recorded commit", async (t) => {
+test("space-38: a marker with a half-written selection is repaired at startup into the recorded commit, and one whose file changed since records none", async (t) => {
   const first = await startHome("repair");
   const { key, clone } = await addFolder(first, first.projectDir);
   await first.stop();
   const dataDir = first.dataDir;
   const cwd = first.projectDir;
   const sessionId = await seedHistorySession(join(clone, "sessions"), cwd, turnRecords("Base turn", 1));
+  const whole = await seedHistorySession(join(clone, "sessions"), cwd, turnRecords("Another base turn", 1));
   git(clone, "add", "-A", "--", ".");
   git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base");
   const base = git(clone, "rev-parse", "HEAD");
@@ -252,6 +253,7 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   const theirsDir = peerClone(remote);
   await createSessionStore({ sessionsDir: join(theirsDir, "sessions") }).prepare();
   await seedHistorySession(join(theirsDir, "sessions"), cwd, turnRecords("Their second turn", 2), sessionId);
+  await seedHistorySession(join(theirsDir, "sessions"), cwd, turnRecords("Their other second turn", 2), whole);
   git(theirsDir, "add", "-A", "--", ".");
   git(theirsDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "theirs");
   git(theirsDir, "push", "-q", "origin", "HEAD:spex");
@@ -264,8 +266,15 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   git(clone, "add", "-A", "--", ".");
   git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "ours");
   const ours = git(clone, "rev-parse", "HEAD");
-  // The interrupted apply: the replay landed, the manifest did not, the marker stands.
+  // The interrupted apply: one session landed whole, its hint and viewed
+  // marker not yet cleared; the other's replay landed and its manifest did
+  // not; the marker stands.
   const marker = join(clone, ".spex-apply.json");
+  for (const file of [`${whole}.records.jsonl`, `${whole}.json`]) writeFileSync(join(clone, "sessions", file), readFileSync(join(theirsDir, "sessions", file)));
+  writeFileSync(join(clone, "sessions", `${whole}.hints.json`), "{}");
+  const prefsFile = join(dataDir, "local", "prefs.json");
+  const prefs = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, "utf8")) : { format: 1, prefs: {} };
+  writeFileSync(prefsFile, JSON.stringify({ ...prefs, prefs: { ...prefs.prefs, [`viewed:${whole}`]: Date.now() } }));
   writeFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), readFileSync(join(theirsDir, "sessions", `${sessionId}.records.jsonl`)));
   writeFileSync(marker, JSON.stringify({ v: 1, ours, theirs, base, choices: { [`sessions/${sessionId}`]: "theirs" }, at: Date.now() }));
   const home = await startHome("repair-start", { dataDir, project: false });
@@ -277,6 +286,8 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   assert.notEqual(head, ours);
   assert.deepEqual(git(clone, "log", "-1", "--format=%P").split(" "), [ours, theirs]);
   assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.json`)), readFileSync(join(theirsDir, "sessions", `${sessionId}.json`)));
+  assert.equal(existsSync(join(clone, "sessions", `${whole}.hints.json`)), false, "the session landed before the crash loses its hint");
+  assert.equal(prefsOf(dataDir)[`viewed:${whole}`], undefined, "and its viewed marker");
   assert.equal(git(clone, "show", "HEAD:notes.txt"), "ours");
   assert.equal(git(clone, "status", "--porcelain"), "");
   assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
@@ -293,6 +304,98 @@ test("space-38: a marker with a half-written selection is repaired at startup in
   assert.ok(!cleared.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(cleared.diagnostics));
   assert.equal(existsSync(marker), false);
   assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  // A file the interrupted apply would write, changed since by another
+  // hand, is left as it stands: the marker goes and no merge commit is recorded.
+  await again.stop();
+  writeFileSync(join(theirsDir, "other.txt"), "host\n");
+  git(theirsDir, "add", "-A", "--", ".");
+  git(theirsDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "theirs again");
+  git(theirsDir, "push", "-q", "origin", "HEAD:spex");
+  git(clone, "fetch", "-q", "origin");
+  const theirsAgain = git(clone, "rev-parse", "refs/remotes/origin/spex");
+  writeFileSync(join(clone, "other.txt"), "mine meanwhile\n");
+  writeFileSync(marker, JSON.stringify({ v: 1, ours: head, theirs: theirsAgain, base: theirs, choices: {}, at: Date.now() }));
+  const diverged = await startHome("repair-diverged", { dataDir, project: false });
+  t.after(() => diverged.stop());
+  const left = await diverged.client.expectOk("space.get", {});
+  assert.ok(!left.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(left.diagnostics));
+  assert.equal(existsSync(marker), false);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head, "no merge commit");
+  assert.equal(readFileSync(join(clone, "other.txt"), "utf8"), "mine meanwhile\n");
+  // The abandoned selection leaves an ordinary local change: the next sync
+  // saves it and replans, the file now a choice between both sides.
+  const replanned = await diverged.client.settle("space.sync", { repository: key });
+  assert.equal(replanned.sync.phase, "choices", JSON.stringify(replanned.sync));
+  assert.deepEqual(replanned.conflicts.map((c) => c.unit.unit), ["other.txt"]);
+  assert.equal(git(clone, "show", "HEAD:other.txt"), "mine meanwhile");
+  // A marker whose merge never landed, with spex moved on since — a commit
+  // from a terminal — is obsolete: it goes with nothing written or committed.
+  await diverged.stop();
+  const movedOn = git(clone, "rev-parse", "HEAD");
+  writeFileSync(marker, JSON.stringify({ v: 1, ours: head, theirs: theirsAgain, base: theirs, choices: {}, at: Date.now() }));
+  const obsolete = await startHome("repair-obsolete", { dataDir, project: false });
+  t.after(() => obsolete.stop());
+  const read = await obsolete.client.expectOk("space.get", {});
+  assert.ok(!read.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(read.diagnostics));
+  assert.equal(existsSync(marker), false);
+  assert.equal(git(clone, "rev-parse", "HEAD"), movedOn);
+  assert.equal(readFileSync(join(clone, "other.txt"), "utf8"), "mine meanwhile\n");
+});
+
+test("space-38: Save commits the tree it validated on the HEAD it staged against; a HEAD moved meanwhile refuses it, and a file written after validation stays local", async (t) => {
+  const home = await startHome("save-snapshot");
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  // A terminal commit lands while Save validates: the stale tree is not
+  // made a child of the new HEAD, and both the commit and the bytes stay.
+  writeFileSync(join(clone, "notes.txt"), "first\n");
+  let terminal = "";
+  home.hooks.beforeStep = ({ step, repository, at }) => {
+    if (step !== "save" || at !== "commit" || repository !== key) return;
+    home.hooks.beforeStep = undefined;
+    terminal = git(clone, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "from a terminal");
+    git(clone, "update-ref", "refs/heads/spex", terminal);
+  };
+  const stale = await home.client.settle("space.sync", { repository: key });
+  assert.ok(stale.sync.phase === "stopped" && stale.sync.step === "save" && stale.sync.retry, JSON.stringify(stale.sync));
+  assert.equal(git(clone, "rev-parse", "HEAD"), terminal, "the terminal's commit stands");
+  assert.equal(readFileSync(join(clone, "notes.txt"), "utf8"), "first\n");
+  assert.throws(() => git(clone, "cat-file", "-e", "HEAD:notes.txt"), "nothing saved over it");
+  // A file rewritten after validation stays a local change; the validated bytes are what Save commits.
+  home.hooks.beforeStep = ({ step, repository, at }) => {
+    if (step !== "save" || at !== "commit" || repository !== key) return;
+    home.hooks.beforeStep = undefined;
+    writeFileSync(join(clone, "notes.txt"), "late\n");
+  };
+  const saved = await home.client.settle("space.sync", { repository: key });
+  assert.equal(saved.sync.phase, "done", JSON.stringify(saved.sync));
+  assert.equal(git(clone, "show", "HEAD:notes.txt"), "first");
+  assert.equal(git(clone, "rev-parse", "HEAD~1"), terminal);
+  assert.equal(readFileSync(join(clone, "notes.txt"), "utf8"), "late\n");
+  assert.match(git(clone, "status", "--porcelain", "--", "notes.txt"), /^ ?M/);
+  // A file another process leaves invalid while an incoming change is
+  // applied stands as the refresh's finding; it admits the next sync,
+  // whose Save names the file, and once the reader repairs it the sync
+  // after goes through with the core still running (space-20, space-15).
+  await peerPush(peerClone(bare), (dir) => writeFileSync(join(dir, "incoming.txt"), "from the host\n"));
+  const stray = join(clone, "intents", `${randomUUID()}.assets`);
+  home.hooks.beforeStep = ({ step, repository }) => {
+    if (step !== "refresh" || repository !== key) return;
+    home.hooks.beforeStep = undefined;
+    mkdirSync(stray, { recursive: true });
+    writeFileSync(join(stray, "stray.png"), "no intent names this");
+  };
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const finding = (await home.client.expectOk("space.get", {})).diagnostics.find((d) => d.blocking && d.reason.includes("attachments without their intent"));
+  assert.ok(finding, "the refresh's finding is reported");
+  const named = await home.client.settle("space.sync", { repository: key });
+  assert.ok(named.sync.phase === "stopped" && named.sync.step === "save" && /attachments without their intent/.test(named.sync.message), JSON.stringify(named.sync));
+  rmSync(stray, { recursive: true, force: true });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done", "a repaired file admits the sync");
+  assert.ok(!(await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.reason.includes("attachments without their intent")));
 });
 
 test("space-38: a marker left after a landed fast-forward is cleared at startup with spex on the host's commit", async (t) => {
@@ -321,6 +424,65 @@ test("space-38: a marker left after a landed fast-forward is cleared at startup 
   assert.equal(git(clone, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
   assert.equal(git(clone, "status", "--porcelain"), "");
   assert.equal(readFileSync(join(clone, "notes.txt"), "utf8"), "theirs\n");
+});
+
+test("space-38: two Syncs admitted together over a marker a released lease left both repair it; the one whose ref update lost to the other's finished repair reports nothing", async (t) => {
+  // The first repair's ref update, held before it runs.
+  const shim = holdingGit("update-ref refs/heads/spex");
+  const home = await startHome("repair-twice", { env: { PATH: shim.path } });
+  t.after(() => { shim.release(); return home.stop(); });
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const sessionId = await seedHistorySession(join(clone, "sessions"), home.projectDir, turnRecords("Base turn", 1));
+  await home.client.expectOk("project.register", { path: home.projectDir });
+  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  // The host's newer turn of that session arrives beside a local change,
+  // and the session is held through the Apply: the marker stays.
+  const peer = peerClone(bare);
+  await peerPush(peer, (dir) => seedHistorySession(join(dir, "sessions"), home.projectDir, turnRecords("Their second turn", 2), sessionId).then(() => undefined));
+  writeFileSync(join(clone, "notes.txt"), "mine\n");
+  const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await sessions.prepare();
+  const hold: { lease?: { release(): Promise<unknown> } } = {};
+  home.hooks.beforeStep = async ({ step, repository }) => { if (step === "apply" && repository === key && !hold.lease) hold.lease = await sessions.acquireManagement(sessionId); };
+  const stopped = await home.client.settle("space.sync", { repository: key }).finally(async () => {
+    home.hooks.beforeStep = undefined;
+    await hold.lease?.release();
+  });
+  assert.ok(hold.lease, "the lease was held through the Apply");
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "apply" && stopped.sync.cause === "lease", JSON.stringify(stopped.sync));
+  const marker = join(clone, ".spex-apply.json");
+  assert.equal(existsSync(marker), true, "the recorded selection stands for the retry");
+  const recorded = JSON.parse(readFileSync(marker, "utf8")) as { ours: string; theirs: string };
+  assert.equal(git(clone, "rev-parse", "HEAD"), recorded.ours, "no merge commit");
+  await home.client.expectOk("project.register", { path: home.projectDir });
+  for (let i = 0; i < 200 && (await home.client.expectOk("session.list", {})).find((s) => s.id === sessionId)?.externalWriter; i += 1) await sleep(50);
+
+  // The first admission's repair writes the selection and waits at its
+  // ref update; the second, admitted meanwhile, repairs the same marker
+  // to its end.
+  shim.hold();
+  const first = home.client.command("space.sync", { repository: key });
+  await shim.held();
+  const second = await home.client.command("space.sync", { repository: key });
+  assert.ok(second.ok, JSON.stringify(second));
+  assert.equal(existsSync(marker), false, "the second repair finished the selection");
+  // Released, the first's ref update finds `spex` moved and fails: the
+  // marker gone, its admission goes on with no repair issue on either.
+  shim.release();
+  const reply = await first;
+  assert.ok(reply.ok, JSON.stringify(reply));
+  const read = await home.client.expectOk("space.get", {});
+  assert.ok(!read.diagnostics.some((d) => d.file.endsWith(".spex-apply.json")), JSON.stringify(read.diagnostics));
+  const settled = await home.client.settle("space.sync", { repository: key });
+  assert.equal(settled.sync.phase, "done", JSON.stringify(settled.sync));
+  assert.ok(!(await home.client.expectOk("space.get", {})).diagnostics.some((d) => d.file.endsWith(".spex-apply.json")));
+  assert.equal(existsSync(marker), false);
+  assert.equal(git(clone, "log", "--merges", "--format=%P", `${recorded.ours}..HEAD`), `${recorded.ours} ${recorded.theirs}`, "one merge of the recorded sides on the Save commit");
+  assert.deepEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`)), readFileSync(join(peer, "sessions", `${sessionId}.records.jsonl`)));
+  assert.equal(git(clone, "show", "HEAD:notes.txt"), "mine");
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
 });
 
 test("space-38: a missing repository, an unreachable host and a sleeping transport stop with their causes", async (t) => {

@@ -56,11 +56,16 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
-- a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either.
+- a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either;
+- the store reads `home.yaml` and the clones under `workspace/` as they stand when a command needs them, with no reload; a read creates no folder, and a clone gone since it was read is absent and refused where a command names it, your own group's clone being made only when the store opens ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- each change the core makes applies to the file as it reads at that instant, read, changed and written in one step, so a change an editor made since stands ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- a `home.yaml` that will not read, or that was deleted after it was read, is reported as blocking and refuses every write that needs it, a deleted one as changed meanwhile, the file neither written over nor recreated from memory until it reads again; meanwhile reads answer from its last valid reading, or with no pairs where the store opened on it.
 
 ### storage-3
 
-The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)].
+The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)]:
+
+- the store reads the file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### storage-4
 
@@ -76,27 +81,34 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
 - an intent holds no rank and no link to another intent: the next to run is the oldest queued one by `createdAt`, then by `id`;
-- an edit, a dispatch and a close rewrite the file whole; a remove deletes the file and its asset directory;
+- the store reads every intent file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- a capture writes a new file only where no clone holds an intent of its id and no file holds its name, never replacing one;
+- no write recreates the clone holding `intents/` where it moved or was removed;
 - a malformed file is reported without deletion, and its intent is listed nowhere.
 
 ### storage-5
 
 The preference store shall encode `local/prefs.json` as exactly `{format: 1, prefs: {...}}`, with these core preference values:
 
-- each preference is a JSON value;
+- each preference is a JSON value, read from the file as it stands and changed in one step with that read, so a value another writer changed meanwhile stands ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's stored history changes;
 - `sync:<repository>:last` stores the last completed in-app sync of that spex repository as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `sync:<repository>:noticed` records that this device's reader has seen the privacy notice before the first push into a spex repository with other members [[space-57](space.md#space-57)];
 - `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the facts the repair names, so the repair stands in the list and counts as no issue here alone;
-- `authoring:<id>:player` stores the roster player id answering that authoring session's conversation; absent means the Captain's block; removed with the session.
+- `authoring:<instance>:player` stores the roster player id answering the conversation of the authoring session with that instance [[storage-23](#storage-23)]; absent means the Captain's block; removed with the session.
 - `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, a subagent model, an effort, a subagent effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; browser access is a boolean override with omission inheriting the configured off-by-default setting [[media-9](media.md#media-9)]; absent means the session runs what the config resolves; removed with the session.
 - `session:<id>:parked` stores what a run of that session standing parked on the Boss advertised at its last settlement — the park's reason, its actions and the shell's ending, each an id with its label and any standing the runtime reported [[core-service-32](core-service.md#core-service-32)]; absent means that settlement found no parked run advertising anything; the next settlement writes it again [[core-service-91](core-service.md#core-service-91)], and it is removed with the session.
 - `language` stores the home's interface language as an offered language code [[core-service-108](core-service.md#core-service-108)]; absent means the reader's system ([DR-078](../decisions/078-the-interface-speaks-the-readers-language.md)).
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: the app token the Git host issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at sign-in and at every refresh and removed at sign-out:
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: the app token the Git host issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at sign-in and at every refresh and removed at sign-out or on the host's refusal, each as a versioned write of that host's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
+- a write names the pair its writer read, or none; in one step, the file is read, that host's pair compared with the named one in every field, and the file replaced only where they are equal, every other host's pair kept and the file removed with the last pair;
+- where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
+- a malformed entry for that host is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other host's pair kept, unless a well-formed pair stands there by then, which stays;
+- a file of another format, or with no hosts map, is refused and left as it is;
 - no credential is written anywhere else, and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
 
 ### storage-6
@@ -120,9 +132,11 @@ Where a spex repository's clone holds `config/playbook.config.yaml`, the config 
 
 ### storage-23
 
-The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
+The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, instance, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
 
-- `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`; `proposal` is `{command, intent, players}`;
+- `instance` is a canonical lowercase UUID minted at creation and never rewritten, the session's identity; a file an earlier version wrote without it reads as the UUID formed from the first 32 hex digits of the SHA-256 of `authoring:<id>:<createdAt>`, its version digit `8` and its variant bits `10`, until its next write records that UUID;
+- `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', device?, phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`, `device` being the home's `device` [[storage-2](#storage-2)] that runs it while `outcome` is `running`; `proposal` is `{command, intent, players}`;
+- a `turn_started` record carries the home's `device` as `device`;
 - timestamps use Unix milliseconds; no provider token enters either file; an incomplete final record line is not a record;
 - the session with its records and assets is one unit [[storage-11](#storage-11)], shared with the spex repository like any session.
 
@@ -185,12 +199,13 @@ When invoked as `plan <ours> <theirs>`, the storage Git tool shall report the re
 
 ### storage-21
 
-When invoked as `select [unit=ours|theirs ...]` during a Git merge, the storage Git tool shall apply the validated selection between `HEAD` and `MERGE_HEAD` in the selected clone under the home and session leases [[storage-14](#storage-14)]:
+When invoked as `select [unit=ours|theirs ...]` during a Git merge, the storage Git tool shall apply the validated selection between `HEAD` and `MERGE_HEAD` in the selected clone under the home lease [[storage-14](#storage-14)]:
 
 - reject unknown or duplicate choices, unresolved conflicts and choices contrary to an unambiguous comparison [[storage-11](#storage-11)];
-- validate the complete candidate before applying files [[storage-12](#storage-12)]; validation failure leaves working files and index unchanged;
-- write or delete each selected session's replay before its manifest, clear hints and viewed markers when its selected bundle differs from `HEAD`, and stage every selected path;
-- report filesystem failures without claiming success; retrying selection repairs an interrupted application before reopening.
+- validate the complete candidate — `HEAD`'s tree with each unit taken whole from its selected side — in a private copy before applying files [[storage-12](#storage-12)]; validation failure leaves working files and index unchanged;
+- write or delete each unit whose working-tree files differ from its selection by a versioned replacement [[storage-14](#storage-14)] naming the unit's tracked paths as Git's merge left them when the selection began, each read as Git reads its path, a file in neither side's tree left untouched as Git leaves an untracked file, a session's replay before its manifest and under that session's lease, its files and attachment folder owner-only, clear hints and viewed markers when its selected bundle differs from `HEAD`, and set the index to the candidate's tree;
+- a unit changed since the selection began, or a session whose lease is held, refuses selection naming it, leaving its files and the index unchanged and the units written before it in place;
+- report filesystem failures without claiming success; retrying selection completes an interrupted or refused application before reopening.
 
 ### storage-22
 
@@ -234,7 +249,11 @@ When continuing after Git selection, the host shall require Playbook's repositor
 
 ### storage-14
 
-The core shall remain the sole writer of Spex-owned files, using atomic same-directory replacement under the Spex home lease at `.lease/` [[core-service-61](core-service.md#core-service-61)], while session mutations use Playbook's per-session lease and shared store [[1]], one shared store per spex repository's `sessions/`.
+The core shall write Spex-owned files as the one process holding the Spex home lease at `.lease/` [[core-service-61](core-service.md#core-service-61)], each write an atomic same-directory replacement or an append, while session mutations use Playbook's per-session lease and shared store [[1]], one shared store per spex repository's `sessions/`:
+
+- a versioned replacement names the bytes and existence it read and is refused where the file no longer holds them at the instant before its rename;
+- an independent process writing the same files keeps ordinary filesystem behavior: no lock holds it off a file, and what it writes outside that instant is never refused;
+- a replacement of a session's files takes that session's management lease for that write alone, releasing it once the write lands.
 
 ### storage-26
 
@@ -268,7 +287,9 @@ When an integration suite migrates a former-layout home of two projects and one 
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
-- exact authoring session and credential encodings written and read back, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
+- exact authoring session and credential encodings written and read back, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)];
+- a credential write naming a pair the file no longer holds writing nothing, and one naming the held pair replacing or removing it with another host's pair kept [[storage-19](#storage-19)];
+- a malformed entry for a host refused by a read and a versioned write, a sign-out's removal of it keeping another host's pair, a well-formed pair stored after the failed read kept by that removal, and a file of another format left byte for byte as it was [[storage-19](#storage-19)].
 
 ### storage-25
 
@@ -284,7 +305,25 @@ When an integration suite merges two real Git branches of a group's own spex rep
 - every whole-unit choice, including clean text merges and deletion; an intent added on each side present on both afterwards with no choice asked; the environment unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-20](#storage-20)];
 - reports of unpaired clones and folders, and rejection of duplicate sources, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook the environment lacks is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
-- leases blocking competing writes, one session store per spex repository [[storage-14](#storage-14)].
+- through the apply seam, a versioned replacement refused where a file changed while its session's lease was awaited — against the Save commit, and under `select` against Git's merge output as it stood when the selection began — the change kept and the index unchanged, a session's lease free once its write lands, and the index holding the validated tree [[storage-14](#storage-14)] [[storage-21](#storage-21)];
+- through the apply seam, a clone moved or removed while a lease is awaited refusing the write with no folder made at its former path, a held session lease refusing before any other unit is written, and a Git-checked-out CRLF file under `core.autocrlf` read as unchanged [[storage-14](#storage-14)];
+- an untracked attachment in a unit neither side changed surviving selection [[storage-21](#storage-21)];
+- the home lease refusing every mutating command, a held session lease refusing selection of that session's unit with the index unchanged and a retry after its release completing it, and a lease in another spex repository's store refusing nothing [[storage-14](#storage-14)] [[storage-21](#storage-21)].
+
+### storage-28
+
+When an integration suite changes the home's files beside a running store, it shall verify that a change to `home.yaml` keeps an editor's change made since the store wrote it, and that once the file is deleted an ordinary change is refused as changed meanwhile without restoring it [[storage-2](#storage-2)]; that an intent edit whose file another writer rewrote during the edit's own wait is refused as changed meanwhile with that rewrite standing, and an intent written after its clone vanished is refused without recreating the clone [[storage-4](#storage-4)]; and that a preference write keeps a marker another writer cleared from `local/prefs.json` cleared, a read following the file [[storage-5](#storage-5)].
+
+### storage-29
+
+When the read-through suite `store-readthrough.integration.test.ts` changes the files of a running real store from outside it, it shall verify, with no reload between change and read:
+
+- a project's name, its working-folder pair and a clone another process added read on the next query, which leaves no `sessions/` in the clone it found [[storage-2](#storage-2)] [[storage-3](#storage-3)];
+- a damaged `project.json` reported with its bytes kept, and its report gone once it is repaired [[storage-3](#storage-3)] [[storage-12](#storage-12)];
+- a clone removed from outside absent from every read with its pair reported as a repair, its session store refused, your own group's clone refused once removed, and neither made again [[storage-2](#storage-2)];
+- intent files added, closed, dispatched, repaired and removed from outside read by the queue, History, source, dispatch and asset reads, and an edit applied to the file as it stands [[storage-4](#storage-4)];
+- a damaged intent file listed nowhere, reported without blocking, refused with its cause, and its bytes left by an edit and by a capture of its id, while a capture of an id another clone holds writes nothing [[storage-4](#storage-4)] [[storage-12](#storage-12)];
+- a damaged `home.yaml` refusing a registration with its bytes kept while preferences stay writable, its repair admitting the next registration, a deleted one refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)].
 
 ### storage-27
 

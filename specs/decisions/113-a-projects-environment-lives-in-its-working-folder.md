@@ -6,7 +6,7 @@
 ## Status
 
 Proposed (2026-10-10).
-Amends, under [DR-046](046-decision-record-evolution.md):
+Proposes to amend, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-104](104-spec-package-format-and-client-environments.md) in where an environment lives: a project's `spex.yaml` and `spex.lock` move from its spex repository's clone to the root of its working folder, committed with the code, and a path source is relative to that root; the format, resolution, the store, the files installed under the clone and the exports stand, and a group's environment stays in its spex repository.
 - [DR-103](103-the-home-and-its-groups.md) in its principle and its tree: the environment is the code's configuration, not a record, so a project's spex repository no longer holds `spex.yaml` or `spex.lock`, the unit `spex.yaml` with `spex.lock` remains for a group's own spex repository alone, and Spex itself still commits nothing to the code, the reader committing the environment with it.

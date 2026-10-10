@@ -173,11 +173,11 @@ describe("contextual browser controls through the core client", () => {
 
   test("authoring prepares its configured agent without editing global or draft choice", async () => {
     const command = fixture();
-    render(<ConfiguredBrowserTools agent={agent} context={{ kind: "draft", projectId: "me/demo-spex", id: "my-draft" }} />);
+    render(<ConfiguredBrowserTools agent={agent} context={{ kind: "draft", projectId: "me/demo-spex", id: "my-draft", instance: "72000000-0000-4000-8000-0000000000aa" }} />);
     expect(command).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId("draft-browser"));
     await supported();
-    expect(command).toHaveBeenCalledWith("agent.capabilities", { agent, context: { kind: "draft", projectId: "me/demo-spex", id: "my-draft" } });
+    expect(command).toHaveBeenCalledWith("agent.capabilities", { agent, context: { kind: "draft", projectId: "me/demo-spex", id: "my-draft", instance: "72000000-0000-4000-8000-0000000000aa" } });
     expect(checkbox().disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Set up browser" }));
     await screen.findByText("Browser ready");

@@ -10,18 +10,19 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { seedHistorySession } from "./testing/demo.js";
 import type { RepositoryState } from "./protocol.js";
 import { clonePath, createSpaceHarness } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, bareRepo, otherDevice, joinRemote, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, otherDevice, joinRemote, startHome, runTurn, snapshot, peerClone, peerPush, turnRecords, sleep } = fixture;
 test.after(() => fixture.dispose());
 
 /** A project's own settings: the player each role uses, no model (core-service-2). */
 const projectConfig = (side: string): string => `# Settings from ${side}\nplaybooks:\n  code:\n    roles:\n      coder: dev.coder\n`;
 
-test("space-38: a Settings conflict, validation at Apply, a slipped writer, a rejected push and a fast-forward", async (t) => {
+test("space-38: a Settings conflict, validation at Apply, a unit changed before its write, a rejected push, a fast-forward and held sessions", async (t) => {
   const bare = bareRepo();
   const a = await startHome("a3");
   t.after(() => a.stop());
@@ -30,7 +31,7 @@ test("space-38: a Settings conflict, validation at Apply, a slipped writer, a re
   const projectA = await a.client.expectOk("project.register", { path: a.projectDir });
   const key = projectA.id;
   const aClone = clonePath(a.dataDir, key);
-  await runTurn(a, key, "Seed");
+  const seed = await runTurn(a, key, "Seed");
   await a.client.expectOk("space.remote.set", { repository: key, url: bare });
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
   // B adds a folder of the same name, so its spex repository bears the
@@ -90,30 +91,48 @@ test("space-38: a Settings conflict, validation at Apply, a slipped writer, a re
   });
   assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done");
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
-  // A records file appended between Save and Apply restarts once from Save; a second append stops it.
+  // A unit the Apply writes, changed here after Save, is refused at its
+  // write with no merge commit; the sync restarts once from Save, where
+  // the unit changed on both sides is a choice.
   const bSession = await seedHistorySession(join(bClone, "sessions"), bFolder, turnRecords("B's session", 1));
   await b.client.expectOk("project.register", { path: bFolder });
-  await runTurn(a, key, "Something incoming for B");
+  const shared = await a.client.expectOk("intent.queue", { projectId: key, text: "Shared intent" });
   assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
-  let slips = 1;
+  assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  await a.client.expectOk("intent.edit", { intentId: shared.id, text: "A's edit" });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const sharedFile = join(bClone, "intents", `${shared.id}.json`);
+  let edits = 1;
   let applies = 0;
-  b.hooks.beforeStep = async ({ step, repository }) => {
+  let label = 0;
+  b.hooks.beforeStep = ({ step, repository }) => {
     if (step !== "apply" || repository !== key) return;
     applies += 1;
-    if (slips > 0) { slips -= 1; await seedHistorySession(join(bClone, "sessions"), bFolder, turnRecords(`slip ${applies}`, applies + 1), bSession); }
+    if (edits > 0) { edits -= 1; writeFileSync(sharedFile, JSON.stringify({ ...JSON.parse(readFileSync(sharedFile, "utf8")), text: `B's late edit ${++label}` })); }
   };
-  const restarted = await b.client.settle("space.sync", { repository: key });
-  assert.equal(restarted.sync.phase, "done", JSON.stringify(restarted.sync));
-  assert.equal(applies, 2, "one restart from Save");
-  assert.match(git(bClone, "show", `HEAD:sessions/${bSession}.records.jsonl`), /slip 1/);
-  await runTurn(a, key, "More incoming for B");
-  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
-  slips = 2;
+  const savedBefore = git(bClone, "rev-parse", "HEAD");
+  const late = await b.client.settle("space.sync", { repository: key });
+  assert.equal(late.sync.phase, "choices", JSON.stringify(late.sync));
+  assert.equal(applies, 1, "the restart's Compare asks instead of applying");
+  assert.deepEqual(late.conflicts.map((c) => c.unit.unit), [`intents/${shared.id}`]);
+  assert.match(readFileSync(sharedFile, "utf8"), /B's late edit 1/, "the late change is kept");
+  assert.equal(git(bClone, "rev-parse", "HEAD~1"), savedBefore, "the restart's Save commits the late change, and no merge commit follows");
+  assert.equal(git(bClone, "log", "-1", "--format=%P").split(" ").length, 1);
+  assert.equal(existsSync(join(bClone, ".spex-apply.json")), false);
+  // Changed again before each of two writes, the host's side chosen
+  // stops the sync; Retry with that choice takes the host's unit whole.
+  edits = 2;
   applies = 0;
-  const twice = await b.client.settle("space.sync", { repository: key });
+  const choice = { [`intents/${shared.id}`]: "remote" as const };
+  const twice = await b.client.settle("space.sync", { repository: key, choices: choice });
   assert.ok(twice.sync.phase === "stopped" && twice.sync.step === "apply" && twice.sync.cause === "writer", JSON.stringify(twice.sync));
+  assert.equal(applies, 2, "one restart from Save");
+  assert.match(readFileSync(sharedFile, "utf8"), /B's late edit 3/);
+  assert.equal(git(bClone, "log", "-1", "--format=%P").split(" ").length, 1, "no merge commit");
   b.hooks.beforeStep = undefined;
-  assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  assert.equal((await b.client.settle("space.sync", { repository: key, choices: choice })).sync.phase, "done");
+  assert.deepEqual(readFileSync(sharedFile), readFileSync(join(aClone, "intents", `${shared.id}.json`)), "the host's unit, whole");
+  assert.equal(git(bClone, "log", "-1", "--format=%P").split(" ").length, 2);
   // A push rejected because the peer advanced after the check re-checks once; advanced again, it stops.
   let pushes = 0;
   let pushesToReject = 1;
@@ -157,4 +176,73 @@ test("space-38: a Settings conflict, validation at Apply, a slipped writer, a re
     assert.ok((mode & 0o077) === 0, `${entry} is ${mode.toString(8)}`);
   }
   assert.ok((await b.client.expectOk("session.list", {})).some((s) => s.id === ffSession && s.title === "Fast forward me"));
+  // A session held by another process stops no write but its own: the
+  // Apply writes the incoming intent beside it.
+  const sessions = createSessionStore({ sessionsDir: join(bClone, "sessions") });
+  await sessions.prepare();
+  const holdAtApply = (id: string) => {
+    const hold: { lease?: { release(): Promise<unknown> } } = {};
+    b.hooks.beforeStep = async ({ step, repository }) => { if (step === "apply" && repository === key && !hold.lease) hold.lease = await sessions.acquireManagement(id); };
+    return async () => {
+      b.hooks.beforeStep = undefined;
+      await hold.lease?.release();
+      assert.ok(hold.lease, "the lease was held through the Apply");
+      // The core reads the released lease from the file again.
+      await b.client.expectOk("project.register", { path: bFolder });
+      for (let i = 0; i < 200 && (await b.client.expectOk("session.list", {})).find((s) => s.id === id)?.externalWriter; i += 1) await sleep(50);
+    };
+  };
+  await a.client.expectOk("intent.queue", { projectId: key, text: "Incoming beside a held session" });
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  let release = holdAtApply(bSession);
+  try { assert.equal((await b.client.settle("space.sync", { repository: key })).sync.phase, "done"); }
+  finally { await release(); }
+  // A session the Apply writes, held elsewhere, stops the sync naming it
+  // with no merge commit. The incoming intent written before it names the
+  // session's newer turn, so the selection is kept whole: the marker
+  // stays, and Retry after the lease's release finishes the recorded units.
+  await runTurn(a, key, "Seed again", seed);
+  const turns = readFileSync(join(aClone, "sessions", `${seed}.records.jsonl`), "utf8").trim().split("\n")
+    .map((line) => (JSON.parse(line) as { record: { type?: string; turnId?: number } }).record).filter((record) => record.type === "turn_started").map((record) => record.turnId as number);
+  const written = randomUUID();
+  writeFileSync(join(aClone, "intents", `${written}.json`), JSON.stringify({ format: 1, id: written, text: "Dispatched to the held session", createdAt: Date.now(), dispatched: { sessionId: seed, turnId: Math.max(...turns), at: Date.now() } }));
+  assert.equal((await a.client.settle("space.sync", { repository: key })).sync.phase, "done");
+  const seedRecords = join(bClone, "sessions", `${seed}.records.jsonl`);
+  const seedBytes = readFileSync(seedRecords);
+  const saved = git(bClone, "rev-parse", "HEAD");
+  release = holdAtApply(seed);
+  let leased: RepositoryState;
+  try { leased = await b.client.settle("space.sync", { repository: key }); }
+  finally { await release(); }
+  assert.ok(leased.sync.phase === "stopped" && leased.sync.step === "apply" && leased.sync.cause === "lease" && /“Seed” is in use/.test(leased.sync.message), JSON.stringify(leased.sync));
+  assert.equal(git(bClone, "rev-parse", "HEAD"), saved, "no merge commit");
+  assert.equal(existsSync(join(bClone, ".spex-apply.json")), true, "the recorded selection stands for the retry");
+  // Sessions are written first, so the intent naming the held session's
+  // newer turn is not published before it.
+  const writtenFile = join(bClone, "intents", `${written}.json`);
+  assert.equal(existsSync(writtenFile), false);
+  assert.deepEqual(readFileSync(seedRecords), seedBytes, "the held session is untouched");
+  // Still held across a restart, the startup repair meets the lease and a
+  // Retry is refused with the marker kept; released, the next Retry's
+  // repair finishes the recorded selection — no finding left before stands in.
+  await b.stop();
+  const held = await sessions.acquireManagement(seed);
+  const again = await startHome("b3-again", { dataDir: b.dataDir, project: false, env: otherDevice("b3") });
+  t.after(() => again.stop());
+  try {
+    assert.ok((await again.client.expectOk("space.get", {})).diagnostics.some((d) => d.file.endsWith(".spex-apply.json") && d.blocking), "the held lease stands as a repair issue");
+    assert.equal((await again.client.command("space.sync", { repository: key })).ok, false, "a Retry while still held is refused");
+    assert.equal(existsSync(join(bClone, ".spex-apply.json")), true);
+  } finally { await held.release(); }
+  await again.client.expectOk("project.register", { path: bFolder });
+  for (let i = 0; i < 200 && (await again.client.expectOk("session.list", {})).find((s) => s.id === seed)?.externalWriter; i += 1) await sleep(50);
+  const retried = await again.client.settle("space.sync", { repository: key });
+  assert.equal(retried.sync.phase, "done", JSON.stringify(retried.sync));
+  assert.equal(existsSync(join(bClone, ".spex-apply.json")), false);
+  assert.deepEqual(readFileSync(writtenFile), readFileSync(join(aClone, "intents", `${written}.json`)));
+  assert.deepEqual(readFileSync(seedRecords), readFileSync(join(aClone, "sessions", `${seed}.records.jsonl`)));
+  assert.deepEqual(git(bClone, "log", "-1", "--format=%P", "HEAD").split(" ")[0], saved, "the recorded merge on the Save commit");
+  git(bClone, "merge-base", "--is-ancestor", "origin/spex", "HEAD");
+  assert.equal(git(bClone, "status", "--porcelain"), "");
+  assert.ok((await again.client.expectOk("ledger.get", {})).intents.some((row) => row.intent.id === written), "the views read the finished selection");
 });

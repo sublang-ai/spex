@@ -214,7 +214,7 @@ interface Home {
   dataDir: string;
   projectDir: string;
   configPath: string;
-  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void> };
+  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void> };
   stop(): Promise<void>;
 }
 
@@ -320,6 +320,47 @@ playbooks:
     writeFileSync(script, `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 300\n`);
     chmodSync(script, 0o755);
     return { script, pidFile };
+  }
+
+  /** A `git` on the core's PATH that holds the first command whose
+   * arguments hold `args` after `hold()` — one clone's `rev-parse
+   * --git-dir`, the read a Groups state makes of it, or a join's clone —
+   * until `release()`, then runs the real Git: a command caught in flight.
+   * With `after`, the real Git runs first and its answer is held, so the
+   * core awaits a command that already read the clone. Later matching
+   * commands run at once. */
+  function holdingGit(args: string, options: { after?: boolean } = {}): { path: string; hold(): void; held(): Promise<string>; release(): void } {
+    const dir = mkdtempSync(join(scratch, "holding-git-"));
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    const hold = join(dir, "hold");
+    const claimed = join(dir, "claimed");
+    const held = join(dir, "held");
+    const out = join(dir, "out");
+    const err = join(dir, "err");
+    // The held marker records the umask the command was spawned under.
+    const wait = `umask > "${held}.tmp"; mv "${held}.tmp" "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done`;
+    writeFileSync(join(dir, "git"), [
+      "#!/bin/sh",
+      'case " $* " in',
+      `  *" ${args} "*)`,
+      options.after
+        ? `    if mv "${hold}" "${claimed}" 2>/dev/null; then "${real}" "$@" > "${out}" 2> "${err}"; status=$?; ${wait}; cat "${out}"; cat "${err}" >&2; exit $status; fi ;;`
+        : `    if mv "${hold}" "${claimed}" 2>/dev/null; then ${wait}; fi ;;`,
+      "esac",
+      `exec "${real}" "$@"`,
+      "",
+    ].join("\n"));
+    chmodSync(join(dir, "git"), 0o755);
+    return {
+      path: `${dir}:${process.env.PATH ?? ""}`,
+      hold: () => writeFileSync(hold, ""),
+      held: async () => {
+        for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
+        assert.ok(existsSync(held), "the command reached Git");
+        return readFileSync(held, "utf8").trim();
+      },
+      release: () => { rmSync(hold, { force: true }); rmSync(claimed, { force: true }); },
+    };
   }
 
   /** The pid the sleeping GIT_SSH_COMMAND wrote once Git spawned it. */
@@ -500,7 +541,7 @@ playbooks:
   ];
 
   return {
-    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
+    scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, runTurn, snapshot, peerClone, peerPush, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
       rmSync(scratch, { recursive: true, force: true });

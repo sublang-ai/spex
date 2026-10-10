@@ -64,13 +64,6 @@ export function repositoryOf(
   return undefined;
 }
 
-/** Why every environment control waits while that spex repository
- * syncs (playbook-library-92), naming the sync; undefined otherwise. */
-export function syncHold(repository: RepositoryState | undefined): string | undefined {
-  if (repository?.sync.phase !== "running") return undefined;
-  return i18n._("Waits for the sync of {repository}", { repository: repository.key });
-}
-
 /** What the core is doing to an environment, as its line reads. */
 export function busyWord(busy: EnvironmentState["busy"]): string | undefined {
   switch (busy) {

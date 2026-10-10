@@ -65,8 +65,6 @@ msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphe
 msgstr "“{id}”不是有效的规程 id：只能用小写字母、数字和单个连字符，最多 64 个字符"
 
 #. A session's own title, quoted
-#. A session's own title, quoted
-#: src/service.ts
 #: src/session.ts
 msgid "“{title}”"
 msgstr "“{title}”"
@@ -118,13 +116,20 @@ msgstr "{described} — 安装方式：npm install -g {spec}{steps}"
 
 #. Refusal on a damaged draft: the diagnostic already composed, then the way out
 #: src/authoring.ts
-msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic}；删除草稿，或修复文件后重启 Spex"
+msgid "{diagnostic}; delete the draft, or repair the file"
+msgstr "{diagnostic}；删除草稿，或修复文件"
 
 #. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
 #: src/config.ts
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 msgstr "项目的设置中不允许 {entry}：项目设置只列出所启用的规程及每个角色使用的参与者"
+
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#: src/files.ts
+#: src/home.ts
+msgid "{file} changed meanwhile; retry"
+msgstr "{file} 在此期间已更改；请重试"
 
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
@@ -175,6 +180,11 @@ msgstr "{host} 拒绝了本机的访问"
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
+#. Refusal: the authoring session's file changed, or another session took its id, since the page read it
+#: src/authoring.ts
+msgid "{id} changed meanwhile; retry"
+msgstr "{id} 期间已更改，请重试"
+
 #. Refusal: the id offered for a new playbook is one an installed spec package exports
 #: src/authoring.ts
 msgid "{id} is already a playbook of this project's or your own environment; pick another id"
@@ -205,30 +215,10 @@ msgstr "{name} 在 {path} 中已更改；请重新解析后再安装"
 msgid "{name} has no folder on this device"
 msgstr "{name} 在本设备上没有文件夹"
 
-#. Refusal while a spex repository checks the Git host; {name} is its name
-#: src/space.ts
-msgid "{name} is checking the host; wait for it to finish"
-msgstr "{name} 正在检查托管平台；请等待其完成"
-
-#. A session another host is writing right now
-#: src/service.ts
-msgid "{name} is in use elsewhere"
-msgstr "{name} 正在别处使用"
-
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{project} 中的 {name} 正在别处使用"
-
-#. Refusal while a spex repository is being joined; {name} is its name
-#: src/space.ts
-msgid "{name} is joining; wait for it to finish"
-msgstr "{name} 正在加入；请等待其完成"
-
-#. Refusal while a spex repository's clone moves or is renamed; {name} is its name
-#: src/space.ts
-msgid "{name} is moving; wait for it to finish"
-msgstr "{name} 正在移动；请等待其完成"
 
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
@@ -240,6 +230,7 @@ msgstr "此处未请求 {name}"
 msgid "{name} is on the host already"
 msgstr "{name} 已在托管平台上"
 
+#. Refusal of a join: the spex repository has a clone here
 #. Refusal of a join: the spex repository has a clone here
 #: src/space.ts
 msgid "{name} is on this device already"
@@ -255,20 +246,15 @@ msgstr "{name} 按路径请求，但这个 spex 仓库在本设备上没有工�
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} 仍在 {project} 中工作 — 请等待它完成，或中止它"
 
-#. Refusal while a spex repository syncs; {name} is its name
-#: src/space.ts
-msgid "{name} is syncing; wait for it to finish"
-msgstr "{name} 正在同步；请等待其完成"
-
 #. Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path
 #: src/space-groups.ts
 msgid "{name} is taken in {group}; choose another name"
 msgstr "{name} 在 {group} 中已被占用；请另选一个名称"
 
-#. A session whose lease this host cannot read
+#. A completed step of an enabling: the spec package's request written
 #: src/service.ts
-msgid "{name} ownership cannot be verified"
-msgstr "{name} 的归属无法确认"
+msgid "{name} requested in spex.yaml"
+msgstr "{name} 已在 spex.yaml 中请求"
 
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
@@ -490,11 +476,6 @@ msgstr "{path}.subagentModel 不受“{adapter}”适配器支持"
 msgid "{path}.subagentModel must be a nonblank string"
 msgstr "{path}.subagentModel 必须是非空字符串"
 
-#. What blocks a Space operation: a playbook compile is running
-#: src/service.ts
-msgid "{playbookId} is compiling"
-msgstr "{playbookId} 正在编译"
-
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
@@ -507,6 +488,14 @@ msgstr "{projectId} 在本设备上没有工作文件夹"
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} 不是空目录；示例只能填充新建或空的目录"
+
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#: src/service.ts
+#: src/space.ts
+msgid "{what} changed meanwhile; retry"
+msgstr "{what} 已在此期间更改；请重试"
 
 #. One settings drift; `who` is itself a message and `field` the config file's own field name
 #: src/session.ts
@@ -578,21 +567,6 @@ msgstr "◇ 现在由 Captain 作答 — 此前的对话已重放给它"
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ 服务商拒绝了续接的对话 — 正在重放"
 
-#. Refusal: that draft's one compile is under way
-#: src/authoring.ts
-msgid "a compile is already running for {id}"
-msgstr "{id} 已有编译在运行"
-
-#. Refusal: one compile per playbook at a time
-#: src/service.ts
-msgid "a compile is already running for {playbookId}"
-msgstr "{playbookId} 已有编译在运行"
-
-#. Refusal: the draft's compile must end before this act
-#: src/authoring.ts
-msgid "a compile is running for {id}; cancel it first"
-msgstr "{id} 正在编译；请先取消"
-
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "A dispatched intent's content is history."
@@ -608,11 +582,6 @@ msgstr "已派发的意图无法再修改文本"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同步"
 
-#. Stands in for the title of a session that has none yet
-#: src/service.ts
-msgid "a new session"
-msgstr "一个新会话"
-
 #. Refusal: an edit to a project's config file that only your own group's file may take
 #: src/config-edit.ts
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
@@ -624,8 +593,6 @@ msgid "A retried upload chunk contains different bytes."
 msgstr "重试上传的数据块与已接收的内容不同。"
 
 #. Stands in for the title of a session that has none
-#. Stands in for the title of a session that has none
-#: src/service.ts
 #: src/session.ts
 msgid "a session"
 msgstr "一个会话"
@@ -644,6 +611,11 @@ msgstr "会话、意图和编写会话不提供文本差异"
 #: src/space.ts
 msgid "A sign-in is already running"
 msgstr "已有一个登录正在进行"
+
+#. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
+#: src/drafts.ts
+msgid "a transcript of {id} stands without its session file; move it aside or delete it first"
+msgstr "{id} 的对话记录没有对应的会话文件；请先将其移开或删除"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -675,13 +647,6 @@ msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 #: src/space-git.ts
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
-
-#. Refusal of a second operation on a spex repository while one runs
-#. Refusal of a second operation on a spex repository while one runs
-#. Refusal of a second operation on a spex repository while one runs
-#: src/space.ts
-msgid "Already syncing"
-msgstr "正在同步"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -727,11 +692,6 @@ msgstr "请先绑定该已有项目，再更改其会话的智能体"
 #: src/service.ts
 msgid "bind the existing project before restoring"
 msgstr "请先绑定该已有项目，然后恢复"
-
-#. Refusal: this client already owns browser preparation
-#: src/service.ts
-msgid "Browser preparation is already running."
-msgstr "浏览器准备已在进行中。"
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -934,6 +894,16 @@ msgstr "记录 id {id} 重复：{first} 与 {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "编辑被拒绝"
+
+#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "enabling stopped after {done}: {error}"
+msgstr "启用在完成 {done} 后停止：{error}"
+
+#. A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them
+#: src/service.ts
+msgid "environment packages installed"
+msgstr "环境中的规约包已安装"
 
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
@@ -1146,6 +1116,11 @@ msgstr "失败次数无效"
 msgid "invalid home file"
 msgstr "主目录文件无效"
 
+#. Diagnostic for a damaged authoring file: the identity it records will not read
+#: src/drafts.ts
+msgid "invalid instance"
+msgstr "实例标识无效"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
@@ -1335,6 +1310,11 @@ msgstr "迁移输出校验失败"
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
 msgstr "请将该文件夹移开，然后重试。"
+
+#. Refusal: a draft deletion names exactly one of the two
+#: src/service.ts
+msgid "name either the session's instance or its file's version"
+msgstr "请指明会话的实例或其文件的版本，二者择一"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -1567,6 +1547,11 @@ msgstr "规程 {playbookId} 已不再启用"
 msgid "playbook {playbookId} joined the session"
 msgstr "规程 {playbookId} 加入了本会话"
 
+#. A completed step of an enabling: the playbook's entry written to the config
+#: src/service.ts
+msgid "playbook {playbookId} written"
+msgstr "规程 {playbookId} 已写入"
+
 #. One settings drift; `field` is the manifest's own field name
 #: src/session.ts
 msgid "playbook {playbookId}'s {field} changed"
@@ -1680,6 +1665,11 @@ msgstr "Player {playerId} 已不再被本会话的规程绑定"
 msgid "player {playerId} joined the roster"
 msgstr "Player {playerId} 加入了名单"
 
+#. A completed step of an enabling: a new session player written to your own settings
+#: src/service.ts
+msgid "player {playerId} written"
+msgstr "Player {playerId} 已写入"
+
 #. Config error; `players` is the config file's own field name
 #: src/config.ts
 msgid "players must be an object"
@@ -1765,7 +1755,6 @@ msgstr "请重试；若再次失败，在终端中对空间目录运行 git comm
 msgid "Retry; if it fails again, run the same step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情。"
 
-#. Guidance under a step that stopped for a reason the app does not classify
 #. Guidance under a step that stopped for a reason the app does not classify
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
@@ -1912,11 +1901,6 @@ msgstr "Spex 未能登录。你可以关闭此浏览器窗口并返回 Spex。"
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex 已登录。你可以关闭此浏览器窗口。"
 
-#. Why an interrupted sync's repair failed; spex is the branch's own name
-#: src/space.ts
-msgid "spex moved since the interrupted sync; resolve it in a terminal"
-msgstr "自这次中断的同步以来 spex 已变动；请在终端中处理"
-
 #. A project's new spex repository's description on the Git host, its code on no remote
 #: src/space-groups.ts
 msgid "Spex records of {name}"
@@ -1946,6 +1930,11 @@ msgstr "Spex: 编译在“{where}”阶段失败 — 正在请智能体修正源
 #: src/authoring.ts
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: 编译成功 — 正在请求注册方案"
+
+#. A completed step of an enabling: the environment's lock written
+#: src/service.ts
+msgid "spex.lock resolved"
+msgstr "spex.lock 已解析"
 
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
@@ -2055,6 +2044,8 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
 #. Refusal during attachment admission
+#. Refusal: environment work asked once the core stops
+#: src/environments.ts
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
@@ -2166,11 +2157,6 @@ msgstr "路径中包含符号链接"
 msgid "the path must be relative to the home"
 msgstr "路径必须相对于空间目录"
 
-#. Stands in for a project's name where the core has none
-#: src/service.ts
-msgid "the project"
-msgstr "该项目"
-
 #. Stands where a message names the remote's host and no URL says which
 #: src/space-git.ts
 msgid "the remote"
@@ -2216,6 +2202,11 @@ msgstr "该会话正在恢复中"
 #: src/session.ts
 msgid "the session's structure no longer matches its stored one"
 msgstr "该会话的结构与存储的结构已不一致"
+
+#. A step refused because a sign-in, a token refresh or a sign-out replaced the stored credential while it ran
+#: src/space-groups.ts
+msgid "The sign-in changed meanwhile; try again"
+msgstr "登录在此期间已更改；请重试"
 
 #. A sign-in that ended because nobody approved it in time
 #: src/space-groups.ts
@@ -2362,7 +2353,6 @@ msgstr "此文件已上传完成。"
 
 #. Media transfer refusal
 #. Media transfer refusal
-#. Media transfer refusal
 #: src/media-transfers.ts
 #: src/media.ts
 msgid "This upload is unavailable. Retry the file upload."
@@ -2466,16 +2456,6 @@ msgstr "上传暂存路径不安全：{path}"
 msgid "Upload write made no progress."
 msgstr "无法继续写入上传文件。"
 
-#. What blocks a Space operation: a session of this project is working
-#: src/service.ts
-msgid "Wait for {name} in {project}"
-msgstr "请等待 {project} 中的 {name}"
-
-#. Attachment transfer or storage diagnostic
-#: src/service.ts
-msgid "Wait for the media upload to finish."
-msgstr "请等待媒体文件上传完成。"
-
 #. Refusal: a turn is running in the project being rebound
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before rebinding"
@@ -2485,16 +2465,6 @@ msgstr "请先等待该项目正在进行的轮次结束或将其中止，再重
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before removing it"
 msgstr "请先等待该项目正在进行的轮次结束或将其中止，再移除项目"
-
-#. Refusal: the draft's agent is answering, so its agent cannot change now
-#: src/authoring.ts
-msgid "wait for the reply before switching the agent"
-msgstr "请等待回复结束后再切换智能体"
-
-#. Refusal: the draft's agent is answering
-#: src/authoring.ts
-msgid "wait for the reply, or abort it, first"
-msgstr "请先等待回复结束，或将其中止"
 
 #. Refusal: the session being deleted has a turn in flight
 #. Refusal: the session being deleted has a turn in flight
@@ -2507,16 +2477,6 @@ msgstr "请先等待正在进行的轮次结束或将其中止，再执行删除
 #: src/space.ts
 msgid "Wait for the session to finish, then Retry."
 msgstr "请等待该会话结束，然后重试。"
-
-#. What blocks a Space operation: the spex repository's environment is resolving, installing or publishing
-#: src/environments.ts
-msgid "Wait for the spec packages of {repository} to finish installing"
-msgstr "请等待 {repository} 的规约包安装完成"
-
-#. What blocks a Space operation: a turn is being admitted
-#: src/service.ts
-msgid "Wait for the turn being submitted"
-msgstr "请等待正在提交的轮次"
 
 #. A step the Git host left waiting, with no words of its own
 #: src/space-groups.ts
@@ -2547,11 +2507,6 @@ msgstr "等待在 {group} 中有权准备其分支的成员：{words}"
 #: src/space-groups.ts
 msgid "Waiting: {words}"
 msgstr "等待中：{words}"
-
-#. Why a compile cannot start: the draft's agent is answering
-#: src/authoring.ts
-msgid "Waits for the reply"
-msgstr "正在等待回复"
 
 #. Guidance after the reader stopped a transfer to the Git host
 #: src/space-git.ts

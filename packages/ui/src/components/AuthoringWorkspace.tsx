@@ -26,10 +26,14 @@ import {
   DRAFT_STACK_DEFAULT,
   DRAFT_STACK_MAX,
   DRAFT_STACK_MIN,
+  draftShown,
   getClient,
   useAppStore,
+  type DraftRegisterForm,
+  type DraftSourceMode,
 } from "../state/store.js";
-import { draftChipTitle, draftChipTone, draftChipWord, draftPackagePath } from "../lib/drafts.js";
+import { draftChipTitle, draftChipTone, draftChipWord, draftMediaOwner, draftPackagePath } from "../lib/drafts.js";
+import type { SpecEditorState } from "../lib/spec-view-model.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
 import { CompileBand } from "./CompileBand.js";
@@ -137,7 +141,7 @@ export function AuthoringWorkspace({
   const draft = useAppStore((state) => state.drafts[draftId]);
   const media = useComposerAttachments(
     draftAttachmentKey(draftId),
-    draft ? { kind: "draft", projectId: draft.projectId, id: draftId } : undefined,
+    draft ? draftMediaOwner(draft) : undefined,
   );
   const draftView = useAppStore((state) => state.draftViews[draftId]);
   const source = useAppStore((state) => state.draftSources[draftId]);
@@ -219,6 +223,13 @@ export function AuthoringWorkspace({
   }, [tab, artifactsReady, compiledOk]);
 
   if (!draft) return null;
+  // What a control does once its command answered reaches only the
+  // session it was shown for: a session made again under the id keeps
+  // its own composer, Source tab and form (playbook-library-62).
+  const shown = draft.instance;
+  const forShown = <A extends unknown[]>(effect: (...args: A) => void) => (...args: A): void => {
+    if (shown === undefined || draftShown(draftId, shown)) effect(...args);
+  };
   const summary = configState?.status === "valid" ? configState.summary : undefined;
   const compiling = draft.activity === "compiling";
   // A diagnostic and the toolchain's guidance are the core's own
@@ -227,9 +238,7 @@ export function AuthoringWorkspace({
     ? draft.diagnostic
     : !source
     ? i18n._("No source yet")
-    : draft.activity === "turn"
-      ? i18n._({ id: "Waits for the reply", comment: "why a control is held: the draft's agent turn is running" })
-      : compiling
+    : compiling
         ? i18n._({ id: "Compiling", comment: "why a control is held: the draft's compile is running" })
         : toolchain && !toolchain.node.ok
           ? toolchain.node.guidance
@@ -355,10 +364,10 @@ export function AuthoringWorkspace({
               composerText={composer?.draft ?? ""}
               attachments={media.controls}
               error={error}
-              onComposerChange={(text) => setDraftComposer(draftId, text)}
+              onComposerChange={forShown((text: string) => setDraftComposer(draftId, text))}
               onSend={async (text) => {
                 await sendDraft(draftId, text, media.assets);
-                media.consume();
+                forShown(media.consume)();
               }}
               onAbort={() => void abortDraft(draftId)}
               onPickAgent={(playerId) => setDraftPlayer(draftId, playerId)}
@@ -381,11 +390,11 @@ export function AuthoringWorkspace({
                   try {
                     await writeDraftSource(draftId, { sourcePath: picked });
                   } catch (cause) {
-                    reportDraftError(draftId, (cause as Error).message);
+                    forShown(reportDraftError)(draftId, (cause as Error).message);
                   }
                   return "field";
                 }
-                setDraftSourceMode(draftId, { mode: "paste", pastePath: picked, pasteText: "" });
+                forShown(setDraftSourceMode)(draftId, { mode: "paste", pastePath: picked, pasteText: "" });
                 return "paste";
               }}
             />
@@ -510,8 +519,8 @@ export function AuthoringWorkspace({
                   editor={editor}
                   connected={connected}
                   pickFile={pickFile}
-                  onMode={(next) => setDraftSourceMode(draftId, next)}
-                  onEditor={(next) => setDraftEditor(draftId, next)}
+                  onMode={forShown((next: Partial<DraftSourceMode>) => setDraftSourceMode(draftId, next))}
+                  onEditor={forShown((next: SpecEditorState | undefined) => setDraftEditor(draftId, next))}
                   onWrite={(input) => writeDraftSource(draftId, input)}
                   onRead={() => refreshDraftSource(draftId)}
                 />
@@ -528,7 +537,7 @@ export function AuthoringWorkspace({
                   readiness={readiness}
                   form={form}
                   connected={connected}
-                  onForm={(next) => setDraftForm(draftId, next)}
+                  onForm={forShown((next: DraftRegisterForm) => setDraftForm(draftId, next))}
                   onRegister={(input) => registerDraft(draftId, input)}
                   onNavigate={onNavigate}
                 />

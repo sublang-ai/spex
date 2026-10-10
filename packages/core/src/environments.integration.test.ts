@@ -10,19 +10,22 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { CoreService, type CoreServiceOptions } from "./service.js";
+import type { EnvironmentManager } from "./environments.js";
+import { CoreError } from "./session.js";
+import type { Store } from "./store.js";
 import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { starterText, templatePath } from "./config.js";
 import { builtinPackage, publishRelease, readRelease, RegistryClient, type BuiltinPackage } from "./environment/index.js";
-import type { Command, CommandResults, EnvironmentState, ServerMessage, SyncStep } from "./protocol.js";
+import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
@@ -303,7 +306,8 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage" });
   assert.equal(created.package, `${OWN}/triage`, "the account's login is the org (playbook-library-70)");
   const folder = join(working, "spex-packages", "triage");
-  await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", text: "I want a playbook that triages new issues." });
+  const instance = created.instance!;
+  await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
   const latest = () => core.client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
   await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
   assert.equal(latest()?.state, "compiled");
@@ -313,7 +317,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 
   // Enabling requests it by path, installs and writes the project's entry.
   await core.client.expectOk("draft.register", {
-    projectId: project.id, draftId: "triage", command: "triage", intent: "Label new issues",
+    projectId: project.id, draftId: "triage", instance, command: "triage", intent: "Label new issues",
     bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
   });
   assert.equal((parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${OWN}/triage`] !== undefined, true);
@@ -358,7 +362,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 // environments-25: the commands over the protocol
 // ---------------------------------------------------------------------------
 
-test("environments-25: every environment command replies and refuses as its table says, broadcasts its state, and is busy while its spex repository syncs", { timeout: 180_000 }, async (t) => {
+test("environments-25: every environment command replies and refuses as its table says and broadcasts its state", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-commands-registry-") });
   t.after(() => registry.close());
   const skill = (name: string): string => `---\nname: ${name}\ndescription: The ${name} skill.\n---\n\nDo ${name}.\n`;
@@ -370,16 +374,8 @@ test("environments-25: every environment command replies and refuses as its tabl
     await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
   });
 
-  // The sync's check waits until the test lets it go.
-  let hold: (() => void) | undefined;
-  let held: Promise<void> | undefined;
   const dir = scratchDir("spex-env-commands-");
-  const core = await startCore(dir, {
-    hostUrl: registry.url,
-    extra: {
-      spaceBeforeStep: async (event: { step: SyncStep }) => { if (event.step === "check" && held) await held; },
-    },
-  });
+  const core = await startCore(dir, { hostUrl: registry.url });
   t.after(() => core.stop());
   const { client } = core;
   const working = gitFolder(join(dir, "project"));
@@ -427,6 +423,10 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^2.0.0" } });
   const conflicted = await client.environment(key, mark, (state) => state.busy === null && state.conflicts !== null);
   assert.equal(conflicted.conflicts?.[0]?.name, "acme/lint");
+  // The report stands only while spex.yaml holds the bytes it read.
+  const conflictedRequests = join(clonePath(core.dataDir, key), "spex.yaml");
+  writeFileSync(conflictedRequests, `${readFileSync(conflictedRequests, "utf8")}# edited\n`);
+  assert.equal((await client.expectOk("environment.get", { repository: key })).conflicts, null, "a report of former requests is not shown");
 
   // environment.remove.
   await client.expectError("environment.remove", { repository: key, name: "acme/never" }, "invalid_request");
@@ -448,27 +448,12 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.ok(code?.folder?.endsWith(join("packages", "sublang", "playbooks", "playbooks", "en", "code")));
   assert.ok(listed.own.some((row) => row.id === "review"));
 
-  // While the spex repository syncs, every write is busy, naming the sync.
+  // The spex repository syncs to a host.
   const bare = join(dir, "host.git");
   execFileSync("git", ["init", "-q", "--bare", "-b", "spex", bare]);
   await client.expectOk("space.remote.set", { repository: key, url: bare });
-  held = new Promise((resolve) => { hold = resolve; });
   const from = client.mark();
   await client.expectOk("space.sync", { repository: key });
-  await client.waitFor((m) => m.type === "space.state" && m.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "running" && repository.sync.step === "check")), 30_000, from);
-  for (const [type, fields] of [
-    ["environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^1.0.0" } }],
-    ["environment.remove", { repository: key, name: "sublang/playbooks" }],
-    ["environment.resolve", { repository: key }],
-    ["environment.install", { repository: key }],
-    ["environment.publish", { repository: key, path: "spex-packages/none" }],
-    ["draft.create", { projectId: key, draftId: "held" }],
-    ["config.edit", { repository: key, op: { kind: "playbook.delete", playbookId: "code" } }],
-  ] as const) {
-    await client.expectError(type as Command["type"], fields as never, "busy", /syncing/);
-  }
-  hold?.();
-  held = undefined;
   await client.waitFor((m) => m.type === "space.state" && m.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "done")), 30_000, from);
 
   // Another member changes the environment on the host: the lock a sync
@@ -653,4 +638,390 @@ test("environments-21 through a real core: the registry presents the access secr
   assert.ok(installed(state, "acme/tools"));
   const signedOut = front.log.filter((entry) => entry.to === "registry");
   assert.ok(signedOut.length > 0 && signedOut.every((entry) => entry.bearer === null), JSON.stringify(signedOut));
+});
+
+// ---------------------------------------------------------------------------
+// DR-111: operations side by side, each write versioned on its file
+// ---------------------------------------------------------------------------
+
+/** A registry fetch that holds the first call a matcher picks while
+ * armed, until the test lets it go. */
+function heldFetch(): { fetch: typeof fetch; arm(match: (path: string) => boolean): void; reached(): boolean; release(): void } {
+  let matcher: ((path: string) => boolean) | undefined;
+  let gate: Promise<void> | undefined;
+  let open: (() => void) | undefined;
+  let hit = false;
+  return {
+    fetch: async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (matcher?.(url.pathname) && gate) {
+        const wait = gate;
+        matcher = undefined;
+        hit = true;
+        await wait;
+      }
+      return fetch(input, init);
+    },
+    arm(match) { matcher = match; hit = false; gate = new Promise((resolve) => { open = resolve; }); },
+    reached: () => hit,
+    release() { open?.(); gate = undefined; },
+  };
+}
+
+/** Wait until a project's environment stands idle with its built-in
+ * spec package installed: the clone's first settle done. */
+async function settledProject(client: Client, key: string): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    const state = await client.expectOk("environment.get", { repository: key });
+    if (state.busy === null && state.packages.some((pkg) => pkg.name === "sublang/playbooks" && pkg.installed)) return;
+    if (Date.now() - start > 60_000) throw new Error(`timeout waiting for ${key} to settle`);
+    await sleep(25);
+  }
+}
+
+/** The core's environment manager, for the assertions no command reaches. */
+const managerOf = (core: Core): EnvironmentManager => (core.service as unknown as { environments: EnvironmentManager }).environments;
+
+const refusedWith = (code: string) => (error: unknown): boolean => error instanceof CoreError && error.code === code;
+
+test("environments-25: a request is admitted while another's resolution is held, an overtaken resolution writes no lock and says so, a clone's files decide its next settle, and a stopped core starts no work", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-side-registry-") });
+  t.after(() => registry.close());
+  for (const name of ["slow", "lint"]) {
+    const release = skillRelease("acme", name);
+    await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir("spex-env-side-release-"), name), release.manifest, release.files));
+  }
+  const held = heldFetch();
+  const dir = scratchDir("spex-env-side-");
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
+  let stopped = false;
+  t.after(() => (stopped ? undefined : core.stop()));
+  const { client } = core;
+  try {
+    const project = await client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+    const key = project.id;
+    const clone = clonePath(core.dataDir, key);
+    const lockPath = join(clone, "spex.lock");
+    await settledProject(client, key);
+
+    // The first request's resolution waits at the registry.
+    held.arm((path) => path === "/api/v1/packages/acme/slow");
+    await client.expectOk("environment.request", { repository: key, name: "acme/slow", request: { kind: "registry", version: "^1.0.0" } });
+    await until(held.reached, 30_000, "the held resolution");
+    // A second request is admitted at once and written beside the first.
+    let mark = client.mark();
+    assert.deepEqual(await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^1.0.0" } }), { accepted: true });
+    const requested = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+    assert.ok(requested.packages["acme/slow"] && requested.packages["acme/lint"], "both requests stand in spex.yaml");
+    // The second resolves both and installs, while the first still runs:
+    // its end claims nothing for the other (environments-14).
+    const both = await client.environment(key, mark, (state) => ["acme/slow", "acme/lint"].every((name) => state.packages.some((pkg) => pkg.name === name && pkg.installed)));
+    assert.equal(both.busy, "resolving", "the held resolution still reads as running");
+    assert.equal(both.error, null);
+    const lock = readFileSync(lockPath, "utf8");
+
+    // Let the first go: overtaken by the second's write, it writes no
+    // lock, and its outcome says what changed.
+    mark = client.mark();
+    held.release();
+    const idle = await client.environment(key, mark, (state) => state.busy === null);
+    assert.equal(readFileSync(lockPath, "utf8"), lock, "the overtaken resolution wrote nothing");
+    assert.match(idle.error ?? "", /^Resolving stopped: .*spex\.yaml changed meanwhile; retry$/);
+    assert.equal(idle.stale, null);
+    assert.ok(["acme/slow", "acme/lint"].every((name) => idle.packages.some((pkg) => pkg.name === name && pkg.installed)));
+
+    // spex.lock rewritten by hand during a held resolution, spex.yaml as
+    // it was: the lock's own check refuses the write, reported (environments-5).
+    held.arm((path) => path === "/api/v1/packages/acme/slow");
+    await client.expectOk("environment.resolve", { repository: key });
+    await until(held.reached, 30_000, "the held resolution");
+    const edited = `${lock}# edited by hand\n`;
+    writeFileSync(lockPath, edited);
+    mark = client.mark();
+    held.release();
+    const refused = await client.environment(key, mark, (state) => state.busy === null);
+    assert.equal(readFileSync(lockPath, "utf8"), edited, "the hand-edited lock stands");
+    assert.match(refused.error ?? "", /^Resolving stopped: .*spex\.lock changed meanwhile; retry$/);
+
+    // A clone whose lock and installed files go is settled again at the
+    // next change of the repositories, its files deciding (environments-5).
+    rmSync(lockPath);
+    rmSync(join(clone, "packages"), { recursive: true, force: true });
+    mark = client.mark();
+    await client.expectOk("project.register", { path: gitFolder(join(dir, "other")) });
+    const resettled = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed));
+    assert.ok(existsSync(lockPath), "the lock is resolved again");
+    assert.equal(resettled.error, null);
+
+    // Once the core stops, strict environment work is refused before any write.
+    const manager = managerOf(core);
+    const requests = readFileSync(join(clone, "spex.yaml"));
+    stopped = true;
+    await core.stop();
+    await assert.rejects(manager.ensureRequested(key, "acme/late", { version: "^1.0.0" }), refusedWith("aborted"));
+    await assert.rejects(manager.installNow(key, true, { lockWritten: false, installed: false }), refusedWith("aborted"));
+    assert.deepEqual(readFileSync(join(clone, "spex.yaml")), requests, "nothing was written");
+  } finally {
+    held.release();
+  }
+});
+
+test("environments-21 through a real core: an install whose lock or requests changed during its held download publishes nothing and says so, a removed clone is not made again, and installed means installed as locked", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-held-registry-") });
+  t.after(() => registry.close());
+  const kit = (version: string, files: Record<string, string>): Promise<void> => makeRelease(join(scratchDir("spex-env-held-release-"), "kit"), {
+    format: 2, org: "acme", name: "kit", version, description: "Kit", license: "Apache-2.0",
+    artifacts: { tidy: { kind: "skill", language: "en" } },
+  }, files).then(async (releaseDir) => { await publishRelease(new RegistryClient({ url: registry.url }), releaseDir); });
+  const skillMd = (body: string): string => `---\nname: tidy\ndescription: The tidy skill\n---\n\n${body}\n`;
+  // Each later release holds a subset of the first's file names.
+  await kit("1.0.0", { "skills/en/tidy/SKILL.md": skillMd("one"), "skills/en/tidy/notes.txt": "notes\n" });
+  for (const [version, body] of [["1.1.0", "two"], ["1.2.0", "three"], ["1.3.0", "four"]] as const) await kit(version, { "skills/en/tidy/SKILL.md": skillMd(body) });
+  const held = heldFetch();
+  const dir = scratchDir("spex-env-held-");
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
+  t.after(() => core.stop());
+  const { client } = core;
+  try {
+    const project = await client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+    const key = project.id;
+    const clone = clonePath(core.dataDir, key);
+    await settledProject(client, key);
+    const installedVersion = (): string => (parseYaml(readFileSync(join(clone, "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
+    const download = (version: string) => (path: string): boolean =>
+      path === `/api/v1/packages/acme/kit/${version}/download` || path.startsWith(`/acme/kit/${version}/`);
+    const kitOf = (state: EnvironmentState) => state.packages.find((pkg) => pkg.name === "acme/kit");
+
+    let mark = client.mark();
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.0.0" } });
+    await client.environment(key, mark, (state) => state.busy === null && kitOf(state)?.installed === true);
+    const requests = readFileSync(join(clone, "spex.yaml"));
+    const lock = readFileSync(join(clone, "spex.lock"));
+
+    // A lock replaced while the download is held — a sync applying the
+    // host's — refuses the outdated swap: the newer lock's files stand.
+    held.arm(download("1.1.0"));
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.1.0" } });
+    await until(held.reached, 30_000, "the held download of 1.1.0");
+    writeFileSync(join(clone, "spex.yaml"), requests);
+    writeFileSync(join(clone, "spex.lock"), lock);
+    mark = client.mark();
+    held.release();
+    let state = await client.environment(key, mark, (current) => current.busy === null);
+    assert.deepEqual(readFileSync(join(clone, "spex.lock")), lock, "the replaced lock stands");
+    assert.equal(installedVersion(), "1.0.0", "the outdated install published nothing");
+    assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed, state.stale], ["1.0.0", true, null]);
+    assert.match(state.error ?? "", /^Installing stopped; the last files stay: .*spex\.lock changed meanwhile; retry$/);
+
+    // spex.yaml gone while its lock stands installed: the enabling path's
+    // awaited install is refused, resolving again needed, never a success.
+    rmSync(join(clone, "spex.yaml"));
+    try {
+      const progress = { lockWritten: false, installed: false };
+      await assert.rejects(managerOf(core).installNow(key, false, progress), (error: unknown) =>
+        refusedWith("invalid_request")(error) && /resolve again to install/.test((error as Error).message));
+      assert.deepEqual(progress, { lockWritten: false, installed: false });
+      assert.deepEqual(readFileSync(join(clone, "spex.lock")), lock);
+    } finally {
+      writeFileSync(join(clone, "spex.yaml"), requests);
+    }
+
+    // A spex.yaml changed while the download is held refuses the swap
+    // too; the lock written for the former requests reads stale, and its
+    // package reads not installed, though files of its names stand
+    // (environments-14).
+    held.arm(download("1.2.0"));
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.2.0" } });
+    await until(held.reached, 30_000, "the held download of 1.2.0");
+    writeFileSync(join(clone, "spex.yaml"), `${readFileSync(join(clone, "spex.yaml"), "utf8")}# edited meanwhile\n`);
+    mark = client.mark();
+    held.release();
+    state = await client.environment(key, mark, (current) => current.busy === null);
+    assert.equal(installedVersion(), "1.0.0");
+    assert.equal(existsSync(join(clone, "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md")), true);
+    assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed], ["1.2.0", false]);
+    assert.deepEqual(state.stale, ["Requests changed; resolve again to install"]);
+    assert.match(state.error ?? "", /spex\.yaml changed meanwhile; retry$/);
+    // Installing the stale lock installs and exports nothing, and reports
+    // the stale reasons alone, no change meanwhile invented (environments-7).
+    const exported = join(dir, "project", ".claude", "skills", "tidy", "SKILL.md");
+    const exportedBefore = statSync(exported).ino;
+    mark = client.mark();
+    await client.expectOk("environment.install", { repository: key });
+    state = await client.environment(key, mark, (current) => current.busy === null);
+    assert.equal(state.error, null);
+    assert.deepEqual(state.stale, ["Requests changed; resolve again to install"]);
+    assert.equal(installedVersion(), "1.0.0");
+    assert.equal(statSync(exported).ino, exportedBefore, "no export of the stale lock");
+
+    // A clone removed while the download is held is never made again,
+    // by the install or its exports. The request's own operation is
+    // awaited to its end: a missing clone is announced nowhere and read
+    // as not found.
+    const manager = managerOf(core);
+    const original = manager.request;
+    let done = undefined as Promise<void> | undefined;
+    manager.request = async (...args) => {
+      const admitted = await original.apply(manager, args);
+      done = admitted.done;
+      return admitted;
+    };
+    try {
+      held.arm(download("1.3.0"));
+      await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.3.0" } });
+    } finally {
+      manager.request = original;
+    }
+    assert.ok(done, "the request's operation was admitted");
+    await until(held.reached, 30_000, "the held download of 1.3.0");
+    rmSync(clone, { recursive: true, force: true });
+    held.release();
+    await done;
+    assert.equal(existsSync(clone), false, "the install made no folder at the clone's address");
+    assert.deepEqual(existsSync(join(core.dataDir, "cache", "staging")) ? readdirSync(join(core.dataDir, "cache", "staging")) : [], [], "no staged tree outlives the refusal");
+    await client.expectError("environment.get", { repository: key }, "not_found");
+    // The enabling path's strict steps are refused there, no folder made.
+    await assert.rejects(manager.installNow(key, false, { lockWritten: false, installed: false }), refusedWith("not_found"));
+    await assert.rejects(manager.ensureRequested(key, "acme/kit", { version: "1.0.0" }), refusedWith("not_found"));
+    assert.equal(existsSync(clone), false);
+  } finally {
+    held.release();
+  }
+});
+
+test("environments-14: an operation held while its clone moves announces its end at the new address, and writes nothing at the old", { timeout: 120_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-move-registry-") });
+  t.after(() => registry.close());
+  const release = skillRelease("acme", "slow");
+  await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir("spex-env-move-release-"), "slow"), release.manifest, release.files));
+  const held = heldFetch();
+  const dir = scratchDir("spex-env-move-");
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
+  t.after(() => core.stop());
+  const { client } = core;
+  try {
+    const project = await client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+    const from = project.id;
+    const to = `${OWN}/moved-spex`;
+    const source = clonePath(core.dataDir, from);
+    const target = clonePath(core.dataDir, to);
+    await settledProject(client, from);
+    held.arm((path) => path === "/api/v1/packages/acme/slow");
+    await client.expectOk("environment.request", { repository: from, name: "acme/slow", request: { kind: "registry", version: "^1.0.0" } });
+    await until(held.reached, 30_000, "the held resolution");
+    const lock = readFileSync(join(source, "spex.lock"));
+
+    // The clone moves as a sync following a host rename moves it: the
+    // folder renamed, the store and the environment told (space-60's
+    // own calls, invoked here beside the held work).
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+    (core.service as unknown as { store: Store }).store.moveRepositories([{ from, to }]);
+    await managerOf(core).moved(from, to);
+    const moved = await client.expectOk("environment.get", { repository: to });
+    assert.equal(moved.busy, "resolving", "the held operation still runs, read at the new address");
+
+    const mark = client.mark();
+    held.release();
+    const ended = await client.environment(to, mark, (state) => state.busy === null, 30_000);
+    assert.match(ended.error ?? "", /changed meanwhile; retry$/, "the held resolution found its files moved");
+    assert.equal(existsSync(source), false, "nothing was made at the old address");
+    assert.deepEqual(readFileSync(join(target, "spex.lock")), lock, "the held resolution wrote no lock");
+  } finally {
+    held.release();
+  }
+});
+
+test("shared-config-roundtrip-3: a config edit whose file another writer changes while it composes is refused as a conflict, the other writer's bytes standing", { timeout: 60_000 }, async (t) => {
+  let gate: Promise<void> | undefined;
+  let open: (() => void) | undefined;
+  let reached = false;
+  const loadModule = async (specifier: string): Promise<unknown> => {
+    if (gate) { const wait = gate; gate = undefined; reached = true; await wait; }
+    return import(isAbsolute(specifier) ? pathToFileURL(specifier).href : specifier);
+  };
+  const dir = scratchDir("spex-env-config-conflict-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE, extra: { loadModule } });
+  t.after(() => core.stop());
+  try {
+    gate = new Promise((resolve) => { open = resolve; });
+    const reply = core.client.command("config.edit", { op: { kind: "captain.set", patch: { model: "claude-other" } } });
+    await until(() => reached, 30_000, "the held composition");
+    const other = `${readFileSync(core.configPath, "utf8")}# another writer\n`;
+    writeFileSync(core.configPath, other);
+    open?.();
+    const answer = await reply;
+    assert.ok(!answer.ok, "the edit is refused");
+    if (answer.ok) return;
+    assert.equal(answer.error.code, "conflict");
+    assert.match(answer.error.message, /changed meanwhile; retry/);
+    assert.equal(readFileSync(core.configPath, "utf8"), other, "the other writer's bytes stand");
+  } finally {
+    gate = undefined;
+    open?.();
+  }
+});
+
+test("playbook-library-98: an enabling refused after some of its writes names them, they stand, nothing else is overwritten, and a retry enables from what stands", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-env-enable-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
+  t.after(() => core.stop());
+  const { client } = core;
+  const working = gitFolder(join(dir, "project"));
+  const project = await client.expectOk("project.register", { path: working });
+  const clone = clonePath(core.dataDir, project.id);
+  await settledProject(client, project.id);
+
+  // An authoring session compiles its playbook (playbook-library-69).
+  const { instance } = await client.expectOk("draft.create", { projectId: project.id, draftId: "triage" });
+  assert.ok(instance, "the session's recorded instance");
+  await client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
+  const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
+  await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
+  const register = { projectId: project.id, draftId: "triage", instance, command: "triage", intent: "Label new issues",
+    bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } };
+
+  // The project's config folder is a file another writer placed: the
+  // entry, the enabling's last write, fails after the request, the lock
+  // and the new player were written.
+  const configDir = join(clone, "config");
+  const aside = join(clone, "config.aside");
+  const hadConfig = existsSync(configDir);
+  if (hadConfig) renameSync(configDir, aside);
+  const foreign = "a file another writer placed\n";
+  writeFileSync(configDir, foreign);
+  let failure: { code: string; message: string } | undefined;
+  let afterFailure: { requests: string; lock: string; own: string; foreign: string } | undefined;
+  try {
+    const reply = await client.command("draft.register", register);
+    if (!reply.ok) failure = reply.error;
+    afterFailure = {
+      requests: readFileSync(join(clone, "spex.yaml"), "utf8"),
+      lock: readFileSync(join(clone, "spex.lock"), "utf8"),
+      own: readFileSync(core.configPath, "utf8"),
+      foreign: readFileSync(configDir, "utf8"),
+    };
+  } finally {
+    rmSync(configDir, { force: true });
+    if (hadConfig) renameSync(aside, configDir);
+  }
+  assert.ok(failure, "the enabling is refused");
+  assert.equal(failure.code, "internal", failure.message);
+  assert.match(failure.message, /^enabling stopped after /);
+  for (const step of [/local\/triage requested in spex\.yaml|\/triage requested in spex\.yaml/, /spex\.lock resolved/, /player dev\.triager written/]) assert.match(failure.message, step);
+  assert.match(failure.message, /ENOTDIR/);
+  assert.doesNotMatch(failure.message, /playbook triage written/);
+  // What was written stands; the other writer's file is not overwritten.
+  assert.match(afterFailure!.requests, /\/triage:\n\s+path: spex-packages\/triage\n/);
+  assert.match(afterFailure!.lock, /\/triage:/);
+  assert.match(afterFailure!.own, /dev\.triager:\n\s+adapter: claude/);
+  assert.equal(afterFailure!.foreign, foreign);
+
+  // A retry, the folder back, reads what stands: no request written
+  // again, the entry written, the session enabled.
+  await client.expectOk("draft.register", register);
+  assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
+  assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
+  await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
 });

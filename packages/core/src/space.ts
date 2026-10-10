@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Groups' core (DR-103, DR-057): every spex repository on this device
-// with its sync machine — one per clone, any number at once (space-31) —
-// its three-way unit plan with human labels (space-33, space-34), its
-// write gate beneath the clone (space-21), the validated apply that
-// never runs `git merge` (space-19), the refresh that re-indexes the
-// running core (space-20), and the read-only explorer (space-35).
+// Groups' core (DR-103, DR-057, DR-111): every spex repository on this
+// device with its sync machine — one operation per clone, any number of
+// clones at once (space-31) — its three-way unit plan with human labels
+// (space-33, space-34), the validated apply that never runs `git merge`
+// (space-19), the refresh that re-indexes the running core (space-20),
+// and the read-only explorer (space-35). No operation refuses another
+// (space-21): each write is checked at its own instant.
 
 import { randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
-import { HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
+import { CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import type {
@@ -36,7 +37,7 @@ import type {
 import { CoreError } from "./session.js";
 import {
   classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, membersDecide, noLongerShared,
-  signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun,
+  signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
   callbackPages, hostKey, listingFor, nameTaken, ownNameFor, readHostView, relayHostError, repositoryDescription, signInFailure,
@@ -53,7 +54,9 @@ import {
   resolveStorageChoices,
   SPEX_BRANCH,
   storageUnitName,
+  StorageWriteRefused,
   UPLOAD_STAGING,
+  validateStorageSnapshot,
   validateStorageTree,
   type StorageChoice,
   type StorageMergeUnit,
@@ -77,12 +80,7 @@ export interface SpaceHost {
   /** What the core found about the folders each repair names, and the
    * one it proposes (space-53): checked, never searched for. */
   checkRepairs: (diagnostics: StorageDiagnostic[]) => Promise<StorageDiagnostic[]>;
-  /** The named blocker of space-11 beneath one clone — a turn in flight,
-   * a session held elsewhere, a compile — or undefined when it is quiet. */
-  blocker: (repository: string) => Promise<string | undefined>;
   broadcast: (state: GroupsState) => void;
-  pauseWatchers: (repository: string) => void;
-  resumeWatchers: (repository: string) => void;
   reloadConfig: () => Promise<void>;
   /** One full rescan of a clone's sessions: history-replaced,
    * session.state, session.removed and intents.changed as a foreign-host
@@ -91,9 +89,10 @@ export interface SpaceHost {
   ledgerChanged: (projectIds: string[]) => void;
   /** Test seam (space-32): the transport limit; 120 s by default. */
   transportTimeoutMs?: number;
-  /** Test seam: awaited before each step runs, so a suite can act
-   * between steps deterministically. */
-  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** Test seam: awaited before each step runs, and inside Save between
+   * its validation and its commit (`at: "commit"`), so a suite can act
+   * between them deterministically. */
+  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
   /** The Git host's client (git-host-1..11): the one this home signs in
    * to and reads. */
   client: GitHostClient;
@@ -111,9 +110,6 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
-  /** What the core is already writing beneath these clones — an
-   * environment's install — lands before they move (space-59). */
-  settleBeneath?: (repositories: string[]) => Promise<void>;
 }
 
 /** What a spex repository's clone says of its host: its origin URL and
@@ -225,6 +221,28 @@ function pruneEmptyFolders(dir: string, stopAt: string): void {
   }
 }
 
+/** Whether two paths name one file — a case-only rename's source and
+ * destination on a filesystem that folds case (space-60). */
+function sameFile(a: string, b: string): boolean {
+  try {
+    const one = statSync(a);
+    const two = statSync(b);
+    return one.dev === two.dev && one.ino === two.ino;
+  } catch { return false; }
+}
+
+/** Whether a move's destination is taken by anything but its source. */
+function occupied(from: string, to: string): boolean {
+  return existsSync(to) && !sameFile(from, to);
+}
+
+/** The refusal of a write whose file changed since it was read (DR-111). */
+const changedMeanwhile = (what: string): string => i18n._({
+  id: "{what} changed meanwhile; retry",
+  values: { what },
+  comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+});
+
 /** The diagnostic a pending Git merge stands as (space-11). */
 const mergePendingReason = (): string => i18n._({
   id: "a Git merge is pending; finish or abort it in a terminal before syncing",
@@ -238,6 +256,12 @@ const repairFailureReason = (cause: string): string => i18n._({
   values: { cause },
   comment: "A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed",
 });
+
+/** A system call's own failure — a clone gone meanwhile, a full disk —
+ * as Node reports it: an ordinary error Retry may clear, never a file
+ * the reader must fix (space-15). */
+const systemFailure = (error: unknown): boolean =>
+  !(error instanceof StorageFormatError) && typeof (error as NodeJS.ErrnoException | null)?.syscall === "string";
 
 type RepositoryInfo =
   | { git: { ok: false; guidance: string }; root: false }
@@ -270,7 +294,7 @@ interface PlanRevisions { ours: string | null; theirs: string; base: string }
 interface LastPlan extends PlanRevisions { oursTree: string; units: StorageMergeUnit[] }
 interface Lists { local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[] }
 interface Pending { head: string; origin: string; base: string; units: StorageMergeUnit[]; resolved: Map<string, StorageChoice>; counts: { sent: number; received: number } }
-interface Applied { headBefore: string; headAfter: string; changedSessions: string[]; diagnostics: StorageDiagnostic[] }
+interface Applied { headBefore: string; headAfter: string }
 interface ApplyMarker { v: 1; ours: string; theirs: string; base: string; choices: Record<string, StorageChoice>; at: number }
 type CompareResult =
   | { outcome: "unrelated" }
@@ -478,12 +502,15 @@ const unknownUnit = (unit: string): string => i18n._({
  * every record but what the clone regenerates. */
 const RECORD_KINDS = new Set<SpaceUnitKind>(["session", "intent", "authoring", "environment", "settings", "other"]);
 
-/** One spex repository's sync machine (space-31): at most one operation
- * at a time on this clone, any number of clones at once. */
+/** One spex repository's sync machine (space-31): one operation on this
+ * clone at a time — a second Sync or Check joins it — any number of
+ * clones at once; it refuses nothing beneath the clone (space-21). */
 class RepositorySync {
   git: SpaceGit;
+  /** The running operation's progress, else the last one's outcome. */
   phase: SpaceSyncPhase = { phase: "idle" };
-  /** The clone's remote and recorded id, as last read. */
+  /** The clone's remote and recorded id as its last read found them;
+   * every decision reads them again first. */
   facts: CloneFacts = { remote: null, id: null };
   /** What the last transport learnt of the host before the next read
    * (space-15): a refusal turns the repository read-only, a missing one
@@ -494,10 +521,17 @@ class RepositorySync {
   private unrelated = false;
   private lists: Lists = { local: [], incoming: [], conflicts: [] };
   private lastPlan?: LastPlan;
-  cached?: RepositoryState;
-  private operation?: Promise<void>;
+  /** The operation running on this clone: its kind and its promise. */
+  private current?: { op: SpaceOp; work: Promise<void> };
+  /** How the running operation ended, shown once its lists are read. */
+  private ended?: SpaceSyncPhase;
+
+  private takeEnded(): SpaceSyncPhase | undefined {
+    const ended = this.ended;
+    this.ended = undefined;
+    return ended;
+  }
   private applied?: Applied;
-  private holding?: { leases: { release(): Promise<unknown> }[]; umask: number };
   /** The text of the failure that stopped an interrupted sync's repair;
    * its diagnostic is phrased where it is read (core-service-111). */
   private repairFailure?: string;
@@ -532,115 +566,82 @@ class RepositorySync {
   rebind(repository: SpexRepository): void {
     this.repository = repository;
     this.git = this.makeGit(repository.dir);
-    if (this.cached) this.cached = { ...this.cached, key: repository.key, name: splitKey(repository.key).name };
+  }
+
+  /** Whether an operation runs on this clone. */
+  running(): boolean { return this.current !== undefined; }
+
+  /** The kind of operation running on this clone, if any. */
+  private runningOp(): SpaceOp | undefined { return this.current?.op; }
+
+  /** An outcome a manager's act on this clone ends in — a join's code
+   * clone (space-63) — shown unless an operation runs meanwhile. */
+  report(phase: SpaceSyncPhase): void {
+    if (!this.current) this.phase = phase;
   }
 
   get key(): string { return this.repository.key; }
   private get dir(): string { return this.repository.dir; }
 
-  // -- the gate (space-21) ---------------------------------------------------
-
-  /** The busy message while an operation runs, else undefined. */
-  busy(): string | undefined {
-    if (this.phase.phase !== "running") return undefined;
-    // One whole sentence per operation: a verb dropped into a frame
-    // carries to no other language (core-service-111).
-    const name = splitKey(this.key).name;
-    switch (this.phase.op) {
-      case "sync":
-        return i18n._({ id: "{name} is syncing; wait for it to finish", values: { name }, comment: "Refusal while a spex repository syncs; {name} is its name" });
-      case "join":
-        return i18n._({ id: "{name} is joining; wait for it to finish", values: { name }, comment: "Refusal while a spex repository is being joined; {name} is its name" });
-      case "move":
-        return i18n._({ id: "{name} is moving; wait for it to finish", values: { name }, comment: "Refusal while a spex repository's clone moves or is renamed; {name} is its name" });
-      default:
-        return i18n._({ id: "{name} is checking the host; wait for it to finish", values: { name }, comment: "Refusal while a spex repository checks the Git host; {name} is its name" });
-    }
+  /** The clone's remote and recorded host id, read afresh. */
+  async readFacts(): Promise<CloneFacts> {
+    await this.readRepository();
+    return this.facts;
   }
 
-  assertNotRunning(): void {
-    if (this.phase.phase === "running") {
-      throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
+  /**
+   * The clone's remote and recorded host id, written only while its
+   * remote still reads `expected` (DR-111): the read, the check and the
+   * writes are one synchronous step, so no core command lands between
+   * them, and Git takes its own config lock for each write. An
+   * independent process keeps ordinary filesystem behaviour. Returns
+   * false, writing nothing, where the remote changed meanwhile.
+   */
+  private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null }): boolean {
+    const git = (args: string[]): GitRun => {
+      const run = this.git.runSync(args);
+      if (run.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${lastLines(run.stderr)}`);
+      return run;
+    };
+    const current = this.configNow("remote.origin.url");
+    if (current !== expected) return false;
+    if (next.url !== undefined && next.url !== current) {
+      git(next.url === null ? ["remote", "remove", "origin"] : current === null ? ["remote", "add", "origin", next.url] : ["remote", "set-url", "origin", next.url]);
     }
-  }
-
-  /** Hold the gate for an operation the manager runs beneath this clone
-   * — a rename or a join's code clone (space-21); false while another
-   * runs. */
-  hold(op: SpaceOp, step: SyncStep): boolean {
-    if (this.phase.phase === "running") return false;
-    this.phase = { phase: "running", op, step, since: Date.now(), cancelable: false };
+    if (next.id === null) this.git.runSync(["config", "--unset", "spex.repositoryId"]);
+    else if (next.id !== undefined) git(["config", "spex.repositoryId", next.id]);
+    this.facts = {
+      remote: next.url === undefined ? current : next.url,
+      id: next.id === undefined ? this.facts.id : next.id,
+    };
     return true;
   }
 
-  /** Lift a hold, or end it stopped. */
-  release(stopped?: { op: SpaceOp; step: SyncStep; failure: GitFailure }): void {
-    this.phase = stopped ? { phase: "stopped", op: stopped.op, step: stopped.step, ...stopped.failure } : { phase: "idle" };
+  /** One config value as the clone's `.git/config` holds it now, read
+   * synchronously so a check and its write share one core turn. */
+  private configNow(key: string): string | null {
+    const read = this.git.runSync(["config", "--get", key]);
+    return read.code === 0 ? read.stdout.toString("utf8").trim() : null;
   }
 
-  // -- reads and moves (space-59, space-60) -----------------------------------
-
-  /** Reads of the clone in flight, outside its operations, and who
-   * waits for the last to end. */
-  private readers = 0;
-  private drainWaiters: (() => void)[] = [];
-  /** Set while the clone moves: a read waits for it. */
-  private move?: { done: Promise<void>; end: () => void };
-
-  /** A read of the clone outside its operations — its state, its facts,
-   * the explorer, a diff: it waits while the clone moves and then reads
-   * where the clone now lies, and a move waits for it, so no read meets
-   * a clone half moved (space-59, space-60). */
-  async reading<T>(body: () => Promise<T>): Promise<T> {
-    while (this.move) await this.move.done;
-    this.readers += 1;
-    try { return await body(); }
-    finally {
-      this.readers -= 1;
-      if (this.readers === 0) for (const wake of this.drainWaiters.splice(0)) wake();
-    }
-  }
-
-  /** Every read in flight done. */
-  async quiesce(): Promise<void> {
-    while (this.readers > 0) await new Promise<void>((wake) => { this.drainWaiters.push(wake); });
-  }
-
-  /** Begin a move of this clone: reads starting from now wait for its
-   * end, and this resolves once the reads in flight are done. */
-  async beginMove(): Promise<void> {
-    if (!this.move) {
-      let end = (): void => {};
-      const done = new Promise<void>((resolveDone) => { end = resolveDone; });
-      this.move = { done, end };
-    }
-    await this.quiesce();
-  }
-
-  /** End a move: the reads that waited read the clone where it lies. */
-  endMove(): void {
-    const move = this.move;
-    this.move = undefined;
-    move?.end();
-  }
-
-  /** The clone's remote and recorded host id, read afresh. */
-  async readFacts(): Promise<CloneFacts> {
-    return this.reading(async () => {
-      await this.readRepository();
-      return this.facts;
-    });
+  /** Whether the clone's remote and recorded host id read `remote` and
+   * `id` at this instant (DR-111): a move checks them at its rename. */
+  recordsNow(remote: string | null, id: string): boolean {
+    return this.configNow("remote.origin.url") === remote && this.configNow("spex.repositoryId") === id;
   }
 
   /** Give the clone the host's own remote and id (space-58, space-63):
-   * the URL the host handed over, used as given (space-5). */
-  async attachHost(url: string, id: string): Promise<void> {
+   * the URL the host handed over, used as given (space-5), written only
+   * over the remote the caller read before asking the host — `expected`
+   * — so a remote set meanwhile is refused, never replaced. */
+  async attachHost(url: string, id: string, expected: string | null): Promise<void> {
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
-    if (repo.remote === null) await this.git.ok(["remote", "add", "origin", url]);
-    else if (repo.remote !== url) await this.git.ok(["remote", "set-url", "origin", url]);
-    await this.git.ok(["config", "spex.repositoryId", id]);
+    // A remote already at the host's URL is the one this attaches.
+    if (!this.publishRemote(repo.remote === url ? url : expected, { url, id })) {
+      throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
+    }
     if (repo.remote !== url) {
       await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
       await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
@@ -648,27 +649,22 @@ class RepositorySync {
       this.remoteEmpty = false;
       this.unrelated = false;
     }
-    this.facts = { remote: url, id };
     this.hostOverride = undefined;
   }
 
   /** Record the host's id beside a clone matched by its remote URL
-   * (git-host-5). */
-  async recordId(id: string): Promise<void> {
-    if (this.phase.phase === "running" || this.facts.id === id) return;
-    await this.reading(() => this.recordIdNow(id));
-  }
-
-  /** The same, inside this clone's own operation. */
-  async recordIdNow(id: string): Promise<void> {
-    if ((await this.git.run(["config", "spex.repositoryId", id])).code === 0) this.facts = { ...this.facts, id };
+   * (git-host-5), only while that remote stands. */
+  recordId(id: string, remote: string): void {
+    if (this.facts.id === id && this.facts.remote === remote) return;
+    this.publishRemote(remote, { id });
   }
 
   /** The URL the host hands over after a rename or a transfer
-   * (space-60), used as given, inside this clone's own operation. */
-  async setOrigin(url: string): Promise<void> {
-    await this.git.ok(["remote", "set-url", "origin", url]);
-    this.facts = { ...this.facts, remote: url };
+   * (space-60), used as given, written only over the remote read. */
+  setOrigin(url: string, expected: string): void {
+    if (!this.publishRemote(expected, { url })) {
+      throw new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true });
+    }
   }
 
   /** This clone's own diagnostics: a pending merge, a refresh's finding,
@@ -714,20 +710,18 @@ class RepositorySync {
     };
   }
 
-  /** The repository's state, recomputing the lists from the working
-   * tree when asked (space-33: mine is the working tree outside a sync). */
+  /** The repository's state, read from the clone at this instant,
+   * recomputing the lists from the working tree when asked (space-33:
+   * mine is the working tree outside a sync). An operation's own lists
+   * — a sync's plan, the picker's conflicts — stand while it runs or
+   * waits for choices. */
   async state(recompute: boolean): Promise<RepositoryState> {
-    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
-    return this.reading(() => this.readState(recompute));
+    return this.readState(recompute && !this.current && this.phase.phase !== "choices");
   }
 
   private async readState(recompute: boolean): Promise<RepositoryState> {
-    if (this.phase.phase === "running" && this.cached) return { ...this.cached, sync: this.phase };
     const repo = await this.readRepository();
-    if (recompute && repo.root && repo.head !== null && this.phase.phase !== "choices") {
-      try { await this.computeWorkingLists(repo.head, repo.originSpex); }
-      catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
-    }
+    if (recompute && repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.originSpex);
     let ahead: number | null = null;
     let behind: number | null = null;
     if (repo.root && repo.head && repo.originSpex && this.checkedAt !== null) {
@@ -780,17 +774,33 @@ class RepositorySync {
       noticed: store.getPref<unknown>(noticedPref(this.key)) === true,
       sync: this.phase,
     };
-    this.cached = state;
     return state;
   }
 
-  private async broadcast(recompute: boolean): Promise<void> {
-    await this.state(recompute);
+  /** The working tree's lists against the last check, kept as this
+   * clone's lists and plan (space-33); a failure keeps the last ones. */
+  private async refreshLists(head: string, originSpex: string | null): Promise<void> {
+    try {
+      const computed = await this.computeWorkingLists(head, originSpex);
+      this.lastPlan = computed.plan;
+      this.lists = computed.lists;
+      if (computed.unrelated !== undefined) this.unrelated = computed.unrelated;
+    } catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** Announce this clone's step; with `lists`, its lists recomputed from
+   * the working tree first (space-29). */
+  private async broadcast(lists: boolean): Promise<void> {
+    if (lists) {
+      const repo = await this.readRepository();
+      if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.originSpex);
+    }
     await this.owner.publish();
   }
 
   /** What a removal of this clone would lose (projects-9): its record
-   * units the host has not received. */
+   * units the host has not received, counted without touching the
+   * clone's own lists. */
   async pendingUnits(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
@@ -799,8 +809,8 @@ class RepositorySync {
       const units = planStorageUnits({ ours: readStorageTree(this.dir, mine), theirs: new Map(), base: new Map() });
       return units.filter((unit) => RECORD_KINDS.has(spaceUnitKind(unit.name))).length;
     }
-    await this.computeWorkingLists(repo.head, repo.originSpex);
-    return [...this.lists.local, ...this.lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
+    const { lists } = await this.computeWorkingLists(repo.head, repo.originSpex);
+    return [...lists.local, ...lists.conflicts.map((conflict) => conflict.unit)].filter((unit) => RECORD_KINDS.has(unit.kind)).length;
   }
 
   // -- the plan (space-33) and its labels (space-34) ------------------------
@@ -814,22 +824,23 @@ class RepositorySync {
     } finally { rmSync(index, { force: true }); }
   }
 
-  private async computeWorkingLists(head: string, originSpex: string | null): Promise<void> {
+  private async computeWorkingLists(head: string, originSpex: string | null): Promise<{ plan: LastPlan; lists: Lists; unrelated?: boolean }> {
     const mine = await this.workingTree();
     let theirs = head;
     let base = head;
+    let unrelated: boolean | undefined;
     if (this.checkedAt !== null) {
       if (this.remoteEmpty) { theirs = EMPTY_TREE; base = EMPTY_TREE; }
       else if (originSpex) {
         const merged = await this.git.run(["merge-base", "HEAD", `refs/remotes/origin/${SPEX_BRANCH}`]);
-        if (merged.code === 0) { theirs = originSpex; base = merged.stdout.toString("utf8").trim(); this.unrelated = false; }
-        else this.unrelated = true;
+        if (merged.code === 0) { theirs = originSpex; base = merged.stdout.toString("utf8").trim(); unrelated = false; }
+        else unrelated = true;
       }
     }
     const trees: StorageTrees = { ours: readStorageTree(this.dir, mine), theirs: readStorageTree(this.dir, theirs), base: readStorageTree(this.dir, base) };
     const units = planStorageUnits(trees);
-    this.lastPlan = { ours: null, oursTree: mine, theirs, base, units };
-    this.lists = await this.describe(units, trees, { ours: null, theirs, base });
+    const lists = await this.describe(units, trees, { ours: null, theirs, base });
+    return { plan: { ours: null, oursTree: mine, theirs, base, units }, lists, ...(unrelated !== undefined ? { unrelated } : {}) };
   }
 
   private async blob(oid: string): Promise<Buffer> {
@@ -1002,13 +1013,10 @@ class RepositorySync {
   /** Give the clone a remote, or take it away (space-5): the way a
    * reader or a test reaches a host this wave. */
   async setRemote(url: string | null): Promise<void> {
-    this.assertNotRunning();
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
-    if (url === null) {
-      if (repo.remote !== null) await this.git.ok(["remote", "remove", "origin"]);
-    } else {
+    if (url !== null) {
       const checked = validateRemoteUrl(url);
       if (!checked.ok) throw new CoreError("invalid_request", checked.reason);
       // The Git host's own remote URLs are those it hands over, used as
@@ -1019,49 +1027,65 @@ class RepositorySync {
           comment: "Refusal of a remote the reader named under the Git host's own origin",
         }));
       }
-      if (url !== repo.remote) await this.git.ok(repo.remote === null ? ["remote", "add", "origin", url] : ["remote", "set-url", "origin", url]);
     }
     if (url !== repo.remote) {
+      // Written over the remote read above, or refused (DR-111); a remote
+      // the reader names is no repository the host listed.
+      if (!this.publishRemote(repo.remote, { url, id: null })) {
+        throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
+      }
       // A changed remote clears the last check and the last sync (space-5):
       // what the old remote held says nothing about the new one.
       await this.git.run(["update-ref", "-d", `refs/remotes/origin/${SPEX_BRANCH}`]);
       await this.git.run(["config", "--unset", `branch.${SPEX_BRANCH}.remote`]);
-      // A remote the reader names is no repository the host listed.
-      await this.git.run(["config", "--unset", "spex.repositoryId"]);
       this.checkedAt = null;
       this.host.store.deletePref(lastSyncPref(this.key));
       this.remoteEmpty = false;
       this.unrelated = false;
       this.hostOverride = undefined;
-      this.phase = { phase: "idle" };
+      // A running operation's progress is its own to end.
+      if (!this.current) this.phase = { phase: "idle" };
     }
     await this.state(true);
   }
 
   // -- operations (space-31) -------------------------------------------------
 
-  private runOperation(op: SpaceOp, body: () => Promise<void>): Promise<void> {
-    const work = (async () => {
+  /** Run one operation on this clone (space-31), after `after` — a
+   * check a sync follows — has settled. Its progress is its own: it
+   * ends it, and clears only itself as the running operation. */
+  private runOperation(op: SpaceOp, body: () => Promise<void>, after?: Promise<void>): Promise<void> {
+    const entry: { op: SpaceOp; work: Promise<void> } = { op, work: Promise.resolve() };
+    entry.work = (async () => {
+      await after?.catch(() => undefined);
+      this.ended = undefined;
       try { await body(); }
       catch (error) {
+        this.ended = undefined;
         const step = this.phase.phase === "running" ? this.phase.step : "save";
         if (error instanceof SpaceStopped) this.phase = { phase: "stopped", op, step: error.step, ...error.failure };
         else {
           const message = error instanceof Error ? error.message : String(error);
-          this.phase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: i18n._({
-            id: "Retry; if it fails again, run the step in a terminal for detail.",
-            comment: "Guidance under a step that stopped for a reason the app does not classify",
-          }), retry: true };
+          this.phase = { phase: "stopped", op, step, cause: "git", message: lastLines(message), guidance: retryGuidance(), retry: true };
         }
       } finally {
-        await this.releaseHoldings();
-        try { await this.broadcast(this.phase.phase !== "choices"); }
+        // An ending is shown with the lists it leaves: a row read between
+        // never pairs the new phase with the former lists (space-29).
+        const ended = this.takeEnded();
+        try {
+          if (ended && ended.phase !== "choices") {
+            const repo = await this.readRepository();
+            if (repo.root && repo.head !== null) await this.refreshLists(repo.head, repo.originSpex);
+          }
+        } catch (error) { console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`); }
+        if (ended) this.phase = ended;
+        if (this.current === entry) this.current = undefined;
+        try { await this.broadcast(!ended && this.phase.phase !== "choices"); }
         catch (error) { console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`); }
       }
     })();
-    this.operation = work;
-    void work.finally(() => { if (this.operation === work) this.operation = undefined; });
-    return work;
+    this.current = entry;
+    return entry.work;
   }
 
   /** Enter a step. Check enters with no Stop: its host read comes
@@ -1072,63 +1096,60 @@ class RepositorySync {
     await this.host.beforeStep?.({ op, step, repository: this.key });
   }
 
+  /** Check the host (space-8). A Check asked while a sync or another
+   * check runs joins it: that operation checks the host itself. */
   async fetch(): Promise<{ accepted: true }> {
-    this.assertNotRunning();
-    const previous = this.phase;
-    this.phase = { phase: "running", op: "check", step: "check", since: Date.now(), cancelable: false };
-    let repo: ReadyRepository;
-    try {
-      repo = await this.requireReady();
-      await this.owner.admit(this, { push: false, noticed: true });
-    } catch (error) { this.phase = previous; throw error; }
+    if (this.current) return { accepted: true };
+    const repo = await this.requireReady();
+    await this.owner.admit(this, { push: false, noticed: true });
+    if (this.current) return { accepted: true };
     void this.runOperation("check", async () => {
       await this.enter("check", "check", false);
       await this.check(repo.remote, "check");
-      this.phase = { phase: "idle" };
+      this.ended = { phase: "idle" };
     });
     return { accepted: true };
   }
 
   /** `internal` marks a sync the core starts itself — after a sign-in, a
    * pick or a creation (space-4, space-58) — whose act already said what
-   * a join does (space-13). */
+   * a join does (space-13). A Sync asked while a sync runs joins it; one
+   * asked while a check runs follows that check. Nothing beneath the
+   * clone is refused meanwhile (space-21). */
   async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean }): Promise<{ accepted: true }> {
-    this.assertNotRunning();
-    const previous = this.phase;
-    // The gate is set before the admission checks (space-21).
-    this.phase = { phase: "running", op: "sync", step: "save", since: Date.now(), cancelable: false };
-    let repo: ReadyRepository;
+    if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
-    try {
-      const blocker = await this.host.blocker(this.key);
-      if (blocker) throw new CoreError("busy", blocker);
-      repo = await this.requireReady();
-      const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics()].find((d) => d.blocking);
-      if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
-      await this.repairIfMarked();
-      if (input.choices && Object.keys(input.choices).length > 0) {
-        const plan = this.lastPlan?.units ?? [];
-        for (const [name, choice] of Object.entries(input.choices)) {
-          const unit = plan.find((u) => u.name === name);
-          if (!unit) throw new CoreError("invalid_request", unknownUnit(name));
-          if (unit.choice !== "conflict") {
-            const label = [...this.lists.local, ...this.lists.incoming].find((u) => u.unit === name)?.label ?? name;
-            throw new CoreError("invalid_request", i18n._({
-              id: "{label} has no divergent change",
-              values: { label },
-              comment: "Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label",
-            }));
-          }
-          choices[name] = choice === "mine" ? "ours" : "theirs";
+    const repo = await this.requireReady();
+    // The repair re-reads its marker now, so a finding it left before
+    // never stands in for what the files say at this admission.
+    await this.repairIfMarked();
+    // A refresh's finding is what the files said when it last re-read
+    // them; it stays under issues but admits the sync, whose Save
+    // validates the exact staged files and names any file still invalid,
+    // so a file the reader repaired is never refused by a stale finding.
+    const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics().filter((d) => d !== this.refreshProblem)].find((d) => d.blocking);
+    if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
+    if (input.choices && Object.keys(input.choices).length > 0) {
+      const plan = this.lastPlan?.units ?? [];
+      for (const [name, choice] of Object.entries(input.choices)) {
+        const unit = plan.find((u) => u.name === name);
+        if (!unit) throw new CoreError("invalid_request", unknownUnit(name));
+        if (unit.choice !== "conflict") {
+          const label = [...this.lists.local, ...this.lists.incoming].find((u) => u.unit === name)?.label ?? name;
+          throw new CoreError("invalid_request", i18n._({
+            id: "{label} has no divergent change",
+            values: { label },
+            comment: "Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label",
+          }));
         }
+        choices[name] = choice === "mine" ? "ours" : "theirs";
       }
-      if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
-      await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
-    } catch (error) {
-      this.phase = previous;
-      throw error;
     }
-    void this.runOperation("sync", () => this.syncBody(repo, choices, input.join === true));
+    if (input.noticed === true) this.host.store.setPref(noticedPref(this.key), true);
+    await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
+    // A sync begun while this one was admitted is the one it joins.
+    if (this.runningOp() === "sync") return { accepted: true };
+    void this.runOperation("sync", () => this.syncBody(repo, choices, input.join === true), this.current?.work);
     return { accepted: true };
   }
 
@@ -1139,7 +1160,7 @@ class RepositorySync {
   /** Cancel a transport and wait for the operation to settle (shutdown). */
   async stop(): Promise<void> {
     this.git.cancel();
-    try { await this.operation; } catch { /* reported as state */ }
+    try { await this.current?.work; } catch { /* reported as state */ }
   }
 
   // -- the steps (space-12, space-15) ----------------------------------------
@@ -1182,8 +1203,8 @@ class RepositorySync {
         case "compare": {
           await this.enter(op, "compare", false);
           const result = await this.compare(choices, join);
-          if (result.outcome === "unrelated") { this.phase = { phase: "unrelated" }; return; }
-          if (result.outcome === "choices") { this.phase = { phase: "choices", savedCommit }; return; }
+          if (result.outcome === "unrelated") { this.ended = { phase: "unrelated" }; return; }
+          if (result.outcome === "choices") { this.ended = { phase: "choices", savedCommit }; return; }
           if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
           pending = result.pending;
           counts = pending.counts;
@@ -1227,7 +1248,7 @@ class RepositorySync {
             // new sessions stay on this device (space-12, space-61).
             const at = Date.now();
             this.host.store.setPref(lastSyncPref(this.key), { at, sent: 0, received: counts.received });
-            this.phase = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
+            this.ended = { phase: "done", at, sent: 0, received: counts.received, pushed: false };
             next = "done";
             break;
           }
@@ -1255,7 +1276,7 @@ class RepositorySync {
           upstream = true;
           const at = Date.now();
           this.host.store.setPref(lastSyncPref(this.key), { at, sent: counts.sent, received: counts.received });
-          this.phase = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
+          this.ended = { phase: "done", at, sent: counts.sent, received: counts.received, pushed: pushed === "ok" };
           next = "done";
           break;
         }
@@ -1266,10 +1287,16 @@ class RepositorySync {
   /** Step 1 — Save: refresh the rules, stage, refuse a leak, validate,
    * commit when anything is staged (space-12). */
   private async save(): Promise<string | null> {
-    const dir = this.dir;
     const stop = (message: string, guidance: string): SpaceStopped => new SpaceStopped("save", { cause: "validation", message, guidance, retry: false });
-    try { prepareStorageGitFiles(dir, this.host.store.untrackedSessionPaths(this.key)); }
-    catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
+    // The HEAD this Save stages against, read before anything is staged:
+    // the commit's parent and the version its ref update names.
+    const head = await this.git.ok(["rev-parse", "HEAD"]);
+    // The clone's address is read at each write, as Apply's is (DR-111):
+    // a clone moved meanwhile is written where it lies, and one removed
+    // meanwhile refuses with nothing made where it stood, as any failing
+    // system call does, through the retryable stop.
+    try { prepareStorageGitFiles(this.dir, this.host.store.untrackedSessionPaths(this.key)); }
+    catch (error) { if (systemFailure(error)) throw error; throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
       comment: "Guidance where the sync rules file could not be refreshed",
     })); }
@@ -1290,17 +1317,25 @@ class RepositorySync {
         }),
       );
     }
-    try { await validateStorageTree(dir, this.validation()); }
+    // What is validated is the staged tree itself, and that tree is what
+    // the commit records, on the HEAD it was staged against: a file written
+    // beside the Save stays a local change, and a HEAD moved meanwhile
+    // refuses the commit as Git's conditional ref write does.
+    const tree = await this.git.ok(["write-tree"]);
+    // The staged files validated whole supersede a refresh's earlier finding.
+    try { await validateStorageSnapshot(this.dir, tree, this.validation()); this.refreshProblem = undefined; }
     catch (error) {
       await this.git.run(["reset", "-q"]);
+      if (systemFailure(error)) throw error;
       throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
         id: "Nothing was saved. Fix or remove the file, then sync again.",
         comment: "Guidance where a file under the home failed validation before the save",
       }));
     }
-    if (await this.git.succeeds(["diff", "--cached", "--quiet"])) return null;
+    await this.host.beforeStep?.({ op: "sync", step: "save", repository: this.key, at: "commit" });
+    if (tree === await this.git.ok(["rev-parse", `${head}^{tree}`])) return null;
     const units = [...new Set(staged.map(storageUnitName))].sort();
-    const commit = await this.git.run([...(await this.git.committerArgs()), "commit", "-q", "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
+    const commit = await this.git.run([...(await this.git.committerArgs()), "commit-tree", tree, "-p", head, "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
       throw new SpaceStopped("save", {
         cause: "git",
@@ -1315,7 +1350,10 @@ class RepositorySync {
         retry: true,
       });
     }
-    return this.git.ok(["rev-parse", "HEAD"]);
+    const saved = commit.stdout.toString("utf8").trim();
+    const moved = await this.git.run(["update-ref", `refs/heads/${SPEX_BRANCH}`, saved, head]);
+    if (moved.code !== 0) throw new SpaceStopped("save", { cause: "git", message: lastLines(moved.stderr), guidance: retryGuidance(), retry: true });
+    return saved;
   }
 
   private validation(): { own: boolean; libraryDir: string } {
@@ -1366,7 +1404,6 @@ class RepositorySync {
   /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
    * their ancestor, or the empty tree for a join (space-13, space-14). */
   private async compare(choices: Record<string, StorageChoice>, join: boolean): Promise<CompareResult> {
-    const dir = this.dir;
     const originRef = `refs/remotes/origin/${SPEX_BRANCH}`;
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.ok(["rev-parse", originRef]);
@@ -1374,7 +1411,8 @@ class RepositorySync {
     this.unrelated = merged.code !== 0;
     if (this.unrelated && !join) return { outcome: "unrelated" };
     const base = this.unrelated ? EMPTY_TREE : merged.stdout.toString("utf8").trim();
-    const trees: StorageTrees = { ours: readStorageTree(dir, head), theirs: readStorageTree(dir, origin), base: readStorageTree(dir, base) };
+    // The trees are read where the clone lies now (DR-111).
+    const trees: StorageTrees = { ours: readStorageTree(this.dir, head), theirs: readStorageTree(this.dir, origin), base: readStorageTree(this.dir, base) };
     const units = planStorageUnits(trees);
     this.lastPlan = { ours: head, oursTree: head, theirs: origin, base, units };
     this.lists = await this.describe(units, trees, { ours: head, theirs: origin, base });
@@ -1397,69 +1435,36 @@ class RepositorySync {
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }
 
-  private beginHolding(): void {
-    if (this.holding) return;
-    this.holding = { leases: [], umask: process.umask(0o077) };
-    this.host.pauseWatchers(this.key);
-  }
-
-  private async releaseHoldings(): Promise<void> {
-    const holding = this.holding;
-    if (!holding) return;
-    this.holding = undefined;
-    const results = await Promise.allSettled(holding.leases.reverse().map((lease) => lease.release()));
-    this.host.store.setManagedSessions(undefined);
-    process.umask(holding.umask);
-    this.host.resumeWatchers(this.key);
-    for (const result of results) if (result.status === "rejected") console.error(`spex: session lease release failed: ${String(result.reason)}`);
-  }
-
-  /** Take every session's management lease (space-31): a held one stops
-   * the sync naming its session. */
-  private async acquireSessionLeases(units: StorageMergeUnit[], step: SyncStep): Promise<void> {
-    const store = this.host.store;
-    const shared = this.repository.store;
-    await shared.prepare();
-    const ids = new Set(units.filter((u) => spaceUnitKind(u.name) === "session").map((u) => u.name.slice("sessions/".length)));
-    for (const file of existsSync(shared.sessionsDir) ? readdirSync(shared.sessionsDir) : []) {
-      if (file.endsWith(".json") && UUID.test(file.slice(0, -5))) ids.add(file.slice(0, -5));
-    }
-    for (const id of [...ids].sort()) {
-      try { (this.holding as { leases: { release(): Promise<unknown> }[] }).leases.push(await shared.acquireManagement(id)); }
-      catch {
-        const title = store.describeSession(id)?.title;
-        throw new SpaceStopped(step, {
-          cause: "lease",
-          message: title
-            ? i18n._({
-                id: "“{title}” is in use",
-                values: { title },
-                comment: "A stopped sync's message: a session is held elsewhere, named by its title",
-              })
-            : i18n._({
-                id: "Session {id} is in use",
-                values: { id: id.slice(0, 8) },
-                comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
-              }),
-          guidance: i18n._({
-            id: "Wait for the session to finish, then Retry.",
-            comment: "Guidance under a sync a held session stopped",
+  /** A session's write refused because its lease is held (space-15). */
+  private leaseStop(unit: string): SpaceStopped {
+    const id = unit.slice("sessions/".length);
+    const title = this.host.store.describeSession(id)?.title;
+    return new SpaceStopped("apply", {
+      cause: "lease",
+      message: title
+        ? i18n._({
+            id: "“{title}” is in use",
+            values: { title },
+            comment: "A stopped sync's message: a session is held elsewhere, named by its title",
+          })
+        : i18n._({
+            id: "Session {id} is in use",
+            values: { id: id.slice(0, 8) },
+            comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
           }),
-          retry: true,
-        });
-      }
-    }
-    // The refresh's rescan must not read the core's own leases as writers.
-    store.setManagedSessions(ids);
+      guidance: i18n._({
+        id: "Wait for the session to finish, then Retry.",
+        comment: "Guidance under a sync a held session stopped",
+      }),
+      retry: true,
+    });
   }
 
-  /** Step 4 — Apply: the validated selection, one merge commit or a
-   * fast-forward, never a Git merge (space-19). */
+  /** Step 4 — Apply: the validated selection written unit by unit under
+   * the version Save committed, then one merge commit of the candidate's
+   * tree or a fast-forward, never a Git merge (space-19). A refused write
+   * records no merge commit. */
   private async apply(pending: Pending): Promise<"restart" | void> {
-    const status = await this.git.ok(["status", "--porcelain=v1", "-z", "-uall"]);
-    if (status.length > 0) return "restart";
-    this.beginHolding();
-    await this.acquireSessionLeases(pending.units, "apply");
     const marker = this.markerPath();
     let result: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
@@ -1468,7 +1473,7 @@ class RepositorySync {
         { ours: pending.head, theirs: pending.origin, base: pending.base, unrelated: pending.base === EMPTY_TREE, units: pending.units },
         Object.fromEntries(pending.resolved),
         {
-          holdsSessionLeases: true,
+          sessions: this.repository.store,
           prefsFile: prefsFileOf(this.host.home),
           validate: this.validation(),
           beforeWrite: () => {
@@ -1478,7 +1483,20 @@ class RepositorySync {
         },
       );
     } catch (error) {
+      // A held lease interrupts the apply: the marker stays, and the next
+      // admission's repair finishes the recorded selection once it is free,
+      // so units that name one another never stand half applied. A changed
+      // unit makes the selection obsolete: what was written is an ordinary
+      // local change, and the sync replans from Save. A moved clone keeps
+      // its marker where it now lies.
+      if (error instanceof StorageWriteRefused && error.reason === "lease") throw this.leaseStop(error.unit);
+      if (error instanceof StorageWriteRefused && error.reason === "changed") {
+        rmSync(marker, { force: true });
+        if (error.written.length > 0) await this.reindex(error.written.includes("config/playbook.config.yaml"));
+        return "restart";
+      }
       if (error instanceof StorageFormatError) {
+        rmSync(marker, { force: true });
         throw new SpaceStopped("apply", {
           cause: "validation",
           message: `${error.file}: ${error.reason}`,
@@ -1491,15 +1509,14 @@ class RepositorySync {
       }
       throw error;
     }
-    const headAfter = await this.commitSelection(pending.head, pending.origin, pending.resolved);
+    const headAfter = await this.commitSelection(pending.head, pending.origin, result.tree, pending.resolved);
     rmSync(marker, { force: true });
-    this.applied = { headBefore: pending.head, headAfter, changedSessions: result.changedSessions, diagnostics: result.diagnostics };
+    this.applied = { headBefore: pending.head, headAfter };
   }
 
-  /** The merge commit from the staged selection, or `spex` moved to the
-   * host's commit where the selection equals its tree (space-19). */
-  private async commitSelection(head: string, origin: string, resolved: Map<string, StorageChoice>): Promise<string> {
-    const tree = await this.git.ok(["write-tree"]);
+  /** The merge commit of the validated candidate's tree, or `spex`
+   * moved to the host's commit where that tree equals its tree (space-19). */
+  private async commitSelection(head: string, origin: string, tree: string, resolved: Map<string, StorageChoice>): Promise<string> {
     const fastForward = await this.git.succeeds(["merge-base", "--is-ancestor", head, origin]);
     const originTree = await this.git.ok(["rev-parse", `${origin}^{tree}`]);
     let commit = origin;
@@ -1517,7 +1534,17 @@ class RepositorySync {
    * view reflects the selected state (space-20). */
   private async refresh(): Promise<void> {
     const applied = this.applied as Applied;
-    const store = this.host.store;
+    await this.reindex(!(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"])));
+    this.unrelated = false;
+    this.applied = undefined;
+    // The lists are recomputed at Refresh (space-29): the working tree
+    // now holds the selected state.
+    await this.broadcast(true);
+  }
+
+  /** Re-validate and re-index what an Apply wrote, merged or not
+   * (space-20). */
+  private async reindex(configChanged: boolean): Promise<void> {
     this.refreshProblem = undefined;
     try { await validateStorageTree(this.dir, this.validation()); }
     catch (error) {
@@ -1525,17 +1552,10 @@ class RepositorySync {
         ? { file: error.file, reason: error.reason, blocking: true }
         : { file: this.dir, reason: error instanceof Error ? error.message : String(error), blocking: true };
     }
-    store.reload();
-    const configChanged = !(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"]));
+    this.host.store.reload();
     if (configChanged) await this.host.reloadConfig();
     await this.host.rescanSessions(this.key);
     this.host.ledgerChanged([this.key]);
-    await this.releaseHoldings();
-    this.unrelated = false;
-    this.applied = undefined;
-    // The lists are recomputed at Refresh (space-29): the working tree
-    // now holds the selected state.
-    await this.broadcast(true);
   }
 
   /** Step 6 — Push `spex` to the host, setting the upstream once (space-12). */
@@ -1577,19 +1597,27 @@ class RepositorySync {
 
   private async repairIfMarked(): Promise<void> {
     if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
-    try {
-      await this.repair();
-      this.repairFailure = undefined;
-      this.host.store.reload();
-      await this.host.rescanSessions(this.key);
-    } catch (error) {
-      this.repairFailure = error instanceof Error ? error.message : String(error);
-      throw new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
+    let written: string[];
+    try { written = await this.repair(); }
+    catch (error) {
+      // A second admission repairing the same marker loses its lease or
+      // its ref update to the first; the marker gone, that one finished
+      // the selection and nothing failed here (space-31).
+      if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
+      throw this.repairFailed(error);
     }
+    this.repairFailure = undefined;
+    try { await this.reindex(written.includes("config/playbook.config.yaml")); }
+    catch (error) { throw this.repairFailed(error); }
   }
 
-  private async repair(): Promise<void> {
-    const dir = this.dir;
+  private repairFailed(error: unknown): CoreError {
+    this.repairFailure = error instanceof Error ? error.message : String(error);
+    return new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
+  }
+
+  /** Finish an interrupted apply from its marker; the units written. */
+  private async repair(): Promise<string[]> {
     const marker = readJsonFile(this.markerPath()) as Partial<ApplyMarker>;
     if (marker.v !== 1 || typeof marker.ours !== "string" || typeof marker.theirs !== "string" || typeof marker.base !== "string" || typeof marker.choices !== "object" || marker.choices === null) {
       // Both failures below reach the reader as the cause inside the
@@ -1605,27 +1633,34 @@ class RepositorySync {
     if (head !== marker.ours) {
       // The ref update landed before the marker was removed — a merge
       // commit whose parents are the recorded sides, or a fast-forward
-      // onto the host's commit: nothing is re-applied.
-      const parents = (await this.git.ok(["log", "-1", "--format=%P", "HEAD"])).split(/\s+/).filter(Boolean);
-      const landed = head === marker.theirs || (parents.includes(marker.ours) && parents.includes(marker.theirs));
-      if (landed) { rmSync(this.markerPath(), { force: true }); return; }
-      throw new Error(i18n._({
-        id: "spex moved since the interrupted sync; resolve it in a terminal",
-        comment: "Why an interrupted sync's repair failed; spex is the branch's own name",
-      }));
+      // onto the host's commit — or `spex` moved on without it, a commit
+      // from a terminal making the selection obsolete. Either way nothing
+      // is re-applied: what was written is an ordinary local change, and
+      // the sync saves and replans.
+      rmSync(this.markerPath(), { force: true });
+      return [];
     }
-    const trees: StorageTrees = { ours: readStorageTree(dir, marker.ours), theirs: readStorageTree(dir, marker.theirs), base: readStorageTree(dir, marker.base) };
+    // Read and written where the clone lies now, as Save and Apply are (DR-111).
+    const trees: StorageTrees = { ours: readStorageTree(this.dir, marker.ours), theirs: readStorageTree(this.dir, marker.theirs), base: readStorageTree(this.dir, marker.base) };
     const units = planStorageUnits(trees);
     const choices = marker.choices as Record<string, StorageChoice>;
-    this.beginHolding();
+    // Each unit is finished as Apply writes it, a file already holding
+    // its selection accepted. One changed since by another hand makes the
+    // selection obsolete: it is left as it stands, the marker goes with no
+    // merge commit, and the next sync replans from Save. A held lease
+    // leaves the marker for a later repair.
+    let applied: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
-      await this.acquireSessionLeases(units, "apply");
-      await applyStorageSelection(dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
-        holdsSessionLeases: true, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
+      applied = await applyStorageSelection(this.dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
+        sessions: this.repository.store, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
       });
-      await this.commitSelection(marker.ours, marker.theirs, resolveStorageChoices(units, choices));
-      rmSync(this.markerPath(), { force: true });
-    } finally { await this.releaseHoldings(); }
+    } catch (error) {
+      if (error instanceof StorageWriteRefused && error.reason === "changed") { rmSync(this.markerPath(), { force: true }); return error.written; }
+      throw error;
+    }
+    await this.commitSelection(marker.ours, marker.theirs, applied.tree, resolveStorageChoices(units, choices));
+    rmSync(this.markerPath(), { force: true });
+    return applied.written;
   }
 
   // -- diff (space-10) -------------------------------------------------------
@@ -1874,10 +1909,10 @@ export class SpaceManager {
   /** Steps at the host waiting for a member with the rights (space-64),
    * by the clone's key; asked again at the next read. */
   private readonly waiting = new Map<string, Waiting>();
-  /** Joins in flight or stopped, by the host's id (space-63). */
+  /** The progress of joins in flight or stopped, by the host's id
+   * (space-63): each join's own entry, which only it replaces or
+   * removes; no join is refused because another runs. */
   private readonly joining = new Map<string, SpaceSyncPhase>();
-  /** Picks being asked of the host, by key. */
-  private readonly picking = new Set<string>();
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
 
@@ -2037,20 +2072,28 @@ export class SpaceManager {
   }
 
   /** Sign out (git-host-10): revoke at the host, tried once, forget the
-   * credential, keep every clone and record. */
+   * credential, keep every clone and record. The home is marked signed
+   * out in the same turn as the removal; a pair stored in its place
+   * meanwhile stays, and the account with it. */
   async signOut(): Promise<GroupsState> {
-    const busy = this.busy();
-    if (busy) throw new CoreError("busy", busy);
     this.flow?.cancel();
-    await this.host.client.signOut();
-    this.host.store.signOut();
-    this.hostSignedOut = undefined;
-    this.view = undefined;
-    this.attached.clear();
-    this.readFailure = undefined;
-    this.waiting.clear();
-    this.joining.clear();
-    for (const machine of this.machines.values()) machine.hostOverride = undefined;
+    try {
+      await this.host.client.signOut(() => {
+        this.host.store.signOut();
+        this.hostSignedOut = undefined;
+        this.view = undefined;
+        this.attached.clear();
+        this.readFailure = undefined;
+        this.waiting.clear();
+        // A join still running keeps its progress; its transport holds its
+        // own brokered credential or stops asking to sign in (space-15).
+        for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
+        for (const machine of this.machines.values()) machine.hostOverride = undefined;
+      });
+    } catch (error) {
+      if (error instanceof CredentialChanged) throw new CoreError("conflict", relayHostError(error, this.hostName()));
+      throw error;
+    }
     const state = await this.state();
     this.host.broadcast(state);
     return state;
@@ -2082,7 +2125,7 @@ export class SpaceManager {
     const renamed = await this.renameOwn(account);
     let view: HostView;
     try { view = await this.readHost(); } catch { return; }
-    if (renamed !== "busy") await this.ensureOwnOnHost(view);
+    if (renamed !== "conflict") await this.ensureOwnOnHost(view);
     await this.retryWaiting(view);
     await this.publish();
   }
@@ -2110,14 +2153,17 @@ export class SpaceManager {
           if (!this.host.store.repository(repository.key)) continue;
           const machine = this.machine(repository.key);
           machine.hostOverride = undefined;
-          if (machine.facts.id === null && machine.facts.remote !== null) {
-            const listing = listingFor(view, null, machine.facts.remote);
-            if (listing) await machine.recordId(listing.repository.id);
+          const facts = await machine.readFacts().catch(() => ({ remote: null, id: null }));
+          if (facts.id === null && facts.remote !== null) {
+            const listing = listingFor(view, null, facts.remote);
+            if (listing) { try { machine.recordId(listing.repository.id, facts.remote); } catch { /* recorded at the next read */ } }
           }
         }
         return view;
       } catch (error) {
-        if (error instanceof HostError && error.kind === "reauth" && this.signedIn()) this.signedOutByHost();
+        // A refusal signed out where its pair was removed (git-host-4);
+        // here, only a home whose app token is gone is, checked now.
+        if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
         this.readFailure = relayHostError(error, this.hostName());
         throw error;
       } finally {
@@ -2133,55 +2179,41 @@ export class SpaceManager {
   // -- your own group (space-4, space-59, space-65) ---------------------------
 
   /** Rename your own group's folder and its spex repository after the
-   * account's login (space-59): every clone beneath it moves, every pair
-   * naming one is rewritten, in one step while nothing beneath runs. */
-  private async renameOwn(account: HostAccount): Promise<"none" | "done" | "busy"> {
+   * account's login (space-59): one synchronous step at its instant —
+   * the clones beneath read now, each moved by one rename, every pair
+   * naming one rewritten. A destination already taken is a conflict:
+   * nothing moves, and the next set-up asks again. Writers beneath the
+   * clones resolve their paths at their own instants. */
+  private async renameOwn(account: HostAccount): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
     const current = store.home.ownName;
     if (!target || target === current) return "none";
-    const keys = store.listRepositories().map((repository) => repository.key).filter((key) => key.startsWith(`${current}/`));
     const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
+    // Your own group's clone moves last, so the home names its folder
+    // only once every other clone beneath stands under the new name.
+    const keys = store.listRepositories().map((repository) => repository.key)
+      .filter((key) => key.startsWith(`${current}/`))
+      .sort((a, b) => Number(a === ownFrom) - Number(b === ownFrom));
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
-    if (moves.some((move) => existsSync(store.home.clonePath(move.to)))) return "busy";
-    // A pick in flight writes the clone's remote: it ends first.
-    if (keys.some((key) => this.picking.has(key))) return "busy";
-    const held: RepositorySync[] = [];
-    const moving: RepositorySync[] = [];
+    if (moves.some((move) => occupied(store.home.clonePath(move.from), store.home.clonePath(move.to)))) return "conflict";
+    const done: { from: string; to: string }[] = [];
     try {
-      // The gate of every clone beneath, old key and new (space-21):
-      // held before the checks, and through the move until the store,
-      // the machines and the core read every clone where it now lies.
-      for (const key of keys) {
-        const machine = this.machine(key);
-        if (!machine.hold("move", "apply")) return "busy";
-        held.push(machine);
-      }
-      await this.publish();
-      for (const key of keys) if (await this.host.blocker(key)) return "busy";
-      // Reads in flight end where the clones lie, and what an
-      // environment is writing beneath them lands, before the folders
-      // move; a read starting meanwhile waits and reads them moved.
-      for (const machine of held) {
-        moving.push(machine);
-        await machine.beginMove();
-      }
-      await this.host.settleBeneath?.(keys);
       for (const move of moves) {
         const to = store.home.clonePath(move.to);
         mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
         renameSync(store.home.clonePath(move.from), to);
+        done.push(move);
       }
-      pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
-      this.relocate(moves, target);
-      for (const machine of moving.splice(0)) machine.endMove();
-      await this.afterMove(moves);
-      return "done";
-    } finally {
-      for (const machine of moving) machine.endMove();
-      for (const machine of held) machine.release();
+    } catch (error) {
+      console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
     }
+    pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
+    const complete = done.length === moves.length;
+    this.relocate(done, complete ? target : undefined);
+    await this.afterMove(done);
+    return complete ? "done" : "conflict";
   }
 
   /** Your own group's spex repository on the host (space-4, space-65):
@@ -2241,12 +2273,13 @@ export class SpaceManager {
    * histories where `join` (space-13), a first push otherwise. From the
    * first write of its remote, the repository counts as listed as the
    * host answered it until a read begun after this is held (git-host-5),
-   * so its row goes straight to its sync. */
-  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean): Promise<void> {
+   * so its row goes straight to its sync. The remote is written only
+   * over `expected`, the one the caller read before asking the host. */
+  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, expected: string | null = null): Promise<void> {
     const { repository } = listing;
     this.attachedAfter = this.readsBegun;
     this.attached.set(repository.id, listing);
-    try { await machine.attachHost(repository.remoteUrl, repository.id); }
+    try { await machine.attachHost(repository.remoteUrl, repository.id, expected); }
     catch (error) {
       this.attached.delete(repository.id);
       throw error;
@@ -2264,7 +2297,6 @@ export class SpaceManager {
     description: string,
     mode: "refuse" | "quiet",
   ): Promise<"created" | "waiting" | "local"> {
-    const key = machine.key;
     const ask = { groupId: group.id, name, description };
     let answer: Awaited<ReturnType<GitHostClient["create"]>>;
     try {
@@ -2276,13 +2308,14 @@ export class SpaceManager {
           : relayHostError(error, this.hostName()));
       }
       // The refusal stands on the row with the host's words, and the
-      // creation is asked again at the next read (space-4, space-64).
-      this.waiting.set(key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
+      // creation is asked again at the next read (space-4, space-64),
+      // under the key the clone bears now, wherever it moved meanwhile.
+      this.waiting.set(machine.key, { step: "create", group: group.fullPath, message: relayHostError(error, this.hostName()), create: ask });
       await this.publish();
       return "waiting";
     }
     if (answer.status === "pending") {
-      this.waiting.set(key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
+      this.waiting.set(machine.key, { step: "create", group: group.fullPath, message: answer.message, create: ask });
       await this.publish();
       return "waiting";
     }
@@ -2292,20 +2325,28 @@ export class SpaceManager {
   }
 
   /** Every step left waiting, asked again at a read (space-64): a
-   * creation a member with the rights did is found and joined. */
+   * creation a member with the rights did is found and joined. An entry
+   * stands until its step is done or no longer asked for — never lost to
+   * an act that failed meanwhile. */
   private async retryWaiting(view: HostView): Promise<void> {
     for (const [key, waiting] of [...this.waiting]) {
       if (!this.host.store.repository(key)) { this.waiting.delete(key); continue; }
       const machine = this.machine(key);
+      const facts = await machine.readFacts();
       if (waiting.step === "create" && waiting.create) {
+        // A remote set meanwhile — a pick — ends the wait for a creation.
+        if (facts.remote !== null) { if (this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key); continue; }
         const ask = waiting.create;
         const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
-        this.waiting.delete(key);
-        if (found) await this.adopt(machine, found, true);
-        else await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet");
+        try {
+          if (found) await this.adopt(machine, found, true, null);
+          else if (await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet") === "created" && this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key);
+        } catch (error) {
+          console.error(`spex: ${machine.key} still waits: ${error instanceof Error ? error.message : String(error)}`);
+        }
         continue;
       }
-      const listing = listingFor(view, machine.facts.id, machine.facts.remote);
+      const listing = listingFor(view, facts.id, facts.remote);
       if (!listing) continue;
       if (listing.branchPresent) { this.waiting.delete(key); continue; }
       try {
@@ -2332,10 +2373,10 @@ export class SpaceManager {
    * listed one, or create `<name>-spex` in a group. */
   async pick(key: string, choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string }, noticed = false): Promise<{ accepted: true }> {
     const machine = this.machine(key);
-    machine.assertNotRunning();
-    if (this.picking.has(key)) throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
-    this.picking.add(key);
-    try {
+    {
+      // The remote is written only where none stands at the write
+      // (attachHost); a second pick meets the first's remote there, or
+      // the host's own refusal of a taken name.
       const facts = await machine.readFacts();
       if (facts.remote !== null) {
         throw new CoreError("invalid_request", i18n._({ id: "{name} is on the host already", values: { name: splitKey(key).name }, comment: "Refusal of a pick: the spex repository is not local only" }));
@@ -2371,8 +2412,6 @@ export class SpaceManager {
       await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
         repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null }), "refuse");
       return { accepted: true };
-    } finally {
-      this.picking.delete(key);
     }
   }
 
@@ -2397,34 +2436,46 @@ export class SpaceManager {
       throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
     }
     const store = this.host.store;
-    const here = store.listRepositories().some((repository) => {
-      const facts = this.machine(repository.key).facts;
-      return facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId;
-    });
+    // Read from each clone now: its recorded id or its remote (git-host-5).
+    const here = (await Promise.all(store.listRepositories().map(async (repository) => {
+      try { return await this.machine(repository.key).readFacts(); } catch { return { remote: null, id: null }; }
+    }))).some((facts) => facts.id === hostId || listingFor(view, facts.id, facts.remote)?.repository.id === hostId);
     if (here || store.repository(key) || existsSync(store.home.clonePath(key))) {
       throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
     }
-    if (this.joining.get(hostId)?.phase === "running") throw new CoreError("busy", i18n._({ id: "Already syncing", comment: "Refusal of a second operation on a spex repository while one runs" }));
     const path = folder === undefined ? undefined : resolve(folder);
     if (path !== undefined && store.home.keyForFolder(path)) {
       throw new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
     }
-    this.joining.set(hostId, { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false });
+    const progress: SpaceSyncPhase = { phase: "running", op: "join", step: "check", since: Date.now(), cancelable: false };
+    this.joining.set(hostId, progress);
     await this.publish();
-    void this.runJoin(listing, key, path);
+    void this.runJoin(listing, key, path, progress);
     return { accepted: true };
   }
 
-  private async runJoin(listing: HostListing, key: string, folder: string | undefined): Promise<void> {
+  /** One join (space-63): the spex repository cloned into a private
+   * stage beside its place, then published there by a rename only where
+   * nothing stands — another join's clone among them — and a failure
+   * removes only its own stage. `progress` is this
+   * join's own entry, replaced or removed only while it stands. */
+  private async runJoin(listing: HostListing, key: string, folder: string | undefined, progress: SpaceSyncPhase): Promise<void> {
     const store = this.host.store;
     const id = listing.repository.id;
     const url = listing.repository.remoteUrl;
-    const dir = store.home.clonePath(key);
-    const stop = (failure: GitFailure): void => {
-      this.joining.set(id, { phase: "stopped", op: "join", step: "check", ...failure });
+    const dest = store.home.clonePath(key);
+    let mine = progress;
+    const own = (next: SpaceSyncPhase | undefined): void => {
+      if (this.joining.get(id) !== mine) return;
+      if (next) { this.joining.set(id, next); mine = next; }
+      else this.joining.delete(id);
     };
+    const stop = (failure: GitFailure): void => own({ phase: "stopped", op: "join", step: "check", ...failure });
+    let stage: string | undefined;
     try {
-      mkdirSync(dirname(dir), { recursive: true, mode: 0o700 });
+      mkdirSync(dirname(dest), { recursive: true, mode: 0o700 });
+      stage = mkdtempSync(join(dirname(dest), `.${basename(dest)}.join-`));
+      const dir = join(stage, "clone");
       let credential: GitCredentialHandle | null;
       try { credential = await this.credentialFor(url, "check"); }
       catch (error) {
@@ -2432,41 +2483,58 @@ export class SpaceManager {
         throw error;
       }
       // Sessions are private: the clone is written owner-only (space-32).
-      const umask = process.umask(0o077);
+      // Each child inherits the owner-only umask as it is spawned — `run`
+      // spawns synchronously — and the core's own is restored before
+      // anything is awaited, so no other work runs under it.
+      const privately = (args: string[], options: GitRunOptions = {}): Promise<GitRun> => {
+        const umask = process.umask(0o077);
+        try { return this.probe.run(args, options); }
+        finally { process.umask(umask); }
+      };
       let run: GitRun;
       try {
         const options = { transport: true, ...(credential ? { credential } : {}) };
-        run = await this.probe.run(["clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", url, dir], options);
+        run = await privately(["clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", url, dir], options);
         if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
           // The host holds no `spex` yet: its default branch, then `spex`
           // beside it (space-32).
           rmSync(dir, { recursive: true, force: true });
-          run = await this.probe.run(["clone", "-q", url, dir], options);
-          if (run.code === 0) run = await this.probe.run(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
+          run = await privately(["clone", "-q", url, dir], options);
+          if (run.code === 0) run = await privately(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
         }
       } finally {
-        process.umask(umask);
         await credential?.dispose();
       }
       if (run.code !== 0) {
-        rmSync(dir, { recursive: true, force: true });
         stop(credential ? classifyHostTransportFailure(run, this.hostName()) : classifyTransportFailure(run, url));
         return;
       }
       await this.probe.run(["-C", dir, "config", "spex.repositoryId", id]);
+      // Publication: the place checked absent and the stage renamed there
+      // in one synchronous step; a place taken meanwhile — another join's
+      // clone — is left as it stands, and a failed rename leaves no folder.
+      if (existsSync(dest)) {
+        stop({ cause: "git", message: i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }), guidance: nothingDeleted(), retry: false });
+        return;
+      }
+      renameSync(dir, dest);
       store.adoptRepositories();
       this.host.repositoriesChanged();
       const machine = this.machine(key);
       await machine.readFacts();
       await this.host.rescanSessions(key);
       this.host.ledgerChanged([key]);
-      if (folder !== undefined) await this.pairJoined(machine, id, folder);
+      if (folder !== undefined) {
+        const next = await this.pairJoined(machine, folder, (phase) => own(phase));
+        if (next) machine.report(next);
+      }
       // The join ends once its code is here or its clone failed; only
       // then does its row read the clone's state (space-61, space-63).
-      this.joining.delete(id);
+      own(undefined);
     } catch (error) {
       stop({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
+      if (stage) rmSync(stage, { recursive: true, force: true });
       await this.publish();
     }
   }
@@ -2475,28 +2543,27 @@ export class SpaceManager {
    * the remote its `project.json` names with this device's own Git and
    * credentials, or a folder already holding it, paired with the clone;
    * a group's own spex repository pairs the folder its sessions run in.
-   * The join's Code step runs while the code clones (space-63). */
-  private async pairJoined(machine: RepositorySync, id: string, folder: string): Promise<void> {
+   * The join's Code step runs while the code clones (space-63), shown
+   * through `step`; a failure comes back as the row's stopped state. */
+  private async pairJoined(machine: RepositorySync, folder: string, step: (phase: SpaceSyncPhase) => void): Promise<SpaceSyncPhase | undefined> {
     const project = this.projectFile(machine.repository);
     const root = existsSync(folder) && await this.workTreeRoot(folder);
     const remote = !root && project?.remote ? project.remote : undefined;
-    const step: SyncStep = remote ? "code" : "check";
-    if (!machine.hold("join", step)) return;
-    this.joining.set(id, machine.phase);
+    const at: SyncStep = remote ? "code" : "check";
+    step({ phase: "running", op: "join", step: at, since: Date.now(), cancelable: false });
     await this.publish();
-    let failure: GitFailure | undefined;
+    const stopped = (failure: GitFailure): SpaceSyncPhase => ({ phase: "stopped", op: "join", step: at, ...failure });
     try {
       if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
         const run = await this.probe.run(["clone", "-q", remote, folder], { transport: true });
         if (run.code !== 0) {
-          failure = {
+          return stopped({
             cause: run.killed ?? "git",
             message: lastLines(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
             guidance: i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" }),
             retry: false,
-          };
-          return;
+          });
         }
       }
       mkdirSync(folder, { recursive: true });
@@ -2504,10 +2571,9 @@ export class SpaceManager {
       this.host.repositoriesChanged();
       await this.host.rescanSessions(machine.key);
       this.host.ledgerChanged([machine.key]);
+      return undefined;
     } catch (error) {
-      failure = { cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false };
-    } finally {
-      machine.release(failure ? { op: "join", step, failure } : undefined);
+      return stopped({ cause: "git", message: lastLines(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: false });
     }
   }
 
@@ -2584,10 +2650,10 @@ export class SpaceManager {
       throw new SpaceStopped("check", { cause: "gone", message: noLongerShared(), guidance: nothingDeleted(), retry: true });
     }
     const repository = listing.repository;
-    if (facts.id === null) await machine.recordIdNow(repository.id);
+    if (facts.id === null && facts.remote !== null) machine.recordId(repository.id, facts.remote);
     const key = hostKey(repository);
-    if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key);
-    if (facts.remote !== repository.remoteUrl) await machine.setOrigin(repository.remoteUrl);
+    if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key, repository.id, facts.remote);
+    if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
     const readOnly = listing.readOnly !== null;
     if (!readOnly && !listing.branchPresent) {
       // `spex` beside the default branch, never as it (git-host-7).
@@ -2620,13 +2686,24 @@ export class SpaceManager {
     return withGitCredential(credential, this.host.hostRuntime);
   }
 
-  /** Follow the host's rename or transfer of one clone, inside its sync's
-   * gate (space-60). */
-  private async moveInSync(machine: RepositorySync, to: string): Promise<void> {
+  /** Follow the host's rename or transfer of one clone within its sync
+   * (space-60): one rename at its instant, once the clone still reads the
+   * remote the check read before asking the host — `remote` — and records
+   * the host's id, the check's own recording of it included, and still
+   * lies where the home says. A destination taken by anything but the
+   * clone itself — a case-only rename's is the same folder — stops the
+   * sync; writers beneath resolve their paths at their own instants, and
+   * a process holding the old path keeps it. */
+  private async moveInSync(machine: RepositorySync, to: string, id: string, remote: string | null): Promise<void> {
     const store = this.host.store;
     const from = machine.key;
+    const source = machine.repository.dir;
     const target = store.home.clonePath(to);
-    if (existsSync(target)) {
+    const moved = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${from}`), guidance: retryGuidance(), retry: true });
+    // Nothing is awaited from here to the rename.
+    if (!machine.recordsNow(remote, id)) throw moved();
+    if (store.repository(from)?.dir !== source || machine.key !== from) throw moved();
+    if (occupied(source, target)) {
       throw new SpaceStopped("check", {
         cause: "git",
         message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
@@ -2634,17 +2711,10 @@ export class SpaceManager {
         retry: true,
       });
     }
-    // Reads in flight end, and an environment's writes land, before the
-    // clone moves; a read starting meanwhile reads it moved.
-    await machine.beginMove();
-    try {
-      await this.host.settleBeneath?.([from]);
-      const source = machine.repository.dir;
-      mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-      renameSync(source, target);
-      pruneEmptyFolders(dirname(source), store.home.workspace);
-      this.relocate([{ from, to }]);
-    } finally { machine.endMove(); }
+    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    renameSync(source, target);
+    pruneEmptyFolders(dirname(source), store.home.workspace);
+    this.relocate([{ from, to }]);
     await this.afterMove([{ from, to }]);
   }
 
@@ -2691,21 +2761,6 @@ export class SpaceManager {
     return machine;
   }
 
-  /** The busy message while an operation runs on this clone (space-21);
-   * other clones stay writable. */
-  busyFor(key: string | undefined): string | undefined {
-    return key === undefined ? undefined : this.machines.get(key)?.busy();
-  }
-
-  /** Whether any clone's operation runs. */
-  busy(): string | undefined {
-    for (const machine of this.machines.values()) {
-      const busy = machine.busy();
-      if (busy) return busy;
-    }
-    return undefined;
-  }
-
   /** The store's, session and migration diagnostics, each repair marked
    * with what this device's reader answered (space-54). */
   storageDiagnostics(): StorageDiagnostic[] {
@@ -2729,10 +2784,9 @@ export class SpaceManager {
 
   /** An answer naming no repair the core still reports is discarded
    * (space-54) — but never on a fold that cannot be trusted to be
-   * complete: blocking damage, or an operation in flight, would drop a
-   * record the next honest fold still wants. */
+   * complete: blocking damage would drop a record the next honest fold
+   * still wants. The fold is read from the files at its instant. */
   private pruneAnswers(reported: StorageDiagnostic[]): void {
-    if (this.busy()) return;
     if (reported.some((entry) => entry.blocking)) return;
     const standing = new Set(reported.map((entry) => entry.repair?.key).filter(Boolean) as string[]);
     for (const key of this.host.store.prefKeys("space:repair:")) {
@@ -2795,7 +2849,9 @@ export class SpaceManager {
       // new key, and its old one names nothing (space-59, space-60).
       if (!store.repository(repository.key)) continue;
       const machine = this.machine(repository.key);
-      const base = recompute || !machine.cached ? await machine.state(true) : { ...machine.cached, sync: machine.phase };
+      // Every row is read from its clone at this instant (space-61).
+      const base = await machine.state(recompute);
+      if (this.host.store.repository(repository.key)?.dir !== machine.repository.dir) continue;
       repositories.push(this.overlay(machine, base));
     }
     for (const key of [...this.machines.keys()]) if (!store.repository(key)) this.machines.delete(key);
@@ -2928,8 +2984,8 @@ export class SpaceManager {
     return [own, ...[...entries.values()].filter((entry) => entry !== own).sort((a, b) => a.fullPath.localeCompare(b.fullPath))];
   }
 
-  /** Broadcast the state after one machine moved, from each machine's
-   * last reading; transitions in a burst coalesce into one. */
+  /** Broadcast the state after one machine moved, every clone read at
+   * this instant; transitions in a burst coalesce into one. */
   async publish(): Promise<void> {
     if (this.stopping) return;
     if (this.publishing) { this.republish = true; return this.publishing; }
@@ -2959,26 +3015,25 @@ export class SpaceManager {
 
   cancel(key: string): boolean { return this.machine(key).cancel(); }
 
+  // A read resolves the clone's path at its instant; one that meets a
+  // clone moved meanwhile fails, and the interface reads again on the
+  // move's broadcast (space-29).
   diff(key: string, unit: string, path: string, side: SpaceChoice): Promise<{ patch: string; truncated: boolean }> {
-    const machine = this.machine(key);
-    return machine.reading(() => machine.diff(unit, path, side));
+    return this.machine(key).diff(unit, path, side);
   }
 
   tree(key: string, path?: string): Promise<{ path: string; entries: SpaceEntry[] }> {
-    const machine = this.machine(key);
-    return machine.reading(() => machine.tree(path));
+    return this.machine(key).tree(path);
   }
 
   read(key: string, path: string): Promise<SpaceReadResult> {
-    const machine = this.machine(key);
-    return machine.reading(() => machine.read(path));
+    return this.machine(key).read(path);
   }
 
   /** What removing a project would lose (projects-9). */
   pendingUnits(key: string): Promise<number> {
     if (!this.host.store.repository(key)) return Promise.resolve(0);
-    const machine = this.machine(key);
-    return machine.reading(() => machine.pendingUnits());
+    return this.machine(key).pendingUnits();
   }
 
   /** An interrupted apply in any clone is repaired from its marker before
@@ -2991,8 +3046,6 @@ export class SpaceManager {
   async stop(): Promise<void> {
     this.stopping = true;
     await Promise.all([...this.machines.values()].map((machine) => machine.stop()));
-    // No read of a clone outlives the core that started it.
     try { await this.publishing; } catch { /* reported where it ran */ }
-    await Promise.all([...this.machines.values()].map((machine) => machine.quiesce()));
   }
 }

@@ -10,11 +10,10 @@
 // writes the same bytes on every device.
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
-import { writeApplicationBytes } from "../app-storage.js";
+import { writeApplicationBytes, writeVersionedBytes, type FileVersion } from "../files.js";
 import { isPackageName, sha256Hex, type Issue, type Manifest } from "./format.js";
 import { requestsDigest } from "./requests.js";
 
@@ -78,7 +77,8 @@ export function resolutionVersion(resolution: Resolution): string | undefined {
 const byPath = (a: { path: string }, b: { path: string }): number => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 const sortedKeys = (record: Record<string, unknown>): string[] => Object.keys(record).sort();
 
-function sourceValue(source: SourceLock): Record<string, unknown> {
+/** A source as the lock writes it: its own fields, in one order. */
+export function sourceValue(source: SourceLock): Record<string, unknown> {
   if (isRegistrySource(source)) return { registry: source.registry, version: source.version, checksum: source.checksum };
   if (isGitSource(source)) return { git: source.git, commit: source.commit, ...(source.path !== undefined ? { path: source.path } : {}) };
   const requires: Record<string, string[]> = {};
@@ -232,11 +232,13 @@ export async function readLock(file: string): Promise<Lock | null> {
   return parseLock(await readFile(file, "utf8"));
 }
 
-/** Write `spex.lock` atomically; returns the bytes written. */
-export async function writeLock(file: string, lock: Lock): Promise<string> {
+/** Write `spex.lock` atomically, no folder made; returns the bytes
+ * written. Given the version the writer read, the write is refused as a
+ * conflict where the lock changed meanwhile (DR-111). */
+export async function writeLock(file: string, lock: Lock, expected?: FileVersion): Promise<string> {
   const text = serializeLock(lock);
-  await mkdir(dirname(file), { recursive: true });
-  writeApplicationBytes(file, text);
+  if (expected === undefined) writeApplicationBytes(file, text);
+  else writeVersionedBytes(file, text, expected);
   return text;
 }
 

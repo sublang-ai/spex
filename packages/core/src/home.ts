@@ -109,6 +109,9 @@ export function parseHomeFile(value: unknown, file: string): HomeFile {
 
 /** The home: its file, its workspace and the pairs of this device. */
 export class Home {
+  /** The file's text as this home last read or wrote it. */
+  private text?: string;
+
   private constructor(readonly root: string, private data: HomeFile) {}
 
   static file(root: string): string { return join(root, HOME_FILE); }
@@ -117,10 +120,43 @@ export class Home {
   /** Read `home.yaml`; a malformed or unknown one is refused, never guessed. */
   static load(root: string): Home {
     const file = Home.file(root);
-    let value: unknown;
-    try { value = parseYaml(readFileSync(file, "utf8")); }
+    let text: string;
+    try { text = readFileSync(file, "utf8"); }
     catch (error) { throw new StorageFormatError(file, (error as Error).message); }
-    return new Home(resolve(root), parseHomeFile(value, file));
+    const home = new Home(resolve(root), Home.parse(text, file));
+    home.text = text;
+    return home;
+  }
+
+  private static parse(text: string, file: string): HomeFile {
+    let value: unknown;
+    try { value = parseYaml(text); }
+    catch (error) { throw new StorageFormatError(file, (error as Error).message); }
+    return parseHomeFile(value, file);
+  }
+
+  /** Read `home.yaml` again where its bytes changed since this home last
+   * read or wrote them — an editor's or another writer's change — so the
+   * next change applies to the file as it stands (DR-111); true where it
+   * changed. A file that no longer parses, or was deleted once read, is
+   * refused, never replaced; only a home not yet written has none. */
+  refresh(): boolean {
+    const file = Home.file(this.root);
+    let text: string;
+    try { text = readFileSync(file, "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new StorageFormatError(file, (error as Error).message);
+      if (this.text === undefined) return false;
+      throw new StorageFormatError(file, i18n._({
+        id: "{file} changed meanwhile; retry",
+        values: { file: HOME_FILE },
+        comment: "Refusal: a file changed between the core's read and its write; the reader retries",
+      }));
+    }
+    if (text === this.text) return false;
+    this.data = Home.parse(text, file);
+    this.text = text;
+    return true;
   }
 
   /** A new home, not yet written: a fresh device id, the host the
@@ -235,7 +271,9 @@ export class Home {
   /** Write `home.yaml` atomically. */
   save(): void {
     parseHomeFile(this.data, Home.file(this.root));
-    writeApplicationBytes(Home.file(this.root), stringifyYaml(this.data));
+    const text = stringifyYaml(this.data);
+    writeApplicationBytes(Home.file(this.root), text);
+    this.text = text;
   }
 }
 

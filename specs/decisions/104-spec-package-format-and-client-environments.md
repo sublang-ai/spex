@@ -10,7 +10,7 @@ Spex decides the spec package format and the environments.
 spex.pub, the registry, keeps the dependency declaration it checks [[8]] and its interface [[9]], and takes the format in its own decision record [[11]].
 This record builds on [DR-103](103-the-home-and-its-groups.md), which defines spex repositories, working folders, projects and groups.
 Completed by [DR-105](105-playbook-17-5-0-adoption.md) in its ask that the launcher take each playbook's module location at launch: Playbook 17.5.0 takes it, so no launcher config names a module.
-Amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in where an environment lives: a project's `spex.yaml` and `spex.lock` are at the root of its working folder, committed with the code, a path source relative to that root; a group's stay in its spex repository, and the store, the installed files and the exports stand.
+Proposed to be amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in where an environment lives: a project's `spex.yaml` and `spex.lock` are at the root of its working folder, committed with the code, a path source relative to that root; a group's stay in its spex repository, and the store, the installed files and the exports stand.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-005](005-compilation-integration.md) and [DR-058](058-chat-assisted-playbook-authoring.md): registering a compiled playbook becomes requesting its spec package and naming the player for each role; the launcher gets the module's location from Spex at launch instead of from the launcher config. The compile flow stands.

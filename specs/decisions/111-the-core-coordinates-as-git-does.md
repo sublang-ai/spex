@@ -5,7 +5,7 @@
 
 ## Status
 
-Proposed (2026-10-09).
+Accepted (2026-10-10).
 Amends [DR-045](045-unified-session-storage.md) §Git synchronization in one rule: local writers are no longer stopped during commit, checkout and merge; every write is versioned or appended, and a sync refuses a replacement its pre-write check finds changed since Save.
 Amends [DR-057](057-space-surface.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, and no gate is set before its checks; a sync, like every operation, refuses nothing and reports its progress.
 Amends [DR-103](103-the-home-and-its-groups.md) where it inherited that admission for the per-repository sync, and in one clause: no local claim stands for a host repository; the host's answer alone decides a race between two devices.
@@ -43,7 +43,9 @@ Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-th
 - A sync commits what is on disk, merges, and refuses a replacement whose pre-write check finds the file changed since Save, honoring a session's lease.
   An independent process keeps ordinary filesystem behavior: the check is the core's own, made at the instant before its rename, and no lock holds another process off the file.
   The apply step writes each unit under the version its Save step committed, taking a session's lease for that instant as any writer of its records does ([DR-108](108-the-root-lease-names-the-machine.md)).
-  Where any such write is refused, because the unit changed since Save or its session is leased, Apply records no merge commit: the Save commit stands, the units already written are local changes equal to the host's side, and the sync saves and merges again or stops for a retry.
+  Where any such write is refused, Apply records no merge commit and the Save commit stands.
+  A unit changed since Save makes the selection obsolete: the units already written are local changes equal to the host's side, and the sync saves and merges again or stops for a retry.
+  A session's lease held elsewhere interrupts the apply instead: its repair record stays, and the retry finishes the recorded selection once the lease is free, since units written apart can name one another.
   A unit changed on both sides is a choice the reader answers, whole units chosen as [DR-045](045-unified-session-storage.md) decided, with no merge inside a unit [[storage-11](../packages/storage.md#storage-11)] [[space-17](../packages/space.md#space-17)].
 - The core reads files for its picture.
   An in-memory copy in the core is a cache validated by the file's version at use, as Git's index is validated by stat, never a source of truth; a listing or a rescan corrects nothing, because nothing can be wrong.
@@ -53,7 +55,7 @@ Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-th
 
 | Case | Git's answer, adopted |
 | --- | --- |
-| an agent appends records while a sync applies | the apply replaces a session's files only where they still read as Save committed them and the lease is free for that instant; where not, no merge commit is recorded, the Save commit stands, and the sync saves and merges again or stops for a retry, a choice where both sides changed |
+| an agent appends records while a sync applies | the apply replaces a session's files only where they still read as Save committed them and the lease is free for that instant; where not, no merge commit is recorded and the Save commit stands: changed files make the sync save and merge again or stop for a retry, a choice where both sides changed, and a held lease leaves the recorded selection for the retry to finish |
 | a removal while a turn runs | the removal is one write at its instant, refused where a session's lease file names a live writer ([DR-108](108-the-root-lease-names-the-machine.md)); what a process does once its folder is gone is its own affair, as an editor's after `rm -rf` |
 | a clone moved by the host while work runs beneath it | the move is one rename at its instant, a versioned write of the clone's address; the core's own writes resolve the address at their instant, and a process holding the old path is its own affair |
 | two devices create a group's repository at once | the host refuses the second creation of a taken name, and the refusal is the answer; no local claim stands ([DR-103](103-the-home-and-its-groups.md)) |
@@ -70,7 +72,7 @@ Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-th
 ## Consequences
 
 - These items state a refusal while an operation runs and change: space-11's admission table keeps only the notice [[space-57](../packages/space.md#space-57)]; space-21's sole-writer rule and every `busy` it lists; space-31's gate bullets; space-14 and space-60 where they wait for nothing running beneath a clone; projects-10's removal gate; core-service-96's refusals of a command while the session's spex repository syncs; environments-15 where a request waits for a sync; the interface items that render `busy` (space-61's controls, the Settings and Playbooks surfaces' refusals).
-- These items state the rule once and gain the version each write names: storage-14 (atomic replacement under a version, and the append); space-13, space-17 and space-20 (the apply's versioned units); core-service-96 and playbook-library-70 (the instance as the session's version; no mirror); environments-7, -14 and -15 (requests, lock and installs as versioned writes, prepared privately); shared-config-roundtrip-1 (a config write under the digest it read); spec-view-50 unchanged.
+- These items state the rule once and gain the version each write names: storage-14 (atomic replacement under a version, and the append); space-19, space-20 and space-31 (the apply's versioned units and their repair), with space-12, space-15, space-32 and space-33 following them and storage-21 for the command line's selection, space-13 and space-17 unchanged; core-service-96 and playbook-library-70 (the instance as the session's version; no mirror); environments-7, -14 and -15 (requests, lock and installs as versioned writes, prepared privately); shared-config-roundtrip-1 (a config write under the digest it read); spec-view-50 unchanged.
 - The code loses the sync machine's write gate, the dispatch gate and `spaceBlocker`, the reservations and host claims, the environment queue's blocking of repository operations, and the authoring manager's live mirror; the inventory in `docs/gatekeeper-inventory.md` lists every holder with its disposition.
 - The order of change: the sync's apply first, since it is the one writer that rewrites files others hold; then the authoring mirror; then the gates, whose removal is safe once every write beneath them is versioned; then the environment's writes.
 - What the reader sees: "changed meanwhile, retry" where "busy" stood, and progress where a refusal stood; no write waits for another operation to finish.

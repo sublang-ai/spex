@@ -6,14 +6,15 @@
 // `<org>/<pkg>` and requested from one source — a registry version
 // requirement, a path inside the working folder, or a Git repository at
 // a revision — with an optional `select` and `alias`. Edits go through
-// yaml's Document API, so comments and key order survive.
+// yaml's Document API, so comments and key order survive, and each is a
+// versioned write of the bytes it read (DR-111).
 
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, posix } from "node:path";
+import { readFile } from "node:fs/promises";
+import { isAbsolute, posix } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
-import { writeApplicationBytes } from "../app-storage.js";
+import { readVersioned, writeVersionedBytes } from "../files.js";
 import { isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
 import { isRequirement } from "./semver.js";
 
@@ -246,41 +247,34 @@ function syncNode(doc: Document, path: (string | number)[], value: unknown): voi
   else doc.setIn(path, typeof value === "object" && value !== null ? doc.createNode(value) : value);
 }
 
-function documentOf(file: string): Document {
-  if (existsSync(file)) {
-    const doc = parseDocument(readFileSync(file, "utf8"), { uniqueKeys: true });
+function documentOf(text: string | null): Document {
+  if (text !== null) {
+    const doc = parseDocument(text, { uniqueKeys: true });
     if (doc.errors.length > 0) throw new RequestsError(doc.errors.map((error) => ({ rule: "yaml", message: error.message })));
     if (doc.contents !== null) return doc;
   }
   return new Document({ format: 1, packages: {} });
 }
 
-async function writeText(file: string, text: string): Promise<void> {
-  await mkdir(dirname(file), { recursive: true });
-  writeApplicationBytes(file, text);
-}
-
 /** Write requests, preserving the file's comments and key order. */
 export async function writeRequests(file: string, requests: Requests): Promise<string> {
-  const doc = documentOf(file);
-  syncNode(doc, [], requestsValue(requests));
-  const text = doc.toString({ lineWidth: 0 });
-  parseRequests(text);
-  await writeText(file, text);
-  return text;
+  return (await editRequests(file, (doc) => syncNode(doc, [], requestsValue(requests)))).text;
 }
 
-/** Edit `spex.yaml` through its Document, then validate and write it
- * atomically; a refused edit writes nothing. */
+/** Edit `spex.yaml` through the Document of the bytes read, then
+ * validate the candidate and write it under their version: a refused
+ * edit writes nothing, and a file changed meanwhile — or a clone gone —
+ * is refused as a conflict, no folder made (DR-111). */
 export async function editRequests(
   file: string,
   edit: (doc: Document) => void,
 ): Promise<{ requests: Requests; text: string; digest: string }> {
-  const doc = documentOf(file);
+  const { bytes, version } = readVersioned(file);
+  const doc = documentOf(bytes === null ? null : bytes.toString("utf8"));
   edit(doc);
   const text = doc.toString({ lineWidth: 0 });
   const requests = parseRequests(text);
-  await writeText(file, text);
+  writeVersionedBytes(file, text, version);
   return { requests, text, digest: requestsDigest(text) };
 }
 

@@ -98,7 +98,8 @@ When a client sends `environment.resolve` for a spex repository, or its `spex.ya
 - caret and tilde never pick a version its publisher yanked; an exact requirement, or installing from the lock, may; nothing picks a version the registry's operator suppressed;
 - among solutions the core takes the highest, comparing the requested spec packages' versions first, then the rest, each in name order; a newer release lacking a selected artifact never blocks an older solution;
 - a path source resolves to the manifest in the working folder, a Git source to the named commit's manifest, with their dependencies from the registry;
-- when no solution exists, the core replies `invalid_request` naming the version requirements in conflict, before anything is installed or run.
+- when no solution exists, the core replies `invalid_request` naming the version requirements in conflict, before anything is installed or run;
+- the lock is written only while `spex.yaml` still holds the bytes resolved and `spex.lock` the bytes read before resolving, each checked at the instant of the write; a resolution overtaken meanwhile writes nothing and reports as its outcome the file that changed meanwhile, to retry ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 #### environments-6
 
@@ -120,8 +121,10 @@ When a client sends `environment.install` for a spex repository, or a resolve or
 - the store keeps each distinct file once under `store/<sha256>`, written once after its digest is verified, with an executable copy apart under `store/x/<sha256>`, and keeps a file while a lock of an environment on this device [[environments-26](#environments-26)] selects it; `cache/` holds fetched archives and metadata and may be deleted at any time;
 - a file is fetched by any transport the registry offers — the release archive, or raw files — or from the Git source at the locked commit, and stored only when its SHA-256 matches the lock's `files`; the portable-path rules [[environments-1](#environments-1)] are re-checked; no code runs;
 - a path source copies nothing: its files are used where they are, in the working folder, each working folder running its own; a device whose working folder lacks the path reports it missing, and the environment stays otherwise installed;
-- the new installed files are complete before they replace the old ones; an install that fails leaves the last files in place and reports its cause;
-- a stale lock — its `requests` digest no longer matching `spex.yaml`, or a path source's manifest no longer stating the version, dependencies and `requires` the lock recorded, or lacking an artifact the lock selected — installs nothing new: the last files stay, and the core reports that resolving again is needed.
+- the new installed files are complete, prepared privately, before they replace the old ones; an install that fails leaves the last files in place and reports its cause;
+- the replacement happens only while the clone stands, the environment's `spex.lock` [[environments-26](#environments-26)] still holds the bytes installed, and the lock still matches `spex.yaml` and its path sources, checked at the instant before the swap; an install overtaken meanwhile publishes nothing, the last files staying, and reports as its outcome the file that changed meanwhile, to retry; a clone gone meanwhile is never made again, and an install awaited on it is refused ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- the exports of an install are written only while the lock and the installed files still stand as it left them, so no export mixes two locks;
+- a stale lock — its `requests` digest no longer matching `spex.yaml`, or a path source's manifest no longer stating the version, dependencies and `requires` the lock recorded, or lacking an artifact the lock selected — installs and exports nothing new: the last files stay, and the core reports that resolving again is needed, refusing an install its caller awaits with that reason.
 
 ### Exports
 
@@ -186,14 +189,16 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 
 #### environments-14
 
-When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed, a path source missing on this device, the lock's staleness, the conflict report where resolution failed, and, for a project, whether its two files are committed with the code, both in the code's `HEAD`, or not and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
+When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it, read at the reply from the environment's files where it lives [[environments-26](#environments-26)] and the files installed in the spex repository's clone: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed as the lock locks them — recorded by the install that placed them, with the same source, files and artifacts, every file there — a path source missing on this device, the lock's staleness, the step of the latest operation still running — one begun before the clone moved counted, and its end announced, at the new address — the last operation's failure, the conflict report while `spex.yaml` still holds the bytes the failed resolution read, and, for a project, whether its two files are committed with the code, both in the code's `HEAD`, or not and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 #### environments-15
 
 When a client sends `environment.request` for a spex repository with a spec package name and a request [[environments-2](#environments-2)], or `environment.remove` with a name, the core shall write `spex.yaml` where the environment lives [[environments-26](#environments-26)], preserving comments and key order, then resolve [[environments-5](#environments-5)] and install [[environments-7](#environments-7)], and announce the environment changed:
 
 - a request naming a path outside the working folder, a malformed requirement, or a name that is not `<org>/<pkg>` is refused before any write;
-- the write is refused `busy` while the spex repository syncs [[space-21](space.md#space-21)].
+- the candidate is prepared from the bytes read and written under their version, so a file changed meanwhile, or a clone gone, is refused `conflict` — changed meanwhile, retry — with the newer file kept and no folder made ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- every command starts at once, beside any operation still running on the environment, and none waits for or refuses another;
+- once the core stops, no operation starts, and a request or install its caller awaits is refused before any write.
 
 ## Internal Behavior
 
@@ -211,12 +216,12 @@ The core shall expose environments through these commands and one message, each 
 | Command | Input | Result | Errors |
 | --- | --- | --- | --- |
 | `environment.get` | `{ repository }` | `EnvironmentState` [[environments-14](#environments-14)] | `not_found` |
-| `environment.request` | `{ repository, name, request }` | `{ accepted: true }` | `invalid_request`, `busy` |
-| `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `busy` |
-| `environment.resolve` | `{ repository }` | `{ accepted: true }` | `busy` |
-| `environment.install` | `{ repository }` | `{ accepted: true }` | `busy` |
+| `environment.request` | `{ repository, name, request }` | `{ accepted: true }` | `invalid_request`, `conflict` |
+| `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `conflict` |
+| `environment.resolve` | `{ repository }` | `{ accepted: true }` | `not_found` |
+| `environment.install` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.search` | `{ query }` | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out and the registry refusing) |
-| `environment.publish` | `{ repository, path }` | `{ accepted: true }` | `invalid_request` (not a release; not signed in), `busy` |
+| `environment.publish` | `{ repository, path }` | `{ accepted: true }` | `invalid_request` (not a release; not signed in) |
 
 - `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish and sync-applied lock; a long command replies `accepted` at once and reports through state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5).
 
@@ -246,6 +251,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 
 - every selected file lands under `packages/` with its bytes and executable flag, the store holds each distinct file once with an executable copy apart, a wrong digest installs nothing and is reported, `cache/` deleted mid-way is rebuilt, and a file leaves the store only when no lock on the device selects it [[environments-7](#environments-7)];
 - the replacement is atomic: a failure between fetch and replace leaves the previous files whole [[environments-7](#environments-7)];
+- through a real core with an install's download held at the registry: a lock replaced meanwhile, or a `spex.yaml` changed meanwhile, publishes nothing, the files standing stay, and the outcome names the file that changed, to retry; a clone removed meanwhile is not made again, no staged tree outlives the refusal, and a request or install then awaited on it is refused [[environments-15](#environments-15)]; an install of the lock left stale then installs and exports nothing and reports its stale reasons alone, and with `spex.yaml` gone beside an installed lock an install awaited by the enabling path is refused, resolving again needed; and `environment.get` reports a package installed only where the install record matches the lock, never for files of another lock under the same names [[environments-7](#environments-7)] [[environments-14](#environments-14)];
 - a changed `spex.yaml`, a changed path-source manifest and a path source lacking a selected artifact each mark the lock stale, install nothing new and report resolving again [[environments-7](#environments-7)];
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
@@ -271,7 +277,14 @@ When an integration suite runs an authoring session that writes a spec package i
 
 #### environments-25
 
-When an integration suite drives the environment commands over the protocol, it shall assert each command's reply and refusal of the table, the `environment.state` broadcast after resolve, install and a sync-applied lock, `environment.get` carrying every field the surface lists, and `busy` during that spex repository's sync [[environments-17](#environments-17)] [[environments-14](#environments-14)] [[environments-15](#environments-15)].
+When an integration suite drives the environment commands over the protocol, it shall assert each command's reply and refusal of the table, the `environment.state` broadcast after resolve, install and a sync-applied lock, and `environment.get` carrying every field the surface lists [[environments-17](#environments-17)] [[environments-14](#environments-14)] [[environments-15](#environments-15)]:
+
+- with a resolution held at the registry, a second request is admitted and written beside the first, the overtaken resolution writes no lock and reports `spex.yaml` changed meanwhile, the final lock resolves both, and the state reads busy until the last operation ends [[environments-15](#environments-15)] [[environments-5](#environments-5)] [[environments-14](#environments-14)];
+- with `environment.resolve` held at the registry and `spex.lock` rewritten by hand, `spex.yaml` unchanged, the rewritten lock stands and the outcome reports `spex.lock` changed meanwhile [[environments-5](#environments-5)];
+- a clone whose lock and installed files are removed resolves and installs again at the next change of the repositories [[environments-5](#environments-5)];
+- an operation held while its clone is renamed and the store and environment follow the move reads busy at the new address, and its end is announced there with busy cleared and its outcome reported, nothing written at the old [[environments-14](#environments-14)] [[environments-5](#environments-5)];
+- once the core stops, a request and an install awaited by the enabling path are refused `aborted` with `spex.yaml` unchanged [[environments-15](#environments-15)];
+- a conflict report reads while `spex.yaml` holds the bytes its resolution read and no longer after the file changes [[environments-14](#environments-14)].
 
 ## References
 

@@ -907,18 +907,6 @@ const issueRowId = (entry: IssueEntry): string =>
   entry.repair ? `repair:${entry.repair.key}` : `diagnostic:${entry.file}:${entry.reason}`;
 const outcomeRowId = (key: string): string => `repair:${key}`;
 
-/** Whether any spex repository's operation is running: while one
- * runs, the repairs naming it are refused (space-47). */
-function runningRepositories(groups: GroupsState): Set<string> {
-  const keys = new Set<string>();
-  for (const group of groups.groups) {
-    for (const repo of group.repositories) {
-      if (repo.sync.phase === "running") keys.add(repo.key);
-    }
-  }
-  return keys;
-}
-
 /**
  * The home's issues list (space-1, space-46..space-55): every repair
  * the core folded and every diagnostic no repair folds. It opens from
@@ -959,7 +947,6 @@ export function IssuesList({
     setFocusTo(undefined);
   }, [refreshes]);
 
-  const busy = runningRepositories(groups);
   // The core carries the count (space-1): what the reader has not
   // answered. Rows he has set aside stand on, quietly.
   const issueCount = groups.issues;
@@ -1083,7 +1070,7 @@ export function IssuesList({
               <RepairRow
                 key={id}
                 repair={entry.repair}
-                disabled={!connected || (entry.repair.repository !== undefined && busy.has(entry.repair.repository))}
+                disabled={!connected}
                 focusSeq={focusSeq(id)}
                 onResolved={onResolved}
                 onNote={onNote}

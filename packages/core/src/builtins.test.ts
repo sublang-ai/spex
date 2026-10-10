@@ -41,7 +41,8 @@ async function installedBuiltins(): Promise<Map<string, ModuleLocation>> {
   const result = await resolve({ requests: parseRequests(text), requestsText: text, registry, workingFolder: null, git: gitSource(cache) });
   assert.ok(result.ok);
   if (!result.ok) throw new Error("unreachable");
-  await install({ cloneDir: clone, lock: result.lock, store, cache, registry, git: gitSource(cache), workingFolder: null, requestsText: text });
+  // No lock stands on disk: the install expects none (DR-111).
+  await install({ cloneDir: clone, lock: result.lock, lockVersion: null, store, cache, registry, git: gitSource(cache), workingFolder: null, requestsText: text });
   return moduleLocations(result.lock, clone, null);
 }
 

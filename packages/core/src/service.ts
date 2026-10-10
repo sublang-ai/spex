@@ -14,6 +14,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -22,6 +23,7 @@ import {
   type FSWatcher,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
@@ -51,14 +53,12 @@ import {
 } from "./config.js";
 import {
   CAPTAIN_AGENT_ID,
-  mediaOwnerRepository,
   parseCommand,
   PROTOCOL_VERSION,
   type AdapterName,
   type Channel,
   type Command,
   type ConfigState,
-  type ErrorCode,
   type MediaUploadOwner,
   type ReadinessEntry,
   type ServerMessage,
@@ -74,6 +74,7 @@ import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
+import { fileVersion, listed, readVersioned, UUID, VersionConflictError } from "./files.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -104,13 +105,14 @@ import {
   isGitSource,
   isPathSource,
   isSkillName,
+  playbookModuleCandidates,
   prepareBuiltinEnvironment,
   readManifest,
   writeExcludeBlock,
   type BuiltinPackage,
 } from "./environment/index.js";
-import { kebab } from "./home.js";
-import type { CommandResults, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
+import { kebab, splitKey } from "./home.js";
+import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -210,9 +212,10 @@ export interface CoreServiceOptions {
   systemLanguages?: readonly string[];
   /** Test seam (space-32): the Space transport limit; 120 s by default. */
   spaceTransportTimeoutMs?: number;
-  /** Test seam: awaited before each Space step runs, so a suite can act
-   * between steps deterministically. */
-  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** Test seam: awaited before each Space step runs, and inside Save
+   * between its validation and its commit (`at: "commit"`), so a suite can
+   * act between them deterministically. */
+  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -237,21 +240,22 @@ export interface CoreServiceOptions {
   registryFetch?: typeof fetch;
 }
 
-/** Commands that write beneath a clone (space-21): refused `busy` while
- * an operation runs on that spex repository, so the core stays the sole
- * writer through it while every other clone stays writable. */
-const SPACE_GATED_COMMANDS = new Set<Command["type"]>([
-  "turn.submit", "session.control", "session.create", "session.restore", "session.discard", "session.delete", "session.viewed",
-  "project.rebind", "project.remove",
-  "intent.queue", "intent.edit", "intent.close", "intent.remove",
-  "config.edit", "compile.run", "media.begin", "media.chunk", "media.finish", "media.cancel",
-  "draft.create", "draft.open", "draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.register", "draft.player.set", "draft.delete", "draft.artifacts",
-  // An environment's writes (environments-15, environments-17).
-  "environment.request", "environment.remove", "environment.resolve", "environment.install", "environment.publish",
-]);
-
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
+
+/** The files a config state was composed from, each at the version read
+ * (DR-111): an unreadable one stands as its error, so it compares stably. */
+type ConfigInputs = Map<string, string | null>;
+const inputVersion = (file: string): string | null => {
+  try { return fileVersion(file); }
+  catch (error) { return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`; }
+};
+/** The first input no longer standing at the version read. */
+const changedInput = (inputs: ConfigInputs): string | undefined => {
+  for (const [file, version] of inputs) if (inputVersion(file) !== version) return file;
+  return undefined;
+};
+const changedMeanwhile = (file: string): CoreError => new CoreError("conflict", new VersionConflictError(file).message);
 
 /** What a sync tells the environments once it applied a lock or moved a
  * clone (environments-8, environments-17): optional on the Space host. */
@@ -286,22 +290,13 @@ function channelKey(channel: Channel): string {
     : `${channel.kind}:${channel.sessionId}`;
 }
 
-/** A session named as the reader sees it, so a language can quote its
- * own way (core-service-111). */
-const titled = (title: string): string =>
-  i18n._({ id: "“{title}”", comment: "A session's own title, quoted", values: { title } });
-const inUseElsewhere = (name: string): string =>
-  i18n._({
-    id: "{name} is in use elsewhere",
-    comment: "A session another host is writing right now",
-    values: { name },
-  });
-const unverifiedOwner = (name: string): string =>
-  i18n._({
-    id: "{name} ownership cannot be verified",
-    comment: "A session whose lease this host cannot read",
-    values: { name },
-  });
+/** Any failure as the reply's error: a CoreError as it is, any other
+ * classed by what it is, its own words kept. */
+function coreErrorOf(error: unknown): CoreError {
+  if (error instanceof CoreError) return error;
+  const code: CoreError["code"] = error instanceof MediaTransferError ? "invalid_request" : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
+  return new CoreError(code, error instanceof Error ? error.message : String(error));
+}
 
 /** The not-found refusals the command paths share, each phrased when
  * it is raised (core-service-111); the id itself is never translated. */
@@ -456,13 +451,17 @@ export class CoreService {
 
   private configState: ConfigState;
   private composed?: ComposedConfig;
+  /** The files {@link configState} was composed from: the state is a
+   * cache validated by them at use (DR-111); none while no load of the
+   * files has been published. */
+  private configInputs?: ConfigInputs;
   private seeded = false;
   private readonly runCommand: RunCommand;
   private readonly forge: ForgeAdapter;
-  /** One in-flight compile per playbook id; abort via compile.abort. */
-  private readonly activeCompiles = new Map<string, AbortController>();
-  /** The project a one-shot compile writes its spec package in. */
-  private readonly compileHolders = new Map<string, string>();
+  /** Each running one-shot compile's own cancel handle, by playbook id:
+   * cancellation and progress only, admitting or refusing nothing
+   * (core-service-25). */
+  private readonly standaloneCompiles = new Map<string, Set<AbortController>>();
   /** Projects whose ledger changed since the last broadcast (DR-035). */
   private readonly ledgerChanged = new Set<string>();
   private ledgerTimer?: NodeJS.Timeout;
@@ -490,8 +489,6 @@ export class CoreService {
     controller: AbortController;
     done: Promise<unknown>;
   }>();
-  /** A sync's Apply through Refresh pauses its clone's watchers (space-31). */
-  private readonly watchersPaused = new Set<string>();
   /** The language the core is composing in (core-service-111): the
    * resolution in force, kept so a choice that resolves to the same
    * language re-derives nothing. */
@@ -597,7 +594,6 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
-      settleBeneath: (repositories: string[]) => this.environments.idle(repositories),
       home: this.store.dir,
       env: this.env,
       store: this.store,
@@ -608,19 +604,14 @@ export class CoreService {
         this.store.listProjects().map((project) => ({ id: project.id, name: project.name, path: project.path })),
         this.runCommand,
       ),
-      blocker: (repository) => this.spaceBlocker(repository),
       broadcast: (state) => this.broadcast({ type: "space.state", state }),
-      pauseWatchers: (repository) => {
-        this.watchersPaused.add(repository);
-        if (this.adoptTimer) { clearTimeout(this.adoptTimer); this.adoptTimer = undefined; }
-        if (repository === this.store.home.own() && this.reloadTimer) { clearTimeout(this.reloadTimer); this.reloadTimer = undefined; }
-      },
-      resumeWatchers: (repository) => { this.watchersPaused.delete(repository); },
       reloadConfig: () => this.reloadConfig(),
       rescanSessions: async (repository) => {
         await this.media.reset();
-        this.drafts.refresh();
         await this.syncForeignSessions();
+        // Its authoring sessions are read from their files again by the
+        // clients showing them (core-service-96).
+        this.authors.applied(repository);
         // A sync applied what the host holds, its lock among it: the
         // environment installs from it and exports (environments-8,
         // environments-17), its state broadcast.
@@ -647,12 +638,8 @@ export class CoreService {
       })));
     const service = this;
     this.authors = new AuthorManager({
-      approvalHandler: (draftId) => this.approvals.handler({kind: "draft", id: draftId}, () => ({ownerLabel: draftId})),
-      cancelApprovals: (draftId, invocationId) => this.approvals.cancel({kind: "draft", id: draftId}, invocationId),
-      retireMedia: (draftId, remove) => {
-        const projectId = this.drafts.projectOf(draftId);
-        return projectId ? this.media.retireOwner({kind: "draft", projectId, id: draftId}, remove) : Promise.resolve(remove());
-      },
+      approvalHandler: (draftId, instance) => this.approvals.handler({kind: "draft", id: draftId, instance}, () => ({ownerLabel: draftId})),
+      cancelApprovals: (draftId, instance, invocationId) => this.approvals.cancel({kind: "draft", id: draftId, instance}, invocationId),
       store: this.store,
       drafts: this.drafts,
       // Read when used: your own group's config moves with its clone.
@@ -661,35 +648,42 @@ export class CoreService {
       adapterImports: options.adapterImports,
       compileSpawner: options.compileSpawner,
       compileRuntime: options.compileRuntime,
-      activeCompiles: this.activeCompiles,
       composed: () => this.composed,
+      // A turn reads the config as its files stand when it starts (DR-111).
+      prepareConfig: () => this.settledConfig(),
       readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
       org: () => this.packageOrg(),
       enabled: (id) => this.draftEnabled(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
+      device: () => this.store.home.device,
+      importInto: (prepare, place) => this.media.importInto(prepare, place),
     });
-    this.authors.events.onRecord = (draftId, record) => {
+    this.authors.events.onRecord = (draftId, instance, record) => {
       const key = `draft:${draftId}`;
       for (const client of this.clients) {
         if (client.channels.has(key)) {
-          this.send(client.socket, { type: "draft.record", draftId, seq: record.seq, record: record.record });
+          this.send(client.socket, { type: "draft.record", draftId, instance, seq: record.seq, record: record.record });
         }
       }
     };
     this.authors.events.onState = (draft) => this.broadcast({ type: "draft.state", draft });
     this.authors.events.onSource = (message) => this.broadcast(message);
-    this.authors.events.onProgress = (draftId, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, line });
-    this.authors.events.onRemoved = (draftId, projectId) => this.broadcast({ type: "draft.removed", draftId, projectId });
+    this.authors.events.onProgress = (draftId, instance, line) => this.broadcast({ type: "compile.progress", playbookId: draftId, instance, line });
+    this.authors.events.onHistory = (draftId, instance) => this.broadcast({ type: "draft.history-replaced", draftId, instance });
+    this.authors.events.onRemoved = (draftId, projectId, instance) => this.broadcast({ type: "draft.removed", draftId, projectId, ...(instance ? { instance } : {}) });
     this.media = new ApplicationMedia({
       home: this.store.dir,
       directoryOf: (owner) => this.mediaDirectory(owner),
+      rootOf: (owner) => {
+        const key = owner.kind === "project" ? owner.id : owner.projectId;
+        const repository = this.store.repository(key);
+        if (!repository) throw noProject(key);
+        return repository.dir;
+      },
       assertOwner: (owner, write) => {
         if (this.stopping) throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during attachment admission"}));
-        const repository = mediaOwnerRepository(owner);
-        const gate = this.space.busyFor(repository ?? (owner.kind === "session" ? this.store.sessionRepository(owner.id) : undefined));
-        if (write && gate) throw new CoreError("busy", gate);
         if (owner.kind === "project") {
           if (!this.store.getProject(owner.id)) throw noProject(owner.id);
           if (write) this.store.assertWritable({ projectId: owner.id });
@@ -701,7 +695,10 @@ export class CoreService {
           if (intent && intent.projectId !== owner.projectId) throw noIntent(owner.intentId);
           if (!write && !intent) throw noIntent(owner.intentId);
         } else if (owner.kind === "draft") {
-          if (!this.authors.has(owner.id) || this.drafts.projectOf(owner.id) !== owner.projectId) throw noDraft(owner.id);
+          // The session the owner names by its instance (media-4): a
+          // session made again under its id is another owner.
+          if (!this.authors.has(owner.id) || this.drafts.projectOf(owner.id) !== owner.projectId ||
+            this.drafts.instanceOf(owner.id) !== owner.instance) throw noDraft(owner.id);
         } else if (!this.store.describeSession(owner.id)) throw noSession(owner.id);
       },
       openSessionAsset: (sessionId, assetId) => this.store.sessionStoreFor(sessionId).openAsset(sessionId, assetId),
@@ -813,16 +810,47 @@ export class CoreService {
     return this.environments.modulesFor(projectId);
   }
 
+  /** {@link modules}, recording into `inputs` the locks it reads and,
+   * for each playbook composition asks for, the entry files those locks
+   * place it at — a missing one as absent, so its repair is a change
+   * (DR-111). Nothing an entry imports is recorded. */
+  private modulesRead(projectId: string | null, inputs: ConfigInputs): PlaybookModules {
+    const keys = [...new Set([...(projectId === null ? [] : [projectId]), this.store.home.own()])];
+    for (const key of keys) {
+      const dir = this.store.repository(key)?.dir;
+      if (dir) inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+    }
+    const located = keys.map((key) => this.environments.locations(key));
+    const modules = this.modules(projectId);
+    return {
+      repository: modules.repository,
+      find: (id) => {
+        for (const locations of located) {
+          for (const [name, location] of locations) {
+            if (name !== id && location.id !== id) continue;
+            // A missing entry stands at its first candidate; any of them appearing repairs it.
+            const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
+            for (const entry of entries) if (!inputs.has(entry)) inputs.set(entry, inputVersion(entry));
+          }
+        }
+        return modules.find(id);
+      },
+    };
+  }
+
   /** The players every project's file names that your own group's
    * roster lacks (core-service-2, settings-46), listed on the valid
    * config state; a project's session raises them when it opens. */
-  private missingPlayers(ownTop: unknown): import("./protocol.js").MissingPlayer[] {
+  private missingPlayers(ownTop: unknown, inputs: ConfigInputs): import("./protocol.js").MissingPlayer[] {
     const own = this.store.home.own();
     const projects: { repository: string; top: unknown }[] = [];
     for (const repository of this.store.listRepositories()) {
-      if (repository.key === own || resolve(repository.configPath) === resolve(this.configPath) || !existsSync(repository.configPath)) continue;
-      try { projects.push({ repository: repository.key, top: parseYaml(readFileSync(repository.configPath, "utf8")) }); }
-      catch { /* that project's own load reports it */ }
+      if (repository.key === own || resolve(repository.configPath) === resolve(this.configPath)) continue;
+      try {
+        const { bytes, version } = readVersioned(repository.configPath);
+        inputs.set(repository.configPath, version);
+        if (bytes) projects.push({ repository: repository.key, top: parseYaml(bytes.toString("utf8")) });
+      } catch { /* that project's own load reports it */ }
     }
     return missingPlayersOf(ownTop, projects);
   }
@@ -858,99 +886,61 @@ export class CoreService {
     return this.options.systemLanguages ?? [Intl.DateTimeFormat().resolvedOptions().locale];
   }
 
-  /**
-   * The named blocker of an operation on one clone (space-11): a turn
-   * in flight or being admitted in one of its sessions, a session of it
-   * held — or unprovably held — by another host, observed live through
-   * its shared store, or a running compile of its authoring sessions.
-   */
-  private async spaceBlocker(repository: string): Promise<string | undefined> {
-    if (this.media.isWriting()) return i18n._({id: "Wait for the media upload to finish.", comment: "Attachment transfer or storage diagnostic"});
-    // An environment resolving or installing writes beneath the clone.
-    const installing = this.environments.busyFor(repository);
-    if (installing) return installing;
-    const sessions = this.sessions.listSessions().filter((session) => session.projectId === repository);
-    for (const session of sessions) {
-      const project = this.store.getProject(session.projectId)?.name ?? i18n._({
-        id: "the project",
-        comment: "Stands in for a project's name where the core has none",
-      });
-      const name = session.title ? titled(session.title) : i18n._({
-        id: "a new session",
-        comment: "Stands in for the title of a session that has none yet",
-      });
-      if (session.externalWriter === "active") return inUseElsewhere(name);
-      if (session.externalWriter === "unknown") return unverifiedOwner(name);
-      if (session.live || session.turnActive || this.submitting.has(session.id)) return i18n._({
-        id: "Wait for {name} in {project}",
-        comment:
-          "What blocks a Space operation: a session of this project is working",
-        values: { name, project },
-      });
-    }
-    if ([...this.submitting.keys()].some((sessionId) => this.store.sessionRepository(sessionId) === repository)) return i18n._({
-      id: "Wait for the turn being submitted",
-      comment: "What blocks a Space operation: a turn is being admitted",
-    });
-    for (const playbookId of this.activeCompiles.keys()) {
-      const holder = this.compileHolders.get(playbookId) ?? this.drafts.projectOf(playbookId) ?? this.store.home.own();
-      if (holder !== repository) continue;
-      return i18n._({
-        id: "{playbookId} is compiling",
-        comment: "What blocks a Space operation: a playbook compile is running",
-        values: { playbookId },
-      });
-    }
-    // A lease taken since the last rescan is still a held session.
-    const shared = this.store.sessionStore(repository);
-    for (const session of sessions) {
-      if (this.sessions.getLive(session.id)) continue;
-      const name = session.title ? titled(session.title) : i18n._({
-        id: "a session",
-        comment: "Stands in for the title of a session that has none",
-      });
-      let lease: "active" | "idle" | "unknown";
-      try { lease = await shared.readLeaseState(session.id); } catch { lease = "unknown"; }
-      if (lease === "active") return inUseElsewhere(name);
-      if (lease === "unknown") return unverifiedOwner(name);
-    }
-    return undefined;
-  }
-
   private requireSpace(): SpaceManager {
     return this.space;
   }
 
-  /** The spex repository a command writes beneath, for the write gate
-   * (space-21); undefined where it writes beneath none. */
-  private commandRepository(command: Command): string | undefined {
-    switch (command.type) {
-      case "turn.submit": case "session.control": case "session.restore": case "session.discard": case "session.delete": case "session.viewed":
-        return this.store.sessionRepository(command.sessionId);
-      case "session.create": case "project.rebind": case "project.remove": case "intent.queue":
-        return command.projectId;
-      case "intent.edit": case "intent.close": case "intent.remove":
-        return this.store.getIntent(command.intentId)?.projectId;
-      case "config.edit":
-        return command.repository ?? this.store.home.own();
-      case "compile.run":
-        return command.projectId;
-      case "environment.request": case "environment.remove": case "environment.resolve": case "environment.install": case "environment.publish":
-        return command.repository;
-      case "draft.open": case "draft.artifacts":
-        return command.projectId;
-      case "media.begin":
-        return mediaOwnerRepository(command.owner);
-      case "media.chunk": case "media.finish": case "media.cancel": {
-        const owner = this.media.uploads.ownerOf(command.uploadId);
-        return owner ? mediaOwnerRepository(owner) : undefined;
+  /**
+   * Every session of a clone a removal deletes, held under Playbook's
+   * management lease (projects-10): a lease another writer holds — a
+   * running turn here or a terminal's — refuses the removal `busy`.
+   * `check` is the removal's own instant: called synchronously inside
+   * the removal itself, with nothing awaited before the deletion, it
+   * refuses as a change meanwhile a session that appeared while the
+   * leases were taken, or a clone moved or replaced since. Your own
+   * group's clone is never deleted.
+   */
+  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void }> {
+    const repository = this.store.repository(key);
+    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined };
+    const identity = (): string | undefined => {
+      try { const info = statSync(repository.dir); return `${info.dev}:${info.ino}`; } catch { return undefined; }
+    };
+    // A session stands on disk by any of its files: Playbook publishes
+    // its lease `.<id>.lock` before it writes `<id>.json`, and lists a
+    // session by its records too.
+    const sessionIds = (): string[] => {
+      if (!existsSync(repository.sessionsDir)) return [];
+      const ids = new Set<string>();
+      for (const file of readdirSync(repository.sessionsDir)) {
+        const id = /^\.(.+)\.lock$/.exec(file)?.[1] ?? /^(.+?)(?:\.records\.jsonl|\.json)$/.exec(file)?.[1];
+        if (id && UUID.test(id)) ids.add(id);
       }
-      case "draft.create": case "draft.send": case "draft.abort": case "draft.source.write": case "draft.compile":
-      case "draft.register": case "draft.player.set": case "draft.delete":
-        return command.projectId;
-      default:
-        return undefined;
+      return [...ids].sort();
+    };
+    const clone = identity();
+    const held: { sessionId: string; release(): Promise<unknown> }[] = [];
+    try {
+      for (const id of sessionIds()) held.push(await repository.store.acquireManagement(id));
+    } catch {
+      await Promise.allSettled(held.map((lease) => lease.release()));
+      throw new CoreError("busy", i18n._({
+        id: "wait for the project's running turn to finish, or abort it, before removing it",
+        comment: "Refusal: a turn is running in the project being removed",
+      }));
     }
+    const leased = new Set(held.map((lease) => lease.sessionId));
+    return {
+      leases: held,
+      check: () => {
+        if (this.store.repository(key)?.dir === repository.dir && identity() === clone && sessionIds().every((id) => leased.has(id))) return;
+        throw new CoreError("conflict", i18n._({
+          id: "{what} changed meanwhile; retry",
+          values: { what: splitKey(key).name },
+          comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+        }));
+      },
+    };
   }
 
   /** Announce ledger changes debounced (DR-035): session records land
@@ -1186,9 +1176,6 @@ export class CoreService {
       if (this.sessionsWatchers.has(repository.key) || !existsSync(repository.sessionsDir)) continue;
       const key = repository.key;
       this.sessionsWatchers.set(key, watch(repository.sessionsDir, (_eventType, filename) => {
-        // A sync's Apply through Refresh writes the directory itself and
-        // ends in one full rescan (space-31).
-        if (this.watchersPaused.has(key)) return;
         // The CLI can append without replacing its manifest. Our own
         // sidecars are irrelevant, and the store excludes owned sessions
         // when a shared stream changes. A missing filename means scan.
@@ -1246,9 +1233,6 @@ export class CoreService {
       const name = dir === configDir ? basename(repository.configPath) : basename(configDir);
       try {
         const watcher = watch(dir, (_eventType, filename) => {
-          // A sync's Apply through Refresh reloads once it is done
-          // (space-31).
-          if (this.watchersPaused.has(key)) return;
           if (filename && filename !== name) return;
           // `config/` appeared: the file inside it is watched from now.
           if (dir !== configDir) this.watchProjectConfigs();
@@ -1390,7 +1374,7 @@ export class CoreService {
     // abort and are awaited so no Cligent outlives the core (DR-051).
     this.authors.markStopping();
     // Kill any in-flight compile child so shutdown never orphans slc.
-    for (const controller of this.activeCompiles.values()) controller.abort();
+    for (const handles of this.standaloneCompiles.values()) for (const controller of handles) controller.abort();
     // A disposal failure must not leave the endpoint or the store open
     // (CORE-39): finish the shutdown, then report it to the host.
     let failure: { error: unknown } | undefined;
@@ -1502,15 +1486,42 @@ export class CoreService {
   /** The composition of {@link composedFor} on the config already
    * loaded: `ready` first waits for the project's environment, which a
    * reload's own broadcast does not, its environment announcing itself
-   * when it settles (environments-17). */
+   * when it settles (environments-17). The files are read after that
+   * wait and checked after composing: one changed meanwhile composes
+   * once more, then the caller is refused to retry (DR-111). */
   private async composeProject(projectId: string, ready: boolean): Promise<ComposedConfig> {
-    if (this.configState.status !== "valid" || !this.composed) {
-      throw new CoreError("invalid_config", this.configRefusal());
-    }
+    const own = (): ComposedConfig => {
+      if (this.configState.status !== "valid" || !this.composed) {
+        throw new CoreError("invalid_config", this.configRefusal());
+      }
+      return this.composed;
+    };
+    own();
     const repository = this.store.repository(projectId);
-    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return this.composed;
-    const hasProjectFile = existsSync(repository.configPath);
-    const file = hasProjectFile ? repository.configPath : this.configPath;
+    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return own();
+    // The session's playbooks come from the project's environment before
+    // your own group's (environments-9), whether or not the project's
+    // own file enables any; one not yet resolved resolves first.
+    if (ready) await this.environments.ready(projectId);
+    for (let attempt = 0; ; attempt += 1) {
+      own();
+      const inputs: ConfigInputs = new Map();
+      let result: { composed: ComposedConfig } | { error: unknown };
+      try { result = { composed: await this.composeProjectOnce(repository.configPath, projectId, inputs) }; }
+      catch (error) { result = { error }; }
+      const changed = changedInput(inputs);
+      if (changed === undefined) {
+        if ("error" in result) throw result.error;
+        return result.composed;
+      }
+      if (attempt > 0) throw changedMeanwhile(changed);
+    }
+  }
+
+  /** One read and composition of a project's configuration, recording
+   * each file read in `inputs`. */
+  private async composeProjectOnce(projectPath: string, projectId: string, inputs: ConfigInputs): Promise<ComposedConfig> {
+    let file = this.configPath;
     const cause = (error: unknown): CoreError => new CoreError("invalid_config", i18n._({
       id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
       values: { file, reason: error instanceof Error ? error.message : String(error) },
@@ -1518,17 +1529,23 @@ export class CoreService {
     let projectTop: unknown;
     let ownTop: unknown;
     try {
-      projectTop = hasProjectFile ? parseYaml(readFileSync(repository.configPath, "utf8")) : undefined;
-      ownTop = parseYaml(readFileSync(this.configPath, "utf8"));
-    } catch (error) { throw cause(error); }
-    // The session's playbooks come from the project's environment before
-    // your own group's (environments-9), whether or not the project's
-    // own file enables any; one not yet resolved resolves first.
-    if (ready) await this.environments.ready(projectId);
+      const project = readVersioned(projectPath);
+      inputs.set(projectPath, project.version);
+      if (project.bytes) file = projectPath;
+      projectTop = project.bytes ? parseYaml(project.bytes.toString("utf8")) : undefined;
+      const read = readVersioned(this.configPath);
+      inputs.set(this.configPath, read.version);
+      // Gone, the file is read once more for the system's own reason.
+      ownTop = parseYaml((read.bytes ?? readFileSync(this.configPath)).toString("utf8"));
+    } catch (error) {
+      if (!inputs.has(projectPath)) inputs.set(projectPath, inputVersion(projectPath));
+      if (!inputs.has(this.configPath)) inputs.set(this.configPath, inputVersion(this.configPath));
+      throw cause(error);
+    }
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
-        modules: this.modules(projectId),
-        ...(hasProjectFile ? { project: { top: projectTop, path: repository.configPath } } : {}),
+        modules: this.modulesRead(projectId, inputs),
+        ...(file === projectPath ? { project: { top: projectTop, path: projectPath } } : {}),
       });
     } catch (error) { throw cause(error); }
   }
@@ -1542,13 +1559,18 @@ export class CoreService {
    * file is refused.
    */
   private async projectConfigState(projectId: string, ready: boolean): Promise<ConfigState> {
-    const own = this.configState;
-    if (own.status !== "valid") return own;
+    if (this.configState.status !== "valid") return this.configState;
     const repository = this.store.repository(projectId);
     if (!repository) throw noProject(projectId);
     try {
+      const inputs = this.configInputs;
       const composed = await this.composeProject(projectId, ready);
-      if (composed === this.composed) return own;
+      // Your own group's state, its notifications and theme, as its files
+      // still stand after composing.
+      const changed = this.cacheChanged(inputs);
+      if (changed !== undefined) throw changedMeanwhile(changed);
+      const own = this.configState;
+      if (own.status !== "valid" || composed === this.composed) return own;
       // Notifications and theme are your own group's alone.
       const summary = summarizeConfig({ path: own.summary.path, raw: null, composed });
       return {
@@ -1560,7 +1582,9 @@ export class CoreService {
         },
       };
     } catch (error) {
-      if (!(error instanceof CoreError)) throw error;
+      // A file changed meanwhile is no state of the files (DR-111).
+      if (!(error instanceof CoreError) || error.code === "conflict") throw error;
+      if (this.configState.status !== "valid") return this.configState;
       return {
         status: "invalid",
         path: existsSync(repository.configPath) ? repository.configPath : this.configPath,
@@ -1581,13 +1605,20 @@ export class CoreService {
     return out;
   }
 
-  /** Broadcast the config state with every project's composition. */
-  private async broadcastConfig(generation: number): Promise<void> {
+  /** Broadcast the config state with every project's composition,
+   * unless a newer reload began or the files it stands on changed while
+   * the compositions were read (DR-111); whether it was broadcast. */
+  private async broadcastConfig(generation: number, inputs = this.configInputs): Promise<boolean> {
     const projects = await this.projectConfigStates();
-    if (generation !== this.reloadGeneration) return;
+    if (generation !== this.reloadGeneration || this.cacheChanged(inputs) !== undefined) return false;
     this.broadcast({ type: "config.state", state: this.configState, ...(projects ? { projects } : {}) });
+    return true;
   }
 
+  /** The config state as its files stand now: a reload pending or in
+   * flight is awaited, and a file changed with no watcher's word yet
+   * reloads once here; changed again meanwhile, the caller is refused
+   * to retry (DR-111). */
   private async settledConfig(): Promise<void> {
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer);
@@ -1595,6 +1626,17 @@ export class CoreService {
       await this.reloadConfig();
     }
     while (this.reloading) await this.reloading;
+    if (this.cacheChanged() === undefined) return;
+    await this.reloadConfig();
+    while (this.reloading) await this.reloading;
+    const changed = this.cacheChanged();
+    if (changed !== undefined) throw changedMeanwhile(changed);
+  }
+
+  /** The first file the published config state no longer stands on;
+   * your own group's config where no load has been published. */
+  private cacheChanged(inputs = this.configInputs): string | undefined {
+    return inputs === undefined ? this.configPath : changedInput(inputs);
   }
 
   private async reloadNow(generation: number): Promise<void> {
@@ -1604,17 +1646,49 @@ export class CoreService {
     // and every superseded one must discard its work — committing it would
     // publish an older file's state, and a readiness probe that outlived a
     // newer reload would overwrite that reload's broadcast with entries
-    // for a configuration no longer active.
+    // for a configuration no longer active. A file changed while the load
+    // composed makes its result, valid or not, no state of the files:
+    // it is read once more, else nothing is published and the next use
+    // reads again (DR-111).
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const inputs: ConfigInputs = new Map();
+      const next = await this.loadOwnConfig(inputs);
+      if (generation !== this.reloadGeneration) return;
+      if (changedInput(inputs) !== undefined) continue;
+      this.composed = next.composed;
+      this.configState = next.state;
+      this.configInputs = inputs;
+      // Each broadcast awaits more reads: the files are checked after
+      // them, and a change is no state to announce.
+      if (!(await this.broadcastConfig(generation, inputs))) {
+        if (generation !== this.reloadGeneration) return;
+        continue;
+      }
+      const entries = await this.readiness();
+      if (generation !== this.reloadGeneration) return;
+      if (changedInput(inputs) !== undefined) continue;
+      this.broadcast({ type: "readiness.state", entries });
+      return;
+    }
+  }
+
+  /** Your own group's config state, recording each file read in `inputs`. */
+  private async loadOwnConfig(inputs: ConfigInputs): Promise<{ state: ConfigState; composed: ComposedConfig | undefined }> {
     let nextState: ConfigState;
     let nextComposed: ComposedConfig | undefined;
-    if (!existsSync(this.configPath)) {
+    // Read before any migration; the load reports the bytes it composed.
+    inputs.set(this.configPath, inputVersion(this.configPath));
+    if (inputs.get(this.configPath) === null) {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
       try {
-        const loaded = await loadConfig(this.configPath, this.options.loadModule, { modules: this.modules(null) });
+        const loaded = await loadConfig(this.configPath, this.options.loadModule, {
+          modules: this.modulesRead(null, inputs),
+          read: (version) => inputs.set(this.configPath, version),
+        });
         nextComposed = loaded.composed;
-        const missingPlayers = this.missingPlayers(loaded.raw);
+        const missingPlayers = this.missingPlayers(loaded.raw, inputs);
         nextState = {
           status: "valid",
           summary: summarizeConfig(loaded),
@@ -1633,14 +1707,7 @@ export class CoreService {
         nextComposed = undefined;
       }
     }
-    if (generation !== this.reloadGeneration) return;
-    this.composed = nextComposed;
-    this.configState = nextState;
-    await this.broadcastConfig(generation);
-    if (generation !== this.reloadGeneration) return;
-    const entries = await this.readiness();
-    if (generation !== this.reloadGeneration) return;
-    this.broadcast({ type: "readiness.state", entries });
+    return { state: nextState, composed: nextComposed };
   }
 
   private watchConfigFile(): void {
@@ -1648,7 +1715,6 @@ export class CoreService {
     const file = basename(this.configPath);
     if (!existsSync(dir)) return;
     this.watcher = watch(dir, (_eventType, filename) => {
-      if (this.watchersPaused.has(this.store.home.own())) return;
       if (filename && filename !== file) return;
       this.scheduleReload();
     });
@@ -1827,17 +1893,15 @@ export class CoreService {
         result,
       });
     } catch (error) {
-      const code: ErrorCode =
-        error instanceof CoreError ? error.code : error instanceof MediaTransferError ? "invalid_request" : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
-      const message = error instanceof Error ? error.message : String(error);
+      const failure = coreErrorOf(error);
       this.send(client.socket, {
         type: "reply",
         id: command.id,
         ok: false,
         error: {
-          code,
-          message,
-          ...(error instanceof CoreError && error.details ? { details: error.details } : {}),
+          code: failure.code,
+          message: failure.message,
+          ...(failure.details ? { details: failure.details } : {}),
         },
       });
     }
@@ -1866,27 +1930,23 @@ export class CoreService {
     client: ClientState,
     command: Command,
   ): Promise<unknown> {
-    // The write gate (space-21): while an operation runs on a spex
-    // repository, every command writing beneath its clone is refused
-    // naming the operation; other clones stay writable.
-    const gate = SPACE_GATED_COMMANDS.has(command.type) ? this.space.busyFor(this.commandRepository(command)) : undefined;
-    if (gate) throw new CoreError("busy", gate);
+    // No operation refuses a command (space-21): each write is checked
+    // at its own instant, against its file's version or its session's
+    // lease.
     if (["project.create", "project.register", "project.rebind", "project.remove"].includes(command.type)) this.store.assertProjectsWritable();
     if (command.type === "session.create" || command.type === "intent.queue") this.store.assertWritable({projectId:command.projectId});
     if (command.type === "session.restore" || command.type === "session.discard" || command.type === "turn.submit" || command.type === "session.control") this.store.assertWritable({sessionId:command.sessionId});
     switch (command.type) {
       case "approval.list": return this.approvals.snapshot();
       case "approval.respond": return this.approvals.respond(command.generation, command.requestId, command.owner, command.decision);
-      case "media.begin": {
-        this.media.ownerStore(command.owner, true);
-        return this.media.writing(() => this.media.uploads.begin(command));
-      }
+      case "media.begin":
+        return this.media.begin(command);
       case "media.chunk":
-        return this.media.writing(() => this.media.uploads.chunk(command.uploadId, command.offset, command.data));
+        return this.media.uploads.chunk(command.uploadId, command.offset, command.data);
       case "media.finish":
-        return this.media.writing(() => this.media.uploads.finish(command.uploadId));
+        return this.media.uploads.finish(command.uploadId);
       case "media.cancel":
-        return this.media.writing(() => this.media.uploads.cancel(command.uploadId));
+        return this.media.uploads.cancel(command.uploadId);
       case "media.read":
         return this.media.read(command.owner, command.assetId, command.offset, command.length);
       case "agent.capabilities": {
@@ -1897,10 +1957,9 @@ export class CoreService {
         if (this.stopping || client.socket.readyState !== WebSocket.OPEN) {
           return {status: "cancelled"};
         }
-        if (this.browserPreparations.has(command.operationId) ||
-            [...this.browserPreparations.values()].some((entry) => entry.client === client)) {
-          throw new CoreError("busy", i18n._({id: "Browser preparation is already running.", comment: "Refusal: this client already owns browser preparation"}));
-        }
+        // The same preparation asked again joins the one running.
+        const running = this.browserPreparations.get(command.operationId);
+        if (running) return await running.done;
         const controller = new AbortController();
         const done = (async () => {
           const agent = await this.contextualBrowserAgent(command);
@@ -1921,11 +1980,20 @@ export class CoreService {
         return {canceled};
       }
       case "config.get":
-        if (command.projectId === undefined) return this.configState;
+        // The state as the files stand now, a change no watcher reported
+        // yet read here (DR-111).
         await this.settledConfig();
+        if (command.projectId === undefined) return this.configState;
         return this.projectConfigState(command.projectId, true);
-      case "readiness.get":
-        return this.readiness();
+      case "readiness.get": {
+        await this.settledConfig();
+        // The probes await: their answer stands only on the files it read.
+        const inputs = this.configInputs;
+        const entries = await this.readiness();
+        const changed = this.cacheChanged(inputs);
+        if (changed !== undefined) throw changedMeanwhile(changed);
+        return entries;
+      }
       case "agent.options":
         return readAgentOptions(command.adapter, this.env, this.options.discoverAgentModels);
       case "project.list":
@@ -2079,14 +2147,11 @@ export class CoreService {
         // repository's clone; the folder and the host stay untouched
         // (projects-9, projects-10).
         const key = command.projectId;
-        if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
-        if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
-        if (this.sessions.listSessions().some((session) => session.projectId === key && (session.live || session.turnActive))) {
-          throw new CoreError("busy", i18n._({
-            id: "wait for the project's running turn to finish, or abort it, before removing it",
-            comment: "Refusal: a turn is running in the project being removed",
-          }));
-        }
+        const assertProject = (): void => {
+          if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
+          if (key === this.store.home.own() && !this.store.home.folderOf(key)) throw noProject(key);
+        };
+        assertProject();
         // What has not reached the host asks a second confirmation
         // naming the count (projects-9).
         if (command.confirm !== true) {
@@ -2099,13 +2164,29 @@ export class CoreService {
             }), { units });
           }
         }
+        // The removal is one write at its instant (projects-10): every
+        // session of the clone held under its Playbook lease — a live
+        // writer's refuses it — then, with nothing awaited, the pair
+        // forgotten and the clone deleted. No other work is waited for.
+        const { leases, check } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
-        await this.media.retireOwner({kind: "project", id: key}, () => {
-          if (!this.store.removeProject(key)) throw noProject(key);
-        }, () => {
-          if (!this.store.repository(key) && !this.store.home.folderOf(key)) throw noProject(key);
-          this.store.assertProjectsWritable();
-        });
+        try {
+          // retireOwner runs the final check, then invalidates the
+          // project's uploads and readers, then the removal, with nothing
+          // awaited between them: a refusal at the check invalidates
+          // nothing (media-17). The project is read first, so a home
+          // that query finds changed is refused next, before the check.
+          await this.media.retireOwner({kind: "project", id: key}, () => {
+            if (!this.store.removeProject(key)) throw noProject(key);
+          }, () => {
+            assertProject();
+            this.store.assertProjectsWritable();
+            check();
+          });
+        } finally {
+          // The leases went with the clone; what stands is released.
+          await Promise.allSettled(leases.map((lease) => lease.release()));
+        }
         for (const sessionId of removed) this.broadcast({ type: "session.removed", sessionId, projectId: key });
         this.afterRepositoriesChanged();
         this.queueLedgerChange([key]);
@@ -2294,6 +2375,9 @@ export class CoreService {
             this.options.loadModule,
             { modules: this.modules(null) },
           );
+        // The file changed while the candidate composed: changed
+        // meanwhile, retry (DR-111).
+        if (result.conflict) throw new CoreError("conflict", result.error!);
         if (!result.ok) {
           throw new CoreError(
             "invalid_config",
@@ -2305,6 +2389,9 @@ export class CoreService {
           );
         }
         await this.reloadConfig();
+        // The reply is the state the files stand at; the write stands
+        // either way (DR-111).
+        await this.settledConfig();
         this.authors.republish();
         return this.configState;
       }
@@ -2319,6 +2406,8 @@ export class CoreService {
           ? [...this.environments.locations(command.repository).values()].find((location) => location.id === command.playbookId && location.present)?.module
           : undefined;
         if (command.repository !== undefined && !this.store.repository(command.repository)) throw noProject(command.repository);
+        // The config's module, as its files stand (DR-111).
+        if (!named && command.repository === undefined) await this.settledConfig();
         const from = named
           ?? (command.repository === undefined ? this.composed?.playbooks.find((entry) => entry.id === command.playbookId)?.from : undefined)
           ?? (command.repository === undefined ? this.installedModule(command.playbookId) : undefined);
@@ -2337,7 +2426,8 @@ export class CoreService {
       case "library.builtins": {
         // The built-in spec package's playbooks your own group's
         // environment installs, each `configured` where the config
-        // enables it (playbook-library-34).
+        // enables it (playbook-library-34), as its files stand (DR-111).
+        await this.settledConfig();
         const configuredIds = new Set(
           this.composed?.playbooks.map((playbook) => playbook.id) ?? [],
         );
@@ -2356,26 +2446,19 @@ export class CoreService {
             comment: "Refusal: no config file exists at the path the core reads",
           }));
         }
+        // The Captain's block as the file stands (DR-111).
+        await this.settledConfig();
         // The one-shot compile writes the spec package under development
         // in the working folder of the project it names (environments-10).
         const project = this.store.getProject(command.projectId);
         if (!project) throw noProject(command.projectId);
         if (!isSkillName(command.playbookId)) throw invalidPlaybookId(command.playbookId);
-        // One compile per playbook id, fail-closed (DR-010 §5): a
-        // duplicate submission is rejected, never queued or merged.
-        if (this.activeCompiles.has(command.playbookId)) {
-          throw new CoreError(
-            "busy",
-            i18n._({
-              id: "a compile is already running for {playbookId}",
-              comment: "Refusal: one compile per playbook at a time",
-              values: { playbookId: command.playbookId },
-            }),
-          );
-        }
+        // A compile is an independent process (DR-111): a second one of
+        // the same id runs beside it, each with its own cancel handle.
         const controller = new AbortController();
-        this.activeCompiles.set(command.playbookId, controller);
-        this.compileHolders.set(command.playbookId, project.id);
+        const handles = this.standaloneCompiles.get(command.playbookId) ?? new Set<AbortController>();
+        handles.add(controller);
+        this.standaloneCompiles.set(command.playbookId, handles);
         try {
           const packagePath = draftPackagePath(command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
@@ -2442,13 +2525,17 @@ export class CoreService {
             packageDir,
           });
         } finally {
-          this.activeCompiles.delete(command.playbookId);
-          this.compileHolders.delete(command.playbookId);
+          handles.delete(controller);
+          if (handles.size === 0 && this.standaloneCompiles.get(command.playbookId) === handles) this.standaloneCompiles.delete(command.playbookId);
         }
       }
       case "compile.abort": {
-        const controller = this.activeCompiles.get(command.playbookId);
-        if (!controller) {
+        // Naming an authoring session's instance cancels every compile
+        // of that session: a successor under the id is not it. Without
+        // one, every running one-shot compile of the id.
+        const controllers = command.instance === undefined ? [...(this.standaloneCompiles.get(command.playbookId) ?? [])] : [];
+        const canceled = command.instance !== undefined ? this.authors.cancelCompiles(command.instance) : controllers.length > 0;
+        if (!canceled) {
           throw new CoreError(
             "not_found",
             i18n._({
@@ -2458,13 +2545,14 @@ export class CoreService {
             }),
           );
         }
-        controller.abort();
+        for (const controller of controllers) controller.abort();
         this.broadcast({
           // English, deliberately (core-service-111): the page reads the
           // compile's progress lines, and this one tells it the run was
           // canceled, so it is wire text rather than the core's prose.
           type: "compile.progress",
           playbookId: command.playbookId,
+          ...(command.instance !== undefined ? { instance: command.instance } : {}),
           line: "◇ compile canceled",
         });
         return null;
@@ -2509,7 +2597,8 @@ export class CoreService {
         const staging: MediaUploadOwner = {kind: "project", id: project.id};
         await this.media.validate(staging, command.attachments ?? []);
         this.media.ownerStore(staging, true);
-        if (command.source && command.source.kind !== "chat") {
+        const refuseHeldSource = (): void => {
+          if (!command.source || command.source.kind === "chat") return;
           const holder = this.store.openIntentBySource(
             project.id,
             command.source.kind,
@@ -2526,7 +2615,8 @@ export class CoreService {
               }),
             );
           }
-        }
+        };
+        refuseHeldSource();
         // An intent holds no place of its own: the queue is its project's
         // queued intents oldest first (core-service-42, core-service-107).
         const id = randomUUID();
@@ -2548,9 +2638,13 @@ export class CoreService {
         const owner: MediaUploadOwner = {kind: "intent", projectId: project.id, intentId: id};
         try {
           await this.media.adopt(owner, [staging], command.attachments ?? []);
+          // Read again after the await, in the step that writes: an
+          // intent another queue or a sync wrote meanwhile holds it.
+          refuseHeldSource();
           this.store.addIntent(intent);
         } catch (error) {
-          rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });
+          // The project may have left meanwhile: only its own folder goes.
+          if (this.store.repository(project.id)) rmSync(this.store.intentAssetsDir(id, project.id), { recursive: true, force: true });
           throw error;
         }
         this.queueLedgerChange([project.id]);
@@ -2573,7 +2667,7 @@ export class CoreService {
         // from the spex repository's staging owner (media-4).
         const owner: MediaUploadOwner = {kind: "intent", projectId: intent.projectId, intentId: intent.id};
         await this.media.adopt(owner, [{kind: "project", id: intent.projectId}], attachments);
-        this.requireOpenIntent(intent.id);
+        this.assertIntentUnchanged(intent);
         if (this.deriveIntentState(intent.id) !== "queued") throw new CoreError("conflict", i18n._({id: "A dispatched intent's content is history.", comment: "Refusal during attachment admission"}));
         this.store.editIntent(intent.id, command.text, command.attachments);
         this.queueLedgerChange([intent.projectId]);
@@ -2784,6 +2878,9 @@ export class CoreService {
       case "draft.list":
         return this.authors.list();
       case "draft.create": {
+        // The ids the config enables are taken (playbook-library-51), as
+        // its files stand (DR-111).
+        await this.settledConfig();
         const project = this.store.getProject(command.projectId);
         const repository = this.store.repository(command.projectId);
         if (!project || !repository) {
@@ -2810,24 +2907,25 @@ export class CoreService {
         return this.authors.open(command.draftId, command.afterSeq);
       case "draft.send": {
         this.requireDraft(command.projectId, command.draftId);
-        const owner = {kind: "draft" as const, projectId: command.projectId, id: command.draftId};
+        this.authors.assertInstance(command.draftId, command.instance);
+        const owner = {kind: "draft" as const, projectId: command.projectId, id: command.draftId, instance: command.instance};
         await this.media.validate(owner, command.attachments ?? []);
         this.media.ownerStore(owner, true);
-        return this.authors.send(command.draftId, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})});
+        return this.authors.send(command.draftId, command.instance, {text: command.text, ...(command.attachments?.length ? {attachments: command.attachments} : {})});
       }
       case "draft.abort":
         this.requireDraft(command.projectId, command.draftId);
-        return this.authors.abort(command.draftId);
+        return this.authors.abort(command.draftId, command.instance);
       case "draft.source.write":
         this.requireDraft(command.projectId, command.draftId);
-        return this.authors.writeSource(command.draftId, {
+        return this.authors.writeSource(command.draftId, command.instance, {
           ...(command.content !== undefined ? { content: command.content } : {}),
           ...(command.sourcePath !== undefined ? { sourcePath: command.sourcePath } : {}),
           ...(command.baseVersion !== undefined ? { baseVersion: command.baseVersion } : {}),
         });
       case "draft.compile":
         this.requireDraft(command.projectId, command.draftId);
-        return this.authors.compile(command.draftId);
+        return this.authors.compile(command.draftId, command.instance);
       case "draft.register": {
         this.requireDraft(command.projectId, command.draftId);
         if (!existsSync(this.configPath)) {
@@ -2842,6 +2940,7 @@ export class CoreService {
         // its artifacts (playbook-library-69).
         return await this.authors.register(
           command.draftId,
+          command.instance,
           command.command,
           command.intent,
           (result, location) => this.enableCompiled({
@@ -2857,13 +2956,30 @@ export class CoreService {
       }
       case "draft.player.set":
         this.requireDraft(command.projectId, command.draftId);
-        return this.authors.setPlayer(command.draftId, command.playerId);
-      case "draft.delete":
+        // The roster as the file stands now (DR-111).
+        await this.settledConfig();
+        return this.authors.setPlayer(command.draftId, command.instance, command.playerId);
+      case "draft.delete": {
         this.requireDraft(command.projectId, command.draftId);
-        this.authors.assertDeletable(command.draftId);
-        await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId}, () => this.authors.delete(command.draftId),
-          () => this.authors.assertDeletable(command.draftId));
+        // The instance read, or a damaged file's version: one of the two.
+        if ((command.instance === undefined) === (command.fileVersion === undefined)) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "name either the session's instance or its file's version",
+            comment: "Refusal: a draft deletion names exactly one of the two",
+          }));
+        }
+        this.authors.assertDeletable(command.draftId, command.instance !== undefined ? { instance: command.instance } : { version: command.fileVersion as string });
+        if (command.instance === undefined) {
+          // A file that will not read names no instance, so no media
+          // owner was ever admitted for it (media-4): it goes at once.
+          this.authors.delete(command.draftId, { version: command.fileVersion as string });
+          return null;
+        }
+        const expected = { instance: command.instance };
+        await this.media.retireOwner({kind: "draft", projectId: command.projectId, id: command.draftId, instance: command.instance}, () => this.authors.delete(command.draftId, expected),
+          () => this.authors.assertDeletable(command.draftId, expected));
         return null;
+      }
       case "draft.artifacts": {
         this.requireDraft(command.projectId, command.draftId);
         // The compiled stages in the playbook artifact's folder of the
@@ -3073,7 +3189,8 @@ export class CoreService {
    * package by path from the chosen spex repository's environment and
    * install it; write the players your own group's roster lacks; write
    * the `playbooks.<id>` entry, no `from`, into that spex repository's
-   * config; reload.
+   * config; reload. Each write is versioned on its own file; one refused
+   * after others leaves them written, named in the refusal (DR-111).
    */
   private async enableCompiled(input: {
     playbookId: string;
@@ -3138,35 +3255,65 @@ export class CoreService {
       }));
     }
 
-    // The spec package is requested by path and installed before the
-    // config names its playbook (playbook-library-69, environments-15).
-    await this.environments.requestAndInstall(targetKey, name, { path: packagePath });
+    // Each write from here stands on its own, versioned on the file it
+    // writes; any failure after one of them leaves those before it
+    // written, undoes nothing, and names them (playbook-library-69,
+    // DR-111).
+    const done: string[] = [];
+    try {
+      // The spec package is requested by path and installed before the
+      // config names its playbook (playbook-library-69, environments-15).
+      const requested = await this.environments.ensureRequested(targetKey, name, { path: packagePath });
+      if (requested) {
+        done.push(i18n._({ id: "{name} requested in spex.yaml", comment: "A completed step of an enabling: the spec package's request written", values: { name } }));
+      }
+      const progress = { lockWritten: false, installed: false };
+      try {
+        await this.environments.installNow(targetKey, requested, progress);
+      } finally {
+        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock resolved", comment: "A completed step of an enabling: the environment's lock written" }));
+        if (progress.installed) done.push(i18n._({ id: "environment packages installed", comment: "A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them" }));
+      }
 
-    // Lanes the bindings name but the roster lacks are created first,
-    // so the binding never dangles (DR-032, playbook-library-3).
-    for (const op of playerOps) {
-      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
-      if (!minted.ok) {
-        throw new CoreError("invalid_config", i18n._({
-          id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
-          comment: "Refusal after a successful compile; `error` is the config validation's own words",
-          values: { playerId: (op as { playerId: string }).playerId, error: minted.error },
+      // Lanes the bindings name but the roster lacks are created first,
+      // so the binding never dangles (DR-032, playbook-library-3).
+      for (const op of playerOps) {
+        const playerId = (op as { playerId: string }).playerId;
+        const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
+        if (!minted.ok) {
+          throw new CoreError(minted.conflict ? "conflict" : "invalid_config", i18n._({
+            id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
+            comment: "Refusal after a successful compile; `error` is the config validation's own words",
+            values: { playerId, error: minted.error },
+          }));
+        }
+        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an enabling: a new session player written to your own settings", values: { playerId } }));
+      }
+      const edit = targetKey === own
+        ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
+        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+      if (!edit.ok) {
+        throw new CoreError(edit.conflict ? "conflict" : "invalid_config", i18n._({
+          id: "compiled, but registration was refused: {error}",
+          comment:
+            "Refusal after a successful compile; `error` is the config validation's own words",
+          values: { error: edit.error },
         }));
       }
+      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an enabling: the playbook's entry written to the config", values: { playbookId } }));
+      await this.reloadConfig();
+      // The state the files stand at, or the enabling reports what it did.
+      await this.settledConfig();
+      this.authors.republish();
+    } catch (error) {
+      if (done.length === 0) throw error;
+      const failure = coreErrorOf(error);
+      throw new CoreError(failure.code, i18n._({
+        id: "enabling stopped after {done}: {error}",
+        comment: "Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
+        values: { done: listed(done), error: failure.message },
+      }), failure.details);
     }
-    const edit = targetKey === own
-      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
-      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
-    if (!edit.ok) {
-      throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but registration was refused: {error}",
-        comment:
-          "Refusal after a successful compile; `error` is the config validation's own words",
-        values: { error: edit.error },
-      }));
-    }
-    await this.reloadConfig();
-    this.authors.republish();
     return this.configState;
   }
 
@@ -3221,11 +3368,12 @@ export class CoreService {
     });
   }
 
-  /** A clone came or went: watch its sessions and re-read its
-   * authoring sessions. */
+  /** A clone came or went: watch its sessions; its authoring sessions
+   * are read where they stand at each use, and announced again so a
+   * page shows each under the project now holding it (core-service-96). */
   private afterRepositoriesChanged(): void {
-    this.drafts.refresh();
     if (this.options.watchConfig !== false) this.watchRepositories();
+    this.authors.republish();
     // A new clone's environment — requesting the built-in spec package
     // since the store made it (storage-6) — resolves and installs.
     this.environments.settleUnresolved();
@@ -3459,7 +3607,8 @@ export class CoreService {
 
   /** The intent named must exist and still be open (DR-035). */
   private requireOpenIntent(intentId: string) {
-    const intent = this.store.getIntent(intentId);
+    // Read from its file now (DR-111), as a sync may have changed it.
+    const intent = this.store.currentIntent(intentId);
     if (!intent) throw noIntent(intentId);
     this.store.assertWritable({projectId:intent.projectId});
     if (intent.closedAt !== undefined) {
@@ -3469,6 +3618,21 @@ export class CoreService {
       }));
     }
     return intent;
+  }
+
+  /** An intent read before an await, refused as changed meanwhile where
+   * its file no longer reads the same (DR-111); the write that follows
+   * lands in the same synchronous step. */
+  private assertIntentUnchanged(read: IntentInfo): void {
+    const now = this.store.currentIntent(read.id);
+    if (!now) throw noIntent(read.id);
+    if (!isDeepStrictEqual(now, read)) {
+      throw new CoreError("conflict", i18n._({
+        id: "{what} changed meanwhile; retry",
+        values: { what: intentTitle(now) },
+        comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+      }));
+    }
   }
 
   /** One intent's derived state, read from the one fold (DR-035). */

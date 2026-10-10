@@ -150,6 +150,7 @@ While the project palette is open, the palette shall stand inside the window at 
 Where the core manages projects, the home file shall pair each working folder with its spex repository's key [[storage-2](storage.md#storage-2)], the key being the clone's path under `workspace/` and no identity Spex mints [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - removing a project forgets the pair and deletes the clone; the working folder remains;
+- the removal is one step at its instant: every session of the clone held under Playbook's management lease — a lease another writer holds refusing it `busy` — then, with nothing awaited, a session that appeared meanwhile or a clone moved or replaced since refusing it as changed meanwhile, as a home file that no longer reads does [[storage-2](storage.md#storage-2)], the pair forgotten and the clone deleted; it waits for no other work ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
 ### Repository State
@@ -244,6 +245,10 @@ Where the Overview tab renders a project whose GitHub binding names an unmet con
 #### projects-21
 
 Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files, its `spex.yaml` and `spex.lock` at its root among them, and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
+
+#### projects-33
+
+Where a project's session is held under a management lease taken out of band and a compile of that project runs, the test suite shall assert that its removal is refused `busy` deleting nothing, as it is under a live lease of a session that has no record yet; that a session whose lease appears while the removal's own leasing is held refuses it as changed meanwhile, the clone standing and the project's upload in flight resuming from its received offset to a finish; that a home file deleted while that leasing is held refuses it as changed meanwhile as well, the clone standing and the file not written back, an upload in flight resuming to a finish once the file is restored; and that once every lease is released the removal completes with the compile still running [[projects-10](#projects-10)].
 
 ### Label Coverage
 

@@ -1042,10 +1042,6 @@ msgstr "无条件"
 msgid "An agent failed"
 msgstr "有智能体失败"
 
-#: src/components/SpaceSurface.tsx
-msgid "Another operation is running"
-msgstr "另一项操作正在进行"
-
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "在下方回答，或放弃该运行"
@@ -1758,7 +1754,6 @@ msgstr "需先编译"
 #. draft state chip, at most 14 characters: a compile is running
 #. the draft's compile is running
 #. why a control is held: the draft's compile is running
-#. why a control is held: the draft's compile is running
 #: src/components/AuthoringWorkspace.tsx
 #: src/lib/drafts.ts
 msgid "Compiling"
@@ -2101,14 +2096,6 @@ msgstr "删除此会话？它由终端运行，其历史也会一并删除。"
 #: src/components/NavRail.tsx
 msgid "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
 msgstr "删除此会话？它由终端运行，其历史也会一并删除。未发送的草稿也随之删除。"
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's compile is running"
-msgstr "删除需等待：该会话正在编译"
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's turn is running"
-msgstr "删除需等待：该会话的轮次正在运行"
 
 #. a sync unit's change: it is gone on this side
 #: src/components/SpaceSync.tsx
@@ -6237,21 +6224,6 @@ msgstr "等待你的回复"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "等待你的裁定"
-
-#. why a control is held: the draft's agent turn is running
-#. why a control is held: the draft's agent turn is running
-#: src/components/AuthoringWorkspace.tsx
-#: src/lib/drafts.ts
-msgid "Waits for the reply"
-msgstr "等待回复"
-
-#: src/components/DraftConversation.tsx
-msgid "Waits for the reply — the agent switches on the next turn"
-msgstr "等待回复 — 智能体将在下一轮切换"
-
-#: src/lib/environments.ts
-msgid "Waits for the sync of {repository}"
-msgstr "等待 {repository} 同步完成"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

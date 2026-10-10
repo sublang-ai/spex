@@ -55,8 +55,8 @@ class MediaClient {
   }
   close(): void { this.socket.close(); }
 
-  async waitFor(predicate: (message: ServerMessage) => boolean): Promise<ServerMessage> {
-    const deadline = Date.now() + 5000;
+  async waitFor(predicate: (message: ServerMessage) => boolean, timeoutMs = 5000): Promise<ServerMessage> {
+    const deadline = Date.now() + timeoutMs;
     for (;;) {
       const found = this.messages.find(predicate);
       if (found) return found;
@@ -116,7 +116,7 @@ async function readAll(client: MediaClient, owner: MediaOwner, asset: MediaAsset
   return Buffer.concat(chunks);
 }
 
-test("space-37: pending attachment validation excludes sync until queue and edit admission finish", {timeout: 30_000}, async () => {
+test("space-21: a sync is admitted while attachment validation for a queue or an edit is pending, and both land", {timeout: 120_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
   const media = Reflect.get(f.service, "media") as ApplicationMedia;
@@ -162,14 +162,20 @@ test("space-37: pending attachment validation excludes sync until queue and edit
           },
         } : store;
       };
-      const head = git(clone, "rev-parse", "HEAD");
       const submitted = operation === "queue"
         ? client.command("intent.queue", {projectId: project.id, text: "", attachments: [asset]})
         : client.command("intent.edit", {intentId, text: "Review these bytes", attachments: [asset]});
       admission = submitted;
       await validating;
-      await assert.rejects(client.command("space.sync", {repository: project.id}), /busy: Wait for the media upload to finish/);
-      assert.equal(git(clone, "rev-parse", "HEAD"), head, "refusal precedes Git mutation");
+      // The sync refuses nothing (space-21): it runs beside the admission.
+      const during = client.messages.length;
+      assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
+      const phaseOf = (message: ServerMessage) => message.type === "space.state"
+        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
+        : undefined;
+      const beside = await client.waitFor((message) => client.messages.indexOf(message) >= during
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 30_000);
+      assert.equal(phaseOf(beside)?.phase, "done", JSON.stringify(phaseOf(beside)));
       release();
       const intent = await submitted;
       intentId = intent.id;
@@ -179,11 +185,8 @@ test("space-37: pending attachment validation excludes sync until queue and edit
       assert.deepEqual(await readAll(client, {kind: "intent", projectId: project.id, intentId}, asset), Buffer.from("kept"));
       const after = client.messages.length;
       assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
-      const phaseOf = (message: ServerMessage) => message.type === "space.state"
-        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
-        : undefined;
       const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after
-        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 30_000);
       assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
       assert.equal(git(remote, "rev-parse", "spex"), git(clone, "rev-parse", "HEAD"));
       assert.equal(f.stats.runs.length, 0);
@@ -198,30 +201,67 @@ test("space-37: pending attachment validation excludes sync until queue and edit
   }
 });
 
+test("storage-4: an intent edit whose file changed across its own wait is refused as changed meanwhile, the change standing", {timeout: 30_000}, async () => {
+  const f = await sessionFixture();
+  const client = new MediaClient(f.service.port());
+  const media = Reflect.get(f.service, "media") as ApplicationMedia;
+  const adopt = media.adopt.bind(media);
+  let release = () => {};
+  try {
+    const project = await client.command("project.register", {path: f.project});
+    const intent = await client.command("intent.queue", {projectId: project.id, text: "First words"});
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => { entered = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    // Hold only the edit's wait for its attachments (media-4).
+    media.adopt = async (...args: Parameters<typeof adopt>) => { entered(); await barrier; return adopt(...args); };
+    const edit = client.command("intent.edit", {intentId: intent.id, text: "Edited words"});
+    await waiting;
+    // Another writer — a sync's Apply — rewrites the file meanwhile.
+    const file = join(clonePath(f.options.dataDir, project.id), "intents", `${intent.id}.json`);
+    const synced = {...JSON.parse(await readFile(file, "utf8")), text: "Synced words"};
+    await writeFile(file, JSON.stringify(synced));
+    release();
+    await assert.rejects(edit, /conflict: .*changed meanwhile/);
+    assert.equal(JSON.parse(await readFile(file, "utf8")).text, "Synced words", "the other writer's change stands");
+  } finally {
+    release();
+    media.adopt = adopt;
+    client.close(); await f.service.stop(); await rm(f.dir, {recursive: true, force: true});
+  }
+});
+
 test("media-18: deleting and recreating a draft invalidates completed and incomplete upload retries", {timeout: 30_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
-  let owner = {kind: "draft" as const, projectId: "", id: "retired-media"};
+  let owner = {kind: "draft" as const, projectId: "", id: "retired-media", instance: ""};
   const request = () => ({owner, uploadId: randomUUID(), name: "kept.txt", mimeType: "text/plain", byteLength: 4});
   try {
     // An authoring session lives in its project's spex repository (storage-23).
     const project = await client.command("project.register", {path: f.project});
     owner = {...owner, projectId: project.id};
     const completed = request(), incomplete = request();
-    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
+    const former = owner;
+    completed.owner = incomplete.owner = former;
     for (const upload of [completed, incomplete]) {
       await client.command("media.begin", upload);
       await client.command("media.chunk", {uploadId: upload.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
     }
     const prior = await client.command("media.finish", {uploadId: completed.uploadId});
     await client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1});
-    await client.command("draft.delete", {projectId: project.id, draftId: owner.id});
-    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
+    await client.command("draft.delete", {projectId: project.id, draftId: owner.id, instance: former.instance});
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
     for (const upload of [completed, incomplete]) {
-      await assert.rejects(client.command("media.begin", upload), /canceled|expired/);
+      // The begin names the former instance, refused as no owner; the
+      // finish, naming the upload alone, meets its invalidation.
+      await assert.rejects(client.command("media.begin", upload), /not_found/);
       await assert.rejects(client.command("media.finish", {uploadId: upload.uploadId}), /canceled|expired/);
     }
     await assert.rejects(client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1}));
+    // media-4: the former instance owns nothing in its successor.
+    await assert.rejects(client.command("media.begin", {...request(), owner: former}), /not_found/);
+    await assert.rejects(client.command("media.read", {owner: former, assetId: prior.asset.assetId, offset: 0, length: 1}), /not_found/);
     const fresh = request();
     await client.command("media.begin", fresh);
     await client.command("media.chunk", {uploadId: fresh.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
@@ -303,7 +343,9 @@ test("media-10: a restarted core reclaims crashed uploads only after taking the 
     await client.command("media.chunk", {uploadId: incompleteId, offset: 0, data: Buffer.from("abc").toString("base64")});
     const stagingRoot = join(options.dataDir, "local", "uploads");
     const [lifetime] = await readdir(stagingRoot);
-    const staged = join(stagingRoot, lifetime, incompleteId);
+    // Each upload stages under a name of its own; the completed one's is gone.
+    const [stagedName] = await readdir(join(stagingRoot, lifetime));
+    const staged = join(stagingRoot, lifetime, stagedName);
     await assert.rejects(CoreService.start(options), /already|running|held|owner/i);
     assert.equal(await readFile(staged, "utf8"), "abc", "a rejected second core leaves the live owner's upload intact");
     child.kill("SIGKILL");

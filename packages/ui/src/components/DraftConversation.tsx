@@ -39,6 +39,7 @@ import {
 import { Icon } from "./Icon.js";
 import { Markdown } from "./Markdown.js";
 import { MediaOwnerProvider } from "./StoredMedia.js";
+import { draftMediaOwner } from "../lib/drafts.js";
 import { Segment, latestCall } from "./PlayerPane.js";
 import { RunningMark } from "./RunningMark.js";
 
@@ -221,8 +222,8 @@ function DirectiveText({
 
 /** The agent chip as a button and its picker (playbook-library-55):
  * "Captain" or the chosen roster player, wearing the adapter's
- * readiness; the popover follows the house idiom (DR-010 §6) and is
- * disabled while a turn runs, since a switch applies to the next. */
+ * readiness; the popover follows the house idiom (DR-010 §6), and a
+ * switch while a turn runs applies to the next. */
 function AgentPicker({
   draft,
   players,
@@ -244,7 +245,6 @@ function AgentPicker({
     onClose: () => setOpen(false),
     menu: true,
   });
-  const disabled = draft.activity === "turn";
   const readinessOf = (adapter: string) =>
     readiness.find((entry) => entry.adapter === adapter);
   // A player answers under its own lane id; the Captain answers under
@@ -274,12 +274,7 @@ function AgentPicker({
         data-testid="draft-agent"
         aria-haspopup="menu"
         aria-expanded={open}
-        disabled={disabled}
-        title={
-          disabled
-            ? i18n._("Waits for the reply — the agent switches on the next turn")
-            : i18n._("Choose which agent answers")
-        }
+        title={i18n._("Choose which agent answers")}
         onClick={() => setOpen((current) => !current)}
         className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold hover:bg-neutral-100 disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-neutral-800"
       >
@@ -444,11 +439,12 @@ export function DraftConversation({
   // for a damaged record or transcript, else the open's own failure
   // (playbook-library-62).
   const diagnostic = draft.diagnostic ?? draftView?.loadError;
+  const owner = draftMediaOwner(draft);
   const empty =
     entries.length === 0 && !draftView?.loading && !diagnostic && !turnRunning;
 
   return (
-    <MediaOwnerProvider owner={{ kind: "draft", projectId: draft.projectId, id: draft.id }}>
+    <MediaOwnerProvider owner={owner}>
     <section
       data-testid="draft-conversation"
       className="@container flex min-h-0 flex-1 flex-col gap-2"
@@ -462,7 +458,7 @@ export function DraftConversation({
             readiness={readiness}
             onPick={onPickAgent}
           />
-          <ConfiguredBrowserTools agent={draft.agent} context={{ kind: "draft", projectId: draft.projectId, id: draft.id }} disabled={turnRunning} />
+          {owner ? <ConfiguredBrowserTools agent={draft.agent} context={owner} disabled={turnRunning} /> : null}
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {turnRunning ? (
               <>
@@ -630,7 +626,7 @@ export function DraftConversation({
             ))}
           </div>
         ) : null}
-        <ApprovalNotice owner={{kind: "draft", id: draft.id}} />
+        {draft.instance ? <ApprovalNotice owner={{kind: "draft", id: draft.id, instance: draft.instance}} /> : null}
         <ComposerBox
           attachments={attachments ? { ...attachments, disabled: attachments.disabled || sending || !connected || !!requirement } : undefined}
           field={

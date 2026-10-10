@@ -1042,10 +1042,6 @@ msgstr "always"
 msgid "An agent failed"
 msgstr "An agent failed"
 
-#: src/components/SpaceSurface.tsx
-msgid "Another operation is running"
-msgstr "Another operation is running"
-
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "Answer below, or drop the run"
@@ -1758,7 +1754,6 @@ msgstr "Compiles first"
 #. draft state chip, at most 14 characters: a compile is running
 #. the draft's compile is running
 #. why a control is held: the draft's compile is running
-#. why a control is held: the draft's compile is running
 #: src/components/AuthoringWorkspace.tsx
 #: src/lib/drafts.ts
 msgid "Compiling"
@@ -2101,14 +2096,6 @@ msgstr "Delete this session? It was run from the terminal; its history goes too.
 #: src/components/NavRail.tsx
 msgid "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
 msgstr "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's compile is running"
-msgstr "Delete waits: the session's compile is running"
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's turn is running"
-msgstr "Delete waits: the session's turn is running"
 
 #. a sync unit's change: it is gone on this side
 #: src/components/SpaceSync.tsx
@@ -6237,21 +6224,6 @@ msgstr "waiting for your reply"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "waiting for your verdict"
-
-#. why a control is held: the draft's agent turn is running
-#. why a control is held: the draft's agent turn is running
-#: src/components/AuthoringWorkspace.tsx
-#: src/lib/drafts.ts
-msgid "Waits for the reply"
-msgstr "Waits for the reply"
-
-#: src/components/DraftConversation.tsx
-msgid "Waits for the reply — the agent switches on the next turn"
-msgstr "Waits for the reply — the agent switches on the next turn"
-
-#: src/lib/environments.ts
-msgid "Waits for the sync of {repository}"
-msgstr "Waits for the sync of {repository}"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

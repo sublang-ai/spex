@@ -58,7 +58,6 @@ import {
   ownRepositoryKey,
   repositoryOf,
   sourceKindWord,
-  syncHold,
 } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
@@ -793,21 +792,8 @@ function DraftRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const deleteRef = useRef<HTMLButtonElement>(null);
-  const busyWith =
-    draft.activity === "turn"
-      ? i18n._("Delete waits: the session's turn is running")
-      : draft.activity === "compiling"
-        ? i18n._("Delete waits: the session's compile is running")
-        : undefined;
-
   async function remove(): Promise<void> {
     setConfirming(false);
-    // Refused while the session works, naming which (DR-010 §4).
-    if (busyWith) {
-      setError(busyWith);
-      deleteRef.current?.focus();
-      return;
-    }
     setBusy(true);
     setError(undefined);
     try {
@@ -1250,7 +1236,6 @@ export function LibrarySurface({
     .filter((draft) => draft.projectId === projectId)
     .sort((a, b) => b.touchedAt - a.touchedAt);
   const sideRepository = repository ? repositoryOf(space, repository) : undefined;
-  const hold = syncHold(sideRepository);
   const workingFolder = side === "project" ? project?.path : sideRepository?.folder;
 
   const hintsFor = (entry: PlaybookAvailability): ReactNode => {
@@ -1389,7 +1374,7 @@ export function LibrarySurface({
         </div>
       ) : null}
 
-      {repository ? <EnvironmentSection repository={repository} sync={hold} /> : null}
+      {repository ? <EnvironmentSection repository={repository} /> : null}
 
       <section data-testid="playbooks-enabled" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
@@ -1475,7 +1460,7 @@ export function LibrarySurface({
       ) : null}
 
       {repository ? (
-        <AddSpecPackages repository={repository} sync={hold} folder={workingFolder} />
+        <AddSpecPackages repository={repository} folder={workingFolder} />
       ) : null}
 
       <section className="flex flex-col gap-2">

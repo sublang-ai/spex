@@ -65,8 +65,6 @@ msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphe
 msgstr "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 
 #. A session's own title, quoted
-#. A session's own title, quoted
-#: src/service.ts
 #: src/session.ts
 msgid "“{title}”"
 msgstr "“{title}”"
@@ -118,13 +116,20 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 
 #. Refusal on a damaged draft: the diagnostic already composed, then the way out
 #: src/authoring.ts
-msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic}; delete the draft, or repair the file and restart Spex"
+msgid "{diagnostic}; delete the draft, or repair the file"
+msgstr "{diagnostic}; delete the draft, or repair the file"
 
 #. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
 #: src/config.ts
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 msgstr "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
+
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#: src/files.ts
+#: src/home.ts
+msgid "{file} changed meanwhile; retry"
+msgstr "{file} changed meanwhile; retry"
 
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
@@ -175,6 +180,11 @@ msgstr "{host} refused this machine's access"
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
 
+#. Refusal: the authoring session's file changed, or another session took its id, since the page read it
+#: src/authoring.ts
+msgid "{id} changed meanwhile; retry"
+msgstr "{id} changed meanwhile; retry"
+
 #. Refusal: the id offered for a new playbook is one an installed spec package exports
 #: src/authoring.ts
 msgid "{id} is already a playbook of this project's or your own environment; pick another id"
@@ -205,30 +215,10 @@ msgstr "{name} changed in {path}; resolve again to install"
 msgid "{name} has no folder on this device"
 msgstr "{name} has no folder on this device"
 
-#. Refusal while a spex repository checks the Git host; {name} is its name
-#: src/space.ts
-msgid "{name} is checking the host; wait for it to finish"
-msgstr "{name} is checking the host; wait for it to finish"
-
-#. A session another host is writing right now
-#: src/service.ts
-msgid "{name} is in use elsewhere"
-msgstr "{name} is in use elsewhere"
-
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{name} is in use elsewhere in {project}"
-
-#. Refusal while a spex repository is being joined; {name} is its name
-#: src/space.ts
-msgid "{name} is joining; wait for it to finish"
-msgstr "{name} is joining; wait for it to finish"
-
-#. Refusal while a spex repository's clone moves or is renamed; {name} is its name
-#: src/space.ts
-msgid "{name} is moving; wait for it to finish"
-msgstr "{name} is moving; wait for it to finish"
 
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
@@ -240,6 +230,7 @@ msgstr "{name} is not requested here"
 msgid "{name} is on the host already"
 msgstr "{name} is on the host already"
 
+#. Refusal of a join: the spex repository has a clone here
 #. Refusal of a join: the spex repository has a clone here
 #: src/space.ts
 msgid "{name} is on this device already"
@@ -255,20 +246,15 @@ msgstr "{name} is requested by path, and this spex repository has no working fol
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} is still working in {project} — wait for it to finish, or abort it"
 
-#. Refusal while a spex repository syncs; {name} is its name
-#: src/space.ts
-msgid "{name} is syncing; wait for it to finish"
-msgstr "{name} is syncing; wait for it to finish"
-
 #. Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path
 #: src/space-groups.ts
 msgid "{name} is taken in {group}; choose another name"
 msgstr "{name} is taken in {group}; choose another name"
 
-#. A session whose lease this host cannot read
+#. A completed step of an enabling: the spec package's request written
 #: src/service.ts
-msgid "{name} ownership cannot be verified"
-msgstr "{name} ownership cannot be verified"
+msgid "{name} requested in spex.yaml"
+msgstr "{name} requested in spex.yaml"
 
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
@@ -490,11 +476,6 @@ msgstr "{path}.subagentModel is not supported for adapter \"{adapter}\""
 msgid "{path}.subagentModel must be a nonblank string"
 msgstr "{path}.subagentModel must be a nonblank string"
 
-#. What blocks a Space operation: a playbook compile is running
-#: src/service.ts
-msgid "{playbookId} is compiling"
-msgstr "{playbookId} is compiling"
-
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
 #. Refusal: an authoring session belongs to a project whose working folder is on this device
@@ -507,6 +488,14 @@ msgstr "{projectId} has no working folder on this device"
 #: src/forge.ts
 msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} is not empty; the example seeds only a new or empty directory"
+
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#: src/service.ts
+#: src/space.ts
+msgid "{what} changed meanwhile; retry"
+msgstr "{what} changed meanwhile; retry"
 
 #. One settings drift; `who` is itself a message and `field` the config file's own field name
 #: src/session.ts
@@ -578,21 +567,6 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
-#. Refusal: that draft's one compile is under way
-#: src/authoring.ts
-msgid "a compile is already running for {id}"
-msgstr "a compile is already running for {id}"
-
-#. Refusal: one compile per playbook at a time
-#: src/service.ts
-msgid "a compile is already running for {playbookId}"
-msgstr "a compile is already running for {playbookId}"
-
-#. Refusal: the draft's compile must end before this act
-#: src/authoring.ts
-msgid "a compile is running for {id}; cancel it first"
-msgstr "a compile is running for {id}; cancel it first"
-
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "A dispatched intent's content is history."
@@ -608,11 +582,6 @@ msgstr "a dispatched intent's text is history"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 
-#. Stands in for the title of a session that has none yet
-#: src/service.ts
-msgid "a new session"
-msgstr "a new session"
-
 #. Refusal: an edit to a project's config file that only your own group's file may take
 #: src/config-edit.ts
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
@@ -624,8 +593,6 @@ msgid "A retried upload chunk contains different bytes."
 msgstr "A retried upload chunk contains different bytes."
 
 #. Stands in for the title of a session that has none
-#. Stands in for the title of a session that has none
-#: src/service.ts
 #: src/session.ts
 msgid "a session"
 msgstr "a session"
@@ -644,6 +611,11 @@ msgstr "a session, an intent or an authoring session offers no text diff"
 #: src/space.ts
 msgid "A sign-in is already running"
 msgstr "A sign-in is already running"
+
+#. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
+#: src/drafts.ts
+msgid "a transcript of {id} stands without its session file; move it aside or delete it first"
+msgstr "a transcript of {id} stands without its session file; move it aside or delete it first"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -675,13 +647,6 @@ msgstr "add this machine's SSH key to an account that can see it"
 #: src/space-git.ts
 msgid "Add this machine's SSH key to an account that can see it"
 msgstr "Add this machine's SSH key to an account that can see it"
-
-#. Refusal of a second operation on a spex repository while one runs
-#. Refusal of a second operation on a spex repository while one runs
-#. Refusal of a second operation on a spex repository while one runs
-#: src/space.ts
-msgid "Already syncing"
-msgstr "Already syncing"
 
 #. Migration diagnostic: a stored intent references an attachment whose bytes are gone
 #: src/migrate-home.ts
@@ -727,11 +692,6 @@ msgstr "bind the existing project before changing its session's agents"
 #: src/service.ts
 msgid "bind the existing project before restoring"
 msgstr "bind the existing project before restoring"
-
-#. Refusal: this client already owns browser preparation
-#: src/service.ts
-msgid "Browser preparation is already running."
-msgstr "Browser preparation is already running."
 
 #. Config migration failure; `cause` is the migration's own reason and the field names are the config file's
 #: src/config-migrate.ts
@@ -934,6 +894,16 @@ msgstr "duplicate record id {id}: {first} and {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "edit rejected"
+
+#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "enabling stopped after {done}: {error}"
+msgstr "enabling stopped after {done}: {error}"
+
+#. A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them
+#: src/service.ts
+msgid "environment packages installed"
+msgstr "environment packages installed"
 
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
@@ -1146,6 +1116,11 @@ msgstr "invalid failure count"
 msgid "invalid home file"
 msgstr "invalid home file"
 
+#. Diagnostic for a damaged authoring file: the identity it records will not read
+#: src/drafts.ts
+msgid "invalid instance"
+msgstr "invalid instance"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
@@ -1335,6 +1310,11 @@ msgstr "migration output verification failed"
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
 msgstr "Move that folder aside, then Retry."
+
+#. Refusal: a draft deletion names exactly one of the two
+#: src/service.ts
+msgid "name either the session's instance or its file's version"
+msgstr "name either the session's instance or its file's version"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -1567,6 +1547,11 @@ msgstr "playbook {playbookId} is no longer enabled"
 msgid "playbook {playbookId} joined the session"
 msgstr "playbook {playbookId} joined the session"
 
+#. A completed step of an enabling: the playbook's entry written to the config
+#: src/service.ts
+msgid "playbook {playbookId} written"
+msgstr "playbook {playbookId} written"
+
 #. One settings drift; `field` is the manifest's own field name
 #: src/session.ts
 msgid "playbook {playbookId}'s {field} changed"
@@ -1680,6 +1665,11 @@ msgstr "player {playerId} is no longer bound by the session's playbooks"
 msgid "player {playerId} joined the roster"
 msgstr "player {playerId} joined the roster"
 
+#. A completed step of an enabling: a new session player written to your own settings
+#: src/service.ts
+msgid "player {playerId} written"
+msgstr "player {playerId} written"
+
 #. Config error; `players` is the config file's own field name
 #: src/config.ts
 msgid "players must be an object"
@@ -1765,7 +1755,6 @@ msgstr "Retry; if it fails again, run git commit in the home from a terminal for
 msgid "Retry; if it fails again, run the same step in a terminal for detail."
 msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 
-#. Guidance under a step that stopped for a reason the app does not classify
 #. Guidance under a step that stopped for a reason the app does not classify
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
@@ -1912,11 +1901,6 @@ msgstr "Spex did not sign in. You may close this browser window and return to Sp
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex is signed in. You may close this browser window."
 
-#. Why an interrupted sync's repair failed; spex is the branch's own name
-#: src/space.ts
-msgid "spex moved since the interrupted sync; resolve it in a terminal"
-msgstr "spex moved since the interrupted sync; resolve it in a terminal"
-
 #. A project's new spex repository's description on the Git host, its code on no remote
 #: src/space-groups.ts
 msgid "Spex records of {name}"
@@ -1946,6 +1930,11 @@ msgstr "Spex: the compile failed at {where} — asking the agent to fix the sour
 #: src/authoring.ts
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: the compile succeeded — asking for a registration proposal"
+
+#. A completed step of an enabling: the environment's lock written
+#: src/service.ts
+msgid "spex.lock resolved"
+msgstr "spex.lock resolved"
 
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
@@ -2055,6 +2044,8 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
 #. Refusal during attachment admission
+#. Refusal: environment work asked once the core stops
+#: src/environments.ts
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "The core is stopping."
@@ -2166,11 +2157,6 @@ msgstr "the path goes through a symbolic link"
 msgid "the path must be relative to the home"
 msgstr "the path must be relative to the home"
 
-#. Stands in for a project's name where the core has none
-#: src/service.ts
-msgid "the project"
-msgstr "the project"
-
 #. Stands where a message names the remote's host and no URL says which
 #: src/space-git.ts
 msgid "the remote"
@@ -2216,6 +2202,11 @@ msgstr "the session is recovering"
 #: src/session.ts
 msgid "the session's structure no longer matches its stored one"
 msgstr "the session's structure no longer matches its stored one"
+
+#. A step refused because a sign-in, a token refresh or a sign-out replaced the stored credential while it ran
+#: src/space-groups.ts
+msgid "The sign-in changed meanwhile; try again"
+msgstr "The sign-in changed meanwhile; try again"
 
 #. A sign-in that ended because nobody approved it in time
 #: src/space-groups.ts
@@ -2362,7 +2353,6 @@ msgstr "This upload has already completed."
 
 #. Media transfer refusal
 #. Media transfer refusal
-#. Media transfer refusal
 #: src/media-transfers.ts
 #: src/media.ts
 msgid "This upload is unavailable. Retry the file upload."
@@ -2466,16 +2456,6 @@ msgstr "Upload staging path is unsafe: {path}"
 msgid "Upload write made no progress."
 msgstr "Upload write made no progress."
 
-#. What blocks a Space operation: a session of this project is working
-#: src/service.ts
-msgid "Wait for {name} in {project}"
-msgstr "Wait for {name} in {project}"
-
-#. Attachment transfer or storage diagnostic
-#: src/service.ts
-msgid "Wait for the media upload to finish."
-msgstr "Wait for the media upload to finish."
-
 #. Refusal: a turn is running in the project being rebound
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before rebinding"
@@ -2485,16 +2465,6 @@ msgstr "wait for the project's running turn to finish, or abort it, before rebin
 #: src/service.ts
 msgid "wait for the project's running turn to finish, or abort it, before removing it"
 msgstr "wait for the project's running turn to finish, or abort it, before removing it"
-
-#. Refusal: the draft's agent is answering, so its agent cannot change now
-#: src/authoring.ts
-msgid "wait for the reply before switching the agent"
-msgstr "wait for the reply before switching the agent"
-
-#. Refusal: the draft's agent is answering
-#: src/authoring.ts
-msgid "wait for the reply, or abort it, first"
-msgstr "wait for the reply, or abort it, first"
 
 #. Refusal: the session being deleted has a turn in flight
 #. Refusal: the session being deleted has a turn in flight
@@ -2507,16 +2477,6 @@ msgstr "wait for the running turn to finish, or abort it, before deleting"
 #: src/space.ts
 msgid "Wait for the session to finish, then Retry."
 msgstr "Wait for the session to finish, then Retry."
-
-#. What blocks a Space operation: the spex repository's environment is resolving, installing or publishing
-#: src/environments.ts
-msgid "Wait for the spec packages of {repository} to finish installing"
-msgstr "Wait for the spec packages of {repository} to finish installing"
-
-#. What blocks a Space operation: a turn is being admitted
-#: src/service.ts
-msgid "Wait for the turn being submitted"
-msgstr "Wait for the turn being submitted"
 
 #. A step the Git host left waiting, with no words of its own
 #: src/space-groups.ts
@@ -2547,11 +2507,6 @@ msgstr "Waiting for a member who can prepare its branch in {group}: {words}"
 #: src/space-groups.ts
 msgid "Waiting: {words}"
 msgstr "Waiting: {words}"
-
-#. Why a compile cannot start: the draft's agent is answering
-#: src/authoring.ts
-msgid "Waits for the reply"
-msgstr "Waits for the reply"
 
 #. Guidance after the reader stopped a transfer to the Git host
 #: src/space-git.ts

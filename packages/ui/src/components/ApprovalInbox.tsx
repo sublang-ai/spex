@@ -53,11 +53,16 @@ export function ApprovalFeedback() {
   </div>;
 }
 
+const sameOwner = (a: ApprovalOwner, b: ApprovalOwner): boolean =>
+  a.kind === b.kind && a.id === b.id && (a.kind !== "draft" || (b.kind === "draft" && a.instance === b.instance));
+
 /** This notice names only real core requests belonging to this conversation. */
 export function ApprovalNotice({owner}: {owner: ApprovalOwner}) {
   const pending = useAppStore((state) => state.approvals?.pending);
   const show = useAppStore((state) => state.showApprovals);
-  const own = pending?.filter((item) => item.owner.kind === owner.kind && item.owner.id === owner.id) ?? [];
+  // A draft's calls are its instance's: a session made again under the
+  // id never shows the former's (core-service-96).
+  const own = pending?.filter((item) => sameOwner(item.owner, owner)) ?? [];
   if (!own.length) return null;
   return <div className="shrink-0 border-t border-brand-200 px-3 py-2 text-sm dark:border-brand-800">
     <button className="text-left text-brand-700 underline [overflow-wrap:anywhere] dark:text-brand-300" onClick={() => show(own[0].id)}>{i18n._("Tool approval needed ({count})", {count: own.length})}</button>
