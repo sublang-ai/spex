@@ -564,7 +564,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   refused enabling preserves other accepted package requests, repository
   operations release only their own reservation, and concurrent picks,
   joins and creation retries cannot attach the same host repository twice.
-  Settings edits also refuse stale inputs or a destination busy syncing.
+  A host lookup that only decides blocks no command, and a deferred
+  assignment is retried, not lost. Settings edits also refuse stale inputs
+  or a destination busy syncing: an edit overtaken while it was composed is
+  refused instead of overwriting the accepted one (DR-111).
 - Register derives valid, distinct default new player lanes for Chinese and
   digit-leading roles and colliding role names, preserving explicit sharing
   choices and existing roster players.

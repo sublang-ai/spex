@@ -57,7 +57,8 @@ import {
   type ResolveResult,
   type RunGit,
 } from "./environment/index.js";
-import { EnvironmentManager } from "./environments.js";
+import { EnvironmentManager, type EnvironmentManagerOptions } from "./environments.js";
+import { CoreError } from "./session.js";
 import { Store } from "./store.js";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -158,7 +159,7 @@ function cloneOf(home: Home, key: string): string {
 /** The core's environment manager over a scratch home's clones; the
  * store holds what a session's module lookup reads: your own group,
  * each clone and the working folder paired with it. */
-function environmentsOver(home: Home, own: string, clones: Record<string, { dir: string; workingFolder: string | null }>): EnvironmentManager {
+function environmentsOver(home: Home, own: string, clones: Record<string, { dir: string; workingFolder: string | null }>, extra: Partial<EnvironmentManagerOptions> = {}): EnvironmentManager {
   const store = {
     dir: home.root,
     home: {
@@ -171,6 +172,7 @@ function environmentsOver(home: Home, own: string, clones: Record<string, { dir:
   return new EnvironmentManager({
     store: store as unknown as Store, userHome: null, deviceHome: home.root, builtin: null, token: async () => null,
     gitCredential: async () => undefined, credentialArgs: async () => ({ env: {}, configArgs: [], dispose: () => {} }), broadcast: () => {},
+    ...extra,
   });
 }
 
@@ -1120,20 +1122,49 @@ test("environments-22: a path source's playbook whose folder this device lacks i
 
 // Enabling publishes a whole prepared environment with its config in
 // one queue turn (environments-26..27, playbook-library-100).
-test("environment enabling owns preparation, publication and rollback", async (t) => {
+test("environments-27: enabling owns preparation, publication and rollback", async (t) => {
   const deferred = () => {
     let release!: () => void;
     return { promise: new Promise<void>((resolve) => { release = resolve; }), release: () => release() };
   };
-  const fixture = () => {
+  /** A wait for a parked operation to arrive, bounded and naming it. */
+  const arrived = async (promise: Promise<void>, what: string): Promise<void> => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([promise, new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`timed out waiting for ${what}`)), 30_000);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  const fixture = (extra: Partial<EnvironmentManagerOptions> = {}) => {
     const home = makeHome();
     const key = "me/me-spex";
     const working = join(home.root, "working");
     mkdirSync(home.clone, { recursive: true });
     mkdirSync(working, { recursive: true });
     mkdirSync(join(home.root, ".claude"), { recursive: true });
-    return { home, key, working, manager: environmentsOver(home, key, { [key]: { dir: home.clone, workingFolder: working } }) };
+    return { home, key, working, manager: environmentsOver(home, key, { [key]: { dir: home.clone, workingFolder: working } }, extra) };
   };
+
+  await t.test("an operation waiting for its turn owns the clone, which is idle only once none waits", async () => {
+    await publishSimple("tx-pending/one", "1.0.0");
+    await publishSimple("tx-pending/two", "1.0.0");
+    const idle: (string | undefined)[] = [];
+    let manager!: EnvironmentManager;
+    const made = fixture({ onIdle: (repository) => { idle.push(manager.busyFor(repository)); } });
+    const { key } = made;
+    manager = made.manager;
+    const first = manager.request(key, "tx-pending/one", { version: "1.0.0" });
+    // Admitted to the queue, its turn not yet begun: nothing runs.
+    assert.equal(manager.state(key).busy, null, "no operation has started");
+    assert.ok(manager.busyFor(key), "the waiting request alone owns the clone");
+    const second = manager.request(key, "tx-pending/two", { version: "1.0.0" });
+    await (await first).done;
+    await (await second).done;
+    assert.equal(manager.busyFor(key), undefined);
+    assert.ok(idle.length > 0, "the clone was reported idle once its work cleared");
+    assert.deepEqual(idle, idle.map(() => undefined), "idle is reported only while nothing runs or waits");
+  });
 
   await t.test("an unchanged request cannot install or export for a departed owner", async () => {
     await publishSimple("tx-retired/tool", "1.0.0");
@@ -1153,7 +1184,7 @@ test("environment enabling owns preparation, publication and rollback", async (t
       if (!alive) throw new Error("the authoring session departed");
     });
     const refused = assert.rejects(enabling, /the authoring session departed/);
-    await entered.promise;
+    await arrived(entered.promise, "the enabling's download");
     alive = false;
     release.release();
     await refused;
@@ -1178,12 +1209,17 @@ test("environment enabling owns preparation, publication and rollback", async (t
       return index(name);
     };
     const enabling = manager.requestAndInstall(key, "tx-queued/failed", { version: "1.0.0" });
+    // Read when the enabling has settled and the request queued behind it
+    // has not started: no operation runs, one waits.
+    let between: { busy: unknown; blocker: string | undefined } | undefined;
+    enabling.catch(() => { between = { busy: manager.state(key).busy, blocker: manager.busyFor(key) }; });
     const refused = assert.rejects(enabling, /the release could not be read/);
-    await entered.promise;
+    await arrived(entered.promise, "the failing enabling's resolution");
     const accepted = manager.request(key, "tx-queued/accepted", { version: "1.0.0" });
-    assert.ok(manager.busyFor(key), "the clone remains owned through queued work");
     release.release();
     await refused;
+    assert.equal(between?.busy, null, "nothing runs between the two operations");
+    assert.ok(between?.blocker, "the queued request alone keeps the clone owned");
     await (await accepted).done;
     const requests = parseRequests(readFileSync(join(home.clone, "spex.yaml"), "utf8"));
     assert.deepEqual(plain(requests.packages), { "tx-queued/accepted": { version: "1.0.0" } });
@@ -1270,5 +1306,93 @@ test("environment enabling owns preparation, publication and rollback", async (t
     const lock = await readLock(join(home.clone, "spex.lock"));
     assert.ok(lock?.packages["tx-ordinary/tool"], "resolution is durable even though the files are unavailable");
     assert.equal(manager.state(key).packages.find((entry) => entry.name === "tx-ordinary/tool")?.installed, false);
+  });
+
+  await t.test("a refused candidate leaves the published conflicts and error as they were", async () => {
+    await publishSimple("tx-state/tool", "1.0.0");
+    await publishSimple("tx-state/other", "1.0.0");
+    const { key, manager } = fixture();
+    const reported = () => ({ conflicts: manager.state(key).conflicts, error: manager.state(key).error });
+    const source = manager.registry();
+    const archive = source.archive.bind(source);
+    const file = source.file.bind(source);
+    const downloads = (working: boolean) => {
+      source.archive = working ? archive : async () => { throw new Error("the download stopped"); };
+      source.file = working ? file : async () => { throw new Error("the download stopped"); };
+    };
+    // A published install failure stands through refused candidates.
+    downloads(false);
+    await (await manager.request(key, "tx-state/tool", { version: "1.0.0" })).done;
+    const failed = reported();
+    assert.match(failed.error ?? "", /the download stopped/);
+    // A candidate without a solution reports no conflicts of its own.
+    await assert.rejects(manager.requestAndInstall(key, "tx-state/other", { version: "9.9.9" }), /No set of versions meets every requirement: tx-state\/other/);
+    assert.deepEqual(reported(), failed, "the candidate's conflicts are not the environment's");
+    // A candidate whose download fails reports no install error either.
+    await assert.rejects(manager.requestAndInstall(key, "tx-state/other", { version: "1.0.0" }), /the download stopped/);
+    assert.deepEqual(reported(), failed, "the candidate's failure is not the environment's");
+    downloads(true);
+    // Published conflicts stand through a candidate that resolved and was refused.
+    await (await manager.request(key, "tx-state/tool", { version: "9.9.9" })).done;
+    const conflicted = reported();
+    assert.equal(conflicted.conflicts?.[0]?.name, "tx-state/tool");
+    await assert.rejects(manager.requestAndInstall(key, "tx-state/tool", { version: "1.0.0" }, undefined, async () => {
+      throw new CoreError("conflict", "the configuration changed while enabling; retry");
+    }), /the configuration changed while enabling/);
+    assert.deepEqual(reported(), conflicted, "the refused candidate's solution clears nothing");
+    // A published enabling replaces the requests whose conflicts they were.
+    await manager.requestAndInstall(key, "tx-state/tool", { version: "1.0.0" });
+    assert.deepEqual(reported(), { conflicts: null, error: null });
+  });
+
+  await t.test("work queued when the core stops refuses instead of succeeding", async () => {
+    await publishSimple("tx-stopped/held", "1.0.0");
+    await publishSimple("tx-stopped/queued", "1.0.0");
+    await publishSimple("tx-stopped/kept", "1.0.0");
+    const { home, key, manager } = fixture();
+    await (await manager.request(key, "tx-stopped/kept", { version: "1.0.0" })).done;
+    const before = snapshot(home.clone);
+    const entered = deferred();
+    const release = deferred();
+    const source = manager.registry();
+    const index = source.index.bind(source);
+    source.index = async (name) => {
+      if (name === "tx-stopped/held") { entered.release(); await release.promise; }
+      return index(name);
+    };
+    const held = manager.requestAndInstall(key, "tx-stopped/held", { version: "1.0.0" });
+    const heldRefused = assert.rejects(held, (error: unknown) => error instanceof CoreError && error.code === "not_found");
+    await arrived(entered.promise, "the held enabling's resolution");
+    const queued = manager.requestAndInstall(key, "tx-stopped/queued", { version: "1.0.0" });
+    const requested = manager.request(key, "tx-stopped/queued", { version: "1.0.0" });
+    const removed = manager.remove(key, "tx-stopped/kept");
+    const refusals = [queued, requested, removed].map((work) => assert.rejects(work, (error: unknown) => error instanceof CoreError && error.code === "not_found"));
+    const stopping = manager.stop();
+    release.release();
+    await heldRefused;
+    await Promise.all(refusals);
+    await stopping;
+    assert.deepEqual(snapshot(home.clone), before, "nothing queued wrote after the stop");
+  });
+
+  await t.test("a failed commit removes only the folders it made, each while empty", async () => {
+    await publishSimple("tx-folders/skill", "1.0.0");
+    const { home, key, working, manager } = fixture();
+    // The working folder's agent folder stands; its skills folder does not.
+    mkdirSync(join(working, ".claude"));
+    const config = join(home.clone, "config", "playbook.config.yaml");
+    await assert.rejects(manager.requestAndInstall(key, "tx-folders/skill", { version: "1.0.0" }, undefined, async () => ({
+      files: [config], validate() {}, commit() {
+        mkdirSync(join(home.clone, "config"));
+        writeFileSync(config, "part of the proposed config\n");
+        throw new Error("the config destination is not writable");
+      },
+    })), /the config destination is not writable/);
+    assert.equal(existsSync(join(home.clone, "config")), false, "the config folder the commit made goes");
+    assert.equal(existsSync(join(home.clone, "skills")), false, "the clone's skills folder the commit made goes");
+    assert.equal(existsSync(join(working, ".claude", "skills")), false, "the agent's skills folder the commit made goes");
+    assert.ok(existsSync(join(working, ".claude")), "a folder that stood before stays");
+    assert.ok(existsSync(home.clone), "the clone stays");
+    assert.deepEqual(snapshot(home.clone), {}, "no request, lock or installed files");
   });
 });

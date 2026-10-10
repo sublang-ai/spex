@@ -12,7 +12,7 @@
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start.
 
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, rmdirSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
@@ -102,6 +102,8 @@ export interface EnvironmentManagerOptions {
   broadcast: (repository: string, state: EnvironmentState) => void;
   /** An environment's installed files or exports changed. */
   changed?: (repository: string) => void;
+  /** A clone's last admitted operation finished: none runs or waits. */
+  onIdle?: (repository: string) => void;
 }
 
 type Busy = NonNullable<EnvironmentState["busy"]>;
@@ -125,10 +127,16 @@ export interface PreparedEnvironmentCommit {
 }
 
 /** Undo only this commit's write set, captured immediately before its
- * synchronous publication. No other core write can interleave here. */
+ * synchronous publication. No other core write can interleave here.
+ * The folders the commit makes on the way to its paths go too, deepest
+ * first, each only while it stays empty. */
 function snapshotPaths(paths: string[], backup: string): { restore(): void; dispose(): void } {
   const unique = [...new Set(paths)].filter((path, _index, all) => !all.some((parent) => parent !== path && path.startsWith(`${parent}${sep}`)));
   const entries = unique.map((path, index) => ({ path, saved: join(backup, String(index)), existed: lstatSync(path, { throwIfNoEntry: false }) !== undefined }));
+  const absent = new Set<string>();
+  for (const { path } of entries) {
+    for (let dir = dirname(path); dir !== dirname(dir) && !existsSync(dir); dir = dirname(dir)) absent.add(dir);
+  }
   try {
     for (const entry of entries) if (entry.existed) {
       mkdirSync(dirname(entry.saved), { recursive: true });
@@ -143,6 +151,10 @@ function snapshotPaths(paths: string[], backup: string): { restore(): void; disp
           mkdirSync(dirname(entry.path), { recursive: true });
           cpSync(entry.saved, entry.path, { recursive: true, verbatimSymlinks: true });
         }
+      }
+      for (const dir of [...absent].sort((a, b) => b.length - a.length)) {
+        try { rmdirSync(dir); }
+        catch (error) { if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
       }
     },
     dispose() { rmSync(backup, { recursive: true, force: true }); },
@@ -397,7 +409,10 @@ export class EnvironmentManager {
     state.pending++;
     const run = async (): Promise<T> => {
       try { return await work(); }
-      finally { state.pending--; }
+      finally {
+        state.pending--;
+        if (state.pending === 0) this.options.onIdle?.(key);
+      }
     };
     const next = state.chain.then(run, run);
     state.chain = next.then(() => undefined, () => undefined);
@@ -438,7 +453,10 @@ export class EnvironmentManager {
     request: Request;
     prepare?: (modules: PlaybookModules) => Promise<PreparedEnvironmentCommit>;
   }): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped) {
+      if (strict) throw this.departed(key);
+      return;
+    }
     const dir = this.store.repository(key)?.dir;
     if (!dir) {
       if (strict) this.cloneDir(key);
@@ -457,11 +475,7 @@ export class EnvironmentManager {
       const validateInputs = (): void => {
         held?.();
         if (this.stopped || this.store.repository(key)?.dir !== dir || !existsSync(dir) || this.workingFolder(key) !== workingFolder) {
-          throw new CoreError("not_found", i18n._({
-            id: "the environment of {key} moved or left while it was prepared",
-            comment: "Refusal: a prepared environment no longer has its original destination",
-            values: { key },
-          }));
+          throw this.departed(key);
         }
         if (readBytes(requestsPath) !== requestsBefore || readBytes(lockPath) !== lockBefore) {
           throw new CoreError("conflict", i18n._({
@@ -493,13 +507,16 @@ export class EnvironmentManager {
       if ((mode === "resolve" || (mode === "auto" && lock === null)) && requests !== null) {
         this.setBusy(key, "resolving");
         const result = await resolve({ requests, requestsText: requestsText ?? undefined, registry, workingFolder, git: this.git, gitCredential: this.options.gitCredential });
+        // An enabling's candidate is unpublished: its conflicts, or its
+        // solution, say nothing of the environment's requests.
         if (!result.ok) {
+          if (enabling) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
           state.conflicts = result.conflicts;
           state.error = null;
           if (strict) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
           return;
         }
-        state.conflicts = null;
+        if (!enabling) state.conflicts = null;
         lock = result.lock;
         lockText = serializeLock(lock);
         // An ordinary resolution publishes its new lock even when the
@@ -555,20 +572,35 @@ export class EnvironmentManager {
         snapshot.restore();
         throw error;
       } finally { snapshot.dispose(); }
+      if (enabling) state.conflicts = null;
       state.error = null;
       this.options.changed?.(key);
     } catch (error) {
+      // A refused enabling published nothing, so the environment's
+      // reported error stays the one its published files earned.
       if (error instanceof CoreError) {
         if (strict) throw error;
         state.error = error.message;
       } else {
-        state.error = failurePhrase(phase, error);
-        if (strict) throw new CoreError("invalid_request", state.error);
+        const phrase = failurePhrase(phase, error);
+        if (!enabling) state.error = phrase;
+        if (strict) throw new CoreError("invalid_request", phrase);
       }
     } finally {
       prepared?.dispose();
       this.setBusy(key, null);
     }
+  }
+
+  /** The refusal of a write whose environment left before it could
+   * publish: the clone moved or went, its pair changed, or the core
+   * stopped while the write waited or was prepared. */
+  private departed(key: string): CoreError {
+    return new CoreError("not_found", i18n._({
+      id: "the environment of {key} moved or left while it was prepared",
+      comment: "Refusal: a prepared environment no longer has its original destination",
+      values: { key },
+    }));
   }
 
   private conflictPhrase(conflicts: readonly Conflict[]): string {
@@ -611,6 +643,7 @@ export class EnvironmentManager {
     this.cloneDir(key);
     this.refuseRequest(name, request, this.workingFolder(key));
     await this.enqueue(key, async () => {
+      if (this.stopped) throw this.departed(key);
       const path = join(this.cloneDir(key), "spex.yaml");
       this.refuseRequest(name, request, this.workingFolder(key));
       try { writeApplicationBytes(path, prepareRequest(readBytes(path), name, request).text); }
@@ -627,6 +660,7 @@ export class EnvironmentManager {
   async remove(key: string, name: string): Promise<{ done: Promise<void> }> {
     this.cloneDir(key);
     await this.enqueue(key, async () => {
+      if (this.stopped) throw this.departed(key);
       const path = join(this.cloneDir(key), "spex.yaml");
       const current = readRequestsFile(path);
       if (!current?.requests.packages[name]) {

@@ -20,6 +20,8 @@ export interface ApplicationMediaOptions {
   openSessionAsset(sessionId: string, assetId: MediaAsset["assetId"]): Promise<AssetReader>;
   /** Test seam: awaited as an owner's retirement begins its drain. */
   beforeDrain?: (owner: MediaOwner) => void | Promise<void>;
+  /** The last write in flight ended: none runs now. */
+  onIdle?: () => void;
 }
 
 interface ReaderEntry {
@@ -123,7 +125,10 @@ export class ApplicationMedia {
   async writing<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new Error(i18n._({id: "Media storage has stopped.", comment: "Media storage failure"}));
     this.pendingWrites++;
-    try { return await operation(); } finally { this.pendingWrites--; }
+    try { return await operation(); } finally {
+      this.pendingWrites--;
+      if (this.pendingWrites === 0) this.options.onIdle?.();
+    }
   }
 
   ownerStore(owner: MediaUploadOwner, write = false): OwnerAssetStore {

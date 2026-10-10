@@ -191,6 +191,30 @@ When a client sends `environment.request` for a spex repository with a spec pack
 - a request naming a path outside the working folder, a malformed requirement, or a name that is not `<org>/<pkg>` is refused before any write;
 - the write is refused `busy` while the spex repository syncs [[space-21](space.md#space-21)].
 
+### The Queue
+
+#### environments-26
+
+The core shall run each spex repository's environment operations — requests and removals [[environments-15](#environments-15)], resolutions, installs and exports, and enablings [[environments-28](#environments-28)] — one at a time in one queue per clone, each counting as that environment's work from its admission to the queue through its completion, so a later operation reads the earlier one's result:
+
+- once the core stops, the queue writes nothing more: a request, removal or enabling still waiting for its turn is refused `not_found`, and an operation whose acceptance was already replied ends without writing.
+
+### Enabling
+
+#### environments-28
+
+When an enabling [[playbook-library-7](playbook-library.md#playbook-library-7)] requests and installs a spec package in a spex repository's environment, the core shall prepare its request, resolution, installed files, exports and config edits without changing any published file, then, with no asynchronous work between, validate that its authoring session still stands [[core-service-96](core-service.md#core-service-96)], its destinations are current and its inputs unchanged, and publish them together:
+
+| Case | Outcome |
+| --- | --- |
+| everything holds | the requests, lock, installed files, exports and config edits published as one |
+| the session departed, or an address it prepared for — the spex repository's clone, the working folder, or a config's — no longer designates that destination | refused `not_found`; nothing written at the former address |
+| `spex.yaml` or `spex.lock`, a path source's manifest the lock relies on [[environments-7](#environments-7)], or a config file the edits were composed from [[shared-config-roundtrip-6](shared-config-roundtrip.md#shared-config-roundtrip-6)] changed meanwhile | refused `conflict` |
+| an operation holds the target's spex repository or your own group's [[space-21](space.md#space-21)] | refused `busy` |
+
+- a refusal, or a failure to resolve or install the candidate, discards the preparation: the published requests, lock, installed files, exports and config stay as they were — another accepted request among them — and the environment's reported conflicts and errors stay as they were, the candidate's own withheld;
+- a failure during publication restores only the files that publication wrote and removes each folder it created that it leaves empty, before another queued operation runs.
+
 ## Internal Behavior
 
 #### environments-16
@@ -207,8 +231,8 @@ The core shall expose environments through these commands and one message, each 
 | Command | Input | Result | Errors |
 | --- | --- | --- | --- |
 | `environment.get` | `{ repository }` | `EnvironmentState` [[environments-14](#environments-14)] | `not_found` |
-| `environment.request` | `{ repository, name, request }` | `{ accepted: true }` | `invalid_request`, `busy` |
-| `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `busy` |
+| `environment.request` | `{ repository, name, request }` | `{ accepted: true }` | `invalid_request`, `busy`, `not_found` (the core stopped [[environments-26](#environments-26)]) |
+| `environment.remove` | `{ repository, name }` | `{ accepted: true }` | `invalid_request`, `busy`, `not_found` (the core stopped [[environments-26](#environments-26)]) |
 | `environment.resolve` | `{ repository }` | `{ accepted: true }` | `busy` |
 | `environment.install` | `{ repository }` | `{ accepted: true }` | `busy` |
 | `environment.search` | `{ query }` | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out and the registry refusing) |
@@ -219,14 +243,6 @@ The core shall expose environments through these commands and one message, each 
 #### environments-18
 
 The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, with scripted yank, suppression, private namespaces honouring the stand-in host's app tokens, and a publish endpoint that validates as the core does and stores the archive.
-
-#### environments-26
-
-The core shall serialize each spex repository's environment writes from queue admission through completion, including an enabling's request, resolution, install, exports and config publication [[playbook-library-7](playbook-library.md#playbook-library-7)]:
-
-- an enabling prepares without changing the active requests, lock, installed files, exports or config, then validates the admitted authoring session, current destinations and unchanged inputs, including the path sources’ manifest requirements, at one synchronous publication boundary;
-- a refused preparation discards its staged changes, and a failure during publication restores only that publication's write set before another queued operation can run;
-- an ordinary resolution still publishes its lock before installing, so a failed install keeps the earlier files and reports them as not installed for that resolution [[environments-14](#environments-14)].
 
 ## Verification
 
@@ -281,7 +297,21 @@ When an integration suite drives the environment commands over the protocol, it 
 
 #### environments-27
 
-When an integration suite overlaps enabling with authoring retirement or another environment request, it shall assert that the retired session publishes no request, lock, installed files, exports or config, including when its request was already present, and that a failed enabling does not erase an independently accepted request [[environments-26](#environments-26)]; it shall also inject a config publication failure and assert that the prior environment, agent exports and config remain whole, refuse a path-source manifest changed during preparation, and validate a successful candidate config against a newly installed transitive playbook before publication [[environments-9](#environments-9)] [[environments-26](#environments-26)] ([integration coverage](../../packages/core/src/environment.integration.test.ts)).
+When an integration suite holds an enabling's preparation — through a real `draft.register` where the case names one, the environment queue otherwise — and overlaps it with authoring retirement, a competing edit, a repository operation, a move or a failure, it shall assert, as an explicit case matrix:
+
+- the session retired during the enabling's resolution or a dependency download, its request absent or already present: no request, lock, installed file, export or config is published [[environments-28](#environments-28)];
+- a `config.edit` of your own group's config, and for a project target of the project's, accepted while a `draft.register` is held: the enabling is refused `conflict`, each config holding the accepted edit and `spex.yaml`, `spex.lock`, `packages/` and the exports unchanged [[environments-28](#environments-28)];
+- a repository operation holding the target's spex repository, or your own group's, when a held `draft.register` is released: the enabling is refused `busy`, nothing published [[environments-28](#environments-28)];
+- `spex.yaml` or `spex.lock` rewritten while a `draft.register` is held: the enabling is refused `conflict`, the clone's files as rewritten [[environments-28](#environments-28)];
+- a path source's manifest changed during preparation: the enabling is refused `conflict`, nothing published [[environments-28](#environments-28)];
+- your own group's spex repository's address, or the target's working folder, changed while a `draft.register` is held: the enabling is refused `not_found`, nothing written at the former address [[environments-28](#environments-28)];
+- an `environment.request` of another spec package submitted while a `draft.register` is held, the enabling then refused: the request is accepted once the enabling settles, and it, its lock and its installed files stand [[environments-28](#environments-28)] [[environments-26](#environments-26)];
+- an `environment.request` queued behind a held `draft.register` that is then refused: once the refusal settles and before the request's turn starts, the environment's reported state reads idle while a repository operation on that clone is still refused, the queued request counting as its work [[environments-26](#environments-26)];
+- an enabling whose candidate fails to resolve or install, and one refused at publication, while the environment reports an earlier error or conflict: `environment.get` reports that earlier error or conflict unchanged and none from the candidate [[environments-28](#environments-28)];
+- an `environment.request` of another spec package submitted while a held enabling then succeeds: it is accepted after the enabling's publication, `spex.yaml` holding both requests and the lock resolving both [[environments-26](#environments-26)];
+- an enabling, and an `environment.request`, still queued when the core stops: each is refused `not_found`, nothing written [[environments-26](#environments-26)];
+- a failure injected into publication after it created folders that did not exist: the prior requests, lock, installed files, agent exports and configs stand whole, and no folder the publication created is left [[environments-28](#environments-28)];
+- a successful enabling whose candidate config enables a playbook required transitively: the config is validated against that newly installed playbook before publication [[environments-9](#environments-9)], and everything is published together [[environments-28](#environments-28)].
 
 ## References
 

@@ -198,6 +198,17 @@ async function until(check: () => boolean, timeoutMs = 60_000, what = "condition
   }
 }
 
+/** A command's reply once it arrives, phrased for a held seam's
+ * diagnostic: a reply before the seam is reached means it never will be. */
+function settledReply(reply: ReturnType<Client["command"]>): () => string | undefined {
+  let phrased: string | undefined;
+  reply.then(
+    (settled) => { phrased = settled.ok ? "ok" : `${settled.error.code}: ${settled.error.message}`; },
+    (error: unknown) => { phrased = String(error); },
+  );
+  return () => phrased;
+}
+
 interface Harness {
   service: CoreService;
   stats: FakeAdapterStats;
@@ -2104,7 +2115,7 @@ test("playbook-library-100: an activity of a session its id no longer names comm
     }
   });
 
-  await t.test("an enabling's request and install released after the rescan, with a new player to add", async () => {
+  await t.test("an enabling's held config preparation released after the rescan, with a new player to add", async () => {
     const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
     const { projectId, clone, configPath } = harness;
     const kept = authoringFiles(clone, "triage");
@@ -2125,14 +2136,13 @@ test("playbook-library-100: an activity of a session its id no longer names comm
         const draft = client.latest("triage");
         return draft?.activity === "idle" && draft.proposal !== undefined && draft.queued.length === 0;
       }, 120_000, "the proposal");
-      let entered!: () => void;
-      const installed = new Promise<void>((resolve) => { entered = resolve; });
+      let held = false;
       const barrier = new Promise<void>((resolve) => { release = resolve; });
       environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
         const prepare = args[4]!;
         args[4] = async (modules) => {
           const config = await prepare(modules);
-          entered();
+          held = true;
           await barrier;
           return config;
         };
@@ -2152,10 +2162,12 @@ test("playbook-library-100: an activity of a session its id no longer names comm
         bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
         newPlayers: { "dev.triager": { adapter: "claude" } },
       });
-      await installed;
+      const replied = settledReply(registering);
+      await until(() => held || replied() !== undefined, 60_000, "the enabling's config preparation to reach its hold");
+      assert.equal(replied(), undefined, "draft.register replied before its config preparation was held");
 
-      // The session departs while the enabling awaits its install: the
-      // enabling writes nothing after it left.
+      // The session departs while the enabling's config preparation is
+      // held: the enabling writes nothing after it left.
       const keptTranscript = await promoteOther(client, harness, kept, other);
       release();
       const reply = await registering;
@@ -2203,8 +2215,6 @@ test("playbook-library-100: an activity of a session its id no longer names comm
         return draft?.activity === "idle" && draft.proposal !== undefined && draft.queued.length === 0;
       }, 120_000, "the proposal");
       let installed = false;
-      let entered!: () => void;
-      const loading = new Promise<void>((resolve) => { entered = resolve; });
       const barrier = new Promise<void>((resolve) => { release = resolve; });
       environments.requestAndInstall = async (...args: Parameters<EnvironmentManager["requestAndInstall"]>) => {
         installed = true;
@@ -2214,7 +2224,6 @@ test("playbook-library-100: an activity of a session its id no longer names comm
       options.loadModule = async (specifier) => {
         if (installed && !held && specifier.endsWith("triage.registry.mjs")) {
           held = true;
-          entered();
           await barrier;
         }
         return loadModule(specifier);
@@ -2232,7 +2241,9 @@ test("playbook-library-100: an activity of a session its id no longer names comm
         intent: "Label new issues",
         bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
       });
-      await loading;
+      const replied = settledReply(registering);
+      await until(() => held || replied() !== undefined, 60_000, "the candidate config's module load to reach its hold");
+      assert.equal(replied(), undefined, "draft.register replied before its candidate config's module load was held");
 
       // The session departs while the entry edit composes: the entry is
       // not written after it left.

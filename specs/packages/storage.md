@@ -111,7 +111,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 | no sign-in, or no pick | created locally as `<name>-spex` under your own group's folder with no remote, `<name>` being the folder's name, until the reader picks a group |
 
 - a folder already paired selects its existing pair; a folder inside another working folder below its top level is refused;
-- a local clone name already occupied by a clone, path, pair or an operation's reserved destination [[space-21](space.md#space-21)] takes the first free numeric suffix (`<name>-2-spex`, then `-3-spex`);
+- a local clone name already occupied by a clone, path, pair or an operation's reserved destination [[space-21](space.md#space-21)] — a Join's among them [[space-63](space.md#space-63)] — takes the first free numeric suffix (`<name>-2-spex`, then `-3-spex`);
 - the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and its environment requests the built-in spec package [[environments-11](environments.md#environments-11)];
 - a session is a project's by the clone that holds it, never by matching its working directory; its recorded working directory decides only where it may continue [[core-service-73](core-service.md#core-service-73)];
 - the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports [[space-60](space.md#space-60)] move the clone and rewrite in one step every pair naming it and `own` where it names the moved clone [[storage-2](#storage-2)].
@@ -309,7 +309,7 @@ When the root-lease integration suite runs the core's store and the storage Git 
 
 ### storage-28
 
-Where a Join holds a destination before its clone directory exists, when an integration suite adds or creates a working folder that would choose the same local clone name, it shall verify that allocation takes the first free numeric suffix and that both the new project's clone and the joined clone survive with their own records and pairings [[storage-6](#storage-6)].
+While a Join holds a destination before its clone directory exists, when an integration suite adds or creates a working folder that would choose the same local clone name, it shall verify that allocation takes the first free numeric suffix, and that the new project's clone with its pairing and the joined clone with its records survive [[storage-6](#storage-6)].
 
 ## References
 

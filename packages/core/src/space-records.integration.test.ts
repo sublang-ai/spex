@@ -200,7 +200,9 @@ test("space-37: two group's own repositories leave your own group's clone local 
   const notes = host.script.addRepository({ group: "ada", name: "notes-spex", records: GROUP_RECORDS, members: [bob] });
   const branches = [git(ada.bare, "rev-parse", "spex"), git(notes.bare, "rev-parse", "spex")];
   const home = await startHome("records-two", { host, project: false, extra: { signIn: "browser" } });
-  t.after(() => home.stop());
+  // A hold below is released before the core stops.
+  let release = (): void => {};
+  t.after(async () => { release(); await home.stop(); });
   const signed = await signIn(home, host);
   // Nothing created or joined; the choice stands on your own group's
   // local-only row as one issue, both candidates listed not on this
@@ -231,16 +233,33 @@ test("space-37: two group's own repositories leave your own group's clone local 
   assert.equal(ownRow(declined).choice?.candidates.length, 2);
   assert.equal(typeof (prefsOf(home.dataDir)[`space:repair:${repair}`] as { declined?: unknown } | undefined)?.declined, "number");
   const before = declined.readAt ?? 0;
+  // The Refresh's lookup held while it reads which clones hold what: it
+  // reserves nothing while it only decides, so its row never reads
+  // running and a write to the clone meanwhile is admitted (space-21).
+  const space = (home.service as unknown as { space: { readOthers(except: string): Promise<void> } }).space;
+  const readOthers = space.readOthers.bind(space);
+  let deciding!: () => void;
+  const decided = new Promise<void>((resolve) => { deciding = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  space.readOthers = async (except) => {
+    space.readOthers = readOthers;
+    deciding();
+    await released;
+    return readOthers(except);
+  };
   const fromRefresh = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
   await home.client.waitSpace(fromRefresh, (state) => (state.readAt ?? 0) > before);
-  // readAt announces the host answer before the asynchronous candidate
-  // checks finish. These notice assertions exercise the settled choice,
-  // not the busy refusal while Refresh still owns that lookup.
-  await (home.service as unknown as { space: { settingUp?: Promise<void> } }).space.settingUp;
-  const refreshed = await home.client.expectOk("space.get", {});
-  assert.equal(ownRow(refreshed).sync.phase, "idle", "a settled choice holds no operation reservation");
-  assert.deepEqual([refreshed.issues, ownRow(refreshed).state, ownRow(refreshed).choice?.repair, ownRow(refreshed).choice?.declined], [0, "local-only", repair, true]);
+  await Promise.race([decided, delay(10_000).then(() => { throw new Error("timeout waiting for the Refresh's lookup"); })]);
+  assert.equal(ownRow(await home.client.expectOk("space.get", {})).sync.phase, "idle", "a lookup deciding holds no reservation");
+  await home.client.expectOk("space.remote.set", { repository: "ada/ada-spex", url: null });
+  // Released, the lookup stands the same choice again and announces it.
+  const fromRelease = home.client.mark();
+  release();
+  const refreshed = await home.client.waitRepository(fromRelease, "ada/ada-spex", () => true);
+  assert.ok(home.client.readings(fromRefresh, ["ada/ada-spex"]).every((row) => row.sync.phase !== "running"), "no reading of the clone ran while the Refresh decided");
+  assert.deepEqual([ownRow(await home.client.expectOk("space.get", {})).sync.phase, refreshed.state, refreshed.choice?.repair, refreshed.choice?.declined], ["idle", "local-only", repair, true]);
+  assert.equal((await home.client.expectOk("space.get", {})).issues, 0);
   const answered = await home.client.expectOk("space.repair.decline", { repair, declined: false });
   assert.deepEqual([answered.issues, ownRow(answered).choice?.declined], [1, false]);
   // The candidate bearing the clone's key is told apart by its state and
@@ -536,7 +555,7 @@ test("space-37: a lookup and a pick of one clone run one at a time: a pick durin
   const fromSignIn = first.client.mark();
   const signing = signIn(first, host);
   await until(() => creations(host) === 1, "the set-up's creation");
-  await first.client.expectError("space.pick", { repository: "ada/ada-spex", choice: { kind: "create", groupId: null, name: "ada" } }, "busy", /^Already syncing$/);
+  await first.client.expectError("space.pick", { repository: "ada/ada-spex", choice: { kind: "create", groupId: null, name: "ada" } }, "busy", /^ada-spex is joining; wait for it to finish$/);
   await signing;
   const own = await first.client.waitRepository(fromSignIn, "ada/ada-spex", (repository) => repository.sync.phase === "done");
   assert.ok(own.sync.phase === "done" && own.sync.pushed, JSON.stringify(own.sync));
