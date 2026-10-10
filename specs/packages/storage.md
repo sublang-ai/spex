@@ -57,11 +57,15 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
 - a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either;
-- each change the core makes applies to the file as it reads at that instant, read, changed and written in one step, so a change an editor made since stands; a file deleted once read is refused as changed meanwhile, never written back from memory ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- the store reads `home.yaml` and the clones under `workspace/` as they stand when a command needs them, with no reload; a read creates no folder, and a clone gone since it was read is absent and refused where a command names it, your own group's clone being made only when the store opens ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- each change the core makes applies to the file as it reads at that instant, read, changed and written in one step, so a change an editor made since stands ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- a `home.yaml` that will not read, or that was deleted after it was read, is reported as blocking and refuses every write that needs it, a deleted one as changed meanwhile, the file neither written over nor recreated from memory until it reads again; meanwhile reads answer from its last valid reading, or with no pairs where the store opened on it.
 
 ### storage-3
 
-The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)].
+The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)]:
+
+- the store reads the file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### storage-4
 
@@ -77,7 +81,9 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
 - an intent holds no rank and no link to another intent: the next to run is the oldest queued one by `createdAt`, then by `id`;
+- the store reads every intent file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- a capture writes a new file only where no clone holds an intent of its id and no file holds its name, never replacing one;
 - no write recreates the clone holding `intents/` where it moved or was removed;
 - a malformed file is reported without deletion, and its intent is listed nowhere.
 
@@ -97,8 +103,12 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: the app token the Git host issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at sign-in and at every refresh and removed at sign-out:
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<url>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: the app token the Git host issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at sign-in and at every refresh and removed at sign-out or on the host's refusal, each as a versioned write of that host's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
+- a write names the pair its writer read, or none; in one step, the file is read, that host's pair compared with the named one in every field, and the file replaced only where they are equal, every other host's pair kept and the file removed with the last pair;
+- where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
+- a malformed entry for that host is refused by every read and write, except that a sign-out which could not read it removes it in one step, every other host's pair kept, unless a well-formed pair stands there by then, which stays;
+- a file of another format, or with no hosts map, is refused and left as it is;
 - no credential is written anywhere else, and no credential enters a tracked file or a remote URL [[space-5](space.md#space-5)].
 
 ### storage-6
@@ -263,7 +273,9 @@ When an integration suite migrates a former-layout home of two projects and one 
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
-- exact authoring session and credential encodings written and read back, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
+- exact authoring session and credential encodings written and read back, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)];
+- a credential write naming a pair the file no longer holds writing nothing, and one naming the held pair replacing or removing it with another host's pair kept [[storage-19](#storage-19)];
+- a malformed entry for a host refused by a read and a versioned write, a sign-out's removal of it keeping another host's pair, a well-formed pair stored after the failed read kept by that removal, and a file of another format left byte for byte as it was [[storage-19](#storage-19)].
 
 ### storage-16
 
@@ -283,6 +295,17 @@ When an integration suite merges two real Git branches of one spex repository co
 ### storage-24
 
 When an integration suite changes the home's files beside a running store, it shall verify that a change to `home.yaml` keeps an editor's change made since the store wrote it, and that once the file is deleted an ordinary change is refused as changed meanwhile without restoring it [[storage-2](#storage-2)]; that an intent edit whose file another writer rewrote during the edit's own wait is refused as changed meanwhile with that rewrite standing, and an intent written after its clone vanished is refused without recreating the clone [[storage-4](#storage-4)]; and that a preference write keeps a marker another writer cleared from `local/prefs.json` cleared, a read following the file [[storage-5](#storage-5)].
+
+### storage-25
+
+When the read-through suite `store-readthrough.integration.test.ts` changes the files of a running real store from outside it, it shall verify, with no reload between change and read:
+
+- a project's name, its working-folder pair and a clone another process added read on the next query, which leaves no `sessions/` in the clone it found [[storage-2](#storage-2)] [[storage-3](#storage-3)];
+- a damaged `project.json` reported with its bytes kept, and its report gone once it is repaired [[storage-3](#storage-3)] [[storage-12](#storage-12)];
+- a clone removed from outside absent from every read with its pair reported as a repair, its session store refused, your own group's clone refused once removed, and neither made again [[storage-2](#storage-2)];
+- intent files added, closed, dispatched, repaired and removed from outside read by the queue, History, source, dispatch and asset reads, and an edit applied to the file as it stands [[storage-4](#storage-4)];
+- a damaged intent file listed nowhere, reported without blocking, refused with its cause, and its bytes left by an edit and by a capture of its id, while a capture of an id another clone holds writes nothing [[storage-4](#storage-4)] [[storage-12](#storage-12)];
+- a damaged `home.yaml` refusing a registration with its bytes kept while preferences stay writable, its repair admitting the next registration, a deleted one refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)].
 
 ### storage-27
 

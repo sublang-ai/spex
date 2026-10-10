@@ -14,7 +14,9 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
+import { CredentialChanged, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
+import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
@@ -179,7 +181,7 @@ test("space-37: the device sign-in links the stand-in's code, names the host, an
  * --git-dir`, the read a Groups state makes of it, or a join's clone —
  * until `release()`, then runs the real Git: a command caught in flight.
  * Later matching commands run at once. */
-function holdingGit(args: string): { path: string; hold(): void; held(): Promise<void>; release(): void } {
+function holdingGit(args: string): { path: string; hold(): void; held(): Promise<string>; release(): void } {
   const dir = mkdtempSync(join(scratch, "holding-git-"));
   const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
   const hold = join(dir, "hold");
@@ -189,7 +191,8 @@ function holdingGit(args: string): { path: string; hold(): void; held(): Promise
     "#!/bin/sh",
     'case " $* " in',
     `  *" ${args} "*)`,
-    `    if mv "${hold}" "${claimed}" 2>/dev/null; then : > "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done; fi ;;`,
+    // The held marker records the umask the command was spawned under.
+    `    if mv "${hold}" "${claimed}" 2>/dev/null; then umask > "${held}.tmp"; mv "${held}.tmp" "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done; fi ;;`,
     "esac",
     `exec "${real}" "$@"`,
     "",
@@ -201,6 +204,7 @@ function holdingGit(args: string): { path: string; hold(): void; held(): Promise
     held: async () => {
       for (let i = 0; i < 400 && !existsSync(held); i += 1) await sleep(25);
       assert.ok(existsSync(held), "the command reached Git");
+      return readFileSync(held, "utf8").trim();
     },
     release: () => { rmSync(hold, { force: true }); rmSync(claimed, { force: true }); },
   };
@@ -488,6 +492,40 @@ test("space-63: two joins of one repository publish one clone; the later finds i
   assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
 });
 
+test("space-37: a join's clone child runs owner-only while the core's own umask stays as it was, and the clone it writes stays private", async (t) => {
+  const host = await startHost();
+  const listed = host.script.addRepository({ group: "acme", name: "private-spex" });
+  const key = "acme/private-spex";
+  const shim = holdingGit("clone -q --branch spex");
+  // The ordinary umask a desktop starts under; read back by setting it
+  // again, synchronously.
+  const readUmask = (): number => { const mask = process.umask(0o022); process.umask(mask); return mask; };
+  const previous = process.umask(0o022);
+  const home = await startHome("join-umask", { host, project: false, env: { PATH: shim.path }, extra: { signIn: "browser" } });
+  t.after(() => { shim.release(); process.umask(previous); return home.stop(); });
+  await signIn(home, host);
+  shim.hold();
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.join", { hostId: listed.id }), { accepted: true });
+  // The child was spawned owner-only; while it stands held the core has
+  // awaited it and its own umask is the one it had (space-32).
+  assert.equal(await shim.held(), "0077", "the clone child runs under 0077");
+  assert.equal(readUmask(), 0o022, "the core's umask is restored before it awaits the child");
+  await sleep(100);
+  assert.equal(readUmask(), 0o022, "and stays restored while the child runs");
+  shim.release();
+  await home.client.waitRepository(from, key, (repository) => repository.state === "reachable");
+  assert.equal(readUmask(), 0o022, "the join leaves the core's umask as it was");
+  // What the child alone wrote — the clone's folders and the pack it
+  // fetched, which no later command under the core's umask rewrites —
+  // keeps its owner-only modes once published.
+  const clone = clonePath(home.dataDir, key);
+  const pack = join(clone, ".git", "objects", "pack");
+  const written = [clone, join(clone, ".git"), join(clone, ".git", "objects"), pack, ...readdirSync(pack).map((name) => join(pack, name))];
+  assert.ok(written.some((path) => path.endsWith(".pack")), "the clone fetched a pack");
+  assert.deepEqual(written.filter((path) => (statSync(path).mode & 0o077) !== 0), [], "no entry the clone child wrote is wider than owner-only");
+});
+
 test("space-37: Sign out revokes this device and keeps every clone, its repositories unreachable until the next sign-in", async (t) => {
   const host = await startHost();
   const home = await startHome("signout", { host, project: false, extra: { signIn: "browser" } });
@@ -568,6 +606,98 @@ test("git-host-4: a refresh the stand-in refuses, or a device it revoked, signs 
   // A sign-out of the reader's own says nothing of the host.
   await signInRead();
   assert.deepEqual((await home.client.expectOk("space.signout", {})).signIn, { phase: "idle" });
+});
+
+test("git-host-4, git-host-10: a refusal or a sign-out overtaken by a newer sign-in leaves that sign-in's account signed in", async (t) => {
+  const host = await startHost();
+  const home = await startHome("overtaken", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  // The core's own client and Groups, reached for what no command shows:
+  // its answers held, and the instant its pair is removed.
+  const core = home.service as unknown as { hostClient: GitHostClient; space: { readHost(): Promise<unknown>; signedInAs(account: HostAccount): Promise<void> } };
+  const client = core.hostClient as unknown as { fetchImpl: typeof fetch; credentials: CredentialStore };
+  const holds = holdingFetch(client.fetchImpl);
+  client.fetchImpl = holds.fetch;
+  const store = fileCredentialStore(home.dataDir, host.url);
+  /** A device sign-in elsewhere — another process on this home, or a
+   * home of its own — storing its pair through `credentials`. */
+  const signInElsewhere = async (credentials: CredentialStore): Promise<HostAccount> => {
+    const elsewhere = new GitHostClient({ url: host.url, label: "Spex elsewhere", credentials });
+    const flow = await elsewhere.startDeviceSignIn();
+    host.script.approveDevice(flow.userCode);
+    return flow.done;
+  };
+  const assertSignedIn = async (pair: StoredCredential | null): Promise<void> => {
+    const state = await home.client.expectOk("space.get", {});
+    assert.equal(state.account?.login, LOGIN);
+    assert.deepEqual(state.signIn, { phase: "idle" });
+    assert.equal(Home.load(home.dataDir).file.host.signedOut, undefined);
+    assert.ok(samePair(await store.read(), pair), "the newer pair stays");
+  };
+
+  // A read the stand-in refused for the former pair, while a newer one was stored.
+  host.script.revokeDevices();
+  let gate = holds.hold((path, status) => path.startsWith("/api/v1/host/") && status === 401);
+  const before = await store.read();
+  const reading = core.space.readHost();
+  reading.catch(() => undefined);
+  let newer: StoredCredential | null = null;
+  try {
+    await gate.reached;
+    await signInElsewhere(fileCredentialStore(home.dataDir, host.url));
+    newer = await store.read();
+  } finally {
+    gate.release();
+  }
+  assert.ok(newer !== null && !samePair(newer, before), "a newer pair was stored");
+  await assert.rejects(reading, (error: unknown) => error instanceof CredentialChanged);
+  await settled();
+  await assertSignedIn(newer);
+
+  // A sign-out whose revocation is held while a newer pair is stored.
+  gate = holds.hold((path) => path === "/api/v1/auth/revoke");
+  const refused = home.client.expectError("space.signout", {}, "conflict", /The sign-in changed meanwhile; try again/);
+  const read = newer;
+  try {
+    await gate.reached;
+    await signInElsewhere(fileCredentialStore(home.dataDir, host.url));
+    newer = await store.read();
+  } finally {
+    gate.release();
+  }
+  await refused;
+  assert.ok(newer !== null && !samePair(newer, read), "a newer pair was stored");
+  await assertSignedIn(newer);
+
+  // A sign-out whose removal is followed, before its own continuation,
+  // by a newer sign-in publishing its pair and its account.
+  const scratchHome = mkdtempSync(join(scratch, "elsewhere-"));
+  const account = await signInElsewhere(fileCredentialStore(scratchHome, host.url));
+  const latest = await fileCredentialStore(scratchHome, host.url).read();
+  const own = client.credentials;
+  let published = false;
+  client.credentials = {
+    read: () => own.read(),
+    replace: (expected, next) => {
+      const replaced = own.replace(expected, next);
+      if (replaced && next === null) {
+        queueMicrotask(() => {
+          published = store.replace(null, latest);
+          void core.space.signedInAs(account);
+        });
+      }
+      return replaced;
+    },
+  };
+  const mark = home.client.mark();
+  const out = await home.client.expectOk("space.signout", {});
+  assert.ok(published, "the newer pair was published after the removal");
+  assert.equal(out.account?.login, LOGIN, "the newer sign-in's account is signed in");
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.state === "reachable");
+  await assertSignedIn(latest);
 });
 
 test("space-37: while a check sleeps on the stand-in's transport, writes beneath that clone are admitted, a second Sync joins it, and Stop ends it", async (t) => {

@@ -12,7 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
@@ -253,6 +253,38 @@ test("space-37: a running compile and an out-of-band lease refuse no sync; a rem
   await home.client.expectOk("media.chunk", { uploadId: upload.uploadId, offset: 4, data: Buffer.from("more").toString("base64") });
   const finished = await home.client.expectOk("media.finish", { uploadId: upload.uploadId });
   assert.equal((await home.client.expectOk("media.read", { owner, assetId: finished.asset.assetId, offset: 0, length: 8 })).data, Buffer.from("halfmore").toString("base64"));
+  // The home file going while the removal takes its leases refuses it at
+  // its final check too, before the upload in flight is invalidated; the
+  // file is not written back, and restored it admits that same upload.
+  const homeFile = Home.file(home.dataDir);
+  const homeBytes = readFileSync(homeFile);
+  const pending = { owner, uploadId: randomUUID(), name: "pending.txt", mimeType: "text/plain", byteLength: 8 };
+  await home.client.expectOk("media.begin", pending);
+  await home.client.expectOk("media.chunk", { uploadId: pending.uploadId, offset: 0, data: Buffer.from("home").toString("base64") });
+  const leasingAgain = new Promise<void>((resolve) => { entered = resolve; });
+  const barrierAgain = new Promise<void>((resolve) => { release = resolve; });
+  repository.store = { ...sessions, acquireManagement: async (id: string) => {
+    const held = await sessions.acquireManagement(id);
+    entered(); await barrierAgain;
+    return held;
+  } };
+  try {
+    const removal = home.client.expectError("project.remove", { projectId: key, confirm: true }, "invalid_request", /home\.yaml changed meanwhile; retry/);
+    await Promise.race([leasingAgain, removal]);
+    rmSync(homeFile);
+    release();
+    await removal;
+    assert.ok(!existsSync(homeFile), "the home file is not written back from memory");
+  } finally {
+    release();
+    repository.store = sessions;
+    writeFileSync(homeFile, homeBytes);
+  }
+  assert.ok(existsSync(clone), "the clone stands after the home refusal");
+  assert.equal((await home.client.expectOk("media.begin", pending)).offset, 4, "the upload resumes once the home file is restored");
+  await home.client.expectOk("media.chunk", { uploadId: pending.uploadId, offset: 4, data: Buffer.from("back").toString("base64") });
+  const restored = await home.client.expectOk("media.finish", { uploadId: pending.uploadId });
+  assert.equal((await home.client.expectOk("media.read", { owner, assetId: restored.asset.assetId, offset: 0, length: 8 })).data, Buffer.from("homeback").toString("base64"));
   // Released, the removal runs with the compile still running: it waits
   // for no other work.
   assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null);

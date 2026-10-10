@@ -13,9 +13,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { chmod, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { writeApplicationBytes } from "./files.js";
 
 /** The Git host a new home records unless `SPEX_HOST_URL` names another
  * (git-host-1). */
@@ -122,6 +123,17 @@ export class HostError extends Error {
   }
 }
 
+/** The pair a step used was no longer the stored one when its answer
+ * came (git-host-4, git-host-10, storage-19): nothing was stored or
+ * removed, and the step may be made again. Local; not the host's. */
+export class CredentialChanged extends Error {
+  readonly code = "changed";
+  constructor() {
+    super("The stored sign-in changed meanwhile");
+    this.name = "CredentialChanged";
+  }
+}
+
 /** A sign-in started while another runs (git-host-2: a second start is
  * `busy`). */
 export class SignInBusyError extends Error {
@@ -139,8 +151,27 @@ export interface StoredCredential { access: string; accessExpiresAt: number; ref
 
 export interface CredentialStore {
   read(): Promise<StoredCredential | null>;
-  write(credential: StoredCredential): Promise<void>;
-  remove(): Promise<void>;
+  /**
+   * A versioned write of this host's pair (storage-19, DR-111): `next`,
+   * or none, in place of `expected`, the pair the writer read, or none.
+   * The file is read, compared and replaced in one synchronous step;
+   * false, and nothing written, where it holds another pair.
+   */
+  replace(expected: StoredCredential | null, next: StoredCredential | null): boolean;
+  /**
+   * For a sign-out whose read failed (git-host-10, storage-19): remove
+   * this host's malformed entry in one synchronous step, other hosts'
+   * kept; true where it is gone or none stands, false, and nothing
+   * written, where a well-formed pair stands by then. A file of another
+   * format is refused.
+   */
+  removeMalformed?(): boolean;
+}
+
+/** Whether two pairs are one, compared in every field. */
+function samePair(a: StoredCredential | null, b: StoredCredential | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.access === b.access && a.accessExpiresAt === b.accessExpiresAt && a.refresh === b.refresh;
 }
 
 interface CredentialsFile { format: 1; hosts: Record<string, unknown> }
@@ -156,23 +187,18 @@ export function credentialsPath(homeDir: string): string {
  * written atomically with owner-only permissions under a `local/` made
  * owner-only (storage-19). A file of another format is refused, never
  * guessed at or overwritten. Other hosts' entries are kept; removing the
- * last one removes the file.
+ * last one removes the file. Every access is synchronous, so a
+ * replacement's read, comparison and rename leave no await between them.
  */
 export function fileCredentialStore(homeDir: string, hostUrl: string): CredentialStore {
   const dir = join(homeDir, "local");
   const file = credentialsPath(homeDir);
   const key = trimUrl(hostUrl);
-  let queue: Promise<unknown> = Promise.resolve();
-  const serial = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = queue.then(work, work);
-    queue = next.catch(() => undefined);
-    return next;
-  };
 
-  async function load(): Promise<CredentialsFile | null> {
+  function load(): CredentialsFile | null {
     let text: string;
     try {
-      text = await readFile(file, "utf8");
+      text = readFileSync(file, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
@@ -191,49 +217,50 @@ export function fileCredentialStore(homeDir: string, hostUrl: string): Credentia
     return { format: 1, hosts: { ...doc.hosts } };
   }
 
-  async function save(doc: CredentialsFile): Promise<void> {
-    await mkdir(dir, { recursive: true, mode: 0o700 });
-    const temp = join(dir, `.credentials.yaml.${randomBytes(6).toString("hex")}.tmp`);
-    const handle = await open(temp, "wx", 0o600);
-    try {
-      await handle.writeFile(stringifyYaml({ format: 1, hosts: doc.hosts }), "utf8");
-      await handle.sync();
-    } finally {
-      await handle.close();
+  function entryOf(doc: CredentialsFile | null): StoredCredential | null {
+    const entry = doc?.hosts[key];
+    if (entry === undefined) return null;
+    if (!isRecord(entry) || typeof entry.access !== "string" || typeof entry.refresh !== "string"
+      || typeof entry.accessExpiresAt !== "number" || !Number.isFinite(entry.accessExpiresAt)) {
+      throw new Error(`${file} holds a malformed entry for ${key}; it is left as it is`);
     }
-    try {
-      await chmod(temp, 0o600);
-      await rename(temp, file);
-    } catch (error) {
-      await rm(temp, { force: true });
-      throw error;
+    return { access: entry.access, accessExpiresAt: entry.accessExpiresAt, refresh: entry.refresh };
+  }
+
+  /** Write `doc` with this host's pair set to `next` or removed. */
+  function save(doc: CredentialsFile, next: StoredCredential | null): true {
+    if (next === null) {
+      if (!(key in doc.hosts)) return true;
+      delete doc.hosts[key];
+    } else {
+      doc.hosts[key] = { access: next.access, accessExpiresAt: next.accessExpiresAt, refresh: next.refresh };
     }
+    if (Object.keys(doc.hosts).length === 0) {
+      rmSync(file, { force: true });
+      return true;
+    }
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeApplicationBytes(file, stringifyYaml({ format: 1, hosts: doc.hosts }));
+    return true;
   }
 
   return {
-    read: () => serial(async () => {
-      const doc = await load();
-      if (!doc) return null;
-      const entry = doc.hosts[key];
-      if (entry === undefined) return null;
-      if (!isRecord(entry) || typeof entry.access !== "string" || typeof entry.refresh !== "string"
-        || typeof entry.accessExpiresAt !== "number" || !Number.isFinite(entry.accessExpiresAt)) {
-        throw new Error(`${file} holds a malformed entry for ${key}; it is left as it is`);
+    read: async () => entryOf(load()),
+    replace: (expected, next) => {
+      const doc = load() ?? { format: 1, hosts: {} };
+      if (!samePair(entryOf(doc), expected)) return false;
+      return save(doc, next);
+    },
+    removeMalformed: () => {
+      const doc = load();
+      if (doc === null) return true;
+      try {
+        if (entryOf(doc) !== null) return false;
+      } catch {
+        return save(doc, null);
       }
-      return { access: entry.access, accessExpiresAt: entry.accessExpiresAt, refresh: entry.refresh };
-    }),
-    write: (credential) => serial(async () => {
-      const doc = (await load()) ?? { format: 1, hosts: {} };
-      doc.hosts[key] = { access: credential.access, accessExpiresAt: credential.accessExpiresAt, refresh: credential.refresh };
-      await save(doc);
-    }),
-    remove: () => serial(async () => {
-      const doc = await load();
-      if (!doc || !(key in doc.hosts)) return;
-      delete doc.hosts[key];
-      if (Object.keys(doc.hosts).length === 0) await rm(file, { force: true });
-      else await save(doc);
-    }),
+      return true;
+    },
   };
 }
 
@@ -296,6 +323,9 @@ function page(title: string, text: string): string {
 
 interface Answer { status: number; json: unknown; retryAfter: string | null }
 
+/** An app token a sign-in was issued, and the person it reads as. */
+interface Issued { credential: StoredCredential; account: HostAccount }
+
 const REAUTH_CODES = new Set(["invalid_token", "token_revoked", "reauth_required", "unauthenticated", "token_expired"]);
 
 /**
@@ -352,7 +382,7 @@ export class GitHostClient {
    * challenge, and the host's `/login/app` URL to open.
    */
   async startBrowserSignIn(options: { timeoutMs?: number; pages?: CallbackPages } = {}): Promise<BrowserSignIn> {
-    const slot = this.claimSignIn();
+    const { slot, expected } = await this.beginSignIn();
     const pages = options.pages ?? DEFAULT_PAGES;
     const server = createServer();
     try {
@@ -417,11 +447,13 @@ export class GitHostClient {
       }
       answering = true;
       clearTimeout(timer);
-      void this.answerCallback(target.searchParams, { state, verifier, redirectUri, isSettled: () => settled }).then((outcome) => {
+      void this.answerCallback(target.searchParams, { state, verifier, redirectUri, isSettled: () => settled }).then((answered) => {
         if (settled) {
           respond(response, 410, pages.failed, close);
           return;
         }
+        // Stored and ended in one turn: no cancel falls between them.
+        const outcome = "issued" in answered ? this.publish(expected, answered.issued) : answered;
         // The page goes out before the listener closes, so the browser
         // always sees how the sign-in ended.
         end(outcome, true);
@@ -440,7 +472,7 @@ export class GitHostClient {
   private async answerCallback(
     params: URLSearchParams,
     flow: { state: string; verifier: string; redirectUri: string; isSettled: () => boolean },
-  ): Promise<{ account: HostAccount } | { error: HostError }> {
+  ): Promise<{ issued: Issued } | { error: HostError }> {
     try {
       if (params.get("state") !== flow.state) return { error: signInError("state") };
       const error = params.get("error");
@@ -454,7 +486,7 @@ export class GitHostClient {
       });
       if (flow.isSettled()) return { error: signInError("stopped") };
       if (answer.status !== 200) return { error: exchangeError(answer) };
-      return { account: await this.completeSignIn(answer) };
+      return { issued: await this.issued(answer) };
     } catch (error) {
       return { error: asSignInError(error) };
     }
@@ -466,7 +498,7 @@ export class GitHostClient {
    * slower on each `slow_down`, until the token, a denial or the expiry.
    */
   async startDeviceSignIn(): Promise<DeviceSignIn> {
-    const slot = this.claimSignIn();
+    const { slot, expected } = await this.beginSignIn();
     let start: { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number };
     try {
       const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label } });
@@ -530,11 +562,15 @@ export class GitHostClient {
         }
         if (settled) return;
         if (answer.status === 200) {
+          let answered: { issued: Issued } | { error: HostError };
           try {
-            end({ account: await this.completeSignIn(answer) });
+            answered = { issued: await this.issued(answer) };
           } catch (error) {
-            end({ error: asSignInError(error) });
+            answered = { error: asSignInError(error) };
           }
+          if (settled) return;
+          // Stored and ended in one turn: no cancel falls between them.
+          end("issued" in answered ? this.publish(expected, answered.issued) : answered);
           return;
         }
         const code = codeOf(answer);
@@ -569,14 +605,21 @@ export class GitHostClient {
 
   /**
    * Sign this device out (git-host-10): revoke it at the host with its
-   * app token, tried once, and remove the credential either way.
+   * app token, tried once, and remove that pair either way, calling
+   * `onRemoved` in the same turn as the removal. Where another pair was
+   * stored in its place meanwhile, that pair stays, `onRemoved` is not
+   * called, and `CredentialChanged` is thrown. A malformed entry, which
+   * cannot be read, is removed unless a well-formed pair stands by then.
    */
-  async signOut(): Promise<void> {
+  async signOut(onRemoved?: () => void): Promise<void> {
     let credential: StoredCredential | null = null;
     try {
       credential = await this.credentials.read();
-    } catch {
-      credential = null;
+    } catch (error) {
+      if (!this.credentials.removeMalformed) throw error;
+      if (!this.credentials.removeMalformed()) throw new CredentialChanged();
+      onRemoved?.();
+      return;
     }
     if (credential) {
       const stored = credential;
@@ -605,7 +648,14 @@ export class GitHostClient {
         // No answer: tried once, and the credential goes either way.
       }
     }
-    await this.credentials.remove();
+    if (!this.credentials.replace(credential, null)) throw new CredentialChanged();
+    onRemoved?.();
+  }
+
+  /** Whether no pair is stored for this host now, read synchronously so
+   * a caller acts on it in the same turn. */
+  holdsNone(): boolean {
+    return this.credentials.replace(null, null);
   }
 
   /** `GET /api/v1/host/me`: the person, as the host reports them. */
@@ -709,22 +759,39 @@ export class GitHostClient {
     return slot;
   }
 
+  /** Claim the one sign-in, and read the pair it begins over: its token
+   * is stored only in that pair's place (git-host-2). */
+  private async beginSignIn(): Promise<{ slot: object; expected: StoredCredential | null }> {
+    const slot = this.claimSignIn();
+    try {
+      return { slot, expected: await this.credentials.read() };
+    } catch (error) {
+      this.releaseSignIn(slot);
+      throw error;
+    }
+  }
+
   private releaseSignIn(slot: object): void {
     if (this.signIn === slot) this.signIn = null;
   }
 
-  /** Store the issued app token, then read the person with it; a person
-   * the host does not return leaves nothing stored. */
-  private async completeSignIn(answer: Answer): Promise<HostAccount> {
+  /** The issued app token and the person read with it, nothing stored
+   * yet; a person the host does not return throws (git-host-2). */
+  private async issued(answer: Answer): Promise<Issued> {
     const credential = tokenFrom(answer, this.now());
-    await this.credentials.write(credential);
+    const me = await this.send("GET", "/api/v1/host/me", { bearer: credential.access });
+    if (me.status !== 200) throw answerError(me);
+    return { credential, account: accountFrom(me.json) };
+  }
+
+  /** Store an issued token in place of the pair its sign-in began over;
+   * the caller ends the sign-in in the same turn. Another pair stored
+   * meanwhile ends it `stopped`, that pair kept (git-host-2). */
+  private publish(expected: StoredCredential | null, issued: Issued): { account: HostAccount } | { error: HostError } {
     try {
-      const me = await this.send("GET", "/api/v1/host/me", { bearer: credential.access });
-      if (me.status !== 200) throw answerError(me);
-      return accountFrom(me.json);
+      return this.credentials.replace(expected, issued.credential) ? { account: issued.account } : { error: signInError("stopped") };
     } catch (error) {
-      await this.credentials.remove().catch(() => undefined);
-      throw error;
+      return { error: asSignInError(error) };
     }
   }
 
@@ -738,8 +805,7 @@ export class GitHostClient {
       answer = await this.send(method, path, { body, bearer: credential.access });
     }
     if (answer.status === 401 || REAUTH_CODES.has(codeOf(answer) ?? "")) {
-      await this.signOutLocally();
-      throw new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status });
+      throw this.signOutLocally(credential, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
     }
     if (answer.status < 200 || answer.status >= 300) throw answerError(answer);
     return answer;
@@ -753,7 +819,9 @@ export class GitHostClient {
   }
 
   /** One refresh at a time: a caller arriving while one runs joins it,
-   * and one arriving after it finds the rotated pair already stored. */
+   * and one arriving after it finds the rotated pair already stored.
+   * Where another pair replaced the refreshed one meanwhile, the answer
+   * stores and removes nothing, and `CredentialChanged` is thrown. */
   private refresh(stale: StoredCredential): Promise<StoredCredential> {
     if (this.refreshing) return this.refreshing;
     const tracked: Promise<StoredCredential> = this.runRefresh(stale).finally(() => {
@@ -772,22 +840,26 @@ export class GitHostClient {
     });
     if (answer.status === 200) {
       const next = tokenFrom(answer, this.now());
-      await this.credentials.write(next);
+      if (!this.credentials.replace(latest, next)) throw new CredentialChanged();
       return next;
     }
     const error = answerError(answer);
     if (error.kind === "unreachable" || error.kind === "rate_limited") throw error;
-    await this.signOutLocally();
-    throw new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status });
+    throw this.signOutLocally(latest, new HostError("reauth", { code: codeOf(answer), words: wordsOf(answer), status: answer.status }));
   }
 
-  private async signOutLocally(): Promise<void> {
-    await this.credentials.remove();
+  /** The host refused `used` (git-host-4): remove it and say the device
+   * is signed out in the same turn, giving back `refusal` to throw;
+   * where another pair is stored in its place, nothing is removed or
+   * said, and `CredentialChanged` comes back instead. */
+  private signOutLocally(used: StoredCredential, refusal: HostError): Error {
+    if (!this.credentials.replace(used, null)) return new CredentialChanged();
     try {
       this.onSignedOut?.("reauth");
     } catch {
       // The listener's failure is its own.
     }
+    return refusal;
   }
 
   private async send(method: string, path: string, init: { body?: unknown; bearer?: string }): Promise<Answer> {

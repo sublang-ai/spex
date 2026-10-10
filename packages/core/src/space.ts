@@ -16,7 +16,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
-import { HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
+import { CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
 import type {
@@ -37,7 +37,7 @@ import type {
 import { CoreError } from "./session.js";
 import {
   classifyHostTransportFailure, classifyTransportFailure, displayRemote, GitMissingError, lastLines, membersDecide, noLongerShared,
-  signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun,
+  signInAgain, SpaceGit, validateRemoteUrl, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
   callbackPages, hostKey, listingFor, nameTaken, ownNameFor, readHostView, relayHostError, repositoryDescription, signInFailure,
@@ -2053,20 +2053,28 @@ export class SpaceManager {
   }
 
   /** Sign out (git-host-10): revoke at the host, tried once, forget the
-   * credential, keep every clone and record. */
+   * credential, keep every clone and record. The home is marked signed
+   * out in the same turn as the removal; a pair stored in its place
+   * meanwhile stays, and the account with it. */
   async signOut(): Promise<GroupsState> {
     this.flow?.cancel();
-    await this.host.client.signOut();
-    this.host.store.signOut();
-    this.hostSignedOut = undefined;
-    this.view = undefined;
-    this.attached.clear();
-    this.readFailure = undefined;
-    this.waiting.clear();
-    // A join still running keeps its progress; its transport holds its
-    // own brokered credential or stops asking to sign in (space-15).
-    for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
-    for (const machine of this.machines.values()) machine.hostOverride = undefined;
+    try {
+      await this.host.client.signOut(() => {
+        this.host.store.signOut();
+        this.hostSignedOut = undefined;
+        this.view = undefined;
+        this.attached.clear();
+        this.readFailure = undefined;
+        this.waiting.clear();
+        // A join still running keeps its progress; its transport holds its
+        // own brokered credential or stops asking to sign in (space-15).
+        for (const [id, phase] of [...this.joining]) if (phase.phase !== "running") this.joining.delete(id);
+        for (const machine of this.machines.values()) machine.hostOverride = undefined;
+      });
+    } catch (error) {
+      if (error instanceof CredentialChanged) throw new CoreError("conflict", relayHostError(error, this.hostName()));
+      throw error;
+    }
     const state = await this.state();
     this.host.broadcast(state);
     return state;
@@ -2134,7 +2142,9 @@ export class SpaceManager {
         }
         return view;
       } catch (error) {
-        if (error instanceof HostError && error.kind === "reauth" && this.signedIn()) this.signedOutByHost();
+        // A refusal signed out where its pair was removed (git-host-4);
+        // here, only a home whose app token is gone is, checked now.
+        if (error instanceof HostError && error.code === "signed_out" && this.signedIn() && this.host.client.holdsNone()) this.signedOutByHost();
         this.readFailure = relayHostError(error, this.hostName());
         throw error;
       } finally {
@@ -2454,20 +2464,26 @@ export class SpaceManager {
         throw error;
       }
       // Sessions are private: the clone is written owner-only (space-32).
-      const umask = process.umask(0o077);
+      // Each child inherits the owner-only umask as it is spawned — `run`
+      // spawns synchronously — and the core's own is restored before
+      // anything is awaited, so no other work runs under it.
+      const privately = (args: string[], options: GitRunOptions = {}): Promise<GitRun> => {
+        const umask = process.umask(0o077);
+        try { return this.probe.run(args, options); }
+        finally { process.umask(umask); }
+      };
       let run: GitRun;
       try {
         const options = { transport: true, ...(credential ? { credential } : {}) };
-        run = await this.probe.run(["clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", url, dir], options);
+        run = await privately(["clone", "-q", "--branch", SPEX_BRANCH, "--single-branch", url, dir], options);
         if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
           // The host holds no `spex` yet: its default branch, then `spex`
           // beside it (space-32).
           rmSync(dir, { recursive: true, force: true });
-          run = await this.probe.run(["clone", "-q", url, dir], options);
-          if (run.code === 0) run = await this.probe.run(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
+          run = await privately(["clone", "-q", url, dir], options);
+          if (run.code === 0) run = await privately(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
         }
       } finally {
-        process.umask(umask);
         await credential?.dispose();
       }
       if (run.code !== 0) {

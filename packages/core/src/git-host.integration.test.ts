@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
+  CredentialChanged,
   DEFAULT_HOST_URL,
   GitHostClient,
   HostError,
@@ -24,8 +25,10 @@ import {
   type HostAccount,
   type HostErrorKind,
   type SignInCause,
+  type StoredCredential,
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
+import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
 async function setup(options: { skew?: { ms: number } } = {}) {
@@ -34,10 +37,12 @@ async function setup(options: { skew?: { ms: number } } = {}) {
   const host = await startStandinHost({ dir: join(scratch, "host") });
   const signedOut: HostErrorKind[] = [];
   const skew = options.skew;
+  const holds = holdingFetch();
   const client = new GitHostClient({
     url: host.url,
     label: "Spex on test",
     credentials: fileCredentialStore(home, host.url),
+    fetch: holds.fetch,
     ...(skew ? { now: () => Date.now() + skew.ms } : {}),
     onSignedOut: (kind) => signedOut.push(kind),
   });
@@ -47,6 +52,7 @@ async function setup(options: { skew?: { ms: number } } = {}) {
     home,
     host,
     client,
+    holds,
     signedOut,
     closeHost: async () => {
       if (!closed) await host.close();
@@ -393,7 +399,7 @@ test("git-host-10: another host's credential stays; a file of another format is 
   const t = await setup();
   try {
     const other = fileCredentialStore(t.home, "https://elsewhere.example");
-    await other.write({ access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" });
+    assert.equal(other.replace(null, { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" }), true);
     await browserSignIn(t.client);
     await t.client.signOut();
     assert.deepEqual(await other.read(), { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" });
@@ -402,8 +408,254 @@ test("git-host-10: another host's credential stays; a file of another format is 
 
     writeFileSync(credentialsPath(t.home), "format: 2\nhosts: {}\n");
     await assert.rejects(other.read(), /format 2, which this version of Spex does not read/);
-    await assert.rejects(other.write({ access: "a", accessExpiresAt: 1, refresh: "r" }), /format 2/);
+    assert.throws(() => other.replace(null, { access: "a", accessExpiresAt: 1, refresh: "r" }), /format 2/);
     assert.equal(readFileSync(credentialsPath(t.home), "utf8"), "format: 2\nhosts: {}\n");
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("storage-19: a credential write replaces or removes only the pair it names, another host's pair kept", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "spex-credentials-"));
+  try {
+    const mine = fileCredentialStore(scratch, "https://host.example");
+    const other = fileCredentialStore(scratch, "https://elsewhere.example");
+    const a: StoredCredential = { access: "spexa_a", accessExpiresAt: 1, refresh: "spexr_a" };
+    const b: StoredCredential = { access: "spexa_b", accessExpiresAt: 2, refresh: "spexr_b" };
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 3, refresh: "spexr_other" };
+    assert.equal(other.replace(null, kept), true);
+    assert.equal(mine.replace(a, b), false, "none stood in place of the named pair");
+    assert.equal(mine.replace(null, a), true);
+    assert.equal(mine.replace(null, b), false, "a pair stands where none was named");
+    assert.equal(mine.replace({ ...a, accessExpiresAt: 9 }, b), false, "compared in every field");
+    assert.ok(samePair(await mine.read(), a));
+    assert.equal(mine.replace(a, b), true);
+    assert.equal(mine.replace(a, null), false, "a removal of a replaced pair removes nothing");
+    assert.ok(samePair(await mine.read(), b));
+    assert.equal(mode(credentialsPath(scratch)), 0o600);
+    assert.equal(mine.replace(b, null), true);
+    assert.equal(await mine.read(), null);
+    assert.ok(samePair(await other.read(), kept), "another host's pair stays throughout");
+    assert.equal(other.replace(kept, null), true);
+    assert.equal(existsSync(credentialsPath(scratch)), false, "the last pair takes the file with it");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("git-host-10, storage-19: a sign-out removes a malformed entry unless a well-formed pair stands by then; another format stays", async () => {
+  const t = await setup();
+  try {
+    const file = credentialsPath(t.home);
+    const key = t.host.url.replace(/\/+$/, "");
+    const store = fileCredentialStore(t.home, t.host.url);
+    const other = fileCredentialStore(t.home, "https://elsewhere.example");
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 3, refresh: "spexr_other" };
+    const newer: StoredCredential = { access: "spexa_newer", accessExpiresAt: Date.now() + 3_600_000, refresh: "spexr_newer" };
+    const write = (entry: unknown): void => {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify({ format: 1, hosts: { [key]: entry, "https://elsewhere.example": kept } }));
+    };
+    let removed = 0;
+    const onRemoved = () => { removed += 1; };
+
+    // Every other read and write refuses the malformed entry, writing nothing.
+    write({ access: 7 });
+    const malformed = readFileSync(file, "utf8");
+    await assert.rejects(store.read(), /malformed entry/);
+    assert.throws(() => store.replace(null, newer), /malformed entry/);
+    assert.throws(() => t.client.holdsNone(), /malformed entry/);
+    assert.equal(readFileSync(file, "utf8") === malformed, true, "the file is left as it is");
+
+    // A well-formed pair stored after the sign-out's failed read stays.
+    const racing = new GitHostClient({
+      url: t.host.url,
+      label: "Spex on test",
+      fetch: t.holds.fetch,
+      credentials: {
+        read: async () => {
+          try {
+            return await store.read();
+          } catch (error) {
+            write(newer);
+            throw error;
+          }
+        },
+        replace: (expected, next) => store.replace(expected, next),
+        removeMalformed: () => store.removeMalformed!(),
+      },
+    });
+    await assert.rejects(racing.signOut(onRemoved), (error: unknown) => error instanceof CredentialChanged);
+    assert.equal(removed, 0, "nothing is marked signed out");
+    assert.ok(samePair(await store.read(), newer), "the well-formed pair stays");
+
+    // The malformed entry alone is removed, and the account signed out.
+    write({ access: 7 });
+    await t.client.signOut(onRemoved);
+    assert.equal(removed, 1, "the account is signed out in the removal's turn");
+    assert.equal(await store.read(), null);
+    assert.ok(samePair(await other.read(), kept), "another host's pair stays");
+    assert.equal(mode(file), 0o600);
+    assert.equal(t.host.script.requests.some((r) => r.path === "/api/v1/auth/revoke"), false, "nothing is revoked");
+    assert.deepEqual(t.signedOut, [], "an explicit sign-out is no refusal");
+
+    // A file of another format is refused and left byte for byte.
+    writeFileSync(file, "format: 2\nhosts: {}\n");
+    await assert.rejects(t.client.signOut(onRemoved), /format 2/);
+    assert.equal(readFileSync(file, "utf8") === "format: 2\nhosts: {}\n", true, "the file is left as it is");
+    assert.equal(removed, 1, "nothing more is marked signed out");
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("git-host-4: a held refresh, granted or refused, or a held refusal of a pair replaced meanwhile stores, removes and signs out nothing", async () => {
+  const skew = { ms: 0 };
+  const t = await setup({ skew });
+  try {
+    const store = fileCredentialStore(t.home, t.host.url);
+    const other = fileCredentialStore(t.home, "https://elsewhere.example");
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" };
+    assert.equal(other.replace(null, kept), true);
+    /** Hold the answer `match` picks, store `next` in place of the pair
+     * the call used, release, and find the call refused as changed. */
+    const overtaken = async (match: (path: string, status: number) => boolean, next: StoredCredential): Promise<void> => {
+      const used = await store.read();
+      const gate = t.holds.hold(match);
+      const pending = t.client.groups();
+      pending.catch(() => undefined);
+      try {
+        await gate.reached;
+        assert.equal(store.replace(used, next), true);
+      } finally {
+        gate.release();
+      }
+      await assert.rejects(pending, (error: unknown) => error instanceof CredentialChanged);
+      assert.ok(samePair(await store.read(), next), "the newer pair stays");
+      assert.ok(samePair(await other.read(), kept), "another host's pair stays");
+      assert.deepEqual(t.signedOut, [], "nothing is signed out");
+    };
+    const newer = (n: number): StoredCredential => ({ access: `spexa_newer_${n}`, accessExpiresAt: Date.now() + 7_200_000, refresh: `spexr_newer_${n}` });
+
+    // A refresh the stand-in grants, its answer held.
+    await browserSignIn(t.client);
+    skew.ms = 3_600_000 - 30_000;
+    await overtaken((path) => path === "/api/v1/auth/token", newer(1));
+    // A refresh the stand-in refuses, its answer held.
+    skew.ms = 0;
+    await browserSignIn(t.client);
+    t.host.script.refuseRefresh = true;
+    skew.ms = 3_600_000 - 30_000;
+    await overtaken((path) => path === "/api/v1/auth/token", newer(2));
+    // A call refused for a revoked device, its answer held.
+    skew.ms = 0;
+    t.host.script.refuseRefresh = false;
+    await browserSignIn(t.client);
+    t.host.script.revokeDevices();
+    await overtaken((path, status) => path === "/api/v1/host/groups" && status === 401, newer(3));
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("git-host-2, git-host-3: with the person's read held, a cancel stores nothing, and a pair stored meanwhile stays", async () => {
+  const t = await setup();
+  try {
+    const store = fileCredentialStore(t.home, t.host.url);
+    const other = fileCredentialStore(t.home, "https://elsewhere.example");
+    const kept: StoredCredential = { access: "spexa_other", accessExpiresAt: 1, refresh: "spexr_other" };
+    assert.equal(other.replace(null, kept), true);
+    const holdMe = () => t.holds.hold((path) => path === "/api/v1/host/me");
+    /** Open a browser flow's URL and deliver its callback, unanswered yet. */
+    const callback = async (url: string): Promise<{ page: Promise<Response> }> => {
+      const first = await fetch(url, { redirect: "manual" });
+      const page = fetch(first.headers.get("location") ?? "");
+      page.catch(() => undefined);
+      return { page };
+    };
+
+    // The browser flow, canceled while the person's read is held.
+    let gate = holdMe();
+    const browser = await t.client.startBrowserSignIn();
+    browser.done.catch(() => undefined);
+    const { page } = await callback(browser.url);
+    try {
+      await gate.reached;
+      browser.cancel();
+    } finally {
+      gate.release();
+    }
+    // The cancel closes the listener, so the page may be cut off.
+    await page.then((answer) => answer.text(), () => undefined);
+    await assert.rejects(browser.done, hostError("reauth", { cause: "stopped" }));
+    await settled();
+    assert.equal(await store.read(), null, "the browser flow stored nothing");
+
+    // The device flow, the same.
+    gate = holdMe();
+    const device = await t.client.startDeviceSignIn();
+    device.done.catch(() => undefined);
+    t.host.script.approveDevice(device.userCode);
+    try {
+      await gate.reached;
+      device.cancel();
+    } finally {
+      gate.release();
+    }
+    await assert.rejects(device.done, hostError("reauth", { cause: "stopped" }));
+    await settled();
+    assert.equal(await store.read(), null, "the device flow stored nothing");
+
+    // A pair stored meanwhile ends the sign-in stopped, and stays.
+    gate = holdMe();
+    const overtaken = await t.client.startBrowserSignIn();
+    const ended = overtaken.done.then(() => null, (error: unknown) => error);
+    const { page: answered } = await callback(overtaken.url);
+    const newer: StoredCredential = { access: "spexa_newer", accessExpiresAt: Date.now() + 3_600_000, refresh: "spexr_newer" };
+    try {
+      await gate.reached;
+      assert.equal(store.replace(null, newer), true);
+    } finally {
+      gate.release();
+    }
+    await (await answered).text();
+    assert.ok(hostError("reauth", { cause: "stopped" })(await ended));
+    assert.ok(samePair(await store.read(), newer), "the pair stored meanwhile stays");
+    assert.ok(samePair(await other.read(), kept), "another host's pair stays");
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("git-host-2, git-host-3: a person read that fails ends either flow failed, nothing stored", async () => {
+  const t = await setup();
+  try {
+    // The stand-in issues the token; its person read is answered 403.
+    const client = new GitHostClient({
+      url: t.host.url,
+      label: "Spex on test",
+      credentials: fileCredentialStore(t.home, t.host.url),
+      fetch: async (input, init) => {
+        const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+        if (path !== "/api/v1/host/me") return fetch(input, init);
+        return new Response(JSON.stringify({ error: { code: "forbidden", message: "No person." } }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+
+    const browser = await client.startBrowserSignIn();
+    const first = await fetch(browser.url, { redirect: "manual" });
+    await (await fetch(first.headers.get("location") ?? "")).text();
+    await assert.rejects(browser.done, hostError("reauth", { cause: "refused" }));
+    assert.equal(existsSync(credentialsPath(t.home)), false, "the browser flow stored nothing");
+
+    const device = await client.startDeviceSignIn();
+    t.host.script.approveDevice(device.userCode);
+    await assert.rejects(device.done, hostError("reauth", { cause: "refused" }));
+    assert.equal(existsSync(credentialsPath(t.home)), false, "the device flow stored nothing");
+    assert.equal(await client.signedIn(), false);
   } finally {
     await t.dispose();
   }

@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   closed, isLocalPath, isObject, isRecordedPath, isText, isTimestamp, isUuid, knownFormat, need,
-  readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, UUID,
+  readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
 } from "./files.js";
 import { i18n } from "./i18n.js";
 import { mediaAttachmentsSchema, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
@@ -155,12 +155,16 @@ export function readIntentFiles(intentsDir: string): { intents: IntentFile[]; pr
 
 /** Write one intent file atomically, validating it first. The folder
  * holding `intents/` must stand: a write never recreates a clone that
- * moved or was removed (DR-111). */
-export function writeIntentFile(intentsDir: string, intent: IntentFile): void {
+ * moved or was removed (DR-111). A new intent's file is written only
+ * where none stands, checked at the instant before its rename; another
+ * process keeps ordinary filesystem behavior. */
+export function writeIntentFile(intentsDir: string, intent: IntentFile, create = false): void {
   try { mkdirSync(intentsDir); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const file = join(intentsDir, `${intent.id}.json`);
-  writeApplicationFile(file, parseIntentFile(intent, file, intent.id));
+  const value = parseIntentFile(intent, file, intent.id);
+  if (create) writeVersionedBytes(file, JSON.stringify(value), null);
+  else writeApplicationFile(file, value);
 }
 
 // ---------------------------------------------------------------------------

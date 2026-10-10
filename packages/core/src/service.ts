@@ -74,7 +74,7 @@ import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
-import { listed, UUID } from "./files.js";
+import { fileVersion, listed, readVersioned, UUID, VersionConflictError } from "./files.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -105,6 +105,7 @@ import {
   isGitSource,
   isPathSource,
   isSkillName,
+  playbookModuleCandidates,
   prepareBuiltinEnvironment,
   readManifest,
   writeExcludeBlock,
@@ -241,6 +242,20 @@ export interface CoreServiceOptions {
 
 // The Sources cache ages out at ten minutes (dashboard-14).
 const FORGE_CACHE_MS = 600_000;
+
+/** The files a config state was composed from, each at the version read
+ * (DR-111): an unreadable one stands as its error, so it compares stably. */
+type ConfigInputs = Map<string, string | null>;
+const inputVersion = (file: string): string | null => {
+  try { return fileVersion(file); }
+  catch (error) { return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`; }
+};
+/** The first input no longer standing at the version read. */
+const changedInput = (inputs: ConfigInputs): string | undefined => {
+  for (const [file, version] of inputs) if (inputVersion(file) !== version) return file;
+  return undefined;
+};
+const changedMeanwhile = (file: string): CoreError => new CoreError("conflict", new VersionConflictError(file).message);
 
 /** What a sync tells the environments once it applied a lock or moved a
  * clone (environments-8, environments-17): optional on the Space host. */
@@ -436,6 +451,10 @@ export class CoreService {
 
   private configState: ConfigState;
   private composed?: ComposedConfig;
+  /** The files {@link configState} was composed from: the state is a
+   * cache validated by them at use (DR-111); none while no load of the
+   * files has been published. */
+  private configInputs?: ConfigInputs;
   private seeded = false;
   private readonly runCommand: RunCommand;
   private readonly forge: ForgeAdapter;
@@ -630,6 +649,8 @@ export class CoreService {
       compileSpawner: options.compileSpawner,
       compileRuntime: options.compileRuntime,
       composed: () => this.composed,
+      // A turn reads the config as its files stand when it starts (DR-111).
+      prepareConfig: () => this.settledConfig(),
       readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
@@ -789,16 +810,47 @@ export class CoreService {
     return this.environments.modulesFor(projectId);
   }
 
+  /** {@link modules}, recording into `inputs` the locks it reads and,
+   * for each playbook composition asks for, the entry files those locks
+   * place it at — a missing one as absent, so its repair is a change
+   * (DR-111). Nothing an entry imports is recorded. */
+  private modulesRead(projectId: string | null, inputs: ConfigInputs): PlaybookModules {
+    const keys = [...new Set([...(projectId === null ? [] : [projectId]), this.store.home.own()])];
+    for (const key of keys) {
+      const dir = this.store.repository(key)?.dir;
+      if (dir) inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
+    }
+    const located = keys.map((key) => this.environments.locations(key));
+    const modules = this.modules(projectId);
+    return {
+      repository: modules.repository,
+      find: (id) => {
+        for (const locations of located) {
+          for (const [name, location] of locations) {
+            if (name !== id && location.id !== id) continue;
+            // A missing entry stands at its first candidate; any of them appearing repairs it.
+            const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
+            for (const entry of entries) if (!inputs.has(entry)) inputs.set(entry, inputVersion(entry));
+          }
+        }
+        return modules.find(id);
+      },
+    };
+  }
+
   /** The players every project's file names that your own group's
    * roster lacks (core-service-2, settings-46), listed on the valid
    * config state; a project's session raises them when it opens. */
-  private missingPlayers(ownTop: unknown): import("./protocol.js").MissingPlayer[] {
+  private missingPlayers(ownTop: unknown, inputs: ConfigInputs): import("./protocol.js").MissingPlayer[] {
     const own = this.store.home.own();
     const projects: { repository: string; top: unknown }[] = [];
     for (const repository of this.store.listRepositories()) {
-      if (repository.key === own || resolve(repository.configPath) === resolve(this.configPath) || !existsSync(repository.configPath)) continue;
-      try { projects.push({ repository: repository.key, top: parseYaml(readFileSync(repository.configPath, "utf8")) }); }
-      catch { /* that project's own load reports it */ }
+      if (repository.key === own || resolve(repository.configPath) === resolve(this.configPath)) continue;
+      try {
+        const { bytes, version } = readVersioned(repository.configPath);
+        inputs.set(repository.configPath, version);
+        if (bytes) projects.push({ repository: repository.key, top: parseYaml(bytes.toString("utf8")) });
+      } catch { /* that project's own load reports it */ }
     }
     return missingPlayersOf(ownTop, projects);
   }
@@ -1434,15 +1486,42 @@ export class CoreService {
   /** The composition of {@link composedFor} on the config already
    * loaded: `ready` first waits for the project's environment, which a
    * reload's own broadcast does not, its environment announcing itself
-   * when it settles (environments-17). */
+   * when it settles (environments-17). The files are read after that
+   * wait and checked after composing: one changed meanwhile composes
+   * once more, then the caller is refused to retry (DR-111). */
   private async composeProject(projectId: string, ready: boolean): Promise<ComposedConfig> {
-    if (this.configState.status !== "valid" || !this.composed) {
-      throw new CoreError("invalid_config", this.configRefusal());
-    }
+    const own = (): ComposedConfig => {
+      if (this.configState.status !== "valid" || !this.composed) {
+        throw new CoreError("invalid_config", this.configRefusal());
+      }
+      return this.composed;
+    };
+    own();
     const repository = this.store.repository(projectId);
-    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return this.composed;
-    const hasProjectFile = existsSync(repository.configPath);
-    const file = hasProjectFile ? repository.configPath : this.configPath;
+    if (!repository || resolve(repository.configPath) === resolve(this.configPath)) return own();
+    // The session's playbooks come from the project's environment before
+    // your own group's (environments-9), whether or not the project's
+    // own file enables any; one not yet resolved resolves first.
+    if (ready) await this.environments.ready(projectId);
+    for (let attempt = 0; ; attempt += 1) {
+      own();
+      const inputs: ConfigInputs = new Map();
+      let result: { composed: ComposedConfig } | { error: unknown };
+      try { result = { composed: await this.composeProjectOnce(repository.configPath, projectId, inputs) }; }
+      catch (error) { result = { error }; }
+      const changed = changedInput(inputs);
+      if (changed === undefined) {
+        if ("error" in result) throw result.error;
+        return result.composed;
+      }
+      if (attempt > 0) throw changedMeanwhile(changed);
+    }
+  }
+
+  /** One read and composition of a project's configuration, recording
+   * each file read in `inputs`. */
+  private async composeProjectOnce(projectPath: string, projectId: string, inputs: ConfigInputs): Promise<ComposedConfig> {
+    let file = this.configPath;
     const cause = (error: unknown): CoreError => new CoreError("invalid_config", i18n._({
       id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
       values: { file, reason: error instanceof Error ? error.message : String(error) },
@@ -1450,17 +1529,23 @@ export class CoreService {
     let projectTop: unknown;
     let ownTop: unknown;
     try {
-      projectTop = hasProjectFile ? parseYaml(readFileSync(repository.configPath, "utf8")) : undefined;
-      ownTop = parseYaml(readFileSync(this.configPath, "utf8"));
-    } catch (error) { throw cause(error); }
-    // The session's playbooks come from the project's environment before
-    // your own group's (environments-9), whether or not the project's
-    // own file enables any; one not yet resolved resolves first.
-    if (ready) await this.environments.ready(projectId);
+      const project = readVersioned(projectPath);
+      inputs.set(projectPath, project.version);
+      if (project.bytes) file = projectPath;
+      projectTop = project.bytes ? parseYaml(project.bytes.toString("utf8")) : undefined;
+      const read = readVersioned(this.configPath);
+      inputs.set(this.configPath, read.version);
+      // Gone, the file is read once more for the system's own reason.
+      ownTop = parseYaml((read.bytes ?? readFileSync(this.configPath)).toString("utf8"));
+    } catch (error) {
+      if (!inputs.has(projectPath)) inputs.set(projectPath, inputVersion(projectPath));
+      if (!inputs.has(this.configPath)) inputs.set(this.configPath, inputVersion(this.configPath));
+      throw cause(error);
+    }
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
-        modules: this.modules(projectId),
-        ...(hasProjectFile ? { project: { top: projectTop, path: repository.configPath } } : {}),
+        modules: this.modulesRead(projectId, inputs),
+        ...(file === projectPath ? { project: { top: projectTop, path: projectPath } } : {}),
       });
     } catch (error) { throw cause(error); }
   }
@@ -1474,13 +1559,18 @@ export class CoreService {
    * file is refused.
    */
   private async projectConfigState(projectId: string, ready: boolean): Promise<ConfigState> {
-    const own = this.configState;
-    if (own.status !== "valid") return own;
+    if (this.configState.status !== "valid") return this.configState;
     const repository = this.store.repository(projectId);
     if (!repository) throw noProject(projectId);
     try {
+      const inputs = this.configInputs;
       const composed = await this.composeProject(projectId, ready);
-      if (composed === this.composed) return own;
+      // Your own group's state, its notifications and theme, as its files
+      // still stand after composing.
+      const changed = this.cacheChanged(inputs);
+      if (changed !== undefined) throw changedMeanwhile(changed);
+      const own = this.configState;
+      if (own.status !== "valid" || composed === this.composed) return own;
       // Notifications and theme are your own group's alone.
       const summary = summarizeConfig({ path: own.summary.path, raw: null, composed });
       return {
@@ -1492,7 +1582,9 @@ export class CoreService {
         },
       };
     } catch (error) {
-      if (!(error instanceof CoreError)) throw error;
+      // A file changed meanwhile is no state of the files (DR-111).
+      if (!(error instanceof CoreError) || error.code === "conflict") throw error;
+      if (this.configState.status !== "valid") return this.configState;
       return {
         status: "invalid",
         path: existsSync(repository.configPath) ? repository.configPath : this.configPath,
@@ -1513,13 +1605,20 @@ export class CoreService {
     return out;
   }
 
-  /** Broadcast the config state with every project's composition. */
-  private async broadcastConfig(generation: number): Promise<void> {
+  /** Broadcast the config state with every project's composition,
+   * unless a newer reload began or the files it stands on changed while
+   * the compositions were read (DR-111); whether it was broadcast. */
+  private async broadcastConfig(generation: number, inputs = this.configInputs): Promise<boolean> {
     const projects = await this.projectConfigStates();
-    if (generation !== this.reloadGeneration) return;
+    if (generation !== this.reloadGeneration || this.cacheChanged(inputs) !== undefined) return false;
     this.broadcast({ type: "config.state", state: this.configState, ...(projects ? { projects } : {}) });
+    return true;
   }
 
+  /** The config state as its files stand now: a reload pending or in
+   * flight is awaited, and a file changed with no watcher's word yet
+   * reloads once here; changed again meanwhile, the caller is refused
+   * to retry (DR-111). */
   private async settledConfig(): Promise<void> {
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer);
@@ -1527,6 +1626,17 @@ export class CoreService {
       await this.reloadConfig();
     }
     while (this.reloading) await this.reloading;
+    if (this.cacheChanged() === undefined) return;
+    await this.reloadConfig();
+    while (this.reloading) await this.reloading;
+    const changed = this.cacheChanged();
+    if (changed !== undefined) throw changedMeanwhile(changed);
+  }
+
+  /** The first file the published config state no longer stands on;
+   * your own group's config where no load has been published. */
+  private cacheChanged(inputs = this.configInputs): string | undefined {
+    return inputs === undefined ? this.configPath : changedInput(inputs);
   }
 
   private async reloadNow(generation: number): Promise<void> {
@@ -1536,17 +1646,49 @@ export class CoreService {
     // and every superseded one must discard its work — committing it would
     // publish an older file's state, and a readiness probe that outlived a
     // newer reload would overwrite that reload's broadcast with entries
-    // for a configuration no longer active.
+    // for a configuration no longer active. A file changed while the load
+    // composed makes its result, valid or not, no state of the files:
+    // it is read once more, else nothing is published and the next use
+    // reads again (DR-111).
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const inputs: ConfigInputs = new Map();
+      const next = await this.loadOwnConfig(inputs);
+      if (generation !== this.reloadGeneration) return;
+      if (changedInput(inputs) !== undefined) continue;
+      this.composed = next.composed;
+      this.configState = next.state;
+      this.configInputs = inputs;
+      // Each broadcast awaits more reads: the files are checked after
+      // them, and a change is no state to announce.
+      if (!(await this.broadcastConfig(generation, inputs))) {
+        if (generation !== this.reloadGeneration) return;
+        continue;
+      }
+      const entries = await this.readiness();
+      if (generation !== this.reloadGeneration) return;
+      if (changedInput(inputs) !== undefined) continue;
+      this.broadcast({ type: "readiness.state", entries });
+      return;
+    }
+  }
+
+  /** Your own group's config state, recording each file read in `inputs`. */
+  private async loadOwnConfig(inputs: ConfigInputs): Promise<{ state: ConfigState; composed: ComposedConfig | undefined }> {
     let nextState: ConfigState;
     let nextComposed: ComposedConfig | undefined;
-    if (!existsSync(this.configPath)) {
+    // Read before any migration; the load reports the bytes it composed.
+    inputs.set(this.configPath, inputVersion(this.configPath));
+    if (inputs.get(this.configPath) === null) {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
       try {
-        const loaded = await loadConfig(this.configPath, this.options.loadModule, { modules: this.modules(null) });
+        const loaded = await loadConfig(this.configPath, this.options.loadModule, {
+          modules: this.modulesRead(null, inputs),
+          read: (version) => inputs.set(this.configPath, version),
+        });
         nextComposed = loaded.composed;
-        const missingPlayers = this.missingPlayers(loaded.raw);
+        const missingPlayers = this.missingPlayers(loaded.raw, inputs);
         nextState = {
           status: "valid",
           summary: summarizeConfig(loaded),
@@ -1565,14 +1707,7 @@ export class CoreService {
         nextComposed = undefined;
       }
     }
-    if (generation !== this.reloadGeneration) return;
-    this.composed = nextComposed;
-    this.configState = nextState;
-    await this.broadcastConfig(generation);
-    if (generation !== this.reloadGeneration) return;
-    const entries = await this.readiness();
-    if (generation !== this.reloadGeneration) return;
-    this.broadcast({ type: "readiness.state", entries });
+    return { state: nextState, composed: nextComposed };
   }
 
   private watchConfigFile(): void {
@@ -1845,11 +1980,20 @@ export class CoreService {
         return {canceled};
       }
       case "config.get":
-        if (command.projectId === undefined) return this.configState;
+        // The state as the files stand now, a change no watcher reported
+        // yet read here (DR-111).
         await this.settledConfig();
+        if (command.projectId === undefined) return this.configState;
         return this.projectConfigState(command.projectId, true);
-      case "readiness.get":
-        return this.readiness();
+      case "readiness.get": {
+        await this.settledConfig();
+        // The probes await: their answer stands only on the files it read.
+        const inputs = this.configInputs;
+        const entries = await this.readiness();
+        const changed = this.cacheChanged(inputs);
+        if (changed !== undefined) throw changedMeanwhile(changed);
+        return entries;
+      }
       case "agent.options":
         return readAgentOptions(command.adapter, this.env, this.options.discoverAgentModels);
       case "project.list":
@@ -2245,6 +2389,9 @@ export class CoreService {
           );
         }
         await this.reloadConfig();
+        // The reply is the state the files stand at; the write stands
+        // either way (DR-111).
+        await this.settledConfig();
         this.authors.republish();
         return this.configState;
       }
@@ -2259,6 +2406,8 @@ export class CoreService {
           ? [...this.environments.locations(command.repository).values()].find((location) => location.id === command.playbookId && location.present)?.module
           : undefined;
         if (command.repository !== undefined && !this.store.repository(command.repository)) throw noProject(command.repository);
+        // The config's module, as its files stand (DR-111).
+        if (!named && command.repository === undefined) await this.settledConfig();
         const from = named
           ?? (command.repository === undefined ? this.composed?.playbooks.find((entry) => entry.id === command.playbookId)?.from : undefined)
           ?? (command.repository === undefined ? this.installedModule(command.playbookId) : undefined);
@@ -2277,7 +2426,8 @@ export class CoreService {
       case "library.builtins": {
         // The built-in spec package's playbooks your own group's
         // environment installs, each `configured` where the config
-        // enables it (playbook-library-34).
+        // enables it (playbook-library-34), as its files stand (DR-111).
+        await this.settledConfig();
         const configuredIds = new Set(
           this.composed?.playbooks.map((playbook) => playbook.id) ?? [],
         );
@@ -2296,6 +2446,8 @@ export class CoreService {
             comment: "Refusal: no config file exists at the path the core reads",
           }));
         }
+        // The Captain's block as the file stands (DR-111).
+        await this.settledConfig();
         // The one-shot compile writes the spec package under development
         // in the working folder of the project it names (environments-10).
         const project = this.store.getProject(command.projectId);
@@ -2445,7 +2597,8 @@ export class CoreService {
         const staging: MediaUploadOwner = {kind: "project", id: project.id};
         await this.media.validate(staging, command.attachments ?? []);
         this.media.ownerStore(staging, true);
-        if (command.source && command.source.kind !== "chat") {
+        const refuseHeldSource = (): void => {
+          if (!command.source || command.source.kind === "chat") return;
           const holder = this.store.openIntentBySource(
             project.id,
             command.source.kind,
@@ -2462,7 +2615,8 @@ export class CoreService {
               }),
             );
           }
-        }
+        };
+        refuseHeldSource();
         // An intent holds no place of its own: the queue is its project's
         // queued intents oldest first (core-service-42, core-service-107).
         const id = randomUUID();
@@ -2484,6 +2638,9 @@ export class CoreService {
         const owner: MediaUploadOwner = {kind: "intent", projectId: project.id, intentId: id};
         try {
           await this.media.adopt(owner, [staging], command.attachments ?? []);
+          // Read again after the await, in the step that writes: an
+          // intent another queue or a sync wrote meanwhile holds it.
+          refuseHeldSource();
           this.store.addIntent(intent);
         } catch (error) {
           // The project may have left meanwhile: only its own folder goes.
@@ -2721,6 +2878,9 @@ export class CoreService {
       case "draft.list":
         return this.authors.list();
       case "draft.create": {
+        // The ids the config enables are taken (playbook-library-51), as
+        // its files stand (DR-111).
+        await this.settledConfig();
         const project = this.store.getProject(command.projectId);
         const repository = this.store.repository(command.projectId);
         if (!project || !repository) {
@@ -2796,6 +2956,8 @@ export class CoreService {
       }
       case "draft.player.set":
         this.requireDraft(command.projectId, command.draftId);
+        // The roster as the file stands now (DR-111).
+        await this.settledConfig();
         return this.authors.setPlayer(command.draftId, command.instance, command.playerId);
       case "draft.delete": {
         this.requireDraft(command.projectId, command.draftId);
@@ -3140,6 +3302,8 @@ export class CoreService {
       }
       done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an enabling: the playbook's entry written to the config", values: { playbookId } }));
       await this.reloadConfig();
+      // The state the files stand at, or the enabling reports what it did.
+      await this.settledConfig();
       this.authors.republish();
     } catch (error) {
       if (done.length === 0) throw error;

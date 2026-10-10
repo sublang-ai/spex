@@ -145,12 +145,12 @@ export class Home {
     let text: string;
     try { text = readFileSync(file, "utf8"); }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new StorageFormatError(file, (error as Error).message);
       if (this.text === undefined) return false;
       throw new StorageFormatError(file, i18n._({
-        id: "{what} changed meanwhile; retry",
-        values: { what: HOME_FILE },
-        comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+        id: "{file} changed meanwhile; retry",
+        values: { file: HOME_FILE },
+        comment: "Refusal: a file changed between the core's read and its write; the reader retries",
       }));
     }
     if (text === this.text) return false;

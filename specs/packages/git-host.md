@@ -27,10 +27,11 @@ When a client sends `space.signin.start` on the desktop, the core shall sign in 
 1. listen on `127.0.0.1` at a port the operating system assigns, for one callback;
 2. mint a 32-byte verifier and its S256 challenge;
 3. reply with the host's `/login/app` URL carrying `client_id=spex`, a label naming this device and app, the loopback `redirect_uri`, the challenge with `code_challenge_method=S256`, and a random `state`, which the shell opens in the system browser [[app-shell-37](app-shell.md#app-shell-37)];
-4. on the callback, check `state`, exchange the `code` with the verifier at the host's token endpoint, store the app token [[storage-19](storage.md#storage-19)], read the person [[git-host-5](git-host.md#git-host-5)], write the account into `home.yaml`, and answer the browser with a page saying the sign-in is complete and the browser may be closed;
+4. on the callback, check `state`, exchange the `code` with the verifier at the host's token endpoint, read the person [[git-host-5](git-host.md#git-host-5)] with the issued access secret, then, in one step with the sign-in's end, store the app token in place of the pair that stood when the sign-in began [[storage-19](storage.md#storage-19)], write the account into `home.yaml`, and answer the browser with a page saying the sign-in is complete and the browser may be closed;
 5. set the home up for the account [[space-4](space.md#space-4)].
 
-- a callback carrying `error=access_denied`, a wrong `state`, or a refused exchange ends the sign-in `failed` with its cause and stores nothing; ten minutes without a callback, or `space.signin.cancel`, ends it `expired` or `stopped` and closes the listener;
+- a callback carrying `error=access_denied`, a wrong `state`, a refused exchange, or a person the host does not return ends the sign-in `failed` with its cause and stores nothing; ten minutes without a callback, or `space.signin.cancel`, ends it `expired` or `stopped` and closes the listener;
+- a sign-in that ends before its token is stored stores nothing, and one that finds its starting pair changed or removed ends `stopped`, storing nothing;
 - at most one sign-in runs at a time; a second start is `busy`.
 
 #### git-host-3
@@ -41,14 +42,15 @@ When a client sends `space.signin.start` on the server shell, the core shall sig
 2. poll the host's token endpoint at the interval it named, backing off when told to slow down, until the app token arrives, the person denies, or the code expires;
 3. on the token, continue as the browser flow does from its fourth step.
 
-- a denial ends the sign-in `failed` with `denied`, an expiry with `expired`, and `space.signin.cancel` stops the polling; nothing is stored until the token arrives.
+- a denial ends the sign-in `failed` with `denied`, an expiry with `expired`, and `space.signin.cancel` stops the polling; nothing is stored until the token arrives and the person is read.
 
 #### git-host-4
 
 While the home holds an app token, when a call to the host is made, the core shall present the access secret as a bearer credential and keep the token current:
 
-- an access secret within a minute of expiring, or one the host answers `token_expired` to, is refreshed first through the refresh secret, one refresh at a time, the new pair stored before any further call [[storage-19](storage.md#storage-19)]; a call refused `token_expired` is retried once after the refresh;
+- an access secret within a minute of expiring, or one the host answers `token_expired` to, is refreshed first through the refresh secret, one refresh at a time, the new pair stored in place of the refreshed one before any further call [[storage-19](storage.md#storage-19)]; a call refused `token_expired` is retried once after the refresh;
 - a refresh the host refuses, or a call the host answers `invalid_token`, `token_revoked` or `reauth_required` to, signs the device out of the home: the credential is removed, the account kept in `home.yaml` marked signed out, the Groups state reporting the sign-out as the host's with that account's login [[space-3](space.md#space-3)], held for the core's run alone, and every spex repository with a remote turns unreachable with "Sign in again" [[space-61](space.md#space-61)], until the next sign-in;
+- a refresh or a refusal answers the pair its request presented: the credential's removal and the sign-out are one step, and where that pair is no longer the stored one, by a sign-in, a refresh or a sign-out meanwhile [[storage-19](storage.md#storage-19)], nothing is stored or removed, the device is not signed out, and the call is refused as changed meanwhile, to be made again;
 - `rate_limited` is reported with the host's retry time, `provider_unavailable` and a network failure as unreachable, and a `host_refused` with the host's words [[git-host-11](git-host.md#git-host-11)].
 
 ### Reads and Writes
@@ -97,9 +99,11 @@ When the core runs a Git transport — clone, fetch, push or `ls-remote` — aga
 
 #### git-host-10
 
-When a client sends `space.signout`, the core shall revoke this device at the host with its app token, remove the credential [[storage-19](storage.md#storage-19)], and mark the account signed out in `home.yaml`, keeping every clone and record:
+When a client sends `space.signout`, the core shall revoke this device at the host with its app token, then, in one step, remove that pair [[storage-19](storage.md#storage-19)] and mark the account signed out in `home.yaml`, keeping every clone and record:
 
-- a host that cannot be reached is tried once; the credential is removed either way.
+- a host that cannot be reached is tried once; the credential is removed either way;
+- where another pair was stored in its place meanwhile, by a sign-in or a refresh, nothing is removed, the account stays signed in, and the sign-out is refused `conflict` as changed meanwhile, to be sent again;
+- where this host's stored entry is malformed, nothing is revoked, and that entry is removed and the account signed out, unless a well-formed pair is stored there by then, which stays as above; a credentials file of another format is left as it is and the sign-out refused [[storage-19](storage.md#storage-19)].
 
 #### git-host-11
 
@@ -135,9 +139,14 @@ When an integration suite starts a real core on a scratch home against the stand
 - a new home records the stand-in's URL from `SPEX_HOST_URL`, and a later start with the variable changed keeps the recorded one [[git-host-1](#git-host-1)];
 - the browser flow's URL names the loopback redirect, an S256 challenge and `client_id=spex`; completing it at the stand-in stores the app token with owner-only permissions and the account in `home.yaml`, and the callback page says the browser may be closed [[git-host-2](#git-host-2)];
 - a callback with a wrong `state`, one carrying `access_denied`, a refused exchange, a cancel and a test-shortened expiry each end the sign-in with its cause and store nothing; a second start during a flow is `busy` [[git-host-2](#git-host-2)];
+- with the person read held after the exchange, a cancel in the browser flow and in the device flow ends the sign-in `stopped` with nothing stored once the read answers, and a pair stored meanwhile ends it `stopped`, that pair and another host's kept [[git-host-2](#git-host-2)] [[git-host-3](#git-host-3)];
+- with the person read failing after the exchange, the browser flow and the device flow each end the sign-in `failed` with nothing stored [[git-host-2](#git-host-2)] [[git-host-3](#git-host-3)];
 - the device flow replies with the stand-in's user code and its verification URL completed with that code, polls at its interval, backs off on slow down, and completes on approval; a denial and an expiry end it with their causes [[git-host-3](#git-host-3)];
 - an access secret the stand-in expires is refreshed once before the next call, two concurrent calls refresh once, and a refresh the stand-in refuses, or a device it revoked, signs the device out with every remote repository unreachable and the state reporting the host's sign-out with the account's login until the next sign-in, which clears it [[git-host-4](#git-host-4)];
-- sign-out revokes the device at the stand-in and removes the credential, and a stand-in that cannot be reached still leaves the home signed out [[git-host-10](#git-host-10)].
+- with a refresh's answer, granted or refused, or a revoked pair's refusal held while another pair is stored, the answer stores and removes nothing and signs nothing out, and the call is refused as changed meanwhile, another host's pair kept; a core whose held read was refused for the former pair keeps its account signed in [[git-host-4](#git-host-4)];
+- sign-out revokes the device at the stand-in and removes the credential, and a stand-in that cannot be reached still leaves the home signed out [[git-host-10](#git-host-10)];
+- a sign-out over a malformed entry for the stand-in removes it and marks the account signed out, another host's pair kept; one whose failed read is followed by a well-formed pair stored there keeps that pair, marks nothing and is refused as changed; one over a file of another format leaves it byte for byte and marks nothing [[git-host-10](#git-host-10)];
+- a core's sign-out whose revocation is held while a new sign-in stores its pair is refused `conflict`, the new pair and the account signed in kept; one whose removal is followed, before the sign-out's own continuation, by a new sign-in storing its pair and account leaves that account signed in [[git-host-10](#git-host-10)].
 
 #### git-host-14
 

@@ -4,8 +4,10 @@
 // Application files belong to Spex; session files and mutations belong
 // to Playbook. The home pairs working folders with spex repositories,
 // one clone each under `workspace/` with its own session store
-// (storage-1, storage-14, DR-103). These maps are rebuilt projections
-// for UI and intent folds.
+// (storage-1, storage-14, DR-103). The home, the clones, project files
+// and intents are read from disk when asked (DR-111); a clone's
+// descriptor is kept only as its paths and session store. The session
+// maps are rebuilt projections for UI and run folds.
 
 import {
   appendFileSync,
@@ -19,6 +21,7 @@ import {
   rmSync,
   statSync,
   writeFileSync,
+  type Dirent,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
@@ -26,10 +29,10 @@ import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./r
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
-  intentFileOf, intentInfoOf, parseIntentFile, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
+  intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
-import { readJsonFile, StorageFormatError, writeApplicationFile } from "./files.js";
+import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
 import { Home, repositoryNameFor, splitKey } from "./home.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { initializeClone } from "./storage-git.js";
@@ -416,13 +419,11 @@ export class Store {
   private meta: StoreMeta = { version: META_VERSION };
   private homeFile!: Home;
   private homeProblem?: StorageDiagnostic;
+  /** Each clone's descriptor by key, as the last walk found it: a handle
+   * on its paths and session store, never a fact about its files. */
   private readonly repositories = new Map<string, SpexRepository>();
-  private readonly projects = new Map<string, ProjectInfo>();
   private readonly prefs = new Map<string, unknown>();
   private readonly forgeCache = new Map<string, { at: number; state: ForgeState }>();
-  private readonly intents = new Map<string, IntentInfo>();
-  private readonly intentProblems = new Map<string, StorageDiagnostic>();
-  private readonly projectFileProblems = new Map<string, StorageDiagnostic>();
   private readonly sessionProblems = new Map<string, StorageDiagnostic>();
   private readonly untrackedSessions = new Set<string>();
   private readonly localSessions = new Set<string>();
@@ -526,8 +527,8 @@ export class Store {
     return join(this.dir, "meta.json");
   }
 
-  /** The home file this store serves. */
-  get home(): Home { return this.homeFile; }
+  /** The home file this store serves, as `home.yaml` reads now. */
+  get home(): Home { this.refreshHome(); return this.homeFile; }
 
   /** Read or create `home.yaml`, make sure your own group's spex
    * repository stands, and index every clone under `workspace/`. */
@@ -547,7 +548,7 @@ export class Store {
     }
     mkdirSync(join(this.dir, "local"), { recursive: true, mode: 0o700 });
     this.ensureOwnRepository();
-    this.discoverRepositories();
+    this.prepareSessionDirs();
     this.loadApplication();
   }
 
@@ -585,13 +586,21 @@ export class Store {
     catch (error) { console.error(`spex: ${dir} is not a repository yet: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
-  /** Every clone under `workspace/`: a folder named `<name>-spex` inside
-   * plain group folders mirroring the Git host (storage-1). */
-  private discoverRepositories(): void {
+  /** Every clone under `workspace/` as the folders stand now: a folder
+   * named `<name>-spex` inside plain group folders mirroring the Git host
+   * (storage-1). The walk only reads: a clone found again keeps its
+   * descriptor, and one gone leaves the map. */
+  private currentRepositories(): Map<string, SpexRepository> {
     const found = new Map<string, string>();
     const walk = (dir: string, depth: number): void => {
-      if (depth > 8 || !existsSync(dir)) return;
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (depth > 8) return;
+      let entries: Dirent[];
+      try { entries = readdirSync(dir, { withFileTypes: true }); }
+      catch (error) {
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return;
+        throw error;
+      }
+      for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
         const path = join(dir, entry.name);
         const key = this.homeFile.keyOf(path);
@@ -601,36 +610,26 @@ export class Store {
     };
     walk(this.homeFile.workspace, 0);
     for (const key of [...this.repositories.keys()]) if (!found.has(key)) this.repositories.delete(key);
-    for (const [key, dir] of found) {
-      if (this.repositories.has(key)) continue;
-      const repository = spexRepository(key, dir);
-      // Sessions are private, and Playbook's store refuses a sessions
-      // directory that is not 0700.
-      mkdirSync(repository.sessionsDir, { recursive: true, mode: 0o700 });
-      this.repositories.set(key, repository);
-    }
-    this.refreshProjects();
+    for (const [key, dir] of found) if (!this.repositories.has(key)) this.repositories.set(key, spexRepository(key, dir));
+    return this.repositories;
   }
 
-  private refreshProjects(): void {
-    this.projects.clear();
-    for (const folder of this.homeFile.folders()) {
-      const repository = this.repositories.get(folder.repository);
-      if (!repository) continue;
-      this.projects.set(folder.repository, this.projectInfo(repository, folder.path));
-    }
+  /** Each clone's `sessions/`, made where missing by the store's own
+   * writes — its open, a registration, a move, a join — never by a read:
+   * sessions are private, and Playbook's store refuses a sessions
+   * directory that is not 0700. */
+  private prepareSessionDirs(): void {
+    for (const repository of this.currentRepositories().values()) mkdirSync(repository.sessionsDir, { recursive: true, mode: 0o700 });
   }
 
-  private readProjectFile(repository: SpexRepository): ProjectFile | undefined {
-    if (!existsSync(repository.projectFile)) return undefined;
-    try {
-      const file = parseProjectFile(readJsonFile(repository.projectFile), repository.projectFile);
-      this.projectFileProblems.delete(repository.key);
-      return file;
-    } catch (error) {
+  /** `project.json` as it reads now (storage-3): the file, or the
+   * diagnostic of one that will not read; neither where none stands. */
+  private readProjectFile(repository: SpexRepository): { file?: ProjectFile; problem?: StorageDiagnostic } {
+    if (!existsSync(repository.projectFile)) return {};
+    try { return { file: parseProjectFile(readJsonFile(repository.projectFile), repository.projectFile) }; }
+    catch (error) {
       if (!(error instanceof StorageFormatError)) throw error;
-      this.projectFileProblems.set(repository.key, { file: error.file, reason: error.reason, blocking: false });
-      return undefined;
+      return { problem: { file: error.file, reason: error.reason, blocking: false } };
     }
   }
 
@@ -641,7 +640,7 @@ export class Store {
     return {
       id: repository.key,
       path,
-      name: this.readProjectFile(repository)?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
+      name: this.readProjectFile(repository).file?.name ?? (repository.key === this.homeFile.own() ? this.homeFile.ownName : basename(path)),
       registeredAt,
       repository: { key: repository.key, name, group, own: group === this.homeFile.ownName },
     };
@@ -649,24 +648,20 @@ export class Store {
 
   /** Every clone this home holds. */
   listRepositories(): SpexRepository[] {
-    return [...this.repositories.values()].sort((a, b) => a.key.localeCompare(b.key));
+    return [...this.currentRepositories().values()].sort((a, b) => a.key.localeCompare(b.key));
   }
 
-  repository(key: string): SpexRepository | undefined { return this.repositories.get(key); }
+  repository(key: string): SpexRepository | undefined { return this.currentRepositories().get(key); }
 
-  /** Your own group's spex repository. */
+  /** Your own group's spex repository: made at the store's open alone
+   * (storage-6), and refused, never made again, where it went since. */
   ownRepository(): SpexRepository {
-    const own = this.repositories.get(this.homeFile.own());
-    if (!own) {
-      const dir = this.homeFile.clonePath(this.homeFile.own());
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
-      this.discoverRepositories();
-    }
-    return this.repositories.get(this.homeFile.own()) as SpexRepository;
+    this.refreshHome();
+    return this.requireRepository(this.homeFile.own());
   }
 
   private requireRepository(key: string): SpexRepository {
-    const repository = this.repositories.get(key);
+    const repository = this.repository(key);
     if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no spex repository {key} on this device",
       comment: "Refusal: the key names no clone under workspace/", values: { key } }));
     return repository;
@@ -677,13 +672,21 @@ export class Store {
     this.homeFile.save();
   }
 
-  /** Before a change to `home.yaml`, the file as it stands now: a change
-   * made since this store last read or wrote it — an editor's — is read
-   * first, so the change applies to it rather than replacing it (DR-111).
-   * Each caller reads, changes and writes within one synchronous step. */
+  /** `home.yaml` as it stands now (DR-111), read at each of the store's
+   * operations and queries — never inside `Home`'s own getters, so a
+   * change made and saved in one synchronous step is never read over. A
+   * change made since this store last read or wrote it — an editor's —
+   * is taken; a file that will not read, or was deleted once read, stands
+   * as the home's problem, refusing every write that needs it while the
+   * last reading answers; a repaired file clears it. */
   private refreshHome(): void {
-    if (this.homeProblem) return;
-    if (this.homeFile.refresh()) this.refreshProjects();
+    try { this.homeFile.refresh(); }
+    catch (error) {
+      if (!(error instanceof StorageFormatError)) throw error;
+      this.homeProblem = { file: error.file, reason: error.reason, blocking: true };
+      return;
+    }
+    if (this.homeProblem && Home.exists(this.dir)) this.homeProblem = undefined;
   }
 
   /** The file the preferences were last read from or written to, by its
@@ -748,17 +751,16 @@ export class Store {
   // -- load (the restart fold, CORE-10/52) ----------------------------------
 
   /**
-   * Re-read every application file from disk (space-20): an in-app sync
-   * replaced intents, preferences or project files under this running
-   * store, so the indexes rebuild from the same loaders the restart fold
-   * uses; sessions re-index through their own rescan.
+   * After an in-app sync (space-20): each clone it brought gets its
+   * `sessions/`, and the preferences and forge cache are read again from
+   * the same loaders the restart fold uses; the home, project files and
+   * intents are read when asked, and sessions re-index through their own
+   * rescan.
    */
   reload(): void {
     this.forgeCache.clear();
     this.cacheProblem = undefined;
-    this.intents.clear();
-    this.intentProblems.clear();
-    this.discoverRepositories();
+    this.prepareSessionDirs();
     this.loadApplication();
   }
 
@@ -776,36 +778,15 @@ export class Store {
         values: { cause: String(error) },
       }), blocking:false};
     }
-    for (const repository of this.repositories.values()) this.loadIntents(repository);
-  }
-
-  /** One clone's intents: every readable file, and a diagnostic per file
-   * that will not read, its intent listed nowhere (storage-4). */
-  private loadIntents(repository: SpexRepository): void {
-    for (const [id, intent] of [...this.intents]) if (intent.projectId === repository.key) this.intents.delete(id);
-    for (const [file] of [...this.intentProblems]) if (file.startsWith(`${repository.intentsDir}/`)) this.intentProblems.delete(file);
-    const { intents, problems } = readIntentFiles(repository.intentsDir);
-    for (const problem of problems) this.intentProblems.set(problem.file, problem);
-    for (const file of intents) {
-      if (this.intents.has(file.id)) {
-        const path = join(repository.intentsDir, `${file.id}.json`);
-        this.intentProblems.set(path, { file: path, reason: i18n._({
-          id: "duplicate queue {intentId}",
-          comment: "Storage diagnostic: two acts queue the same intent",
-          values: { intentId: file.id },
-        }), blocking: false });
-        continue;
-      }
-      this.intents.set(file.id, intentInfoOf(file, repository.key));
-    }
   }
 
   // -- sessions, one shared store per clone (storage-14) --------------------
 
-  /** Your own group's session store: where the XDG import lands
-   * (storage-18) and what a session-less caller reads. */
-  sessionStore(key = this.homeFile.own()): SharedSessionStore {
-    return (this.repositories.get(key) ?? this.ownRepository()).store;
+  /** A clone's session store; your own group's by default: where the
+   * XDG import lands (storage-18) and what a session-less caller reads.
+   * A key naming no clone now is refused, never served by another's. */
+  sessionStore(key?: string): SharedSessionStore {
+    return (key === undefined ? this.ownRepository() : this.requireRepository(key)).store;
   }
 
   /** The session store of the clone holding a session. */
@@ -1016,7 +997,7 @@ export class Store {
   /** The session files of one clone Playbook has yet to accept, relative
    * to the clone, so its rules keep them out of Git (storage-17). */
   untrackedSessionPaths(key: string): string[] {
-    const repository = this.repositories.get(key);
+    const repository = this.repository(key);
     if (!repository) return [];
     const directory = relative(repository.dir, repository.sessionsDir);
     if (directory.startsWith("..") || isAbsolute(directory)) return [];
@@ -1032,7 +1013,9 @@ export class Store {
     if (owned) this.localSessions.add(id); else this.localSessions.delete(id);
   }
 
+  /** Refused while `home.yaml`, read now, does not stand (storage-12). */
   assertProjectsWritable(): void {
+    this.refreshHome();
     if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
   }
 
@@ -1320,15 +1303,15 @@ export class Store {
    * group, or select the pair it already has (storage-6). */
   registerProject(path: string, name: string, _at?: number): ProjectInfo {
     this.assertProjectsWritable();
-    this.refreshHome();
     const normalized = resolve(path);
     const paired = this.homeFile.keyForFolder(normalized);
-    if (paired && this.projects.has(paired)) return this.projects.get(paired)!;
+    const project = paired ? this.getProject(paired) : undefined;
+    if (project) return project;
     if (paired) throw new StorageFormatError(Home.file(this.dir), i18n._({ id: "path {path} needs explicit rebinding",
       comment: "Refusal: the folder is recorded for a project already, so Add cannot claim it", values: { path: normalized } }));
     const base = repositoryNameFor(name || basename(normalized)).slice(0, -"-spex".length);
     let key = `${this.homeFile.ownName}/${base}-spex`;
-    for (let n = 2; this.repositories.has(key) || existsSync(this.homeFile.clonePath(key)) || this.homeFile.folderOf(key); n += 1) {
+    for (let n = 2; existsSync(this.homeFile.clonePath(key)) || this.homeFile.folderOf(key); n += 1) {
       key = `${this.homeFile.ownName}/${base}-${n}-spex`;
     }
     const dir = this.homeFile.clonePath(key);
@@ -1338,15 +1321,14 @@ export class Store {
     this.initializeRepository(dir);
     this.homeFile.pair(normalized, key);
     this.saveHome();
-    this.discoverRepositories();
-    return this.projects.get(key)!;
+    this.prepareSessionDirs();
+    return this.getProject(key)!;
   }
 
   /** Pair a folder with an existing clone (storage-22): the supplied
    * aliases replace the list, omitted ones keep it. */
   rebindProject(options: { id: string; path: string; aliases?: string[] }): ProjectInfo {
     this.assertProjectsWritable();
-    this.refreshHome();
     const repository = this.requireRepository(options.id);
     const normalized = resolve(options.path);
     const other = this.homeFile.keyForFolder(normalized);
@@ -1359,14 +1341,12 @@ export class Store {
       throw error;
     }
     this.saveHome();
-    this.refreshProjects();
-    return this.projects.get(repository.key)!;
+    return this.getProject(repository.key)!;
   }
 
   /** The account a sign-in read, written into `home.yaml` (storage-2). */
   signIn(account: { id: string; login: string; displayName: string | null }): void {
     this.assertProjectsWritable();
-    this.refreshHome();
     this.homeFile.signIn(account);
     this.saveHome();
   }
@@ -1374,8 +1354,8 @@ export class Store {
   /** The credential went; the account stays, marked signed out
    * (git-host-4, git-host-10). */
   signOut(): void {
-    if (this.homeProblem) return;
     this.refreshHome();
+    if (this.homeProblem) return;
     this.homeFile.signOut();
     this.saveHome();
   }
@@ -1384,18 +1364,18 @@ export class Store {
    * Clones the caller already moved on disk (space-59, space-60): every
    * pair naming a moved key names its new one in `home.yaml`, your own
    * group's name follows where it was renamed, and the indexes — clones,
-   * sessions, intents, the preferences keyed by repository — follow in
-   * the same step, so no reader sees a key that names nothing.
+   * sessions, the preferences keyed by repository — follow in the same
+   * step, so no reader sees a key that names nothing; intents are read
+   * where their clones now lie.
    */
   moveRepositories(moves: { from: string; to: string }[], own?: string): void {
     this.assertProjectsWritable();
     if (moves.length === 0 && own === undefined) return;
-    this.refreshHome();
     this.homeFile.move(moves, own);
     this.saveHome();
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
     for (const { from } of moves) this.repositories.delete(from);
-    this.discoverRepositories();
+    this.prepareSessionDirs();
     for (const [id, location] of [...this.sessionLocations]) {
       const next = to.get(location);
       if (next) this.sessionLocations.set(id, next);
@@ -1405,10 +1385,6 @@ export class Store {
       if (!next) continue;
       const repository = this.repositories.get(next);
       this.sessions.set(id, { ...meta, projectId: next, ...(repository && meta.originDir ? { originDir: repository.sessionsDir } : {}) });
-    }
-    for (const [id, intent] of [...this.intents]) {
-      const next = to.get(intent.projectId);
-      if (next) this.intents.set(id, { ...intent, projectId: next });
     }
     this.changePrefs((prefs) => {
       let changed = false;
@@ -1425,61 +1401,56 @@ export class Store {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }
     }
-    for (const { from } of moves) {
-      const gone = `${this.homeFile.clonePath(from)}/`;
-      for (const file of [...this.intentProblems.keys()]) if (file.startsWith(gone)) this.intentProblems.delete(file);
-    }
-    const targets = new Set(moves.map((entry) => entry.to));
-    for (const repository of this.repositories.values()) if (targets.has(repository.key)) this.loadIntents(repository);
-    this.refreshProjects();
   }
 
   /** A clone that came under `workspace/` from outside the store — a
-   * join's — is indexed with its intents (space-63). */
+   * join's — gets its `sessions/` (space-63); its intents are read when
+   * asked. */
   adoptRepositories(): void {
-    this.discoverRepositories();
-    for (const repository of this.repositories.values()) this.loadIntents(repository);
+    this.prepareSessionDirs();
   }
 
   /** Forget the pair and delete the clone (projects-9, projects-10); the
    * working folder stays as it is. */
   removeProject(key: string): boolean {
     this.assertProjectsWritable();
-    this.refreshHome();
     const folder = this.homeFile.folderOf(key);
-    const repository = this.repositories.get(key);
+    const repository = this.repository(key);
     if (!folder && !repository) return false;
     try { this.onProjectRemoving?.(key, folder?.path); }
     catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
     if (folder) { this.homeFile.unpair(key); this.saveHome(); }
     if (repository && key !== this.homeFile.own()) {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
-      for (const [id, intent] of [...this.intents]) if (intent.projectId === key) this.intents.delete(id);
       rmSync(repository.dir, { recursive: true, force: true });
       this.repositories.delete(key);
     }
-    this.refreshProjects();
     return true;
   }
 
+  /** Every damaged or unresolved stored file as the files read now
+   * (core-service-86, storage-12): a repaired or removed file's report
+   * leaves with it. */
   storageDiagnostics(): StorageDiagnostic[] {
     this.currentPrefs();
+    this.refreshHome();
+    const repositories = this.listRepositories();
     const reports: StorageDiagnostic[] = [
       ...(this.homeProblem ? [this.homeProblem] : []),
-      ...this.intentProblems.values(),
-      ...this.projectFileProblems.values(),
+      ...this.readIntents().problems,
+      ...repositories.flatMap((repository) => this.readProjectFile(repository).problem ?? []),
       ...(this.prefsProblem ? [this.prefsProblem] : []),
       ...(this.cacheProblem ? [this.cacheProblem] : []),
     ];
     const paired = new Set(this.homeFile.folders().map((folder) => folder.repository));
-    for (const repository of this.repositories.values()) {
+    for (const repository of repositories) {
       if (paired.has(repository.key)) continue;
       const held = [...this.sessions.values()].filter((meta) => meta.projectId === repository.key);
       // Your own group's clone needs a folder only once it holds sessions.
       if (repository.key === this.homeFile.own() && held.length === 0) continue;
       const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
       const { group, name } = splitKey(repository.key);
-      const label = this.readProjectFile(repository)?.name ?? name;
+      const label = this.readProjectFile(repository).file?.name ?? name;
       reports.push({
         file: relative(this.dir, repository.dir),
         reason: unpairedReason(label),
@@ -1487,8 +1458,9 @@ export class Store {
         repair: { kind: "repository", repository: repository.key, name, group, directories, sessions: held.length, key: repairKey(repository.key, directories) },
       });
     }
+    const cloned = new Set(repositories.map((repository) => repository.key));
     for (const folder of this.homeFile.folders()) {
-      if (this.repositories.has(folder.repository)) continue;
+      if (cloned.has(folder.repository)) continue;
       reports.push({
         file: "home.yaml",
         reason: missingCloneReason(folder.path),
@@ -1501,15 +1473,30 @@ export class Store {
 
   validateStorage(): StorageDiagnostic[] { return this.storageDiagnostics(); }
 
+  /** Each paired folder's project, as `home.yaml`, its clone and its
+   * `project.json` stand now (storage-2, storage-3). */
   listProjects(): ProjectInfo[] {
-    return [...this.projects.values()].sort((a, b) => a.registeredAt - b.registeredAt || a.id.localeCompare(b.id));
+    this.refreshHome();
+    const repositories = this.currentRepositories();
+    return this.homeFile.folders()
+      .flatMap((folder) => {
+        const repository = repositories.get(folder.repository);
+        return repository ? [this.projectInfo(repository, folder.path)] : [];
+      })
+      .sort((a, b) => a.registeredAt - b.registeredAt || a.id.localeCompare(b.id));
   }
 
-  getProject(id: string): ProjectInfo | undefined { return this.projects.get(id); }
+  getProject(id: string): ProjectInfo | undefined {
+    this.refreshHome();
+    const folder = this.homeFile.folderOf(id);
+    const repository = folder ? this.repository(id) : undefined;
+    return folder && repository ? this.projectInfo(repository, folder.path) : undefined;
+  }
 
   getProjectByPath(path: string): ProjectInfo | undefined {
+    this.refreshHome();
     const key = this.homeFile.keyForFolder(path);
-    return key ? this.projects.get(key) : undefined;
+    return key ? this.getProject(key) : undefined;
   }
 
   // -- sessions -------------------------------------------------------------
@@ -1587,7 +1574,7 @@ export class Store {
   describeSession(id: string): SessionInfo | undefined {
     const meta = this.sessions.get(id);
     if (!meta) return undefined;
-    const project = this.projects.get(meta.projectId);
+    const project = this.getProject(meta.projectId);
     if (!project) return undefined;
     return this.summarize(meta, project.path);
   }
@@ -1629,10 +1616,11 @@ export class Store {
 
   listSessions(): SessionInfo[] {
     const out: SessionInfo[] = [];
+    const projects = new Map(this.listProjects().map((project) => [project.id, project]));
     for (const meta of [...this.sessions.values()].sort(
       (a, b) => a.createdAt - b.createdAt,
     )) {
-      const project = this.projects.get(meta.projectId);
+      const project = projects.get(meta.projectId);
       // A session whose project left the registry stays on disk but
       // out of the listing (DR-036).
       if (!project) continue;
@@ -1834,59 +1822,97 @@ export class Store {
 
   // -- intents, one file each (storage-4, core-service-52) ------------------
 
-  /** One intent as its file reads at this instant (DR-111): a change a
-   * sync applied since the index read it is taken, and a file gone
-   * meanwhile names no intent. Each write that follows lands in the same
-   * synchronous step. */
+  /** Every intent as the files of every clone read now (storage-4,
+   * DR-111): each readable file by its id — the first clone by key
+   * holding it — and a diagnostic for each file that will not read or
+   * repeats an id, its intent listed nowhere. Nothing is kept between
+   * reads. */
+  private readIntents(): { intents: Map<string, { intent: IntentInfo; repository: SpexRepository }>; problems: StorageDiagnostic[] } {
+    const intents = new Map<string, { intent: IntentInfo; repository: SpexRepository }>();
+    const problems: StorageDiagnostic[] = [];
+    for (const repository of this.listRepositories()) {
+      const read = readIntentFiles(repository.intentsDir);
+      problems.push(...read.problems);
+      for (const file of read.intents) {
+        if (intents.has(file.id)) {
+          const path = join(repository.intentsDir, `${file.id}.json`);
+          problems.push({ file: path, reason: i18n._({
+            id: "duplicate queue {intentId}",
+            comment: "Storage diagnostic: two acts queue the same intent",
+            values: { intentId: file.id },
+          }), blocking: false });
+          continue;
+        }
+        intents.set(file.id, { intent: intentInfoOf(file, repository.key), repository });
+      }
+    }
+    return { intents, problems };
+  }
+
+  /** One intent as its file reads at this instant (DR-111): an edit since
+   * the last read is taken, and a file gone meanwhile names no intent;
+   * a file of its id that will not read is refused with its cause. Each
+   * write that follows lands in the same synchronous step. */
   private requireIntent(id: string): { intent: IntentInfo; repository: SpexRepository } {
-    const noIntent = (): StorageFormatError => new StorageFormatError(join("intents", `${id}.json`), i18n._({
+    const { intents, problems } = this.readIntents();
+    const found = intents.get(id);
+    if (found) return found;
+    const damaged = problems.find((problem) => basename(problem.file) === `${id}.json`);
+    if (damaged) throw new StorageFormatError(damaged.file, damaged.reason);
+    throw new StorageFormatError(join("intents", `${id}.json`), i18n._({
       id: "no intent {intentId}", comment: "Refusal: no intent of this id is in the ledger", values: { intentId: id } }));
-    const indexed = this.intents.get(id);
-    if (!indexed) throw noIntent();
-    const repository = this.requireRepository(indexed.projectId);
-    const file = join(repository.intentsDir, `${id}.json`);
-    if (!existsSync(file)) { this.intents.delete(id); throw noIntent(); }
-    const intent = intentInfoOf(parseIntentFile(readJsonFile(file), file, id), repository.key);
-    this.intents.set(id, intent);
-    return { intent, repository };
   }
 
   /** An intent as its file reads now, or undefined where none stands. */
   currentIntent(id: string): IntentInfo | undefined {
-    try { return structuredClone(this.requireIntent(id).intent); }
-    catch (error) {
-      if (error instanceof StorageFormatError && !this.intents.has(id)) return undefined;
-      throw error;
-    }
+    const { intents, problems } = this.readIntents();
+    const found = intents.get(id);
+    if (found) return structuredClone(found.intent);
+    const damaged = problems.find((problem) => basename(problem.file) === `${id}.json`);
+    if (damaged) throw new StorageFormatError(damaged.file, damaged.reason);
+    return undefined;
   }
 
   /** Rewrite one intent's file whole (storage-4). */
   private writeIntent(repository: SpexRepository, intent: IntentInfo): void {
     this.assertWritable({ projectId: intent.projectId });
     writeIntentFile(repository.intentsDir, intentFileOf(intent));
-    this.intents.set(intent.id, intentInfoOf(intentFileOf(intent), repository.key));
   }
 
   /** The directory beside an intent's file holding its attachments. */
   intentAssetsDir(id: string, projectId?: string): string {
-    const key = projectId ?? this.intents.get(id)?.projectId;
+    const key = projectId ?? this.readIntents().intents.get(id)?.repository.key;
     if (!key) throw new StorageFormatError(join("intents", `${id}.assets`), i18n._({
       id: "no intent {intentId}", comment: "Refusal: no intent of this id is in the ledger", values: { intentId: id } }));
     return join(this.requireRepository(key).intentsDir, `${id}.assets`);
   }
 
   /** Store a new intent as one file of its project's spex repository
-   * (core-service-42). */
+   * (core-service-42): refused where any clone's intent holds its id or
+   * a file stands at its name, read now and checked again at the instant
+   * of the write, so no file is replaced. */
   addIntent(intent: IntentInfo): void {
     const repository = this.requireRepository(intent.projectId);
-    if (this.intents.has(intent.id)) throw new StorageFormatError(join(repository.intentsDir, `${intent.id}.json`), i18n._({
+    this.assertWritable({ projectId: intent.projectId });
+    const file = join(repository.intentsDir, `${intent.id}.json`);
+    const duplicate = (): StorageFormatError => new StorageFormatError(file, i18n._({
       id: "duplicate queue {intentId}", comment: "Storage diagnostic: two acts queue the same intent", values: { intentId: intent.id } }));
-    this.writeIntent(repository, structuredClone(intent));
+    if (this.readIntents().intents.has(intent.id) || existsSync(file)) throw duplicate();
+    try { writeIntentFile(repository.intentsDir, intentFileOf(structuredClone(intent)), true); }
+    catch (error) {
+      if (error instanceof VersionConflictError) throw duplicate();
+      throw error;
+    }
   }
 
   getIntent(id: string): IntentInfo | undefined {
-    const intent = this.intents.get(id);
-    return intent ? structuredClone(intent) : undefined;
+    const found = this.readIntents().intents.get(id);
+    return found ? structuredClone(found.intent) : undefined;
+  }
+
+  /** Every intent the files hold now, as stored. */
+  private currentIntents(): IntentInfo[] {
+    return [...this.readIntents().intents.values()].map((entry) => entry.intent);
   }
 
   /** The open intent holding a source artifact, if any (DR-035). */
@@ -1895,7 +1921,7 @@ export class Store {
     kind: IntentSourceKind,
     ref: string,
   ): IntentInfo | undefined {
-    for (const intent of this.intents.values()) {
+    for (const intent of this.currentIntents()) {
       if (
         intent.projectId === projectId &&
         intent.closedAt === undefined &&
@@ -1911,8 +1937,9 @@ export class Store {
   /** Every open intent of a project on this device, oldest first by
    * capture time, then by id (core-service-107). */
   listOpenIntents(): IntentInfo[] {
-    return [...this.intents.values()]
-      .filter((intent) => intent.closedAt === undefined && this.projects.has(intent.projectId))
+    const projects = new Set(this.listProjects().map((project) => project.id));
+    return this.currentIntents()
+      .filter((intent) => intent.closedAt === undefined && projects.has(intent.projectId))
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((intent) => structuredClone(intent));
   }
@@ -1926,7 +1953,7 @@ export class Store {
     before?: { closedAt: number; intentId: string },
     include: (intent: IntentInfo) => boolean = () => true,
   ): IntentInfo[] {
-    return [...this.intents.values()]
+    return this.currentIntents()
       .filter(
         (intent): intent is IntentInfo & { closedAt: number } =>
           intent.projectId === projectId &&
@@ -1956,7 +1983,7 @@ export class Store {
   listSessionDispatches(
     sessionId: string,
   ): { intentId: string; turnId: number; open: boolean; closedAt?: number }[] {
-    return [...this.intents.values()]
+    return this.currentIntents()
       .filter((intent) => intent.dispatched?.sessionId === sessionId)
       .sort(
         (a, b) =>
@@ -2038,7 +2065,6 @@ export class Store {
     this.assertWritable({ projectId: intent.projectId });
     rmSync(join(repository.intentsDir, `${intent.id}.assets`), { recursive: true, force: true });
     rmSync(join(repository.intentsDir, `${intent.id}.json`), { force: true });
-    this.intents.delete(intent.id);
   }
 
   // -- prefs ----------------------------------------------------------------

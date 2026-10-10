@@ -106,6 +106,9 @@ export interface AuthorManagerOptions {
   compileSpawner?: LineSpawner;
   compileRuntime?: ToolchainRuntime;
   composed: () => ComposedConfig | undefined;
+  /** Brings {@link composed} to the config as its files stand, awaited
+   * once as each turn or compile starts (DR-111); it keeps what it read. */
+  prepareConfig?: () => Promise<void>;
   readiness: (adapter: AdapterName) => boolean | null;
   /** Ids a playbook of the project's or your own group's environment
    * holds; a new session never takes one (playbook-library-51). */
@@ -1171,6 +1174,7 @@ export class AuthorManager {
     let aborted = false;
     let reply: string | undefined;
     try {
+      await this.options.prepareConfig?.();
       const draft = this.expect(id, instance);
       const resolved = this.resolveAgent(draft);
       const composed = this.options.composed();
@@ -1601,6 +1605,9 @@ export class AuthorManager {
         startedAt = Math.max(startedAt, (draft.compile?.at ?? 0) + 1);
         draft.compile = { at: startedAt, by, outcome: "running", device: this.options.device() };
       });
+      // The compiler's agent is the config's as its files stand (DR-111);
+      // a refusal settles the compile its marker started.
+      await this.options.prepareConfig?.();
       this.status(
         id,
         instance,

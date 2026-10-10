@@ -52,6 +52,8 @@ On every load and reload:
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
 - A turn in flight keeps the config it opened with; the next message opens with the current config, or is refused naming the config error [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+- The state is a cache of the files it was composed from — both config files, the environments' locks, and each module entry those locks place an enabled playbook at, a missing one as absent — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- A load, composition, broadcast or readiness probe whose files changed while it ran publishes nothing it read, valid or not: it may read once more, else the command is refused as `conflict`, "changed meanwhile; retry".
 - Where the file is a profiles-era config, the load migrates it in place per the launcher's semantics ([DR-019](../decisions/019-inline-agent-configuration.md)): named profiles inline into agent blocks, the `profiles` map is deleted, the pre-migration file is backed up beside the config with comments surviving, and a `profile` naming a missing entry is a config error that leaves the file untouched.
 - Validation fails closed on the same defect classes as the playbook launcher [[core-service-16](#core-service-16)].
 
@@ -759,6 +761,25 @@ Where the config file carries a defect from each launcher fail-closed defect cla
 - Captain and player writable paths exercise every refusal class and valid canonical form, agreeing with the installed Cligent configuration loader [[core-service-16](#core-service-16)].
 - Accepted paths reach the runtime projection canonically while their on-disk spelling stays unchanged [[core-service-16](#core-service-16)].
 
+#### core-service-117
+
+Where the core watches no config file and a playbook module's import or a readiness probe can be held, when each case changes the files beneath it with no reload asked, the integration suite shall assert the case's outcome [[core-service-2](#core-service-2)]:
+
+| Case | Outcome |
+| --- | --- |
+| your own file edited, then `config.get` and `readiness.get` | both read the edit |
+| a valid file made invalid while its import is held | the invalid state answers; the valid one is never broadcast |
+| an invalid file repaired while its import is held | the repair answers; the invalid one is never broadcast |
+| edited again while the re-read's import is held | refused `conflict`, nothing broadcast; the retry reads what stands |
+| edited while a reload's readiness probe is held | no readiness broadcast for the earlier file; the re-read's follows its state |
+| the module entry the lock names removed, then restored | the missing module, then the valid state |
+| edited while a reload's broadcast composes a project, its import held | only the re-read's state is broadcast |
+| a project's file edited while its composition's import is held | the project's state names the edit |
+| edited before an authoring turn, before a queued one, and before a compile | each runs on the edited agent; the running turn keeps its own |
+| a player added to the roster, then `draft.player.set` choosing it | accepted, the next turn running on that player |
+| a compile asked while the config cannot be read as standing | the compile's failure recorded at the toolchain phase, no compiler run |
+| `config.edit` whose reload's composition is held while the file is edited twice more | the reply is the state standing after the edits or `conflict`, never the state before the edit |
+
 ### Persistence Coverage
 
 #### core-service-22
@@ -854,7 +875,7 @@ Where a stored session's stream parks a run in its failure state, the test suite
 
 #### core-service-55
 
-Where a project holds an open issue-sourced intent, the test suite shall send a second `intent.queue` with the same source kind and reference and assert the dedup contract of [[core-service-42](#core-service-42)]: the reply is a `conflict` error naming the existing intent, no intent is stored, and once the existing intent closes [[core-service-46](#core-service-46)] the same request is accepted.
+Where a project holds an open issue-sourced intent, the test suite shall send a second `intent.queue` with the same source kind and reference and assert the dedup contract of [[core-service-42](#core-service-42)]: the reply is a `conflict` error naming the existing intent, no intent is stored, and once the existing intent closes [[core-service-46](#core-service-46)] the same request is accepted; and that an intent holding the same source, whether written by a sync or stored by a second `intent.queue`, while a first queue is held adopting its attachments leaves exactly one intent file for that source and refuses the held queue with `conflict` [[core-service-42](#core-service-42)].
 
 #### core-service-56
 
