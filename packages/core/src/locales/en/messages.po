@@ -1912,11 +1912,6 @@ msgstr "Spex did not sign in. You may close this browser window and return to Sp
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex is signed in. You may close this browser window."
 
-#. Why an interrupted sync's repair failed; spex is the branch's own name
-#: src/space.ts
-msgid "spex moved since the interrupted sync; resolve it in a terminal"
-msgstr "spex moved since the interrupted sync; resolve it in a terminal"
-
 #. A project's new spex repository's description on the Git host, its code on no remote
 #: src/space-groups.ts
 msgid "Spex records of {name}"

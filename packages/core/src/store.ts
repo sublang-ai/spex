@@ -925,7 +925,7 @@ export class Store {
       initialVisible = [...ids];
     }
     const prior = this.sessions.get(id);
-    const writer = live || this.managedSessions.has(id) ? "idle" : await shared.readLeaseState(id);
+    const writer = live ? "idle" : await shared.readLeaseState(id);
     if (live === false && this.localSessions.has(id)) return;
     const meta: SessionMeta = {
       id, projectId: repository.key, cwd: manifest.cwd,
@@ -957,10 +957,10 @@ export class Store {
   /** Admission revalidates ownership without consuming foreign replay that
    * the service's scanner still owes its subscribers (core-service-73). */
   async refreshSessionOwnership(id: string): Promise<void> {
-    if (this.localSessions.has(id) || this.managedSessions.has(id)) return;
+    if (this.localSessions.has(id)) return;
     const writer = await this.sessionStoreFor(id).readLeaseState(id);
     const current = this.sessions.get(id);
-    if (!current || current.live || this.localSessions.has(id) || this.managedSessions.has(id)) return;
+    if (!current || current.live || this.localSessions.has(id)) return;
     const { externalWriter: _priorWriter, ...unchanged } = current;
     this.sessions.set(id, { ...unchanged, ...(writer === "idle" ? {} : { externalWriter: writer }) });
   }
@@ -987,14 +987,6 @@ export class Store {
     if (key) this.sessionLocations.set(id, key);
     if (owned) this.localSessions.add(id); else this.localSessions.delete(id);
   }
-
-  /** The sessions whose management lease this core itself holds for a
-   * sync's Apply through Refresh (space-31): its own lease is not an
-   * external writer when the refresh rescans them. */
-  setManagedSessions(ids: ReadonlySet<string> | undefined): void {
-    this.managedSessions = ids ?? new Set();
-  }
-  private managedSessions: ReadonlySet<string> = new Set();
 
   assertProjectsWritable(): void {
     if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);

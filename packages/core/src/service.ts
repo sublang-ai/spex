@@ -210,9 +210,10 @@ export interface CoreServiceOptions {
   systemLanguages?: readonly string[];
   /** Test seam (space-32): the Space transport limit; 120 s by default. */
   spaceTransportTimeoutMs?: number;
-  /** Test seam: awaited before each Space step runs, so a suite can act
-   * between steps deterministically. */
-  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** Test seam: awaited before each Space step runs, and inside Save
+   * between its validation and its commit (`at: "commit"`), so a suite can
+   * act between them deterministically. */
+  spaceBeforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -490,8 +491,6 @@ export class CoreService {
     controller: AbortController;
     done: Promise<unknown>;
   }>();
-  /** A sync's Apply through Refresh pauses its clone's watchers (space-31). */
-  private readonly watchersPaused = new Set<string>();
   /** The language the core is composing in (core-service-111): the
    * resolution in force, kept so a choice that resolves to the same
    * language re-derives nothing. */
@@ -610,12 +609,6 @@ export class CoreService {
       ),
       blocker: (repository) => this.spaceBlocker(repository),
       broadcast: (state) => this.broadcast({ type: "space.state", state }),
-      pauseWatchers: (repository) => {
-        this.watchersPaused.add(repository);
-        if (this.adoptTimer) { clearTimeout(this.adoptTimer); this.adoptTimer = undefined; }
-        if (repository === this.store.home.own() && this.reloadTimer) { clearTimeout(this.reloadTimer); this.reloadTimer = undefined; }
-      },
-      resumeWatchers: (repository) => { this.watchersPaused.delete(repository); },
       reloadConfig: () => this.reloadConfig(),
       rescanSessions: async (repository) => {
         await this.media.reset();
@@ -1186,9 +1179,6 @@ export class CoreService {
       if (this.sessionsWatchers.has(repository.key) || !existsSync(repository.sessionsDir)) continue;
       const key = repository.key;
       this.sessionsWatchers.set(key, watch(repository.sessionsDir, (_eventType, filename) => {
-        // A sync's Apply through Refresh writes the directory itself and
-        // ends in one full rescan (space-31).
-        if (this.watchersPaused.has(key)) return;
         // The CLI can append without replacing its manifest. Our own
         // sidecars are irrelevant, and the store excludes owned sessions
         // when a shared stream changes. A missing filename means scan.
@@ -1246,9 +1236,6 @@ export class CoreService {
       const name = dir === configDir ? basename(repository.configPath) : basename(configDir);
       try {
         const watcher = watch(dir, (_eventType, filename) => {
-          // A sync's Apply through Refresh reloads once it is done
-          // (space-31).
-          if (this.watchersPaused.has(key)) return;
           if (filename && filename !== name) return;
           // `config/` appeared: the file inside it is watched from now.
           if (dir !== configDir) this.watchProjectConfigs();
@@ -1648,7 +1635,6 @@ export class CoreService {
     const file = basename(this.configPath);
     if (!existsSync(dir)) return;
     this.watcher = watch(dir, (_eventType, filename) => {
-      if (this.watchersPaused.has(this.store.home.own())) return;
       if (filename && filename !== file) return;
       this.scheduleReload();
     });

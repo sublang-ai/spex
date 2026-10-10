@@ -8,7 +8,7 @@
 
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
@@ -40,8 +40,9 @@ export const APPLY_MARKER = ".spex-apply.json";
 export const UPLOAD_STAGING = ".spex-uploads";
 
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
-const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv): Buffer =>
-  execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], ...(env ? { env } : {}) });
+const SESSION_UNIT = /^sessions\/[0-9a-f-]{36}$/;
+const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: string): Buffer =>
+  execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env } : {}), ...(input === undefined ? {} : { input }) });
 const revision = (dir: string, ref: string): string => git(dir, ["rev-parse", "--verify", `${ref}^{commit}`]).toString().trim();
 
 /** Whether a path of a clone may leave the device: not one of the
@@ -70,16 +71,20 @@ function bundleFiles(name: string): string[] {
   return [];
 }
 
-/** Every tracked blob of a revision or tree, as path → blob id. */
-export function readStorageTree(dir: string, ref: string): StorageTree {
-  const out = new Map<string, string>();
+/** Every tracked blob of a revision or tree with its mode. */
+function readTreeEntries(dir: string, ref: string): Map<string, { mode: string; oid: string }> {
+  const out = new Map<string, { mode: string; oid: string }>();
   for (const line of git(dir, ["ls-tree", "-rz", "--full-tree", ref]).toString().split("\0")) {
     if (!line) continue;
     const tab = line.indexOf("\t"); const file = line.slice(tab + 1); const [mode, type, oid] = line.slice(0, tab).split(" ");
     if (type !== "blob" || !["100644", "100755"].includes(mode)) throw new StorageFormatError(file, "tracked storage entries must be regular files");
-    out.set(file, oid);
+    out.set(file, { mode, oid });
   }
   return out;
+}
+/** Every tracked blob of a revision or tree, as path → blob id. */
+export function readStorageTree(dir: string, ref: string): StorageTree {
+  return new Map([...readTreeEntries(dir, ref)].map(([file, entry]) => [file, entry.oid]));
 }
 function equal(a: StorageTree, b: StorageTree, paths: string[]): boolean { return paths.every((p) => a.get(p) === b.get(p)); }
 /** Group every tracked path of three trees into units and classify each
@@ -143,21 +148,6 @@ export async function storageMachineIdentity(): Promise<string> {
   try { return await resolveMachineIdentity(); }
   catch (error) { throw new Error(`Spex cannot identify this machine: ${error instanceof Error ? error.message : String(error)}`); }
 }
-function copySafe(source: string, target: string, top = true): void {
-  if (!existsSync(source)) return;
-  const stat = lstatSync(source);
-  if (stat.isSymbolicLink() || !stat.isDirectory() && (!stat.isFile() || stat.nlink !== 1)) throw new StorageFormatError(source, "unsafe storage path");
-  if (stat.isDirectory()) {
-    mkdirSync(target, { recursive: true, mode: 0o700 });
-    for (const file of readdirSync(source)) {
-      if (file === ".git" || file.startsWith(".lock") || file.endsWith(".lock") || file.includes(".lock.")) continue;
-      // What never leaves the device needs no validation copy.
-      if (top && (file === "packages" || file === "skills" || file === UPLOAD_STAGING)) continue;
-      copySafe(join(source, file), join(target, file), false);
-    }
-  } else { mkdirSync(dirname(target), { recursive: true, mode: 0o700 }); writeFileSync(target, readFileSync(source), { mode: 0o600 }); }
-}
-
 export interface ValidateStorageOptions {
   /** Your own group's clone: its config holds the captain and players. */
   own?: boolean;
@@ -274,120 +264,233 @@ export async function validateStorageTree(dir_: string, options: ValidateStorage
   return diagnostics;
 }
 
-/** The session ids a plan's units name. */
-const sessionUnits = (units: StorageMergeUnit[]): string[] => units.filter((u) => /^sessions\/[0-9a-f-]{36}$/.test(u.name)).map((u) => u.name.slice(9));
+/** A unit's write refused at its instant (storage-14, space-19): a file
+ * of it holds neither the bytes the apply read nor the selected ones, its
+ * session's lease is held, or the clone no longer stands where the apply
+ * began. `written` names the units written before it. */
+export class StorageWriteRefused extends Error {
+  constructor(readonly unit: string, readonly reason: "changed" | "lease" | "moved", readonly written: string[], detail: string) {
+    super(`${unit}: ${detail}`);
+    this.name = "StorageWriteRefused";
+  }
+}
+
+/** Playbook's shared store over a clone's `sessions/`, as far as a
+ * session's write needs it: its lease (storage-14). */
+interface SessionLeases {
+  acquireManagement(id: string): Promise<{ release(): Promise<unknown> }>;
+}
 
 export interface ApplyStorageOptions {
-  /** The caller — the running core — already holds every session's
-   * management lease; otherwise they are taken here for the write. */
-  holdsSessionLeases?: boolean;
+  /** The version each unit is written under: the plan's `ours` commit — a
+   * sync's Save (space-19) — or, during `select`, the unit as Git's merge
+   * left it when the apply began (storage-21). */
+  workingTree?: "ours" | "merge";
+  /** The clone's shared session store, whose lease each session's write
+   * takes for that write alone; one is opened here otherwise. */
+  sessions?: SessionLeases;
   /** Runs after the complete candidate validated and before the first
    * file is replaced: the core records its repair marker here (space-31). */
   beforeWrite?: () => void;
-  /** `local/prefs.json`, whose viewed markers of changed sessions clear. */
+  /** `local/prefs.json`, whose viewed markers of written sessions clear. */
   prefsFile?: string;
   validate?: Omit<ValidateStorageOptions, "selectedSessionIds">;
 }
 export interface AppliedStorageSelection {
   diagnostics: StorageDiagnostic[];
-  /** Session units whose bytes changed from `ours`: their hints and
-   * viewed markers were cleared (storage-21). */
+  /** Session units whose selected bytes differ from `ours`. */
   changedSessions: string[];
   selected: Map<string, StorageChoice>;
+  /** The validated candidate's tree, now the clone's index (space-19). */
+  tree: string;
+  /** The units written; the others already held their selection. */
+  written: string[];
+}
+
+type TreeEntries = Map<string, { mode: string; oid: string }>;
+const publicationOrder = (path: string): number => path.includes(".assets/") ? 0 : path.endsWith(".records.jsonl") ? 1 : 2;
+
+/** A unit's files on disk now, as path → the blob id Git would give
+ * them, its filters applied as for that path: its planned paths, and with
+ * `members` every portable file under its attachment folder, one added
+ * since the plan's trees among them (space-19). */
+function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<string, string> {
+  const paths = new Set([...unit.paths, ...bundleFiles(unit.name)]);
+  const walk = (rel: string): void => {
+    const full = join(dir, rel);
+    let stat;
+    try { stat = lstatSync(full); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new StorageFormatError(rel, "unsafe destination");
+    for (const entry of readdirSync(full, { withFileTypes: true })) {
+      const child = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (portable(child) && storageUnitName(child) === unit.name) paths.add(child);
+    }
+  };
+  if (members && /^(sessions|intents|authoring)\//.test(unit.name)) walk(`${unit.name}.assets`);
+  const present = [...paths].filter((file) => {
+    let stat;
+    try { stat = lstatSync(join(dir, file)); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+    if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1) throw new StorageFormatError(file, "unsafe destination");
+    return true;
+  });
+  if (!present.length) return new Map();
+  // One synchronous child: no await enters the instant it serves.
+  const oids = git(dir, ["hash-object", "--stdin-paths"], undefined, `${present.join("\n")}\n`).toString().trim().split("\n");
+  return new Map(present.map((file, index) => [file, oids[index]]));
+}
+
+/** Validate a tree of a clone as Git holds it, in a private copy: what is
+ * staged or selected, never the live files beside it (storage-12). */
+export async function validateStorageSnapshot(dir: string, tree: string, options: Omit<ValidateStorageOptions, "selectedSessionIds"> = {}): Promise<StorageDiagnostic[]> {
+  const stage = mkdtempSync(join(tmpdir(), "spex-storage-snapshot-"));
+  try {
+    const env = { ...process.env, GIT_INDEX_FILE: join(stage, "index") };
+    git(dir, ["read-tree", tree], env);
+    git(dir, ["checkout-index", "-a", "-f", `--prefix=${join(stage, "tree")}/`], env);
+    // Every session in the tree is tracked, so its version must be one Spex shares.
+    const sessions = new Set([...readStorageTree(dir, tree).keys()].map(storageUnitName).filter((unit) => SESSION_UNIT.test(unit)).map((unit) => unit.slice(9)));
+    return await validateStorageTree(join(stage, "tree"), { ...options, selectedSessionIds: sessions });
+  } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
 /**
- * Apply a resolved selection in a clone by the rules `select` applies
- * (storage-21, space-19): stage the chosen blobs in a scratch copy,
- * validate the complete candidate, then replace files atomically —
- * replay before manifest, deletions last — clear hints and viewed
- * markers of every changed session, and stage every selected path. The
+ * Apply a resolved selection in a clone (storage-21, space-19): build the
+ * candidate — `ours` with each unit taken whole from its selected side —
+ * under a temporary index, validate it complete in a private copy, then
+ * write each unit that differs, one at a time: a session's under its
+ * lease for that write alone, its files compared with the version read
+ * and replaced — replay before manifest — with no await between the two.
+ * The index is set to the candidate's tree; nothing is committed. The
  * caller holds the home lease: the CLI reserves it, the core owns it.
  */
 export async function applyStorageSelection(dir_: string, plan: StorageMergePlan, choices: Record<string, StorageChoice>, options: ApplyStorageOptions = {}): Promise<AppliedStorageSelection> {
   const dir = resolve(dir_);
   if (plan.base === null) throw new Error("storage branches have no common ancestor; join them explicitly to compare against the empty tree");
   const selected = resolveStorageChoices(plan.units, choices);
-  const leases: { release(): Promise<unknown> }[] = [];
+  const sides: { ours: TreeEntries; theirs: TreeEntries } = { ours: readTreeEntries(dir, plan.ours), theirs: readTreeEntries(dir, plan.theirs) };
+  const sideOf = (unit: StorageMergeUnit) => sides[selected.get(unit.name) as StorageChoice];
+  const differs = (unit: StorageMergeUnit): boolean => unit.paths.some((path) => sideOf(unit).get(path)?.oid !== sides.ours.get(path)?.oid);
+  const changedSessions = plan.units.filter((unit) => SESSION_UNIT.test(unit.name) && differs(unit)).map((unit) => unit.name);
+  for (const unit of plan.units) {
+    const present = (path: string): boolean => sideOf(unit).has(path);
+    const assets = unit.paths.some((path) => path.startsWith(`${unit.name}.assets/`) && present(path));
+    if (SESSION_UNIT.test(unit.name)) {
+      const manifest = present(`${unit.name}.json`);
+      const replay = present(`${unit.name}.records.jsonl`);
+      if (manifest !== replay || (assets && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete manifest, replay and asset bundle");
+    } else if (/^(intents|authoring)\//.test(unit.name)) {
+      const record = present(`${unit.name}.json`);
+      const replay = present(`${unit.name}.records.jsonl`);
+      if ((assets || replay) && !record) throw new StorageFormatError(unit.name, "selected unit requires its record with its attachments");
+    }
+  }
+  const versioned = (options.workingTree ?? "ours") === "ours";
+  const unitTree = (side: TreeEntries, unit: StorageMergeUnit): Map<string, string> =>
+    new Map(unit.paths.flatMap((path) => { const entry = side.get(path); return entry ? [[path, entry.oid] as const] : []; }));
+  // The version each unit is written under, read before the first await:
+  // the Save commit's, or the merge's output as it stands at entry — its
+  // planned paths alone, so a file in neither tree is left as Git leaves it.
+  const read = new Map(plan.units.map((unit) => [unit.name, versioned ? unitTree(sides.ours, unit) : unitOnDisk(dir, unit, false)]));
+  // The clone the apply began in: a write never lands in a folder made
+  // anew where it was moved from or removed.
+  const identity = (): string => { const root = lstatSync(dir); const data = lstatSync(join(dir, ".git")); return `${root.dev}:${root.ino}:${data.dev}:${data.ino}`; };
+  const began = identity();
+  const stands = (): boolean => { try { return identity() === began; } catch { return false; } };
   const stage = mkdtempSync(join(tmpdir(), "spex-storage-selection-"));
   try {
-    const priorFiles = readStorageTree(dir, plan.ours);
-    const trees = { ours: priorFiles, theirs: readStorageTree(dir, plan.theirs) };
-    const changedSessions = new Set<string>();
-    copySafe(dir, stage);
-    for (const unit of plan.units) {
-      const files = trees[selected.get(unit.name) as StorageChoice];
-      if (unit.name.startsWith("sessions/") && !equal(priorFiles, files, unit.paths)) changedSessions.add(unit.name);
-      const present = (path: string): boolean => files.has(path);
-      const assets = unit.paths.some((path) => path.startsWith(`${unit.name}.assets/`) && present(path));
-      if (/^sessions\/[0-9a-f-]{36}$/.test(unit.name)) {
-        const manifest = present(`${unit.name}.json`);
-        const replay = present(`${unit.name}.records.jsonl`);
-        if (manifest !== replay || (assets && !manifest)) throw new StorageFormatError(unit.name, "selected session requires its complete manifest, replay and asset bundle");
-      } else if (/^(intents|authoring)\//.test(unit.name)) {
-        const record = present(`${unit.name}.json`);
-        const replay = present(`${unit.name}.records.jsonl`);
-        if ((assets || replay) && !record) throw new StorageFormatError(unit.name, "selected unit requires its record with its attachments");
-      }
-      for (const file of unit.paths) {
-        const target = join(stage, file); const oid = files.get(file);
-        if (oid === undefined) rmSync(target, { force: true });
-        else { mkdirSync(dirname(target), { recursive: true, mode: 0o700 }); writeFileSync(target, git(dir, ["cat-file", "blob", oid]), { mode: 0o600 }); }
-      }
-    }
-    const diagnostics = await validateStorageTree(stage, { ...(options.validate ?? {}), selectedSessionIds: new Set(sessionUnits(plan.units)) });
-    if (!options.holdsSessionLeases) {
-      const { createSessionStore } = await import("@sublang/playbook/session-store");
-      const sessionsDir = join(dir, "sessions"); mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
-      const shared = createSessionStore({ sessionsDir }); await shared.prepare();
-      const ids = new Set(sessionUnits(plan.units));
-      for (const file of readdirSync(sessionsDir)) if (file.endsWith(".json") && UUID.test(file.slice(0, -5))) ids.add(file.slice(0, -5));
-      for (const id of [...ids].sort()) leases.push(await shared.acquireManagement(id));
-    }
-    for (const file of plan.units.flatMap((unit) => unit.paths)) {
-      const target = join(dir, file);
-      if (existsSync(target) && (!lstatSync(target).isFile() || lstatSync(target).isSymbolicLink() || lstatSync(target).nlink !== 1)) throw new StorageFormatError(file, "unsafe destination");
-    }
+    // The candidate is built from Git's objects alone, so what another
+    // process writes beside the apply never enters it.
+    const env = { ...process.env, GIT_INDEX_FILE: join(stage, "index") };
+    git(dir, ["read-tree", plan.ours], env);
+    const absent = `0 ${"0".repeat(plan.ours.length)}`;
+    const entries = plan.units.filter((unit) => selected.get(unit.name) === "theirs" && differs(unit)).flatMap((unit) => unit.paths.map((path) => {
+      const entry = sides.theirs.get(path);
+      return entry ? `${entry.mode} blob ${entry.oid}\t${path}` : `${absent}\t${path}`;
+    }));
+    if (entries.length) git(dir, ["update-index", "-z", "--index-info"], env, `${entries.join("\0")}\0`);
+    const tree = git(dir, ["write-tree"], env).toString().trim();
+    const diagnostics = await validateStorageSnapshot(dir, tree, options.validate ?? {});
+    if (!stands()) throw new StorageWriteRefused(plan.units[0]?.name ?? "", "moved", [], "the clone moved or was removed");
+
+    // A unit the selection leaves as `ours` is the working tree's own
+    // business; under `select` every unit Git's merge touched is set. A
+    // unit already holding its selection needs no write, and an unsafe
+    // destination refuses before the first.
+    const want = (unit: StorageMergeUnit): Map<string, string> => unitTree(sideOf(unit), unit);
+    const holds = (disk: Map<string, string>, wanted: Map<string, string>): boolean =>
+      disk.size === wanted.size && [...wanted].every(([path, oid]) => disk.get(path) === oid);
+    // Sessions go first: an intent may name a session's newer turn, and a
+    // session refused at its write then leaves no intent naming it.
+    const pending = plan.units.filter((unit) => (!versioned || differs(unit)) && !holds(unitOnDisk(dir, unit, versioned), want(unit)))
+      .sort((a, b) => Number(!SESSION_UNIT.test(a.name)) - Number(!SESSION_UNIT.test(b.name)));
     options.beforeWrite?.();
-    const {createAssetStore} = await import("@sublang/playbook/session-assets");
-    const assetDirectories = new Set(plan.units.flatMap((unit) => unit.paths)
-      .filter((path) => path.includes(".assets/"))
-      .map((path) => path.slice(0, path.indexOf(".assets/") + ".assets".length)));
-    for (const directory of assetDirectories) await createAssetStore({directory: join(dir, directory)}).prepare();
-    for (const unit of plan.units) {
-      const publicationOrder = (path: string) => path.includes(".assets/") ? 0 : path.endsWith(".records.jsonl") ? 1 : 2;
-      const ordered = [...unit.paths].sort((a, b) => publicationOrder(a) - publicationOrder(b) || a.localeCompare(b));
-      for (const file of ordered) {
-        const target = join(dir, file); const prepared = join(stage, file);
-        if (existsSync(target) && (!lstatSync(target).isFile() || lstatSync(target).isSymbolicLink() || lstatSync(target).nlink !== 1)) throw new StorageFormatError(file, "unsafe destination");
-        if (existsSync(prepared)) {
-          mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-          const temporary = `${target}.${randomUUID()}.tmp`; writeFileSync(temporary, readFileSync(prepared), { mode: 0o600 }); renameSync(temporary, target);
-        } else rmSync(target, { force: true });
-      }
-      // A local hint belongs to the previous exact checkpoint, never the selected branch.
-      if (changedSessions.has(unit.name)) rmSync(join(dir, `${unit.name}.hints.json`), { force: true });
-    }
-    if (options.prefsFile && existsSync(options.prefsFile) && changedSessions.size > 0) {
-      const prefs = parsePrefs(readJsonFile(options.prefsFile), options.prefsFile);
-      for (const session of changedSessions) delete prefs[`viewed:${session.slice(9)}`];
-      writeApplicationFile(options.prefsFile, { format: 1, prefs });
-    }
-    // Stage each selected path present in the work tree or the index; a
-    // path absent from both — deleted on the chosen side and never
-    // tracked here — has nothing to stage and would fail the pathspec.
-    const paths = plan.units.flatMap((unit) => unit.paths);
-    const indexed = new Set(paths.length ? git(dir, ["ls-files", "-z", "--", ...paths]).toString().split("\0").filter(Boolean) : []);
-    const present = paths.filter((file) => indexed.has(file) || existsSync(join(dir, file)));
-    if (present.length) git(dir, ["add", "-A", "--", ...present]);
-    return { diagnostics, changedSessions: [...changedSessions], selected };
-  } finally {
+
+    const written: string[] = [];
+    let complete = false;
+    let sessions: SessionLeases | undefined;
     try {
-      const released = await Promise.allSettled(leases.reverse().map((lease) => lease.release()));
-      const failed = released.find((result) => result.status === "rejected");
-      if (failed?.status === "rejected") throw failed.reason;
-    } finally { rmSync(stage, { recursive: true, force: true }); }
-  }
+      for (const unit of pending) {
+        const wanted = want(unit);
+        const version = read.get(unit.name) as Map<string, string>;
+        const modes = new Map(unit.paths.flatMap((path) => { const entry = sideOf(unit).get(path); return entry ? [[path, entry.mode] as const] : []; }));
+        const bytes = new Map([...wanted].map(([path, oid]) => [path, git(dir, ["cat-file", "blob", oid])]));
+        const moved = (): StorageWriteRefused => new StorageWriteRefused(unit.name, "moved", [...written], "the clone moved or was removed");
+        let lease: { release(): Promise<unknown> } | undefined;
+        if (SESSION_UNIT.test(unit.name)) {
+          // Playbook's lease makes the sessions folder where it is missing.
+          if (!stands()) throw moved();
+          sessions ??= options.sessions ?? (await import("@sublang/playbook/session-store")).createSessionStore({ sessionsDir: join(dir, "sessions") });
+          try { lease = await sessions.acquireManagement(unit.name.slice(9)); }
+          catch (error) { throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error)); }
+        }
+        try {
+          // The instant of the write: after the last await the clone is
+          // checked, the unit read and replaced with nothing awaited between.
+          if (!stands()) throw moved();
+          const disk = unitOnDisk(dir, unit, versioned);
+          const paths = [...new Set([...disk.keys(), ...wanted.keys(), ...version.keys()])].sort((a, b) => publicationOrder(a) - publicationOrder(b) || a.localeCompare(b));
+          const changed = paths.find((path) => disk.get(path) !== version.get(path) && disk.get(path) !== wanted.get(path));
+          if (changed) throw new StorageWriteRefused(unit.name, "changed", [...written], `${changed} changed since it was read`);
+          for (const file of paths) {
+            const target = join(dir, file); const oid = wanted.get(file);
+            if (oid) {
+              if (disk.get(file) === oid) continue;
+              mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+              const temporary = `${target}.${randomUUID()}.tmp`;
+              writeFileSync(temporary, bytes.get(file) as Buffer, { mode: modes.get(file) === "100755" ? 0o700 : 0o600 }); renameSync(temporary, target);
+            } else if (disk.has(file)) rmSync(target, { force: true });
+          }
+          // Attachments stay owner-only whoever made their folder — Git's
+          // merge makes it under the process umask; only a differing mode
+          // changes, since a mode change moves the ctime readers pin.
+          for (const [file, mode] of [[`${unit.name}.assets`, 0o700], ...[...wanted.keys()].filter((path) => path.includes(".assets/")).map((path) => [path, 0o600] as const)] as const) {
+            const stat = lstatSync(join(dir, file), { throwIfNoEntry: false });
+            if (stat && !stat.isSymbolicLink() && (stat.mode & 0o777) !== mode) chmodSync(join(dir, file), mode);
+          }
+          // A local hint belongs to the previous exact checkpoint, never the selected branch.
+          if (SESSION_UNIT.test(unit.name)) rmSync(join(dir, `${unit.name}.hints.json`), { force: true });
+          written.push(unit.name);
+        } finally { await lease?.release(); }
+      }
+      // Complete, every changed session holds its selection — one an
+      // interrupted apply wrote before a crash among them — and loses its
+      // hint, with no write of its files.
+      if (stands()) for (const unit of changedSessions) rmSync(join(dir, `${unit}.hints.json`), { force: true });
+      complete = true;
+    } finally {
+      const viewed = complete ? changedSessions : written.filter((unit) => changedSessions.includes(unit));
+      if (options.prefsFile && existsSync(options.prefsFile) && viewed.length > 0) {
+        const prefs = parsePrefs(readJsonFile(options.prefsFile), options.prefsFile);
+        for (const session of viewed) delete prefs[`viewed:${session.slice(9)}`];
+        writeApplicationFile(options.prefsFile, { format: 1, prefs });
+      }
+    }
+    // The index takes the candidate's tree, never the working tree's bytes.
+    git(dir, ["read-tree", tree]);
+    try { git(dir, ["update-index", "-q", "--refresh"]); } catch { /* a path differing on disk is a local change */ }
+    return { diagnostics, changedSessions, selected, tree, written };
+  } finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
 /** Select into an in-progress ordinary Git merge of one clone; leave
@@ -399,6 +502,7 @@ export async function selectStorageMerge(home_: string, key: string, choices: Re
     const dir = loaded.clonePath(key);
     const plan = planStorageMerge(dir, "HEAD", "MERGE_HEAD", options);
     const { diagnostics } = await applyStorageSelection(dir, plan, choices, {
+      workingTree: "merge",
       prefsFile: join(home, "local", "prefs.json"),
       validate: { own: key === loaded.own(), libraryDir: join(home, "playbooks") },
     });

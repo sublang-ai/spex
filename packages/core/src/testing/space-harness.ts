@@ -214,7 +214,7 @@ interface Home {
   dataDir: string;
   projectDir: string;
   configPath: string;
-  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void> };
+  hooks: { beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void> };
   stop(): Promise<void>;
 }
 
