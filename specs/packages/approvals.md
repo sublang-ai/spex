@@ -16,6 +16,7 @@ When a visible working session or authoring call invokes its native approval han
 
 - only the live handler creates authority, never a prompt, config value, or stored event;
 - multiple calls and owners retain distinct identities even if native request ids repeat;
+- a draft owner names the authoring session's instance [[storage-23](storage.md#storage-23)], so a session made again under its id neither shows nor answers the former's calls, which stay pending until answered, canceled or ended as the former's;
 - the native request admits at most 256 KiB (262,144 UTF-8 bytes) of compact JSON and a maximum value depth of 64, counting the request object as depth zero and each object member or array item as one further level;
 - malformed, already-aborted, expired, or unavailable requests fail closed without becoming actionable.
 
@@ -60,7 +61,7 @@ When the interface presents approval capability or a permission-related setup fa
 
 ### approvals-7
 
-When real authenticated WebSocket clients drive controllable working agents through temporary sessions and authoring drafts, integration verification shall assert exact request ownership and parallel isolation [[approvals-1](#approvals-1)], no tool side effect while pending, allow-once and deny with at-most-once delivery and conflicting or stale response refusal [[approvals-2](#approvals-2)], cancellation, completion, expiry, the owning session's disposal, and shutdown invalidation [[approvals-3](#approvals-3)], and reconnect, multiple-client, and core-restart snapshots [[approvals-4](#approvals-4)].
+When real authenticated WebSocket clients drive controllable working agents through temporary sessions and authoring drafts, integration verification shall assert exact request ownership and parallel isolation, a draft's pending call standing as its former instance's after the draft is deleted and made again and refused when answered as the successor's [[approvals-1](#approvals-1)], no tool side effect while pending, allow-once and deny with at-most-once delivery and conflicting or stale response refusal [[approvals-2](#approvals-2)], cancellation, completion, expiry, the owning session's disposal, and shutdown invalidation [[approvals-3](#approvals-3)], and reconnect, multiple-client, and core-restart snapshots [[approvals-4](#approvals-4)].
 
 ### approvals-8
 

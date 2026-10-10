@@ -118,8 +118,8 @@ msgstr "{described} — 安装方式：npm install -g {spec}{steps}"
 
 #. Refusal on a damaged draft: the diagnostic already composed, then the way out
 #: src/authoring.ts
-msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic}；删除草稿，或修复文件后重启 Spex"
+msgid "{diagnostic}; delete the draft, or repair the file"
+msgstr "{diagnostic}；删除草稿，或修复文件"
 
 #. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
 #: src/config.ts
@@ -174,6 +174,11 @@ msgstr "{host} 拒绝了本机的访问"
 #: src/space-git.ts
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
+
+#. Refusal: the authoring session's file changed, or another session took its id, since the page read it
+#: src/authoring.ts
+msgid "{id} changed meanwhile; retry"
+msgstr "{id} 期间已更改，请重试"
 
 #. Refusal: the id offered for a new playbook is one an installed spec package exports
 #: src/authoring.ts
@@ -578,20 +583,10 @@ msgstr "◇ 现在由 Captain 作答 — 此前的对话已重放给它"
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ 服务商拒绝了续接的对话 — 正在重放"
 
-#. Refusal: that draft's one compile is under way
-#: src/authoring.ts
-msgid "a compile is already running for {id}"
-msgstr "{id} 已有编译在运行"
-
 #. Refusal: one compile per playbook at a time
 #: src/service.ts
 msgid "a compile is already running for {playbookId}"
 msgstr "{playbookId} 已有编译在运行"
-
-#. Refusal: the draft's compile must end before this act
-#: src/authoring.ts
-msgid "a compile is running for {id}; cancel it first"
-msgstr "{id} 正在编译；请先取消"
 
 #. Refusal during attachment admission
 #: src/service.ts
@@ -644,6 +639,11 @@ msgstr "会话、意图和编写会话不提供文本差异"
 #: src/space.ts
 msgid "A sign-in is already running"
 msgstr "已有一个登录正在进行"
+
+#. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
+#: src/drafts.ts
+msgid "a transcript of {id} stands without its session file; move it aside or delete it first"
+msgstr "{id} 的对话记录没有对应的会话文件；请先将其移开或删除"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -1146,6 +1146,11 @@ msgstr "失败次数无效"
 msgid "invalid home file"
 msgstr "主目录文件无效"
 
+#. Diagnostic for a damaged authoring file: the identity it records will not read
+#: src/drafts.ts
+msgid "invalid instance"
+msgstr "实例标识无效"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
@@ -1335,6 +1340,11 @@ msgstr "迁移输出校验失败"
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
 msgstr "请将该文件夹移开，然后重试。"
+
+#. Refusal: a draft deletion names exactly one of the two
+#: src/service.ts
+msgid "name either the session's instance or its file's version"
+msgstr "请指明会话的实例或其文件的版本，二者择一"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2481,16 +2491,6 @@ msgstr "请先等待该项目正在进行的轮次结束或将其中止，再重
 msgid "wait for the project's running turn to finish, or abort it, before removing it"
 msgstr "请先等待该项目正在进行的轮次结束或将其中止，再移除项目"
 
-#. Refusal: the draft's agent is answering, so its agent cannot change now
-#: src/authoring.ts
-msgid "wait for the reply before switching the agent"
-msgstr "请等待回复结束后再切换智能体"
-
-#. Refusal: the draft's agent is answering
-#: src/authoring.ts
-msgid "wait for the reply, or abort it, first"
-msgstr "请先等待回复结束，或将其中止"
-
 #. Refusal: the session being deleted has a turn in flight
 #. Refusal: the session being deleted has a turn in flight
 #: src/service.ts
@@ -2542,11 +2542,6 @@ msgstr "等待在 {group} 中有权准备其分支的成员：{words}"
 #: src/space-groups.ts
 msgid "Waiting: {words}"
 msgstr "等待中：{words}"
-
-#. Why a compile cannot start: the draft's agent is answering
-#: src/authoring.ts
-msgid "Waits for the reply"
-msgstr "正在等待回复"
 
 #. Guidance after the reader stopped a transfer to the Git host
 #: src/space-git.ts

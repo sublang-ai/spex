@@ -118,8 +118,8 @@ msgstr "{described} — install with: npm install -g {spec}{steps}"
 
 #. Refusal on a damaged draft: the diagnostic already composed, then the way out
 #: src/authoring.ts
-msgid "{diagnostic}; delete the draft, or repair the file and restart Spex"
-msgstr "{diagnostic}; delete the draft, or repair the file and restart Spex"
+msgid "{diagnostic}; delete the draft, or repair the file"
+msgstr "{diagnostic}; delete the draft, or repair the file"
 
 #. Config error: a project's or another group's settings file holds a field only your own group's file may hold; {entry} is the field's own path
 #: src/config.ts
@@ -174,6 +174,11 @@ msgstr "{host} refused this machine's access"
 #: src/space-git.ts
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
+
+#. Refusal: the authoring session's file changed, or another session took its id, since the page read it
+#: src/authoring.ts
+msgid "{id} changed meanwhile; retry"
+msgstr "{id} changed meanwhile; retry"
 
 #. Refusal: the id offered for a new playbook is one an installed spec package exports
 #: src/authoring.ts
@@ -578,20 +583,10 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
-#. Refusal: that draft's one compile is under way
-#: src/authoring.ts
-msgid "a compile is already running for {id}"
-msgstr "a compile is already running for {id}"
-
 #. Refusal: one compile per playbook at a time
 #: src/service.ts
 msgid "a compile is already running for {playbookId}"
 msgstr "a compile is already running for {playbookId}"
-
-#. Refusal: the draft's compile must end before this act
-#: src/authoring.ts
-msgid "a compile is running for {id}; cancel it first"
-msgstr "a compile is running for {id}; cancel it first"
 
 #. Refusal during attachment admission
 #: src/service.ts
@@ -644,6 +639,11 @@ msgstr "a session, an intent or an authoring session offers no text diff"
 #: src/space.ts
 msgid "A sign-in is already running"
 msgstr "A sign-in is already running"
+
+#. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
+#: src/drafts.ts
+msgid "a transcript of {id} stands without its session file; move it aside or delete it first"
+msgstr "a transcript of {id} stands without its session file; move it aside or delete it first"
 
 #. Refusal: this conversation is mid-turn
 #. Refusal: this conversation is mid-turn
@@ -1146,6 +1146,11 @@ msgstr "invalid failure count"
 msgid "invalid home file"
 msgstr "invalid home file"
 
+#. Diagnostic for a damaged authoring file: the identity it records will not read
+#: src/drafts.ts
+msgid "invalid instance"
+msgstr "invalid instance"
+
 #. Storage diagnostic: an act names no valid intent id
 #: src/app-storage.ts
 msgid "invalid intent ID"
@@ -1335,6 +1340,11 @@ msgstr "migration output verification failed"
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
 msgstr "Move that folder aside, then Retry."
+
+#. Refusal: a draft deletion names exactly one of the two
+#: src/service.ts
+msgid "name either the session's instance or its file's version"
+msgstr "name either the session's instance or its file's version"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2481,16 +2491,6 @@ msgstr "wait for the project's running turn to finish, or abort it, before rebin
 msgid "wait for the project's running turn to finish, or abort it, before removing it"
 msgstr "wait for the project's running turn to finish, or abort it, before removing it"
 
-#. Refusal: the draft's agent is answering, so its agent cannot change now
-#: src/authoring.ts
-msgid "wait for the reply before switching the agent"
-msgstr "wait for the reply before switching the agent"
-
-#. Refusal: the draft's agent is answering
-#: src/authoring.ts
-msgid "wait for the reply, or abort it, first"
-msgstr "wait for the reply, or abort it, first"
-
 #. Refusal: the session being deleted has a turn in flight
 #. Refusal: the session being deleted has a turn in flight
 #: src/service.ts
@@ -2542,11 +2542,6 @@ msgstr "Waiting for a member who can prepare its branch in {group}: {words}"
 #: src/space-groups.ts
 msgid "Waiting: {words}"
 msgstr "Waiting: {words}"
-
-#. Why a compile cannot start: the draft's agent is answering
-#: src/authoring.ts
-msgid "Waits for the reply"
-msgstr "Waits for the reply"
 
 #. Guidance after the reader stopped a transfer to the Git host
 #: src/space-git.ts

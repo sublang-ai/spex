@@ -105,7 +105,7 @@ test("approvals-7: authenticated live requests survive reconnect and deliver onc
     const other = f.client();
     await other.ready;
     assert.deepEqual((await other.pending()).pending, pending.pending);
-    await assert.rejects(other.command("approval.respond", {generation: pending.generation, requestId: request.id, owner: {kind: "draft", id: "wrong"}, decision: "allow_once"}), /not_found/);
+    await assert.rejects(other.command("approval.respond", {generation: pending.generation, requestId: request.id, owner: {kind: "draft", id: "wrong", instance: "72000000-0000-4000-8000-000000000003"}, decision: "allow_once"}), /not_found/);
     const second = f.client();
     const results = await Promise.allSettled([other.answer(pending, request, "allow_once"), second.answer(pending, request, "deny")]);
     assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
@@ -160,18 +160,28 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
   const f = await fixture();
   try {
     await f.first.command("turn.submit", {sessionId: f.session.id, text: "session"});
+    const instances: Record<string, string> = {};
     for (const draftId of ["one", "two"]) {
-      await f.first.command("draft.create", {projectId: f.projectId, draftId});
-      await f.first.command("draft.send", {projectId: f.projectId, draftId, text: "approval-fixture"});
+      instances[draftId] = (await f.first.command("draft.create", {projectId: f.projectId, draftId})).instance!;
+      await f.first.command("draft.send", {projectId: f.projectId, draftId, instance: instances[draftId], text: "approval-fixture"});
     }
     const state = await f.first.pending(3);
     assert.equal(new Set(state.pending.map((request) => request.id)).size, 3);
     assert.equal(new Set(state.pending.map((request) => request.invocationId)).size, 3);
     assert.equal(new Set(state.pending.map((request) => request.request.id)).size, 1);
     const one = state.pending.find((request) => request.owner.kind === "draft" && request.owner.id === "one")!;
+    assert.deepEqual(one.owner, {kind: "draft", id: "one", instance: instances.one});
+    // Deleted and made again while its call waits, the session's id
+    // names another session: the call stays the former's, never shown
+    // or answered as the successor's, and is answered as the former's.
+    await f.first.command("draft.delete", {projectId: f.projectId, draftId: "one", instance: instances.one});
+    const successor = (await f.first.command("draft.create", {projectId: f.projectId, draftId: "one"})).instance!;
+    assert.notEqual(successor, instances.one);
+    assert.ok((await f.first.pending(3)).pending.some((request) => request.id === one.id), "deletion cancels nothing");
+    await assert.rejects(f.first.command("approval.respond", {generation: state.generation, requestId: one.id, owner: {kind: "draft", id: "one", instance: successor}, decision: "allow_once"}), /not_found/);
     await f.first.answer(state, one, "deny");
     assert.equal((await f.first.pending(2)).pending.some((request) => request.id === one.id), false);
-    await f.first.command("draft.abort", {projectId: f.projectId, draftId: "two"});
+    await f.first.command("draft.abort", {projectId: f.projectId, draftId: "two", instance: instances.two});
     assert.equal((await f.first.pending()).pending[0].owner.kind, "session");
     const restarted = await f.restart();
     assert.deepEqual((await restarted.pending(0)).pending, []);

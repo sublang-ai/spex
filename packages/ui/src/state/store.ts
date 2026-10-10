@@ -836,8 +836,14 @@ const refolding = new Map<
 const refoldPending = new Set<string>();
 
 /** Drafts with a draft.open replay in flight: live draft.record
- * messages buffer here and apply after the replay, in seq order. */
-const draftBackfilling = new Map<string, DraftRecord[]>();
+ * messages buffer here, with the instance each names, and apply after
+ * the replay, in seq order. */
+const draftBackfilling = new Map<string, (DraftRecord & { instance: string })[]>();
+/** The draft events heard per draft — a state or a removal — against
+ * one running count, so a list read in flight never overrides what
+ * was heard after it was asked (playbook-library-62). */
+let draftEvents = 0;
+const draftHeard = new Map<string, number>();
 
 export function getClient(): SpexClient {
   if (!client) throw new Error(i18n._("client not connected"));
@@ -894,6 +900,14 @@ export function projectsMoved(state: GroupsState, projects: readonly ProjectInfo
       .map((repository) => repository.key),
   );
   return paired.size !== projects.length || projects.some((project) => !paired.has(project.id));
+}
+
+/** Whether the page still shows the session `instance` names under
+ * `draftId`: the one boundary a late event, reply or completion passes
+ * before it touches what the page keeps for that session
+ * (playbook-library-62). */
+export function draftShown(draftId: string, instance: string | undefined): boolean {
+  return instance !== undefined && useAppStore.getState().drafts[draftId]?.instance === instance;
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -1186,21 +1200,51 @@ export const useAppStore = create<AppState>((set, get) => {
    * same reducer the run view uses, plus the seq index that lets the
    * thread interleave lines and segments in record order. A record at
    * or before the view's last seq is a replay and folds nothing. */
+  function foldInto(view: DraftView, entry: DraftRecord): void {
+    if (entry.seq <= view.view.lastSeq) return;
+    const before = view.view.captain.length;
+    applyRecord(view.view, entry.seq, permissionAsFailure(entry.record));
+    if (view.view.captain.length > before) view.lineSeqs.push(entry.seq);
+  }
+
   function foldDraftRecord(draftId: string, entry: DraftRecord): void {
     const current = get().draftViews[draftId] ?? emptyDraftView();
-    if (entry.seq <= current.view.lastSeq) return;
-    const before = current.view.captain.length;
-    applyRecord(current.view, entry.seq, permissionAsFailure(entry.record));
-    if (current.view.captain.length > before) current.lineSeqs.push(entry.seq);
+    foldInto(current, entry);
     // A new outer object each fold: the view mutates in place, so the
     // identity a selector compares must move for the pane to redraw.
     set({ draftViews: { ...get().draftViews, [draftId]: { ...current } } });
   }
 
-  /** Subscribe to a draft and replay its stored records and source
-   * after the view's last seq (playbook-library-62); live records
-   * arriving meanwhile buffer and apply afterwards, so a reconnect can
-   * never lose the gap. */
+  /** Take what the core says of a draft. Another instance under the
+   * same id is another session: what the page kept for the former
+   * goes first, the workspace staying open only where the reader asked
+   * for this one (playbook-library-62). */
+  function adoptDraft(info: DraftInfo, keepOpen = false): void {
+    const known = get().drafts[info.id];
+    if (known?.instance && info.instance && known.instance !== info.instance) {
+      const open = get().openDraftId;
+      forgetDraft(info.id);
+      if (keepOpen && open === info.id) set({ openDraftId: open });
+    }
+    noteDraftHeard(info.id);
+    set({ drafts: { ...get().drafts, [info.id]: info } });
+  }
+
+  /** Whether a message naming `instance` is the shown session's: one
+   * naming a former instance changes nothing. */
+  const isShown = draftShown;
+
+  function noteDraftHeard(draftId: string): void {
+    draftEvents += 1;
+    draftHeard.set(draftId, draftEvents);
+  }
+
+  /** Subscribe to a draft and replay its whole stored transcript and
+   * source (playbook-library-62): the thread is built again from the
+   * file, so a history replaced on disk replaces it, while the
+   * composer, the Source tab's edits and the Enable form stand; live
+   * records arriving meanwhile buffer and apply afterwards, so a
+   * reconnect can never lose the gap. */
   async function ensureDraftSubscribed(draftId: string): Promise<void> {
     const current = get().draftViews[draftId] ?? emptyDraftView();
     set({
@@ -1209,23 +1253,26 @@ export const useAppStore = create<AppState>((set, get) => {
         [draftId]: { ...current, loading: true, loadError: undefined },
       },
     });
-    const pending: DraftRecord[] = [];
+    const pending: (DraftRecord & { instance: string })[] = [];
     draftBackfilling.set(draftId, pending);
     try {
       await getClient().subscribe({ kind: "draft", draftId });
       const reply = await getClient().command("draft.open", {
         projectId: draftProject(draftId),
         draftId,
-        afterSeq: current.view.lastSeq,
+        afterSeq: 0,
       });
       if (draftBackfilling.get(draftId) !== pending) return;
-      for (const entry of reply.records) foldDraftRecord(draftId, entry);
-      for (const entry of pending) foldDraftRecord(draftId, entry);
-      const view = get().draftViews[draftId] ?? emptyDraftView();
+      const rebuilt = emptyDraftView();
+      for (const entry of reply.records) foldInto(rebuilt, entry);
+      for (const entry of pending) {
+        if (!reply.draft.instance || entry.instance === reply.draft.instance) foldInto(rebuilt, entry);
+      }
+      adoptDraft(reply.draft, true);
+      const view = rebuilt;
       const source = reply.source;
       const known = get().draftSources[draftId];
       set({
-        drafts: { ...get().drafts, [draftId]: reply.draft },
         draftViews: {
           ...get().draftViews,
           [draftId]: { ...view, loading: false, loadError: undefined },
@@ -1265,6 +1312,14 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
+  /** The instance a command on a draft names: the one shown
+   * (core-service-96). */
+  function draftInstance(draftId: string): string {
+    const instance = get().drafts[draftId]?.instance;
+    if (!instance) throw new Error(i18n._("This draft is no longer listed."));
+    return instance;
+  }
+
   /** The project whose spex repository holds a draft (storage-23):
    * every draft command names it. */
   function draftProject(draftId: string): string {
@@ -1285,6 +1340,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
   /** Forget a draft everywhere once the core has retired or deleted it. */
   function forgetDraft(draftId: string): void {
+    noteDraftHeard(draftId);
     get().removeAttachmentFiles(`draft:${draftId}`);
     draftBackfilling.delete(draftId);
     const state = get();
@@ -1360,6 +1416,9 @@ export const useAppStore = create<AppState>((set, get) => {
         applyLanguageChoice(message.language);
         break;
       case "compile.progress": {
+        // A line of a session's compile is that session's alone; a
+        // standalone compile's names none.
+        if (message.instance !== undefined && !isShown(message.playbookId, message.instance)) break;
         const progress = get().compileProgress;
         const times = get().compileProgressAt;
         set({
@@ -1384,7 +1443,17 @@ export const useAppStore = create<AppState>((set, get) => {
         const buffer = draftBackfilling.get(message.draftId);
         const entry: DraftRecord = { seq: message.seq, record: message.record };
         if (buffer) {
-          buffer.push(entry);
+          buffer.push({ ...entry, instance: message.instance });
+          break;
+        }
+        // Only into a thread the page shows for that very session: a late
+        // record never makes one up.
+        const view = get().draftViews[message.draftId];
+        if (!view || !isShown(message.draftId, message.instance)) break;
+        // A record not following the thread's last means the history
+        // changed on disk: the thread is read again whole.
+        if (!view.loading && entry.seq !== view.view.lastSeq + 1) {
+          void ensureDraftSubscribed(message.draftId).catch(() => {});
           break;
         }
         foldDraftRecord(message.draftId, entry);
@@ -1392,10 +1461,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       case "draft.state": {
         const draft = message.draft;
-        const previous = get().drafts[draft.id];
-        const updates: Partial<AppState> = {
-          drafts: { ...get().drafts, [draft.id]: draft },
-        };
+        const before = get().drafts[draft.id];
+        adoptDraft(draft);
+        // A replaced session's compile log went with it.
+        const previous = before?.instance && draft.instance && before.instance !== draft.instance ? undefined : before;
+        const updates: Partial<AppState> = {};
         // A compile that just started opens a fresh log: the band folds
         // this compile's lines, never the last one's under them.
         if (
@@ -1414,10 +1484,18 @@ export const useAppStore = create<AppState>((set, get) => {
         // unique within one spex repository only, so a removal names
         // the project too.
         const known = get().drafts[message.draftId];
-        if (!known || known.projectId === message.projectId) forgetDraft(message.draftId);
+        if (!known || (known.projectId === message.projectId && (message.instance === undefined || known.instance === message.instance))) forgetDraft(message.draftId);
         break;
       }
+      case "draft.history-replaced":
+        // A sync may have replaced the history under the same instance:
+        // a thread shown is read again from the file.
+        if (get().draftViews[message.draftId] && isShown(message.draftId, message.instance)) {
+          void ensureDraftSubscribed(message.draftId).catch(() => {});
+        }
+        break;
       case "draft.source": {
+        if (!isShown(message.draftId, message.instance)) break;
         // Who changed it: the agent while its turn runs, else the Boss.
         const by =
           get().drafts[message.draftId]?.activity === "turn" ? "agent" : "you";
@@ -1780,9 +1858,10 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const session of sessions.filter((item) => item.live || loaded.has(item.id))) {
         await ensureSubscribed(session.id).catch(() => {});
       }
-      // Drafts opened this launch re-subscribe and backfill the same
-      // way (playbook-library-62); the list itself re-pulls.
-      void get()
+      // Drafts opened this launch re-subscribe and read their whole
+      // transcript again (playbook-library-62), once the list has said
+      // where each stands now — a move while away re-keys its project.
+      await get()
         .listDrafts()
         .catch(() => {});
       for (const draftId of Object.keys(get().draftViews)) {
@@ -2532,23 +2611,35 @@ export const useAppStore = create<AppState>((set, get) => {
     // -----------------------------------------------------------------
 
     async listDrafts(): Promise<void> {
+      const asked = draftEvents;
       const listed = await getClient().command("draft.list", {});
-      const drafts = Object.fromEntries(
-        (Array.isArray(listed) ? listed : []).map((draft) => [draft.id, draft]),
-      );
-      set({ drafts, draftsLoaded: true });
+      // A draft heard of since the list was asked keeps what was heard.
+      const heardSince = (id: string) => (draftHeard.get(id) ?? 0) > asked;
+      for (const draft of Array.isArray(listed) ? listed : []) {
+        if (!heardSince(draft.id)) adoptDraft(draft);
+      }
+      const ids = new Set((Array.isArray(listed) ? listed : []).map((draft) => draft.id));
+      // One the list no longer names is gone, open workspace and all,
+      // unless something newer than the list was heard of it.
+      const state = get();
+      const known = new Set([...Object.keys(state.drafts), ...Object.keys(state.draftViews), ...(state.openDraftId ? [state.openDraftId] : [])]);
+      for (const id of known) {
+        if (!ids.has(id) && !heardSince(id)) forgetDraft(id);
+      }
+      set({ draftsLoaded: true });
     },
 
     async createDraft(draftId: string): Promise<DraftInfo> {
       const projectId = workingProject(get());
       if (!projectId) throw new Error(draftNeedsProject());
       const draft = await getClient().command("draft.create", { projectId, draftId });
-      set({ drafts: { ...get().drafts, [draft.id]: draft } });
+      adoptDraft(draft);
       await get().openDraft(draft.id);
       return draft;
     },
 
     async openDraft(draftId: string): Promise<void> {
+      noteDraftHeard(draftId);
       set({ openDraftId: draftId });
       // A draft opened this launch keeps its thread; the replay from
       // its last seq brings only what it missed.
@@ -2562,20 +2653,23 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async sendDraft(draftId: string, text: string, attachments?: readonly MediaAsset[]): Promise<{ queued: boolean }> {
+      const instance = get().drafts[draftId]?.instance;
       try {
-        const reply = await getClient().command("draft.send", { projectId: draftProject(draftId), draftId, text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
-        get().clearDraftError(draftId);
+        const reply = await getClient().command("draft.send", { projectId: draftProject(draftId), draftId, instance: draftInstance(draftId), text, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
+        if (isShown(draftId, instance)) get().clearDraftError(draftId);
         return { queued: reply.queued };
       } catch (cause) {
-        setDraftError(draftId, (cause as Error).message);
+        if (isShown(draftId, instance) || instance === undefined) setDraftError(draftId, (cause as Error).message);
         throw cause;
       }
     },
 
     async abortDraft(draftId: string): Promise<void> {
+      const instance = get().drafts[draftId]?.instance;
       try {
-        await getClient().command("draft.abort", { projectId: draftProject(draftId), draftId });
+        await getClient().command("draft.abort", { projectId: draftProject(draftId), draftId, instance: draftInstance(draftId) });
       } catch (cause) {
+        if (instance !== undefined && !isShown(draftId, instance)) return;
         setDraftError(
           draftId,
           i18n._("abort failed: {reason}", {
@@ -2586,16 +2680,18 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async writeDraftSource(draftId, input) {
+      const instance = draftInstance(draftId);
       const reply = await getClient().command("draft.source.write", {
         projectId: draftProject(draftId),
         draftId,
+        instance,
         ...(input.content !== undefined ? { content: input.content } : {}),
         ...(input.sourcePath !== undefined ? { sourcePath: input.sourcePath } : {}),
         ...(input.baseVersion !== undefined ? { baseVersion: input.baseVersion } : {}),
       });
       // The broadcast follows; the Boss's own write is known to be theirs.
       const current = get().draftSources[draftId];
-      if (input.content !== undefined || current) {
+      if (isShown(draftId, instance) && (input.content !== undefined || current)) {
         set({
           draftSources: {
             ...get().draftSources,
@@ -2613,6 +2709,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async refreshDraftSource(draftId: string): Promise<DraftSourceState | null> {
       const view = get().draftViews[draftId];
+      const instance = get().drafts[draftId]?.instance;
       const reply = await getClient().command("draft.open", {
         projectId: draftProject(draftId),
         draftId,
@@ -2623,35 +2720,39 @@ export const useAppStore = create<AppState>((set, get) => {
       const source = reply.source
         ? { markdown: reply.source.markdown, version: reply.source.version, mtime: reply.source.mtime }
         : null;
-      set({
-        drafts: { ...get().drafts, [draftId]: reply.draft },
-        draftSources: { ...get().draftSources, [draftId]: source },
-      });
+      // A reply for a session replaced meanwhile, or one the page no
+      // longer shows, changes nothing here.
+      if (!isShown(draftId, instance) || reply.draft.instance !== instance) return source;
+      adoptDraft(reply.draft);
+      set({ draftSources: { ...get().draftSources, [draftId]: source } });
       return source;
     },
 
     async compileDraft(draftId: string): Promise<void> {
+      const instance = get().drafts[draftId]?.instance;
       set({
         compileProgress: { ...get().compileProgress, [draftId]: [] },
         compileProgressAt: { ...get().compileProgressAt, [draftId]: [] },
       });
       try {
         // Compiles run for minutes: no client timeout (DR-010 §5).
-        await getClient().command("draft.compile", { projectId: draftProject(draftId), draftId }, { timeoutMs: 0 });
+        await getClient().command("draft.compile", { projectId: draftProject(draftId), draftId, instance: draftInstance(draftId) }, { timeoutMs: 0 });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
         // A failed phase and a cancel are told by the band from the
         // draft's state; a refusal is a message to show.
-        if (error.code !== "aborted" && error.code !== "invalid_request") {
+        if (error.code !== "aborted" && error.code !== "invalid_request" && (instance === undefined || isShown(draftId, instance))) {
           setDraftError(draftId, error.message);
         }
       }
     },
 
     async abortDraftCompile(draftId: string): Promise<void> {
+      const instance = get().drafts[draftId]?.instance;
       try {
-        await getClient().command("compile.abort", { playbookId: draftId });
+        await getClient().command("compile.abort", { playbookId: draftId, instance: draftInstance(draftId) });
       } catch (cause) {
+        if (instance !== undefined && !isShown(draftId, instance)) return;
         setDraftError(
           draftId,
           i18n._("cancel failed: {reason}", {
@@ -2663,9 +2764,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async registerDraft(draftId, input): Promise<void> {
       const projectId = draftProject(draftId);
+      const instance = draftInstance(draftId);
       const configState = await getClient().command("draft.register", {
         projectId,
         draftId,
+        instance,
         command: input.command,
         intent: input.intent,
         bindings: input.bindings,
@@ -2675,26 +2778,36 @@ export const useAppStore = create<AppState>((set, get) => {
       // The session stays, to be worked on further and published; the
       // list opens on the side enabled in, with the new card in view
       // (playbook-library-61).
+      // The config it wrote is everyone's; the workspace closes only if
+      // it still shows the session that enabled.
+      set({ configState });
+      void get().loadPlaybookLists(projectId).catch(() => {});
+      if (!isShown(draftId, instance) || get().openDraftId !== draftId) return;
       const side: PlaybooksSide =
         input.repository && input.repository !== projectId ? "own" : "project";
-      set({ configState, revealPlaybook: draftId, playbooksSide: side, openDraftId: undefined });
-      void get().loadPlaybookLists(projectId).catch(() => {});
+      set({ revealPlaybook: draftId, playbooksSide: side, openDraftId: undefined });
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
-      const draft = await getClient().command("draft.player.set", { projectId: draftProject(draftId), draftId, playerId });
-      set({ drafts: { ...get().drafts, [draftId]: draft } });
+      const instance = draftInstance(draftId);
+      const draft = await getClient().command("draft.player.set", { projectId: draftProject(draftId), draftId, instance, playerId });
+      if (isShown(draftId, instance)) adoptDraft(draft);
     },
 
     async deleteDraft(draftId: string): Promise<void> {
-      await getClient().command("draft.delete", { projectId: draftProject(draftId), draftId });
+      // A file that will not read is deleted under its bytes' version.
+      const known = get().drafts[draftId];
+      const named = known?.instance ? { instance: known.instance } : { fileVersion: known?.fileVersion };
+      await getClient().command("draft.delete", { projectId: draftProject(draftId), draftId, ...named });
+      if (get().drafts[draftId]?.instance !== known?.instance) return;
       forgetDraft(draftId);
       void getClient().unsubscribe({ kind: "draft", draftId }).catch(() => {});
     },
 
     async loadDraftArtifacts(draftId: string): Promise<PlaybookArtifacts> {
+      const instance = get().drafts[draftId]?.instance;
       const artifacts = await getClient().command("draft.artifacts", { projectId: draftProject(draftId), draftId });
-      set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
+      if (instance === undefined || isShown(draftId, instance)) set({ draftArtifacts: { ...get().draftArtifacts, [draftId]: artifacts } });
       return artifacts;
     },
 

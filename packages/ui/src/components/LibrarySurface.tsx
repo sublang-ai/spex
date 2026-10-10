@@ -793,21 +793,8 @@ function DraftRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const deleteRef = useRef<HTMLButtonElement>(null);
-  const busyWith =
-    draft.activity === "turn"
-      ? i18n._("Delete waits: the session's turn is running")
-      : draft.activity === "compiling"
-        ? i18n._("Delete waits: the session's compile is running")
-        : undefined;
-
   async function remove(): Promise<void> {
     setConfirming(false);
-    // Refused while the session works, naming which (DR-010 §4).
-    if (busyWith) {
-      setError(busyWith);
-      deleteRef.current?.focus();
-      return;
-    }
     setBusy(true);
     setError(undefined);
     try {

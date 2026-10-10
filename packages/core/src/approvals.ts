@@ -12,7 +12,8 @@ interface Pending {
   value: PendingApproval;
   finish: (decision?: ApprovalDecision, error?: Error) => void;
 }
-const sameOwner = (a: ApprovalOwner, b: ApprovalOwner) => a.kind === b.kind && a.id === b.id;
+const sameOwner = (a: ApprovalOwner, b: ApprovalOwner) =>
+  a.kind === b.kind && a.id === b.id && (a.kind !== "draft" || (b.kind === "draft" && a.instance === b.instance));
 const ACK_GRACE_MS = 30_000;
 const MAX_ACKNOWLEDGEMENTS = 2048;
 const cancelled = () => new DOMException(i18n._({id: "The tool approval is no longer pending.", comment: "Live tool approval refusal"}), "AbortError");

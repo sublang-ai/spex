@@ -27,8 +27,8 @@ import { useAppStore, type DraftRegisterForm, type DraftSourceState } from "../s
 import { applyLocalPatch } from "../lib/config-ops.js";
 import {
   agentBlockOf,
-  busyReason,
   derivedIntent,
+  draftMediaOwner,
   draftPackagePath,
   existingRolePlayerId,
   newPlayerId,
@@ -198,7 +198,6 @@ export function DraftRegisterTab({
   const resolved = resolveRegisterForm(draft, source, players, form);
   const current: DraftRegisterForm = form ?? { players: {}, newPlayers: {} };
   const draftBlock = agentBlockOf(draft.agent);
-  const waiting = busyReason(draft);
 
   const blockFor = (newId: string): AgentBlockInput =>
     current.newPlayers[newId] ?? draftBlock;
@@ -206,7 +205,7 @@ export function DraftRegisterTab({
     resolved.command.trim().length > 0 &&
     resolved.intent.trim().length > 0 &&
     resolved.roles.every((role) => resolved.choices[role]);
-  const disabled = !connected || busy || !complete || waiting !== undefined;
+  const disabled = !connected || busy || !complete;
 
   async function register(): Promise<void> {
     if (disabled) return;
@@ -387,7 +386,7 @@ export function DraftRegisterTab({
                       title={i18n._("{name} agent", { name: newId })}
                       direction="down"
                       initial={blockFor(newId)}
-                      context={{ kind: "draft", projectId: draft.projectId, id: draft.id }}
+                      context={draftMediaOwner(draft)}
                       readiness={readiness}
                       captain={captain}
                       anchorRef={gearRef}
@@ -421,16 +420,14 @@ export function DraftRegisterTab({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-neutral-500">
-          {waiting ??
-            (complete
-              ? i18n._("Requests the spec package by path, then writes the playbook and any new player")
-              : i18n._("Every role needs a player, and the command and intent their words"))}
+          {complete
+            ? i18n._("Requests the spec package by path, then writes the playbook and any new player")
+            : i18n._("Every role needs a player, and the command and intent their words")}
         </span>
         <button
           type="button"
           data-testid="register-submit"
           disabled={disabled}
-          title={waiting}
           onClick={() => void register()}
           className="ml-auto rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -468,7 +465,6 @@ function PublishControl({
   // read from what changed rather than from what stood.
   const [sent, setSent] = useState<{ name: string; version: string; error: string | null }>();
   const path = draftPackagePath(draft);
-  const waiting = busyReason(draft);
 
   if (!signedIn) {
     return (
@@ -561,8 +557,7 @@ function PublishControl({
             <button
               type="button"
               data-testid="publish-confirm"
-              disabled={pending !== undefined || waiting !== undefined}
-              title={waiting}
+              disabled={pending !== undefined}
               onClick={() => void confirm()}
               className="min-h-6 rounded bg-brand-600 px-2 py-0.5 font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
@@ -577,8 +572,8 @@ function PublishControl({
           <button
             type="button"
             data-testid="publish-button"
-            disabled={pending !== undefined || publishing || waiting !== undefined}
-            title={waiting ?? i18n._("Upload {path} to the registry", { path })}
+            disabled={pending !== undefined || publishing}
+            title={i18n._("Upload {path} to the registry", { path })}
             onClick={() => void ask()}
             className="rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
           >

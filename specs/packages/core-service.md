@@ -286,16 +286,17 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 #### core-service-96
 
-The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and hold one activity per authoring session ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and run at most one turn per authoring session instance, refusing no other command because a turn, compile or enabling runs ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
 | Command | While a turn runs | While a compile runs |
 | --- | --- | --- |
 | `draft.send` | accepted, queued | accepted, queued |
-| `draft.compile` | `busy` | `busy`, as a duplicate compile |
-| `draft.source.write`, `draft.register`, `draft.delete` | `busy` | `busy` |
 | `draft.abort` | ends the turn | `{aborted: false}` |
+| every other command | admitted | admitted |
 
-- a draft compile is the playbook id's one compile, canceled by `compile.abort` as any compile is; `compile.run` and `draft.compile` for one id exclude each other;
+- a draft compile is an ordinary process with a cancel handle of its instance's, any number running at once beside a turn, a source write, an enabling, a deletion or another compile; a `compile.abort` naming the instance cancels every compile of that instance and replies `not_found` where none runs, one naming no instance acting as for a standalone compile; its `compile.progress` lines name the instance;
+- a session made again under an id is another session, whose turn may run beside a former instance's in the same working folder;
+- a session's state carries its recorded instance [[storage-23](storage.md#storage-23)], or, where its file will not read, that file's version instead; `draft.record` and `draft.source` name the instance, and `draft.removed` names it where the file read; after a sync applies a spex repository, each of its sessions is announced to every client as `draft.history-replaced` naming its instance, with its state, and after a clone moves every session's state is announced again under the project now holding it; every command but `draft.list`, `draft.create`, `draft.open` and `draft.artifacts` names the instance it read, `draft.delete` the version where it read none, and replies `conflict`, changed meanwhile, where the session's file no longer records it;
 - `draft.create` replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, or for a project with no working folder on this device; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`; every command replies `busy` while the project's spex repository syncs;
 - a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an enabled one stays and reads enabled;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
@@ -934,7 +935,7 @@ Where the core service runs with an injected compile spawner whose toolchain run
 
 #### core-service-97
 
-Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request`, `conflict` and `busy` refusals, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
+Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request` and `conflict` refusals, a command naming a replaced session's former instance among the conflicts, a `compile.abort` naming a former instance refused while its successor's compile runs and the progress lines naming the compile's instance, two compiles of one instance running at once and both canceled by one `compile.abort` naming it, a moved clone's session announced under its new project with its instance, a sync receiving a session's transcript announced as `draft.history-replaced` with its instance, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
 
 ### Endpoint Coverage
 

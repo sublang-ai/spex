@@ -12,7 +12,7 @@ import { outputBlock } from "../lib/tool-body.js";
 import { storedAsset } from "../lib/media.js";
 
 const OwnerContext = createContext<MediaOwner | undefined>(undefined);
-export function MediaOwnerProvider({ owner, children }: { owner: MediaOwner; children: ReactNode }) {
+export function MediaOwnerProvider({ owner, children }: { owner: MediaOwner | undefined; children: ReactNode }) {
   return <OwnerContext.Provider value={owner}>{children}</OwnerContext.Provider>;
 }
 
