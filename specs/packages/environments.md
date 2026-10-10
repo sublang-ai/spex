@@ -48,7 +48,7 @@ When the core reads a release — from the registry, a Git commit, a path inside
 The core shall keep an environment's `spex.yaml` and `spex.lock` at the root of the working folder for a project, and at the root of the clone for a group's own spex repository [[storage-1](storage.md#storage-1)], reading them at each use and writing them there, never staging, committing or ignoring them in a working folder's Git ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
 
 - a project's environment is committed with its code by the reader, so it follows the code's branches and history, and a working folder cloned with them holds its environment before Spex writes anything;
-- a project's environment is this device's alone while its two files are untracked in the working folder — the reader cannot push the code, keeps it clean, or the folder is no repository;
+- a project's environment is this device's alone while the code's `HEAD` lacks either file, read from the folder's Git at each use, so a file added but not committed counts as not committed, as does a folder that is no repository or has no commit;
 - a use is the core's start, the pairing of a working folder, a session start, an export and `environment.get`, and the files as the folder holds them at that read are the environment, so a branch switch, a pull or a hand edit shows at the next use.
 
 #### environments-2
@@ -186,7 +186,7 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 
 #### environments-14
 
-When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed, a path source missing on this device, the lock's staleness, the conflict report where resolution failed, and, for a project, whether its two files are committed with the code or untracked and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
+When a client sends `environment.get` for a spex repository, the core shall reply with the environment as the Playbooks surface lists it: every request with its source, every resolved spec package with its version, source, who required it, its selected artifacts with their chosen language and fallback mark, its exports, whether its files are installed, a path source missing on this device, the lock's staleness, the conflict report where resolution failed, and, for a project, whether its two files are committed with the code, both in the code's `HEAD`, or not and so this device's alone [[environments-26](#environments-26)] ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
 #### environments-15
 
@@ -249,7 +249,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 - a changed `spex.yaml`, a changed path-source manifest and a path source lacking a selected artifact each mark the lock stale, install nothing new and report resolving again [[environments-7](#environments-7)];
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
-- a project's `spex.yaml` and `spex.lock` stand at its working folder's root and nowhere in its clone, the core having staged, committed and ignored nothing [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked and as committed once they are tracked [[environments-14](#environments-14)];
+- a project's `spex.yaml` and `spex.lock` stand at its working folder's root and nowhere in its clone, the core having staged, committed and ignored nothing [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked, still after `git add` alone, and as committed once a commit holds both [[environments-14](#environments-14)];
 - a private namespace at the stand-in registry installs with the device's app token and refuses without, naming the spec package [[environments-12](#environments-12)].
 
 #### environments-22

@@ -19,7 +19,7 @@ Implement [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-
 - [ ] Pairing a working folder writes an environment requesting the built-in spec package where the folder holds none and installs from the one it holds.
 - [ ] A lock the working folder's files changed from outside is installed at the next read; a manifest changed alone marks the lock stale.
 - [ ] The migration moves each project's files out of its clone once, with a receipt, the folder's copy winning and the deletion carried by the next sync.
-- [ ] The listing and the Playbooks surface say when a project's environment is this device's; the Sync tab lists the environment kind for a group's own spex repository alone.
+- [ ] The listing and the Playbooks surface say when a project's environment is this device's; the Sync tab lists the environment kind wherever a clone holds the two files.
 - [ ] Core, UI and browser-journey coverage for every amended verification item; the README and the storage guide follow.
 
 ## Tasks
