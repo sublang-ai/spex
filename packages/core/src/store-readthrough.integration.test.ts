@@ -3,7 +3,7 @@
 
 // The core reads files for its picture (DR-111): what an editor, a sync
 // or another clone wrote under a running store is what its next query
-// reads, with no reload, and a read makes no folder (storage-25). The
+// reads, with no reload, and a read makes no folder (storage-29). The
 // home file, clones and project files (storage-2, storage-3), intents
 // (storage-4), their damage (storage-12), and one open intent per source
 // artifact held at the write (core-service-42, core-service-55).

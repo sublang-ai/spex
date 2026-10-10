@@ -6,7 +6,7 @@
 ## Intent
 
 This package defines the Groups surface under [DR-103](../decisions/103-the-home-and-its-groups.md), the surface [DR-057](../decisions/057-space-surface.md) named Space: where the reader signs in to the Git host, sees their groups with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with the host between Boss turns, reads a spex repository's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree.
-A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)]; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, the environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from the host; a **local** unit is one this device changed and an **incoming** unit one the host's copy changed, each against their common ancestor.
+A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)]; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, a group's own environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from the host; a **local** unit is one this device changed and an **incoming** unit one the host's copy changed, each against their common ancestor.
 The core performs every Git operation and every call to the Git host; the surface renders the core's state and runs neither itself.
 
 ## External Behavior
@@ -243,7 +243,7 @@ While a spex repository's Sync tab is shown, it shall list the local units — t
 | Sessions | `sessions/<id>` bundle | the session's title, or "untitled session" | new, updated or deleted; turn count |
 | Intents | `intents/<id>.json` with its assets | the intent's title | new, updated or deleted |
 | Authoring | `authoring/<id>` | the session's title, or "untitled authoring session" | new, updated or deleted |
-| Environment | `spex.yaml` with `spex.lock` | "Spec packages changed" | a View diff control [[space-10](#space-10)] |
+| Environment | `spex.yaml` with `spex.lock`, wherever a clone holds them — a group's own, or a project's until the migration moves them [[storage-1](storage.md#storage-1)] | "Spec packages changed" | a View diff control [[space-10](#space-10)] |
 | Settings | `config/playbook.config.yaml` | "Settings changed" | a View diff control [[space-10](#space-10)] |
 | Code | `project.json` | "Code remote changed" | a View diff control [[space-10](#space-10)] |
 | Sync rules | `.gitignore`, `.gitattributes` | "Sync rules updated" | a View diff control [[space-10](#space-10)] |
@@ -392,7 +392,7 @@ When a sync's Apply step runs, the core shall build the candidate as `select` do
 When a sync's Apply step has changed the working tree — by merge or fast-forward, by the units it wrote before a changed unit refused its write [[space-19](#space-19)], or by a repair [[space-31](#space-31)] — the core shall re-validate [[storage-12](storage.md#storage-12)] and re-index the clone before the sync pushes, restarts or stops, so every view reflects the working tree without a restart:
 
 - a session whose bundle changed is announced with its history replaced [[core-service-87](core-service.md#core-service-87)], a new one served and a deleted one forgotten as the shared store's arrivals and departures are [[core-service-60](core-service.md#core-service-60)] [[core-service-76](core-service.md#core-service-76)], and the project's ledger is announced changed [[core-service-51](core-service.md#core-service-51)];
-- the intents, the environment and the preferences are re-read, and the configuration reloads through its ordinary reload [[core-service-2](core-service.md#core-service-2)], the environment's exports refreshed [[environments-8](environments.md#environments-8)];
+- the intents, a group's own environment and the preferences are re-read, and the configuration reloads through its ordinary reload [[core-service-2](core-service.md#core-service-2)], that environment's exports refreshed [[environments-8](environments.md#environments-8)];
 - a diagnostic found here is reported under issues and undoes nothing; it refuses no later sync, whose Save validates the staged files and names any still invalid [[space-15](#space-15)], and a Save whose staged files validate clears it.
 
 #### space-21
@@ -622,7 +622,7 @@ The core shall compute one three-way plan per read or sync of a clone — this d
 | remote | `origin/spex`; `HEAD` itself before any check, and the empty tree where the host holds no `spex` |
 | ancestor | `merge-base(HEAD, origin/spex)`; `HEAD` before any check; the empty tree for a join; the plan withheld for unrelated histories without one |
 
-- units: `sessions/<uuid>.json` with `sessions/<uuid>.records.jsonl` and `sessions/<uuid>.assets/`, `intents/<uuid>.json` with `intents/<uuid>.assets/`, `authoring/<uuid>.json` with its records and assets, `spex.yaml` with `spex.lock`, and each other tracked path alone; a bundle unit taken from a side needs every file of it on that side or none;
+- units: `sessions/<uuid>.json` with `sessions/<uuid>.records.jsonl` and `sessions/<uuid>.assets/`, `intents/<uuid>.json` with `intents/<uuid>.assets/`, `authoring/<uuid>.json` with its records and assets, `spex.yaml` with `spex.lock` wherever a clone holds them [[storage-1](storage.md#storage-1)], and each other tracked path alone; a bundle unit taken from a side needs every file of it on that side or none;
 - a unit is local where mine differs from the ancestor and remote does not, incoming where remote differs and mine does not, a conflict where both differ from the ancestor and from each other, and agreed otherwise;
 - unknown units, duplicate choices, and choices contrary to a decided unit are refused before any write; the command-line tool keeps its contract [[storage-10](storage.md#storage-10)], sharing this plan, the validator and the application code behind a seam that takes a caller-supplied ancestor and whether the working tree holds the Save commit or Git's merge output.
 
@@ -709,7 +709,7 @@ When an integration suite runs two real cores on two scratch homes sharing one s
 
 When an integration suite writes local changes of every unit kind into a clone, it shall assert the listings and the explorer:
 
-- the local list carries a titled session as new, an intent by its title, an authoring session, "Spec packages changed" with a diff, "Settings changed" with a diff, "Code remote changed" and "Sync rules updated", in the kinds' order [[space-7](#space-7)] [[space-34](#space-34)];
+- the local list carries a titled session as new, an intent by its title, an authoring session, "Settings changed" with a diff, "Code remote changed" and "Sync rules updated", in the kinds' order, and in a clone holding `spex.yaml` with `spex.lock` "Spec packages changed" with a diff in its place [[space-7](#space-7)] [[space-34](#space-34)];
 - after a peer pushes, `space.fetch` lists the incoming units the same way with conflicts marked and ahead and behind counted, a host without `spex` reads empty, and `space.diff` returns a patch for Settings on each side and refuses a session and an intent unit [[space-8](#space-8)] [[space-10](#space-10)];
 - `space.tree` maps every catalog path to its family and sharing mark with session and intent owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed, `packages/` as staying here and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
 

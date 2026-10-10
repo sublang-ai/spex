@@ -6,7 +6,8 @@
 ## Status
 
 Prepared for review (2026-10-10).
-DR-111 accepted; tasks 2 to 6 delivered, task 3 with the authoring sessions' busy refusals of task 4 and task 5 with the environment's.
+DR-111 accepted; tasks 2 to 4 and 6 delivered, task 3 with the authoring sessions' busy refusals of task 4.
+Task 5's versioned environment writes are implemented at the locations before [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md), with no queue or busy refusal, and prepared for review there; task 5 as amended stays pending until that proposed record is accepted and delivered, then adapts them to the files where it puts them.
 Task 6 delivered the store reading the home, clones, project files and intents as they stand; the config read as its files stand at each use, an enabling's result checked after its reload while each of its writes stays versioned on what it read; the credential file written only over the pair its writer read; Join's owner-only umask scoped to each Git child's spawn; space-31's repair wording scoped to startup and a sync's admission; their concurrent-writer cases; and the inventory's final dispositions.
 
 ## Intent
@@ -21,7 +22,7 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 - [x] The sync's apply writes each unit under the version it read, with a session's lease taken for that instant; a refused write leaves no merge commit, the sync saves and merges again or stops for a retry, and a unit changed on both sides is a choice.
 - [x] The authoring manager reads session files for its picture and treats the recorded instance as the version of a write to the session's own files.
 - [x] Every "busy" refusal of a command because a sync, check, join, move, removal, compile, install or enabling runs is gone from the core, the protocol and the interface; a session lease's refusal and the runtime's own admission of messages stay; a stale write is refused as "changed meanwhile, retry".
-- [x] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing.
+- [ ] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing — implemented on the spex repository's clone; pending on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts a project's environment.
 - [x] The race suites assert no loss and surfaced conflicts under concurrent writers, replacing the gate tests.
 
 ## Tasks
@@ -30,7 +31,7 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 2. Rewrite the sync's apply step: versioned unit writes, the lease taken for the instant of a session's write, whole-unit choices; amend space-15, space-19, space-20, space-31, space-32, space-33, storage-14 and storage-21.
 3. Replace the authoring manager's live mirror with file-derived reads versioned by the recorded instance; amend core-service-96, core-service-97, playbook-library-55 to -57, -61 to -65, -67, -68, -70, -74, -75, -96, -97, storage-5, storage-15, storage-23, media-4, media-18, approvals-1 and approvals-7.
 4. Remove the sync machine's write gate, the admission table's blockers, the dispatch gate and the removal gate; amend space-11, space-21, space-31, projects-10 and the interface's busy states.
-5. Make environment writes versioned and privately prepared; amend environments-7, -14, -15 and the enabling path in playbook-library-69.
+5. Make environment writes versioned and privately prepared, on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts them and after that record's delivery; amend environments-7, -14, -15 and the enabling path in playbook-library-69.
 6. Replace the gate suites with concurrent-writer suites across space, authoring, environments and projects.
 
 ## Verification

@@ -4,6 +4,7 @@
 # The gatekeeper inventory
 
 The audit behind [DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md): every gate, reservation, claim, blocker, busy refusal and in-memory holder of a file fact in the core at commit 9766578a (the archived review rounds' tip), read in three sweeps, and its final disposition in the delivered tree.
+Its scope is the environment's locations before [DR-113](../specs/decisions/113-a-projects-environment-lives-in-its-working-folder.md), a project's `spex.yaml` and `spex.lock` in its spex repository's clone; DR-113 is proposed, and moving them to the working folder's root (IR-100) and adapting the EN rows' versioned writes to that place remain pending, unaudited here.
 The final dispositions below, in compact tables of rows, disposition and evidence, replace the historical inventory's proposed dispositions and its "Files two writers touch" answers; the component and function names they use identify the present code.
 Every historical row id is preserved: the historical inventory at the end keeps each row's id with the location, mechanism and race it named at 9766578a, without its proposal, and the proposals and answers it replaced remain in this file's history in Git.
 The specs, not this file, state the behavior; this file adds no requirement and no mechanism.
@@ -12,7 +13,7 @@ The specs, not this file, state the behavior; this file adds no requirement and 
 
 - **Archived 9766578a locations.** The `Where` columns and line numbers appear only in the historical inventory at the end; each is a location at 9766578a, the archived review rounds' tip, not a location in the delivered tree. The final dispositions name current components and functions instead.
 - **Implementation base cb73fd8b.** IR-099 starts here. Several archived mechanisms (named "absent at base" below) do not exist at cb73fd8b; they were not removed, and nothing restores them to remove them.
-- **Integrated tree.** `codex/ir099-file-coordination`: SY `ea2af1c3`, AU `c5110822`, OP with RM/HI/ME `d8ac927b`, EN `0dca0584`; ST, CF, the Join umask scoping (JN) and the credential file's expected-pair writes (CR) integrated by task 6 on top, frozen for its commit. No supplied implementation remains pending.
+- **Integrated tree.** `codex/ir099-file-coordination`: SY `ea2af1c3`, AU `c5110822`, OP with RM/HI/ME `d8ac927b`, EN `0dca0584`; ST, CF, the Join umask scoping (JN) and the credential file's expected-pair writes (CR) integrated by task 6 on top, frozen for its commit. No supplied implementation of the original scope remains pending; EN covers the clone's environment files only, its adaptation to DR-113's locations pending after IR-100.
 
 ## Legend
 
@@ -24,7 +25,7 @@ This corrects the historical legend, whose "no race remains" and "a lock or a no
 | Own write/read | The core checks the file, value or recorded instance at its own write, or validates a cache at use, in one synchronous core turn. Not a lock against independent processes. |
 | Kept: *kind* | Runtime admission, UI reply ordering, a process handle, a last host answer, progress, a cache, or an existing product rule — named per row. Not every retained Map is a file mirror. |
 | Absent at base | An archived mechanism not present at cb73fd8b. Not removed, not restored. |
-| Integration pending | Supplied implementation not yet in the final tree at reading (none remains in the delivered tree). |
+| Integration pending | Supplied implementation not yet in the final tree at reading (none remains for the original scope; DR-113's locations are outside it). |
 | Declined | An archival proposal judged unnecessary; no mechanism created. |
 
 ## Evidence
