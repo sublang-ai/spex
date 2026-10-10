@@ -53,7 +53,9 @@ import {
   resolveStorageChoices,
   SPEX_BRANCH,
   storageUnitName,
+  StorageWriteRefused,
   UPLOAD_STAGING,
+  validateStorageSnapshot,
   validateStorageTree,
   type StorageChoice,
   type StorageMergeUnit,
@@ -81,8 +83,6 @@ export interface SpaceHost {
    * a session held elsewhere, a compile — or undefined when it is quiet. */
   blocker: (repository: string) => Promise<string | undefined>;
   broadcast: (state: GroupsState) => void;
-  pauseWatchers: (repository: string) => void;
-  resumeWatchers: (repository: string) => void;
   reloadConfig: () => Promise<void>;
   /** One full rescan of a clone's sessions: history-replaced,
    * session.state, session.removed and intents.changed as a foreign-host
@@ -91,9 +91,10 @@ export interface SpaceHost {
   ledgerChanged: (projectIds: string[]) => void;
   /** Test seam (space-32): the transport limit; 120 s by default. */
   transportTimeoutMs?: number;
-  /** Test seam: awaited before each step runs, so a suite can act
-   * between steps deterministically. */
-  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string }) => void | Promise<void>;
+  /** Test seam: awaited before each step runs, and inside Save between
+   * its validation and its commit (`at: "commit"`), so a suite can act
+   * between them deterministically. */
+  beforeStep?: (event: { op: SpaceOp; step: SyncStep; repository: string; at?: "commit" }) => void | Promise<void>;
   /** The Git host's client (git-host-1..11): the one this home signs in
    * to and reads. */
   client: GitHostClient;
@@ -270,7 +271,7 @@ interface PlanRevisions { ours: string | null; theirs: string; base: string }
 interface LastPlan extends PlanRevisions { oursTree: string; units: StorageMergeUnit[] }
 interface Lists { local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[] }
 interface Pending { head: string; origin: string; base: string; units: StorageMergeUnit[]; resolved: Map<string, StorageChoice>; counts: { sent: number; received: number } }
-interface Applied { headBefore: string; headAfter: string; changedSessions: string[]; diagnostics: StorageDiagnostic[] }
+interface Applied { headBefore: string; headAfter: string }
 interface ApplyMarker { v: 1; ours: string; theirs: string; base: string; choices: Record<string, StorageChoice>; at: number }
 type CompareResult =
   | { outcome: "unrelated" }
@@ -497,7 +498,6 @@ class RepositorySync {
   cached?: RepositoryState;
   private operation?: Promise<void>;
   private applied?: Applied;
-  private holding?: { leases: { release(): Promise<unknown> }[]; umask: number };
   /** The text of the failure that stopped an interrupted sync's repair;
    * its diagnostic is phrased where it is read (core-service-111). */
   private repairFailure?: string;
@@ -1054,7 +1054,6 @@ class RepositorySync {
           }), retry: true };
         }
       } finally {
-        await this.releaseHoldings();
         try { await this.broadcast(this.phase.phase !== "choices"); }
         catch (error) { console.error(`spex: space state failed: ${error instanceof Error ? error.message : String(error)}`); }
       }
@@ -1103,9 +1102,15 @@ class RepositorySync {
       const blocker = await this.host.blocker(this.key);
       if (blocker) throw new CoreError("busy", blocker);
       repo = await this.requireReady();
-      const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics()].find((d) => d.blocking);
-      if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
+      // The repair re-reads its marker now, so a finding it left before
+      // never stands in for what the files say at this admission.
       await this.repairIfMarked();
+      // A refresh's finding is what the files said when it last re-read
+      // them; it stays under issues but admits the sync, whose Save
+      // validates the exact staged files and names any file still invalid,
+      // so a file the reader repaired is never refused by a stale finding.
+      const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics().filter((d) => d !== this.refreshProblem)].find((d) => d.blocking);
+      if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
       if (input.choices && Object.keys(input.choices).length > 0) {
         const plan = this.lastPlan?.units ?? [];
         for (const [name, choice] of Object.entries(input.choices)) {
@@ -1268,6 +1273,9 @@ class RepositorySync {
   private async save(): Promise<string | null> {
     const dir = this.dir;
     const stop = (message: string, guidance: string): SpaceStopped => new SpaceStopped("save", { cause: "validation", message, guidance, retry: false });
+    // The HEAD this Save stages against, read before anything is staged:
+    // the commit's parent and the version its ref update names.
+    const head = await this.git.ok(["rev-parse", "HEAD"]);
     try { prepareStorageGitFiles(dir, this.host.store.untrackedSessionPaths(this.key)); }
     catch (error) { throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
@@ -1290,7 +1298,13 @@ class RepositorySync {
         }),
       );
     }
-    try { await validateStorageTree(dir, this.validation()); }
+    // What is validated is the staged tree itself, and that tree is what
+    // the commit records, on the HEAD it was staged against: a file written
+    // beside the Save stays a local change, and a HEAD moved meanwhile
+    // refuses the commit as Git's conditional ref write does.
+    const tree = await this.git.ok(["write-tree"]);
+    // The staged files validated whole supersede a refresh's earlier finding.
+    try { await validateStorageSnapshot(dir, tree, this.validation()); this.refreshProblem = undefined; }
     catch (error) {
       await this.git.run(["reset", "-q"]);
       throw stop(error instanceof StorageFormatError ? `${error.file}: ${error.reason}` : error instanceof Error ? error.message : String(error), i18n._({
@@ -1298,9 +1312,10 @@ class RepositorySync {
         comment: "Guidance where a file under the home failed validation before the save",
       }));
     }
-    if (await this.git.succeeds(["diff", "--cached", "--quiet"])) return null;
+    await this.host.beforeStep?.({ op: "sync", step: "save", repository: this.key, at: "commit" });
+    if (tree === await this.git.ok(["rev-parse", `${head}^{tree}`])) return null;
     const units = [...new Set(staged.map(storageUnitName))].sort();
-    const commit = await this.git.run([...(await this.git.committerArgs()), "commit", "-q", "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
+    const commit = await this.git.run([...(await this.git.committerArgs()), "commit-tree", tree, "-p", head, "-m", `Sync from ${hostname()}\n\n${units.join("\n")}`]);
     if (commit.code !== 0) {
       throw new SpaceStopped("save", {
         cause: "git",
@@ -1315,7 +1330,10 @@ class RepositorySync {
         retry: true,
       });
     }
-    return this.git.ok(["rev-parse", "HEAD"]);
+    const saved = commit.stdout.toString("utf8").trim();
+    const moved = await this.git.run(["update-ref", `refs/heads/${SPEX_BRANCH}`, saved, head]);
+    if (moved.code !== 0) throw new SpaceStopped("save", { cause: "git", message: lastLines(moved.stderr), guidance: retryGuidance(), retry: true });
+    return saved;
   }
 
   private validation(): { own: boolean; libraryDir: string } {
@@ -1397,69 +1415,36 @@ class RepositorySync {
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }
 
-  private beginHolding(): void {
-    if (this.holding) return;
-    this.holding = { leases: [], umask: process.umask(0o077) };
-    this.host.pauseWatchers(this.key);
-  }
-
-  private async releaseHoldings(): Promise<void> {
-    const holding = this.holding;
-    if (!holding) return;
-    this.holding = undefined;
-    const results = await Promise.allSettled(holding.leases.reverse().map((lease) => lease.release()));
-    this.host.store.setManagedSessions(undefined);
-    process.umask(holding.umask);
-    this.host.resumeWatchers(this.key);
-    for (const result of results) if (result.status === "rejected") console.error(`spex: session lease release failed: ${String(result.reason)}`);
-  }
-
-  /** Take every session's management lease (space-31): a held one stops
-   * the sync naming its session. */
-  private async acquireSessionLeases(units: StorageMergeUnit[], step: SyncStep): Promise<void> {
-    const store = this.host.store;
-    const shared = this.repository.store;
-    await shared.prepare();
-    const ids = new Set(units.filter((u) => spaceUnitKind(u.name) === "session").map((u) => u.name.slice("sessions/".length)));
-    for (const file of existsSync(shared.sessionsDir) ? readdirSync(shared.sessionsDir) : []) {
-      if (file.endsWith(".json") && UUID.test(file.slice(0, -5))) ids.add(file.slice(0, -5));
-    }
-    for (const id of [...ids].sort()) {
-      try { (this.holding as { leases: { release(): Promise<unknown> }[] }).leases.push(await shared.acquireManagement(id)); }
-      catch {
-        const title = store.describeSession(id)?.title;
-        throw new SpaceStopped(step, {
-          cause: "lease",
-          message: title
-            ? i18n._({
-                id: "“{title}” is in use",
-                values: { title },
-                comment: "A stopped sync's message: a session is held elsewhere, named by its title",
-              })
-            : i18n._({
-                id: "Session {id} is in use",
-                values: { id: id.slice(0, 8) },
-                comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
-              }),
-          guidance: i18n._({
-            id: "Wait for the session to finish, then Retry.",
-            comment: "Guidance under a sync a held session stopped",
+  /** A session's write refused because its lease is held (space-15). */
+  private leaseStop(unit: string): SpaceStopped {
+    const id = unit.slice("sessions/".length);
+    const title = this.host.store.describeSession(id)?.title;
+    return new SpaceStopped("apply", {
+      cause: "lease",
+      message: title
+        ? i18n._({
+            id: "“{title}” is in use",
+            values: { title },
+            comment: "A stopped sync's message: a session is held elsewhere, named by its title",
+          })
+        : i18n._({
+            id: "Session {id} is in use",
+            values: { id: id.slice(0, 8) },
+            comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
           }),
-          retry: true,
-        });
-      }
-    }
-    // The refresh's rescan must not read the core's own leases as writers.
-    store.setManagedSessions(ids);
+      guidance: i18n._({
+        id: "Wait for the session to finish, then Retry.",
+        comment: "Guidance under a sync a held session stopped",
+      }),
+      retry: true,
+    });
   }
 
-  /** Step 4 — Apply: the validated selection, one merge commit or a
-   * fast-forward, never a Git merge (space-19). */
+  /** Step 4 — Apply: the validated selection written unit by unit under
+   * the version Save committed, then one merge commit of the candidate's
+   * tree or a fast-forward, never a Git merge (space-19). A refused write
+   * records no merge commit. */
   private async apply(pending: Pending): Promise<"restart" | void> {
-    const status = await this.git.ok(["status", "--porcelain=v1", "-z", "-uall"]);
-    if (status.length > 0) return "restart";
-    this.beginHolding();
-    await this.acquireSessionLeases(pending.units, "apply");
     const marker = this.markerPath();
     let result: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
@@ -1468,7 +1453,7 @@ class RepositorySync {
         { ours: pending.head, theirs: pending.origin, base: pending.base, unrelated: pending.base === EMPTY_TREE, units: pending.units },
         Object.fromEntries(pending.resolved),
         {
-          holdsSessionLeases: true,
+          sessions: this.repository.store,
           prefsFile: prefsFileOf(this.host.home),
           validate: this.validation(),
           beforeWrite: () => {
@@ -1478,7 +1463,20 @@ class RepositorySync {
         },
       );
     } catch (error) {
+      // A held lease interrupts the apply: the marker stays, and the next
+      // admission's repair finishes the recorded selection once it is free,
+      // so units that name one another never stand half applied. A changed
+      // unit makes the selection obsolete: what was written is an ordinary
+      // local change, and the sync replans from Save. A moved clone keeps
+      // its marker where it now lies.
+      if (error instanceof StorageWriteRefused && error.reason === "lease") throw this.leaseStop(error.unit);
+      if (error instanceof StorageWriteRefused && error.reason === "changed") {
+        rmSync(marker, { force: true });
+        if (error.written.length > 0) await this.reindex(error.written.includes("config/playbook.config.yaml"));
+        return "restart";
+      }
       if (error instanceof StorageFormatError) {
+        rmSync(marker, { force: true });
         throw new SpaceStopped("apply", {
           cause: "validation",
           message: `${error.file}: ${error.reason}`,
@@ -1491,15 +1489,14 @@ class RepositorySync {
       }
       throw error;
     }
-    const headAfter = await this.commitSelection(pending.head, pending.origin, pending.resolved);
+    const headAfter = await this.commitSelection(pending.head, pending.origin, result.tree, pending.resolved);
     rmSync(marker, { force: true });
-    this.applied = { headBefore: pending.head, headAfter, changedSessions: result.changedSessions, diagnostics: result.diagnostics };
+    this.applied = { headBefore: pending.head, headAfter };
   }
 
-  /** The merge commit from the staged selection, or `spex` moved to the
-   * host's commit where the selection equals its tree (space-19). */
-  private async commitSelection(head: string, origin: string, resolved: Map<string, StorageChoice>): Promise<string> {
-    const tree = await this.git.ok(["write-tree"]);
+  /** The merge commit of the validated candidate's tree, or `spex`
+   * moved to the host's commit where that tree equals its tree (space-19). */
+  private async commitSelection(head: string, origin: string, tree: string, resolved: Map<string, StorageChoice>): Promise<string> {
     const fastForward = await this.git.succeeds(["merge-base", "--is-ancestor", head, origin]);
     const originTree = await this.git.ok(["rev-parse", `${origin}^{tree}`]);
     let commit = origin;
@@ -1517,7 +1514,17 @@ class RepositorySync {
    * view reflects the selected state (space-20). */
   private async refresh(): Promise<void> {
     const applied = this.applied as Applied;
-    const store = this.host.store;
+    await this.reindex(!(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"])));
+    this.unrelated = false;
+    this.applied = undefined;
+    // The lists are recomputed at Refresh (space-29): the working tree
+    // now holds the selected state.
+    await this.broadcast(true);
+  }
+
+  /** Re-validate and re-index what an Apply wrote, merged or not
+   * (space-20). */
+  private async reindex(configChanged: boolean): Promise<void> {
     this.refreshProblem = undefined;
     try { await validateStorageTree(this.dir, this.validation()); }
     catch (error) {
@@ -1525,17 +1532,10 @@ class RepositorySync {
         ? { file: error.file, reason: error.reason, blocking: true }
         : { file: this.dir, reason: error instanceof Error ? error.message : String(error), blocking: true };
     }
-    store.reload();
-    const configChanged = !(await this.git.succeeds(["diff", "--quiet", applied.headBefore, applied.headAfter, "--", "config/playbook.config.yaml"]));
+    this.host.store.reload();
     if (configChanged) await this.host.reloadConfig();
     await this.host.rescanSessions(this.key);
     this.host.ledgerChanged([this.key]);
-    await this.releaseHoldings();
-    this.unrelated = false;
-    this.applied = undefined;
-    // The lists are recomputed at Refresh (space-29): the working tree
-    // now holds the selected state.
-    await this.broadcast(true);
   }
 
   /** Step 6 — Push `spex` to the host, setting the upstream once (space-12). */
@@ -1578,17 +1578,17 @@ class RepositorySync {
   private async repairIfMarked(): Promise<void> {
     if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
     try {
-      await this.repair();
+      const written = await this.repair();
       this.repairFailure = undefined;
-      this.host.store.reload();
-      await this.host.rescanSessions(this.key);
+      await this.reindex(written.includes("config/playbook.config.yaml"));
     } catch (error) {
       this.repairFailure = error instanceof Error ? error.message : String(error);
       throw new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
     }
   }
 
-  private async repair(): Promise<void> {
+  /** Finish an interrupted apply from its marker; the units written. */
+  private async repair(): Promise<string[]> {
     const dir = this.dir;
     const marker = readJsonFile(this.markerPath()) as Partial<ApplyMarker>;
     if (marker.v !== 1 || typeof marker.ours !== "string" || typeof marker.theirs !== "string" || typeof marker.base !== "string" || typeof marker.choices !== "object" || marker.choices === null) {
@@ -1605,27 +1605,33 @@ class RepositorySync {
     if (head !== marker.ours) {
       // The ref update landed before the marker was removed — a merge
       // commit whose parents are the recorded sides, or a fast-forward
-      // onto the host's commit: nothing is re-applied.
-      const parents = (await this.git.ok(["log", "-1", "--format=%P", "HEAD"])).split(/\s+/).filter(Boolean);
-      const landed = head === marker.theirs || (parents.includes(marker.ours) && parents.includes(marker.theirs));
-      if (landed) { rmSync(this.markerPath(), { force: true }); return; }
-      throw new Error(i18n._({
-        id: "spex moved since the interrupted sync; resolve it in a terminal",
-        comment: "Why an interrupted sync's repair failed; spex is the branch's own name",
-      }));
+      // onto the host's commit — or `spex` moved on without it, a commit
+      // from a terminal making the selection obsolete. Either way nothing
+      // is re-applied: what was written is an ordinary local change, and
+      // the sync saves and replans.
+      rmSync(this.markerPath(), { force: true });
+      return [];
     }
     const trees: StorageTrees = { ours: readStorageTree(dir, marker.ours), theirs: readStorageTree(dir, marker.theirs), base: readStorageTree(dir, marker.base) };
     const units = planStorageUnits(trees);
     const choices = marker.choices as Record<string, StorageChoice>;
-    this.beginHolding();
+    // Each unit is finished as Apply writes it, a file already holding
+    // its selection accepted. One changed since by another hand makes the
+    // selection obsolete: it is left as it stands, the marker goes with no
+    // merge commit, and the next sync replans from Save. A held lease
+    // leaves the marker for a later repair.
+    let applied: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
-      await this.acquireSessionLeases(units, "apply");
-      await applyStorageSelection(dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
-        holdsSessionLeases: true, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
+      applied = await applyStorageSelection(dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
+        sessions: this.repository.store, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
       });
-      await this.commitSelection(marker.ours, marker.theirs, resolveStorageChoices(units, choices));
-      rmSync(this.markerPath(), { force: true });
-    } finally { await this.releaseHoldings(); }
+    } catch (error) {
+      if (error instanceof StorageWriteRefused && error.reason === "changed") { rmSync(this.markerPath(), { force: true }); return error.written; }
+      throw error;
+    }
+    await this.commitSelection(marker.ours, marker.theirs, applied.tree, resolveStorageChoices(units, choices));
+    rmSync(this.markerPath(), { force: true });
+    return applied.written;
   }
 
   // -- diff (space-10) -------------------------------------------------------

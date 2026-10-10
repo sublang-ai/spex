@@ -171,12 +171,13 @@ When invoked as `plan <ours> <theirs>`, the storage Git tool shall report the re
 
 ### storage-21
 
-When invoked as `select [unit=ours|theirs ...]` during a Git merge, the storage Git tool shall apply the validated selection between `HEAD` and `MERGE_HEAD` in the selected clone under the home and session leases [[storage-14](#storage-14)]:
+When invoked as `select [unit=ours|theirs ...]` during a Git merge, the storage Git tool shall apply the validated selection between `HEAD` and `MERGE_HEAD` in the selected clone under the home lease [[storage-14](#storage-14)]:
 
 - reject unknown or duplicate choices, unresolved conflicts and choices contrary to an unambiguous comparison [[storage-11](#storage-11)];
-- validate the complete candidate before applying files [[storage-12](#storage-12)]; validation failure leaves working files and index unchanged;
-- write or delete each selected session's replay before its manifest, clear hints and viewed markers when its selected bundle differs from `HEAD`, and stage every selected path;
-- report filesystem failures without claiming success; retrying selection repairs an interrupted application before reopening.
+- validate the complete candidate — `HEAD`'s tree with each unit taken whole from its selected side — in a private copy before applying files [[storage-12](#storage-12)]; validation failure leaves working files and index unchanged;
+- write or delete each unit whose working-tree files differ from its selection by a versioned replacement [[storage-14](#storage-14)] naming the unit's tracked paths as Git's merge left them when the selection began, each read as Git reads its path, a file in neither side's tree left untouched as Git leaves an untracked file, a session's replay before its manifest and under that session's lease, its files and attachment folder owner-only, clear hints and viewed markers when its selected bundle differs from `HEAD`, and set the index to the candidate's tree;
+- a unit changed since the selection began, or a session whose lease is held, refuses selection naming it, leaving its files and the index unchanged and the units written before it in place;
+- report filesystem failures without claiming success; retrying selection completes an interrupted or refused application before reopening.
 
 ### storage-22
 
@@ -220,7 +221,11 @@ When continuing after Git selection, the host shall require Playbook's repositor
 
 ### storage-14
 
-The core shall remain the sole writer of Spex-owned files, using atomic same-directory replacement under the Spex home lease at `.lease/` [[core-service-61](core-service.md#core-service-61)], while session mutations use Playbook's per-session lease and shared store [[1]], one shared store per spex repository's `sessions/`.
+The core shall write Spex-owned files as the one process holding the Spex home lease at `.lease/` [[core-service-61](core-service.md#core-service-61)], each write an atomic same-directory replacement or an append, while session mutations use Playbook's per-session lease and shared store [[1]], one shared store per spex repository's `sessions/`:
+
+- a versioned replacement names the bytes and existence it read and is refused where the file no longer holds them at the instant before its rename;
+- an independent process writing the same files keeps ordinary filesystem behavior: no lock holds it off a file, and what it writes outside that instant is never refused;
+- a replacement of a session's files takes that session's management lease for that write alone, releasing it once the write lands.
 
 ### storage-26
 
@@ -266,7 +271,10 @@ When an integration suite merges two real Git branches of one spex repository co
 - every whole-unit choice, including clean text merges and deletion; an intent added on each side present on both afterwards with no choice asked; the environment unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-20](#storage-20)];
 - reports of unpaired clones and folders, and rejection of duplicate sources, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook the environment lacks is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - no repetition of actions omitted from selected history [[storage-13](#storage-13)];
-- leases blocking competing writes, one session store per spex repository [[storage-14](#storage-14)].
+- through the apply seam, a versioned replacement refused where a file changed while its session's lease was awaited — against the Save commit, and under `select` against Git's merge output as it stood when the selection began — the change kept and the index unchanged, a session's lease free once its write lands, and the index holding the validated tree [[storage-14](#storage-14)] [[storage-21](#storage-21)];
+- through the apply seam, a clone moved or removed while a lease is awaited refusing the write with no folder made at its former path, a held session lease refusing before any other unit is written, and a Git-checked-out CRLF file under `core.autocrlf` read as unchanged [[storage-14](#storage-14)];
+- an untracked attachment in a unit neither side changed surviving selection [[storage-21](#storage-21)];
+- the home lease refusing every mutating command, a held session lease refusing selection of that session's unit with the index unchanged and a retry after its release completing it, and a lease in another spex repository's store refusing nothing [[storage-14](#storage-14)] [[storage-21](#storage-21)].
 
 ### storage-27
 

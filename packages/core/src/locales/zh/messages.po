@@ -1912,11 +1912,6 @@ msgstr "Spex 未能登录。你可以关闭此浏览器窗口并返回 Spex。"
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex 已登录。你可以关闭此浏览器窗口。"
 
-#. Why an interrupted sync's repair failed; spex is the branch's own name
-#: src/space.ts
-msgid "spex moved since the interrupted sync; resolve it in a terminal"
-msgstr "自这次中断的同步以来 spex 已变动；请在终端中处理"
-
 #. A project's new spex repository's description on the Git host, its code on no remote
 #: src/space-groups.ts
 msgid "Spex records of {name}"
