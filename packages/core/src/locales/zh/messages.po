@@ -124,6 +124,11 @@ msgstr "{diagnostic}；删除草稿，或修复文件"
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 msgstr "项目的设置中不允许 {entry}：项目设置只列出所启用的规程及每个角色使用的参与者"
 
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#: src/files.ts
+msgid "{file} changed meanwhile; retry"
+msgstr "{file} 在此期间已更改；请重试"
+
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
 #: src/drafts.ts
@@ -243,6 +248,11 @@ msgstr "{name} 仍在 {project} 中工作 — 请等待它完成，或中止它"
 #: src/space-groups.ts
 msgid "{name} is taken in {group}; choose another name"
 msgstr "{name} 在 {group} 中已被占用；请另选一个名称"
+
+#. A completed step of an enabling: the spec package's request written
+#: src/service.ts
+msgid "{name} requested in spex.yaml"
+msgstr "{name} 已在 spex.yaml 中请求"
 
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
@@ -884,6 +894,16 @@ msgstr "记录 id {id} 重复：{first} 与 {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "编辑被拒绝"
+
+#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "enabling stopped after {done}: {error}"
+msgstr "启用在完成 {done} 后停止：{error}"
+
+#. A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them
+#: src/service.ts
+msgid "environment packages installed"
+msgstr "环境中的规约包已安装"
 
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
@@ -1527,6 +1547,11 @@ msgstr "规程 {playbookId} 已不再启用"
 msgid "playbook {playbookId} joined the session"
 msgstr "规程 {playbookId} 加入了本会话"
 
+#. A completed step of an enabling: the playbook's entry written to the config
+#: src/service.ts
+msgid "playbook {playbookId} written"
+msgstr "规程 {playbookId} 已写入"
+
 #. One settings drift; `field` is the manifest's own field name
 #: src/session.ts
 msgid "playbook {playbookId}'s {field} changed"
@@ -1639,6 +1664,11 @@ msgstr "Player {playerId} 已不再被本会话的规程绑定"
 #: src/session.ts
 msgid "player {playerId} joined the roster"
 msgstr "Player {playerId} 加入了名单"
+
+#. A completed step of an enabling: a new session player written to your own settings
+#: src/service.ts
+msgid "player {playerId} written"
+msgstr "Player {playerId} 已写入"
 
 #. Config error; `players` is the config file's own field name
 #: src/config.ts
@@ -1901,6 +1931,11 @@ msgstr "Spex: 编译在“{where}”阶段失败 — 正在请智能体修正源
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: 编译成功 — 正在请求注册方案"
 
+#. A completed step of an enabling: the environment's lock written
+#: src/service.ts
+msgid "spex.lock resolved"
+msgstr "spex.lock 已解析"
+
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
 msgid "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-108)"
@@ -2009,6 +2044,8 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "配置无效；请先在设置中修复，智能体才能作答"
 
 #. Refusal during attachment admission
+#. Refusal: environment work asked once the core stops
+#: src/environments.ts
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
@@ -2435,11 +2472,6 @@ msgstr "请先等待正在进行的轮次结束或将其中止，再执行删除
 #: src/space.ts
 msgid "Wait for the session to finish, then Retry."
 msgstr "请等待该会话结束，然后重试。"
-
-#. What blocks a Space operation: the spex repository's environment is resolving, installing or publishing
-#: src/environments.ts
-msgid "Wait for the spec packages of {repository} to finish installing"
-msgstr "请等待 {repository} 的规约包安装完成"
 
 #. A step the Git host left waiting, with no words of its own
 #: src/space-groups.ts

@@ -27,6 +27,7 @@ import {
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
 
+import { readVersioned, writeVersionedBytes } from "../files.js";
 import { AGENT_FOLDERS } from "./agent-folders.js";
 import { parseManifestText, type Manifest } from "./format.js";
 import { isPathSource, resolutionVersion, type Lock, type Resolution } from "./lock.js";
@@ -182,13 +183,16 @@ export function gitExcludeFile(workingFolder: string): string | null {
   return join(common, "info", "exclude");
 }
 
-/** Replace a managed block of a working folder's `info/exclude`. */
+/** Replace a managed block of a working folder's `info/exclude`, under
+ * the version read: the file changed meanwhile is refused as a conflict,
+ * never overwritten (DR-111). */
 export function writeExcludeBlock(workingFolder: string, entries: string[], block: ExcludeBlock = "exports"): void {
   const file = gitExcludeFile(workingFolder);
   if (!file) return;
   const begin = excludeBegin(block);
   const end = excludeEnd(block);
-  const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const read = readVersioned(file);
+  const text = read.bytes === null ? "" : read.bytes.toString("utf8");
   const lines = text.split("\n");
   const kept: string[] = [];
   let inside = false;
@@ -203,7 +207,7 @@ export function writeExcludeBlock(workingFolder: string, entries: string[], bloc
   const next = out.length > 0 ? `${out}\n` : "";
   if (next === text) return;
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, next);
+  writeVersionedBytes(file, next, read.version, 0o644);
 }
 
 /**

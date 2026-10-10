@@ -59,7 +59,6 @@ import {
   type Channel,
   type Command,
   type ConfigState,
-  type ErrorCode,
   type MediaUploadOwner,
   type ReadinessEntry,
   type ServerMessage,
@@ -75,7 +74,7 @@ import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
-import { UUID } from "./files.js";
+import { listed, UUID } from "./files.js";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -274,6 +273,14 @@ function channelKey(channel: Channel): string {
   return channel.kind === "draft"
     ? `draft:${channel.draftId}`
     : `${channel.kind}:${channel.sessionId}`;
+}
+
+/** Any failure as the reply's error: a CoreError as it is, any other
+ * classed by what it is, its own words kept. */
+function coreErrorOf(error: unknown): CoreError {
+  if (error instanceof CoreError) return error;
+  const code: CoreError["code"] = error instanceof MediaTransferError ? "invalid_request" : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
+  return new CoreError(code, error instanceof Error ? error.message : String(error));
 }
 
 /** The not-found refusals the command paths share, each phrased when
@@ -1751,17 +1758,15 @@ export class CoreService {
         result,
       });
     } catch (error) {
-      const code: ErrorCode =
-        error instanceof CoreError ? error.code : error instanceof MediaTransferError ? "invalid_request" : error instanceof StorageFormatError ? "invalid_request" : (error as {code?:string})?.code === "PLAYBOOK_SESSION_LEASE_ACTIVE" ? "busy" : "internal";
-      const message = error instanceof Error ? error.message : String(error);
+      const failure = coreErrorOf(error);
       this.send(client.socket, {
         type: "reply",
         id: command.id,
         ok: false,
         error: {
-          code,
-          message,
-          ...(error instanceof CoreError && error.details ? { details: error.details } : {}),
+          code: failure.code,
+          message: failure.message,
+          ...(failure.details ? { details: failure.details } : {}),
         },
       });
     }
@@ -2226,6 +2231,9 @@ export class CoreService {
             this.options.loadModule,
             { modules: this.modules(null) },
           );
+        // The file changed while the candidate composed: changed
+        // meanwhile, retry (DR-111).
+        if (result.conflict) throw new CoreError("conflict", result.error!);
         if (!result.ok) {
           throw new CoreError(
             "invalid_config",
@@ -3019,7 +3027,8 @@ export class CoreService {
    * package by path from the chosen spex repository's environment and
    * install it; write the players your own group's roster lacks; write
    * the `playbooks.<id>` entry, no `from`, into that spex repository's
-   * config; reload.
+   * config; reload. Each write is versioned on its own file; one refused
+   * after others leaves them written, named in the refusal (DR-111).
    */
   private async enableCompiled(input: {
     playbookId: string;
@@ -3084,35 +3093,63 @@ export class CoreService {
       }));
     }
 
-    // The spec package is requested by path and installed before the
-    // config names its playbook (playbook-library-69, environments-15).
-    await this.environments.requestAndInstall(targetKey, name, { path: packagePath });
+    // Each write from here stands on its own, versioned on the file it
+    // writes; any failure after one of them leaves those before it
+    // written, undoes nothing, and names them (playbook-library-69,
+    // DR-111).
+    const done: string[] = [];
+    try {
+      // The spec package is requested by path and installed before the
+      // config names its playbook (playbook-library-69, environments-15).
+      const requested = await this.environments.ensureRequested(targetKey, name, { path: packagePath });
+      if (requested) {
+        done.push(i18n._({ id: "{name} requested in spex.yaml", comment: "A completed step of an enabling: the spec package's request written", values: { name } }));
+      }
+      const progress = { lockWritten: false, installed: false };
+      try {
+        await this.environments.installNow(targetKey, requested, progress);
+      } finally {
+        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock resolved", comment: "A completed step of an enabling: the environment's lock written" }));
+        if (progress.installed) done.push(i18n._({ id: "environment packages installed", comment: "A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them" }));
+      }
 
-    // Lanes the bindings name but the roster lacks are created first,
-    // so the binding never dangles (DR-032, playbook-library-3).
-    for (const op of playerOps) {
-      const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
-      if (!minted.ok) {
-        throw new CoreError("invalid_config", i18n._({
-          id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
-          comment: "Refusal after a successful compile; `error` is the config validation's own words",
-          values: { playerId: (op as { playerId: string }).playerId, error: minted.error },
+      // Lanes the bindings name but the roster lacks are created first,
+      // so the binding never dangles (DR-032, playbook-library-3).
+      for (const op of playerOps) {
+        const playerId = (op as { playerId: string }).playerId;
+        const minted = await editConfigFile(this.configPath, op, this.options.loadModule, { modules: this.modules(null) });
+        if (!minted.ok) {
+          throw new CoreError(minted.conflict ? "conflict" : "invalid_config", i18n._({
+            id: "compiled, but creating session player \"{playerId}\" was refused: {error}",
+            comment: "Refusal after a successful compile; `error` is the config validation's own words",
+            values: { playerId, error: minted.error },
+          }));
+        }
+        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an enabling: a new session player written to your own settings", values: { playerId } }));
+      }
+      const edit = targetKey === own
+        ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
+        : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
+      if (!edit.ok) {
+        throw new CoreError(edit.conflict ? "conflict" : "invalid_config", i18n._({
+          id: "compiled, but registration was refused: {error}",
+          comment:
+            "Refusal after a successful compile; `error` is the config validation's own words",
+          values: { error: edit.error },
         }));
       }
+      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an enabling: the playbook's entry written to the config", values: { playbookId } }));
+      await this.reloadConfig();
+      this.authors.republish();
+    } catch (error) {
+      if (done.length === 0) throw error;
+      const failure = coreErrorOf(error);
+      throw new CoreError(failure.code, i18n._({
+        id: "enabling stopped after {done}: {error}",
+        comment: "Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
+        values: { done: listed(done), error: failure.message },
+      }), failure.details);
     }
-    const edit = targetKey === own
-      ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
-      : await editProjectConfigFile(target.configPath, this.configPath, entryOp, this.options.loadModule, this.modules(targetKey));
-    if (!edit.ok) {
-      throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but registration was refused: {error}",
-        comment:
-          "Refusal after a successful compile; `error` is the config validation's own words",
-        values: { error: edit.error },
-      }));
-    }
-    await this.reloadConfig();
-    this.authors.republish();
     return this.configState;
   }
 

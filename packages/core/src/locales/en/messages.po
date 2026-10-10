@@ -124,6 +124,11 @@ msgstr "{diagnostic}; delete the draft, or repair the file"
 msgid "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 msgstr "{entry} is not allowed in a project's settings, which name only the playbooks they enable and the player each role uses"
 
+#. Refusal: a file changed between the core's read and its write; the reader retries
+#: src/files.ts
+msgid "{file} changed meanwhile; retry"
+msgstr "{file} changed meanwhile; retry"
+
 #. Refusal: the file moved under the write the reader asked for
 #. Refusal: the file moved under the write the reader asked for
 #: src/drafts.ts
@@ -243,6 +248,11 @@ msgstr "{name} is still working in {project} — wait for it to finish, or abort
 #: src/space-groups.ts
 msgid "{name} is taken in {group}; choose another name"
 msgstr "{name} is taken in {group}; choose another name"
+
+#. A completed step of an enabling: the spec package's request written
+#: src/service.ts
+msgid "{name} requested in spex.yaml"
+msgstr "{name} requested in spex.yaml"
 
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
@@ -884,6 +894,16 @@ msgstr "duplicate record id {id}: {first} and {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "edit rejected"
+
+#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "enabling stopped after {done}: {error}"
+msgstr "enabling stopped after {done}: {error}"
+
+#. A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them
+#: src/service.ts
+msgid "environment packages installed"
+msgstr "environment packages installed"
 
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
@@ -1527,6 +1547,11 @@ msgstr "playbook {playbookId} is no longer enabled"
 msgid "playbook {playbookId} joined the session"
 msgstr "playbook {playbookId} joined the session"
 
+#. A completed step of an enabling: the playbook's entry written to the config
+#: src/service.ts
+msgid "playbook {playbookId} written"
+msgstr "playbook {playbookId} written"
+
 #. One settings drift; `field` is the manifest's own field name
 #: src/session.ts
 msgid "playbook {playbookId}'s {field} changed"
@@ -1639,6 +1664,11 @@ msgstr "player {playerId} is no longer bound by the session's playbooks"
 #: src/session.ts
 msgid "player {playerId} joined the roster"
 msgstr "player {playerId} joined the roster"
+
+#. A completed step of an enabling: a new session player written to your own settings
+#: src/service.ts
+msgid "player {playerId} written"
+msgstr "player {playerId} written"
 
 #. Config error; `players` is the config file's own field name
 #: src/config.ts
@@ -1901,6 +1931,11 @@ msgstr "Spex: the compile failed at {where} — asking the agent to fix the sour
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: the compile succeeded — asking for a registration proposal"
 
+#. A completed step of an enabling: the environment's lock written
+#: src/service.ts
+msgid "spex.lock resolved"
+msgstr "spex.lock resolved"
+
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
 msgid "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-108)"
@@ -2009,6 +2044,8 @@ msgid "the config is not valid; fix it in Settings before the agent can answer"
 msgstr "the config is not valid; fix it in Settings before the agent can answer"
 
 #. Refusal during attachment admission
+#. Refusal: environment work asked once the core stops
+#: src/environments.ts
 #: src/service.ts
 msgid "The core is stopping."
 msgstr "The core is stopping."
@@ -2435,11 +2472,6 @@ msgstr "wait for the running turn to finish, or abort it, before deleting"
 #: src/space.ts
 msgid "Wait for the session to finish, then Retry."
 msgstr "Wait for the session to finish, then Retry."
-
-#. What blocks a Space operation: the spex repository's environment is resolving, installing or publishing
-#: src/environments.ts
-msgid "Wait for the spec packages of {repository} to finish installing"
-msgstr "Wait for the spec packages of {repository} to finish installing"
 
 #. A step the Git host left waiting, with no words of its own
 #: src/space-groups.ts

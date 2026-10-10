@@ -93,7 +93,8 @@ While a compile is running, the Playbooks surface shall display each phase of th
 When an authoring session's compile succeeds, the Playbooks surface shall present the Enable tab [[playbook-library-61](#playbook-library-61)] as the form with fields for command and intent, a player per derived role, and the spex repository to enable it in — the project by default, or your own group where its working folder holds the package, since a path request lives inside the requesting repository's working folder [[environments-2](environments.md#environments-2)] — prefilled where derivable from the playbook source and compiled output, and shall resolve each submission of the form by the cases below:
 
 - Submission passes registry validation [[playbook-library-15](#playbook-library-15)]: the surface packages the entry [[playbook-library-14](#playbook-library-14)], requests the spec package by path from the chosen spex repository's environment where it is not yet requested [[environments-15](environments.md#environments-15)], and enables the playbook by writing its entry — including a role binding per required role [[playbook-library-4](#playbook-library-4)], with any player the submission names but the roster lacks written first — into that config's `playbooks` map.
-- Submission rejected: the rejection names the violated rule and causes no config or environment write.
+- Submission rejected by registry validation or by the config's fail-closed rules for the whole enabling [[playbook-library-15](#playbook-library-15)]: the rejection names the violated rule and causes no config or environment write.
+- Submission refused after some of its writes [[playbook-library-69](#playbook-library-69)]: the refusal names the writes made, which stand.
 
 #### playbook-library-8
 
@@ -512,6 +513,7 @@ When an authoring session's compile settles, the conversation runner shall start
 When an authoring session's playbook is enabled, the enabling path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], request the spec package by path from the chosen spex repository's environment where it is not requested yet and resolve and install it [[environments-15](environments.md#environments-15)], write any player the submission names but your own group's roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and mark the session enabled [[playbook-library-70](#playbook-library-70)]:
 
 - the one-shot `compile.run` is an authoring-style compile followed by this same path in one reply, so both share one helper;
+- each write is an ordinary write of its own file under the version it read [[environments-15](environments.md#environments-15)] [[shared-config-roundtrip-1](shared-config-roundtrip.md#shared-config-roundtrip-1)]; any failure after one of the writes leaves them written, undoes nothing, and the refusal names the writes made — the request, the lock, the install, each player, the entry — with the failure's own code and words ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a refused write leaves the session standing with its artifacts, so a corrected submission enables without recompiling.
 
 ### Authoring Store
@@ -546,6 +548,10 @@ When the conversation runner observes a `tool_result` event or the turn ends, it
 #### playbook-library-17
 
 Where a stub `slc` executable that emits a valid compiled playbook output is named as the configured compiler [[playbook-library-11](#playbook-library-11)], when the compile flow is driven end to end — source provided [[playbook-library-5](#playbook-library-5)], role names entered, the Enable form submitted [[playbook-library-7](#playbook-library-7)] — the test suite shall assert that the stub ran as an external process in the playbook artifact's folder of the spec package in the working folder [[playbook-library-12](#playbook-library-12)], that a registry manifest was emitted beside it whose entry passes the fail-closed registry validation [[playbook-library-15](#playbook-library-15)], that the project's `spex.yaml` gained a path request for the package and its lock exports the playbook [[playbook-library-7](#playbook-library-7)], that the project's config gained a `playbooks.<id>` entry with no `from` whose role bindings are keyed by the entry's derived role ids however the submission cased them [[playbook-library-32](#playbook-library-32)] [[playbook-library-14](#playbook-library-14)], that the surface lists the new playbook [[playbook-library-10](#playbook-library-10)], and that the stub ran with the Captain's block as `SLC_AGENT` and `SLC_MODEL` [[playbook-library-42](#playbook-library-42)].
+
+#### playbook-library-98
+
+Where the core runs with the scripted fake adapter and a stub `slc`, when an authoring session's playbook is compiled and `draft.register` is submitted with a new player while the project's config folder is a file another writer placed, the test suite shall assert that the enabling is refused after its request, lock and player were written, the refusal naming those writes and carrying the failure's own words, that those writes stand and the other writer's file is unchanged, and that a retry once the folder is back writes no request again and enables the playbook [[playbook-library-7](#playbook-library-7)] [[playbook-library-69](#playbook-library-69)].
 
 #### playbook-library-18
 

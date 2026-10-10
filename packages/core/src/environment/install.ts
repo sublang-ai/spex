@@ -5,8 +5,11 @@
 // selected files, verified by digest into the store, are linked under
 // `<clone>/packages/<org>/<pkg>/` at their release paths. The new tree
 // is complete before it replaces the old one; a failure leaves the last
-// files in place. A path source copies nothing and is reported missing
-// where the working folder lacks it; a stale lock installs nothing new.
+// files in place. The swap happens only while the lock it installs still
+// stands on disk at the version read and still matches `spex.yaml` and
+// its path sources: an install overtaken meanwhile publishes nothing
+// (DR-111). A path source copies nothing and is reported missing where
+// the working folder lacks it; a stale lock installs nothing new.
 // No code runs: the only thing added beside the release files is the
 // engine links in each installed playbook artifact's folder.
 
@@ -28,9 +31,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { provisionEngineLinks } from "../compile.js";
+import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
 import { parseManifestText, portablePathIssues, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
-import { isGitSource, isPathSource, isRegistrySource, lockStaleness, type Lock, type LockedFile, type Resolution } from "./lock.js";
+import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type Resolution } from "./lock.js";
 import { readVersionResource, type RegistrySource, type VersionResource } from "./registry.js";
 import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
@@ -38,6 +42,10 @@ import { gunzip, readTar } from "./tar.js";
 export interface InstallOptions {
   cloneDir: string;
   lock: Lock;
+  /** The version of `<clone>/spex.lock` this lock was read as or written
+   * as — null where none stands: a lock on disk at any other version by
+   * the swap refuses it (DR-111). */
+  lockVersion: FileVersion;
   store: ContentStore;
   /** The home's `cache/` folder. */
   cache: string;
@@ -94,29 +102,86 @@ export function missingPathSources(lock: Lock, workingFolder: string | null): st
   return missing;
 }
 
+const canonical = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical((value as Record<string, unknown>)[key])]));
+  }
+  return value;
+};
+
+/** One spec package as the install record holds it: what the lock
+ * locks of it, in one order however the lock was read. */
+function recordEntry(resolution: Resolution): unknown {
+  return canonical({
+    source: sourceValue(resolution.source),
+    files: [...resolution.files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+      .map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable })),
+    artifacts: Object.fromEntries(Object.entries(resolution.artifacts).map(([id, artifact]) => [id, { language: artifact.language, fallback: artifact.fallback }])),
+  });
+}
+
 function installRecord(lock: Lock): Record<string, unknown> {
   const packages: Record<string, unknown> = {};
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     if (isPathSource(resolution.source)) continue;
-    packages[name] = { source: resolution.source, files: resolution.files, artifacts: resolution.artifacts };
+    packages[name] = recordEntry(resolution);
   }
   return { format: 1, packages };
 }
 
-function treeMatches(target: string, lock: Lock, record: Record<string, unknown>): boolean {
-  const file = join(target, INSTALL_RECORD);
-  if (!existsSync(file)) return false;
+function readInstallRecord(target: string): { text: string; packages: Record<string, unknown> } | null {
   try {
-    if (readFileSync(file, "utf8") !== JSON.stringify(record)) return false;
+    const text = readFileSync(join(target, INSTALL_RECORD), "utf8");
+    const value = JSON.parse(text) as { packages?: unknown };
+    return { text, packages: typeof value.packages === "object" && value.packages !== null ? value.packages as Record<string, unknown> : {} };
   } catch {
-    return false;
+    return null;
   }
+}
+
+function filesStand(target: string, name: string, resolution: Resolution): boolean {
+  return resolution.files.every((entry) => existsSync(join(target, ...name.split("/"), ...entry.path.split("/"))));
+}
+
+function treeMatches(target: string, lock: Lock, record: Record<string, unknown>): boolean {
+  if (readInstallRecord(target)?.text !== JSON.stringify(record)) return false;
+  return Object.entries(lock.packages).every(([name, resolution]) => isPathSource(resolution.source) || filesStand(target, name, resolution));
+}
+
+/** The registry and Git sources of a lock whose files stand installed
+ * in the clone as the lock locks them: recorded by the install that
+ * placed them, the same source, files and artifacts, every file there. */
+export function installedPackages(cloneDir: string, lock: Lock): Set<string> {
+  const target = join(cloneDir, "packages");
+  const record = readInstallRecord(target);
+  const out = new Set<string>();
+  if (!record) return out;
   for (const [name, resolution] of Object.entries(lock.packages)) {
     if (isPathSource(resolution.source)) continue;
-    for (const entry of resolution.files) if (!existsSync(join(target, ...name.split("/"), ...entry.path.split("/")))) return false;
+    if (JSON.stringify(record.packages[name]) === JSON.stringify(recordEntry(resolution)) && filesStand(target, name, resolution)) out.add(name);
   }
-  return true;
+  return out;
+}
+
+/** Refuse a swap the files changed under (DR-111): the clone gone, its
+ * lock no longer at the version installed, or the lock no longer
+ * matching `spex.yaml` or a path source's manifest. */
+function assertCurrent(options: InstallOptions): void {
+  const { cloneDir, lock, workingFolder } = options;
+  const lockFile = join(cloneDir, "spex.lock");
+  if (!existsSync(cloneDir)) throw new VersionConflictError(cloneDir);
+  if (fileVersion(lockFile) !== options.lockVersion) throw new VersionConflictError(lockFile);
+  const requestsFile = join(cloneDir, "spex.yaml");
+  const requestsText = existsSync(requestsFile) ? readFileSync(requestsFile, "utf8") : null;
+  let stale = false;
+  try {
+    stale = lockStaleness(lock, requestsText, (path) => (workingFolder === null ? null : readPathManifest(join(workingFolder, ...path.split("/"))))).stale;
+  } catch {
+    stale = true;
+  }
+  if (stale) throw new VersionConflictError(requestsFile);
 }
 
 async function cachedResource(cache: string, registry: RegistrySource, name: string, version: string): Promise<VersionResource> {
@@ -265,10 +330,12 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     }
     writeFileSync(join(staging, INSTALL_RECORD), JSON.stringify(record));
     await options.beforeReplace?.();
+    // Checked at the instant before the swap, nothing awaited between.
+    assertCurrent(options);
     replaceTree(staging, target, join(options.cache, "trash", id));
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
-    if (error instanceof InstallError) throw error;
+    if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
   return { installed: names, missingPaths, unchanged: false };

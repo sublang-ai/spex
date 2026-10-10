@@ -2,11 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The primitives every Spex-owned file shares (storage-14): closed
-// encodings checked field by field, atomic same-directory replacement,
-// and the one storage fault a reader reports.
+// encodings checked field by field, atomic same-directory replacement —
+// plain, or under the version the writer read (DR-111) — and the one
+// storage fault a reader reports.
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, posix, resolve, win32 } from "node:path";
 import { i18n } from "./i18n.js";
 import { UUID_PATTERN } from "./protocol.js";
@@ -83,3 +84,58 @@ export function writeApplicationBytes(file: string, bytes: Buffer | string): voi
 export function writeApplicationFile(file: string, value: unknown): void { writeApplicationBytes(file, JSON.stringify(value)); }
 
 export const sha256 = (bytes: Buffer | string): string => createHash("sha256").update(bytes).digest("hex");
+
+// -- versioned writes (DR-111) ------------------------------------------------
+
+/** A file's version: the SHA-256 of its exact bytes, or null where no
+ * file stands. */
+export type FileVersion = string | null;
+
+/** A versioned write found its file changed since it was read: the
+ * caller reads again and retries (DR-111). */
+export class VersionConflictError extends Error {
+  constructor(readonly file: string) {
+    super(i18n._({ id: "{file} changed meanwhile; retry", comment: "Refusal: a file changed between the core's read and its write; the reader retries",
+      values: { file } }));
+    this.name = "VersionConflictError";
+  }
+}
+
+/** A file's bytes with their version; null bytes where it is absent. */
+export function readVersioned(file: string): { bytes: Buffer | null; version: FileVersion } {
+  let bytes: Buffer;
+  try { bytes = readFileSync(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { bytes: null, version: null };
+    throw error;
+  }
+  return { bytes, version: sha256(bytes) };
+}
+
+export const fileVersion = (file: string): FileVersion => readVersioned(file).version;
+
+/** Atomic same-directory replacement under a version: the file is
+ * checked at the instant before the rename and the write refused as a
+ * conflict where it no longer stands at `expected`. No folder is made:
+ * a write whose folder is gone is refused the same way. The temporary
+ * file never outlives a refusal or a failure. */
+export function writeVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion, mode = 0o600): void {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  let fd: number;
+  try { fd = openSync(temporary, "wx", mode); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new VersionConflictError(file);
+    throw error;
+  }
+  try {
+    try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
+    if (fileVersion(file) !== expected) throw new VersionConflictError(file);
+    renameSync(temporary, file);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
+  if (process.platform !== "win32") {
+    const dir = openSync(dirname(file), "r"); try { fsyncSync(dir); } finally { closeSync(dir); }
+  }
+}
