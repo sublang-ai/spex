@@ -88,7 +88,7 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 - `sync:<repository>:last` stores the last completed in-app sync of that spex repository as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `sync:<repository>:noticed` records that this device's reader has seen the privacy notice before the first push into a spex repository with other members [[space-57](space.md#space-57)];
 - `space:repair:<repair>` records that this device's reader declined to add a repair's project, keyed by the facts the repair names, so the repair stands in the list and counts as no issue here alone;
-- `authoring:<id>:player` stores the roster player id answering that authoring session's conversation; absent means the Captain's block; removed with the session.
+- `authoring:<instance>:player` stores the roster player id answering the conversation of the authoring session with that instance [[storage-23](#storage-23)]; absent means the Captain's block; removed with the session.
 - `session:<id>:agents` stores that session's own agent settings as agent id — the reserved `captain`, or a roster player — to a model, a subagent model, an effort, a subagent effort and a fast mode, each a string, `false` for the provider's current default, or absent for the configured value [[core-service-100](core-service.md#core-service-100)]; browser access is a boolean override with omission inheriting the configured off-by-default setting [[media-9](media.md#media-9)]; absent means the session runs what the config resolves; removed with the session.
 - `session:<id>:parked` stores what a run of that session standing parked on the Boss advertised at its last settlement — the park's reason, its actions and the shell's ending, each an id with its label and any standing the runtime reported [[core-service-32](core-service.md#core-service-32)]; absent means that settlement found no parked run advertising anything; the next settlement writes it again [[core-service-91](core-service.md#core-service-91)], and it is removed with the session.
 - `language` stores the home's interface language as an offered language code [[core-service-108](core-service.md#core-service-108)]; absent means the reader's system ([DR-078](../decisions/078-the-interface-speaks-the-readers-language.md)).
@@ -120,9 +120,11 @@ Where a spex repository's clone holds `config/playbook.config.yaml`, the config 
 
 ### storage-23
 
-The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
+The authoring store shall encode `<clone>/authoring/<id>.json` as exactly `{format: 1, id, instance, createdAt, touchedAt, package, queued, failures, compile?, proposal?}` and `authoring/<id>.records.jsonl` as newline-terminated `{seq, record}` objects in sequence order:
 
-- `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`; `proposal` is `{command, intent, players}`;
+- `instance` is a canonical lowercase UUID minted at creation and never rewritten, the session's identity; a file an earlier version wrote without it reads as the UUID formed from the first 32 hex digits of the SHA-256 of `authoring:<id>:<createdAt>`, its version digit `8` and its variant bits `10`, until its next write records that UUID;
+- `package` is the relative path, inside the working folder, of the spec package under development [[environments-10](environments.md#environments-10)]; `queued` is an array of `{text, attachments?}` content entries preserving ordered owned references [[media-5](media.md#media-5)]; `failures` a nonnegative integer; `compile` is `{at, by: 'boss' | 'agent', outcome: 'running' | 'ok' | 'failed' | 'canceled' | 'interrupted', device?, phase?, output?, questions?, relay?: 'sent' | 'stopped' | 'queued', roles?, sourceSha256?}`, `device` being the home's `device` [[storage-2](#storage-2)] that runs it while `outcome` is `running`; `proposal` is `{command, intent, players}`;
+- a `turn_started` record carries the home's `device` as `device`;
 - timestamps use Unix milliseconds; no provider token enters either file; an incomplete final record line is not a record;
 - the session with its records and assets is one unit [[storage-11](#storage-11)], shared with the spex repository like any session.
 
@@ -259,7 +261,7 @@ When an integration suite migrates a former-layout home of two projects and one 
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
-- exact authoring session and credential encodings written and read back, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
+- exact authoring session and credential encodings written and read back, a session file without `instance` reading as the same derived UUID in two homes and recording it at its next write, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
 
 ### storage-16
 

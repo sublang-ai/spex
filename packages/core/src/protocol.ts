@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -67,11 +67,12 @@ export const environmentRequestSchema = z.union([
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The owners of application media (media-4): a spex repository's
  * staging owner, an intent's own directory beside its file, an
- * authoring session's beside its file, and a Playbook session. */
+ * authoring session's beside its file — named by its instance
+ * (storage-23) — and a Playbook session. */
 export const mediaOwnerSchema = z.discriminatedUnion("kind", [
   z.object({kind: z.literal("project"), id: repositoryKeySchema}).strict(),
   z.object({kind: z.literal("intent"), projectId: repositoryKeySchema, intentId: z.string().regex(UUID_PATTERN)}).strict(),
-  z.object({kind: z.literal("draft"), projectId: repositoryKeySchema, id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
+  z.object({kind: z.literal("draft"), projectId: repositoryKeySchema, id: z.string().regex(/^[a-z][a-z0-9_-]*$/), instance: z.string().regex(UUID_PATTERN)}).strict(),
   z.object({kind: z.literal("session"), id: z.string().min(1)}).strict(),
 ]);
 export type MediaOwner = z.infer<typeof mediaOwnerSchema>;
@@ -97,7 +98,9 @@ export interface MediaUploadState { uploadId: string; offset: number; asset?: Me
 /** Live native authority, never reconstructed from the record stream. */
 export const approvalOwnerSchema = z.discriminatedUnion("kind", [
   z.object({kind: z.literal("session"), id: z.string().min(1)}).strict(),
-  z.object({kind: z.literal("draft"), id: z.string().regex(/^[a-z][a-z0-9_-]*$/)}).strict(),
+  // A draft's call is its session instance's: a session made again
+  // under the id never shows or answers it (core-service-96).
+  z.object({kind: z.literal("draft"), id: z.string().regex(/^[a-z][a-z0-9_-]*$/), instance: z.string().regex(UUID_PATTERN)}).strict(),
 ]);
 export type ApprovalOwner = z.infer<typeof approvalOwnerSchema>;
 export interface PendingApproval {
@@ -887,6 +890,9 @@ export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
 export const playbookIdSchema = z.string().max(64).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 /** An authoring session's id is its playbook's (DR-058). */
 export const draftIdSchema = playbookIdSchema;
+/** The instance an authoring session's file records (storage-23): every
+ * command on an existing session names the one it read (core-service-96). */
+const draftInstanceSchema = z.string().regex(UUID_PATTERN);
 
 /** Session channels carry a session's records; the draft channel
  * carries one draft's authoring records (DR-058). Drafts never enter
@@ -1061,6 +1067,9 @@ export const commandSchema = z.discriminatedUnion("type", [
     type: z.literal("compile.abort"),
     id,
     playbookId: z.string().min(1),
+    /** An authoring session's compile, named by the session's instance:
+     * canceled only while that instance's compile runs (core-service-96). */
+    instance: z.string().regex(UUID_PATTERN).optional(),
   }),
   z.object({ type: z.literal("library.builtins"), id }),
   z.object({ type: z.literal("specs.get"), id, projectId: z.string().min(1) }),
@@ -1229,15 +1238,17 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     text: z.string(),
     attachments: mediaAttachmentsSchema.optional(),
   }),
-  z.object({ type: z.literal("draft.abort"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.abort"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
   z.object({
     type: z.literal("draft.source.write"),
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     /** In-app markdown text, or a picked file's path — one of the two. */
     content: z.string().optional(),
     sourcePath: z.string().min(1).optional(),
@@ -1245,12 +1256,13 @@ export const commandSchema = z.discriminatedUnion("type", [
      * mismatch is a conflict, and no token writes unconditionally. */
     baseVersion: z.string().min(1).optional(),
   }),
-  z.object({ type: z.literal("draft.compile"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({ type: z.literal("draft.compile"), id, projectId: repositoryKeySchema, draftId: draftIdSchema, instance: draftInstanceSchema }),
   z.object({
     type: z.literal("draft.register"),
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     command: z.string().min(1),
     intent: z.string().min(1),
     /** derived role -> the session player that answers it (DR-032). */
@@ -1266,10 +1278,20 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
+    instance: draftInstanceSchema,
     /** The roster player answering this draft; null = the Captain's block. */
     playerId: playerIdSchema.nullable(),
   }),
-  z.object({ type: z.literal("draft.delete"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  z.object({
+    type: z.literal("draft.delete"),
+    id,
+    projectId: repositoryKeySchema,
+    draftId: draftIdSchema,
+    /** The instance read; for a session file that will not read, its
+     * `fileVersion` instead — exactly one of the two. */
+    instance: draftInstanceSchema.optional(),
+    fileVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  }),
   z.object({ type: z.literal("draft.artifacts"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
 ]);
 
@@ -1457,6 +1479,12 @@ export interface DraftProposal {
 
 export interface DraftInfo {
   id: string;
+  /** The session's recorded instance (storage-23): what every command
+   * on it names. Absent where the session file will not read. */
+  instance?: string;
+  /** The unreadable session file's bytes digest, which its Delete
+   * names in place of an instance (core-service-96). */
+  fileVersion?: string;
   /** The project whose spex repository holds this authoring session
    * (storage-23), named by its key. */
   projectId: string;
@@ -1914,6 +1942,8 @@ export interface SessionStateMessage {
 export interface CompileProgressMessage {
   type: "compile.progress";
   playbookId: string;
+  /** An authoring session's compile names the session's instance. */
+  instance?: string;
   line: string;
 }
 
@@ -1954,6 +1984,7 @@ export interface SpaceStateMessage {
 export interface DraftRecordMessage {
   type: "draft.record";
   draftId: string;
+  instance: string;
   seq: number;
   record: TmuxPlayRecord;
 }
@@ -1970,6 +2001,7 @@ export interface DraftStateMessage {
 export interface DraftSourceMessage {
   type: "draft.source";
   draftId: string;
+  instance: string;
   markdown: string;
   version: string;
   mtime: number;
@@ -1977,10 +2009,20 @@ export interface DraftSourceMessage {
 
 /** A draft was retired by registration or deleted (playbook-library-70):
  * broadcast to every client, which drops every trace of it. */
+/** A sync applied the spex repository holding the session: a client
+ * showing it reads its transcript again (core-service-96). */
+export interface DraftHistoryReplacedMessage {
+  type: "draft.history-replaced";
+  draftId: string;
+  instance: string;
+}
+
 export interface DraftRemovedMessage {
   type: "draft.removed";
   projectId: string;
   draftId: string;
+  /** The instance removed; absent for a session file that would not read. */
+  instance?: string;
 }
 
 export interface BrowserProgressMessage { type: "browser.progress"; operationId: string; progress: BrowserSetupProgress }
@@ -2004,6 +2046,7 @@ export type ServerMessage =
   | DraftRecordMessage
   | DraftStateMessage
   | DraftSourceMessage
+  | DraftHistoryReplacedMessage
   | DraftRemovedMessage;
 
 // ---------------------------------------------------------------------------

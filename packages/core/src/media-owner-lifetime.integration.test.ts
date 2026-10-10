@@ -14,7 +14,7 @@ import { mediaOwnerKey, type MediaUploadOwner } from "./protocol.js";
 // An authoring session's assets sit beside its file in its project's
 // spex repository (media-4, storage-23).
 const PROJECT = "tester/proj-spex";
-const draft = (id: string) => ({kind: "draft" as const, projectId: PROJECT, id});
+const draft = (id: string) => ({kind: "draft" as const, projectId: PROJECT, id, instance: "72000000-0000-4000-8000-000000000001"});
 const assetsDir = (home: string, id: string) => join(home, "workspace", "tester", "proj-spex", "authoring", `${id}.assets`);
 const directoryOf = (home: string) => (owner: MediaUploadOwner): string => {
   if (owner.kind !== "draft") throw new Error("Only authoring owners in this fixture");

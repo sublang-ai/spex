@@ -201,27 +201,34 @@ test("space-37: pending attachment validation excludes sync until queue and edit
 test("media-18: deleting and recreating a draft invalidates completed and incomplete upload retries", {timeout: 30_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
-  let owner = {kind: "draft" as const, projectId: "", id: "retired-media"};
+  let owner = {kind: "draft" as const, projectId: "", id: "retired-media", instance: ""};
   const request = () => ({owner, uploadId: randomUUID(), name: "kept.txt", mimeType: "text/plain", byteLength: 4});
   try {
     // An authoring session lives in its project's spex repository (storage-23).
     const project = await client.command("project.register", {path: f.project});
     owner = {...owner, projectId: project.id};
     const completed = request(), incomplete = request();
-    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
+    const former = owner;
+    completed.owner = incomplete.owner = former;
     for (const upload of [completed, incomplete]) {
       await client.command("media.begin", upload);
       await client.command("media.chunk", {uploadId: upload.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});
     }
     const prior = await client.command("media.finish", {uploadId: completed.uploadId});
     await client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1});
-    await client.command("draft.delete", {projectId: project.id, draftId: owner.id});
-    await client.command("draft.create", {projectId: project.id, draftId: owner.id});
+    await client.command("draft.delete", {projectId: project.id, draftId: owner.id, instance: former.instance});
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
     for (const upload of [completed, incomplete]) {
-      await assert.rejects(client.command("media.begin", upload), /canceled|expired/);
+      // The begin names the former instance, refused as no owner; the
+      // finish, naming the upload alone, meets its invalidation.
+      await assert.rejects(client.command("media.begin", upload), /not_found/);
       await assert.rejects(client.command("media.finish", {uploadId: upload.uploadId}), /canceled|expired/);
     }
     await assert.rejects(client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1}));
+    // media-4: the former instance owns nothing in its successor.
+    await assert.rejects(client.command("media.begin", {...request(), owner: former}), /not_found/);
+    await assert.rejects(client.command("media.read", {owner: former, assetId: prior.asset.assetId, offset: 0, length: 1}), /not_found/);
     const fresh = request();
     await client.command("media.begin", fresh);
     await client.command("media.chunk", {uploadId: fresh.uploadId, offset: 0, data: Buffer.from("kept").toString("base64")});

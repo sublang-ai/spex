@@ -52,7 +52,7 @@ When application content becomes durable, the core shall use the shared owner-sc
 | Content | Owner and lifetime |
 | --- | --- |
 | Initial messages, session follow-ups before acceptance, queued intents | The intent's own asset directory beside its file [[storage-4](storage.md#storage-4)]; a session's first message before its intent exists under the spex repository's staging owner |
-| Authoring input and output | The authoring session's asset directory beside its file [[storage-23](storage.md#storage-23)] |
+| Authoring input and output | The authoring session's asset directory beside its file, the owner naming the session's instance [[storage-23](storage.md#storage-23)] |
 | Accepted session input and observed output | Playbook session asset bundle |
 | Intent-to-session handoff | Copy and validate bytes into the session before acknowledging acceptance; retain independent project ownership |
 | Edited intent | Keep the bytes its references still name; a removed intent's directory goes with its file |
@@ -135,4 +135,4 @@ When a fresh installed Desktop uses a signed-in native agent to inspect an owned
 
 ### media-18
 
-When real owner stores and authenticated core clients race media publication with owner removal, integration verification shall assert that removal waits for admitted publication and validation, unrelated owners continue, cached and already closing readers drain, and old incomplete or completed upload identities cannot resume after draft deletion and recreation or registration retirement, while a draft deletion refused after the drain because a compile was admitted leaves an in-flight upload resumable from its received offset to a successful finish [[media-17](#media-17)].
+When real owner stores and authenticated core clients race media publication with owner removal, integration verification shall assert that removal waits for admitted publication and validation, unrelated owners continue, cached and already closing readers drain, and old incomplete or completed upload identities cannot resume, nor a begin naming the former instance be admitted [[media-4](#media-4)], after draft deletion and recreation or registration retirement, while a draft deletion refused after the drain because a compile was admitted leaves an in-flight upload resumable from its received offset to a successful finish [[media-17](#media-17)].

@@ -57,8 +57,12 @@ test("offline requests cannot be answered; conflicts remain visible; older revis
 });
 
 test("parallel owners remain distinct and deny-only native choices never offer approval", () => {
-  const draft = {...request, id: "request-2", owner: {kind: "draft" as const, id: "draft"}, ownerLabel: "draft", actorId: "author", request: {...request.request, choices: ["deny" as const]}};
+  const draft = {...request, id: "request-2", owner: {kind: "draft" as const, id: "draft", instance: "72000000-0000-4000-8000-0000000000aa"}, ownerLabel: "draft", actorId: "author", request: {...request.request, choices: ["deny" as const]}};
   deliver(state(1, [request, draft]));
+  // A session made again under the draft's id shows none of its calls.
+  const successor = render(<ApprovalNotice owner={{...draft.owner, instance: "72000000-0000-4000-8000-0000000000bb"}} />);
+  expect(successor.container.textContent).toBe("");
+  successor.unmount();
   render(<><ApprovalInbox /><ApprovalNotice owner={draft.owner} /></>);
   fireEvent.click(screen.getByRole("button", {name: "Tool approval needed (1)"}));
   expect(screen.getAllByRole("button", {name: "Deny"})).toHaveLength(2);

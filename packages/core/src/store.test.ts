@@ -13,7 +13,7 @@ import Database from "better-sqlite3";
 import { projectCaptainSessionStructure, type SessionExecutionProjection, type SessionFreshBoundary } from "@sublang/playbook/session-store";
 
 import { StateRootHeldError, Store } from "./store.js";
-import { DraftStore, type StoredDraft } from "./drafts.js";
+import { DraftChangedError, DraftStore, legacyInstance, type StoredDraft } from "./drafts.js";
 import { StorageFormatError } from "./app-storage.js";
 import type { SessionInfo, TmuxPlayRecord } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -839,6 +839,9 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const workingFolder = join(dir, "project");
   const location = { key: "tester/proj-spex", authoringDir, workingFolder };
   const drafts = new DraftStore(() => [location]);
+  // `authoring/` is made inside a clone that stands, never the clone.
+  assert.throws(() => drafts.create("triage", 1000, location, "local"), /ENOENT/);
+  mkdirSync(join(authoringDir, ".."), { recursive: true });
   const draft = drafts.create("triage", 1000, location, "local");
   // The spec package under development stands in the working folder
   // with its manifest (environments-10, playbook-library-70).
@@ -848,31 +851,57 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.match(readFileSync(join(packageDir, "meta.yaml"), "utf8"), /^format: 2\norg: local\nname: triage\nversion: 0\.1\.0\n/);
   assert.equal(drafts.recordFile("triage"), join(authoringDir, "triage.json"));
   assert.equal(drafts.projectOf("triage"), "tester/proj-spex");
-  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
+  // Creation mints the session's instance, a fresh UUID each time.
+  assert.match(draft.instance, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
   const full: StoredDraft = {
     ...draft, touchedAt: 2000, queued: [{text: "next"}, {text: "after"}], failures: 2,
     compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], relay: "stopped", roles: ["Coder"], sourceSha256: "ab".repeat(32) },
     proposal: { command: "triage", intent: "Label issues", players: { Coder: "dev.coder" } },
   };
-  drafts.write(full);
+  const read = drafts.load("triage");
+  drafts.write(full, read.version);
   const bytes = JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(bytes), ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures", "compile", "proposal"]);
+  assert.deepEqual(Object.keys(bytes), ["format", "id", "instance", "createdAt", "touchedAt", "package", "queued", "failures", "compile", "proposal"]);
   assert.deepEqual(bytes, full);
   assert.deepEqual(drafts.read("triage"), full);
   assert.deepEqual(drafts.ids(), ["triage"]);
+  // A write under the bytes read before the last write is refused and
+  // changes nothing (playbook-library-70).
+  assert.throws(() => drafts.write({ ...full, failures: 9 }, read.version), DraftChangedError);
+  assert.deepEqual(drafts.read("triage"), full);
+  // A file an earlier version wrote reads as the UUID its id and
+  // creation time derive, alike in two homes, and records it at its
+  // next write.
+  const legacy = '{"format":1,"id":"triage","createdAt":1000,"touchedAt":1000,"package":"spex-packages/triage","queued":[],"failures":0}';
+  const otherDir = join(dir, "elsewhere", "authoring");
+  mkdirSync(otherDir, { recursive: true });
+  writeFileSync(join(otherDir, "triage.json"), legacy);
+  writeFileSync(drafts.recordFile("triage"), legacy);
+  const derived = drafts.read("triage").instance;
+  assert.equal(derived, legacyInstance("triage", 1000));
+  assert.match(derived, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(new DraftStore(() => [{ key: "elsewhere/proj-spex", authoringDir: otherDir, workingFolder: null }]).read("triage").instance, derived);
+  const old = drafts.load("triage");
+  drafts.write({ ...old.draft, touchedAt: 1001 }, old.version);
+  assert.equal(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")).instance, derived);
+  drafts.write(full, drafts.load("triage").version);
   // A fresh store finds the session by its clone.
   assert.deepEqual(new DraftStore(() => [location]).ids(), ["triage"]);
   // The transcript: newline-terminated {seq,record} lines in order,
   // no provider token, and an incomplete final line is not a record.
   const started = { type: "turn_started", turnId: 1, timestamp: 3000, turn: { id: 1, prompt: "hi", timestamp: 3000 } } as unknown as TmuxPlayRecord;
-  drafts.append("triage", 1, started);
-  drafts.append("triage", 2, { type: "player_finished", turnId: 1, timestamp: 3001, playerId: "author", result: { status: "ok", playerId: "author", turnId: 1, resumeToken: "secret-token", finalText: "done" } } as unknown as TmuxPlayRecord);
+  drafts.append("triage", draft.instance, started);
+  drafts.append("triage", draft.instance, { type: "player_finished", turnId: 1, timestamp: 3001, playerId: "author", result: { status: "ok", playerId: "author", turnId: 1, resumeToken: "secret-token", finalText: "done" } } as unknown as TmuxPlayRecord);
   assert.equal(drafts.recordsFile("triage"), join(authoringDir, "triage.records.jsonl"));
   const text = readFileSync(drafts.recordsFile("triage"), "utf8");
   const finished = { type: "player_finished", turnId: 1, timestamp: 3001, playerId: "author", result: { status: "ok", playerId: "author", turnId: 1, finalText: "done" } };
   assert.equal(text, `${JSON.stringify({ seq: 1, record: started })}\n${JSON.stringify({ seq: 2, record: finished })}\n`);
   assert.ok(!text.includes("secret-token"), "no provider token enters the transcript");
   assert.deepEqual(drafts.records("triage"), { records: [{ seq: 1, record: started }, { seq: 2, record: finished as unknown as TmuxPlayRecord }] });
+  // An append naming another instance writes nothing.
+  assert.throws(() => drafts.append("triage", legacyInstance("triage", 1), started), DraftChangedError);
+  assert.equal(readFileSync(drafts.recordsFile("triage"), "utf8"), text);
   appendFileSync(drafts.recordsFile("triage"), '{"seq":3,"record":{"type":"turn_fin');
   assert.deepEqual(drafts.records("triage").records.map((r) => r.seq), [1, 2]);
   assert.equal(drafts.records("triage").incompleteAfterSeq, 2);
@@ -894,7 +923,10 @@ test("storage-23: authoring session encodings are written and read back exactly"
   // folder in the working folder (playbook-library-63).
   mkdirSync(join(authoringDir, "triage.assets"));
   const source = drafts.sourcePath("triage")!;
-  drafts.delete("triage");
+  // The file was left damaged above: it names no instance to delete
+  // under, only its bytes' version.
+  assert.throws(() => drafts.delete("triage", { instance: draft.instance }), DraftChangedError);
+  drafts.delete("triage", { version: drafts.fileVersion("triage")! });
   assert.ok(!existsSync(join(authoringDir, "triage.json")) && !existsSync(join(authoringDir, "triage.records.jsonl")) && !existsSync(join(authoringDir, "triage.assets")));
   assert.ok(existsSync(source));
   assert.ok(existsSync(join(packageDir, "meta.yaml")));

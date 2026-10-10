@@ -149,7 +149,6 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   // The turn is still running: the Source tab followed the write.
   await expect(page.getByTestId("draft-working")).toBeVisible();
   await expect(page.getByTestId("draft-abort")).toHaveText("Abort");
-  await expect(compile).toHaveAttribute("title", "Waits for the reply");
   await expect(page.getByTestId("source-caption")).toContainText("by the agent");
   await expect(chip).toContainText("Draft");
   const thread = page.getByTestId("draft-thread");
@@ -191,13 +190,10 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(
     thread.getByTestId("system-line").filter({ hasText: "Compile failed at Machine — sent to the agent" }),
   ).toBeVisible();
-  await expect(compile).toBeDisabled();
-  await expect(compile).toHaveAttribute("title", "Waits for the reply");
+  // The editor stays open beside the relay turn: a Save writes under
+  // the version it read, whatever the agent does meanwhile.
   await expect(page.getByTestId("source-edit")).toBeEnabled();
-  // Save waits while the agent may be editing the same file.
   await page.getByTestId("source-edit").click();
-  await expect(page.getByTestId("editor-save")).toBeDisabled();
-  await expect(page.getByTestId("editor-save")).toHaveAttribute("title", "Waits for the reply");
   await page.getByTestId("editor-cancel").click();
   await expect(page.getByTestId("spec-editor")).toHaveCount(0);
 
@@ -269,6 +265,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await app.core.command("draft.source.write", {
     projectId: app.projectId!,
     draftId: "triage",
+    instance: (await app.core.command("draft.list", {})).find((draft) => draft.id === "triage")!.instance!,
     content: "# triage\n\nForced from outside the editor.\n",
   });
   await page.getByTestId("editor-save").click();
@@ -309,7 +306,9 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
     .getByTestId("system-line")
     .filter({ hasText: "Now answering: dev.reviewer — the conversation so far was replayed to it" });
   await expect(switched).toBeVisible();
-  await expect.poll(() => app.readPrefs()).toContain("authoring:triage:player");
+  // The choice is kept under the session's instance (storage-5).
+  const { instance } = (await app.core.command("draft.list", {})).find((draft) => draft.id === "triage")!;
+  await expect.poll(() => app.readPrefs()).toContain(`authoring:${instance}:player`);
 
   // ── A reload restores the transcript, the source, and the compiled
   //    tabs (playbook-library-62).
