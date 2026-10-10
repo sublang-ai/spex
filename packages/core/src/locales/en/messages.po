@@ -305,6 +305,11 @@ msgstr "{name} is taken in {group}; choose another name"
 msgid "{name} ownership cannot be verified"
 msgstr "{name} ownership cannot be verified"
 
+#. Refusal while a spex repository's remote URL is being changed or removed; {name} is its name
+#: src/space.ts
+msgid "{name}'s remote is changing; wait for it to finish"
+msgstr "{name}'s remote is changing; wait for it to finish"
+
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
 msgid "{path} already exists, so the clone cannot follow the host there"

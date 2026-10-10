@@ -24,7 +24,7 @@ Where any Spex surface submits a shared-config change that violates the shared f
 
 ### shared-config-roundtrip-6
 
-When a prepared shared-config change reaches publication, the receiving surface shall reject it without writing if its destination is no longer current, an operation holds a repository whose config it used [[space-21](space.md#space-21)], or any config bytes used to prepare it have changed, requiring the caller to retry from current state:
+When a prepared shared-config change reaches publication, the receiving surface shall reject it without writing if its destination is no longer current, an operation holds a repository whose config it used [[space-21](space.md#space-21)], or any config bytes used to prepare it have changed, requiring the caller to retry from current state ([DR-111](../decisions/111-an-overtaken-config-edit-is-refused.md)):
 
 - a project's edit checks both its own file and the own-group configuration used to validate it;
 - validation of these conditions and publication have no asynchronous work between them.

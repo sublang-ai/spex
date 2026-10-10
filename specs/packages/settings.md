@@ -186,7 +186,7 @@ When a Settings edit is saved, the Settings surface shall write your own group's
 
 While the Settings surface is open, when the shared config file changes on disk from outside the app, the Settings surface shall refresh the displayed values to the new file content and show a notice that the config changed externally:
 
-- When the external change conflicts with unsaved edits in the Settings surface, the notice says so; resolution is last-writer-wins per [DR-004](../decisions/004-config-and-persistence.md).
+- When the external change conflicts with unsaved edits in the Settings surface, the notice says so; a save made after the change is last-writer-wins per [DR-004](../decisions/004-config-and-persistence.md), and a save the change overtook while it was composed is refused [[shared-config-roundtrip-6](shared-config-roundtrip.md#shared-config-roundtrip-6)], shown as any refused save is, the change kept ([DR-111](../decisions/111-an-overtaken-config-edit-is-refused.md)).
 
 #### settings-9
 

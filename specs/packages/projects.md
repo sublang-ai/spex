@@ -151,7 +151,7 @@ Where the core manages projects, the home file shall pair each working folder wi
 
 - removing a project forgets the pair and deletes the clone, except your own group's, whose clone stays; the working folder remains;
 - `project.remove` is refused `busy` while any work a sync of its spex repository waits for runs [[space-11](space.md#space-11)] — an authoring session's turn, compile or enabling among it — the refusal naming that work;
-- a removal owns its clone's reservation from before its first asynchronous admission check to its end, every write beneath the clone refused `busy` meanwhile [[space-21](space.md#space-21)], and a clone it keeps reads afterwards as it did before; refusing or completing that removal releases only its own reservation;
+- a removal owns its clone's reservation from before its first asynchronous admission check to its end, every write beneath the clone refused `busy` meanwhile [[space-21](space.md#space-21)], and a clone it keeps reads afterwards as it did before;
 - a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
 ### Repository State

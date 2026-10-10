@@ -18,6 +18,14 @@ function deferred() {
   return { promise, resolve };
 }
 
+/** A seam reached within `ms`, or the test fails naming it. */
+async function within(reached: Promise<void>, what: string, ms = 10_000): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([reached, new Promise<never>((_, fail) => { timer = setTimeout(() => fail(new Error(`timeout waiting for ${what}`)), ms); })]);
+  } finally { clearTimeout(timer); }
+}
+
 const run: RunCommand = (command, args, cwd, env) => defaultRunCommand(command, args, cwd, {
   GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1",
   GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.test",
@@ -26,7 +34,7 @@ const run: RunCommand = (command, args, cwd, env) => defaultRunCommand(command, 
 });
 
 for (const action of ["project.register", "project.create"] as const) {
-  test(`storage-28: ${action} cannot allocate a destination held by an unstarted Join`, async (t) => {
+  test(`storage-28: ${action} cannot allocate a destination held by a Join before its clone is indexed`, async (t) => {
     const host = await fixture.startHost();
     const home = await fixture.startHome(`allocation-${action}`, { host, project: false, extra: { signIn: "browser", runCommand: run } });
     const cloneEntered = deferred();
@@ -40,20 +48,25 @@ for (const action of ["project.register", "project.create"] as const) {
     const key = "ada/reserved-spex";
     const destination = clonePath(home.dataDir, key);
     // Hold only scheduling; the real Git clone runs once released.
-    const probe = (home.service as unknown as { space: { probe: SpaceGit } }).space.probe;
-    const gitRun = probe.run.bind(probe);
+    const space = (home.service as unknown as { space: { joinGit(): SpaceGit } }).space;
+    const joinGit = space.joinGit.bind(space);
     let paused = false;
-    probe.run = async (args, options) => {
-      if (!paused && args[0] === "clone" && args.at(-1) === destination) {
-        paused = true;
-        cloneEntered.resolve();
-        await cloneReleased.promise;
-      }
-      return gitRun(args, options);
+    space.joinGit = () => {
+      const git = joinGit();
+      const gitRun = git.run.bind(git);
+      git.run = async (args, options) => {
+        if (!paused && args[0] === "clone" && args.at(-1) === destination) {
+          paused = true;
+          cloneEntered.resolve();
+          await cloneReleased.promise;
+        }
+        return gitRun(args, options);
+      };
+      return git;
     };
     const from = home.client.mark();
     await home.client.expectOk("space.join", { hostId: listed.id });
-    await cloneEntered.promise;
+    await within(cloneEntered.promise, "the Join's clone");
     assert.equal(existsSync(destination), false);
     const path = action === "project.register" ? fixture.gitFolder("reserved") : join(fixture.scratch, `new-${action}`, "reserved");
     const project = await home.client.expectOk(action, { path });
@@ -90,7 +103,7 @@ test("space-37: Rebind rechecks the clone gate after its working-folder lookup",
   const replacement = fixture.gitFolder("replacement");
   holdPath = replacement;
   const rebinding = home.client.command("project.rebind", { projectId: key, path: replacement });
-  await lookupEntered.promise;
+  await within(lookupEntered.promise, "Rebind's working-folder lookup");
   home.hooks.beforeStep = async (event) => {
     if (event.repository === key && event.op === "sync" && event.step === "save") {
       saveEntered.resolve();
@@ -98,7 +111,7 @@ test("space-37: Rebind rechecks the clone gate after its working-folder lookup",
     }
   };
   const syncing = home.client.settle("space.sync", { repository: key });
-  await saveEntered.promise;
+  await within(saveEntered.promise, "the sync's Save step");
   lookupReleased.resolve();
   const reply = await rebinding;
   assert.ok(!reply.ok);

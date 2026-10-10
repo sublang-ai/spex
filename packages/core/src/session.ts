@@ -377,6 +377,9 @@ export class SessionManager {
   private readonly now: () => number;
   onRecord: (envelope: RecordEnvelope) => void = () => {};
   onSessionState: (session: SessionInfo) => void = () => {};
+  /** A session of the project stopped opening or settling — after the
+   * last state it announced for that (space-11). */
+  onReleased: (projectId: string) => void = () => {};
   onLedgerChange: (projectId: string) => void = () => {};
   /** Local turn completion, after release and the durable read model agree. */
   onTurnSettled: (
@@ -628,7 +631,10 @@ export class SessionManager {
       if (ownsLocalReservation) this.store.setLocalSession(sessionId, false);
       if (error instanceof SettingsDriftError) throw new CoreError("invalid_config", error.message);
       throw this.failure(error, mode === "new" ? "invalid_config" : "invalid_request");
-    } finally { this.opening.delete(project.id); }
+    } finally {
+      this.opening.delete(project.id);
+      this.onReleased(project.id);
+    }
   }
 
   /** The stored structural projection of a schema-7 checkpoint, when it has one. */
@@ -988,6 +994,7 @@ export class SessionManager {
         finally {
           this.settling.delete(entry.info.id);
           this.intentionalStops.delete(entry.info.id);
+          this.onReleased(entry.info.projectId);
         }
         // A restore only reports: what runs next is the Boss's choice,
         // so it hands no queued intent on (core-service-82, DR-088).

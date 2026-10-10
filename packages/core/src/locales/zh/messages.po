@@ -305,6 +305,11 @@ msgstr "{name} 在 {group} 中已被占用；请另选一个名称"
 msgid "{name} ownership cannot be verified"
 msgstr "{name} 的归属无法确认"
 
+#. Refusal while a spex repository's remote URL is being changed or removed; {name} is its name
+#: src/space.ts
+msgid "{name}'s remote is changing; wait for it to finish"
+msgstr "{name} 的远程仓库正在更改；请等待其完成"
+
 #. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
 msgid "{path} already exists, so the clone cannot follow the host there"

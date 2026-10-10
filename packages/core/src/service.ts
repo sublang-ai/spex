@@ -556,6 +556,8 @@ export class CoreService {
       this.broadcast({ type: "session.state", session });
       this.events.onSessionState?.(session);
     };
+    // An opening or a settlement ended after its last announcement.
+    this.sessions.onReleased = () => this.activitySettled();
     this.sessions.onLedgerChange = (projectId) => {
       this.queueLedgerChange([projectId]);
     };
@@ -598,6 +600,8 @@ export class CoreService {
       },
       broadcast: (repository, state) => this.broadcast({ type: "environment.state", repository, state }),
       changed: (repository) => this.environmentChanged(repository),
+      // Its last queued operation ended, after its last announcement.
+      onIdle: () => this.activitySettled(),
     });
     // A working folder unpaired from its project keeps nothing the
     // exports wrote there (environments-8).
@@ -707,6 +711,8 @@ export class CoreService {
     this.authors.events.onRemoved = (draftId, projectId, instance) => this.broadcast({ type: "draft.removed", draftId, projectId, instance });
     this.media = new ApplicationMedia({
       home: this.store.dir,
+      // The last upload or removal in flight ended (space-11).
+      onIdle: () => this.activitySettled(),
       directoryOf: (owner) => this.mediaDirectory(owner),
       assertOwner: (owner, write) => {
         if (this.stopping) throw new CoreError("busy", i18n._({id: "The core is stopping.", comment: "Refusal during attachment admission"}));
@@ -1223,6 +1229,10 @@ export class CoreService {
       projectIds.add(projectId);
     }
     if (projectIds.size > 0) this.queueLedgerChange([...projectIds]);
+    // Another host's leases were read again: one taken and released
+    // since the last scan changed no session's state, yet held a
+    // deferred assignment off (space-11).
+    this.activitySettled();
     // A session that joins the listing — its project registered, or
     // another host's writes read — may hold a restore a stopped core
     // left unrecorded (core-service-82).
@@ -1860,6 +1870,22 @@ export class CoreService {
 
   private broadcast(message: ServerMessage): void {
     for (const client of this.clients) this.send(client.socket, message);
+    // A session's, an authoring session's or an environment's state
+    // changed, or one left: what it held beneath a clone may have ended
+    // (space-11).
+    switch (message.type) {
+      case "session.state": case "session.removed": case "draft.state": case "draft.removed": case "environment.state":
+        this.activitySettled();
+    }
+  }
+
+  /** Work admitted beneath a clone may have ended — a session released,
+   * created or opened, a turn admitted, a compile or an enabling, a media
+   * write, another host's ownership (space-11): a host assignment it
+   * deferred is asked again once its clone is quiet (space-64, space-65).
+   * Cheap where none waits; the space manager coalesces the rest. */
+  private activitySettled(): void {
+    if (!this.stopping) this.space?.activitySettled();
   }
 
   private dispatchRecord(envelope: RecordEnvelope): void {
@@ -1891,8 +1917,9 @@ export class CoreService {
       return;
     }
     const command = parsed.command;
+    // What the command admitted beneath a clone ends with it.
     try {
-      const result = await this.execute(client, command);
+      const result = await this.execute(client, command).finally(() => this.activitySettled());
       this.send(client.socket, {
         type: "reply",
         id: command.id,
@@ -2218,20 +2245,20 @@ export class CoreService {
           throw noProject(command.projectId);
         }
         // Being created from here, the session holds off an operation on
-        // its spex repository (space-11) until it opens, live. Publish
-        // that ownership before opportunistic host setup can begin.
+        // its spex repository (space-11) until it opens, live.
         this.creating.set(project.id, (this.creating.get(project.id) ?? 0) + 1);
         try {
-          // A project's group gains its own spex repository at session
-          // start where it has none (DR-103); setup yields to work
-          // already admitted beneath a clone.
-          void this.ensureGroupRepository(project.id).catch(() => {});
           // Yours with the project.s own on top (core-service-2).
           return await this.sessions.createSession(project, await this.composedFor(project.id));
         } finally {
           const left = (this.creating.get(project.id) ?? 1) - 1;
           if (left > 0) this.creating.set(project.id, left);
           else this.creating.delete(project.id);
+          // A project's group gains its own spex repository at session
+          // start where it has none (DR-103), asked once this creation
+          // no longer holds the clone: what the session itself holds
+          // defers it until that ends, never refused or bypassed.
+          void this.ensureGroupRepository(project.id).catch(() => {});
         }
       }
       case "session.dispose":
@@ -3572,7 +3599,7 @@ export class CoreService {
     }));
     let settled!: () => void;
     this.submitting.set(sessionId, new Promise<void>((resolve) => { settled = resolve; }));
-    return () => { this.submitting.delete(sessionId); settled(); };
+    return () => { this.submitting.delete(sessionId); settled(); this.activitySettled(); };
   }
 
   private validateIntentDispatch(sessionId: string, intentId: string): void {
