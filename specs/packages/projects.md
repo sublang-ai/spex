@@ -17,7 +17,7 @@ Integration coverage exercises registration and card state against fixture repos
 
 When the user confirms a directory in the project palette, the palette shall resolve the confirmed directory by the cases below:
 
-- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in, through the picker of matching spex repositories and groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[environments-26](environments.md#environments-26)], and makes it the workspace's current project.
+- The top level of a git work tree: the palette pairs the directory with a spex repository [[storage-6](storage.md#storage-6)] — while signed in, through the picker of matching spex repositories and groups [[space-58](space.md#space-58)], else locally — the environment the directory holds at its root installed, or one written there [[storage-6](storage.md#storage-6)], and makes it the workspace's current project.
 - Inside a work tree below its top level: the palette registers nothing and shows a message naming the work tree's top-level path.
 - No git work tree at all: the palette registers nothing and shows a message naming the condition and pointing at the Create action [[projects-22](#projects-22)], which initializes the repository on the same path — an existing-repo action never initializes a repository on its own.
 
@@ -260,7 +260,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the palette's Academy action seeds the example, which becomes the current project [[projects-27](#projects-27)];
 - creating with scaffolding from a Chinese browser against an English core produces a Chinese spec tree and authoring-language declaration through the real bundled scaffold [[projects-3](#projects-3)] [[projects-31](#projects-31)];
 - confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
-- confirming an existing repository's path adds it and makes it current, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
+- confirming an existing repository's path adds it and makes it current, its root holding `spex.yaml` and `spex.lock` afterwards, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
 - the Overview tab shows the repository's branch and, for a project with no `origin` remote, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
 - confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)];
 - in a 400-pixel-tall window, a path the palette refuses shows its message inside the window, the palette's own box ending inside it [[projects-30](#projects-30)].

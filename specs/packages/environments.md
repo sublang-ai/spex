@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md): the release layout and manifest the core reads and checks, the requests and lock of each spex repository, resolution, installing through the content-addressed store, the exports that put skills where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
+This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md): the release layout and manifest the core reads and checks, the requests and lock of each project and group, resolution, installing through the content-addressed store, the exports that put skills where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
 A **spec package** is one GEARS contract with the sources, spec, skills, playbooks and applets made from it, named `<org>/<pkg>`; a **release** is its immutable files at one version; an **artifact** is one `source`, `spec`, `skill`, `playbook` or `applet` of a release.
 An **environment** is what a project or a group installs: `spex.yaml` says which spec packages it wants and `spex.lock` records exactly what it got, at the root of a project's working folder or of a group's own spex repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)]; **the registry** is spex.pub.
 A **working folder** is where a project's or a group's sessions run, paired with the spex repository whose environment it uses [[storage-6](storage.md#storage-6)].
@@ -45,12 +45,11 @@ When the core reads a release — from the registry, a Git commit, a path inside
 
 #### environments-26
 
-The core shall keep an environment's `spex.yaml` and `spex.lock` at the root of the working folder for a project, and at the root of the clone for a group's own spex repository [[storage-1](storage.md#storage-1)], writing the two files there and never staging, committing or ignoring them in a working folder's Git ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
+The core shall keep an environment's `spex.yaml` and `spex.lock` at the root of the working folder for a project, and at the root of the clone for a group's own spex repository [[storage-1](storage.md#storage-1)], reading them at each use and writing them there, never staging, committing or ignoring them in a working folder's Git ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
 
 - a project's environment is committed with its code by the reader, so it follows the code's branches and history, and a working folder cloned with them holds its environment before Spex writes anything;
-- while a project's two files are untracked in its working folder — the reader cannot push the code, keeps it clean, or the folder is no repository — the environment is this device's alone, which the listing says [[environments-14](#environments-14)];
-- the files as the working folder holds them are the environment whenever the core reads it, so a branch switch, a pull or a hand edit that changed the lock is installed [[environments-7](#environments-7)], and one that changed `spex.yaml` alone leaves the lock stale [[environments-7](#environments-7)];
-- a command names an environment by its spex repository's key [[environments-17](#environments-17)], the home pairing that key with one working folder on this device [[storage-2](storage.md#storage-2)].
+- a project's environment is this device's alone while its two files are untracked in the working folder — the reader cannot push the code, keeps it clean, or the folder is no repository;
+- a use is the core's start, the pairing of a working folder, a session start, an export and `environment.get`, and the files as the folder holds them at that read are the environment, so a branch switch, a pull or a hand edit shows at the next use.
 
 #### environments-2
 
@@ -116,9 +115,9 @@ When a solution stands, the core shall select, within it, in this order ([DR-104
 
 #### environments-7
 
-When a client sends `environment.install` for a spex repository, or a resolve, a sync of a group's own spex repository, or a change of the working folder's files from outside the core [[environments-26](#environments-26)] changed its lock, the core shall install the lock's selected files under `<clone>/packages/<org>/<pkg>/` at their release paths through the store under the home, atomically ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When a client sends `environment.install` for a spex repository, or a resolve or a sync of a group's own spex repository changed its lock, or a use's read [[environments-26](#environments-26)] finds a lock other than the one installed, the core shall install the lock's selected files under `<clone>/packages/<org>/<pkg>/` at their release paths through the store under the home, atomically ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
-- the store keeps each distinct file once under `store/<sha256>`, written once after its digest is verified, with an executable copy apart under `store/x/<sha256>`, and keeps a file while a lock in a spex repository on this device selects it; `cache/` holds fetched archives and metadata and may be deleted at any time;
+- the store keeps each distinct file once under `store/<sha256>`, written once after its digest is verified, with an executable copy apart under `store/x/<sha256>`, and keeps a file while a lock of an environment on this device [[environments-26](#environments-26)] selects it; `cache/` holds fetched archives and metadata and may be deleted at any time;
 - a file is fetched by any transport the registry offers — the release archive, or raw files — or from the Git source at the locked commit, and stored only when its SHA-256 matches the lock's `files`; the portable-path rules [[environments-1](#environments-1)] are re-checked; no code runs;
 - a path source copies nothing: its files are used where they are, in the working folder, each working folder running its own; a device whose working folder lacks the path reports it missing, and the environment stays otherwise installed;
 - the new installed files are complete before they replace the old ones; an install that fails leaves the last files in place and reports its cause;
@@ -162,7 +161,7 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 
 #### environments-11
 
-When the core starts, it shall seed the app's built-in spec package — the playbooks Playbook ships, as one spec package named `sublang/playbooks` at Playbook's version, each playbook an artifact in `en` with `code` and `decide` requiring `review` — into the store, and shall request it with a caret requirement in your own group's environment where that environment lacks it, and in a new project's environment, written into its working folder when the folder is paired holding no `spex.yaml` [[storage-6](storage.md#storage-6)] [[environments-26](#environments-26)], so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the core starts, it shall seed the app's built-in spec package — the playbooks Playbook ships, as one spec package named `sublang/playbooks` at Playbook's version, each playbook an artifact in `en` with `code` and `decide` requiring `review` — into the store, and shall request it with a caret requirement in your own group's environment where that environment lacks it, and in a new project's environment, written at pairing [[storage-6](storage.md#storage-6)], so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - the lock pins its version like any other, so an app update never changes an environment by itself: the newer release is seeded beside the older, which the store keeps while a lock selects it;
 - the seeded artifacts carry the playbook text and the module as the app's Playbook ships them, the module's engine resolved through the engine links provisioned in each installed playbook artifact's folder as a compile provisions them [[playbook-library-8](playbook-library.md#playbook-library-8)].
@@ -250,7 +249,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 - a changed `spex.yaml`, a changed path-source manifest and a path source lacking a selected artifact each mark the lock stale, install nothing new and report resolving again [[environments-7](#environments-7)];
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
-- a project's `spex.yaml` and `spex.lock` stand at its working folder's root and nowhere in its clone, a working folder paired while holding a committed environment installs from it with nothing written, a lock changed by a Git checkout in the folder is installed at the next read, and the environment is listed as this device's while the files are untracked and as committed once they are tracked, the core having staged, committed and ignored nothing [[environments-26](#environments-26)] [[environments-7](#environments-7)] [[environments-14](#environments-14)];
+- a project's `spex.yaml` and `spex.lock` stand at its working folder's root and nowhere in its clone, the core having staged, committed and ignored nothing [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked and as committed once they are tracked [[environments-14](#environments-14)];
 - a private namespace at the stand-in registry installs with the device's app token and refuses without, naming the spec package [[environments-12](#environments-12)].
 
 #### environments-22

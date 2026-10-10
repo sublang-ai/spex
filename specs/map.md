@@ -160,7 +160,7 @@ meta.md       The spec of specs
 | [server-shell.md](packages/server-shell.md) | Server shell: one-command source launch; UI bundle with negotiated response compression and core WebSocket served from one port; token URL, TLS, bind safety, page connection; supplied compiler, scaffold CLI and agent SDKs |
 | [approvals.md](packages/approvals.md) | Live native tool approval broker, protocol, and accessible controls |
 | [media.md](packages/media.md) | Authenticated content transfer, owned assets, and host browser preparation |
-| [storage.md](packages/storage.md) | The home and its spex repositories: the workspace tree, home.yaml, the root lease naming the machine, one file per intent, authoring sessions, credentials, the groups migration and whole-unit Git selection per spex repository |
+| [storage.md](packages/storage.md) | The home and its spex repositories: the workspace tree, home.yaml, the root lease naming the machine, one file per intent, authoring sessions, credentials, the groups and environment migrations and whole-unit Git selection per spex repository |
 | [settings.md](packages/settings.md) | Settings: Captain agent editor with launcher-parity validation, runtime model options named by one display rule in a listbox model field, adapter readiness, comment-preserving YAML round-trip |
 | [shared-config-roundtrip.md](packages/shared-config-roundtrip.md) | One config file, one fail-closed rule set across Settings, core, and Library |
 | [space.md](packages/space.md) | Groups: sign-in header, groups with their spex repositories and states, picking a group and joining, members, folded repairs acknowledged per device, per-repository sync machine with the per-unit picker, privacy notice and panel, read-only annotated explorer |

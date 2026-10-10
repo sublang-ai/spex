@@ -6,7 +6,7 @@
 ## Status
 
 Proposed (2026-10-10).
-Its tasks precede the versioned environment writes of [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)'s delivery, which then land on the files where this record puts them.
+Its tasks precede the versioned environment writes of [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)'s delivery, which then land on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts them.
 
 ## Intent
 
@@ -14,7 +14,7 @@ Implement [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-
 
 ## Deliverables
 
-- [ ] DR-113 and the amended items in `environments`, `storage`, `projects`, `space` and `playbook-library`, lint-clean.
+- [x] DR-113 and the amended items in `environments`, `storage`, `projects`, `space` and `playbook-library`, lint-clean.
 - [ ] The core reads and writes a project's environment at its working folder's root and a group's in its clone, stages, commits and ignores nothing, and resolves a path source against the root.
 - [ ] Pairing a working folder writes an environment requesting the built-in spec package where the folder holds none and installs from the one it holds.
 - [ ] A lock the working folder's files changed from outside is installed at the next read; a manifest changed alone marks the lock stale.
@@ -25,11 +25,11 @@ Implement [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-
 ## Tasks
 
 1. Record DR-113, amend the specs and write this record.
-2. Move the environment's location into the core: the working folder's root for a project, the clone for a group, the Git stance and the path base, the commands unchanged in shape.
-3. Write the environment at pairing where the folder holds none, install from one it holds, and install a lock changed from outside at the next read.
-4. Add the environment migration with its receipt, and the units' change in the sync's plan and the Sync tab.
-5. Mark an uncommitted project environment as this device's in the listing and on the Playbooks surface, request from the new place in the Enable path, and leave the files on removal.
-6. Port the core, UI and journey suites; update the README and the storage guide.
+2. Move the environment's location into the core — the working folder's root for a project, the clone for a group, the Git stance, the reads and the path base, the commands unchanged in shape — with its core suites.
+3. Write the environment at pairing where the folder holds none, install from one it holds, and install a lock a use's read finds changed, with their suites.
+4. Add the environment migration with its receipt, and the units' change in the sync's plan and the Sync tab, with their suites.
+5. Mark an uncommitted project environment as this device's in the listing and on the Playbooks surface, request from the new place in the Enable path, and leave the files on removal, with the interface and journey suites.
+6. Update the README and the storage guide.
 
 ## Verification
 
