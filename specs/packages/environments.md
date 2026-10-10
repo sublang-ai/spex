@@ -7,7 +7,7 @@
 
 This package defines spec packages and the environments that install them under [DR-104](../decisions/104-spec-package-format-and-client-environments.md): the release layout and manifest the core reads and checks, the requests and lock of each spex repository, resolution, installing through the content-addressed store, the exports that put skills where agents read them and playbooks where the launcher loads them, spec packages under development, the built-in spec package the app ships, and the registry and Git sources.
 A **spec package** is one GEARS contract with the sources, spec, skills, playbooks and applets made from it, named `<org>/<pkg>`; a **release** is its immutable files at one version; an **artifact** is one `source`, `spec`, `skill`, `playbook` or `applet` of a release.
-An **environment** is what a spex repository installs: `spex.yaml` says which spec packages it wants and `spex.lock` records exactly what it got [[storage-1](storage.md#storage-1)]; **the registry** is spex.pub.
+An **environment** is what a project or a group installs: `spex.yaml` says which spec packages it wants and `spex.lock` records exactly what it got, at the root of a project's working folder or of a group's own spex repository's clone [[environments-26](#environments-26)] [[storage-1](storage.md#storage-1)]; **the registry** is spex.pub.
 A **working folder** is where a project's or a group's sessions run, paired with the spex repository whose environment it uses [[storage-6](storage.md#storage-6)].
 
 ## External Behavior
@@ -42,6 +42,15 @@ When the core reads a release — from the registry, a Git commit, a path inside
 - a release keeps, per file, its path, its bytes and one executable flag.
 
 ### Requests and the Lock
+
+#### environments-26
+
+The core shall keep an environment's `spex.yaml` and `spex.lock` at the root of the working folder for a project, and at the root of the clone for a group's own spex repository [[storage-1](storage.md#storage-1)], writing the two files there and never staging, committing or ignoring them in a working folder's Git ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
+
+- a project's environment is committed with its code by the reader, so it follows the code's branches and history, and a working folder cloned with them holds its environment before Spex writes anything;
+- while a project's two files are untracked in its working folder — the reader cannot push the code, keeps it clean, or the folder is no repository — the environment is this device's alone, which the listing says [[environments-14](#environments-14)];
+- the files as the working folder holds them are the environment whenever the core reads it, so a branch switch, a pull or a hand edit that changed the lock is installed [[environments-7](#environments-7)], and one that changed `spex.yaml` alone leaves the lock stale [[environments-7](#environments-7)];
+- a command names an environment by its spex repository's key [[environments-17](#environments-17)], the home pairing that key with one working folder on this device [[storage-2](storage.md#storage-2)].
 
 #### environments-2
 

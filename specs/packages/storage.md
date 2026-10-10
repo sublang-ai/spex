@@ -141,6 +141,20 @@ Before admitting writers to the groups layout, when the core finds the former la
 - no Git history is written before validation confirms session recovery fields contain no provider tokens;
 - `meta.json` remains `{version: 1, importedLegacy?: string[]}` for completed legacy database imports.
 
+### storage-24
+
+When the core, serving a home under the root lease [[storage-26](#storage-26)], finds a project's clone holding `spex.yaml` or `spex.lock`, the environment migration shall move the project's environment into its working folder once and leave a receipt under `local/migrations/` as the groups migration does [[storage-9](#storage-9)] ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
+
+| The working folder | Outcome |
+| --- | --- |
+| holds no `spex.yaml` | the clone's `spex.yaml` and `spex.lock` are moved to the folder's root |
+| holds a `spex.yaml` | the folder's files stand and the clone's are deleted |
+| is missing on this device | the clone's files stay until the folder is paired again [[storage-6](#storage-6)] |
+
+- the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
+- a group's own spex repository, holding no `project.json`, keeps its files [[storage-1](#storage-1)];
+- the installed files under `packages/` and `skills/` are not touched, and the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
+
 ### storage-17
 
 When preparing a clone's Git rules before its first commit and before each sync, the store shall replace its managed rule blocks while preserving authored rules:
@@ -255,6 +269,10 @@ When an integration suite migrates a former-layout home of two projects and one 
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
 - exact authoring session and credential encodings written and read back, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
+
+### storage-25
+
+When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — and then syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files and its clone none, that the second folder's files are unchanged and its clone's deleted, that the third clone keeps its files until the folder is paired, that a receipt stands and a restart repeats nothing, that the installed files are untouched, and that the sync pushes the deletion [[storage-24](#storage-24)].
 
 ### storage-16
 
