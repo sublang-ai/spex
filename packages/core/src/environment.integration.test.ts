@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 import { isValidRegistryEntry } from "./config.js";
+import { fileVersion } from "./files.js";
 import {
   artifactLanguages,
   builtinPackage,
@@ -49,6 +50,7 @@ import {
   sha256Hex,
   storeKey,
   writeLock,
+  type InstallOptions,
   type Lock,
   type RegistrySource,
   type ResolveResult,
@@ -139,6 +141,12 @@ async function resolveText(clone: string, text: string, options: { through?: Reg
     git: options.git ?? gitSource(options.cache ?? join(clone, "..", "..", "..", "cache")),
     ...(options.gitCredential ? { gitCredential: options.gitCredential } : {}),
   });
+}
+
+/** An install expecting `spex.lock` at the version it stands at on disk
+ * now — none where none stands (DR-111). */
+function installAsOnDisk(options: Omit<InstallOptions, "lockVersion">): ReturnType<typeof install> {
+  return install({ ...options, lockVersion: fileVersion(join(options.cloneDir, "spex.lock")) });
 }
 
 function locked(result: ResolveResult): Lock {
@@ -457,7 +465,7 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
     for (const artifact of Object.values(resolution.artifacts as Record<string, Record<string, unknown>>)) assert.deepEqual(Object.keys(artifact), ["language", "fallback"]);
   }
   assert.deepEqual(await readLock(join(first.clone, "spex.lock")), lock);
-  const firstReport = await install({ cloneDir: first.clone, lock, store: first.store, cache: first.cache, registry: client, git: gitSource(first.cache), workingFolder: null });
+  const firstReport = await installAsOnDisk({ cloneDir: first.clone, lock, store: first.store, cache: first.cache, registry: client, git: gitSource(first.cache), workingFolder: null });
   assert.deepEqual(firstReport.installed, ["acme/app", "acme/lib", "acme/press"]);
 
   const second = makeHome();
@@ -466,7 +474,7 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
   cpSync(join(first.clone, "spex.lock"), join(second.clone, "spex.lock"));
   registry.script.clearRequests();
   const secondLock = (await readLock(join(second.clone, "spex.lock")))!;
-  const report = await install({ cloneDir: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), workingFolder: null });
+  const report = await installAsOnDisk({ cloneDir: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), workingFolder: null });
   assert.equal(report.unchanged, false);
   // Installing from the lock resolves nothing: no version index is read.
   assert.deepEqual(registry.script.requests.filter((line) => /^GET \/api\/v1\/packages\/[^/]+\/[^/]+$/.test(line)), []);
@@ -475,7 +483,7 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
   assert.deepEqual(snapshot(join(second.clone, "packages")), snapshot(join(first.clone, "packages")));
   assert.equal(readFileSync(join(second.clone, "spex.lock"), "utf8"), written);
   // A second install of the same lock changes nothing.
-  const again = await install({ cloneDir: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), workingFolder: null });
+  const again = await installAsOnDisk({ cloneDir: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), workingFolder: null });
   assert.equal(again.unchanged, true);
 });
 
@@ -498,7 +506,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   const lock = locked(await resolveText(home.clone, text));
   await writeLock(join(home.clone, "spex.lock"), lock);
   const base = { cloneDir: home.clone, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), workingFolder: null };
-  const report = await install({ ...base, lock });
+  const report = await installAsOnDisk({ ...base, lock });
   assert.deepEqual(report, { installed: ["acme/kit"], missingPaths: [], unchanged: false });
 
   // Every selected file with its bytes and executable flag.
@@ -523,13 +531,13 @@ test("environments-21: files land with bytes and flags through a store keeping e
   const before = snapshot(join(home.clone, "packages"));
   const tampered = structuredClone(lock);
   tampered.packages["acme/kit"]!.files.find((file) => file.path === "skills/en/tidy/other.txt")!.sha256 = "0".repeat(64);
-  await assert.rejects(install({ ...base, lock: tampered }), (error: unknown) =>
+  await assert.rejects(installAsOnDisk({ ...base, lock: tampered }), (error: unknown) =>
     error instanceof InstallError && error.packageName === "acme/kit" && /other\.txt/.test(error.message));
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
 
   // Atomic: a failure between fetch and replace leaves the last files whole.
   const newer = locked(await resolveText(home.clone, requestsYaml({ "acme/kit": { version: "1.1.0" } })));
-  await assert.rejects(install({ ...base, lock: newer, beforeReplace: () => { throw new Error("power cut"); } }), InstallError);
+  await assert.rejects(installAsOnDisk({ ...base, lock: newer, beforeReplace: () => { throw new Error("power cut"); } }), InstallError);
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
   assert.deepEqual(existsSync(join(home.cache, "staging")) ? readdirSync(join(home.cache, "staging")) : [], []);
 
@@ -537,7 +545,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   writeFileSync(join(home.clone, "spex.yaml"), text);
   const peerHome = cloneOf(home, "me/peer-spex");
   const peerLock = locked(await resolveText(peerHome, requestsYaml({ "acme/peer": { version: "1.0.0" } })));
-  await install({ ...base, cloneDir: peerHome, lock: peerLock });
+  await installAsOnDisk({ ...base, cloneDir: peerHome, lock: peerLock });
   assert.deepEqual(home.store.gc(lockStoreKeys([lock, newer, peerLock])), []);
   const removed = home.store.gc(lockStoreKeys([peerLock]));
   assert.ok(removed.includes(storeKey(same, true)));
@@ -548,7 +556,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   rmSync(home.cache, { recursive: true, force: true });
   rmSync(join(home.clone, "packages"), { recursive: true, force: true });
   registry.script.clearRequests();
-  const rebuilt = await install({ ...base, lock });
+  const rebuilt = await installAsOnDisk({ ...base, lock });
   // Half the files or fewer missing: fetched as raw files.
   assert.ok(registry.script.requests.includes("GET /acme/kit/1.0.0/skills/en/tidy/other.txt"), JSON.stringify(registry.script.requests));
   assert.equal(rebuilt.unchanged, false);
@@ -559,7 +567,7 @@ test("environments-21: files land with bytes and flags through a store keeping e
   const edited = await setRequest(join(home.clone, "spex.yaml"), "acme/peer", { version: "^1.0.0" });
   assert.match(edited.text, /^# The environment's requests\.\n/);
   assert.deepEqual(Object.keys(edited.requests.packages), ["acme/kit", "acme/peer"]);
-  const stale = await install({ ...base, lock: newer });
+  const stale = await installAsOnDisk({ ...base, lock: newer });
   assert.equal(stale.installed.length, 0);
   assert.ok(stale.stale?.some((reason) => /spex\.yaml changed/.test(reason)));
   assert.deepEqual(snapshot(join(home.clone, "packages")), before);
@@ -583,7 +591,7 @@ test("environments-21: a path source is used in place per working folder, missin
   assert.deepEqual(lock.packages["acme/local"]!.files, []);
   const base = { cloneDir: home.clone, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), lock };
 
-  const report = await install({ ...base, workingFolder: first });
+  const report = await installAsOnDisk({ ...base, workingFolder: first });
   assert.deepEqual(report.missingPaths, []);
   assert.equal(existsSync(join(home.clone, "packages", "acme", "local")), false, "a path source copies nothing");
   assert.equal(moduleLocations(lock, home.clone, first).get("pave")!.module, join(first, "tools/local/playbooks/en/pave/pave.playbook/pave.registry.mjs"));
@@ -593,17 +601,17 @@ test("environments-21: a path source is used in place per working folder, missin
   assert.match(readFileSync(join(second, ".claude/skills/tidy/SKILL.md"), "utf8"), /the second folder's copy/);
   // A device whose working folder lacks it reports it missing; the rest installs.
   rmSync(join(home.clone, "packages"), { recursive: true, force: true });
-  const missing = await install({ ...base, workingFolder: bare });
+  const missing = await installAsOnDisk({ ...base, workingFolder: bare });
   assert.deepEqual(missing.missingPaths, ["acme/local"]);
   assert.ok(existsSync(join(home.clone, "packages", "acme", "solid", "meta.yaml")));
 
   // A changed path-source manifest and a missing selected artifact mark the lock stale.
   await local(first, "0.2.0", "bumped");
-  const bumped = await install({ ...base, workingFolder: first });
+  const bumped = await installAsOnDisk({ ...base, workingFolder: first });
   assert.ok(bumped.stale?.some((reason) => /changed version from 0\.1\.0 to 0\.2\.0/.test(reason)), JSON.stringify(bumped));
   rmSync(join(first, "tools", "local"), { recursive: true, force: true });
   await local(first, "0.1.0", "", false);
-  const lacking = await install({ ...base, workingFolder: first });
+  const lacking = await installAsOnDisk({ ...base, workingFolder: first });
   assert.ok(lacking.stale?.some((reason) => /no longer holds the selected artifact tidy/.test(reason)), JSON.stringify(lacking));
 });
 
@@ -647,7 +655,7 @@ test("environments-21: a Git source at a branch locks its commit and installs it
     mkdirSync(elsewhere.clone, { recursive: true });
     writeFileSync(join(elsewhere.clone, "spex.yaml"), text);
     const refusedBefore = host.refused;
-    const report = await install({
+    const report = await installAsOnDisk({
       cloneDir: elsewhere.clone, lock, store: elsewhere.store, cache: elsewhere.cache, registry: client,
       git: gitSource(elsewhere.cache, { runGit: run, credentialArgs: testCredentialArgs(join(scratch, "credentials")) }),
       gitCredential: credential, workingFolder: null,
@@ -671,13 +679,13 @@ test("environments-21: a private namespace installs with the device's app token 
   const home = makeHome();
   const text = requestsYaml({ "vault/secrets": { version: "^1.0.0" } });
   const lock = locked(await resolveText(home.clone, text, { through: member }));
-  const report = await install({ cloneDir: home.clone, lock, store: home.store, cache: home.cache, registry: member, git: gitSource(home.cache), workingFolder: null });
+  const report = await installAsOnDisk({ cloneDir: home.clone, lock, store: home.store, cache: home.cache, registry: member, git: gitSource(home.cache), workingFolder: null });
   assert.deepEqual(report.installed, ["vault/secrets"]);
 
   const other = makeHome();
   mkdirSync(other.clone, { recursive: true });
   writeFileSync(join(other.clone, "spex.yaml"), text);
-  await assert.rejects(install({ cloneDir: other.clone, lock, store: other.store, cache: other.cache, registry: anonymous, git: gitSource(other.cache), workingFolder: null }),
+  await assert.rejects(installAsOnDisk({ cloneDir: other.clone, lock, store: other.store, cache: other.cache, registry: anonymous, git: gitSource(other.cache), workingFolder: null }),
     (error: unknown) => error instanceof InstallError && error.packageName === "vault/secrets" && /vault\/secrets/.test(error.message));
   await assert.rejects(resolveText(other.clone, text, { through: stranger }),
     (error: unknown) => error instanceof RegistryError && error.kind === "forbidden" && error.packageName === "vault/secrets");
@@ -719,7 +727,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const projectText = requestsYaml({ "acme/kit2": { version: "^1.0.0", alias: { fmt: "format-code" } }, "acme/walker": { path: "tools/walk" } });
   const projectLock = locked(await resolveText(home.clone, projectText, { workingFolder }));
   const base = { store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache) };
-  await install({ ...base, cloneDir: home.clone, lock: projectLock, workingFolder });
+  await installAsOnDisk({ ...base, cloneDir: home.clone, lock: projectLock, workingFolder });
   const report = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude", "codex"], packagesDir: join(home.clone, "packages") });
   assert.deepEqual(report.skills, ["format-code", "lint", "ship", "walk"]);
   assert.deepEqual(report.unsupportedAgents, ["codex"]);
@@ -744,7 +752,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   // also exports stands in both, each from where it came.
   const ownText = requestsYaml({ "acme/mine": { version: "^1.0.0" } });
   const ownLock = locked(await resolveText(ownClone, ownText));
-  await install({ ...base, cloneDir: ownClone, lock: ownLock, workingFolder: null });
+  await installAsOnDisk({ ...base, cloneDir: ownClone, lock: ownLock, workingFolder: null });
   const ownReport = await exportEnvironment({ cloneDir: ownClone, lock: ownLock, workingFolder: null, userHome, agents: ["claude"], packagesDir: join(ownClone, "packages") });
   assert.deepEqual(ownReport.folders, [{ agent: "claude", level: "user", dir: join(userHome, ".claude/skills") }]);
   assert.match(readFileSync(join(userHome, ".claude/skills/lint/SKILL.md"), "utf8"), /my own lint/);
@@ -771,7 +779,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   mkdirSync(join(workingFolder, ".claude/skills/mine"), { recursive: true });
   writeFileSync(join(workingFolder, ".claude/skills/mine/SKILL.md"), skillText("mine"));
   const narrowed = locked(await resolveText(home.clone, requestsYaml({ "acme/kit2": { version: "^1.0.0", select: [{ artifact: "ship" }, { artifact: "fmt" }], alias: { fmt: "format-code" } } }), { workingFolder }));
-  await install({ ...base, cloneDir: home.clone, lock: narrowed, workingFolder });
+  await installAsOnDisk({ ...base, cloneDir: home.clone, lock: narrowed, workingFolder });
   const again = await exportEnvironment({ cloneDir: home.clone, lock: narrowed, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
   assert.deepEqual(again.removed.sort(), ["lint", "walk"]);
   assert.equal(existsSync(join(workingFolder, ".claude/skills/lint")), false);
@@ -803,7 +811,7 @@ test("environments-23: the built-in spec package seeds, resolves offline, launch
     assert.deepEqual(lock.packages["sublang/playbooks"]!.source, { registry: offline.url, version: shipped.version, checksum: seeded.checksum });
     assert.deepEqual(Object.keys(lock.packages["sublang/playbooks"]!.artifacts), ["branch", "code", "decide", "dev", "inspect", "pr", "review"]);
     await writeLock(join(clone, "spex.lock"), lock);
-    const report = await install({ cloneDir: clone, lock, store: home.store, cache: home.cache, registry: source(), git: gitSource(home.cache), workingFolder: null });
+    const report = await installAsOnDisk({ cloneDir: clone, lock, store: home.store, cache: home.cache, registry: source(), git: gitSource(home.cache), workingFolder: null });
     assert.deepEqual(report.installed, ["sublang/playbooks"]);
     locks[clone] = lock;
   }
@@ -831,7 +839,7 @@ test("environments-23: the built-in spec package seeds, resolves offline, launch
   assert.deepEqual(index.versions.map((entry) => entry.version), [shipped.version, newerVersion]);
   assert.deepEqual([ownClone, projectClone].map((clone) => readFileSync(join(clone, "spex.lock"), "utf8")), lockTexts);
   for (const clone of [ownClone, projectClone]) {
-    const report = await install({ cloneDir: clone, lock: (await readLock(join(clone, "spex.lock")))!, store: home.store, cache: home.cache, registry: source(), git: gitSource(home.cache), workingFolder: null });
+    const report = await installAsOnDisk({ cloneDir: clone, lock: (await readLock(join(clone, "spex.lock")))!, store: home.store, cache: home.cache, registry: source(), git: gitSource(home.cache), workingFolder: null });
     assert.equal(report.unchanged, true);
   }
   // A new environment takes the newer release; the store keeps both while locks select them.

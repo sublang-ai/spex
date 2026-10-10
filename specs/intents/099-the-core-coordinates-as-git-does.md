@@ -6,7 +6,8 @@
 ## Status
 
 In progress (2026-10-10).
-DR-111 accepted; tasks 2, 3 and 4 delivered, task 3 with the authoring sessions' busy refusals of task 4; the environment's busy refusals wait for task 5.
+DR-111 accepted; tasks 2, 3, 4 and 5 delivered, task 3 with the authoring sessions' busy refusals of task 4 and task 5 with the environment's.
+Task 6 remains: the concurrent-writer suites, an enabling's config writes versioned on the config its validation read, and space-31's repair wording scoped to the sync.
 
 ## Intent
 
@@ -20,7 +21,7 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 - [x] The sync's apply writes each unit under the version it read, with a session's lease taken for that instant; a refused write leaves no merge commit, the sync saves and merges again or stops for a retry, and a unit changed on both sides is a choice.
 - [x] The authoring manager reads session files for its picture and treats the recorded instance as the version of a write to the session's own files.
 - [ ] Every "busy" refusal of a command because a sync, check, join, move, removal, compile, install or enabling runs is gone from the core, the protocol and the interface; a session lease's refusal and the runtime's own admission of messages stay; a stale write is refused as "changed meanwhile, retry".
-- [ ] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing.
+- [x] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing.
 - [ ] The race suites assert no loss and surfaced conflicts under concurrent writers, replacing the gate tests.
 
 ## Tasks
