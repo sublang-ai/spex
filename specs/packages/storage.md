@@ -56,7 +56,8 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
-- a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either.
+- a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either;
+- each change the core makes applies to the file as it reads at that instant, read, changed and written in one step, so a change an editor made since stands; a file deleted once read is refused as changed meanwhile, never written back from memory ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### storage-3
 
@@ -76,14 +77,15 @@ The intent store shall encode each `<clone>/intents/<id>.json` as a closed JSON 
 | `closed` | optional `{as: 'done' \| 'dropped', at}` |
 
 - an intent holds no rank and no link to another intent: the next to run is the oldest queued one by `createdAt`, then by `id`;
-- an edit, a dispatch and a close rewrite the file whole; a remove deletes the file and its asset directory;
+- an edit, a dispatch and a close rewrite the file whole as it reads at that instant, in one step with that read; an edit whose intent changed since its command read it, across the command's own wait, is refused as changed meanwhile; a remove deletes the file and its asset directory;
+- no write recreates the clone holding `intents/` where it moved or was removed;
 - a malformed file is reported without deletion, and its intent is listed nowhere.
 
 ### storage-5
 
 The preference store shall encode `local/prefs.json` as exactly `{format: 1, prefs: {...}}`, with these core preference values:
 
-- each preference is a JSON value;
+- each preference is a JSON value, read from the file as it stands and changed in one step with that read, so a value another writer changed meanwhile stands ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - `viewed:<sessionId>` stores the last viewed turn as a nonnegative integer and resets when that session's stored history changes;
 - `sync:<repository>:last` stores the last completed in-app sync of that spex repository as `{at, sent, received}` — Unix milliseconds and unit counts;
 - `sync:<repository>:noticed` records that this device's reader has seen the privacy notice before the first push into a spex repository with other members [[space-57](space.md#space-57)];
@@ -277,6 +279,10 @@ When an integration suite merges two real Git branches of one spex repository co
 - through the apply seam, a clone moved or removed while a lease is awaited refusing the write with no folder made at its former path, a held session lease refusing before any other unit is written, and a Git-checked-out CRLF file under `core.autocrlf` read as unchanged [[storage-14](#storage-14)];
 - an untracked attachment in a unit neither side changed surviving selection [[storage-21](#storage-21)];
 - the home lease refusing every mutating command, a held session lease refusing selection of that session's unit with the index unchanged and a retry after its release completing it, and a lease in another spex repository's store refusing nothing [[storage-14](#storage-14)] [[storage-21](#storage-21)].
+
+### storage-24
+
+When an integration suite changes the home's files beside a running store, it shall verify that a change to `home.yaml` keeps an editor's change made since the store wrote it, and that once the file is deleted an ordinary change is refused as changed meanwhile without restoring it [[storage-2](#storage-2)]; that an intent edit whose file another writer rewrote during the edit's own wait is refused as changed meanwhile with that rewrite standing, and an intent written after its clone vanished is refused without recreating the clone [[storage-4](#storage-4)]; and that a preference write keeps a marker another writer cleared from `local/prefs.json` cleared, a read following the file [[storage-5](#storage-5)].
 
 ### storage-27
 

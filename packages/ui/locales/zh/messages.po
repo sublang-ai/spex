@@ -1042,10 +1042,6 @@ msgstr "无条件"
 msgid "An agent failed"
 msgstr "有智能体失败"
 
-#: src/components/SpaceSurface.tsx
-msgid "Another operation is running"
-msgstr "另一项操作正在进行"
-
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "在下方回答，或放弃该运行"
@@ -6228,10 +6224,6 @@ msgstr "等待你的回复"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "等待你的裁定"
-
-#: src/lib/environments.ts
-msgid "Waits for the sync of {repository}"
-msgstr "等待 {repository} 同步完成"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

@@ -25,7 +25,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cligent, type AgentAdapter, type AgentEvent, type CligentOptions } from "@sublang/cligent";
-import { createAssetStore, externalizeAgentEvent } from "@sublang/playbook/session-assets";
+import { createAssetStore, externalizeAgentEvent, type AssetImport } from "@sublang/playbook/session-assets";
 import type { PlayerAdapterImports, TmuxPlayApprovalHandler } from "@sublang/cligent/tmux-play";
 
 import { loadAgentAdapter } from "./agent-runtime.js";
@@ -36,6 +36,7 @@ import { parseDirectives } from "./directives.js";
 import { AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { parseManifestText } from "./environment/format.js";
 import { i18n } from "./i18n.js";
+import type { ApplicationMedia, AssetPlace } from "./media.js";
 import type {
   AdapterName,
   AgentSummary,
@@ -118,6 +119,9 @@ export interface AuthorManagerOptions {
   excludeEngineLinks?: (workingFolder: string) => void;
   /** The home's device, marking what this device runs (storage-23). */
   device: () => string;
+  /** Import an asset into a session's own folder, prepared privately and
+   * published where `place` resolves at the write boundary (media-4). */
+  importInto: ApplicationMedia["importInto"];
   now?: () => number;
 }
 
@@ -1303,12 +1307,18 @@ export class AuthorManager {
     try {
       const assets = createAssetStore({directory: this.drafts.assetsDir(id)});
       const nativeAttachments = attachments?.length ? await Promise.all(attachments.map((asset) => assets.resolveAttachment(asset, {signal: controller.signal}))) : undefined;
-      // Each record's assets go where the session's file stands at that
-      // instant, and only while it is still this session's: the run
-      // itself goes on, its own affair (DR-111). The check precedes an
-      // awaited import, which creates the folder it writes: the shared
-      // application-asset publisher replaces this write target.
-      const ownAssets = () => this.drafts.instanceOf(id) === instance ? createAssetStore({directory: this.drafts.assetsDir(id)}) : undefined;
+      // Each record's assets are prepared privately and published where
+      // the session's file stands at the publication's instant, only
+      // while it is still this session's (media-4): a moved clone is
+      // followed, a session gone or replaced refuses and nothing is
+      // recreated. The run itself goes on, its own affair (DR-111).
+      const place = (): AssetPlace => {
+        const current = this.drafts.instanceOf(id);
+        if (current !== instance) throw new DraftChangedError(current === undefined);
+        const directory = this.drafts.assetsDir(id);
+        return { root: dirname(dirname(directory)), directory };
+      };
+      const ownAssets = { importAsset: (input: AssetImport) => this.options.importInto((stage) => stage.importAsset(input), place) };
       for await (const event of cligent.run(prompt, { abortSignal: controller.signal, resume: resume ?? false,
         ...(approvalHandler ? {approvalHandler: (request, context) => approvalHandler({request, turnId, actorId: AUTHOR_PLAYER, invocationId}, context)} : {}), ...(nativeAttachments ? {attachments: nativeAttachments} : {}) })) {
         const typed = event as AgentEvent;
@@ -1325,10 +1335,11 @@ export class AuthorManager {
           result = typed.payload.result;
           resumeToken = typed.payload.resumeToken;
         }
-        const store = ownAssets();
-        if (store) {
-          const stored = await externalizeAgentEvent(store, typed);
-          this.append(id, instance, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event: stored.event } as TmuxPlayRecord);
+        if (this.drafts.instanceOf(id) === instance) {
+          let stored: Awaited<ReturnType<typeof externalizeAgentEvent>> | undefined;
+          try { stored = await externalizeAgentEvent(ownAssets, typed); }
+          catch (cause) { if (!(cause instanceof DraftChangedError)) throw cause; }
+          if (stored) this.append(id, instance, { type: "player_event", turnId, timestamp: this.now(), playerId: AUTHOR_PLAYER, event: stored.event } as TmuxPlayRecord);
         }
         if (typed.type === "tool_result") this.refreshSource(id, instance);
       }

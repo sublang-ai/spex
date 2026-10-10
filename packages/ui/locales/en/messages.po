@@ -1042,10 +1042,6 @@ msgstr "always"
 msgid "An agent failed"
 msgstr "An agent failed"
 
-#: src/components/SpaceSurface.tsx
-msgid "Another operation is running"
-msgstr "Another operation is running"
-
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "Answer below, or drop the run"
@@ -6228,10 +6224,6 @@ msgstr "waiting for your reply"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "waiting for your verdict"
-
-#: src/lib/environments.ts
-msgid "Waits for the sync of {repository}"
-msgstr "Waits for the sync of {repository}"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

@@ -2,20 +2,23 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
-import { lstatSync, type Stats } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
+import { closeSync, constants, copyFileSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, statSync, unlinkSync, type Stats } from "node:fs";
 import { lstat, mkdir, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { createAssetStore, type AssetReader, type OwnerAssetStore } from "@sublang/playbook/session-assets";
 import { i18n } from "./i18n.js";
 import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
-import { MediaTransferError, MediaTransfers } from "./media-transfers.js";
+import { MediaTransferError, MediaTransfers, type UploadRequest } from "./media-transfers.js";
 
 export interface ApplicationMediaOptions {
   home: string;
-  /** Assert an existing owner and, for writes, its current mutation gate. */
+  /** Assert an existing owner, as it stands at this instant. */
   assertOwner(owner: MediaOwner, write: boolean): void;
   /** The directory an application owner keeps its assets in (media-4). */
   directoryOf(owner: MediaUploadOwner): string;
+  /** The folder holding that directory — the owner's spex repository's
+   * clone — which a publication never creates. */
+  rootOf(owner: MediaUploadOwner): string;
   /** Session storage remains entirely behind the shared Playbook facade. */
   openSessionAsset(sessionId: string, assetId: MediaAsset["assetId"]): Promise<AssetReader>;
 }
@@ -30,16 +33,81 @@ interface ReaderEntry {
 
 const STAGING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** Where a publication writes, resolved at its write boundary: `root`
+ * — the owner's clone — must stand, and only folders beneath it are made
+ * to reach `directory`. */
+export interface AssetPlace { root: string; directory: string }
+
+const unavailableUpload = (): MediaTransferError =>
+  new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
+
+/**
+ * Import content into an application owner (media-4, DR-111): prepared
+ * and verified privately under `staging` through Playbook's own asset
+ * facade, then published in one synchronous step — `place()` resolving
+ * and checking the owner as it stands now and throwing to refuse, the
+ * owner's folder made beneath its clone, the content then its
+ * descriptor linked in — so an owner removed, moved or replaced while
+ * the content was prepared refuses the publication and nothing is
+ * recreated. A file already there stands — names are content digests —
+ * and the published asset is verified before it is returned.
+ * Every application-owned asset import goes through here; a session's
+ * own assets stay with Playbook's session lease.
+ */
+export async function importOwnedAsset(
+  staging: string,
+  prepare: (stage: OwnerAssetStore) => Promise<MediaAsset>,
+  place: () => AssetPlace,
+): Promise<MediaAsset> {
+  const dir = join(staging, randomUUID());
+  mkdirSync(dir, { mode: 0o700 });
+  try {
+    const stage = createAssetStore({ directory: dir, maxAssetBytes: MEDIA_MAX_FILE_BYTES });
+    const reference = await prepare(stage);
+    const files = (await stage.listAssets()).find((entry) => entry.assetId === reference.assetId);
+    if (!files) throw unavailableUpload();
+    // The owner's write boundary: nothing is awaited from here on.
+    const target = place();
+    if (!ensureBeneath(target.root, target.directory)) throw unavailableUpload();
+    for (const name of [files.path, files.metadataPath]) publishFile(join(dir, name), join(target.directory, name));
+    const handle = openSync(target.directory, "r");
+    try { fsyncSync(handle); } finally { closeSync(handle); }
+    // What the owner now holds is verified as the facade's own import
+    // verifies it — a file that stood there before included — reading
+    // only; a failure leaves every published file as it is.
+    const reader = await createAssetStore({ directory: target.directory, maxAssetBytes: MEDIA_MAX_FILE_BYTES }).openAsset(reference);
+    await reader.close();
+    return reference;
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+/** One prepared file into its owner's folder, never replacing one there
+ * and leaving it a single link, as Playbook's store requires. */
+function publishFile(from: string, to: string): void {
+  try { linkSync(from, to); unlinkSync(from); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") return;
+    if (code !== "EXDEV") throw error;
+    try { copyFileSync(from, to, constants.COPYFILE_EXCL); }
+    catch (copy) { if ((copy as NodeJS.ErrnoException).code !== "EEXIST") throw copy; }
+  }
+}
+
 /** Application owners reuse Playbook's portable asset primitives. */
 export class ApplicationMedia {
   readonly uploads: MediaTransfers;
   private readonly staging: string;
+  /** Where content is prepared before its publication: this lifetime's
+   * own, private, emptied at start under the home lease. */
+  private readonly assetStaging: string;
   private readonly readers = new Map<string, ReaderEntry>();
   private readonly timer: ReturnType<typeof setInterval>;
   private readonly prepared = new Map<string, Promise<void>>();
-  private readonly retiring = new Set<string>();
-  private readonly ownerWork = new Map<string, Set<Promise<unknown>>>();
-  private pendingWrites = 0;
+  /** The clone each upload's owner lay in at its begin, by upload id: a
+   * publication into any other — the owner removed, or its key reused —
+   * is refused (media-17). */
+  private readonly places = new Map<string, string>();
   private closed = false;
   private stagingReady = false;
 
@@ -58,13 +126,10 @@ export class ApplicationMedia {
 
   constructor(private readonly options: ApplicationMediaOptions) {
     this.staging = join(options.home, "local", "uploads", randomUUID());
+    this.assetStaging = join(options.home, "local", "asset-staging");
     this.uploads = new MediaTransfers({
       directory: this.staging,
-      publish: (request, path) => this.writing(async () => {
-        const store = this.ownerStore(request.owner, true);
-        await this.prepareStore(store);
-        return store.importAsset({ path, mimeType: request.mimeType, name: request.name });
-      }),
+      publish: (request, path) => this.publish(request, path),
     });
     this.timer = setInterval(() => {
       for (const [key, entry] of this.readers) {
@@ -112,71 +177,103 @@ export class ApplicationMedia {
       await rmdir(lifetime.path);
     }
     await mkdir(this.staging, { mode: 0o700 });
+    await rm(this.assetStaging, { recursive: true, force: true });
+    await mkdir(this.assetStaging, { mode: 0o700 });
     this.stagingReady = true;
   }
 
-  /** A Space operation cannot race publication into a tracked owner. */
-  isWriting(): boolean { return this.pendingWrites > 0; }
-
-  async writing<T>(operation: () => Promise<T>): Promise<T> {
+  private assertOpen(): void {
     if (this.closed) throw new Error(i18n._({id: "Media storage has stopped.", comment: "Media storage failure"}));
-    this.pendingWrites++;
-    try { return await operation(); } finally { this.pendingWrites--; }
   }
 
   ownerStore(owner: MediaUploadOwner, write = false): OwnerAssetStore {
     mediaOwnerSchema.parse(owner);
-    this.assertAvailable(owner);
     this.options.assertOwner(owner, write);
     return createAssetStore({ directory: this.ownerDirectory(owner), maxAssetBytes: MEDIA_MAX_FILE_BYTES });
   }
 
-  /** Retirement shares the owner's upload lifetime, not a global lock.
-   * Native session writes remain protected by Playbook's existing lease.
-   * The owner admits no new media work while its admitted work drains;
-   * `assert` then repeats the removal's own refusals, and nothing awaits
-   * between that check, invalidating the owner's upload identities, and
-   * starting the removal, so a removal refused by work its owner admitted
-   * during the drain leaves the surviving owner's uploads resumable. */
+  /** Begin an upload (media-2) for an owner standing now, remembering
+   * the clone it lies in. */
+  async begin(request: UploadRequest): ReturnType<MediaTransfers["begin"]> {
+    this.assertOpen();
+    this.ownerStore(request.owner, true);
+    const place = this.placeOf(request.owner);
+    const state = await this.uploads.begin(request);
+    if (place !== undefined && !this.places.has(request.uploadId)) this.places.set(request.uploadId, place);
+    return state;
+  }
+
+  /** Import content into an owner through the private publication of
+   * `importOwnedAsset`; `place` resolves and checks the owner at the
+   * write boundary. The authoring coordinator's imports use this too. */
+  importInto(prepare: (stage: OwnerAssetStore) => Promise<MediaAsset>, place: () => AssetPlace): Promise<MediaAsset> {
+    this.assertOpen();
+    return importOwnedAsset(this.assetStaging, prepare, place);
+  }
+
+  /** Where an owner standing now publishes, or `unavailable`. */
+  private placeFor(owner: MediaUploadOwner, uploadId?: string): AssetPlace {
+    let store: OwnerAssetStore;
+    try { store = this.ownerStore(owner, true); } catch { throw unavailableUpload(); }
+    const begun = uploadId === undefined ? undefined : this.places.get(uploadId);
+    if (begun !== undefined && this.placeOf(owner) !== begun) throw unavailableUpload();
+    return { root: this.options.rootOf(owner), directory: store.directory };
+  }
+
+  /** Publish a staged upload into its owner (media-2, media-17): the
+   * owner resolved and checked at the publication's own instant — still
+   * standing, in the clone it lay in at the begin — so a publication
+   * after a removal or a move is refused and recreates nothing. */
+  private async publish(request: UploadRequest, path: string): Promise<MediaAsset> {
+    this.placeFor(request.owner, request.uploadId);
+    const asset = await this.importInto(
+      (stage) => stage.importAsset({ path, mimeType: request.mimeType, name: request.name }),
+      () => this.placeFor(request.owner, request.uploadId),
+    );
+    this.places.delete(request.uploadId);
+    return asset;
+  }
+
+  /** The identity of the clone an owner lies in now, if it stands. */
+  private placeOf(owner: MediaUploadOwner): string | undefined {
+    try {
+      const info = statSync(this.options.rootOf(owner));
+      return `${info.dev}:${info.ino}`;
+    } catch { return undefined; }
+  }
+
+  /** Remove an owner (media-17): its upload identities invalidated and
+   * its readers closed at this instant, then `remove` runs, `assert`
+   * first repeating the removal's own refusals. Nothing is drained: an
+   * upload still publishing finds its owner gone and is refused. */
   async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
-    this.assertAvailable(owner);
     const key = mediaOwnerKey(owner);
-    this.retiring.add(key);
-    try {
-      return await this.writing(async () => {
-        if (owner.kind !== "session") await this.uploads.settleOwner(owner);
-        await this.drainOwner(key);
-        await Promise.all([...this.readers].filter(([name]) => name.startsWith(`${key}:`)).map(([name, entry]) => this.release(name, entry)));
-        await this.drainOwner(key);
-        assert?.();
-        const cleanup = owner.kind !== "session" ? this.uploads.retireOwner(owner) : undefined;
-        if (owner.kind !== "session") this.prepared.delete(this.ownerDirectory(owner));
-        try { return await remove(); } finally { await cleanup; }
+    assert?.();
+    if (owner.kind !== "session") {
+      void this.uploads.retireOwner(owner).catch((error: unknown) => {
+        console.error(`spex: upload staging of ${key} was not removed: ${error instanceof Error ? error.message : String(error)}`);
       });
-    } finally { this.retiring.delete(key); }
+      this.prepared.delete(this.ownerDirectory(owner));
+    }
+    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
+    return await remove();
   }
 
   private ownerDirectory(owner: MediaUploadOwner): string {
     return this.options.directoryOf(owner);
   }
 
-  private assertAvailable(owner: MediaOwner): void {
-    if (this.retiring.has(mediaOwnerKey(owner))) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
-  }
-
+  /** Verify an owner holds the assets content names (media-5); asset
+   * ids are content digests, verified again wherever they are read. */
   async validate(owner: MediaUploadOwner, assets: readonly MediaAsset[]): Promise<void> {
-    this.assertAvailable(owner);
-    // Validation admits a later write: Space cannot select another asset
-    // generation while this command still relies on the verified bytes.
-    return this.writing(() => this.trackOwnerWork(mediaOwnerKey(owner), async () => {
-      const store = this.ownerStore(owner);
-      await this.prepareStore(store);
-      for (const asset of assets) {
-        const reader = await store.openAsset(asset);
-        await reader.close();
-      }
-    }));
+    this.assertOpen();
+    const store = this.ownerStore(owner);
+    await this.prepareStore(store);
+    for (const asset of assets) {
+      const reader = await store.openAsset(asset);
+      await reader.close();
+    }
   }
 
   /** Take content's attachments into the owner that keeps them
@@ -185,30 +282,33 @@ export class ApplicationMedia {
    * intent's directory beside its file holds every byte it names. */
   async adopt(destination: MediaUploadOwner, sources: readonly MediaUploadOwner[], assets: readonly MediaAsset[]): Promise<void> {
     if (assets.length === 0) return;
-    this.assertAvailable(destination);
-    return this.writing(() => this.trackOwnerWork(mediaOwnerKey(destination), async () => {
-      const target = this.ownerStore(destination, true);
-      for (const asset of assets) {
-        try { const held = await target.openAsset(asset); await held.close(); continue; } catch { /* not here yet */ }
-        let copied = false;
-        for (const source of sources) {
-          const from = this.ownerStore(source);
-          try { await this.prepareStore(from); await target.copyAsset(from, asset); copied = true; break; } catch { /* try the next */ }
-        }
-        if (!copied) throw new MediaTransferError("unavailable", i18n._({id: "This upload is unavailable. Retry the file upload.", comment: "Media transfer refusal"}));
+    this.assertOpen();
+    this.placeFor(destination);
+    const held = this.ownerStore(destination, true);
+    for (const asset of assets) {
+      try { const reader = await held.openAsset(asset); await reader.close(); continue; } catch { /* not here yet */ }
+      let copied = false;
+      for (const source of sources) {
+        const from = this.ownerStore(source);
+        try {
+          await this.prepareStore(from);
+          await this.importInto((stage) => stage.copyAsset(from, asset), () => this.placeFor(destination));
+          copied = true;
+          break;
+        } catch { /* try the next */ }
       }
-    }));
+      if (!copied) throw unavailableUpload();
+    }
   }
 
   async read(owner: MediaOwner, assetId: MediaAsset["assetId"], offset: number, length: number): Promise<{asset: MediaAsset; offset: number; data: string; eof: boolean}> {
     if (this.closed) throw new Error(i18n._({id: "Media storage has stopped.", comment: "Media storage failure"}));
     mediaOwnerSchema.parse(owner);
-    this.assertAvailable(owner);
     this.options.assertOwner(owner, false);
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 1 || length > MEDIA_CHUNK_BYTES) {
       throw new Error(i18n._({id: "Invalid media read range.", comment: "Media storage failure"}));
     }
-    return this.trackOwnerWork(mediaOwnerKey(owner), () => this.readAsset(owner, assetId, offset, length));
+    return this.readAsset(owner, assetId, offset, length);
   }
 
   private async readAsset(owner: MediaOwner, assetId: MediaAsset["assetId"], offset: number, length: number): Promise<{asset: MediaAsset; offset: number; data: string; eof: boolean}> {
@@ -223,8 +323,7 @@ export class ApplicationMedia {
         entry = this.readers.get(key);
       }
       if (!entry) {
-        // Revalidate after evicting another reader yielded to retirement.
-        this.assertAvailable(owner);
+        // Revalidate after evicting another reader yielded.
         this.options.assertOwner(owner, false);
         entry = {
           ownerKey: mediaOwnerKey(owner),
@@ -287,39 +386,41 @@ export class ApplicationMedia {
     clearInterval(this.timer);
     await this.uploads.close();
     await this.closeReaders();
-    await Promise.all([...this.ownerWork.keys()].map((key) => this.drainOwner(key)));
-    if (this.stagingReady) await rm(this.staging, { recursive: true, force: true });
+    if (this.stagingReady) {
+      await rm(this.staging, { recursive: true, force: true });
+      await rm(this.assetStaging, { recursive: true, force: true });
+    }
   }
 
   private release(key: string, entry: ReaderEntry): Promise<void> {
     if (entry.closing) return entry.closing;
     if (this.readers.get(key) !== entry) return Promise.resolve();
     this.readers.delete(key);
-    entry.closing = this.trackOwnerWork(entry.ownerKey, async () => {
+    entry.closing = (async () => {
       await entry.tail;
       try { await (await entry.opened).close(); } catch { /* Preserve the original read failure. */ }
-    });
+    })();
     return entry.closing;
   }
+}
 
-  private trackOwnerWork<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const work = this.ownerWork.get(key) ?? new Set<Promise<unknown>>();
-    this.ownerWork.set(key, work);
-    let settle!: () => void;
-    const lifetime = new Promise<void>((resolve) => { settle = resolve; });
-    work.add(lifetime);
-    return (async () => {
-      try { return await operation(); } finally {
-        work.delete(lifetime);
-        if (work.size === 0 && this.ownerWork.get(key) === work) this.ownerWork.delete(key);
-        settle();
-      }
-    })();
+/** Create `directory` beneath `root` one folder at a time, never `root`
+ * itself: false where `root` no longer stands, or anything on the way
+ * is no folder. */
+function ensureBeneath(root: string, directory: string): boolean {
+  const rel = relative(root, directory);
+  if (rel.startsWith("..")) return false;
+  try { if (!statSync(root).isDirectory()) return false; } catch { return false; }
+  let current = root;
+  for (const part of rel.split(sep).filter(Boolean)) {
+    current = join(current, part);
+    try { mkdirSync(current, { mode: 0o700 }); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") return false;
+      try { if (!lstatSync(current).isDirectory()) return false; } catch { return false; }
+    }
   }
-
-  private async drainOwner(key: string): Promise<void> {
-    while (this.ownerWork.has(key)) await Promise.allSettled([...this.ownerWork.get(key)!]);
-  }
+  return true;
 }
 
 function unsafeStaging(path: string): Error {

@@ -116,7 +116,7 @@ async function readAll(client: MediaClient, owner: MediaOwner, asset: MediaAsset
   return Buffer.concat(chunks);
 }
 
-test("space-37: pending attachment validation excludes sync until queue and edit admission finish", {timeout: 30_000}, async () => {
+test("space-21: a sync is admitted while attachment validation for a queue or an edit is pending, and both land", {timeout: 30_000}, async () => {
   const f = await sessionFixture();
   const client = new MediaClient(f.service.port());
   const media = Reflect.get(f.service, "media") as ApplicationMedia;
@@ -162,14 +162,20 @@ test("space-37: pending attachment validation excludes sync until queue and edit
           },
         } : store;
       };
-      const head = git(clone, "rev-parse", "HEAD");
       const submitted = operation === "queue"
         ? client.command("intent.queue", {projectId: project.id, text: "", attachments: [asset]})
         : client.command("intent.edit", {intentId, text: "Review these bytes", attachments: [asset]});
       admission = submitted;
       await validating;
-      await assert.rejects(client.command("space.sync", {repository: project.id}), /busy: Wait for the media upload to finish/);
-      assert.equal(git(clone, "rev-parse", "HEAD"), head, "refusal precedes Git mutation");
+      // The sync refuses nothing (space-21): it runs beside the admission.
+      const during = client.messages.length;
+      assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
+      const phaseOf = (message: ServerMessage) => message.type === "space.state"
+        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
+        : undefined;
+      const beside = await client.waitFor((message) => client.messages.indexOf(message) >= during
+        && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
+      assert.equal(phaseOf(beside)?.phase, "done", JSON.stringify(phaseOf(beside)));
       release();
       const intent = await submitted;
       intentId = intent.id;
@@ -179,9 +185,6 @@ test("space-37: pending attachment validation excludes sync until queue and edit
       assert.deepEqual(await readAll(client, {kind: "intent", projectId: project.id, intentId}, asset), Buffer.from("kept"));
       const after = client.messages.length;
       assert.deepEqual(await client.command("space.sync", {repository: project.id}), {accepted: true});
-      const phaseOf = (message: ServerMessage) => message.type === "space.state"
-        ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === project.id)?.sync
-        : undefined;
       const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after
         && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""));
       assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
@@ -195,6 +198,36 @@ test("space-37: pending attachment validation excludes sync until queue and edit
     client.close();
     await f.service.stop();
     await rm(f.dir, {recursive: true, force: true});
+  }
+});
+
+test("storage-4: an intent edit whose file changed across its own wait is refused as changed meanwhile, the change standing", {timeout: 30_000}, async () => {
+  const f = await sessionFixture();
+  const client = new MediaClient(f.service.port());
+  const media = Reflect.get(f.service, "media") as ApplicationMedia;
+  const adopt = media.adopt.bind(media);
+  let release = () => {};
+  try {
+    const project = await client.command("project.register", {path: f.project});
+    const intent = await client.command("intent.queue", {projectId: project.id, text: "First words"});
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => { entered = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    // Hold only the edit's wait for its attachments (media-4).
+    media.adopt = async (...args: Parameters<typeof adopt>) => { entered(); await barrier; return adopt(...args); };
+    const edit = client.command("intent.edit", {intentId: intent.id, text: "Edited words"});
+    await waiting;
+    // Another writer — a sync's Apply — rewrites the file meanwhile.
+    const file = join(clonePath(f.options.dataDir, project.id), "intents", `${intent.id}.json`);
+    const synced = {...JSON.parse(await readFile(file, "utf8")), text: "Synced words"};
+    await writeFile(file, JSON.stringify(synced));
+    release();
+    await assert.rejects(edit, /conflict: .*changed meanwhile/);
+    assert.equal(JSON.parse(await readFile(file, "utf8")).text, "Synced words", "the other writer's change stands");
+  } finally {
+    release();
+    media.adopt = adopt;
+    client.close(); await f.service.stop(); await rm(f.dir, {recursive: true, force: true});
   }
 });
 

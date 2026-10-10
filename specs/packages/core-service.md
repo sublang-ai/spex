@@ -78,7 +78,7 @@ Where a project is registered ([DR-006](../decisions/006-projects-and-forge.md))
 
 - After waiting for any settlement in progress [[core-service-91](#core-service-91)], while a session of the project remains live or another host holds one, a further session request for the same project is rejected `busy` naming that session, and creates no session ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - Local admission and recovery reservations keep the project exclusive while ownership is revalidated [[core-service-73](#core-service-73)] or a recovery's released ownership is published [[core-service-83](#core-service-83)]; a refused request releases only its own reservation.
-- While a Space operation runs, the request is rejected `busy` naming that operation [[space-21](space.md#space-21)].
+- A Space operation running on the project's spex repository refuses no request [[space-21](space.md#space-21)].
 - Live sessions for distinct projects run concurrently.
 - While a session is live, a client's disposal request aborts its turn, persists the session's Captain snapshot [[core-service-72](#core-service-72)], disposes the session's runtime, and reports the session as no longer live; a Boss message continues it [[core-service-73](#core-service-73)].
 - Where disposal fails, the core reports the error and retains the session's lease and project reservation until cleanup is confirmed; stopping the owning process allows later recovery through the shared lease checks ([DR-048](../decisions/048-failed-session-cleanup.md)).
@@ -650,10 +650,10 @@ The core contract test suite shall exercise the service end to end through the W
 
 #### core-service-25
 
-The core package shall run at most one compile per playbook id at a time and accept a `compile.abort` command that cancels the in-flight compile for a playbook id:
+The core package shall run each `compile.run` as its own toolchain process with its own cancel handle, and accept a `compile.abort` command that cancels every compile in flight for a playbook id ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
-- While a compile is in flight for a playbook id, a further `compile.run` for that id is rejected fail-closed with a `busy` error naming the id, per [DR-010](../decisions/010-interface-craft.md) principle 5.
-- `compile.abort` cancels the in-flight compile by terminating the toolchain child process, emits a final canceled progress line, and makes the pending `compile.run` reply with an `aborted` error; no further progress output follows the canceled line.
+- a further `compile.run` for an id already compiling is refused nothing: it runs beside the first, the compiler being an independent process;
+- `compile.abort` cancels each in-flight compile of the id by terminating its toolchain child process, emits a final canceled progress line, and makes each pending `compile.run` reply with an `aborted` error; no further progress output follows the canceled line.
 - When `compile.abort` names a playbook id with no compile in flight, the core package rejects it with a `not_found` error.
 
 ### Readiness Reporting
@@ -926,8 +926,8 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 
 Where the core service runs with an injected compile spawner whose toolchain run blocks until canceled, the test suite shall start a compile over the protocol and assert that:
 
-- a second `compile.run` for the same playbook id is rejected with a `busy` error naming the id while the first is in flight [[core-service-25](#core-service-25)];
-- `compile.abort` for that id makes the pending `compile.run` reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
+- a second `compile.run` for the same playbook id while the first is in flight is admitted, its compile running beside the first [[core-service-25](#core-service-25)];
+- `compile.abort` for that id makes both pending `compile.run` calls reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
 - `compile.abort` for a playbook id with no compile in flight is rejected with a `not_found` error;
 - after cancellation, a new `compile.run` for the same id is accepted.
 

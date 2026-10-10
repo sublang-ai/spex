@@ -1053,7 +1053,7 @@ const COMPILE_INPUT = {
   newPlayers: { "dev.helper": { adapter: "claude" } },
 };
 
-test("CORE-27: a second compile.run for the same playbook rejects busy", async () => {
+test("CORE-27: a second compile.run for the same playbook runs beside the first, and one abort cancels both", async () => {
   const harness = await startHarness(VALID_CONFIG, {
     env: { SPEX_SLC: "fake-slc" },
     compileSpawner: hangingCompileSpawner(),
@@ -1061,22 +1061,16 @@ test("CORE-27: a second compile.run for the same playbook rejects busy", async (
   const client = new Client(harness.service.port());
   await client.open();
   const { id: projectId } = await client.expectOk("project.register", { path: harness.projectDir });
+  const working = () => client.messages.filter((m) => m.type === "compile.progress" && m.line === "slc: working").length;
 
   const first = client.command("compile.run", { ...COMPILE_INPUT, projectId });
-  await client.waitFor(
-    (m) => m.type === "compile.progress" && m.line === "slc: working",
-  );
-  const second = await client.command("compile.run", { ...COMPILE_INPUT, projectId });
-  assert.ok(!second.ok, "duplicate compile must be rejected");
-  if (!second.ok) {
-    assert.equal(second.error.code, "busy");
-    assert.match(second.error.message, /already running for demo/);
-  }
+  await client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
+  // The compiler is an independent process: the second is refused nothing.
+  const second = client.command("compile.run", { ...COMPILE_INPUT, projectId });
+  await client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working" && working() >= 2);
 
-  // Cancel so the pending first command settles before teardown.
   await client.expectOk("compile.abort", { playbookId: "demo" });
-  const firstReply = await first;
-  assert.ok(!firstReply.ok && firstReply.error.code === "aborted");
+  for (const reply of [await first, await second]) assert.ok(!reply.ok && reply.error.code === "aborted", JSON.stringify(reply));
 
   client.close();
   await harness.service.stop();

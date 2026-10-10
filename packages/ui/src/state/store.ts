@@ -2983,14 +2983,9 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ activeCompile: { playbookId, running: false, ok: true } });
       } catch (cause) {
         const error = cause as { code?: string; message: string };
-        // A user cancel already ends the log with the ◇ line; a busy
-        // rejection means this very compile is still running.
+        // A user cancel already ends the log with the ◇ line.
         if (error.code === "aborted") {
           set({ activeCompile: { playbookId, running: false, ok: false } });
-          return;
-        }
-        if (error.code === "busy") {
-          appendLine(`… ${error.message}`);
           return;
         }
         appendLine(`✗ ${error.message}`);

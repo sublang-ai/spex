@@ -97,13 +97,13 @@ When a working folder is added while signed in [[storage-6](storage.md#storage-6
 
 When the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the rename runs only while no session beneath the folder has a turn in flight, and blocks writes beneath it only [[space-21](#space-21)].
+- the rename is one step at its instant — every clone beneath moved by one rename and every pair rewritten, with nothing awaited between — refusing nothing beneath the folder [[space-21](#space-21)]; a destination already taken moves nothing, and the next set-up asks again.
 
 #### space-60
 
 When a host read [[git-host-5](git-host.md#git-host-5)] reports a spex repository, known by its id, under another name or group than its clone's path, the core shall move the clone to the new path on that repository's next sync, rewriting every pair that names it and the exports beneath it in the same step, so that its key and name follow the host ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the move runs within the sync, under its gate, only while nothing beneath the clone is running;
+- the move is one rename within the sync at its instant, made only while the clone still reads the remote its check read before asking the host, records the host's id and lies where the home says, and stopping the sync where the destination is taken by anything but the clone itself — a case-only rename's destination is the clone [[space-21](#space-21)];
 - a group the host renamed still holds its spex repositories under their own names, since the host renames no repository with its group.
 
 #### space-61
@@ -133,6 +133,7 @@ When the reader activates Join on a spex repository the host lists and this devi
 
 - a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
 - the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Cloning code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
+- the spex repository clones into a private folder beside its place and moves there only where nothing stands at that instant; a join finding its place taken — another join's clone — stops, leaving that clone as it stands, and every join removes its own private folder alone;
 - a code clone that fails stops the join at its Code step with Git's words, leaving the spex repository cloned and the row offering "Choose folder…" to pair it later.
 
 #### space-64
@@ -171,7 +172,7 @@ When the user pairs a repair's spex repository with the folder proposed [[space-
 - naming a different folder opens the row as an in-place editor over the proposed or recorded path, with Add project, Cancel, Escape cancelling, and an Open folder… control where the running deployment offers a directory picker;
 - the editor says that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
 - a refusal shows in the row with the path kept and the control offered again: a folder inside another working folder, a folder already another spex repository's, and a spex repository whose turn is still running;
-- while any sync of that spex repository runs every repair control is disabled, a rebind being refused then [[space-21](#space-21)].
+- a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)].
 
 #### space-48
 
@@ -214,7 +215,7 @@ While this device's reader has declined to pair a repair's spex repository, the 
 
 - the record is written only when he declines, and removed when the repair is answered otherwise, never by a read or a render;
 - a repair whose recorded facts change is another repair, so it carries no record and counts afresh;
-- an answer naming no repair the core still reports is discarded, except where the fold carries a blocking diagnostic or is the cached state of an operation in flight;
+- an answer naming no repair the core still reports is discarded, except where the fold carries a blocking diagnostic;
 - answering a repair the core does not report is refused.
 
 #### space-55
@@ -280,15 +281,10 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 | the home is signed in, or the spex repository's remote is a path this device can reach | "Sign in first" |
 | the spex repository is reachable or read-only [[space-61](#space-61)] | the state's phrase |
 | no Git merge is pending from a terminal in the clone | "Finish or abort the merge in your terminal" |
-| no session of this spex repository has a turn in flight [[core-service-4](core-service.md#core-service-4)] | "Wait for <session title>" |
-| no session of it is held, or unprovably held, by another host [[core-service-32](core-service.md#core-service-32)] | "<session title> is in use elsewhere" |
-| no compile of its authoring sessions is running | "<playbook> is compiling" |
-| no media upload operation or attachment validation for content admission is in flight for it [[media-2](media.md#media-2)] [[media-5](media.md#media-5)] | "Wait for the media upload to finish." |
-| no sync of it is running | "Already syncing" |
 | no blocking storage diagnostic stands for it [[core-service-86](core-service.md#core-service-86)], a refresh's finding aside [[space-20](#space-20)] | the file and reason |
 | `git` runs | the install guidance |
 
-- a sync of one spex repository never waits for another's sessions: the gate is beneath the clone alone [[space-21](#space-21)].
+- no turn, session, compile, upload, environment change or operation of any spex repository refuses or delays the sync [[space-21](#space-21)].
 
 #### space-12
 
@@ -318,7 +314,7 @@ Where the clone's `spex` and the host's `spex` share no common ancestor, when a 
 
 #### space-14
 
-When the Compare step finds a unit changed differently on both sides without a choice for it [[storage-11](storage.md#storage-11)], the sync shall end in choices needed — the Save commit kept, nothing merged, no lease or gate held — and the surface shall show the picker [[space-9](#space-9)] [[space-17](#space-17)].
+When the Compare step finds a unit changed differently on both sides without a choice for it [[storage-11](storage.md#storage-11)], the sync shall end in choices needed — the Save commit kept, nothing merged, no lease held — and the surface shall show the picker [[space-9](#space-9)] [[space-17](#space-17)].
 
 #### space-15
 
@@ -401,10 +397,12 @@ When a sync's Apply step has changed the working tree — by merge or fast-forwa
 
 #### space-21
 
-While a sync, check, join, rename or move of a spex repository is running, the core shall refuse `busy`, naming the operation, every command that writes beneath that clone — turn submission, session creation, restore, discard, deletion and viewed markers of its sessions, pairing changes, every intent command of it, its configuration and environment edits, and its compiles — and a second operation on it, so nothing the core writes lands beneath that clone through the operation while other spex repositories stay writable:
+While a sync, check, join or move of a spex repository is running, the core shall refuse no command and no operation because it runs ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
-- the gate is set before the admission checks [[space-11](#space-11)], so a turn admitted after it is refused and one admitted before it fails the check;
-- choices needed and stopped are not running states: nothing is refused while the picker waits.
+- every write beneath the clone lands or is refused at its own instant — a file changed since its writer read it as "changed meanwhile; retry", a session's lease as that session's refusal — and the runtime's own admission of messages stays;
+- a second Sync asked while a sync runs, or a Check asked while a sync or a check runs, joins that operation; a Sync asked while a check runs follows it;
+- a remote or recorded host id the core writes is written only while the clone's remote still reads what the core read before awaiting the host, and refused as changed meanwhile otherwise;
+- an operation's progress is its own, ended by it alone, and what it shows is no reason to wait.
 
 #### space-22
 
@@ -495,17 +493,17 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.refresh` | — | `{ accepted: true }` | `invalid_request` (signed out) |
 | `space.signin.start` | — | `{ flow: "browser", url } \| { flow: "device", userCode, verificationUri, expiresAt }` | `busy` (a sign-in in flight) |
 | `space.signin.cancel` | — | `{ stopped: boolean }` | — |
-| `space.signout` | — | `GroupsState` | `busy` (a sync running) |
-| `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `busy` |
-| `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here), `busy` |
+| `space.signout` | — | `GroupsState` | — |
+| `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
+| `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here) |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
-| `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only), `busy` |
-| `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `busy` naming the blocker [[space-11](#space-11)], `invalid_request` (local only, merge pending, blocking diagnostic; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)]) |
+| `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only) |
+| `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `invalid_request` (local only, merge pending, blocking diagnostic [[space-11](#space-11)]; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)]) |
 | `space.cancel` | `{ repository }` | `{ stopped: boolean }` | — |
 | `space.diff` | `{ repository, unit, path, side: "mine" \| "remote" }` | `{ patch: string, truncated: boolean }` | `invalid_request` (a session, intent or authoring unit; unknown unit or path; no check yet for a remote side) |
 | `space.tree` | `{ repository, path?: string }` | `{ path: string, entries: SpaceEntry[] }` | `invalid_request` (path escaping the clone), `not_found` |
 | `space.read` | `{ repository, path: string }` | `{ kind: "text", text, lines, truncated } \| { kind: "withheld", reason } \| { kind: "binary", size }` | `invalid_request` (outside the clone, a symlink, `.git`, not a file), `not_found` |
-| `space.repair.decline` | `{ repair: string, declined: boolean }` | `GroupsState` | `invalid_request` (no repair of that name stands), `busy` (an operation running) |
+| `space.repair.decline` | `{ repair: string, declined: boolean }` | `GroupsState` | `invalid_request` (no repair of that name stands) |
 
 - the device flow's `verificationUri` is the verification URL the host completed with the user code where it gave one [[git-host-3](git-host.md#git-host-3)], and `userCode` is carried for clients and tests, never shown by the surface [[space-3](#space-3)];
 - `space.state { state: GroupsState }` is broadcast to every client on each transition of any repository's machine [[space-31](#space-31)], on a sign-in's start and end, and after a host read; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
@@ -578,12 +576,11 @@ interface Member { id: string; login: string; displayName: string | null; role: 
 
 #### space-31
 
-The core shall run every operation of one spex repository on one state machine per clone, at most one operation per clone at a time and any number of clones at once:
+The core shall run every operation of one spex repository on one state machine per clone, one operation per clone at a time — a second joining or following it [[space-21](#space-21)] — and any number of clones at once:
 
 ```text
 idle ─sync/join→ save ─→ check ─→ compare ─→ apply ─→ refresh ─→ push ─→ done ─→ idle
 idle ─fetch→ check ─→ idle
-idle ─move→ apply ─→ refresh ─→ idle
 save: ignored path staged | validation | commit error → stopped
 check: host refused | reauth | gone | transport | timeout | Stop → stopped;  host empty → push
 compare: conflict without choice → choices;  no ancestor and not a join → unrelated;  nothing incoming → push
@@ -592,11 +589,11 @@ push: rejected (first) → check;  rejected twice | refused | transport | timeou
 choices ─sync with choices→ save;  unrelated ─sync with join→ save;  stopped ─Dismiss or next→ idle
 ```
 
-- the write gate [[space-21](#space-21)] is set on entering `save`, `check` or a move's `apply` and lifted on `choices`, `unrelated`, `stopped`, `done` and `idle`;
 - one full rescan of the clone runs as `refresh`;
 - before the first file is replaced, `apply` records the plan's revisions, ancestor and choices in an ignored `<clone>/.spex-apply.json` and removes it after the ref update lands or a changed unit refuses its write [[space-19](#space-19)];
 - a marker found at startup or admission is finished before any other operation on that clone, and before the admission reads any blocking issue, so a finding of an earlier repair never refuses the admission that repairs again — each unit written as `apply` writes it [[space-19](#space-19)], a file already holding the selected bytes accepted, then the same tree recorded with the same parents; a file holding neither the recorded Save's bytes nor the selected ones is left as it is, the marker removed and no merge commit recorded, so the sync goes on from Save and replans; a marker whose merge never landed while `spex` moved on since — a commit from a terminal — is removed the same way with nothing written; a held session lease leaves the marker standing as a blocking issue that a later admission's repair retries;
-- `sync:<repository>:last` persists in the preferences [[storage-5](storage.md#storage-5)]; the sync's transient state persists nowhere.
+- `sync:<repository>:last` persists in the preferences [[storage-5](storage.md#storage-5)]; the sync's transient state persists nowhere;
+- a row read while an operation runs reads the clone at that instant, keeping that operation's own lists.
 
 #### space-32
 
@@ -676,8 +673,12 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
-- a session with a turn in flight, a session under a management lease taken out of band, and a running compile in one spex repository each make its `space.sync` refuse `busy` by name while another spex repository's sync proceeds [[space-11](#space-11)] [[space-21](#space-21)];
-- while a check runs against a stand-in whose Git transport sleeps, writes beneath that clone are refused `busy` naming the sync while a turn in another spex repository is admitted, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-16](#space-16)] [[space-32](#space-32)];
+- a running compile and a session under a management lease taken out of band each leave the spex repository's `space.sync` to complete, while that lease refuses the project's removal `busy` and, released, the removal completes with the compile still running [[space-11](#space-11)] [[space-21](#space-21)];
+- while a check runs against a transport that sleeps, a turn, a viewed marker, an intent, a pairing and a settings edit beneath that clone all land, a second `space.sync` and a `space.fetch` reply `accepted`, joining it, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-47](#space-47)] [[space-16](#space-16)] [[space-32](#space-32)];
+- a remote set from a terminal while `space.remote.set`, a pick or a Check step awaited its own read leaves the terminal's remote alone in the clone's configuration, the command refused `conflict` or the step stopped as changed meanwhile [[space-21](#space-21)] [[space-60](#space-60)];
+- a remote set through `space.remote.set` while a sync's Check step awaits the stand-in's read of a repository it renamed stops that sync as changed meanwhile, the clone not moved and the new remote standing [[space-60](#space-60)];
+- a sign-in moves your own group's folder while a read of it stands held, an intent naming the old key is refused without recreating the former folder, and the held read ends recreating nothing [[space-59](#space-59)];
+- a second join of one repository, admitted while the first's clone stands held, publishes its clone; the first, released, finds the place taken and leaves that clone and every file written into it as they stand, and no private folder of either remains [[space-63](#space-63)];
 - `space.signout` revokes the device at the stand-in, every repository turns local only or unreachable with nothing deleted, and a later sign-in finds them reachable again [[space-6](#space-6)] [[space-61](#space-61)];
 - a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)].
 
@@ -716,7 +717,6 @@ When an integration suite reports diagnostics on a home holding a clone no pair 
 - a session working directory that is missing or invalid folds into no repair and keeps its own row [[space-46](#space-46)];
 - a rebind to a chosen folder, carrying the repair's recorded directories as aliases, pairs the spex repository and lets every session recorded under them continue [[space-47](#space-47)];
 - a rebind refused because the folder is inside another working folder, because the folder is another spex repository's, or because that repository's turn is running leaves the repair standing with its reason [[space-47](#space-47)];
-- a rebind is refused while that spex repository syncs [[space-47](#space-47)];
 - a repair the core reports still counts while it stands drawn, only the reader's act settling it, and declining writes to this device's preferences and to no tracked file [[space-49](#space-49)] [[space-54](#space-54)];
 - answering a repair the core does not report is refused [[space-54](#space-54)];
 - a recorded directory that is here and a work tree root no pair names is proposed, one that is absent is reported absent and proposed not at all, and no directory outside those the repair names and the shared-parent candidate is examined [[space-53](#space-53)].
