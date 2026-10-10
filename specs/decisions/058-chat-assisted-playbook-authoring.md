@@ -12,6 +12,7 @@ Amended by [DR-082](082-the-first-move-in-a-draft-is-an-act.md) in the workspace
 
 Amended by [DR-097](097-media-and-browser-tools-across-hosts.md) for structured content queues, owned media, and explicit browser access.
 Amended by [DR-103](103-the-home-and-its-groups.md) and [DR-104](104-spec-package-format-and-client-environments.md): the draft store becomes authoring sessions in a project, and a registration is a request plus a role binding.
+Clarified by [DR-112](112-authoring-permissions-use-the-package-working-directory.md) in the authoring agent's permission projection and the limits of adapter enforcement.
 
 ## Context
 

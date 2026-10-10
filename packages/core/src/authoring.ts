@@ -1141,8 +1141,8 @@ export class AuthorManager {
     // The block's model, effort and fast mode, and its subagent model
     // and effort (DR-093) — an unset subagent model resolved to
     // `inherit` and an Off sent as none, as the launcher resolves them
-    // (DR-095); `{ mode: "auto" }` with the spec package's folder as the
-    // one writable path; no tool lists, no maxTurns, no role — the
+    // (DR-095); `{ mode: "auto" }` with the package as cwd and no extra
+    // writable paths (DR-112); no tool lists, no maxTurns, no role — the
     // records name the player, not the events (playbook-library-64).
     const options: CligentOptions<string, boolean, string> = {
       cwd: packageDir,
@@ -1150,7 +1150,7 @@ export class AuthorManager {
       ...(agent.effort !== undefined ? { effort: agent.effort } : {}),
       ...(agent.fastMode !== undefined ? { fastMode: agent.fastMode } : {}),
       ...subagentTuningOf(agent),
-      permissions: { mode: "auto", writablePaths: [packageDir] },
+      permissions: { mode: "auto" },
       ...(agent.browser !== undefined ? {browser: agent.browser} : {}),
     };
     const cligent = new Cligent<string, boolean, string>(new Adapter(), options);
