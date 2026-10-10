@@ -6,7 +6,7 @@
 ## Status
 
 Proposed (2026-10-09).
-Amends [DR-045](045-unified-session-storage.md) §Git synchronization in one rule: local writers are no longer stopped during commit, checkout and merge; every write is versioned or appended, and a merge never overwrites a file changed since it was read.
+Amends [DR-045](045-unified-session-storage.md) §Git synchronization in one rule: local writers are no longer stopped during commit, checkout and merge; every write is versioned or appended, and a sync refuses a replacement its pre-write check finds changed since Save.
 Amends [DR-057](057-space-surface.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, and no gate is set before its checks; a sync, like every operation, refuses nothing and reports its progress.
 Amends [DR-103](103-the-home-and-its-groups.md) where it inherited that admission for the per-repository sync, and in one clause: no local claim stands for a host repository; the host's answer alone decides a race between two devices.
 Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-the-machine.md) whole: one process serves a home under the root lease, and Playbook's per-session lease names the one writer of a session's records.
@@ -23,7 +23,7 @@ Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-th
   It never prevents a race; it detects one and asks the person to retry — "index.lock exists", "your local changes would be overwritten by merge".
   It keeps no live picture that can go stale: every command reads the repository.
 - Playbooks writing session records are editors in a Git repository.
-  Git does not care, and the core need not either, except at the instant a sync would rewrite a file an agent is appending to — which Git answers by refusing to overwrite a changed file, not by stopping the agent.
+  Git does not care, and the core need not either, except at the instant a sync would rewrite a file an agent is appending to — which Git answers by checking before it writes and refusing a changed file, not by stopping the agent.
 - Parts of the core already work Git's way: the root lease admits one process per home ([DR-108](108-the-root-lease-names-the-machine.md)); the spec editor writes under a digest token and is refused on a mismatch [[spec-view-47](../packages/spec-view.md#spec-view-47)]; a session's records are an append-only file [[storage-23](../packages/storage.md#storage-23)]; a sync compares units and lets the reader choose where both sides changed [[space-17](../packages/space.md#space-17)].
   The archived review rounds also gave an authoring session a recorded instance that every command of it names, a version in Git's shape; this record keeps that shape and drops the gates built around it.
   The rest is the gatekeeper.
@@ -40,7 +40,8 @@ Keeps [DR-036](036-file-state-store.md) and [DR-108](108-the-root-lease-names-th
   Across devices, a file both sides appended is a unit changed on both sides, and the reader chooses, as Git conflicts on two additions at one place [[space-17](../packages/space.md#space-17)].
 - No operation refuses another.
   A sync, check, join, move, removal, compile, install or enabling reports its progress and admits every command; what the gate would have refused is admitted and either succeeds, its own write versioned or appended, or is refused at its write by the rule above or by a session's lease.
-- A sync commits what is on disk, merges, and never overwrites a file changed since it read it.
+- A sync commits what is on disk, merges, and refuses a replacement whose pre-write check finds the file changed since Save, honoring a session's lease.
+  An independent process keeps ordinary filesystem behavior: the check is the core's own, made at the instant before its rename, and no lock holds another process off the file.
   The apply step writes each unit under the version its Save step committed, taking a session's lease for that instant as any writer of its records does ([DR-108](108-the-root-lease-names-the-machine.md)).
   Where any such write is refused, because the unit changed since Save or its session is leased, Apply records no merge commit: the Save commit stands, the units already written are local changes equal to the host's side, and the sync saves and merges again or stops for a retry.
   A unit changed on both sides is a choice the reader answers, whole units chosen as [DR-045](045-unified-session-storage.md) decided, with no merge inside a unit [[storage-11](../packages/storage.md#storage-11)] [[space-17](../packages/space.md#space-17)].

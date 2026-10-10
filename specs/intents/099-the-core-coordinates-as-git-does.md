@@ -9,16 +9,16 @@ Proposed (2026-10-09).
 
 ## Intent
 
-Remove the core's gatekeeping over operations and keep to Git's rules: one process per home, a version check at the instant of each write, append-only records under their session's lease, a sync that commits what is on disk and never overwrites a file changed since it read it, and an interface that reads files.
+Remove the core's gatekeeping over operations and keep to Git's rules: one process per home, a version check at the instant of each write, append-only records under their session's lease, a sync that commits what is on disk and refuses a replacement its pre-write check finds changed since Save, and an interface that reads files.
 How the core admits a message to a runtime and how the interface orders its own replies are outside it.
 The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); this record carries its delivery.
 
 ## Deliverables
 
 - [ ] DR-111 accepted with the inventory of every gate, reservation, claim, blocker and in-memory holder and its disposition.
-- [ ] The sync's apply writes each unit under the version it read, with a session's lease taken for that instant; a refused write leaves no merge commit, the sync saves and merges again or stops for a retry, and a unit changed on both sides is a choice, never overwritten.
+- [ ] The sync's apply writes each unit under the version it read, with a session's lease taken for that instant; a refused write leaves no merge commit, the sync saves and merges again or stops for a retry, and a unit changed on both sides is a choice.
 - [ ] The authoring manager reads session files for its picture and treats the recorded instance as the version of a write to the session's own files.
-- [ ] Every "busy" refusal while an operation runs, other than a session lease's, is gone from the core, the protocol and the interface; a stale write is refused as "changed meanwhile, retry".
+- [ ] Every "busy" refusal of a command because a sync, check, join, move, removal, compile, install or enabling runs is gone from the core, the protocol and the interface; a session lease's refusal and the runtime's own admission of messages stay; a stale write is refused as "changed meanwhile, retry".
 - [ ] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing.
 - [ ] The race suites assert no loss and surfaced conflicts under concurrent writers, replacing the gate tests.
 
@@ -33,4 +33,4 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 
 ## Verification
 
-Every task ends with `spex lint` clean and the core, interface and journey suites green; the concurrent-writer suites fail on the gated code and pass on the versioned one; no spec item states a refusal while an operation runs other than Playbook's session lease's.
+Every task ends with `spex lint` clean and the core, interface and journey suites green; the concurrent-writer suites fail on the gated code and pass on the versioned one; no spec item refuses a command because a sync, check, join, move, removal, compile, install or enabling runs, while a session lease's refusal and the runtime's admission of messages stay.
