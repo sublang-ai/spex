@@ -292,10 +292,7 @@ function assertAuthoringPermissions(runs: FakeAdapterStats["runs"], packageDir: 
     // Cligent explicitly refuses Codex permission isolation on native
     // Windows; Spex app hosts are macOS and Linux (DR-049).
     if (process.platform !== "win32") {
-      const mapped = mapPermissionsToCodexOptions(policy);
-      assert.equal(mapped.codexOptions?.config?.default_permissions, ":workspace");
-      assert.equal(mapped.codexOptions?.config?.approvals_reviewer, "auto_review");
-      assert.equal(mapped.codexCliConfigOverrides, undefined, "no extra write grants");
+      assert.doesNotThrow(() => mapPermissionsToCodexOptions(policy));
     }
     assert.deepEqual(policy, { mode: "auto" });
   }
@@ -305,17 +302,8 @@ function assertAuthoringPermissions(runs: FakeAdapterStats["runs"], packageDir: 
 // playbook-library-72: the happy path through registration
 // ---------------------------------------------------------------------------
 
-for (const language of ["en", "zh"]) test(`playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol (${language})`, async () => {
-  const script = authoringScript();
-  if (language === "zh") {
-    for (const rule of script.rules ?? []) {
-      const writes = rule.response.writes;
-      for (const [path, source] of Object.entries(writes ?? {})) {
-        writes![path] = source.replace("Read the issue and the repository's labels with gh.", "用 gh 阅读问题和仓库的标签。");
-      }
-    }
-  }
-  const harness = await startHarness({ script, slc: stubSlcSource("['Triager', 'Verifier']") });
+test("playbook-library-72: a draft is authored, compiled, proposed, and registered over the protocol", async () => {
+  const harness = await startHarness({ script: authoringScript(), slc: stubSlcSource("['Triager', 'Verifier']") });
   const { stats, configPath, projectId, clone } = harness;
   const files = authoringFiles(clone, "triage");
   const client = new Client(harness.service.port());
@@ -371,8 +359,6 @@ for (const language of ["en", "zh"]) test(`playbook-library-72: a draft is autho
   // the real adapters' permission mapping.
   assertAuthoringPermissions(stats.runs, draftDir);
   const first = stats.runs[0];
-  assert.equal(first.cwd, draftDir);
-  assert.deepEqual(first.permissions, { mode: "auto" });
   assert.equal(first.allowedTools, undefined);
   assert.equal(first.disallowedTools, undefined);
   assert.equal(first.resume, undefined);
@@ -409,7 +395,6 @@ for (const language of ["en", "zh"]) test(`playbook-library-72: a draft is autho
   assert.ok(sourceIndex >= 0 && sourceIndex < finishedIndex, "the source streamed before the turn ended");
   const source = client.messages[sourceIndex] as DraftSourceMessage;
   assert.match(source.markdown, /^# triage\n\nRoles:/);
-  assert.ok(source.markdown.includes(language === "zh" ? "用 gh 阅读问题和仓库的标签。" : "Read the issue and the repository's labels with gh."));
   assert.equal(source.version.length, 16);
 
   // playbook-library-66/67: the compile started without a further

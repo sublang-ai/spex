@@ -518,6 +518,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Playbook authoring turns no longer fail Cligent's validation of an absolute
+  writable-path grant, including chat, compile-failure repair and registration
+  proposals ([DR-112](specs/decisions/112-authoring-permissions-use-the-package-working-directory.md)).
 - Register derives valid, distinct default new player lanes for Chinese and
   digit-leading roles and colliding role names, preserving explicit sharing
   choices and existing roster players.
