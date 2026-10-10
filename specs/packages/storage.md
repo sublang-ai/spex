@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines Spex's data files under [DR-103](../decisions/103-the-home-and-its-groups.md): the home, the spex repositories cloned under it, the files each holds, the device-local files, the one-time migration from the former layout, and the whole-unit rules by which a spex repository's `spex` branch merges.
+This package defines Spex's data files under [DR-103](../decisions/103-the-home-and-its-groups.md): the home, the spex repositories cloned under it, the files each holds, the device-local files, the one-time migrations from the former layout and of a project's environment into its working folder, and the whole-unit rules by which a spex repository's `spex` branch merges.
 **Spex home** is the application data directory; paths below are relative to it.
 A **spex repository** is a Git repository named `<name>-spex` holding the records of one project or one group on its `spex` branch; its **clone** lives under `workspace/`, and its **key** is the clone's path relative to `workspace/`, such as `acme/a-spex`, each segment spelled as the host spells its path — letters, digits, `.`, `_` and `-`, never starting with a dot — so a host's group or repository name is a key segment as it is.
 A **working folder** is a folder on this device where a project's or a group's sessions run; a **project** is a working folder paired with a spex repository.
@@ -26,7 +26,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |
-| `<clone>/spex.yaml`, `<clone>/spex.lock` | the environment's requests and lock [[environments-2](environments.md#environments-2)] [[environments-3](environments.md#environments-3)] | Tracked, one unit |
+| `<clone>/spex.yaml`, `<clone>/spex.lock` | the requests and lock of a group's own environment [[environments-2](environments.md#environments-2)] [[environments-3](environments.md#environments-3)]; a project's are at its working folder's root [[environments-26](environments.md#environments-26)], a clone of the former placement holding them until the migration moves them [[storage-24](#storage-24)] | Tracked, one unit |
 | `<clone>/intents/<id>.json`, optional `<clone>/intents/<id>.assets/` | one intent [[storage-4](#storage-4)] and its retained attachments [[media-4](media.md#media-4)] | Tracked, one unit |
 | `<clone>/sessions/<id>.json`, `<clone>/sessions/<id>.records.jsonl`, optional `<clone>/sessions/<id>.assets/` | a Playbook session bundle [[1]] | Tracked, one unit |
 | `<clone>/authoring/<id>.json`, `<clone>/authoring/<id>.records.jsonl`, optional `<clone>/authoring/<id>.assets/` | an authoring session [[storage-23](#storage-23)] | Tracked, one unit |
@@ -110,7 +110,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 | no sign-in, or no pick | created locally under `workspace/<own>/<name>-spex/` with no remote, `<name>` being the folder's name, until the reader picks a group |
 
 - a folder already paired selects its existing pair; a folder inside another working folder below its top level is refused;
-- the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and its environment requests the built-in spec package [[environments-11](environments.md#environments-11)];
+- the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and, where the working folder holds no `spex.yaml`, its environment is written at the folder's root requesting the built-in spec package [[environments-11](environments.md#environments-11)] [[environments-26](environments.md#environments-26)], a folder holding one being installed from it [[environments-7](environments.md#environments-7)];
 - a session is a project's by the clone that holds it, never by matching its working directory; its recorded working directory decides only where it may continue [[core-service-73](core-service.md#core-service-73)];
 - the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports [[space-60](space.md#space-60)] move the clone and rewrite every pair naming it in one step.
 
@@ -132,7 +132,7 @@ Before admitting writers to the groups layout, when the core finds the former la
 
 1. Preserve the original bytes of every file it rewrites or moves under `local/migrations/<migrationId>/inputs/<n>`, with `receipt.json` encoded as `{format: 1, id, kind: 'groups', inputs: [{path, sha256}], steps: [], complete}`; a restart verifies completed outputs or retries incomplete work without overwriting divergent destinations.
 2. Write `home.yaml` [[storage-2](#storage-2)] with `own` as this device's user name and one folder per entry of `projects.json` whose path `local/project-paths.json` records, keeping its aliases; an entry with no path becomes a repair the Groups surface lists [[space-46](space.md#space-46)].
-3. For each project, make `workspace/<own>/<name>-spex/` a repository on a new `spex` branch with no history from the former home, replay its act log once into one file per intent [[storage-4](#storage-4)] — ranks and links dropped, a removed or never-worked dropped intent written nowhere — move its asset directory beside the intents, move the sessions whose working directory resolves to the project into its `sessions/`, write `project.json` [[storage-3](#storage-3)], request the built-in spec package [[environments-11](environments.md#environments-11)], and commit.
+3. For each project, make `workspace/<own>/<name>-spex/` a repository on a new `spex` branch with no history from the former home, replay its act log once into one file per intent [[storage-4](#storage-4)] — ranks and links dropped, a removed or never-worked dropped intent written nowhere — move its asset directory beside the intents, move the sessions whose working directory resolves to the project into its `sessions/`, write `project.json` [[storage-3](#storage-3)], write the working folder's environment requesting the built-in spec package where the folder holds none [[environments-11](environments.md#environments-11)] [[environments-26](environments.md#environments-26)], and commit.
 4. Make `workspace/<own>/<own>-spex/` your own group's repository the same way, moving `config/playbook.config.yaml` into it with every `playbooks.<id>.from` dropped and recorded in the receipt, and the sessions that resolve to no project into its `sessions/`.
 5. Move `prefs.json` to `local/prefs.json` [[storage-5](#storage-5)], converting `space:lastSync` to no entry and `draft:<id>:player` to `authoring:<id>:player`; move the home's `.git`, where the home was a repository, to `local/former-home.git` unchanged, so the old remote is kept aside; leave `playbooks/<id>/` and `local/drafts/` in place, listed as retired.
 6. Validate every output [[storage-12](#storage-12)] before setting the receipt's `complete` to true.
@@ -140,6 +140,20 @@ Before admitting writers to the groups layout, when the core finds the former la
 - an unknown `v` or `format` in an input is preserved unchanged and reported, never guessed or downgraded;
 - no Git history is written before validation confirms session recovery fields contain no provider tokens;
 - `meta.json` remains `{version: 1, importedLegacy?: string[]}` for completed legacy database imports.
+
+### storage-24
+
+When the core, serving a home under the root lease [[storage-26](#storage-26)], finds a project's clone holding `spex.yaml` or `spex.lock` — it looks at its start and at each pairing of a working folder [[storage-6](#storage-6)] — the environment migration shall move that project's environment into its working folder once and leave a receipt under `local/migrations/` with `kind: 'environment'`, as the groups migration does [[storage-9](#storage-9)] ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
+
+| The working folder | Outcome |
+| --- | --- |
+| holds neither file | the clone's `spex.yaml` and `spex.lock` are moved to the folder's root |
+| holds either file | the folder's files stand and the clone's are deleted |
+| is missing on this device | the clone's files stay until the folder is paired, when the move runs for that project |
+
+- the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
+- a group's own spex repository, holding no `project.json`, keeps its files [[storage-1](#storage-1)];
+- the installed files under `packages/` and `skills/` are not touched, and the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
 
 ### storage-17
 
@@ -187,7 +201,7 @@ When invoked as `validate`, the storage Git tool shall reserve the home and vali
 When selecting stored data during a Git merge of a spex repository's `spex` branch, the validator shall compare both pre-merge revisions with their common ancestor:
 
 - compare complete file bytes and existence;
-- treat the manifest, matching replay stream, and owned assets as one session bundle [[1]]; each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock` as one unit; and `config/playbook.config.yaml`, `project.json` and each other tracked file as a separate unit.
+- treat the manifest, matching replay stream, and owned assets as one session bundle [[1]]; each `intents/<id>.json` with its `intents/<id>.assets/` as one unit; each `authoring/<id>.json` with its records and assets as one unit; `spex.yaml` with `spex.lock`, where the spex repository holds them [[storage-1](#storage-1)], as one unit; and `config/playbook.config.yaml`, `project.json` and each other tracked file as a separate unit.
 
 | Comparison | Selection |
 | --- | --- |
@@ -246,19 +260,23 @@ When an integration suite migrates a former-layout home of two projects and one 
 
 - default and explicitly selected locations, and that nothing outside `workspace/` is a Git work tree afterwards [[storage-1](#storage-1)];
 - `home.yaml` carrying this device's user name as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
-- each project's clone on a `spex` branch with one commit, its `project.json` naming the folder's remote, one file per open or worked intent with ranks and links dropped, its asset directory beside them, and its sessions inside [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-9](#storage-9)];
+- each project's clone on a `spex` branch with one commit, its `project.json` naming the folder's remote, one file per open or worked intent with ranks and links dropped, its asset directory beside them, its sessions inside, and its working folder's root holding `spex.yaml` requesting the built-in spec package [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-9](#storage-9)];
 - your own group's clone holding the configuration with every `from` dropped and the unmatched session, the receipt naming the dropped entries [[storage-9](#storage-9)];
 - preferences moved with their viewed markers and session tuning, the former home's `.git` kept aside, the retired library folder in place [[storage-5](#storage-5)] [[storage-9](#storage-9)];
-- a working folder added afterwards paired with a local spex repository that requests the built-in spec package, and sessions listed by the clone that holds them [[storage-6](#storage-6)];
+- a working folder added afterwards paired with a local spex repository, the folder's own `spex.yaml` requesting the built-in spec package and the clone holding none, one added holding a committed environment installed from it with nothing written, and sessions listed by the clone that holds them [[storage-6](#storage-6)];
 - a project's configuration composed on top of your own group's [[storage-7](#storage-7)];
 - restart-safe migration and token-free Git ancestry [[storage-9](#storage-9)];
 - refreshed Git rules after a migration retry [[storage-17](#storage-17)];
 - ordinary-default discovery into your own group's sessions, retained inputs and explicit-location isolation [[storage-18](#storage-18)];
 - exact authoring session and credential encodings written and read back, the credentials file owner-only [[storage-23](#storage-23)] [[storage-19](#storage-19)].
 
+### storage-25
+
+When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files and its clone none, that the second folder's files are unchanged and its clone's deleted, that the third clone keeps its files until its folder is paired and moves them then, that a receipt of kind `environment` stands and a restart repeats nothing, that the installed files are untouched, and that the sync pushes the deletion [[storage-24](#storage-24)].
+
 ### storage-16
 
-When an integration suite merges two real Git branches of one spex repository containing sessions, intents, an authoring session and an environment, it shall verify:
+When an integration suite merges two real Git branches of a group's own spex repository containing sessions, intents, an authoring session and an environment, it shall verify:
 
 - command results and refusals through the documented entry point with `--repository` [[storage-10](#storage-10)];
 - an unchanged index after planning and refused selection, followed by staged complete choices [[storage-20](#storage-20)] [[storage-21](#storage-21)];

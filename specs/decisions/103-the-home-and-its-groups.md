@@ -22,6 +22,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md) in when Spex reads the host: also once when it starts signed in.
 Extended by [DR-108](108-the-root-lease-names-the-machine.md): beside `.lease/`, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`, its owner naming the machine by Playbook's machine identity; a `.lock/` of the former layout is read by the same rule before the migration.
+Amended by [DR-113](113-a-projects-environment-lives-in-its-working-folder.md) in its principle and its tree: the environment is the code's configuration, not a record, so a project's `spex.yaml` and `spex.lock` live at its working folder's root, committed with the code by the reader, leaving its spex repository, while the unit `spex.yaml` with `spex.lock` stays for a group's own; Spex itself still commits nothing to the code.
 
 ## Context
 

@@ -28,7 +28,7 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 2. Rewrite the sync's apply step: versioned unit writes, the lease taken for the instant of a session's write, whole-unit choices; amend space-13, space-17, space-20 and storage-14.
 3. Replace the authoring manager's live mirror with file-derived reads versioned by the recorded instance; amend core-service-96, playbook-library-70, -98, -101.
 4. Remove the sync machine's write gate, the admission table's blockers, the dispatch gate and the removal gate; amend space-11, space-21, space-31, projects-10 and the interface's busy states.
-5. Make environment writes versioned and privately prepared; amend environments-7, -14, -15 and the enabling path in playbook-library-69.
+5. Make environment writes versioned and privately prepared, on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts them and after that record's delivery; amend environments-7, -14, -15 and the enabling path in playbook-library-69.
 6. Replace the gate suites with concurrent-writer suites across space, authoring, environments and projects.
 
 ## Verification
