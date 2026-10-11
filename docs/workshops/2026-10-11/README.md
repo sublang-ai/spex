@@ -26,6 +26,7 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-23 a judge's reply shape fails a completed step and the closing reply misreports it; W-25 a step that committed twice or found its work already committed fails the run | Playbook PRs 72 and 73 (released as 17.8.0); Spex adopts it with slc 0.16.1 by DR-116 (PR 110); confirmed on T04's re-linked `sprint-plan` |
 | W-08 built-in playbooks' intents in English on a Chinese home | spex PR 112 |
 | W-13 seven near-identical recovery rows; W-06 Git's raw words on a failed first commit | spex PR 113, DR-117 |
+| W-24 a clone's sync standing read from Git when no record exists; W-04 signed-out own-group name; W-05 name and path separator; W-20 "New group at <site>" where the host refuses creation | spex PR 114, DR-118 |
 
 ## What is still open
 
