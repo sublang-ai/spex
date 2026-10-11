@@ -544,7 +544,7 @@ test.describe("daily sync", () => {
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
     const link = members.getByTestId(`space-members-link-${TEAM_KEY}`);
-    await expect(link).toHaveText(`Members change at ${new URL(host.url).hostname}`);
+    await expect(link).toHaveText(`Open at ${new URL(host.url).hostname}`);
     await expect(link).toHaveAttribute("href", `${host.url}/${TEAM_KEY}/-/project_members`);
     await scanVocabulary(page, "members", words);
 

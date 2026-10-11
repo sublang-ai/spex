@@ -25,6 +25,7 @@ import {
   KEY,
   MIN,
   NOW,
+  NO_CAN,
   OWN,
   OWN_REPO,
   SESSION_UNIT,
@@ -61,6 +62,7 @@ function teamGroup(repos?: RepositoryState[]): GroupsState["groups"][number] {
     name: "team",
     url: "https://gitlab.example/acme/team",
     own: false,
+    can: NO_CAN,
     repositories: repos ?? [
       repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
       repo({ key: "acme/team/academy-spex", name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null }),
@@ -82,7 +84,7 @@ function signedOut(over: Partial<GroupsState> = {}): GroupsState {
   const project = repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null });
   return {
     ...base({ account: null, readAt: null, ...over }),
-    groups: [{ id: null, fullPath: "jane", name: "jane", url: null, own: true, repositories: [own, project] }],
+    groups: [{ id: null, fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [own, project] }],
   };
 }
 
@@ -665,7 +667,7 @@ describe("GROUPS: Members (space-62)", () => {
     expect(screen.getByTestId("space-member-bob").textContent).toContain("bob");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("Developer");
     const link = screen.getByTestId(`space-members-link-${KEY}`) as HTMLAnchorElement;
-    expect(link.textContent).toBe("Members change at gitlab.example");
+    expect(link.textContent).toBe("Open at gitlab.example");
     expect(link.href).toBe("https://gitlab.example/jane/academy-spex/-/project_members");
     // Refresh reads them again; nothing is cached across reads.
     fireEvent.click(screen.getByTestId("space-refresh"));
