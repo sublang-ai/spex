@@ -91,7 +91,7 @@ When a client sends `space.members` for a reachable spex repository or for a gro
 
 #### git-host-15
 
-When a client sends `space.group.create` [[space-68](space.md#space-68)], the core shall ask the host to create the group — named as the reader typed, private, inside the named group or at the top — and shall act on the answer ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+When a client sends `space.group.create` [[space-68](space.md#space-68)], the core shall ask the host to create the group — named as the reader typed, at the path the reader gave, private, inside the named group or at the top — and shall act on the answer ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
 
 | Answer | The core |
 | --- | --- |
@@ -99,7 +99,7 @@ When a client sends `space.group.create` [[space-68](space.md#space-68)], the co
 | name taken | refuses `invalid_request` saying the name is taken there |
 | `host_refused` | refuses `invalid_request` with the host's words |
 
-- a blank name is refused `invalid_request` before the host is asked, and a parent the home's current view does not list `not_found`;
+- a blank name or path is refused `invalid_request` before the host is asked, and a parent the home's current view does not list `not_found`;
 - the host is asked whatever the view said the person may do there: its refusal is the answer.
 
 #### git-host-16
