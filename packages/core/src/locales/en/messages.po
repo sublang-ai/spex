@@ -587,6 +587,11 @@ msgstr "a dispatched intent's text is history"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 
+#. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
+#: src/service.ts
+msgid "a new playbook needs a license on one line, such as Apache-2.0"
+msgstr "a new playbook needs a license on one line, such as Apache-2.0"
+
 #. Refusal: an edit to a project's config file that only your own group's file may take
 #: src/config-edit.ts
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
@@ -1398,7 +1403,9 @@ msgid "no one"
 msgstr "no one"
 
 #. Refusal: no project of this id is registered
+#. Refusal: no project of this id is registered
 #: src/service.ts
+#: src/session.ts
 msgid "no project {projectId}"
 msgstr "no project {projectId}"
 
@@ -1472,6 +1479,7 @@ msgid "Nothing on this device was deleted."
 msgstr "Nothing on this device was deleted."
 
 #. Guidance where a file under the home failed validation before the save
+#. Guidance where a file under the home failed validation before the save
 #: src/space.ts
 msgid "Nothing was saved. Fix or remove the file, then sync again."
 msgstr "Nothing was saved. Fix or remove the file, then sync again."
@@ -1510,6 +1518,11 @@ msgstr "only a finished intent confirms done"
 #: src/authoring.ts
 msgid "Optimize"
 msgstr "Optimize"
+
+#. Refusal: the org a new playbook's spec package names breaks the manifest's name rule
+#: src/service.ts
+msgid "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 
 #. compile phase: Spex packages the artifacts
 #: src/authoring.ts

@@ -241,7 +241,7 @@ test("media-18: deleting and recreating a draft invalidates completed and incomp
     const project = await client.command("project.register", {path: f.project});
     owner = {...owner, projectId: project.id};
     const completed = request(), incomplete = request();
-    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id, org: "acme", license: "MIT"})).instance!};
     const former = owner;
     completed.owner = incomplete.owner = former;
     for (const upload of [completed, incomplete]) {
@@ -251,7 +251,7 @@ test("media-18: deleting and recreating a draft invalidates completed and incomp
     const prior = await client.command("media.finish", {uploadId: completed.uploadId});
     await client.command("media.read", {owner, assetId: prior.asset.assetId, offset: 0, length: 1});
     await client.command("draft.delete", {projectId: project.id, draftId: owner.id, instance: former.instance});
-    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id})).instance!};
+    owner = {...owner, instance: (await client.command("draft.create", {projectId: project.id, draftId: owner.id, org: "acme", license: "MIT"})).instance!};
     for (const upload of [completed, incomplete]) {
       // The begin names the former instance, refused as no owner; the
       // finish, naming the upload alone, meets its invalidation.

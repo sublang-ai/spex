@@ -31,7 +31,7 @@ import {
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { knownFormat, StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
 import { isLanguageTag } from "./environment/format.js";
@@ -385,22 +385,51 @@ export function authoringLanguage(workingFolder: string, packageDir: string, id:
   return manifestLanguage(packageDir, id) ?? projectAuthoringLanguage(workingFolder) ?? homeLanguage;
 }
 
+/** Who a new spec package under development names as its org, and
+ * the license it is published under (playbook-library-51): a license
+ * none is known for is left out of the manifest. */
+export interface NewPackageFields {
+  org: string;
+  license?: string;
+}
+
 /** The `meta.yaml` of a new spec package under development
- * (playbook-library-70): one playbook artifact in the session's
- * language, version 0.1.0. */
-export function authoringManifest(id: string, org: string, language: string): string {
-  return [
-    "format: 2",
-    `org: ${org}`,
-    `name: ${id}`,
-    "version: 0.1.0",
-    `description: The ${id} playbook`,
-    "artifacts:",
-    `  ${id}:`,
-    "    kind: playbook",
-    `    language: ${language}`,
-    "",
-  ].join("\n");
+ * (playbook-library-70): the org and license given, one playbook
+ * artifact in the session's language, version 0.1.0. */
+export function authoringManifest(id: string, fields: NewPackageFields, language: string): string {
+  return stringifyYaml({
+    format: 2,
+    org: fields.org,
+    name: id,
+    version: "0.1.0",
+    description: `The ${id} playbook`,
+    ...(fields.license !== undefined ? { license: fields.license } : {}),
+    artifacts: { [id]: { kind: "playbook", language } },
+  }, { lineWidth: 0 });
+}
+
+/** The SPDX id a working folder's `LICENSE` names by its opening words,
+ * past a byte order mark and leading whitespace (playbook-library-103). */
+const LICENSE_OPENINGS: readonly (readonly [string, string])[] = [
+  ["Apache License", "Apache-2.0"],
+  ["MIT License", "MIT"],
+];
+
+/** The org and license a new playbook of a project starts from
+ * (playbook-library-103): the first segment of its spex repository's
+ * key, and the license its working folder's `LICENSE` opens with, read
+ * now; none where the file is absent or opens otherwise. */
+export function newPackageDefaults(key: string, workingFolder: string): { org: string; license: string | null } {
+  const org = key.split("/")[0] ?? key;
+  let text: string;
+  try {
+    text = readFileSync(join(workingFolder, "LICENSE"), "utf8");
+  } catch {
+    return { org, license: null };
+  }
+  const opening = text.replace(/^﻿/, "").trimStart();
+  const known = LICENSE_OPENINGS.find(([words]) => opening.startsWith(words));
+  return { org, license: known ? known[1] : null };
 }
 
 /** A file's stat, as Git's index keys a cached fact by it. */
@@ -591,12 +620,13 @@ export class DraftStore {
   }
 
   /** Make the spec package under development in the working folder —
-   * its `meta.yaml` unless a folder brought in already holds one — and
-   * the record, with a fresh instance and the session's language, in
-   * the project's spex repository (playbook-library-70,
-   * playbook-library-51, storage-23). `homeLanguage` is the home's
-   * interface language, the last of the language's sources. */
-  create(id: string, now: number, location: AuthoringLocation, org: string, homeLanguage: string): StoredDraft {
+   * its `meta.yaml`, naming the org and license given, unless a folder
+   * brought in already holds one — and the record, with a fresh
+   * instance and the session's language, in the project's spex
+   * repository (playbook-library-70, playbook-library-51, storage-23).
+   * `homeLanguage` is the home's interface language, the last of the
+   * language's sources. */
+  create(id: string, now: number, location: AuthoringLocation, fields: NewPackageFields, homeLanguage: string): StoredDraft {
     if (location.workingFolder === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
         id: "{projectId} has no working folder on this device",
@@ -619,7 +649,7 @@ export class DraftStore {
     const dir = join(location.workingFolder, ...packagePath.split("/"));
     const language = authoringLanguage(location.workingFolder, dir, id, homeLanguage);
     mkdirSync(join(dir, "playbooks", language, id), { recursive: true });
-    if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, org, language));
+    if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, fields, language));
     // `authoring/` inside a clone that stands: a clone gone is not made.
     if (!existsSync(location.authoringDir)) mkdirSync(location.authoringDir, { mode: 0o700 });
     const draft: StoredDraft = { format: 1, id, instance: randomUUID(), createdAt: now, touchedAt: now, package: packagePath, language, queued: [], failures: 0 };

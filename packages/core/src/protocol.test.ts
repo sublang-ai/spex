@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseCommand, PROTOCOL_VERSION, REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import { PACKAGE_LICENSE_PATTERN, parseCommand, PROTOCOL_VERSION, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 test("protocol version is a positive integer", () => {
   assert.ok(Number.isInteger(PROTOCOL_VERSION) && PROTOCOL_VERSION >= 1);
@@ -157,7 +157,8 @@ test("parseCommand rejects a draft channel without a draft id", () => {
 test("parseCommand accepts every draft command", () => {
   const commands = [
     { type: "draft.list", id: "d3" },
-    { type: "draft.create", id: "d4", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.defaults", id: "d4a", projectId: "alice/a-spex" },
+    { type: "draft.create", id: "d4", projectId: "alice/a-spex", draftId: "triage", org: "acme", license: "Apache-2.0" },
     { type: "draft.open", id: "d5", projectId: "alice/a-spex", draftId: "triage", afterSeq: 4 },
     { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", text: "Compile it." },
     { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002" },
@@ -188,10 +189,17 @@ test("parseCommand accepts every draft command", () => {
 
 test("parseCommand rejects a draft id outside the Agent Skills name rule", () => {
   for (const draftId of ["Triage", "with space", "", "a_b", "-lead", "trail-", "dou--ble", "x".repeat(65)]) {
-    const parsed = parseCommand({ type: "draft.create", id: "d16", projectId: "alice/a-spex", draftId });
+    const parsed = parseCommand({ type: "draft.create", id: "d16", projectId: "alice/a-spex", draftId, org: "acme", license: "MIT" });
     assert.ok(!parsed.ok, draftId);
     if (!parsed.ok) assert.match(parsed.error, /draftId/);
   }
+});
+
+test("a new playbook's license holds one line, never empty or edged with spaces, and draft.create names both fields", () => {
+  for (const license of ["MIT", "Apache-2.0", "MIT OR Apache-2.0", "LicenseRef-Acme"]) assert.ok(PACKAGE_LICENSE_PATTERN.test(license), license);
+  for (const license of ["", " MIT", "MIT ", "MIT\nOR Apache-2.0"]) assert.ok(!PACKAGE_LICENSE_PATTERN.test(license), JSON.stringify(license));
+  assert.ok(!parseCommand({ type: "draft.create", id: "d20", projectId: "alice/a-spex", draftId: "triage" }).ok, "both are required");
+  assert.ok(!parseCommand({ type: "draft.create", id: "d21", projectId: "alice/a-spex", draftId: "triage", org: "acme" }).ok, "the license is required");
 });
 
 test("parseCommand rejects an empty draft message", () => {

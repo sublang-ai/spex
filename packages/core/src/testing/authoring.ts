@@ -29,7 +29,7 @@ export function seedInterruptedDraft(dataDir: string, projectId: string, id: str
   const workingFolder = home.folderOf(projectId)?.path ?? null;
   const location = { key: projectId, authoringDir, workingFolder };
   const store = new DraftStore(() => [location]);
-  const draft = store.create(id, at - 60_000, location, "local", "en");
+  const draft = store.create(id, at - 60_000, location, { org: projectId.split("/")[0]!, license: "Apache-2.0" }, "en");
   store.writeSource(id, source);
   store.append(id, draft.instance, { type: "captain_status", turnId: null, timestamp: at, message: "◇ Compiling — asked by you" } as TmuxPlayRecord);
   // This home's device ran it, so this home's next start closes it.

@@ -162,7 +162,7 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
     await f.first.command("turn.submit", {sessionId: f.session.id, text: "session"});
     const instances: Record<string, string> = {};
     for (const draftId of ["one", "two"]) {
-      instances[draftId] = (await f.first.command("draft.create", {projectId: f.projectId, draftId})).instance!;
+      instances[draftId] = (await f.first.command("draft.create", {projectId: f.projectId, draftId, org: "acme", license: "MIT"})).instance!;
       await f.first.command("draft.send", {projectId: f.projectId, draftId, instance: instances[draftId], text: "approval-fixture"});
     }
     const state = await f.first.pending(3);
@@ -175,7 +175,7 @@ test("approvals-7: concurrent session and drafts keep reused native identities i
     // names another session: the call stays the former's, never shown
     // or answered as the successor's, and is answered as the former's.
     await f.first.command("draft.delete", {projectId: f.projectId, draftId: "one", instance: instances.one});
-    const successor = (await f.first.command("draft.create", {projectId: f.projectId, draftId: "one"})).instance!;
+    const successor = (await f.first.command("draft.create", {projectId: f.projectId, draftId: "one", org: "acme", license: "MIT"})).instance!;
     assert.notEqual(successor, instances.one);
     assert.ok((await f.first.pending(3)).pending.some((request) => request.id === one.id), "deletion cancels nothing");
     await assert.rejects(f.first.command("approval.respond", {generation: state.generation, requestId: one.id, owner: {kind: "draft", id: "one", instance: successor}, decision: "allow_once"}), /not_found/);

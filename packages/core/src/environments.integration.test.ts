@@ -309,9 +309,11 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const project = await core.client.expectOk("project.register", { path: working });
   const clone = clonePath(core.dataDir, project.id);
 
-  // An authoring session writes its spec package in the working folder.
-  const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage" });
-  assert.equal(created.package, `${OWN}/triage`, "the account's login is the org (playbook-library-70)");
+  // An authoring session writes its spec package in the working folder,
+  // under the org New playbook gave — a registry org, not the login.
+  const ORG = "workshop";
+  const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage", org: ORG, license: "Apache-2.0" });
+  assert.equal(created.package, `${ORG}/triage`);
   const folder = join(working, "spex-packages", "triage");
   const instance = created.instance!;
   await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
@@ -327,7 +329,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
     projectId: project.id, draftId: "triage", instance, command: "triage", intent: "Label new issues",
     bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
   });
-  assert.equal((parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${OWN}/triage`] !== undefined, true);
+  assert.equal((parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${ORG}/triage`] !== undefined, true);
   await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
   // A session of the project launches it from the working folder.
   const session = await core.client.expectOk("session.create", { projectId: project.id });
@@ -339,15 +341,15 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // Publishing: the dry run names what would go, then the upload.
   const preview = await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage", dryRun: true });
   const declared = (await readRelease(folder)).files;
-  assert.deepEqual(preview.preview, { name: `${OWN}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
+  assert.deepEqual(preview.preview, { name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   const from = core.client.mark();
   assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage" }), { accepted: true });
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
   assert.equal(published.error, null);
-  assert.deepEqual(published.published, { name: `${OWN}/triage`, version: "0.1.0", url: `${registry.url}/${OWN}/triage` });
+  assert.deepEqual(published.published, { name: `${ORG}/triage`, version: "0.1.0", url: `${registry.url}/${ORG}/triage` });
   // The release at the registry is exactly the folder's declared files.
-  const resource = await (await fetch(`${registry.url}/api/v1/packages/${OWN}/triage/0.1.0`)).json() as { files: { path: string; sha256: string }[] };
+  const resource = await (await fetch(`${registry.url}/api/v1/packages/${ORG}/triage/0.1.0`)).json() as { files: { path: string; sha256: string }[] };
   assert.deepEqual(resource.files.map((file) => [file.path, file.sha256]), declared.map((file) => [file.path, file.sha256]));
 
   // A second home requests the published version from the registry.
@@ -356,9 +358,9 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   t.after(() => other.stop());
   const otherProject = await other.client.expectOk("project.register", { path: gitFolder(join(second, "project")) });
   const mark = other.client.mark();
-  await other.client.expectOk("environment.request", { repository: otherProject.id, name: `${OWN}/triage`, request: { kind: "registry", version: "^0.1.0" } });
-  const installed = await other.client.environment(otherProject.id, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === `${OWN}/triage` && pkg.installed));
-  const pkg = installed.packages.find((entry) => entry.name === `${OWN}/triage`)!;
+  await other.client.expectOk("environment.request", { repository: otherProject.id, name: `${ORG}/triage`, request: { kind: "registry", version: "^0.1.0" } });
+  const installed = await other.client.environment(otherProject.id, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === `${ORG}/triage` && pkg.installed));
+  const pkg = installed.packages.find((entry) => entry.name === `${ORG}/triage`)!;
   assert.deepEqual([pkg.version, pkg.source.kind, pkg.direct], ["0.1.0", "registry", true]);
   const playbooks = await other.client.expectOk("environment.playbooks", { projectId: otherProject.id });
   const row = playbooks.project?.find((entry) => entry.id === "triage");
@@ -1138,7 +1140,7 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   await settledProject(client, project.id);
 
   // An authoring session compiles its playbook (playbook-library-69).
-  const { instance } = await client.expectOk("draft.create", { projectId: project.id, draftId: "triage" });
+  const { instance } = await client.expectOk("draft.create", { projectId: project.id, draftId: "triage", org: OWN, license: "Apache-2.0" });
   assert.ok(instance, "the session's recorded instance");
   await client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
   const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
