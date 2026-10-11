@@ -37,7 +37,7 @@ Where the specs-scaffold option is backed by the spex scaffold generator [[scaff
 4. create an initial commit containing the generated files, or an empty initial commit when scaffolding is off, and
 5. pair the project with a spex repository as Add does [[projects-1](#projects-1)] and make it the workspace's current project.
 
-- Any step failing: the palette reports the failed operation and its output — a failed scaffold naming the command that ran [[projects-31](#projects-31)], a failed initial commit adding that the generated files stay in the folder and that the person finishes the initial commit in a terminal, then uses Add — does not register the project, and leaves already-created files on disk for inspection.
+- Any step failing: the palette reports the failed operation and its output — a failed scaffold naming the command that ran [[projects-31](#projects-31)], a failed initial commit in the app's own words with Git's beneath them [[projects-34](#projects-34)] — does not register the project, and leaves already-created files on disk for inspection.
 - A target already containing its own Git repository: the palette changes nothing and directs the user to Add; where that repository has no initial commit, the guidance first directs the user to finish that commit in a terminal ([DR-099](../decisions/099-project-creation-preserves-existing-repositories.md)).
 
 #### projects-31
@@ -46,6 +46,17 @@ When the create flow scaffolds a project [[projects-3](#projects-3)], the core s
 
 - Scaffold exiting non-zero: the failure names the command that ran and its output, and, for the registry's, that the app's own CLI was not supplied.
 - Language: `project.create` accepts an optional `scaffoldLanguage` of `en` or `zh`, passed as `--lang` to the scaffold; with none named, the core uses its own resolved interface language [[localization-2](localization.md#localization-2)] ([DR-100](../decisions/100-new-project-specs-follow-the-readers-language.md)).
+
+#### projects-34
+
+When the create flow's initial commit fails [[projects-3](#projects-3)], the palette shall report it in the core's own words, phrased in the home's interface language [[core-service-111](core-service.md#core-service-111)] — that Git could not make the first commit, the cause's key phrase where Git's output names one of the cases below, and that the generated files stay in the folder for the person to finish the initial commit in a terminal, then use Add — with Git's own output, carried whole as the refusal's `output` detail, shown beneath those words ([DR-099](../decisions/099-project-creation-preserves-existing-repositories.md)):
+
+| Git's output names | The key phrase |
+| --- | --- |
+| a signing key it lacks (`user.signingkey` … `needs to be configured`) | commit signing is on, but no key is configured |
+| a signing program that failed (`failed to sign`) | commit signing is on, but signing failed |
+| no identity (`Please tell me who you are`, `Author identity unknown`, `Committer identity unknown`, `no email was given`, `empty ident name`) | no Git name and email are configured |
+| anything else | none: the sentence stands alone |
 
 #### projects-27
 
@@ -209,10 +220,11 @@ Where a fixture git repository exists with a named branch checked out, an uncomm
 Where a temporary parent directory exists, when the create-project flow completes, the test suite shall assert the scaffold option's cases below:
 
 - Scaffold option on: the project directory exists, is the top level of a git work tree, contains the generated specs scaffold whose `specs/packages/licensing.md` names the repository's configured git identity as the copyright holder in `licensing-9`, and has an initial commit containing the generated files, and a project card for it appears [[projects-3](#projects-3)].
-- Scaffold option on without a configured git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder; with Git requiring a configured identity, the initial commit fails, the failure is reported with Git's words and the guidance to finish the commit in a terminal, then Add, and no project is registered [[projects-3](#projects-3)].
+- Scaffold option on without a configured git identity: the scaffold's `licensing-9` keeps its `<holder>` placeholder and names no template holder; with Git requiring a configured identity, the initial commit fails, the refusal reads that Git could not make the first commit because no Git name and email are configured, with the guidance to finish the commit in a terminal, then Add, and Git's own words as its `output` detail, and no project is registered [[projects-3](#projects-3)] [[projects-34](#projects-34)].
 - Scaffold language: the real CLI produces the language named by the request, or the core's resolved language when none is named, with its authoring-language declaration and generated files committed [[projects-31](#projects-31)].
 - Scaffold option off: the directory, git repository, initial commit, and project card still result while no specs scaffold is generated [[projects-3](#projects-3)].
-- Git staging or commit failure: the real Git refusal reaches the caller, no project is registered, and the generated files remain available for inspection [[projects-3](#projects-3)].
+- Git staging or commit failure: the real Git refusal reaches the caller — staging's in the refusal's words, and a commit's, naming no case, as its `output` detail beneath the sentence alone — no project is registered, and the generated files remain available for inspection [[projects-3](#projects-3)] [[projects-34](#projects-34)].
+- Commit signing required with no signing key configured, and again with a signing program that fails, each under an English and a Chinese core: the refusal reads, in that core's language, that Git could not make the first commit, the case's key phrase, and the terminal guidance, with Git's own line as its `output` detail [[projects-34](#projects-34)].
 - An existing repository, with or without an initial commit: Create refuses before mutation and names the applicable recovery, preserving the repository's files, index, and HEAD [[projects-3](#projects-3)].
 
 #### projects-32
@@ -255,6 +267,12 @@ Where a project's session is held under a management lease taken out of band and
 #### projects-26
 
 Where the project palette renders with one project holding a live session and one without, the test suite shall assert that the path row offers "Add" titled "Register this existing repository" and "Create" titled "Create a new repository at this path" [[projects-22](#projects-22)] [[projects-25](#projects-25)], both disabled until a path is typed [[projects-22](#projects-22)], that the live project's row reads its running count beside a pulsing dot while the other's reads none [[projects-23](#projects-23)], and that no text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
+
+### Refusal Coverage
+
+#### projects-35
+
+Where the project palette renders with a Create action that refuses, the test suite shall assert that a refusal carrying an `output` detail shows its words with that detail whole beneath them, and that one carrying none shows its words alone [[projects-34](#projects-34)].
 
 ### Browser Journeys
 
