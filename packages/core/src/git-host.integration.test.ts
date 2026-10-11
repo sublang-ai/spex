@@ -839,19 +839,21 @@ test("git-host-15, git-host-16, git-host-17: group creation and member writes an
     const repo = s.addRepository({ group: "acme", name: "team-spex" });
     await browserSignIn(t.client);
 
-    // Creation at the top and inside a group, the path derived from the
-    // name (git-host-15).
-    const top = await t.client.createGroup({ name: "Lumen Labs", parentId: null });
+    // Creation at the top and inside a group, named as typed at the path
+    // given (git-host-15).
+    const top = await t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null });
     assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true }]);
     assert.equal(typeof top.id, "string");
-    const sub = await t.client.createGroup({ name: "Team One", parentId: "2002" });
+    const named = await t.client.createGroup({ name: "华芯智造", path: "huaxin-mfg", parentId: null });
+    assert.deepEqual([named.fullPath, named.name], ["huaxin-mfg", "华芯智造"]);
+    const sub = await t.client.createGroup({ name: "Team One", path: "team-one", parentId: "2002" });
     assert.equal(sub.fullPath, "acme/team-one");
     assert.ok((await t.client.groups()).some((group) => group.id === sub.id && group.fullPath === "acme/team-one"));
-    await assert.rejects(t.client.createGroup({ name: "Lumen Labs", parentId: null }), hostError("name_taken", { words: "Failed to save group: Path has already been taken." }));
+    await assert.rejects(t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null }), hostError("name_taken", { words: "Failed to save group: Path has already been taken." }));
     s.takenGroups.push("elsewhere");
-    await assert.rejects(t.client.createGroup({ name: "Elsewhere", parentId: null }), hostError("name_taken"));
+    await assert.rejects(t.client.createGroup({ name: "Elsewhere", path: "elsewhere", parentId: null }), hostError("name_taken"));
     s.refuseGroupCreate("You cannot create groups here.");
-    await assert.rejects(t.client.createGroup({ name: "Other", parentId: "2002" }), hostError("host_refused", { words: "You cannot create groups here." }));
+    await assert.rejects(t.client.createGroup({ name: "Other", path: "other", parentId: "2002" }), hostError("host_refused", { words: "You cannot create groups here." }));
     s.refuseGroupCreate(null);
 
     // Addition by login at a role's id, to a group and to a repository

@@ -2876,7 +2876,7 @@ export class CoreService {
       // Groups and sharing (git-host-15..17, DR-114): the host is asked,
       // and its answer is the reply.
       case "space.group.create":
-        return this.requireSpace().createGroup(command.name, command.parent);
+        return this.requireSpace().createGroup(command.name, command.path, command.parent);
       case "space.share":
         return this.requireSpace().share({ repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":

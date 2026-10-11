@@ -1195,7 +1195,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   // exactly one (space-29).
   z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
   // Groups and sharing (DR-114, space-29).
-  z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
+  z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
   z
     .object({
       type: z.literal("space.share"),

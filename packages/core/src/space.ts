@@ -48,7 +48,7 @@ import {
 } from "./space-git.js";
 import {
   callbackPages, groupNameTaken, groupNotListed, hostKey, listingFor, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole,
-  notFoundAt, ownNameFor, readHostView, relayHostError, repositoryDescription, signInFailure, underOrigin, userGroup, waitingPhrase,
+  notFoundAt, ownNameFor, pathTheGroup, readHostView, relayHostError, repositoryDescription, signInFailure, underOrigin, userGroup, waitingPhrase,
   type HostListing, type HostView,
 } from "./space-groups.js";
 import {
@@ -2763,13 +2763,16 @@ export class SpaceManager {
     return this.listMembers(target);
   }
 
-  /** Create a group at the host, named as the reader typed, at the top or
-   * inside a group the view lists (git-host-15); its creation begins a
-   * host read so the next state lists it. */
-  async createGroup(name: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+  /** Create a group at the host, named as the reader typed, at the path
+   * the reader gave, at the top or inside a group the view lists
+   * (git-host-15); its creation begins a host read so the next state
+   * lists it. */
+  async createGroup(name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     const typed = name.trim();
     if (typed.length === 0) throw new CoreError("invalid_request", nameTheGroup());
+    const given = path.trim();
+    if (given.length === 0) throw new CoreError("invalid_request", pathTheGroup());
     let parentPath: string | null = null;
     if (parent !== null) {
       const listed = this.view?.groups.find((group) => group.id === parent);
@@ -2778,7 +2781,7 @@ export class SpaceManager {
     }
     let created: Awaited<ReturnType<GitHostClient["createGroup"]>>;
     try {
-      created = await this.host.client.createGroup({ name: typed, parentId: parent });
+      created = await this.host.client.createGroup({ name: typed, path: given, parentId: parent });
     } catch (error) {
       if (error instanceof HostError && error.kind === "name_taken") throw new CoreError("invalid_request", groupNameTaken(typed, parentPath, this.hostName()));
       throw this.hostWriteRefusal(error);
