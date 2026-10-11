@@ -22,13 +22,14 @@ import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { CredentialChanged, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
+import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn, holdingGit } = fixture;
+const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn, holdingGit, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
@@ -973,6 +974,68 @@ test("space-60: a sync moving a renamed repository's clone stops naming a sessio
   assert.ok(existsSync(join(clonePath(home.dataDir, renamed), "sessions", `.${legacyId}.lock`, "owner.json")), "the legacy dead owner's lease moved with it");
   assert.equal(Home.load(home.dataDir).keyForFolder(folder), renamed);
   assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === renamed));
+});
+
+test("space-37: a sign-in on a second home whose own group's clone holds only the set-up commits takes the host's environment and configuration without asking; one holding a session of its own asks", async (t) => {
+  const host = await startHost();
+  // The first device pushes your own group's spex repository, then
+  // another environment and configuration into it.
+  const first = await startHome("first-device", { host, project: false, model: "claude-test-first", extra: { signIn: "browser" } });
+  t.after(() => first.stop());
+  const fromFirst = first.client.mark();
+  await signIn(first, host);
+  await first.client.waitRepository(fromFirst, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const firstClone = clonePath(first.dataDir, HOST_OWN);
+  const builtin = /sublang\/playbooks:\s*\n\s*version:\s*"?\^([^"\s]+)"?/.exec(readFileSync(join(firstClone, "spex.yaml"), "utf8"))?.[1];
+  assert.ok(builtin, readFileSync(join(firstClone, "spex.yaml"), "utf8"));
+  const fromRequest = first.client.mark();
+  await first.client.expectOk("environment.request", { repository: HOST_OWN, name: "sublang/playbooks", request: { kind: "registry", version: builtin } });
+  await first.client.waitFor((message) => first.client.messages.indexOf(message) >= fromRequest && message.type === "environment.state" && message.repository === HOST_OWN && message.state.busy === null && message.state.stale === null && message.state.requests["sublang/playbooks"]?.kind === "registry" && (message.state.requests["sublang/playbooks"] as { version: string }).version === builtin, 60_000);
+  await first.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-host" } } });
+  assert.equal((await first.client.settle("space.sync", { repository: HOST_OWN })).sync.phase, "done");
+  const hostFiles = ["spex.yaml", "spex.lock", "config/playbook.config.yaml"];
+  const hosted = new Map(hostFiles.map((file) => [file, readFileSync(join(firstClone, file))]));
+  for (const file of hostFiles) assert.equal(git(bareOf(host, HOST_OWN), "show", `spex:${file}`), hosted.get(file)?.toString("utf8").trim(), `the host holds the first device's ${file}`);
+  const hostRoot = git(bareOf(host, HOST_OWN), "rev-list", "--max-parents=0", "spex");
+
+  // The second device: its own group's clone holds the set-up commit
+  // alone, an unrelated history whose environment and configuration
+  // each differ from the host's.
+  const second = await startHome("second-device", { host, project: false, model: "claude-test-second", extra: { signIn: "browser" } });
+  t.after(() => second.stop());
+  const before = ownClone(second.dataDir);
+  assert.ok(git(before, "log", "--format=%s").split("\n").every((subject) => subject.startsWith("Start the spex branch on ")));
+  assert.notEqual(git(before, "rev-list", "--max-parents=0", "HEAD"), hostRoot, "unrelated histories");
+  for (const file of hostFiles) assert.notDeepEqual(readFileSync(join(before, file)), hosted.get(file), `the second device's own ${file}`);
+  const fromSecond = second.client.mark();
+  await signIn(second, host);
+  const joined = await second.client.waitRepository(fromSecond, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+  assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
+  // No choice was asked: the join took the host's side (space-59).
+  const readings = second.client.readings(fromSecond, [OWN_KEY, HOST_OWN]);
+  assert.equal(readings.at(-1)?.sync.phase, "done");
+  assert.deepEqual(readings.filter((repository) => repository.sync.phase === "choices").map((repository) => repository.conflicts.map((conflict) => conflict.unit.unit)), []);
+  assert.ok(joined.sync.phase === "done" && joined.sync.received >= 2, JSON.stringify(joined.sync));
+  const secondClone = clonePath(second.dataDir, HOST_OWN);
+  for (const file of hostFiles) assert.deepEqual(readFileSync(join(secondClone, file)), hosted.get(file), `the host's ${file} on the second device`);
+  const config = await second.client.expectOk("config.get", {});
+  assert.ok(config.status === "valid" && config.summary.captain.model === "claude-test-host", "the configuration reloaded");
+  assert.equal(git(bareOf(host, HOST_OWN), "rev-parse", "spex"), git(secondClone, "rev-parse", "spex"));
+
+  // A third device whose own group's clone holds a session of its own:
+  // every unit on both sides is one choice (space-13).
+  const third = await startHome("own-session-device", { host, project: false, model: "claude-test-third", extra: { signIn: "browser" } });
+  t.after(() => third.stop());
+  const ownSession = await seedHistorySession(join(ownClone(third.dataDir), "sessions"), third.dataDir, turnRecords("Mine before signing in", 1));
+  const seeded = new Map(hostFiles.map((file) => [file, readFileSync(join(ownClone(third.dataDir), file))]));
+  const fromThird = third.client.mark();
+  await signIn(third, host);
+  const choices = await third.client.waitRepository(fromThird, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
+  assert.equal(choices.sync.phase, "choices", JSON.stringify(choices.sync));
+  assert.deepEqual(choices.conflicts.map((conflict) => conflict.unit.unit).sort(), ["config/playbook.config.yaml", "environment"]);
+  assert.ok(choices.local.some((unit) => unit.sessionId === ownSession), JSON.stringify(choices.local));
+  const thirdClone = clonePath(third.dataDir, HOST_OWN);
+  for (const file of hostFiles) assert.deepEqual(readFileSync(join(thirdClone, file)), seeded.get(file), `the third device's ${file} kept`);
 });
 
 test("space-59: a sign-in while a session's lease stands beneath a clone of your own group moves none of its clones, and a Refresh after the release moves them all", async (t) => {
