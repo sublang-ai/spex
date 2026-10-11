@@ -16,7 +16,7 @@ import { Document, isMap, parseDocument } from "yaml";
 
 import { readVersioned, writeApplicationBytes, writeVersionedBytes } from "../files.js";
 import { packFiles } from "./archive.js";
-import { BUILTIN_PACKAGE_NAME } from "./exports.js";
+import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
 import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
 import { serializeLock, type Lock } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
@@ -312,6 +312,7 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
     const artifact = manifest.artifacts[id]!;
     artifacts[id] = { language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
     if (artifact.kind === "playbook" || artifact.kind === "skill") exports[id] = id;
+    else if (artifact.kind === "spec") exports[specExportName(BUILTIN_PACKAGE_NAME)] = id;
   }
   const selected = files.filter((file) => (ROOT_FILES as readonly string[]).includes(file.path)
     || ids.some((id) => inArtifact(file.path, manifest.artifacts[id]!.kind, id, artifacts[id]!.language, manifest.name)));

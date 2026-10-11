@@ -399,6 +399,69 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 });
 
 // ---------------------------------------------------------------------------
+// environments-22: a spec package's spec exported through a real core
+// ---------------------------------------------------------------------------
+
+test("environments-22 through a real core: a spec-only spec package requested from the registry exports its spec where claude reads skills, your own group's to the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-spec-registry-") });
+  t.after(() => registry.close());
+  const spec = "# trip-split: Trip Split\n\n## Intent\n\nSplit a trip's costs.\n\n## External Behavior\n\n### trip-split-1\n\nThe splitter shall divide each cost among the travellers who shared it.\n\n## Verification\n\n### trip-split-2\n\nWhen a cost is shared, the suite shall assert its division [[trip-split-1](#trip-split-1)].\n";
+  const releaseDir = await makeRelease(join(scratchDir("spex-env-spec-release-"), "trip-split"), {
+    format: 2, org: "acme", name: "trip-split", version: "1.0.0", description: "Split a trip's costs fairly", license: "Apache-2.0",
+    artifacts: { "trip-split": { kind: "spec", language: "en" } },
+  }, { "specs/en/trip-split.md": spec });
+  await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
+  const released = readFileSync(join(releaseDir, "specs", "en", "trip-split.md"));
+
+  const dir = scratchDir("spex-env-spec-");
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const { client } = core;
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await client.expectOk("project.register", { path: working });
+  const own = `${OWN}/${OWN}-spex`;
+  const exported = join(working, ".claude", "skills", "acme-trip-split");
+  const atHome = join(dir, "user", ".claude", "skills", "acme-trip-split");
+  const exclude = (): string => readFileSync(join(working, ".git", "info", "exclude"), "utf8");
+  const request = { kind: "registry", version: "^1.0.0" } as const;
+  const holds = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === "acme/trip-split" && pkg.installed);
+
+  // Requested in the project: the generated skill stands where claude
+  // reads skills, the release's spec file in it byte for byte.
+  let mark = client.mark();
+  await client.expectOk("environment.request", { repository: key, name: "acme/trip-split", request });
+  const requested = await client.environment(key, mark, (state) => state.busy === null && holds(state));
+  assert.deepEqual(requested.packages.find((pkg) => pkg.name === "acme/trip-split")?.exports, [{ name: "acme-trip-split", artifact: "trip-split" }]);
+  assert.deepEqual(readdirSync(exported).sort(), ["SKILL.md", "trip-split.md"]);
+  assert.ok(readFileSync(join(exported, "trip-split.md")).equals(released), "the spec file is the release's, byte for byte");
+  const skill = readFileSync(join(exported, "SKILL.md"), "utf8");
+  assert.match(skill, /^---\nname: acme-trip-split\n/);
+  assert.match(skill, /`acme\/trip-split` — org `acme`, name `trip-split`, version `1\.0\.0`: Split a trip's costs fairly/);
+  assert.match(exclude(), /^\/\.claude\/skills\/acme-trip-split\/$/m);
+  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", ".claude"], { encoding: "utf8" }), "", "Git ignores the export");
+  assert.equal(existsSync(atHome), false, "a project's spec stays in its working folder");
+
+  // Requested in your own group's environment: your agents' home folder holds it.
+  mark = client.mark();
+  await client.expectOk("environment.request", { repository: own, name: "acme/trip-split", request });
+  await client.environment(own, mark, (state) => state.busy === null && holds(state));
+  assert.deepEqual(readdirSync(atHome).sort(), ["SKILL.md", "trip-split.md"]);
+  assert.ok(readFileSync(join(atHome, "trip-split.md")).equals(released), "your own group's copy is the release's too");
+
+  // Removed and installed again: the skill, its exclude line and the
+  // home folder's copy leave with the spec package.
+  mark = client.mark();
+  await client.expectOk("environment.remove", { repository: key, name: "acme/trip-split" });
+  await client.environment(key, mark, (state) => state.busy === null && !holds(state));
+  assert.equal(existsSync(exported), false, "the removed spec package's skill is gone");
+  assert.doesNotMatch(exclude(), /acme-trip-split/);
+  mark = client.mark();
+  await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });
+  await client.environment(own, mark, (state) => state.busy === null && !holds(state));
+  assert.equal(existsSync(atHome), false, "your own group's copy is gone");
+});
+
+// ---------------------------------------------------------------------------
 // environments-25: the commands over the protocol
 // ---------------------------------------------------------------------------
 

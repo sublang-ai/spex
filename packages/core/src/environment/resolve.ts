@@ -25,6 +25,7 @@ import {
   type Release,
   type ReleaseFile,
 } from "./format.js";
+import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { manifestRequires, type Lock, type LockedArtifact, type LockedFile, type Resolution, type SourceLock } from "./lock.js";
 import { RegistryError, type RegistrySource, type VersionIndexEntry, KNOWN_FORMAT } from "./registry.js";
@@ -372,12 +373,13 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
         .map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable }))
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       : [];
-    // 4. Exports: one skill per selected skill and playbook.
+    // 4. Exports: one skill per selected skill and playbook under its
+    // id, and per selected spec under `<org>-<pkg>` (DR-115), or alias.
     const exports: Record<string, string> = {};
     for (const id of selected) {
       const kind = entry.artifacts[id]!.kind;
-      if (kind !== "skill" && kind !== "playbook") continue;
-      const name = request?.alias?.[id] ?? id;
+      if (kind !== "skill" && kind !== "playbook" && kind !== "spec") continue;
+      const name = request?.alias?.[id] ?? (kind === "spec" ? specExportName(entry.name) : id);
       exports[name] = id;
       const list = exported.get(name) ?? [];
       list.push({ by: entry.name, kind, id });
