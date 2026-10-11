@@ -51,7 +51,9 @@ import {
   draftIdRuleText,
   draftPackagePath,
   isDraftId,
+  isPackageOrg,
   newPlayerId,
+  packageOrgRuleText,
 } from "../lib/drafts.js";
 import {
   chosenProject,
@@ -380,6 +382,25 @@ function ProposedRole({
   );
 }
 
+/** "Commit ⟨folder⟩ with your code", the folder set as code wherever
+ * the language places it (playbook-library-61, DR-069). */
+function commitPhrase(folder: string): ReactNode {
+  const slot = "\u0000";
+  const phrase = i18n._({
+    id: "Commit {folder} with your code",
+    comment: "after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage",
+    values: { folder: slot },
+  });
+  const [before = "", after = ""] = phrase.split(slot);
+  return (
+    <>
+      {before}
+      <code className="font-mono">{folder}</code>
+      {after}
+    </>
+  );
+}
+
 /** One listed playbook (playbook-library-1): its command and intent,
  * where it is enabled, its spec package, its roles — bound where this
  * side enables it, proposed where it does not — Enable or Disable for
@@ -394,6 +415,7 @@ function PlaybookRow({
   readiness,
   captain,
   revealed,
+  enabledFolder,
   hints,
   onChanged,
 }: {
@@ -406,7 +428,12 @@ function PlaybookRow({
   roster: SessionPlayerSummary[];
   readiness: ReadinessEntry[];
   captain?: AgentSummary;
+  /** An enabling just brought this card into view: it is highlighted. */
   revealed: boolean;
+  /** An authoring session's enabling listed this card: its success line
+   * stands, naming the spec package folder to commit with the code
+   * (playbook-library-61). */
+  enabledFolder?: string;
   hints: ReactNode;
   onChanged: () => void;
 }) {
@@ -537,9 +564,10 @@ function PlaybookRow({
           {i18n._("Its files are not on this device")}
         </p>
       ) : null}
-      {revealed ? (
-        <p data-testid="enabled-note" className="text-xs text-neutral-500">
-          {i18n._("Enabled. Sessions started before must be restarted to use it.")}
+      {enabledFolder !== undefined ? (
+        <p data-testid="enabled-note" className="text-xs text-neutral-500 [overflow-wrap:anywhere]">
+          {i18n._("Enabled. Sessions started before must be restarted to use it.")}{" "}
+          <span data-testid="enabled-commit">{commitPhrase(enabledFolder)}</span>
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
@@ -885,13 +913,18 @@ function DraftRow({
   );
 }
 
-/** The New playbook field (playbook-library-51): one thing, the id,
- * checked in place against the Agent Skills name rule and the ids the
- * environments already hold; Enter creates the authoring session and
- * opens its workspace. */
+/** The New playbook field (playbook-library-51): the id, checked in
+ * place against the Agent Skills name rule and the ids the
+ * environments already hold, beside "Org" and "License" for the new
+ * spec package's manifest, filled with the project's defaults; Enter
+ * creates the authoring session and opens its workspace. */
 function NewPlaybookField({
   taken,
   drafts,
+  org,
+  license,
+  onOrgChange,
+  onLicenseChange,
   onCreate,
   onOpenExisting,
   autoFocus,
@@ -904,6 +937,11 @@ function NewPlaybookField({
   /** The playbooks either environment exports, by id. */
   taken: ReadonlyMap<string, PlaybookAvailability>;
   drafts: Record<string, DraftInfo>;
+  /** The new spec package's org and license, as the person left them. */
+  org: string;
+  license: string;
+  onOrgChange: (org: string) => void;
+  onLicenseChange: (license: string) => void;
   onCreate: (id: string) => Promise<unknown>;
   onOpenExisting: (id: string) => void;
   /** The Captain home's slash menu asked for this field. */
@@ -916,6 +954,7 @@ function NewPlaybookField({
   const [error, setError] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const empty = value.trim().length === 0 || org.trim().length === 0 || license.trim().length === 0;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -946,6 +985,13 @@ function NewPlaybookField({
       );
       return;
     }
+    // A new spec package names its org and license: both are asked,
+    // the org by the manifest's name rule.
+    if (empty) return;
+    if (!isPackageOrg(org.trim())) {
+      setError(packageOrgRuleText());
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
@@ -964,6 +1010,7 @@ function NewPlaybookField({
       void submit();
     }
   };
+  const field = "rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950";
 
   return (
     <div
@@ -988,13 +1035,44 @@ function NewPlaybookField({
             disabled={blockedReason !== undefined}
             aria-invalid={error !== undefined}
             aria-describedby="new-playbook-caption"
-            className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950"
+            className={field}
+          />
+        </label>
+        <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
+          <span className="text-xs text-neutral-500">{i18n._({ id: "Org", comment: "field of New playbook: the registry org its spec package is published under" })}</span>
+          <input
+            data-testid="new-playbook-org"
+            value={org}
+            onChange={(event) => {
+              onOrgChange(event.target.value);
+              setError(undefined);
+            }}
+            onKeyDown={onKeyDown}
+            spellCheck={false}
+            disabled={blockedReason !== undefined}
+            className={field}
+          />
+        </label>
+        <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
+          <span className="text-xs text-neutral-500">{i18n._({ id: "License", comment: "field of New playbook: the SPDX license its spec package is published under" })}</span>
+          <input
+            data-testid="new-playbook-license"
+            value={license}
+            onChange={(event) => {
+              onLicenseChange(event.target.value);
+              setError(undefined);
+            }}
+            onKeyDown={onKeyDown}
+            placeholder={i18n._({ id: "e.g. Apache-2.0", comment: "placeholder of the new-playbook license field; an SPDX license id" })}
+            spellCheck={false}
+            disabled={blockedReason !== undefined}
+            className={field}
           />
         </label>
         <button
           type="button"
           data-testid="new-playbook-button"
-          disabled={busy || value.trim().length === 0 || blockedReason !== undefined}
+          disabled={busy || empty || blockedReason !== undefined}
           title={blockedReason}
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
@@ -1060,6 +1138,7 @@ export function LibrarySurface({
   const openDraftId = useAppStore((state) => state.openDraftId);
   const listDrafts = useAppStore((state) => state.listDrafts);
   const createDraft = useAppStore((state) => state.createDraft);
+  const loadDraftDefaults = useAppStore((state) => state.loadDraftDefaults);
   const openDraft = useAppStore((state) => state.openDraft);
   const closeDraft = useAppStore((state) => state.closeDraft);
   const projects = useAppStore((state) => state.projects);
@@ -1081,7 +1160,14 @@ export function LibrarySurface({
   const [listError, setListError] = useState<string>();
   const [exampleError, setExampleError] = useState<string>();
   const [focusNew, setFocusNew] = useState(false);
+  // New playbook's Org and License (playbook-library-51), filled with
+  // the project's defaults as the core reads them, then the person's.
+  const [newOrg, setNewOrg] = useState("");
+  const [newLicense, setNewLicense] = useState("");
   const [revealed, setRevealed] = useState<string>();
+  // The card an enabling revealed keeps its success line until the
+  // surface is left, its highlight fading sooner (playbook-library-61).
+  const [enabledNote, setEnabledNote] = useState<string>();
   const [liveNote, setLiveNote] = useState("");
   const [deletedNote, setDeletedNote] = useState<string>();
   const previousDrafts = useRef<Record<string, DraftInfo>>({});
@@ -1114,6 +1200,29 @@ export function LibrarySurface({
     if (connected && repository) void loadEnvironment(repository).catch(() => {});
   }, [connected, repository, loadEnvironment]);
 
+  // New playbook's Org and License start from the project's defaults,
+  // read as the field is shown for it (playbook-library-51, -103).
+  useEffect(() => {
+    if (!connected || !projectId) return;
+    let current = true;
+    setNewOrg("");
+    setNewLicense("");
+    void loadDraftDefaults(projectId)
+      .then((defaults) => {
+        if (!current || !defaults) return;
+        setNewOrg(defaults.org);
+        setNewLicense(defaults.license ?? "");
+      })
+      .catch(() => {
+        // The fields stand empty for the person to fill.
+      });
+    return () => {
+      current = false;
+    };
+  }, [connected, projectId, loadDraftDefaults]);
+  const newPackage = { org: newOrg.trim(), license: newLicense.trim() };
+  const newPackageReady = isPackageOrg(newPackage.org) && newPackage.license.length > 0;
+
   // The slash menu's request lands on the id field (playbook-library-51),
   // which stands on the project's side.
   useEffect(() => {
@@ -1129,6 +1238,7 @@ export function LibrarySurface({
     const id = consumeRevealPlaybook();
     if (!id) return;
     setRevealed(id);
+    setEnabledNote(id);
     const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === id);
     setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? id }));
     document.getElementById(`playbook-card-${id}`)?.scrollIntoView?.({ block: "center" });
@@ -1162,11 +1272,13 @@ export function LibrarySurface({
     });
     try {
       if (useAppStore.getState().drafts[id]) await openDraft(id);
-      else await createDraft(id);
+      // A new session takes New playbook's org and license
+      // (playbook-library-35).
+      else await createDraft(id, { org: newOrg.trim(), license: newLicense.trim() });
     } catch (cause) {
       setExampleError((cause as Error).message);
     }
-  }, [createDraft, openDraft, setDraftSourceMode]);
+  }, [createDraft, openDraft, setDraftSourceMode, newOrg, newLicense]);
 
   const liveRegion = (
     <div aria-live="polite" role="status" className="sr-only" data-testid="library-live">
@@ -1311,6 +1423,11 @@ export function LibrarySurface({
       readiness={readiness}
       captain={summary.captain}
       revealed={revealed === entry.id}
+      enabledFolder={
+        enabledNote === entry.id
+          ? drafts[entry.id] ? draftPackagePath(drafts[entry.id]!) : `spex-packages/${entry.id}`
+          : undefined
+      }
       hints={hintsFor(entry)}
       onChanged={reloadLists}
     />
@@ -1320,7 +1437,11 @@ export function LibrarySurface({
     <NewPlaybookField
       taken={taken}
       drafts={drafts}
-      onCreate={createDraft}
+      org={newOrg}
+      license={newLicense}
+      onOrgChange={setNewOrg}
+      onLicenseChange={setNewLicense}
+      onCreate={(id) => createDraft(id, newPackage)}
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={focusNew}
       onAutoFocused={() => setFocusNew(false)}
@@ -1472,7 +1593,13 @@ export function LibrarySurface({
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Example", comment: "section heading: the demo playbook" })}</h2>
         <ExampleCard
           onPrefill={prefillFromExample}
-          blockedReason={project ? undefined : draftNeedsProject()}
+          blockedReason={
+            !project
+              ? draftNeedsProject()
+              : drafts[SLC_DEMO.playbookId] || newPackageReady
+                ? undefined
+                : i18n._({ id: "Org and License first", comment: "the example's prefill waits for New playbook's Org and License" })
+          }
           error={exampleError}
         />
       </section>

@@ -1681,6 +1681,11 @@ msgstr "Collapse the sidebar"
 msgid "Collapse the sidebar ({keys})"
 msgstr "Collapse the sidebar ({keys})"
 
+#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage
+#: src/components/LibrarySurface.tsx
+msgid "Commit {folder} with your code"
+msgstr "Commit {folder} with your code"
+
 #: src/lib/failure-catalogue.ts
 msgid "Commit or discard them"
 msgstr "Commit or discard them"
@@ -2305,6 +2310,10 @@ msgstr "Dropping…"
 #: src/components/AgentEditor.tsx
 msgid "e.g. .git, docs/generated"
 msgstr "e.g. .git, docs/generated"
+
+#: src/components/LibrarySurface.tsx
+msgid "e.g. Apache-2.0"
+msgstr "e.g. Apache-2.0"
 
 #: src/components/LibrarySurface.tsx
 msgid "e.g. triage"
@@ -3207,6 +3216,11 @@ msgstr "leases and locks"
 msgid "legacy session sidecar"
 msgstr "legacy session sidecar"
 
+#. field of New playbook: the SPDX license its spec package is published under
+#: src/components/LibrarySurface.tsx
+msgid "License"
+msgstr "License"
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -3976,6 +3990,20 @@ msgstr "Opens a playbook named {id} with the normalized text ready to paste — 
 #: src/lib/compile-log.ts
 msgid "Optimize"
 msgstr "Optimize"
+
+#. field of New playbook: the registry org its spec package is published under
+#: src/components/LibrarySurface.tsx
+msgid "Org"
+msgstr "Org"
+
+#. the example's prefill waits for New playbook's Org and License
+#: src/components/LibrarySurface.tsx
+msgid "Org and License first"
+msgstr "Org and License first"
+
+#: src/lib/drafts.ts
+msgid "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 
 #: src/lib/space.ts
 msgid "original files kept from an upgrade"
