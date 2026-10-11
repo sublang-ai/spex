@@ -18,7 +18,8 @@ Verification requires integration coverage of the surface's compile, request, en
 When the Playbooks surface is opened, the Playbooks surface shall list every playbook the environments of the current project and your own group export [[environments-8](environments.md#environments-8)], showing for each its id, command, intent, the spec package and version it comes from with its source, each required role with the session player bound to it and what that binding effectively runs, and where it is enabled — in the project's config, in your own group's, or in neither ([DR-032](../decisions/032-session-players.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - a playbook both environments export is listed once per environment, each row naming its origin;
-- the list stands under a switch between the current project and your own group, each side showing that spex repository's environment and config; with no project chosen, your own group's alone stands.
+- the list stands under a switch between the current project and your own group, each side showing that spex repository's environment and config; with no project chosen, your own group's alone stands;
+- on either side the list is sectioned by what a session there effectively runs: a playbook enabled in the project's config or in your own group's stands under "Enabled", its row naming which config, and one enabled in neither under "Not enabled" — so a project whose own config enables nothing never reads as having no playbook while the Captain offers your own group's ([DR-069](../decisions/069-key-phrases-not-sentences.md)).
 
 #### playbook-library-2
 
@@ -535,7 +536,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 | Case | Behavior |
 | --- | --- |
-| create | make `<working folder>/spex-packages/<id>/` with `meta.yaml` — `format: 2`, `org` the account's login or `local`, `name` and one `playbook` artifact `<id>` in `en`, version `0.1.0` — and `authoring/<id>.json` in the clone with a fresh instance; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
+| create | make `<working folder>/spex-packages/<id>/` with `meta.yaml` — `format: 2`, `org` the account's login or `local`, `name` and one `playbook` artifact `<id>` in the session's language, version `0.1.0` — and `authoring/<id>.json` in the clone with a fresh instance; the session's language is the project's authoring language where the working folder's `specs/meta.md` declares one by its marker line [[meta-27](../meta.md#meta-27)], else the home's interface language [[core-service-108](core-service.md#core-service-108)], and the playbook's folder, its source file and the compile's folder [[playbook-library-12](#playbook-library-12)] follow it; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
 | open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
 | write source | replace `<id>.md` atomically under the token, whatever runs beside it |
 | write | replace the session file only where, at the instant before the rename, it still holds the bytes read and records the instance the writer names; else refuse, changed meanwhile, writing nothing |
