@@ -21,12 +21,14 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-22 a recovered session wears the failure tone forever | spex PR 105 (merged) |
 | W-14 created group not listed until a refresh | spex PR 106 (merged) |
 | W-17 untracked package blocks `/pr`; W-18 org defaults to an unclaimable login; W-19 compiler cache in releases; W-21 missing license refused by the registry | spex PR 107 (merged) |
+| W-26 a spec-kind package reaches no agent | spex PR 109 (merged), DR-115 |
+| W-11 English relay marker inside Chinese sources; W-12 two-word roles fail late | slc PR 44 (merged, 0.16.1), Playbook PR 71 (guide) |
+| W-23 a judge's reply shape fails a completed step and the closing reply misreports it; W-25 a step that committed twice or found its work already committed fails the run | Playbook PRs 72 and 73 (merged, 17.8.0); Spex adopts both by DR-116 |
 
 ## What is still open
 
-- Playbook runtime: W-23 (a judge's output shape fails a completed step and the closing reply misreports it), W-25 (a step's repository effect is fixed at link time: work already committed, or two commits, fail the run), W-10 (uncommitted drafts cannot link).
-- slc: W-11 (English markers inside Chinese sources), W-12 (two-word roles fail late).
-- Spex: W-26 (a spec-kind package reaches no agent), W-08 (built-in playbooks in English only), W-13, W-20, W-24, W-04, W-05, W-06 (minor).
+- Playbook: W-10 (uncommitted drafts cannot link; a stated non-goal of DR-088 with its reasons).
+- Spex: W-08 (built-in playbooks in English only), W-13, W-20, W-24, W-04, W-05, W-06 (minor).
 
 ## By the numbers
 

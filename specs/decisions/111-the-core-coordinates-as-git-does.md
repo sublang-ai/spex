@@ -12,6 +12,7 @@ Amends [DR-103](103-the-home-and-its-groups.md) where it inherited that admissio
 Amends [DR-058](058-chat-assisted-playbook-authoring.md) in one activity per draft: a draft's compile may run beside its turn, and a duplicate compile is refused per artifact destination, where it was per playbook id.
 Amends [DR-010](010-interface-craft.md) §5 in its duplicates for Space operations and environment commands: a duplicate Space operation joins the one running and a Sync asked during its clone's Check follows it, and environment commands may start beside one another.
 Keeps [DR-036](036-file-state-store.md) whole, and [DR-108](108-the-root-lease-names-the-machine.md) whole in its leases: one process serves a home under the root lease, and Playbook's per-session lease names the one writer of a session's records, refusing a removal or a move of its clone while it names a live or unverifiable writer, the move's check adding no mechanism beyond that lease.
+Amended by [DR-116](116-playbook-17-8-0-slc-0-16-1-adoption.md) in its Playbook floor alone, now `^17.8.0`.
 Amends [DR-108](108-the-root-lease-names-the-machine.md) in its Playbook floor alone, now `^17.7.0`: the core requires Playbook 17.7.0 [[3]], whose session store, opened with `createSessionsDir: false`, makes neither a missing sessions folder nor an ancestor, which a removal, a moved clone and the apply's session writes rely on.
 
 ## Context
