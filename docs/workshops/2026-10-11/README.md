@@ -30,4 +30,32 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 
 ## By the numbers
 
-Filled at the end of the simulation: see the per-team pages for commits, review rounds and agent active time.
+Read from each home's session list and usage at the end of the simulation (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits).
+
+| Team | Sessions | Turns | Agent active (min) | Input tokens | Output tokens | Commits (incl. scaffold) |
+| --- | --- | --- | --- | --- | --- | --- |
+| T01 | 3 | 5 | 179 | 48,495,722 | 934,911 | 13 |
+| T02 | 3 | 4 | 89 | 62,969,995 | 1,051,862 | 9 |
+| T03 | 4 | 10 | 77 | 108,605,664 | 1,731,351 | 23 |
+| T04 | 3 | 5 | 75 | 42,124,330 | 738,826 | 12 |
+| T05 | 1 | 6 | 30 | 8,215,566 | 527,453 | 5 |
+| T06 | 2 | 5 | 32 | 9,621,434 | 133,988 | 7 |
+| T07 | 3 | 6 | 78 | 36,735,225 | 1,174,059 | 9 |
+| T08 | 2 | 2 | 28 | 8,721,056 | 227,028 | 6 |
+| T09 | 3 | 4 | 40 | 3,128,546 | 77,937 | 7 |
+| T10 | 2 | 4 | 33 | 14,677,774 | 377,659 | 7 |
+
+## Reuse map as walked
+
+| Team | Published to `claude-workshop-261011` | Adopted from the registry | Run on the adopter's project |
+| --- | --- | --- | --- |
+| T01 | `shape` | `evaluate` (T08) | yes — pass |
+| T02 | `verify` | `requirements` (T07) | yes — committed |
+| T03 | `propose` | `rollout` (T10) | yes — plan committed, W-23 at the end |
+| T04 | `sprint-plan` | `shape` (T01) | yes — committed |
+| T05 | `design`, `trip-split` (spec only) | — | — |
+| T06 | `contrib` | `verify` (T02) | yes — files committed, W-25 at the end |
+| T07 | `requirements` | `sprint-plan` (T04) | yes — committed, W-23 at the end |
+| T08 | `evaluate` | `design` (T05) | enabled |
+| T09 | `prototype` | `contrib` (T06), `trip-split` (T05) | yes — committed; the spec recast in TypeScript |
+| T10 | `rollout` | `shape` (T01) | enabled |
