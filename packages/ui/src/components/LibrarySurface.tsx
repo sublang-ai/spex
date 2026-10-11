@@ -63,6 +63,7 @@ import {
 } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
+import { playbookIntent } from "../lib/playbook-intent.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
@@ -443,6 +444,8 @@ function PlaybookRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const command = entry.command ?? entry.id;
+  // A built-in's intent in the reader's language (localization-4).
+  const intent = playbookIntent(entry.intent);
   const laneFor = (role: string): string => (players[role] ?? newPlayerId(role)).trim();
   const badLane = entry.roles.find((role) => !playerIdSchema.safeParse(laneFor(role)).success);
 
@@ -507,8 +510,8 @@ function PlaybookRow({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-semibold">/{command}</span>
-        <span className="min-w-0 flex-1 truncate text-xs text-neutral-500" title={entry.intent ?? undefined}>
-          {entry.intent}
+        <span className="min-w-0 flex-1 truncate text-xs text-neutral-500" title={intent ?? undefined}>
+          {intent}
         </span>
         <span
           data-testid={`playbook-enabled-${entry.id}`}

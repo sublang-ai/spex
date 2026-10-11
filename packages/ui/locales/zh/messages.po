@@ -2036,6 +2036,11 @@ msgstr "新建"
 msgid "Create a new repository at this path"
 msgstr "在此路径新建一个仓库"
 
+#. the built-in /branch playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "create and check out a new branch for a GitHub issue or request before pull-request delivery"
+msgstr "在以 PR 交付之前，为 GitHub Issue 或请求创建并检出新分支"
+
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "已在 <0>{path}</0> 创建初始配置"
@@ -2960,6 +2965,11 @@ msgstr "空闲，有失败未处理"
 msgid "image"
 msgstr "图片"
 
+#. the built-in /code playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
+msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交，必要时使用意图记录"
+
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
@@ -2977,6 +2987,11 @@ msgstr "继承 Player（关闭）"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "继承 Player（开启）"
+
+#. the built-in /inspect playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
+msgstr "检查给定材料或运行中的网页界面，并解释观察到的证据，不改动仓库"
 
 #. install the locked files that are missing on this device
 #: src/components/EnvironmentSection.tsx
@@ -4157,6 +4172,11 @@ msgstr "指定一个值…"
 msgid "Places the six-line example as your first message"
 msgstr "把六行示例放为你的第一条消息"
 
+#. the built-in /dev playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
+msgstr "为请求规划开发路径：直接实现，或先形成持久的决策；当请求指明 GitHub Issue 或要求 PR 时，经由 PR 交付"
+
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts
 msgid "playbook"
@@ -4303,6 +4323,11 @@ msgstr "PR"
 #: src/components/DraftRegisterTab.tsx
 msgid "Publish"
 msgstr "发布"
+
+#. the built-in /pr playbook's intent, as its registry entry states it; `code` is the /code playbook
+#: src/lib/playbook-intent.ts
+msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
+msgstr "将经审阅的分支发布为 PR，等待其检查，经由 code 修复一次未通过的检查，然后合并"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Published {name} {version}"
@@ -4841,6 +4866,11 @@ msgstr "重试浏览器支持检查"
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "重试中…"
+
+#. the built-in /review playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "review a supplied scope of committed work until no unsettled findings remain"
+msgstr "审阅给定范围内已提交的工作，直到没有未解决的审阅意见"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -5655,6 +5685,11 @@ msgstr "{age}同步 · 发出 {sent} · 收到 {received}"
 #: src/components/SpaceGroups.tsx
 msgid "Syncing…"
 msgstr "同步中…"
+
+#. the built-in /decide playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "synthesize independent Coder and Reviewer proposals into an approved spec-design commit"
+msgstr "将 Coder 与 Reviewer 各自独立的提案综合为一个获批准的规约设计提交"
 
 #: src/components/SettingsSurface.tsx
 msgid "System"

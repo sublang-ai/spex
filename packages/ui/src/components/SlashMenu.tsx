@@ -3,12 +3,14 @@
 
 // Slash menu (RUN-27): typing "/" at the start of a composer lists
 // the configured playbooks filtered by prefix, with intents as
-// hints. Parents own the keyboard state; this module provides the
-// matching logic and the list rendering.
+// hints, a built-in's in the reader's language (localization-4).
+// Parents own the keyboard state; this module provides the matching
+// logic and the list rendering.
 
 import type { PlaybookSummary } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
+import { playbookIntent } from "../lib/playbook-intent.js";
 
 /** Playbooks matching a composer draft, or null when the menu is closed. */
 export function slashMatches(
@@ -65,7 +67,7 @@ export function SlashMenuList({
         >
           <span className="font-mono font-semibold">/{playbook.command}</span>
           <span className="truncate text-xs text-neutral-500">
-            {playbook.intent}
+            {playbookIntent(playbook.intent)}
           </span>
         </button>
       ))}
