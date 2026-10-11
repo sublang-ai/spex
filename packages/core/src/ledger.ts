@@ -195,6 +195,45 @@ export function foldConditions(records: StoredRecord[]): SessionConditions {
   return conditions;
 }
 
+/** Whether a session's failure still stands (core-service-32, DR-061),
+ * read from its visible records as the queue standing reads them
+ * (core-service-107): a run remains parked on a failure, or a failure —
+ * any runtime error but the one an intentional stop leaves — was
+ * recorded in a turn no later-started turn has since settled without
+ * one. A restore's report starts again under the id of the turn it
+ * reports, so it is such a later turn. */
+export function failureStands(records: StoredRecord[]): boolean {
+  if (foldConditions(records).failure) return true;
+  const stops = stoppedTurnErrorSeqs(records);
+  let standing = false;
+  let current: number | undefined;
+  let currentFailed = false;
+  for (const { seq, record } of records) {
+    const turnId = (record as { turnId?: unknown }).turnId;
+    switch (record.type) {
+      case "turn_started": {
+        const id = (record as { turn?: { id?: unknown } }).turn?.id;
+        current = typeof id === "number" ? id : undefined;
+        currentFailed = false;
+        break;
+      }
+      case "runtime_error":
+        if (stops.has(seq)) break;
+        standing = true;
+        // A failure naming no turn belongs to the latest one started.
+        if (turnId === null || turnId === undefined || turnId === current) currentFailed = true;
+        break;
+      case "turn_finished":
+      case "turn_aborted":
+        if (turnId === current && !currentFailed) standing = false;
+        break;
+      default:
+        break;
+    }
+  }
+  return standing;
+}
+
 function foldConditionsDetail(
   records: StoredRecord[],
 ): SessionConditions & { restoredFailures: RestoredFailure[] } {

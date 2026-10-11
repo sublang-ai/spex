@@ -272,7 +272,8 @@ test("storage-5: a session's own agent settings survive a restart field by field
 
 test("core-service-32: session.list carries each session's conversation summary", () => {
   // The rail's rows are only scannable if the listing carries scent:
-  // the session's own first words, its size, and whether it ended badly.
+  // the session's own first words, its size, and whether a failure of
+  // it still stands — never whether one was ever recorded (DR-061).
   const store = new Store({ own: "tester" });
   const project = store.registerProject(PROJECT_PATH, "proj", 1000);
   const base = {
@@ -286,20 +287,53 @@ test("core-service-32: session.list carries each session's conversation summary"
     turns: 0,
     failed: false,
   };
-  store.createSession({ ...base, id: "rich" });
-  store.createSession({ ...base, id: "bare", createdAt: 3000 });
+  const ids = ["recovered", "failing", "stopped", "parked", "bare"];
+  ids.forEach((id, index) => store.createSession({ ...base, id, createdAt: 2000 + index }));
+  // Each record is stored and folded as a live session records it.
+  const record = (id: string, entry: Record<string, unknown>): void => {
+    const stored = entry as unknown as TmuxPlayRecord;
+    store.appendRecord(id, store.maxSeq(id) + 1, stored);
+    store.foldStoredRecord(id, stored);
+  };
+  const turn = (
+    id: string,
+    turnId: number,
+    prompt: string,
+    at: number,
+    ...within: Record<string, unknown>[]
+  ): void => {
+    record(id, { type: "turn_started", turnId, turn: { id: turnId, prompt }, timestamp: at });
+    within.forEach((entry, index) => record(id, { turnId, timestamp: at + index + 1, ...entry }));
+  };
+  const finished = { type: "turn_finished" };
+  const failure = (message: string) => ({ type: "runtime_error", message });
+  const aborted = (reason: string) => ({ type: "turn_aborted", reason });
+  const runMove = (from: string, to: string) => ({
+    type: "captain_telemetry",
+    topic: "playbook.trace",
+    payload: { sessionId: "run-1", playbookId: "code", depth: 1, type: "fsm.transition", payload: { from, to } },
+  });
 
-  store.startTurn("rich", 1, "harden the session refresh", 2100);
-  store.endTurn("rich", 1, "finished", 2200);
-  store.startTurn("rich", 2, "add expiry-skew tests", 2300);
-  store.appendRecord("rich", 1, {
-    type: "runtime_error",
-    turnId: 2,
-    timestamp: 2400,
-    message: "The Captain's turn failed: adapter sign-in expired",
-  } as TmuxPlayRecord);
+  // The first turn failed; two later turns settled clean.
+  turn("recovered", 1, "harden the session refresh", 2100,
+    failure("adapter sign-in expired"), aborted("adapter sign-in expired"));
+  turn("recovered", 2, "add expiry-skew tests", 2300, finished);
+  turn("recovered", 3, "commit the tests", 2500, finished);
+  // The latest settled turn failed — the Captain's failure names no
+  // turn — and the turn started after it has not settled.
+  turn("failing", 1, "draft the migration", 2100, finished);
+  turn("failing", 2, "run the migration", 2300,
+    { ...failure("The Captain's turn failed: rate limited"), turnId: null }, finished);
+  turn("failing", 3, "try once more", 2500);
+  // A stop's own error is no failure: the core stopped the only turn
+  // as it closed.
+  turn("stopped", 1, "write the notes", 2100,
+    failure("interrupted when Spex closed"), aborted("interrupted when Spex closed"));
+  // A run parked on its failure stands through a later clean turn.
+  turn("parked", 1, "deliver the fix", 2100, runMove("work", "failed"), finished);
+  turn("parked", 2, "what failed?", 2300, finished);
   store.addUsage({
-    sessionId: "rich",
+    sessionId: "recovered",
     turnId: 1,
     actorId: "dev.coder",
     inputTokens: 100,
@@ -309,19 +343,31 @@ test("core-service-32: session.list carries each session's conversation summary"
     at: 2500,
   });
 
-  const listed = store.listSessions();
-  const rich = listed.find((session) => session.id === "rich");
-  const bare = listed.find((session) => session.id === "bare");
+  const listed = new Map(store.listSessions().map((session) => [session.id, session]));
 
-  assert.equal(rich?.title, "harden the session refresh");
-  assert.equal(rich?.turns, 2);
-  assert.equal(rich?.failed, true);
+  assert.equal(listed.get("recovered")?.title, "harden the session refresh");
+  assert.equal(listed.get("recovered")?.turns, 3);
+  assert.equal(listed.get("recovered")?.failed, false);
+  assert.equal(listed.get("failing")?.failed, true);
+  assert.equal(listed.get("stopped")?.failed, false);
+  assert.equal(listed.get("parked")?.failed, true);
+
+  // The turn after the failure settling clean stands it down; a later
+  // failed turn raises it again.
+  record("failing", { type: "turn_finished", turnId: 3, timestamp: 2600 });
+  assert.equal(store.describeSession("failing")?.failed, false);
+  turn("failing", 4, "and again", 2700, failure("provider overloaded"), aborted("provider overloaded"));
+  assert.equal(store.describeSession("failing")?.failed, true);
+
+  // The parked run leaving its failure state ends that failure.
+  turn("parked", 3, "retry it", 2500, runMove("failed", "work"), finished);
+  assert.equal(store.describeSession("parked")?.failed, false);
 
   // A session that never held a turn says so by carrying no title,
   // rather than faking a name.
-  assert.equal(bare?.title, undefined);
-  assert.equal(bare?.turns, 0);
-  assert.equal(bare?.failed, false);
+  assert.equal(listed.get("bare")?.title, undefined);
+  assert.equal(listed.get("bare")?.turns, 0);
+  assert.equal(listed.get("bare")?.failed, false);
   store.close();
 });
 

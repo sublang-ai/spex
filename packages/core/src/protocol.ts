@@ -500,7 +500,10 @@ export interface SessionInfo {
   title?: string;
   /** Turns this session held. */
   turns: number;
-  /** Whether the session carries a failure record. */
+  /** Whether a failure still stands (core-service-32, DR-061): a run
+   * remains parked on a failure, or a failure was recorded in a turn
+   * no later-started turn has since settled without one. An earlier
+   * turn's failure stops standing once a later turn settles clean. */
   failed: boolean;
   /** Recorded cost, when any usage carried one. */
   costUsd?: number;

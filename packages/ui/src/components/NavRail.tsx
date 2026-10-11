@@ -147,9 +147,10 @@ const LIFE_WORDS: Record<Life, () => string> = {
   "external-unknown": () => i18n._("ownership unknown"),
 };
 
-// A failure that summons is filled red; one the session's last turn
-// held that no longer summons is history (hollow), and counts toward
-// no badge.
+// A failure that summons is filled red; one still standing that
+// summons nothing is history (hollow), and counts toward no badge. The
+// core says whether it stands (core-service-32): a failure a later
+// turn settled past no longer does.
 const LIFE_MARKS: Record<Life, string> = {
   question: ATTENTION_MARK_CLASS.question,
   failure: ATTENTION_MARK_CLASS.failure,
