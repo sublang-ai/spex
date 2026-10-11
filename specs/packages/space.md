@@ -868,7 +868,7 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### space-71
 
-Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path after the read the core begins; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them; a second addition of the same login refused in place with the stand-in's words; and a login the stand-in knows no account for refused naming it [[space-68](#space-68)] [[space-69](#space-69)] [[space-1](#space-1)].
+Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path after the read the core begins [[space-68](#space-68)] [[space-1](#space-1)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
 
 #### space-43
 
