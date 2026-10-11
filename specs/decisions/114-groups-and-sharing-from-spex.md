@@ -28,6 +28,7 @@ Amends [DR-064](064-honest-remote-failure.md) in its guidance: where membership 
   Your own group's heading never carries them; its repositories' members panels carry Share and Remove where the host allows.
 - The host is asked whatever the view said; a name it reports taken, a login it knows no account for, and a refusal each show in place with the host's words; nothing is retried, derived or cached.
 - Everything else stays on the Git host — changing a role, visibility, transferring, archiving, deleting — reached through the "Open at <host>" link a members panel keeps.
+- A second device of the same account starts from what the first pushed: where its own group's clone holds nothing of its own yet, the sign-in's join takes the host's side without asking, instead of showing a conflict over the seeded environment to a person who has not done anything yet.
 
 ## Consequences
 
