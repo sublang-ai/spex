@@ -113,11 +113,18 @@ class Client {
     }
   }
 
-  /** The next environment.state of a repository after a mark that holds. */
+  /** Observe the broadcast, then confirm it still describes the files and
+   * running work: an earlier idle announcement may still be in transit. */
   async environment(repository: string, from: number, check: (state: EnvironmentState) => boolean, timeoutMs = 60_000): Promise<EnvironmentState> {
-    const message = await this.waitFor((m) => m.type === "environment.state" && m.repository === repository && check(m.state), timeoutMs, from);
-    if (message.type !== "environment.state") throw new Error("unreachable");
-    return message.state;
+    const start = Date.now();
+    let next = from;
+    for (;;) {
+      const remaining = Math.max(0, timeoutMs - (Date.now() - start));
+      const message = await this.waitFor((m) => m.type === "environment.state" && m.repository === repository && check(m.state), remaining, next);
+      next = this.messages.indexOf(message) + 1;
+      const current = await this.expectOk("environment.get", { repository });
+      if (check(current)) return current;
+    }
   }
 }
 
