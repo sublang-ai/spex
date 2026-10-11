@@ -98,7 +98,7 @@ import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { AUTHORING_LANGUAGE, authoringManifest, DraftStore, draftPackagePath } from "./drafts.js";
+import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   builtinPackage,
@@ -658,6 +658,7 @@ export class CoreService {
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
       org: () => this.packageOrg(),
+      homeLanguage: () => this.homeLanguage(),
       enabled: (id) => this.draftEnabled(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
       device: () => this.store.home.device,
@@ -887,6 +888,14 @@ export class CoreService {
    * at start, or this process's own locale where a shell passed none. */
   private preferredLanguages(): readonly string[] {
     return this.options.systemLanguages ?? [Intl.DateTimeFormat().resolvedOptions().locale];
+  }
+
+  /** The home's interface language as it resolves now (core-service-108,
+   * localization-2) — the stored choice, else the reader's system, else
+   * `en` — the language a new playbook is authored in where neither its
+   * package nor its project names one (playbook-library-70). */
+  private homeLanguage(): Language {
+    return resolveLanguage(this.store.interfaceLanguage(), this.preferredLanguages());
   }
 
   private requireSpace(): SpaceManager {
@@ -2478,10 +2487,13 @@ export class CoreService {
         try {
           const packagePath = draftPackagePath(command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
-          mkdirSync(join(packageDir, "playbooks", AUTHORING_LANGUAGE), { recursive: true });
-          if (!existsSync(join(packageDir, "meta.yaml"))) writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, this.packageOrg()));
+          // The language its manifest already names, else the project's
+          // authoring language, else the home's (playbook-library-70).
+          const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
+          mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
+          if (!existsSync(join(packageDir, "meta.yaml"))) writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, this.packageOrg(), language));
           excludeEngineLinks(project.path);
-          const libraryDir = join(packageDir, "playbooks", AUTHORING_LANGUAGE);
+          const libraryDir = join(packageDir, "playbooks", language);
           let result;
           try {
             result = await compilePlaybook({

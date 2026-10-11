@@ -1037,11 +1037,13 @@ function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): stri
   }
 }
 
-/** The playbooks a side lists, enabled here first (playbook-library-1,
- * playbook-library-34). */
-function splitBySide(rows: readonly PlaybookAvailability[], side: PlaybooksSide) {
-  const enabled = rows.filter((row) => row.enabled.includes(side));
-  const rest = rows.filter((row) => !row.enabled.includes(side));
+/** The playbooks a side lists, sectioned by what a session there
+ * effectively runs: enabled in the project's config or your own
+ * group's, each row naming which, then enabled in neither
+ * (playbook-library-1, playbook-library-34). */
+function splitByEnablement(rows: readonly PlaybookAvailability[]) {
+  const enabled = rows.filter((row) => row.enabled.length > 0);
+  const rest = rows.filter((row) => row.enabled.length === 0);
   return { enabled, rest };
 }
 
@@ -1218,9 +1220,12 @@ export function LibrarySurface({
   const invalid = (lists?.invalid ?? []).filter((entry) => entry.config === side);
   const invalidFor = new Map(invalid.map((entry) => [entry.playbook, entry.reason]));
   const strayInvalid = invalid.filter((entry) => !rows.some((row) => row.id === entry.playbook));
-  const { enabled, rest } = splitBySide(rows, side);
+  const { enabled, rest } = splitByEnablement(rows);
   const everyRow = [...(lists?.project ?? []), ...(lists?.own ?? [])];
   const invalidIds = new Set((lists?.invalid ?? []).map((entry) => entry.playbook));
+  // Neither config enables anything: only then does the list read as
+  // having no playbook (playbook-library-1).
+  const noneEnabled = !everyRow.some((row) => row.enabled.length > 0) && (lists?.invalid ?? []).length === 0;
   // The validated catalog a session composes: what either config
   // enables and validation kept (playbook-library-48/89).
   const enabledIds = new Set(
@@ -1378,7 +1383,7 @@ export function LibrarySurface({
 
       <section data-testid="playbooks-enabled" className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">
-          {i18n._({ id: "Enabled", comment: "section heading: the playbooks this config enables" })}
+          {i18n._({ id: "Enabled", comment: "section heading: the playbooks the project's config or your own group's enables" })}
         </h2>
         {enabled.map(rowFor)}
         {strayInvalid.map((entry) => (
@@ -1391,7 +1396,7 @@ export function LibrarySurface({
         ))}
         {!lists ? (
           <p className="text-xs text-neutral-500">{i18n._({ id: "loading…", comment: "a request for this pane's content is in flight" })}</p>
-        ) : enabled.length === 0 && strayInvalid.length === 0 ? (
+        ) : noneEnabled ? (
           <div
             data-testid="playbooks-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
@@ -1404,7 +1409,7 @@ export function LibrarySurface({
       {rest.length > 0 ? (
         <section data-testid="playbooks-available" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">
-            {i18n._({ id: "Not enabled", comment: "section heading: playbooks this config does not enable" })}
+            {i18n._({ id: "Not enabled", comment: "section heading: playbooks neither the project's config nor your own group's enables" })}
           </h2>
           {rest.map(rowFor)}
         </section>

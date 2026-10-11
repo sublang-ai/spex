@@ -2401,7 +2401,7 @@ msgid "Enable in"
 msgstr "Enable in"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
-#. section heading: the playbooks this config enables
+#. section heading: the playbooks the project's config or your own group's enables
 #: src/components/LibrarySurface.tsx
 #: src/lib/drafts.ts
 msgid "Enabled"
@@ -3668,7 +3668,7 @@ msgid "not deleted"
 msgstr "not deleted"
 
 #. a listed playbook no config enables
-#. section heading: playbooks this config does not enable
+#. section heading: playbooks neither the project's config nor your own group's enables
 #: src/components/LibrarySurface.tsx
 msgid "Not enabled"
 msgstr "Not enabled"

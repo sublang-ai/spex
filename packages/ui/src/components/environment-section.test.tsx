@@ -195,10 +195,15 @@ describe("playbook-library-94: each side's environment", () => {
     expect(screen.getByTestId("playbook-enabled-triage").textContent).toBe("Enabled in the project");
     expect(screen.getByTestId("playbook-enabled-code").textContent).toBe("Not enabled");
     expect(screen.getByTestId("playbook-enabled-review").textContent).toBe("Enabled in your own group");
-    // Enabled here first; the rest below with Enable.
+    // Sectioned by what a session effectively runs: one your own group
+    // enables stands under Enabled beside the project's, still offering
+    // Enable for the project; one neither enables below with Enable.
     expect(within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-triage")).toBeTruthy();
     expect(within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-code")).toBeTruthy();
-    expect(within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-review")).toBeTruthy();
+    const review = within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-review");
+    expect(within(review).getByTestId("playbook-enable-review")).toBeTruthy();
+    expect(within(screen.getByTestId("playbooks-available")).queryByTestId("playbook-card-review")).toBeNull();
+    expect(screen.queryByTestId("playbooks-empty")).toBeNull();
     // [playbook-library-29] the spec package and version, with the
     // muted prefix outside the truncation.
     expect(screen.getByTestId("playbook-from-triage").textContent).toBe("fromacme/triage 1.2.3");

@@ -167,12 +167,15 @@ test("playbook-library-41: both sides listed, a built-in enabled in the project,
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("dev.reviewer");
 
   // The project's side lists the same playbooks from its own
-  // environment, none enabled there: the built-ins enabled in neither
-  // config stand beside them (playbook-library-1, playbook-library-34).
+  // environment, none enabled in its config: those your own group
+  // enables stand under Enabled naming it, so the list never reads as
+  // empty, and the built-ins enabled in neither config below them
+  // (playbook-library-1, playbook-library-34).
   await showSide(page, "project");
-  await expect(page.getByTestId("playbooks-empty")).toBeVisible();
+  await expect(enabled.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
+  await expect(page.getByTestId("playbooks-empty")).toHaveCount(0);
   const available = page.getByTestId("playbooks-available");
-  await expect(available.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
+  await expect(available.getByTestId("playbook-card-code")).toHaveCount(0);
   const decide = available.getByTestId("playbook-card-decide");
   await expect(decide.getByTestId("playbook-enabled-decide")).toHaveText("Not enabled");
   await expect(decide.getByTestId("playbook-enable-decide")).toHaveText("Enable");

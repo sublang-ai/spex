@@ -8,7 +8,8 @@
 // `authoring/<id>.assets/` — written under the Spex home lease the
 // store holds; its spec package under development stands in the
 // project's working folder at `spex-packages/<id>/`, the source at
-// `playbooks/en/<id>/<id>.md` (environments-10). No provider token
+// `playbooks/<language>/<id>/<id>.md` in the session's language
+// (environments-10). No provider token
 // enters any file. Nothing here is a picture of the files: every
 // location, package path and transcript fact is read at use (DR-111),
 // the transcript's tail through a cache its file's stat validates.
@@ -30,8 +31,10 @@ import {
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 import { knownFormat, StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
+import { isLanguageTag } from "./environment/format.js";
 import { mediaAttachmentsSchema, UUID_PATTERN, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
 import { sanitizeRecord } from "./stream-fold.js";
@@ -73,6 +76,9 @@ export interface StoredDraft {
   touchedAt: number;
   /** The spec package under development, relative to the working folder. */
   package: string;
+  /** The playbook artifact's language, decided at creation; a file
+   * without it reads as `en` (storage-23, playbook-library-70). */
+  language?: string;
   queued: MessageContent[];
   failures: number;
   compile?: StoredDraftCompile;
@@ -83,15 +89,19 @@ export interface StoredDraft {
  * folder (environments-10, playbook-library-70). */
 export const draftPackagePath = (id: string): string => `spex-packages/${id}`;
 
-/** A session file's `package`, read without validating the rest: a
- * damaged file still names where its package is, else the default. */
-function readPackagePath(file: string, id: string): string {
+/** A session file's `package` and `language`, read without validating
+ * the rest: a damaged file still names where its package and source
+ * are, else the defaults. */
+function readPackagePlace(file: string, id: string): { package: string; language: string } {
+  let value: { package?: unknown; language?: unknown } = {};
   try {
-    const value = JSON.parse(readFileSync(file, "utf8")) as { package?: unknown };
-    const path = value.package;
-    if (typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..")) return path;
-  } catch { /* the default below */ }
-  return draftPackagePath(id);
+    value = JSON.parse(readFileSync(file, "utf8")) as typeof value;
+  } catch { /* the defaults below */ }
+  const path = value?.package;
+  return {
+    package: typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..") ? path : draftPackagePath(id),
+    language: isLanguageTag(value?.language) ? value.language : DEFAULT_AUTHORING_LANGUAGE,
+  };
 }
 
 /** The instance a file written before `instance` existed reads as
@@ -190,7 +200,7 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     i18n._({ id: "expected an object", comment: "Diagnostic for a damaged file: its top level is not an object" }),
   );
   knownFormat(value, file);
-  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["instance", "compile", "proposal"], file);
+  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["instance", "language", "compile", "proposal"], file);
   need(
     typeof value.package === "string" && value.package.length > 0 && !value.package.startsWith("/") && !value.package.split("/").includes(".."),
     file,
@@ -208,6 +218,11 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     value.instance === undefined || (isText(value.instance) && UUID_PATTERN.test(value.instance)),
     file,
     i18n._({ id: "invalid instance", comment: "Diagnostic for a damaged authoring file: the identity it records will not read" }),
+  );
+  need(
+    value.language === undefined || isLanguageTag(value.language),
+    file,
+    i18n._({ id: "invalid language", comment: "Diagnostic for a damaged authoring file: the language its playbook is authored in will not read" }),
   );
   need(
     isTimestamp(value.createdAt) && isTimestamp(value.touchedAt),
@@ -297,6 +312,7 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     createdAt: draft.createdAt,
     touchedAt: draft.touchedAt,
     package: draft.package,
+    ...(draft.language !== undefined ? { language: draft.language } : {}),
     queued: draft.queued,
     failures: draft.failures,
     ...(draft.compile !== undefined ? { compile: draft.compile } : {}),
@@ -325,12 +341,54 @@ export interface ReadDraftRecords {
  * and the working folder on this device holding its spec package. */
 export interface AuthoringLocation { key: string; authoringDir: string; workingFolder: string | null }
 
-/** The language a new playbook artifact is authored in (playbook-library-70). */
-export const AUTHORING_LANGUAGE = "en";
+/** The language a session file without one reads as (storage-23). */
+export const DEFAULT_AUTHORING_LANGUAGE = "en";
+
+/** The marker line declaring a specs tree's authoring language
+ * (meta-27), as the scaffold reads it. */
+const AUTHORING_LANGUAGE_RE = /^Authoring language:\s*([A-Za-z0-9-]+)\s*$/m;
+
+/** The authoring language the working folder's `specs/meta.md`
+ * declares by its marker line (meta-27), where it names a well-formed
+ * language tag; undefined where it declares none. */
+export function projectAuthoringLanguage(workingFolder: string): string | undefined {
+  let text: string;
+  try {
+    text = readFileSync(join(workingFolder, "specs", "meta.md"), "utf8");
+  } catch {
+    return undefined;
+  }
+  const code = AUTHORING_LANGUAGE_RE.exec(text)?.[1];
+  return isLanguageTag(code) ? code : undefined;
+}
+
+/** The language a spec package folder's `meta.yaml` gives the playbook
+ * artifact `<id>`, read without validating the rest: a folder brought
+ * in by Git keeps its own (playbook-library-51). */
+export function manifestLanguage(packageDir: string, id: string): string | undefined {
+  try {
+    const value = parseYaml(readFileSync(join(packageDir, "meta.yaml"), "utf8")) as unknown;
+    const artifacts = isObject(value) ? value.artifacts : undefined;
+    const artifact = isObject(artifacts) ? artifacts[id] : undefined;
+    const language = isObject(artifact) ? artifact.language : undefined;
+    return isLanguageTag(language) ? language : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The language a new playbook of the spec package under development is
+ * authored in (playbook-library-70): the one its folder's manifest
+ * already names, else the project's authoring language, else the
+ * home's interface language. */
+export function authoringLanguage(workingFolder: string, packageDir: string, id: string, homeLanguage: string): string {
+  return manifestLanguage(packageDir, id) ?? projectAuthoringLanguage(workingFolder) ?? homeLanguage;
+}
 
 /** The `meta.yaml` of a new spec package under development
- * (playbook-library-70): one playbook artifact, version 0.1.0. */
-export function authoringManifest(id: string, org: string): string {
+ * (playbook-library-70): one playbook artifact in the session's
+ * language, version 0.1.0. */
+export function authoringManifest(id: string, org: string, language: string): string {
   return [
     "format: 2",
     `org: ${org}`,
@@ -340,7 +398,7 @@ export function authoringManifest(id: string, org: string): string {
     "artifacts:",
     `  ${id}:`,
     "    kind: playbook",
-    `    language: ${AUTHORING_LANGUAGE}`,
+    `    language: ${language}`,
     "",
   ].join("\n");
 }
@@ -409,7 +467,14 @@ export class DraftStore {
    * the session file names it now. */
   packagePath(id: string): string {
     const location = this.locate(id);
-    return location ? readPackagePath(join(location.authoringDir, `${id}.json`), id) : draftPackagePath(id);
+    return location ? readPackagePlace(join(location.authoringDir, `${id}.json`), id).package : draftPackagePath(id);
+  }
+
+  /** The playbook artifact's language (storage-23), as the session file
+   * names it now; `en` where it names none. */
+  language(id: string): string {
+    const location = this.locate(id);
+    return location ? readPackagePlace(join(location.authoringDir, `${id}.json`), id).language : DEFAULT_AUTHORING_LANGUAGE;
   }
 
   /** The spec package under development: `<working folder>/<package>`
@@ -419,11 +484,11 @@ export class DraftStore {
     return workingFolder === null ? null : join(workingFolder, ...this.packagePath(id).split("/"));
   }
 
-  /** The playbook artifact's folder, `playbooks/en/<id>/` of the
-   * package, where the compiler runs (playbook-library-12). */
+  /** The playbook artifact's folder, `playbooks/<language>/<id>/` of
+   * the package, where the compiler runs (playbook-library-12). */
   artifactDir(id: string): string | null {
     const dir = this.draftDir(id);
-    return dir === null ? null : join(dir, "playbooks", AUTHORING_LANGUAGE, id);
+    return dir === null ? null : join(dir, "playbooks", this.language(id), id);
   }
 
   /** The playbook's text the compiler reads: `<artifact>/<id>.md`. */
@@ -527,9 +592,11 @@ export class DraftStore {
 
   /** Make the spec package under development in the working folder —
    * its `meta.yaml` unless a folder brought in already holds one — and
-   * the record, with a fresh instance, in the project's spex repository
-   * (playbook-library-70, playbook-library-51, storage-23). */
-  create(id: string, now: number, location: AuthoringLocation, org: string): StoredDraft {
+   * the record, with a fresh instance and the session's language, in
+   * the project's spex repository (playbook-library-70,
+   * playbook-library-51, storage-23). `homeLanguage` is the home's
+   * interface language, the last of the language's sources. */
+  create(id: string, now: number, location: AuthoringLocation, org: string, homeLanguage: string): StoredDraft {
     if (location.workingFolder === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
         id: "{projectId} has no working folder on this device",
@@ -550,11 +617,12 @@ export class DraftStore {
     }
     const packagePath = draftPackagePath(id);
     const dir = join(location.workingFolder, ...packagePath.split("/"));
-    mkdirSync(join(dir, "playbooks", AUTHORING_LANGUAGE, id), { recursive: true });
-    if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, org));
+    const language = authoringLanguage(location.workingFolder, dir, id, homeLanguage);
+    mkdirSync(join(dir, "playbooks", language, id), { recursive: true });
+    if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, org, language));
     // `authoring/` inside a clone that stands: a clone gone is not made.
     if (!existsSync(location.authoringDir)) mkdirSync(location.authoringDir, { mode: 0o700 });
-    const draft: StoredDraft = { format: 1, id, instance: randomUUID(), createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
+    const draft: StoredDraft = { format: 1, id, instance: randomUUID(), createdAt: now, touchedAt: now, package: packagePath, language, queued: [], failures: 0 };
     const stage = `${file}.${randomUUID()}.tmp`;
     writeFileSync(stage, JSON.stringify(parseStoredDraft(draft, file, id)), { mode: 0o600 });
     try {
