@@ -603,6 +603,14 @@ msgstr "{who} 自 {since} 起工作中"
 msgid "{who} working…"
 msgstr "{who} 工作中…"
 
+#: src/components/SpaceMembers.tsx
+msgid "@{login} added as {role}"
+msgstr "已添加 @{login}，角色为 {role}"
+
+#: src/components/SpaceMembers.tsx
+msgid "@{login} removed"
+msgstr "已移除 @{login}"
+
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
 msgstr "/ 打开规程 · Enter 发送"
@@ -825,6 +833,7 @@ msgstr "适配器选项；模型支持未验证"
 msgid "Adapter option; model support unverified."
 msgstr "适配器选项；模型支持未验证。"
 
+#. add the person at the chosen role on the Git host
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. request this spec package at the chosen version
@@ -832,6 +841,7 @@ msgstr "适配器选项；模型支持未验证。"
 #: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Add"
 msgstr "添加"
 
@@ -915,6 +925,7 @@ msgstr "加入“接下来”"
 msgid "Added to Up next — see the project's Overview."
 msgstr "已加入“接下来” — 见项目概览。"
 
+#. the Add control, while the host adds the person
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
 #. the Add project control, while the add is in flight
@@ -924,6 +935,7 @@ msgstr "已加入“接下来” — 见项目概览。"
 #: src/components/EnvironmentSection.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpaceSync.tsx
 msgid "Adding…"
 msgstr "添加中…"
@@ -1351,6 +1363,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -1361,6 +1375,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpaceSync.tsx
 #: src/components/SpecEditor.tsx
@@ -2005,8 +2020,10 @@ msgstr "无法在文件管理器中显示"
 msgid "Couldn't undo: {reason}"
 msgstr "无法撤销：{reason}"
 
+#. create the group named in the field on the Git host
 #. start a new repository at the typed path
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Create"
 msgstr "新建"
 
@@ -2017,6 +2034,11 @@ msgstr "在此路径新建一个仓库"
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "已在 <0>{path}</0> 创建初始配置"
+
+#. the Create control, while the host creates the group
+#: src/components/SpaceMembers.tsx
+msgid "Creating…"
+msgstr "创建中…"
 
 #. a file family that stays on this device
 #: src/lib/space.ts
@@ -2824,6 +2846,11 @@ msgstr "前往仪表盘、项目、规程、群组、设置"
 msgid "Graph"
 msgstr "图谱"
 
+#. the field naming a new group on the Git host
+#: src/components/SpaceMembers.tsx
+msgid "Group name"
+msgstr "群组名称"
+
 #. where a group's own spex repository's code lives: it has none, holding the group's records
 #: src/components/SpaceGroups.tsx
 msgid "Group records"
@@ -3150,6 +3177,7 @@ msgstr "刚刚"
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
 #. cancel a removal: leave it as it is
+#. cancel a removal: leave it as it is
 #. cancel: keep the unsaved draft
 #. confirm: keep the intent open
 #. confirm: leave the run as it is
@@ -3161,6 +3189,7 @@ msgstr "刚刚"
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
 msgid "Keep"
@@ -3270,6 +3299,11 @@ msgstr "加载中…"
 msgid "Local changes ({count})"
 msgstr "本地更改（{count}）"
 
+#. the field for a person's login on the Git host, named by its host name
+#: src/components/SpaceMembers.tsx
+msgid "Login at {host}"
+msgstr "{host} 上的用户名"
+
 #: src/lib/drafts.ts
 msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 msgstr "由单个连字符连接的小写字母和数字，最多 64 个字符"
@@ -3315,15 +3349,12 @@ msgstr "媒体不可用"
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
 #. list the people the host lets read a spex repository
+#. list the people the host lets read a spex repository
 #: src/components/SpaceGroups.tsx
 msgid "Members"
 msgstr "成员"
 
-#: src/components/SpaceGroups.tsx
-msgid "Members change at {host}"
-msgstr "在 {host} 更改成员"
-
-#: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "{name} 的成员"
 
@@ -3440,6 +3471,11 @@ msgstr "从未同步"
 msgid "new"
 msgstr "新增"
 
+#. create a group on the Git host
+#: src/components/SpaceGroups.tsx
+msgid "New group"
+msgstr "新建群组"
+
 #: src/components/SpaceGroups.tsx
 msgid "New in a group"
 msgstr "在群组中新建"
@@ -3478,6 +3514,11 @@ msgstr "在 {project} 中新建会话"
 #: src/components/SpaceSurface.tsx
 msgid "New sessions stay on this device"
 msgstr "新会话留在此设备上"
+
+#. create a group inside this group on the Git host
+#: src/components/SpaceGroups.tsx
+msgid "New subgroup"
+msgstr "新建子群组"
 
 #: src/components/SourcesTabs.tsx
 msgid "Next page"
@@ -3890,6 +3931,11 @@ msgstr "打开 {title} — 正在 {project} 中运行"
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "打开并发送一条消息即可接续。"
+
+#. link to the Git host's own members page, where everything else about members is changed
+#: src/components/SpaceMembers.tsx
+msgid "Open at {host}"
+msgstr "在 {host} 打开"
 
 #: src/components/DraftConversation.tsx
 msgid "Open Enable"
@@ -4343,7 +4389,7 @@ msgstr "就绪状态未知"
 msgid "reading {id}…"
 msgstr "正在读取 {id}…"
 
-#: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Reading members…"
 msgstr "正在读取成员…"
 
@@ -4476,17 +4522,20 @@ msgstr "重新加载页面"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: take the member out on the Git host
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
 #. confirm: take this spec package out of the requests
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
+#. take a member out of a group or a spex repository on the Git host
 #. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Remove"
 msgstr "移除"
 
@@ -4514,6 +4563,14 @@ msgstr "移除 {title}"
 #: src/components/ProjectGroup.tsx
 msgid "Remove {title} from history"
 msgstr "从历史中移除 {title}"
+
+#: src/components/SpaceMembers.tsx
+msgid "Remove @{login}"
+msgstr "移除 @{login}"
+
+#: src/components/SpaceMembers.tsx
+msgid "Remove @{login} from {place}?"
+msgstr "要将 @{login} 从 {place} 中移除吗？"
 
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
@@ -4558,8 +4615,10 @@ msgstr "已移除“{title}”"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
+#. the removal is in flight
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
+#: src/components/SpaceMembers.tsx
 msgid "Removing…"
 msgstr "移除中…"
 
@@ -4761,6 +4820,11 @@ msgstr "已审阅"
 #: src/lib/failure-catalogue.ts
 msgid "Rewrote history"
 msgstr "重写了历史"
+
+#. the host's role a person is added at
+#: src/components/SpaceMembers.tsx
+msgid "Role"
+msgstr "角色"
 
 #: src/components/CompileBand.tsx
 msgid "roles: {roles}"
@@ -5047,6 +5111,11 @@ msgstr "设置"
 #: src/components/DeliveryCard.tsx
 msgid "Settled — {title}"
 msgstr "已裁定 — {title}"
+
+#. add a person on the Git host to a group or a spex repository
+#: src/components/SpaceMembers.tsx
+msgid "Share"
+msgstr "共享"
 
 #. badge: this lane answers more than one role
 #: src/components/LibrarySurface.tsx
@@ -6154,6 +6223,11 @@ msgstr "使用默认"
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "{name} 的版本"
+
+#. a membership that comes through the named group, not the group's or repository's own
+#: src/components/SpaceMembers.tsx
+msgid "via {group}"
+msgstr "通过 {group}"
 
 #: src/components/SpaceSync.tsx
 msgid "View diff"
