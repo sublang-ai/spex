@@ -63,6 +63,8 @@ test("approvals-8: fresh served UI reviews actual pending scope, denies safely, 
 test("approvals-8: authoring approval has draft scope and disappears on abort", async ({page, app}) => {
   await open(page, app);
   await nav(page, "Playbooks").click();
+  // The project's defaults fill Org and License (playbook-library-51).
+  await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
   await page.getByTestId("new-playbook-id").fill("approval-draft");
   await page.getByTestId("new-playbook-id").press("Enter");
   await page.getByTestId("draft-composer").fill("Inspect the task-owned fixture");

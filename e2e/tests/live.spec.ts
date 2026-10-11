@@ -272,6 +272,8 @@ test.describe("the changelog playbook", () => {
     // section stands here; the New playbook field proves the surface.
     const idField = page.getByTestId("new-playbook-id");
     await expect(idField).toBeVisible();
+    // The project's defaults fill Org and License (playbook-library-51).
+    await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
     await idField.fill("changelog");
     await idField.press("Enter");
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
