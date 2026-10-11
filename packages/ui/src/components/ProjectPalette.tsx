@@ -24,6 +24,21 @@ import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
+/** A refusal as the palette shows it: the core's words, and Git's own
+ * output where the core relayed it beside them (projects-34). */
+interface Refusal {
+  message: string;
+  detail?: string;
+}
+
+function refusalOf(cause: unknown): Refusal {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  // The relayed output travels as the refusal's detail, apart from the
+  // words (core-service-111), so nothing the tool said is lost.
+  const output = (cause as { details?: { output?: unknown } } | undefined)?.details?.output;
+  return typeof output === "string" && output.trim() ? { message, detail: output } : { message };
+}
+
 export interface ProjectPaletteProps {
   projects: ProjectInfo[];
   sessions: SessionInfo[];
@@ -56,7 +71,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const [pathDraft, setPathDraft] = useState("");
   const [scaffold, setScaffold] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<Refusal>();
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const pathRef = useRef<HTMLInputElement>(null);
@@ -173,7 +188,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         await added(project, before.has(project.id));
       }
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(refusalOf(cause));
     } finally {
       setBusy(false);
     }
@@ -189,7 +204,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       const project = await openAcademyExample(pathDraft.trim() || undefined);
       pick(project.id);
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(refusalOf(cause));
     } finally {
       setBusy(false);
     }
@@ -204,7 +219,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       props
         .onAddPath(path)
         .then((project) => added(project, before.has(project.id)))
-        .catch((cause: Error) => setError(cause.message))
+        .catch((cause: unknown) => setError(refusalOf(cause)))
         .finally(() => setBusy(false));
     });
   }
@@ -520,7 +535,19 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               data-testid="palette-error"
               className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
             >
-              {error}
+              {error.message}
+              {error.detail ? (
+                // Git's own words, whole, beneath the app's: bounded by
+                // the window too, so a long one scrolls inside the
+                // palette rather than pushing its box out of a short
+                // window, where the list has already yielded (projects-30).
+                <pre
+                  data-testid="palette-error-detail"
+                  className="mt-1 max-h-[min(6rem,12vh)] overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] text-red-800/80 dark:text-red-300/80"
+                >
+                  {error.detail}
+                </pre>
+              ) : null}
             </div>
           ) : null}
         </div>

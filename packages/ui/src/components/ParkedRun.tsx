@@ -25,18 +25,33 @@
 // an open intent is ruled on by that intent's close, which ends the run
 // on the way; one serving none takes the ending control itself.
 //
+// The resumes fold (DR-117): Playbook advertises a `jump:<stateId>` for
+// every earlier step the run can re-enter, each labelled with that
+// step's description — six near-identical rows after a restart under a
+// running /shape. They stand behind one secondary control that opens
+// their list in place, each still its own control with its whole label;
+// every other action keeps its place in the row beside Drop.
+//
 // The test ids read `failed-workflow`: they are held from the notice's
 // first name so the browser journeys keep their grip on it.
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import type {
   FailureCause,
   ParkedRun as ParkedRunSummary,
+  ParkedRunAction,
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
 import { causePhrase, causeStep, standingLine } from "../lib/failure-catalogue.js";
+import { Icon } from "./Icon.js";
+
+/** A resume from an earlier step: the verb of Playbook's
+ * `<verb>:<target>` action grammar says so, never the label (DR-117). */
+function isResume(action: ParkedRunAction): boolean {
+  return action.id.startsWith("jump:");
+}
 
 /** The busy form is the longer word, so each control reserves its width
  * once and nothing reflows on activation (DR-041: a busy form never
@@ -109,9 +124,12 @@ export function ParkedRun({
 }) {
   const [pending, setPending] = useState<string>();
   const [confirming, setConfirming] = useState(false);
+  const [resumesOpen, setResumesOpen] = useState(false);
   const [error, setError] = useState<string>();
   const busy = useRef(false);
   const group = useRef<HTMLDivElement>(null);
+  const resumesToggle = useId();
+  const resumesList = useId();
 
   const blocked = !connected
     ? i18n._("Reconnecting…")
@@ -125,6 +143,10 @@ export function ParkedRun({
   // Only a failure park has a recovery to advertise; a run waiting for
   // a reply carries Drop alone, its other door being the composer.
   const actions = failed ? (parked?.actions ?? []) : [];
+  // The row keeps the failure's own acts; the resumes fold (DR-117).
+  // Both keep the summary's order.
+  const inRow = actions.filter((action) => !isResume(action));
+  const resumes = actions.filter(isResume);
 
   async function run(key: string, control: ParkedControl): Promise<void> {
     if (busy.current || disabled) return;
@@ -156,11 +178,58 @@ export function ParkedRun({
   // width and stay whole; only an advertised action, whose label is
   // the runtime's, yields (DR-041).
   const fixed = "shrink-0";
-  const controlClass = `rounded-md border px-2.5 py-1 text-center font-medium disabled:opacity-40 ${
+  const controlFrame = `rounded-md border px-2.5 py-1 font-medium disabled:opacity-40 ${
     failed
       ? "border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900"
       : "border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
   }`;
+  const controlClass = `text-center ${controlFrame}`;
+
+  /** One advertised action's control. In the row its label ellipses at
+   * the control's width, whole in the tooltip (DR-041); folded into the
+   * resumes' list it wraps whole, the row being the list's full width
+   * (DR-117). A no-op or blocked action stays visible and disabled, its
+   * reason in its tooltip: no control is chosen for the Boss, and none
+   * is hidden from him (DR-075). */
+  function actionControl(action: ParkedRunAction, folded: boolean) {
+    const standing = standingLine(action);
+    const inert = action.standing === "no-op" || action.standing === "blocked";
+    return (
+      <button
+        key={action.id}
+        type="button"
+        data-testid="failed-workflow-action"
+        data-action-id={action.id}
+        disabled={disabled || inert}
+        aria-busy={pending === action.id || undefined}
+        title={standing ?? blocked ?? (folded ? undefined : action.label)}
+        onClick={() =>
+          void run(action.id, { kind: "recovery", actionId: action.id })
+        }
+        className={
+          folded
+            ? `relative block w-full text-left ${controlFrame}`
+            : `${CONTROL_WIDTH} ${ACTION_WIDTH} ${controlClass}`
+        }
+      >
+        <span
+          className={`block ${folded ? "whitespace-normal break-words" : "truncate"}${
+            pending === action.id ? " invisible" : ""
+          }`}
+        >
+          {action.label}
+        </span>
+        {pending === action.id ? (
+          <span className="absolute inset-0 flex items-center justify-center">
+            {i18n._({
+              id: "Working…",
+              comment: "busy form of a control the parked run advertises",
+            })}
+          </span>
+        ) : null}
+      </button>
+    );
+  }
 
   // Why it stopped and what to do: the catalogue's phrase for the
   // cause the runtime attached, the Boss step where one exists, and
@@ -255,47 +324,37 @@ export function ParkedRun({
           // out of the notice's box (run-view-128).
           className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
         >
-          {confirming
-            ? null
-            : actions.map((action) => {
-                // A no-op or blocked action stays visible and disabled,
-                // its reason in its tooltip: no control is chosen for
-                // the Boss, and none is hidden from him (DR-075).
-                const standing = standingLine(action);
-                const inert =
-                  action.standing === "no-op" || action.standing === "blocked";
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    data-testid="failed-workflow-action"
-                    data-action-id={action.id}
-                    disabled={disabled || inert}
-                    aria-busy={pending === action.id || undefined}
-                    title={standing ?? blocked ?? action.label}
-                    onClick={() =>
-                      void run(action.id, { kind: "recovery", actionId: action.id })
-                    }
-                    className={`${CONTROL_WIDTH} ${ACTION_WIDTH} ${controlClass}`}
-                  >
-                    <span
-                      className={`block truncate${
-                        pending === action.id ? " invisible" : ""
-                      }`}
-                    >
-                      {action.label}
-                    </span>
-                    {pending === action.id ? (
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        {i18n._({
-                          id: "Working…",
-                          comment: "busy form of a control the parked run advertises",
-                        })}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+          {confirming ? null : inRow.map((action) => actionControl(action, false))}
+          {confirming || resumes.length === 0 ? null : (
+            // The resumes' one door (DR-117): secondary, so it carries
+            // no border, and fixed words, so it holds its width and
+            // may wrap rather than ellipse at the pane's floor.
+            <button
+              id={resumesToggle}
+              type="button"
+              data-testid="failed-workflow-resumes"
+              aria-expanded={resumesOpen}
+              aria-controls={resumesList}
+              disabled={disabled}
+              title={blocked}
+              onClick={() => setResumesOpen((open) => !open)}
+              className={`flex max-w-full shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-left font-medium underline-offset-2 hover:underline disabled:opacity-40 ${
+                failed ? "hover:bg-red-100 dark:hover:bg-red-900" : ""
+              }`}
+            >
+              <Icon
+                name={resumesOpen ? "caretDown" : "caretRight"}
+                className="h-3 w-3 shrink-0"
+              />
+              <span>
+                {i18n._({
+                  id: "Resume from an earlier step…",
+                  comment:
+                    "act: open the list of earlier steps the parked run can resume from",
+                })}
+              </span>
+            </button>
+          )}
           {confirming ? (
             // DR-010 §4: ending a run is the Boss's ruling, so it
             // asks in place. Keep backs out having sent nothing.
@@ -350,6 +409,21 @@ export function ParkedRun({
           )}
         </div>
       </div>
+      {!confirming && resumesOpen && resumes.length > 0 ? (
+        // Opened in place, the notice's full width (DR-117): each
+        // resume reads whole, and the list scrolls rather than pushing
+        // the composer off a short window (DR-041).
+        <ul
+          id={resumesList}
+          data-testid="failed-workflow-resume-list"
+          aria-labelledby={resumesToggle}
+          className="mt-1.5 flex max-h-48 flex-col gap-1 overflow-y-auto"
+        >
+          {resumes.map((action) => (
+            <li key={action.id}>{actionControl(action, true)}</li>
+          ))}
+        </ul>
+      ) : null}
       {pending !== undefined ? (
         <p className="sr-only" role="status">
           {pending === "ending"

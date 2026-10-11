@@ -233,6 +233,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- A failed workflow's notice folds its earlier steps behind one control ([DR-117](specs/decisions/117-the-earlier-steps-fold-behind-one-control.md)).
+  The retry and Drop stand in the notice's row as before; every "Resume
+  from: …" action waits behind "Resume from an earlier step…", which
+  opens their list in place with each label whole, so a run interrupted
+  under a long machine no longer reads as a wall of near-identical rows.
+
 - The core coordinates its writers as Git does ([DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md)).
   A command is no longer refused merely because a sync, check, join,
   move, removal, compile, install or enabling runs. A write whose file
@@ -539,6 +545,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Create says why a project's first commit failed in the app's own words:
+  that Git could not make the first commit, naming commit signing with no
+  key configured, a signing program that failed, or a missing Git name and
+  email, with Git's own output kept beneath and the guidance to finish the
+  commit in a terminal, then Add.
 - Playbook authoring turns no longer fail Cligent's validation of an absolute
   writable-path grant, including chat, compile-failure repair and registration
   proposals ([DR-112](specs/decisions/112-authoring-permissions-use-the-package-working-directory.md)).

@@ -79,6 +79,7 @@ import { fileVersion, listed, readVersioned, UUID, VersionConflictError } from "
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
+  InitialCommitRefusal,
   createProjectRepo,
   seedExampleProject,
   defaultRunCommand,
@@ -2118,7 +2119,13 @@ export class CoreService {
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          throw new CoreError("invalid_request", message);
+          // A refused initial commit keeps Git's own output whole beside
+          // the core's words (projects-34).
+          throw new CoreError(
+            "invalid_request",
+            message,
+            error instanceof InitialCommitRefusal ? { output: error.output } : undefined,
+          );
         }
         const created = this.store.registerProject(path, basename(path), Date.now());
         this.afterRepositoriesChanged();

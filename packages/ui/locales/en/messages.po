@@ -4815,6 +4815,11 @@ msgstr "Restore the interrupted turn before sending."
 msgid "Restoring…"
 msgstr "Restoring…"
 
+#. act: open the list of earlier steps the parked run can resume from
+#: src/components/ParkedRun.tsx
+msgid "Resume from an earlier step…"
+msgstr "Resume from an earlier step…"
+
 #: src/lib/space.ts
 msgid "resume tokens for this machine's agent conversations; they work nowhere else"
 msgstr "resume tokens for this machine's agent conversations; they work nowhere else"

@@ -981,11 +981,6 @@ msgstr "请在终端完成或中止合并"
 msgid "folder {path} is paired twice"
 msgstr "文件夹 {path} 被配对了两次"
 
-#. Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action
-#: src/forge.ts
-msgid "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
-msgstr "git commit 失败：{output}。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
-
 #. A join's stop where git failed to clone the code and printed nothing
 #: src/space.ts
 msgid "Git could not clone the code"
@@ -1000,6 +995,26 @@ msgstr "Git 无法提交"
 #: src/space.ts
 msgid "Git could not diff"
 msgstr "Git 无法比较差异"
+
+#. Project creation refusal: Git signs commits and has no signing key; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git 无法完成初始提交：已开启提交签名，但未配置签名密钥。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
+
+#. Project creation refusal: Git signs commits and its signing program failed; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: commit signing is on, but signing failed. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git 无法完成初始提交：已开启提交签名，但签名失败。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
+
+#. Project creation refusal: Git has no user name and email to commit with; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: no Git name and email are configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git 无法完成初始提交：未配置 Git 用户名和邮箱。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
+
+#. Project creation refusal at the initial commit for a cause the app does not recognize; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git 无法完成初始提交。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。"
 
 #. Guidance where git exists but failed to run; {detail} is the failure's own text, relayed
 #: src/space-git.ts

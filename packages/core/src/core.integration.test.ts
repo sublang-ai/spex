@@ -1314,7 +1314,17 @@ test("projects-18: creation requires its initial commit", async () => {
       const head = await defaultRunCommand("git", ["rev-parse", "--verify", "HEAD"], path);
       if (failure) {
         assert.ok(!result.ok, `${failure} must refuse creation`);
-        assert.match(result.error.message, failure === "staging" ? /git add.*index\.lock/s : /git commit.*creation commit refused/s);
+        if (failure === "staging") {
+          assert.match(result.error.message, /git add.*index\.lock/s);
+        } else {
+          // A refusal naming no case the core recognizes: the plain
+          // sentence, with Git's own words as its detail (projects-34).
+          assert.equal(
+            result.error.message,
+            "Git could not make the first commit. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+          );
+          assert.match(String(result.error.details?.output), /creation commit refused/);
+        }
         assert.equal(projects.length, 0);
         assert.notEqual(head.code, 0);
         assert.ok(existsSync(join(path, "specs", "meta.md")), "generated files remain");
@@ -1328,6 +1338,67 @@ test("projects-18: creation requires its initial commit", async () => {
     } finally {
       client.close();
       await harness.service.stop();
+    }
+  }
+});
+
+test("projects-18: a first commit refused for signing says why in the core's own words, in English and Chinese", async () => {
+  const { defaultRunCommand } = await import("./forge.js");
+  // Real Git, signing every commit: the host's own config never
+  // decides, so the scratch repository's config alone does.
+  const isolated = join(scratchDir("spex-signing-"), "gitconfig");
+  writeFileSync(isolated, "");
+  const gitEnv = { GIT_CONFIG_GLOBAL: isolated, GIT_CONFIG_NOSYSTEM: "1" };
+  const cases = {
+    // SSH signing with no key and no key command: Git names the key.
+    key: {
+      config: [["gpg.format", "ssh"]],
+      git: /either user\.signingkey or gpg\.ssh\.defaultKeyCommand needs to be configured/,
+      en: "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+      zh: "Git 无法完成初始提交：已开启提交签名，但未配置签名密钥。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。",
+    },
+    // A signing program that cannot run, as on a machine without gpg.
+    program: {
+      config: [["gpg.program", join(dirname(isolated), "no-such-gpg")]],
+      git: /gpg failed to sign the data/,
+      en: "Git could not make the first commit: commit signing is on, but signing failed. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+      zh: "Git 无法完成初始提交：已开启提交签名，但签名失败。生成的文件仍在该文件夹中：请在终端中完成初始提交，然后使用“添加”。",
+    },
+  } as const;
+  for (const language of ["en", "zh"] as const) {
+    for (const [name, signing] of Object.entries(cases)) {
+      const run: RunCommand = async (command, args, cwd, env) => {
+        const result = await defaultRunCommand(command, args, cwd, command === "git" ? { ...env, ...gitEnv } : env);
+        if (command === "git" && args[0] === "init" && result.code === 0) {
+          for (const [key, value] of [
+            ["user.name", "Spex Test"],
+            ["user.email", "spex@example.test"],
+            ["commit.gpgsign", "true"],
+            ...signing.config,
+          ]) execFileSync("git", ["-C", args[1], "config", key, value], { env: { ...process.env, ...gitEnv } });
+        }
+        return result;
+      };
+      const harness = await startHarness(VALID_CONFIG, {
+        runCommand: run,
+        systemLanguages: [language === "zh" ? "zh-CN" : "en"],
+      });
+      const client = new Client(harness.service.port());
+      const path = join(harness.dir, `${name}-${language}`);
+      try {
+        await client.open();
+        const result = await client.command("project.create", { path, scaffold: false });
+        assert.ok(!result.ok, `${name} signing must refuse creation`);
+        // The core's sentence in its own language, the case's key
+        // phrase and the way on; Git's own line whole as the detail.
+        assert.equal(result.error.message, signing[language]);
+        assert.match(String(result.error.details?.output), signing.git);
+        assert.equal((await client.expectOk("project.list", {})).length, 0);
+        assert.notEqual((await defaultRunCommand("git", ["rev-parse", "--verify", "HEAD"], path)).code, 0);
+      } finally {
+        client.close();
+        await harness.service.stop();
+      }
     }
   }
 });
@@ -1473,7 +1544,13 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
     scaffold: true,
   });
   assert.ok(!anonymous.ok);
-  assert.match(anonymous.error.message, /^git commit failed: .+\. The generated files stay in the folder: finish the initial commit in your terminal, then use Add\.$/s);
+  // In the app's words, the missing identity named; Git's own words as
+  // the refusal's detail (projects-34).
+  assert.equal(
+    anonymous.error.message,
+    "Git could not make the first commit: no Git name and email are configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+  );
+  assert.match(String(anonymous.error.details?.output), /Please tell me who you are/);
   const unpinned = readFileSync(
     join(anonymousPath, "specs", "packages", "licensing.md"),
     "utf-8",

@@ -49,6 +49,7 @@ import {
   interruptDemoSession,
   fakeAdapterImports,
   parkingScript,
+  failingScript,
   askingScript,
   compiledRunScript,
   prepareStorageGitFiles,
@@ -117,6 +118,14 @@ export interface AppOptions {
    * `realCaptain`, and needs `project` for a repository to commit in.
    */
   park?: boolean;
+  /**
+   * The real Captain shell with the failing script (DR-117): the first
+   * Boss turn starts the real /code root, whose coder's call fails, so
+   * the run parks in its failure state and really advertises a retry
+   * of that step and a resume from an earlier one. Implies
+   * `realCaptain`, and needs `project` for a repository to run in.
+   */
+  failPlayer?: boolean;
   /**
    * The real Captain shell with the asking script (DR-088): the first
    * Boss turn starts the real /code root, whose coder asks the Boss a
@@ -775,6 +784,8 @@ async function arrangeApp(
       : {
           adapterImports: options.nativeBrowser ? undefined : options.park
             ? fakeAdapterImports(parkingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
+            : options.failPlayer
+            ? fakeAdapterImports(failingScript({ delayMs: options.agentDelayMs ?? 1 })).imports
             : options.compiled
             ? fakeAdapterImports(compiledScript(options)).imports
             : options.ask
@@ -784,7 +795,7 @@ async function arrangeApp(
             : fakeAdapterImports(adapterScript(options)).imports,
           adapterRuntime: () => ({ usable: true }),
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
-          ...(options.realCaptain || options.park || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
+          ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
           home,
           own: E2E_OWN,
