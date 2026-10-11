@@ -165,6 +165,11 @@ msgstr "{host} asks to wait; try again later"
 msgid "{host} holds no default branch for it yet"
 msgstr "{host} holds no default branch for it yet"
 
+#. Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name
+#: src/space-groups.ts
+msgid "{host} listed no group {group}"
+msgstr "{host} listed no group {group}"
+
 #. A refusal relayed from the Git host that carried no words; {host} is its display name
 #: src/space-git.ts
 msgid "{host} refused"
@@ -245,6 +250,11 @@ msgstr "{name} is requested by path, and this spex repository has no working fol
 #: src/session.ts
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} is still working in {project} — wait for it to finish, or abort it"
+
+#. Refusal of a new top-level group's name; {name} is the name typed, {host} the Git host's display name
+#: src/space-groups.ts
+msgid "{name} is taken at {host}; choose another name"
+msgstr "{name} is taken at {host}; choose another name"
 
 #. Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path
 #: src/space-groups.ts
@@ -483,6 +493,11 @@ msgstr "{path}.subagentModel must be a nonblank string"
 #: src/service.ts
 msgid "{projectId} has no working folder on this device"
 msgstr "{projectId} has no working folder on this device"
+
+#. Refusal of a share at a role the Git host does not list; {role} is the role named, {host} the host's display name
+#: src/space-groups.ts
+msgid "{role} is not one of the roles {host} grants"
+msgstr "{role} is not one of the roles {host} grants"
 
 #. Refusal where the folder chosen for the example already holds files
 #: src/forge.ts
@@ -1326,6 +1341,21 @@ msgstr "Move that folder aside, then Retry."
 msgid "name either the session's instance or its file's version"
 msgstr "name either the session's instance or its file's version"
 
+#. Refusal of a members, share or removal command naming neither or both a group and a spex repository
+#: src/space-groups.ts
+msgid "Name one group or one spex repository"
+msgstr "Name one group or one spex repository"
+
+#. Refusal of a share or a removal whose login is blank; {host} is the Git host's display name
+#: src/space-groups.ts
+msgid "Name the account's login at {host}"
+msgstr "Name the account's login at {host}"
+
+#. Refusal of a new group whose name is blank
+#: src/space-groups.ts
+msgid "Name the group"
+msgstr "Name the group"
+
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -1448,6 +1478,16 @@ msgstr "no spex repository {key} on this device"
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "Normalize"
+
+#. The Git host found nothing a write named, and gave no words of its own; {host} is its display name
+#: src/space-groups.ts
+msgid "Not found at {host}"
+msgstr "Not found at {host}"
+
+#. The Git host found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole
+#: src/space-groups.ts
+msgid "Not found at {host}: {words}"
+msgstr "Not found at {host}: {words}"
 
 #. Refusal: the clone's HEAD names no branch; spex is the branch's own name
 #: src/space.ts

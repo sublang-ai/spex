@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Git host client (git-host-1..11, DR-103): signs a person in as a
-// public client — the browser flow with PKCE on the desktop, the device
-// flow on the server shell — keeps the app token current in
+// The Git host client (git-host-1..17, DR-103, DR-114): signs a person
+// in as a public client — the browser flow with PKCE on the desktop, the
+// device flow on the server shell — keeps the app token current in
 // `local/credentials.yaml` (storage-19), and reads and writes the host's
-// JSON routes under `/api/v1`. It composes no reader-facing prose: a
+// JSON routes under `/api/v1`: groups, spex repositories and members,
+// with what the host says the person may do and the roles it grants. It composes no reader-facing prose: a
 // failure is a `HostError` carrying its kind and the host's own words,
 // which the core phrases where it speaks (git-host-11). No secret ever
 // enters an error message or a log line.
@@ -53,9 +54,30 @@ function trimUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-export interface HostAccount { id: string; login: string; displayName: string | null }
+/** The person as the host reports them; `canCreateGroup` is whether the
+ * host lets them create a group at the top (git-host-5, DR-114), false
+ * where it says nothing. */
+export interface HostAccount { id: string; login: string; displayName: string | null; canCreateGroup: boolean }
 
-export interface HostGroup { id: string | null; fullPath: string; name: string; url: string | null; kind: "user" | "group" }
+/** What the host lets the person do in a group (git-host-5, DR-114):
+ * create a group inside it, and add and remove its members; false where
+ * the host says nothing, as for a repository's group or your own. */
+export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean }
+
+export interface HostGroup { id: string | null; fullPath: string; name: string; url: string | null; kind: "user" | "group"; can: HostGroupCan }
+
+/** One of the host's own roles (git-host-16): the id a client sends
+ * back, the host's name for it, and whether it may push. */
+export interface HostRole { id: string; name: string; mayPush: boolean }
+
+/** The host's description (git-host-5): its name, its Git origin, and
+ * the roles it grants in its own order, empty where it lists none. */
+export interface HostDescription { displayName: string; gitOrigin: string; roles: HostRole[] }
+
+/** A group or a spex repository at the host, by the host's id, whose
+ * members are read, added or removed (git-host-8, git-host-16,
+ * git-host-17). */
+export interface MembersTarget { kind: "group" | "repository"; id: string }
 
 export interface HostRepository {
   id: string;
@@ -70,6 +92,9 @@ export interface HostRepository {
   lfs: boolean;
   spexBranch: boolean;
   project: Record<string, unknown> | null;
+  /** Whether the host lets the person add and remove its members
+   * (git-host-5, DR-114); false where it says nothing. */
+  can: { manageMembers: boolean };
 }
 
 export interface HostRepositoryDetail extends HostRepository {
@@ -77,7 +102,10 @@ export interface HostRepositoryDetail extends HostRepository {
   branch: { present: boolean; canPush: boolean | null; protected: boolean | null; blocked: boolean };
 }
 
-export interface HostMember { id: string; login: string; displayName: string | null; role: string; url: string | null }
+/** A member as the host lists them (git-host-8): `direct` where the
+ * membership is the group's or repository's own, else `via` the full
+ * path of the group it comes through. */
+export interface HostMember { id: string; login: string; displayName: string | null; role: string; url: string | null; direct: boolean; via: string | null }
 
 export type HostErrorKind =
   | "pending"
@@ -357,13 +385,15 @@ export class GitHostClient {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
-  /** `GET /api/v1/host`: the host's display name and the Git origin its
-   * credentials are valid for. */
-  async describe(): Promise<{ displayName: string; gitOrigin: string }> {
+  /** `GET /api/v1/host`: the host's display name, the Git origin its
+   * credentials are valid for, and the roles it grants (git-host-5). */
+  async describe(): Promise<HostDescription> {
     const answer = await this.send("GET", "/api/v1/host", {});
     if (answer.status !== 200) throw answerError(answer);
     const body = record(answer.json);
-    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin) };
+    // A host that lists no roles grants none through Spex.
+    const roles = body.roles === undefined || body.roles === null ? [] : list(body.roles).map(roleFrom);
+    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin), roles };
   }
 
   /** Whether this device holds an app token for the host. */
@@ -696,10 +726,44 @@ export class GitHostClient {
     return detailFrom(body);
   }
 
-  /** `GET /api/v1/host/repositories/:id/members` (git-host-8). */
-  async members(id: string): Promise<{ members: HostMember[]; membersUrl: string }> {
-    const body = record((await this.call("GET", `/api/v1/host/repositories/${encodeURIComponent(id)}/members`)).json);
+  /** `GET /api/v1/host/repositories/:id/members` or
+   * `GET /api/v1/host/groups/:id/members` (git-host-8): every member with
+   * the host's role name and source, and the host's members page. */
+  async members(target: MembersTarget): Promise<{ members: HostMember[]; membersUrl: string }> {
+    const body = record((await this.call("GET", membersPath(target))).json);
     return { members: list(body.members).map(memberFrom), membersUrl: text(body.members_url) };
+  }
+
+  /**
+   * `POST /api/v1/host/groups` (git-host-15): a private group named
+   * `name`, inside the group `parentId` or at the top where it is null.
+   * A taken name throws `name_taken`, the host's refusal `host_refused`
+   * with its words.
+   */
+  async createGroup(input: { name: string; parentId: string | null }): Promise<HostGroup> {
+    const body = record((await this.call("POST", "/api/v1/host/groups", { name: input.name, parent_id: input.parentId })).json);
+    return groupFrom(body.group);
+  }
+
+  /**
+   * `POST …/members` (git-host-16): add the account the host lists under
+   * exactly `login` to the group or repository at the role whose id is
+   * `role`. No such account throws `not_found` with the host's words
+   * naming the login; a refusal `host_refused` with its words.
+   */
+  async addMember(target: MembersTarget, input: { login: string; role: string }): Promise<HostMember> {
+    const body = record((await this.call("POST", membersPath(target), { login: input.login, role: input.role })).json);
+    return memberFrom(body.member);
+  }
+
+  /**
+   * `DELETE …/members/:login` (git-host-17): remove the account under
+   * `login` from the group's or repository's own members. No account, or
+   * no membership of its own there, throws `not_found` with the host's
+   * words; a refusal `host_refused` with its words.
+   */
+  async removeMember(target: MembersTarget, login: string): Promise<void> {
+    await this.call("DELETE", `${membersPath(target)}/${encodeURIComponent(login)}`);
   }
 
   /**
@@ -933,18 +997,30 @@ function positive(value: unknown, fallback: number): number {
 
 function accountFrom(value: unknown): HostAccount {
   const body = record(value);
-  return { id: text(body.id), login: text(body.login), displayName: optionalText(body.display_name) };
+  return { id: text(body.id), login: text(body.login), displayName: optionalText(body.display_name), canCreateGroup: flag(body.can_create_group) };
 }
 
 function groupFrom(value: unknown): HostGroup {
   const body = record(value);
+  const can: Record<string, unknown> = isRecord(body.can) ? body.can : {};
   return {
     id: optionalText(body.id),
     fullPath: text(body.full_path),
     name: text(body.name),
     url: optionalText(body.url),
     kind: body.kind === "user" ? "user" : "group",
+    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members) },
   };
+}
+
+function roleFrom(value: unknown): HostRole {
+  const body = record(value);
+  return { id: text(body.id), name: text(body.name), mayPush: flag(body.may_push) };
+}
+
+/** The members route of a group or a repository at the host. */
+function membersPath(target: MembersTarget): string {
+  return `/api/v1/host/${target.kind === "group" ? "groups" : "repositories"}/${encodeURIComponent(target.id)}/members`;
 }
 
 function repositoryFrom(value: unknown): HostRepository {
@@ -962,6 +1038,7 @@ function repositoryFrom(value: unknown): HostRepository {
     lfs: flag(body.lfs),
     spexBranch: flag(body.spex_branch),
     project: isRecord(body.project) ? body.project : null,
+    can: { manageMembers: isRecord(body.can) && flag(body.can.manage_members) },
   };
 }
 
@@ -990,6 +1067,10 @@ function memberFrom(value: unknown): HostMember {
     displayName: optionalText(body.display_name),
     role: text(body.role),
     url: optionalText(body.url),
+    // A host that says nothing of the source lists the member as the
+    // group's or repository's own.
+    direct: typeof body.direct === "boolean" ? body.direct : true,
+    via: body.direct === false ? optionalText(body.via) : null,
   };
 }
 
