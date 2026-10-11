@@ -11,10 +11,11 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
@@ -42,6 +43,7 @@ function bundleNodePaths(): string[] {
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
 import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
+import { readVersioned, writeVersionedBytes } from "./files.js";
 import { i18n } from "./i18n.js";
 
 /** The packages a compile resolves from the playbook's own directory:
@@ -289,9 +291,19 @@ export const defaultSpawner: LineSpawner = (command, args, cwd, onLine, signal, 
     };
     child.stdout.on("data", feed);
     child.stderr.on("data", feed);
-    child.on("error", rejectPromise);
+    // A canceled run settles only once its child has exited, so the job
+    // holds its folder until then (playbook-library-99); a spawn failure
+    // rejects at once.
+    let canceled: Error | undefined;
+    child.on("error", (error) => {
+      if (signal?.aborted && error.name === "AbortError") canceled = error;
+      else rejectPromise(error);
+    });
     child.on("close", (code) => {
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        rejectPromise(canceled ?? signal.reason);
+        return;
+      }
       if (buffer.trim()) onLine(buffer);
       resolvePromise(code ?? 1);
     });
@@ -449,11 +461,75 @@ export interface CompileOptions {
   skipSlc?: boolean;
   /** The block the compile's agent is resolved from (playbook-library-42). */
   agent?: CompilerAgent;
+  /** Run once the job is admitted, before it writes anything; the agent
+   * it returns is the compile's, read at that start (playbook-library-42). */
+  start?: () => Promise<CompilerAgent | undefined>;
   /** Where the compile runs; this process's own runtime by default. */
   runtime?: ToolchainRuntime;
   /** Cancels the run: the slc child is killed and the pipeline
    * rejects with an abort error at the next stage boundary. */
   signal?: AbortSignal;
+}
+
+/** What a job writing a playbook artifact's folder does there. */
+export type ArtifactWork = "compile" | "packaging";
+
+/** The job writing each playbook artifact's folder in this core, keyed
+ * by the folder's canonical path: one entry per admitted job, dropped by
+ * that job alone when it ends, nothing written to hold it
+ * (playbook-library-99, DR-111). */
+const artifactJobs = new Map<string, { work: ArtifactWork }>();
+
+/** The folder a compile of `id` in `libraryDir` writes. */
+function artifactFolder(libraryDir: string, id: string): string {
+  return resolve(libraryDir, id);
+}
+
+/** A folder's path with every link resolved — through its nearest
+ * existing ancestor where it is not made yet — so two spellings of one
+ * destination are one key. */
+function canonicalFolder(folder: string): string {
+  let existing = resolve(folder);
+  const rest: string[] = [];
+  while (!existsSync(existing) && dirname(existing) !== existing) {
+    rest.unshift(basename(existing));
+    existing = dirname(existing);
+  }
+  try {
+    return join(realpathSync.native(existing), ...rest);
+  } catch {
+    return resolve(folder);
+  }
+}
+
+/** A job asked for a folder another job of this core writes. */
+export class ArtifactFolderBusy extends Error {
+  constructor(readonly folder: string, readonly work: ArtifactWork) {
+    super(work === "compile"
+      ? i18n._({ id: "a compile is writing {folder}; retry once it ends", values: { folder },
+          comment: "Refusal: another compile of this core writes the playbook's artifact folder" })
+      : i18n._({ id: "Spex is packaging {folder}; retry once it ends", values: { folder },
+          comment: "Refusal: an enabling of this core packages the playbook's artifact folder" }));
+    this.name = "ArtifactFolderBusy";
+  }
+}
+
+/** Run `job` as the one job writing `folder`: admitted, or refused by a
+ * throw, at the call itself, before the job starts; the admission is
+ * released when that job ends (playbook-library-99). */
+function admitArtifactJob<T>(folder: string, work: ArtifactWork, job: () => Promise<T>): Promise<T> {
+  const key = canonicalFolder(folder);
+  const running = artifactJobs.get(key);
+  if (running) throw new ArtifactFolderBusy(folder, running.work);
+  const entry = { work };
+  artifactJobs.set(key, entry);
+  return (async () => {
+    try {
+      return await job();
+    } finally {
+      if (artifactJobs.get(key) === entry) artifactJobs.delete(key);
+    }
+  })();
 }
 
 export interface CompileResult {
@@ -852,7 +928,17 @@ export default {
 `;
 }
 
-export async function compilePlaybook(
+/**
+ * Compile, or with `skipSlc` repackage, a playbook in its artifact
+ * folder as the one job of this core writing that folder: where another
+ * writes it, the call throws {@link ArtifactFolderBusy} at once and
+ * nothing runs (playbook-library-99).
+ */
+export function compilePlaybook(options: CompileOptions): Promise<CompileResult> {
+  return admitArtifactJob(artifactFolder(options.libraryDir, options.playbookId), options.skipSlc ? "packaging" : "compile", () => compileAdmitted(options));
+}
+
+async function compileAdmitted(
   options: CompileOptions,
 ): Promise<CompileResult> {
   const progress = options.onProgress ?? (() => {});
@@ -866,13 +952,25 @@ export async function compilePlaybook(
     );
   }
 
-  const dir = resolve(options.libraryDir, id);
+  // The toolchain is probed before the start, so an authoring compile's
+  // start, whose rebind check follows its own awaits, comes after the
+  // probe's await (playbook-library-67); the probe's verdict is thrown
+  // after the start, which records it. A compile canceled during the
+  // probe starts nothing.
+  const toolchain = options.skipSlc ? undefined : await checkToolchain(env, spawner, options.runtime);
+  signal?.throwIfAborted();
+  const agent = options.start ? await options.start() : options.agent;
+  const dir = artifactFolder(options.libraryDir, id);
   mkdirSync(dir, { recursive: true });
   const sourcePath = join(dir, `${id}.md`);
-  if (options.source.text !== undefined) {
-    writeFileSync(sourcePath, options.source.text);
-  } else if (options.source.path) {
-    copyFileSync(options.source.path, sourcePath);
+  if (options.source.text !== undefined || options.source.path) {
+    // Spex's own write of the source replaces `<id>.md` atomically under
+    // the bytes it held as the job began, the picked file read once; a
+    // file changed meanwhile is a conflict (playbook-library-12).
+    const before = readVersioned(sourcePath);
+    const mode = before.bytes === null ? 0o644 : statSync(sourcePath).mode & 0o777;
+    const bytes = options.source.text ?? await readFile(options.source.path as string);
+    writeVersionedBytes(sourcePath, bytes, before.version, mode);
   } else if (!existsSync(sourcePath)) {
     throw new Error("compile needs a source text or file");
   }
@@ -884,8 +982,7 @@ export async function compilePlaybook(
   // no -o is given (DR-014); the compile runs with cwd = dir.
   const entryModulePath = join(dir, `${id}.ts`);
 
-  if (!options.skipSlc) {
-    const toolchain = await checkToolchain(env, spawner, options.runtime);
+  if (toolchain) {
     if (!toolchain.node.ok) throw new Error(toolchain.node.guidance);
     if (!toolchain.slc.ok) throw new Error(toolchain.slc.guidance);
     const [slcCommand, ...slcArgs] = toolchain.slc.command;
@@ -893,12 +990,12 @@ export async function compilePlaybook(
     // environment configures slc; an adapter slc cannot drive is refused
     // here rather than left to slc's seeded default.
     const configured = SLC_AGENT_VARIABLES.some((variable) => env[variable]);
-    const agentEnv = compilerAgentEnv(env, options.agent);
-    if (options.agent && !configured && !SLC_AGENT_IDS[options.agent.adapter]) {
+    const agentEnv = compilerAgentEnv(env, agent);
+    if (agent && !configured && !SLC_AGENT_IDS[agent.adapter]) {
       throw new Error(
         i18n._({
           id: "The compile's agent runs on {adapter}, which the compiler cannot drive; choose an agent on claude, codex, gemini or opencode, or set SLC_AGENT.",
-          values: { adapter: options.agent.adapter },
+          values: { adapter: agent.adapter },
           comment:
             "Refusal before the compiler runs: the block's adapter has no slc id; the adapter names and `SLC_AGENT` stay as they are",
         }),
@@ -1035,23 +1132,4 @@ export async function compilePlaybook(
   const locator = options.configPath ? relative(dirname(options.configPath), registryBundle).split("\\").join("/") : registryBundle;
   const from = options.configPath && !locator.startsWith(".") ? `./${locator}` : locator;
   return { from, roles, ...ids };
-}
-
-/** Rebuild bundles from retained compiler outputs without invoking an agent. */
-export async function rebuildManagedRegistry(libraryDir: string, id: string): Promise<void> {
-  const directory = resolve(libraryDir, id);
-  if (existsSync(join(directory, `${id}.registry.mjs`))) return;
-  const source = join(directory, `${id}.md`); const entry = join(directory, `${id}.ts`);
-  const wrapper = join(directory, `${id}.registry.ts`);
-  if (!existsSync(source) || !existsSync(entry) || !existsSync(wrapper)) throw new Error(`playbook ${id} is unavailable: retained source or compiler output is missing; compile it in Playbooks`);
-  const temporary = mkdtempSync(join(tmpdir(), "spex-library-rebuild-"));
-  try {
-    const bundled = join(temporary, "entry.mjs");
-    await build({ entryPoints: [wrapper], outfile: bundled, bundle: true, format: "esm", platform: "node", logLevel: "silent", nodePaths: bundleNodePaths() });
-    const module = await import(pathToFileURL(bundled).href);
-    if (!isValidRegistryEntry(module.default) || module.default.id !== id) throw new Error(`retained registry ${id} is invalid`);
-    await compilePlaybook({ playbookId: id, source: {}, roles: [...module.default.requiredRoleIds], command: module.default.command, intent: module.default.intent, libraryDir, skipSlc: true });
-  } catch (error) {
-    throw new Error(`playbook ${id} is unavailable: rebuilding failed: ${(error as Error).message}`);
-  } finally { rmSync(temporary, { recursive: true, force: true }); }
 }

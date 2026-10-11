@@ -30,6 +30,7 @@ When an upload operation is admitted, the core shall apply this transaction prot
 | Command or state | Outcome |
 | --- | --- |
 | Begin with client UUID, project or draft owner, display name, MIME type, and byte length | reserve one private staging file and return the upload ID and received offset |
+| Begin, first or repeated, naming an owner that does not stand — a project or session the core does not hold, or an authoring session whose file records another instance than the one named | reject as not found, reserving no staging file |
 | Repeated begin with identical ID and metadata | return the existing offset or completed reference |
 | Reused ID with different metadata | reject without modifying existing content |
 | Chunk at received offset | append validated base64 bytes and acknowledge the new offset |
@@ -52,7 +53,7 @@ When application content becomes durable, the core shall use the shared owner-sc
 | Content | Owner and lifetime |
 | --- | --- |
 | Initial messages, session follow-ups before acceptance, queued intents | The intent's own asset directory beside its file [[storage-4](storage.md#storage-4)]; a session's first message before its intent exists under the spex repository's staging owner |
-| Authoring input and output | The authoring session's asset directory beside its file [[storage-23](storage.md#storage-23)] |
+| Authoring input and output | The authoring session's asset directory beside its file, the owner naming the session's instance [[storage-23](storage.md#storage-23)] |
 | Accepted session input and observed output | Playbook session asset bundle |
 | Intent-to-session handoff | Copy and validate bytes into the session before acknowledging acceptance; retain independent project ownership |
 | Edited intent | Keep the bytes its references still name; a removed intent's directory goes with its file |
@@ -75,7 +76,10 @@ When a client requests agent capabilities, the core shall return Cligent's conte
 
 ### media-8
 
-When a client requests browser preparation, the core shall run Cligent's cancellable preparation with a fifteen-minute overall budget for the same settings and context, relay checking/installing/launching progress and the typed final result to that client, and abort the owned preparation when the client cancels or disconnects, without enabling browser access or changing configuration.
+When a client requests browser preparation, the core shall run Cligent's cancellable preparation with a fifteen-minute overall budget for the same settings and context, relay checking/installing/launching progress and the typed final result to that client, and abort the owned preparation when the client cancels or disconnects, without enabling browser access or changing configuration:
+
+- a request repeating the operation id of a preparation running joins it, answering with its result;
+- a request with another operation id runs its own preparation beside it, from the same client or another, the shared browser cache being Cligent's to keep.
 
 ### media-9
 
@@ -83,9 +87,14 @@ When browser access is configured for an agent, the core shall preserve its bool
 
 ### media-17
 
-When an application owner is removed or a draft is retired after registration, the core shall exclude new media admission and reads for that owner, invalidate its upload identities throughout their existing retry window, and drain already admitted publication, validation, and readers before removing the owner, without blocking other owners or changing the existing retention of historical project intent assets [[media-4](#media-4)]:
+When content becomes an application owner's asset — a finished upload, attachments taken into an intent, or an authoring turn's output — the core shall prepare and verify it privately through the shared asset primitives, then publish it into the owner in one step at that instant, refusing it as unavailable where the owner no longer stands, or no longer lies in the clone it lay in at the upload's begin, and creating only folders beneath that clone, so that no publication recreates a removed or moved owner or writes into a successor ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
-- the removal's own refusals are checked after that drain, with nothing awaited between the check, the invalidation, and the removal's start, so a removal refused because its owner admitted other work during the drain leaves that owner's upload identities resumable.
+- a file already in the owner stands, its name being its content's digest, and the content lands before its descriptor;
+- a session's own assets stay under Playbook's session lease, and historical project intent assets keep their retention [[media-4](#media-4)].
+
+### media-20
+
+When an application owner is removed, the core shall invalidate the owner's upload identities through their existing retry window and close its cached readers at the removal's own instant, waiting for no upload, validation or reader, while a removal its owner refuses invalidates nothing, leaving those uploads resumable ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ## Verification
 
@@ -135,4 +144,8 @@ When a fresh installed Desktop uses a signed-in native agent to inspect an owned
 
 ### media-18
 
-When real owner stores and authenticated core clients race media publication with owner removal, integration verification shall assert that removal waits for admitted publication and validation, unrelated owners continue, cached and already closing readers drain, and old incomplete or completed upload identities cannot resume after draft deletion and recreation or registration retirement, while a draft deletion refused after the drain because a compile was admitted leaves an in-flight upload resumable from its received offset to a successful finish [[media-17](#media-17)].
+When real owner stores and authenticated core clients race media publication with owner removal and moves, integration verification shall assert that a removal completes while a publication's private preparation stands held [[media-20](#media-20)], the publication then refused and recreating nothing, another owner continuing [[media-17](#media-17)]; that a publication whose clone moved lands where the clone now lies without recreating the former one, one whose clone was replaced by a successor while it was prepared or before its finish is refused, a retried finish refused alike, leaving the successor untouched, and one whose clone went is refused [[media-17](#media-17)], a repeated begin naming the replaced owner refused [[media-2](#media-2)]; that an adoption into an intent whose clone was replaced while its copy was prepared is refused, leaving the successor untouched [[media-17](#media-17)]; that a removal completes while a validation and a reader's close stand held [[media-20](#media-20)], the validation recreating nothing [[media-17](#media-17)]; that old incomplete or completed upload identities cannot resume after their owner stands again [[media-20](#media-20)], nor a begin naming the former instance be admitted [[media-2](#media-2)]; that an authoring turn's output prepared while its session was deleted and made again under its id is refused, nothing landing in the successor and no private stage left [[media-17](#media-17)]; and that a removal its owner refuses leaves an in-flight upload resumable from its received offset to a successful finish [[media-20](#media-20)].
+
+### media-21
+
+When a real WebSocket client asks the core for browser preparation through a substitute adapter whose preparation can block until canceled, integration verification shall assert that a request repeating a running operation's id joins it with one preparation run, that a request with another id runs its own beside it, that the client's cancel ends its own preparation and a disconnect ends the rest, and that no configuration is written [[media-8](#media-8)].

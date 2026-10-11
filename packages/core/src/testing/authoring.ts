@@ -31,8 +31,9 @@ export function seedInterruptedDraft(dataDir: string, projectId: string, id: str
   const store = new DraftStore(() => [location]);
   const draft = store.create(id, at - 60_000, location, "local");
   store.writeSource(id, source);
-  store.append(id, 1, { type: "captain_status", turnId: null, timestamp: at, message: "◇ Compiling — asked by you" } as TmuxPlayRecord);
-  store.write({ ...draft, touchedAt: at, compile: { at, by: "boss", outcome: "running" } });
+  store.append(id, draft.instance, { type: "captain_status", turnId: null, timestamp: at, message: "◇ Compiling — asked by you" } as TmuxPlayRecord);
+  // This home's device ran it, so this home's next start closes it.
+  store.write({ ...draft, touchedAt: at, compile: { at, by: "boss", outcome: "running", device: home.device } }, store.load(id).version);
 }
 
 /** The source the fake writes: a two-role triage workflow. */

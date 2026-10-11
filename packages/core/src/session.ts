@@ -562,6 +562,13 @@ export class SessionManager {
       }))) : undefined;
       const initialVisible = composed ? composed.initialVisible.filter((id) => !members || members.playerIds.includes(id)) : undefined;
       const fixture = composed && this.options.captainFactory ? await this.options.captainFactory(composed, sessionId) : undefined;
+      // Nothing awaited between: a clone gone meanwhile is refused here,
+      // as one gone before the open is.
+      if (!this.store.openSessionsDir(project.id)) throw new CoreError("not_found", i18n._({
+        id: "no project {projectId}",
+        comment: "Refusal: no project of this id is registered",
+        values: { projectId: project.id },
+      }));
       controller = await openSessionHost({
         store: this.store.sessionStore(project.id), sessionId, mode, cwd: project.path,
         ...(this.options.approvalHandler ? {approvalHandler: this.options.approvalHandler(sessionId)} : {}),

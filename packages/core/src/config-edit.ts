@@ -5,14 +5,16 @@
 // operation is applied to a yaml Document (keeping comments, key
 // order, and formatting), then the candidate is composed with the
 // same fail-closed validation as loading — an edit the playbook
-// launcher would reject never reaches the file.
+// launcher would reject never reaches the file — and written under the
+// version of the bytes it was applied to, so a file changed during the
+// composition is refused as a conflict, never overwritten (DR-111).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
 import { composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
-import { writeApplicationBytes } from "./app-storage.js";
+import { readVersioned, VersionConflictError, writeVersionedBytes, type FileVersion } from "./files.js";
 import { i18n } from "./i18n.js";
 
 export interface AgentBlock {
@@ -216,8 +218,23 @@ export function applyConfigOp(text: string, op: ConfigEditOp): string {
 
 export interface EditResult {
   ok: boolean;
-  /** Composition error when the candidate failed validation. */
+  /** Composition error when the candidate failed validation, or the
+   * conflict's words. */
   error?: string;
+  /** The file changed between the read and the write: nothing was
+   * written, and the caller reads again and retries. */
+  conflict?: boolean;
+}
+
+/** Write a candidate under the version it was applied to (DR-111). */
+function writeCandidate(path: string, candidate: string, version: FileVersion): EditResult {
+  try {
+    writeVersionedBytes(path, candidate, version);
+  } catch (error) {
+    if (error instanceof VersionConflictError) return { ok: false, conflict: true, error: error.message };
+    throw error;
+  }
+  return { ok: true };
 }
 
 /**
@@ -230,8 +247,9 @@ export async function editConfigFile(
   loadModule?: LoadModule,
   options: { modules?: PlaybookModules } = {},
 ): Promise<EditResult> {
-  const text = readFileSync(path, "utf8");
-  const candidate = applyConfigOp(text, op);
+  const { bytes, version } = readVersioned(path);
+  if (bytes === null) return { ok: false, conflict: true, error: new VersionConflictError(path).message };
+  const candidate = applyConfigOp(bytes.toString("utf8"), op);
   try {
     const parsed = parseDocument(candidate).toJS() as unknown;
     await composeConfig(parsed, loadModule, path, options);
@@ -241,8 +259,7 @@ export async function editConfigFile(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-  writeApplicationBytes(path, candidate);
-  return { ok: true };
+  return writeCandidate(path, candidate, version);
 }
 
 /** The operations a project's or another group's file takes: only its
@@ -271,8 +288,8 @@ export async function editProjectConfigFile(
       }),
     };
   }
-  const text = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const candidate = applyConfigOp(text, op);
+  const { bytes, version } = readVersioned(path);
+  const candidate = applyConfigOp(bytes === null ? "" : bytes.toString("utf8"), op);
   try {
     const projectTop = parseDocument(candidate).toJS() as unknown;
     validateProjectConfig(projectTop, path);
@@ -281,9 +298,15 @@ export async function editProjectConfigFile(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  mkdirSync(dirname(path), { recursive: true });
-  writeApplicationBytes(path, candidate);
-  return { ok: true };
+  // The file's folder is made inside its clone, never the clone itself.
+  if (!existsSync(dirname(path))) {
+    try { mkdirSync(dirname(path)); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { ok: false, conflict: true, error: new VersionConflictError(path).message };
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  return writeCandidate(path, candidate, version);
 }
 
 /**

@@ -11,18 +11,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { Store } from "./store.js";
+import { spexRepository, Store } from "./store.js";
 import { sha256 } from "./app-storage.js";
 import { Home } from "./home.js";
 import { starterText, templatePath, type PlaybookModules } from "./config.js";
 import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
-import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, validateStorageTree, type StorageChoice } from "./storage-git.js";
+import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageWriteRefused, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
 
 /** One fixed machine identity for the in-process writers and the
@@ -202,8 +202,9 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     unchanged("an invalid side");
 
     // Leases block competing writes (storage-14): the home lease refuses
-    // every mutating command; a session lease in this clone refuses
-    // selection, while one in another spex repository's own store does not.
+    // every mutating command; a session lease in this clone refuses that
+    // session's write, leaving it and the index as the merge left them,
+    // while one in another spex repository's own store refuses nothing.
     const releaseHome = reserveStorageHome(home, machineIdentity);
     try {
       // The command reads this machine's identity, so the holder is a
@@ -215,13 +216,15 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
     unchanged("a held home lease");
     const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") }); await sessions.prepare();
     const held = await sessions.acquireManagement(sessionId);
-    try { cliFails(home, key, ["select", ...complete], /held|owner|active|lease/i); }
+    try { cliFails(home, key, ["select", ...complete], new RegExp(`sessions/${sessionId}: .*(held|owner|active|lease)`, "i")); }
     finally { await held.release(); }
-    unchanged("a held session lease");
+    assert.equal(git(clone, "ls-files", "-s"), mergeIndex, "a held session lease: index unchanged");
+    for (const file of [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`]) assert.deepEqual(readFileSync(join(clone, file)), mergeFiles.get(file), `a held session lease: ${file} unchanged`);
     const otherClone = Home.load(home).clonePath(s.other!.id);
     const otherSession = randomUUID(); bundle("elsewhere", otherSession, otherClone, s.other!.path);
     const otherStore = createSessionStore({ sessionsDir: join(otherClone, "sessions") }); await otherStore.prepare();
     const elsewhere = await otherStore.acquireManagement(otherSession);
+    // The retry completes what the refused selection began (storage-21).
     let result: { plan: { base: string }; diagnostics: unknown[] };
     try { result = cli(home, key, "select", ...complete); }
     finally { await elsewhere.release(); }
@@ -303,7 +306,8 @@ test("storage-16: the documented entry point plans, selects, validates and rebin
 test("storage-16: real Git branches select session bundles and intents as complete units", async () => {
   const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
   try {
-    const shared = randomUUID(); writeIntent(clone, shared, "base"); commit("intent");
+    const shared = randomUUID(); writeIntent(clone, shared, "base");
+    const untouched = randomUUID(); writeIntent(clone, untouched, "neither side changes it"); commit("intent");
     git(clone, "branch", "other"); bundle("ours");
     writeIntent(clone, shared, "ours"); const mine = randomUUID(); writeIntent(clone, mine, "added here", { createdAt: 2 });
     commit("ours"); const oursManifest = readFileSync(join(clone, "sessions", `${sessionId}.json`));
@@ -311,6 +315,9 @@ test("storage-16: real Git branches select session bundles and intents as comple
     writeIntent(clone, shared, "theirs"); const theirs = randomUUID(); writeIntent(clone, theirs, "added there", { createdAt: 3 });
     commit("theirs"); const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`));
     git(clone, "checkout", "-q", "spex"); const plan = planStorageMerge(clone, "HEAD", "other");
+    // An attachment never committed, in a unit neither side changed, is Git's untracked file and stays (storage-21).
+    const local = join(clone, "intents", `${untouched}.assets`, "local.bin");
+    mkdirSync(dirname(local), { recursive: true }); writeFileSync(local, "kept");
     assert.equal(plan.units.find((u) => u.name === `sessions/${sessionId}`)?.choice, "conflict");
     assert.equal(plan.units.find((u) => u.name === `intents/${shared}`)?.choice, "conflict");
     assert.deepEqual(plan.units.find((u) => u.name === `intents/${mine}`)?.changed, { ours: true, theirs: false });
@@ -323,6 +330,7 @@ test("storage-16: real Git branches select session bundles and intents as comple
     assert.equal(intentText(clone, shared), "ours");
     assert.equal(intentText(clone, mine), "added here");
     assert.equal(intentText(clone, theirs), "added there");
+    assert.equal(readFileSync(local, "utf8"), "kept");
     assert.equal(git(clone, "diff", "--name-only", "--diff-filter=U"), "");
     assert.equal(statSync(join(clone, "sessions")).mode & 0o777, 0o700);
     assert.equal(statSync(join(clone, "sessions", `${sessionId}.json`)).mode & 0o777, 0o600);
@@ -407,28 +415,142 @@ test("storage-16: unrelated histories refuse selection until joined, whereupon t
   } finally { dispose(); }
 });
 
-test("storage-16: the apply seam plans over a caller-supplied ancestor and writes under a lease the caller already holds", async () => {
+test("storage-16: the apply seam writes each changed unit under the version it read, a session's lease for that write alone, and stages the validated tree", async () => {
   const { home, key, clone, sessionId, bundle, commit, dispose } = setup();
   try {
     git(clone, "branch", "other");
     bundle("ours"); commit("ours"); const ours = git(clone, "rev-parse", "HEAD");
-    git(clone, "checkout", "-q", "other"); bundle("theirs"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "other"); bundle("theirs"); writeFileSync(join(clone, "notes.md"), "theirs\n"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
     const theirsRecords = readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8");
     git(clone, "checkout", "-q", "spex");
-    assert.notEqual(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
+    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const oursRecords = readFileSync(records, "utf8");
     const plan = planStorageMerge(clone, ours, theirs);
+    const choices = { [`sessions/${sessionId}`]: "theirs" as const };
+    const store = createSessionStore({ sessionsDir: join(clone, "sessions") }); await store.prepare();
     const release = reserveStorageHome(home, machineIdentity);
     try {
-      await assert.rejects(() => selectStorageMerge(home, key, { [`sessions/${sessionId}`]: "theirs" }), /stop the Spex core/);
+      await assert.rejects(() => selectStorageMerge(home, key, choices), /stop the Spex core/);
+      // A held lease refuses the session's write before any other unit,
+      // sessions going first, and the index stays (storage-14).
+      const held = await store.acquireManagement(sessionId);
+      try {
+        await assert.rejects(() => applyStorageSelection(clone, plan, choices), (error: StorageWriteRefused) =>
+          error instanceof StorageWriteRefused && error.reason === "lease" && error.unit === `sessions/${sessionId}` && error.written.length === 0);
+      } finally { await held.release(); }
+      assert.equal(readFileSync(records, "utf8"), oursRecords);
+      assert.equal(existsSync(join(clone, "notes.md")), false, "nothing after the refused session is written");
+      assert.equal(git(clone, "diff", "--cached", "--name-only"), "");
+      // A writer appending just before the lease is granted — after the
+      // candidate validated, the last await before the write — has its
+      // change refused over and kept, and the lease goes with the refusal.
+      const appendFirst = { acquireManagement: (id: string) => { writeFileSync(records, `${oursRecords}{"appended":true}\n`); return store.acquireManagement(id); } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { sessions: appendFirst }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "changed");
+      assert.match(readFileSync(records, "utf8"), /appended/);
+      await (await store.acquireManagement(sessionId)).release();
+      writeFileSync(records, oursRecords);
       let marked = false;
-      const applied = await applyStorageSelection(clone, plan, { [`sessions/${sessionId}`]: "theirs" }, { beforeWrite: () => { marked = true; } });
+      const applied = await applyStorageSelection(clone, plan, choices, { beforeWrite: () => { marked = true; } });
       assert.ok(marked, "the caller's marker runs before the first write");
       assert.deepEqual(applied.changedSessions, [`sessions/${sessionId}`]);
+      assert.deepEqual(applied.written, [`sessions/${sessionId}`, "notes.md"], "sessions first");
       assert.equal(applied.selected.get(`sessions/${sessionId}`), "theirs");
+      assert.equal(applied.tree, git(clone, "rev-parse", `${theirs}^{tree}`));
+      // The lease was the write's alone.
+      await (await store.acquireManagement(sessionId)).release();
     } finally { release(); }
-    assert.equal(readFileSync(join(clone, "sessions", `${sessionId}.records.jsonl`), "utf8"), theirsRecords);
-    assert.equal(git(clone, "diff", "--cached", "--name-only"), [`sessions/${sessionId}.json`, `sessions/${sessionId}.records.jsonl`].join("\n"));
+    assert.equal(readFileSync(records, "utf8"), theirsRecords);
+    assert.equal(git(clone, "write-tree"), git(clone, "rev-parse", `${theirs}^{tree}`), "the index holds the validated tree");
     assert.equal(git(clone, "rev-parse", "HEAD"), ours, "the seam commits nothing itself");
+  } finally { dispose(); }
+});
+
+test("storage-16: under select, a unit changed after the apply read Git's merge output is refused and kept, and a clone moved or removed during a lease's await is never made anew", async () => {
+  const { root, home, key, clone, sessionId, bundle, commit, dispose } = setup();
+  try {
+    git(clone, "branch", "other");
+    bundle("ours"); commit("ours");
+    git(clone, "checkout", "-q", "other"); bundle("theirs"); const fresh = randomUUID(); bundle("fresh", fresh); commit("theirs");
+    git(clone, "checkout", "-q", "spex"); merge(clone);
+    const records = join(clone, "sessions", `${sessionId}.records.jsonl`);
+    const merged = readFileSync(records);
+    assert.match(merged.toString(), /^<<<<<<< /m, "Git's merge output is the version select reads");
+    const plan = planStorageMerge(clone, "HEAD", "MERGE_HEAD");
+    const choices = { [`sessions/${sessionId}`]: "theirs" as const };
+    const store = createSessionStore({ sessionsDir: join(clone, "sessions") });
+    const release = reserveStorageHome(home, machineIdentity);
+    try {
+      // A writer changing the merged unit while its lease is awaited:
+      // refused over, the change kept, the index as the merge left it (storage-21).
+      const index = git(clone, "ls-files", "-s");
+      const late = { acquireManagement: (id: string) => { writeFileSync(records, "late\n"); return store.acquireManagement(id); } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: late }), (error: StorageWriteRefused) =>
+        error instanceof StorageWriteRefused && error.reason === "changed" && error.unit === `sessions/${sessionId}`);
+      assert.equal(readFileSync(records, "utf8"), "late\n");
+      assert.equal(git(clone, "ls-files", "-s"), index);
+      writeFileSync(records, merged);
+      // The clone moved, then removed, while a lease is awaited: the
+      // clone's own session store — the one the core opens — is asked as
+      // the clone goes, the write is refused as moved, never as a lease,
+      // and no folder is made where the clone was (space-19).
+      const moved = join(root, "moved");
+      const backup = join(root, "backup");
+      const real = spexRepository(key, clone).store;
+      const away = (gone: () => void) => ({ acquireManagement: async (id: string) => { gone(); return real.acquireManagement(id); } });
+      const removed = (): void => { execFileSync("cp", ["-Rp", clone, backup]); rmSync(clone, { recursive: true, force: true }); };
+      for (const gone of [() => renameSync(clone, moved), removed]) {
+        await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: away(gone) }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "moved");
+        assert.equal(existsSync(clone), false, "the clone's old path stays absent");
+        const kept = existsSync(moved) ? moved : backup;
+        assert.deepEqual(readFileSync(join(kept, "sessions", `${sessionId}.records.jsonl`)), merged, "the clone elsewhere is untouched");
+        renameSync(kept, clone);
+      }
+      // A successor standing at the same path with the same bytes, the
+      // former clone kept alive elsewhere so no inode is reused: the lease
+      // is taken in the successor, yet the write is refused as moved and
+      // the successor keeps every byte.
+      const successor = (): void => { renameSync(clone, moved); execFileSync("cp", ["-Rp", moved, clone]); };
+      const before = snapshot(clone);
+      const history = git(clone, "log", "--format=%H", "--all");
+      const staged = git(clone, "ls-files", "-s");
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: away(successor) }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "moved");
+      // Its records and units keep every byte — the lease metadata the
+      // acquisition leaves is no record — and its history and index stand.
+      assert.deepEqual(snapshot(clone), before, "the successor's records and units are unchanged");
+      assert.equal(git(clone, "log", "--format=%H", "--all"), history, "the successor's history is unchanged");
+      assert.equal(git(clone, "ls-files", "-s"), staged, "the successor's index is unchanged");
+      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.records.jsonl`)), merged, "the former clone is untouched");
+      await (await real.acquireManagement(sessionId)).release();
+      rmSync(clone, { recursive: true, force: true });
+      renameSync(moved, clone);
+      // The clone moved once its lease is published: the write is refused
+      // as moved, and the lease's release failing at the former path
+      // replaces nothing.
+      const published = { acquireManagement: async (id: string) => { const lease = await real.acquireManagement(id); renameSync(clone, moved); return lease; } };
+      await assert.rejects(() => applyStorageSelection(clone, plan, choices, { workingTree: "merge", sessions: published }), (error: StorageWriteRefused) => error instanceof StorageWriteRefused && error.reason === "moved");
+      assert.equal(existsSync(clone), false, "the release made nothing at the former path");
+      assert.deepEqual(readFileSync(join(moved, "sessions", `${sessionId}.records.jsonl`)), merged);
+    } finally { release(); }
+  } finally { dispose(); }
+});
+
+test("storage-16: a unit's version is read as Git reads its path, so a clean CRLF checkout under core.autocrlf is no change", async () => {
+  const { home, clone, commit, dispose } = setup();
+  try {
+    git(clone, "config", "core.autocrlf", "true");
+    writeFileSync(join(clone, "notes.txt"), "base\n"); commit("notes");
+    git(clone, "branch", "other");
+    git(clone, "checkout", "-q", "other"); writeFileSync(join(clone, "notes.txt"), "theirs\n"); commit("theirs"); const theirs = git(clone, "rev-parse", "HEAD");
+    git(clone, "checkout", "-q", "spex");
+    assert.equal(readFileSync(join(clone, "notes.txt"), "utf8"), "base\r\n", "Git checked the file out with CRLF");
+    assert.equal(git(clone, "status", "--porcelain"), "");
+    const release = reserveStorageHome(home, machineIdentity);
+    try {
+      const applied = await applyStorageSelection(clone, planStorageMerge(clone, "HEAD", "other"), {});
+      assert.deepEqual(applied.written, ["notes.txt"]);
+    } finally { release(); }
+    assert.equal(git(clone, "show", `${theirs}:notes.txt`), "theirs");
+    assert.equal(readFileSync(join(clone, "notes.txt"), "utf8").replace(/\r/g, ""), "theirs\n");
   } finally { dispose(); }
 });
 

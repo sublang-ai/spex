@@ -15,7 +15,7 @@ import type { DraftInfo } from "@sublang/spex-core/protocol";
 
 import type { SpecEditorState } from "../lib/spec-view-model.js";
 import type { DraftSourceMode, DraftSourceState } from "../state/store.js";
-import { busyReason, draftSourcePath } from "../lib/drafts.js";
+import { draftSourcePath } from "../lib/drafts.js";
 import { relativeAge } from "../lib/time.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
@@ -61,10 +61,9 @@ export function DraftSourceTab({
   const now = useClock(false);
   const [pasteBusy, setPasteBusy] = useState(false);
   const [pasteError, setPasteError] = useState<string>();
-  // Save and Use as source wait while a turn or a compile runs
-  // (playbook-library-56); Edit and Paste stay open, so the Boss can
-  // prepare a change through a long compile and save when it ends.
-  const waiting = busyReason(draft);
+  // Save and Use as source write under the version read, whatever runs
+  // beside them: a file changed meanwhile is a conflict to answer
+  // (playbook-library-56).
   const path = `${draftId}.md`;
 
   if (mode.mode === "edit" && editor) {
@@ -74,7 +73,6 @@ export function DraftSourceTab({
           key={path}
           state={editor}
           onState={onEditor}
-          saveBlocked={waiting}
           onWrite={(content, baseVersion) =>
             onWrite({
               content,
@@ -105,7 +103,6 @@ export function DraftSourceTab({
     const canUse =
       connected &&
       !pasteBusy &&
-      !waiting &&
       (mode.pasteText.trim().length > 0 || mode.pastePath.trim().length > 0);
     const useAsSource = async (): Promise<void> => {
       if (!canUse) return;
@@ -174,10 +171,9 @@ export function DraftSourceTab({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span data-testid="paste-caption" className="text-xs text-neutral-500">
-            {waiting ??
-              (mode.pastePath.trim()
-                ? i18n._("The file is copied in as the playbook's source")
-                : i18n._("Replaces the playbook's source"))}
+            {mode.pastePath.trim()
+              ? i18n._("The file is copied in as the playbook's source")
+              : i18n._("Replaces the playbook's source")}
           </span>
           <span className="ml-auto flex items-center gap-1.5">
             <button
@@ -192,7 +188,6 @@ export function DraftSourceTab({
               type="button"
               data-testid="paste-use"
               disabled={!canUse}
-              title={waiting}
               onClick={() => void useAsSource()}
               className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >

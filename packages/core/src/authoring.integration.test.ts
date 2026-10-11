@@ -10,8 +10,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
+import { clearTimeout as clearTimer, setTimeout as setTimer } from "node:timers";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
 import type { PermissionPolicy } from "@sublang/cligent";
@@ -22,10 +23,13 @@ import { mapPermissionsToOpenCodeOptions } from "@sublang/cligent/adapters/openc
 
 import { CoreService } from "./service.js";
 import { authoringDocuments } from "./authoring.js";
-import { defaultSpawner, type LineSpawner } from "./compile.js";
+import { defaultSpawner, MIN_NODE_MAJOR, MIN_NODE_MINOR, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
-import { stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
+import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
+import { DraftChangedError, DraftStore, legacyInstance } from "./drafts.js";
+import { Home } from "./home.js";
+import type { ApplicationMedia } from "./media.js";
 import type {
   Command,
   CommandResults,
@@ -63,16 +67,43 @@ playbooks:
       reviewer: dev.reviewer
 `;
 
+/** A command's fields, the session's instance filled in from what the
+ * client last saw of it unless the test names one (core-service-96). */
+type Fields<T extends Command["type"]> = Omit<Extract<Command, { type: T }>, "type" | "id" | "instance"> & { instance?: string };
+
+const NAMES_INSTANCE = new Set<string>(["draft.send", "draft.abort", "draft.source.write", "draft.compile", "draft.register", "draft.player.set", "draft.delete"]);
+
 class Client {
   private readonly socket: WebSocket;
   readonly messages: ServerMessage[] = [];
+  /** Each session as this client last read it: a state or a reply. */
+  readonly known = new Map<string, DraftInfo>();
   private nextId = 0;
 
   constructor(port: number) {
     this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
     this.socket.on("message", (data) => {
-      this.messages.push(JSON.parse(String(data)) as ServerMessage);
+      const message = JSON.parse(String(data)) as ServerMessage;
+      this.messages.push(message);
+      if (message.type === "draft.state") this.known.set(message.draft.id, message.draft);
+      if (message.type === "reply" && message.ok) this.learn(message.result);
     });
+  }
+
+  private learn(result: unknown): void {
+    const infos = Array.isArray(result) ? result : [(result as { draft?: unknown } | null)?.draft ?? result];
+    for (const info of infos) {
+      if (info && typeof info === "object" && "state" in info && "activity" in info && typeof (info as DraftInfo).id === "string") {
+        this.known.set((info as DraftInfo).id, info as DraftInfo);
+      }
+    }
+  }
+
+  /** The instance the client last read for a session. */
+  instance(id: string): string {
+    const instance = this.known.get(id)?.instance;
+    if (!instance) throw new Error(`no instance known for ${id}`);
+    return instance;
   }
 
   async open(): Promise<void> {
@@ -97,13 +128,20 @@ class Client {
 
   async command<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: Fields<T>,
   ): Promise<
     | { ok: true; result: CommandResults[T] }
     | { ok: false; error: { code: string; message: string } }
   > {
     const id = `c${(this.nextId += 1)}`;
-    this.socket.send(JSON.stringify({ type, id, ...fields }));
+    const named = fields as { draftId?: string; instance?: string; fileVersion?: string };
+    let filled: Record<string, unknown> = { ...fields };
+    if (NAMES_INSTANCE.has(type) && named.draftId && named.instance === undefined && named.fileVersion === undefined) {
+      const known = this.known.get(named.draftId);
+      if (known?.instance) filled = { ...filled, instance: known.instance };
+      else if (type === "draft.delete" && known?.fileVersion) filled = { ...filled, fileVersion: known.fileVersion };
+    }
+    this.socket.send(JSON.stringify({ type, id, ...filled }));
     const reply = await this.waitFor((m) => m.type === "reply" && m.id === id, 120_000);
     if (reply.type !== "reply") throw new Error("unreachable");
     return reply.ok
@@ -113,7 +151,7 @@ class Client {
 
   async expectOk<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: Fields<T>,
   ): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
@@ -122,7 +160,7 @@ class Client {
 
   async expectError<T extends Command["type"]>(
     type: T,
-    fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
+    fields: Fields<T>,
     code: string,
   ): Promise<{ code: string; message: string }> {
     const reply = await this.command(type, fields);
@@ -186,6 +224,18 @@ async function until(check: () => boolean, timeoutMs = 60_000, what = "condition
   while (!check()) {
     if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${what}`);
     await sleep(15);
+  }
+}
+
+/** A reply within `ms`, else undefined: a refusal comes at once, and a
+ * job wrongly admitted behind a held stub fails the test without
+ * waiting on that stub. */
+async function within<T>(reply: Promise<T>, ms = 10_000): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([reply, new Promise<undefined>((resolve) => { timer = setTimer(() => resolve(undefined), ms); })]);
+  } finally {
+    clearTimer(timer);
   }
 }
 
@@ -335,7 +385,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   });
   // storage-23: the record lands in the project's spex repository.
   const record = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "package", "queued", "touchedAt"]);
+  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "instance", "package", "queued", "touchedAt"]);
   assert.equal(record.format, 1);
   assert.equal(record.id, "triage");
   assert.equal(record.package, "spex-packages/triage");
@@ -597,64 +647,60 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
 
 const IN_FLIGHT: FakeScript = { fallback: { deltas: ["working"], result: "", untilAborted: true } };
 
-test("playbook-library-74: one activity per draft — messages queue, the rest is busy, aborts end cleanly", async () => {
+test("playbook-library-74: messages queue behind a turn or compile; every other command is admitted beside them", async (t) => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
   const { projectId } = harness;
   const client = new Client(harness.service.port());
+  // However the test ends, the stop kills the blocking compiler.
+  t.after(async () => { client.close(); await harness.service.stop(); });
   await client.open();
   await client.expectOk("draft.create", { projectId, draftId: "matrix" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "matrix" } });
+  const instance = client.instance("matrix");
+  const blocking = () => client.progress("matrix").filter((line) => line.startsWith("→ gears2fsm")).length;
 
-  // During a turn.
+  // During a turn: the message queues; the rest is admitted beside it.
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "start" }), { accepted: true, queued: false });
   await until(() => client.latest("matrix")?.activity === "turn", 10_000, "the turn");
-  const uploadId = randomUUID();
-  await client.expectOk("media.begin", {uploadId, owner: {kind: "draft", projectId, id: "matrix"}, name: "retained.txt", mimeType: "text/plain", byteLength: 0});
-  const completedUpload = await client.expectOk("media.finish", {uploadId});
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "second" }), { accepted: true, queued: true });
   assert.deepEqual(client.latest("matrix")?.queued, [{text: "second"}]);
-  await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
-  await client.expectError("draft.delete", { projectId, draftId: "matrix" }, "busy");
-  assert.deepEqual(await client.expectOk("media.finish", {uploadId}), completedUpload, "refused deletion preserves the valid completed retry");
-  await client.expectError("draft.register", { projectId, draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
-  await client.expectError("draft.source.write", { projectId, draftId: "matrix", content: "# Matrix\n" }, "busy");
-  await client.expectError("draft.player.set", { projectId, draftId: "matrix", playerId: "dev.coder" }, "busy");
+  await client.expectOk("draft.source.write", { projectId, draftId: "matrix", content: "# Matrix\n\nRoles:\n\n- Helper\n" });
+  await client.expectOk("draft.player.set", { projectId, draftId: "matrix", playerId: "dev.coder" });
+  const first = client.command("draft.compile", { projectId, draftId: "matrix" });
+  await until(() => blocking() === 1, 20_000, "the compile beside the turn");
+  assert.equal(client.latest("matrix")?.activity, "turn");
   assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
   await until(() => client.records("matrix").some((m) => m.record.type === "turn_aborted" && m.record.turnId === 1), 10_000, "turn 1 aborted");
-  // The queue stood and dispatches once the draft is idle.
-  await until(() => client.turnStarts("matrix").includes("second"), 10_000, "the queued message");
-  assert.deepEqual(client.latest("matrix")?.queued, []);
-  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
-  await until(() => client.records("matrix").some((m) => m.record.type === "turn_aborted" && m.record.turnId === 2), 10_000, "turn 2 aborted");
-  await until(() => client.latest("matrix")?.activity === "idle", 10_000, "idle");
-  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
 
-  // During a compile.
-  await client.expectOk("draft.source.write", { projectId, draftId: "matrix", content: "# Matrix\n\nRoles:\n\n- Helper\n" });
-  const compiling = client.command("draft.compile", { projectId, draftId: "matrix" });
-  await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "matrix" && m.line.startsWith("→ gears2fsm"), 20_000);
-  assert.equal(client.latest("matrix")?.activity, "compiling");
-  assert.equal(client.latest("matrix")?.state, "compiling");
+  // During a compile: the queue waits for it; a second compile of its
+  // folder is refused, the first running on (playbook-library-99).
+  await until(() => client.latest("matrix")?.activity === "compiling", 10_000, "compiling");
+  assert.ok(!client.turnStarts("matrix").includes("second"), "the queue waits for the compile");
+  const second = await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
+  assert.match(second.message, /^a compile is writing /);
+  assert.ok(second.message.includes(join("spex-packages", "matrix", "playbooks", "en", "matrix")), second.message);
+  await sleep(100);
+  assert.equal(blocking(), 1, "the refused compile ran no compiler");
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "third" }), { accepted: true, queued: true });
-  await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
-  await client.expectError("draft.source.write", { projectId, draftId: "matrix", content: "# Again\n" }, "busy");
-  await client.expectError("draft.register", { projectId, draftId: "matrix", command: "matrix", intent: "x", bindings: {} }, "busy");
-  await client.expectError("draft.delete", { projectId, draftId: "matrix" }, "busy");
-  await client.expectError("compile.run", { playbookId: "matrix", sourceText: "# X\n", roles: ["helper"], command: "matrix", intent: "x", bindings: { helper: "dev.coder" }, projectId }, "busy");
+  assert.deepEqual(client.latest("matrix")?.queued, [{text: "second"}, {text: "third"}]);
   assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
-  await client.expectOk("compile.abort", { playbookId: "matrix" });
-  const reply = await compiling;
-  assert.ok(!reply.ok && reply.error.code === "aborted");
+  // One Cancel naming the session ends its compile.
+  await client.expectOk("compile.abort", { playbookId: "matrix", instance });
+  const canceledFirst = await first;
+  assert.ok(!canceledFirst.ok && canceledFirst.error.code === "aborted");
   await until(() => client.latest("matrix")?.compile?.outcome === "canceled", 10_000, "canceled");
   await sleep(100);
   assert.equal(client.progress("matrix").at(-1), "◇ compile canceled");
   assert.ok(client.statusLines("matrix").includes("◇ Compile canceled"));
-  // No relay: the next turn is the queued Boss message.
-  await until(() => client.turnStarts("matrix").includes("third"), 10_000, "the queued message after the compile");
-  assert.ok(!client.turnStarts("matrix").some((p) => p.startsWith("Spex:")), "nothing relayed");
+  // No relay: the queued Boss messages go, in order.
+  await until(() => client.turnStarts("matrix").includes("second"), 10_000, "the first queued message");
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
+  await until(() => client.turnStarts("matrix").includes("third"), 10_000, "the second queued message");
+  assert.deepEqual(client.turnStarts("matrix"), ["start", "second", "third"]);
   assert.equal(client.latest("matrix")?.state, "draft");
   await client.expectOk("draft.abort", { projectId, draftId: "matrix" });
   await until(() => client.latest("matrix")?.activity === "idle", 10_000, "idle again");
+  assert.deepEqual(client.latest("matrix")?.queued, []);
 
   client.close();
   await harness.service.stop();
@@ -664,7 +710,7 @@ test("playbook-library-74: one activity per draft — messages queue, the rest i
 // playbook-library-75: restart, reseed, resume, the agent switch, delete
 // ---------------------------------------------------------------------------
 
-test("playbook-library-75: a restart replays the draft, reseeds the conversation, and an agent switch reseeds too", async () => {
+test("playbook-library-75: a restart replays the draft, reseeds the conversation, and an agent switch reseeds too", async (t) => {
   const script: FakeScript = {
     rules: [
       { match: "Conversation so far", response: { deltas: ["Picking up"], result: "Picking up where we left off." } },
@@ -677,6 +723,9 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const files = authoringFiles(clone, "persist");
   const prefsFile = join(dataDir, "local", "prefs.json");
   const client = new Client(first.service.port());
+  // Each stage's core is stopped however the test ends, killing its
+  // blocking compiler; the stops between stages stand as they are.
+  t.after(async () => { client.close(); await first.service.stop(); });
   await client.open();
   await client.expectOk("draft.create", { projectId, draftId: "persist" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
@@ -705,18 +754,21 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
 
   // A compile in flight when the core stops.
   await client.expectOk("draft.source.write", { projectId, draftId: "persist", content: "# Persist\n\nRoles:\n\n- Helper\n" });
-  const compiling = client.command("draft.compile", { projectId, draftId: "persist" });
+  // Sent bare: no reply is owed once the endpoint closes.
+  client.sendRaw(JSON.stringify({ type: "draft.compile", id: "persist-compile", projectId, draftId: "persist", instance: client.instance("persist") }));
   await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "persist" && m.line.startsWith("→ gears2fsm"), 20_000);
   const seqBefore = client.records("persist").at(-1)?.seq ?? 0;
-  client.close();
+  // The core's stop cancels the compiler it started, while the marker
+  // stays as it was for the next start to read.
   await first.service.stop();
-  await compiling.catch(() => undefined);
+  client.close();
   const stored = JSON.parse(readFileSync(files.record, "utf8")) as { compile: { outcome: string } };
   assert.equal(stored.compile.outcome, "running", "the stop leaves the compile as it was");
 
   // playbook-library-70: the restart reads it as interrupted, relays nothing.
   const second = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client2 = new Client(second.service.port());
+  t.after(async () => { client2.close(); await second.service.stop(); });
   await client2.open();
   await client2.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
   const opened = await client2.expectOk("draft.open", { projectId, draftId: "persist" });
@@ -749,8 +801,10 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.equal(switched.player, "dev.reviewer");
   assert.equal(switched.agent.adapter, "codex");
   assert.equal(switched.agent.model, "codex-test");
+  // The choice is the session's, kept under its instance (storage-5).
+  const playerPref = `authoring:${client2.instance("persist")}:player`;
   const prefs = JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> };
-  assert.equal(prefs.prefs["authoring:persist:player"], "dev.reviewer");
+  assert.equal(prefs.prefs[playerPref], "dev.reviewer");
   assert.ok(client2.statusLines("persist").includes("◇ Now answering: dev.reviewer — the conversation so far was replayed to it"));
   await client2.expectError("draft.player.set", { projectId, draftId: "persist", playerId: "dev.nobody" }, "invalid_request");
   await client2.expectOk("draft.send", { projectId, draftId: "persist", text: "switch" });
@@ -763,7 +817,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.match(onReviewer.prompt, /answering as dev\.reviewer/);
   const unswitched = await client2.expectOk("draft.player.set", { projectId, draftId: "persist", playerId: null });
   assert.equal(unswitched.player, null);
-  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs["authoring:persist:player"], undefined);
+  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs[playerPref], undefined);
 
   // playbook-library-70: a transcript damaged behind the core's back
   // blocks the draft alone — it opens with its source and a diagnostic,
@@ -775,6 +829,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   appendFileSync(files.records, '{"seq":999,"record":{"type":"junk"}}\n{not json');
   const third = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client3 = new Client(third.service.port());
+  t.after(async () => { client3.close(); await third.service.stop(); });
   await client3.open();
   const damaged = await client3.expectOk("draft.open", { projectId, draftId: "persist" });
   assert.match(damaged.draft.diagnostic ?? "", /records\.jsonl: damaged transcript after record \d+$/);
@@ -801,7 +856,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist" && m.projectId === projectId);
   for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
   assert.ok(existsSync(join(dir, "project", "spex-packages", "persist", "playbooks", "en", "persist", "persist.md")), "the spec package folder stays");
-  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs["authoring:persist:player"], undefined);
+  assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs[playerPref], undefined);
   assert.deepEqual(await client3.expectOk("draft.list", {}), []);
   await client3.expectError("draft.open", { projectId, draftId: "persist" }, "not_found");
 
@@ -906,26 +961,29 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
 // core-service-97: the command family's refusals, channels, and states
 // ---------------------------------------------------------------------------
 
-test("core-service-97: draft commands refuse by code, stream on the draft channel only, and publish every transition", async () => {
+test("core-service-97: draft commands refuse by code, stream on the draft channel only, and publish every transition", async (t) => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
   const { projectId, clone } = harness;
   const a = new Client(harness.service.port());
   const b = new Client(harness.service.port());
+  // However the test ends, the stop kills the blocking compiler.
+  t.after(async () => { a.close(); b.close(); await harness.service.stop(); });
   await a.open();
   await b.open();
   const other = (await a.expectOk("project.register", { path: workingFolder(join(harness.dir, "other")) })).id;
 
   // not_found for an unknown draft, on every command — the channel
   // subscription included.
+  const GHOST = randomUUID();
   await a.expectError("subscribe", { channel: { kind: "draft", draftId: "ghost" } }, "not_found");
   await a.expectError("draft.open", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.send", { projectId, draftId: "ghost", text: "x" }, "not_found");
-  await a.expectError("draft.abort", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.source.write", { projectId, draftId: "ghost", content: "x" }, "not_found");
-  await a.expectError("draft.compile", { projectId, draftId: "ghost" }, "not_found");
-  await a.expectError("draft.register", { projectId, draftId: "ghost", command: "g", intent: "g", bindings: {} }, "not_found");
-  await a.expectError("draft.player.set", { projectId, draftId: "ghost", playerId: null }, "not_found");
-  await a.expectError("draft.delete", { projectId, draftId: "ghost" }, "not_found");
+  await a.expectError("draft.send", { projectId, draftId: "ghost", instance: GHOST, text: "x" }, "not_found");
+  await a.expectError("draft.abort", { projectId, draftId: "ghost", instance: GHOST }, "not_found");
+  await a.expectError("draft.source.write", { projectId, draftId: "ghost", instance: GHOST, content: "x" }, "not_found");
+  await a.expectError("draft.compile", { projectId, draftId: "ghost", instance: GHOST }, "not_found");
+  await a.expectError("draft.register", { projectId, draftId: "ghost", instance: GHOST, command: "g", intent: "g", bindings: {} }, "not_found");
+  await a.expectError("draft.player.set", { projectId, draftId: "ghost", instance: GHOST, playerId: null }, "not_found");
+  await a.expectError("draft.delete", { projectId, draftId: "ghost", instance: GHOST }, "not_found");
   await a.expectError("draft.artifacts", { projectId, draftId: "ghost" }, "not_found");
   // invalid_request for a reserved id, and for a project with no
   // working folder on this device.
@@ -947,7 +1005,7 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   a.sendRaw(JSON.stringify({ type: "draft.send", id: "bad-1", projectId, draftId: "Not Valid", text: "x" }));
   const rejected = await a.waitFor((m) => m.type === "reply" && m.id === "bad-1");
   assert.ok(rejected.type === "reply" && !rejected.ok && rejected.error.code === "invalid_message");
-  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", projectId, draftId: "iso" }));
+  a.sendRaw(JSON.stringify({ type: "draft.source.write", id: "bad-2", projectId, draftId: "iso", instance: a.instance("iso") }));
   const noSource = await a.waitFor((m) => m.type === "reply" && m.id === "bad-2");
   assert.ok(noSource.type === "reply" && !noSource.ok && noSource.error.code === "invalid_request");
   await sleep(50);
@@ -967,10 +1025,21 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   await a.expectOk("draft.send", { projectId, draftId: "iso", text: "go" });
   await until(() => a.records("iso").some((m) => m.record.type === "player_prompt"), 10_000, "the prompt record");
   assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "queued" }), { accepted: true, queued: true });
-  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
-  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "# x\n" }, "busy");
-  await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
-  await a.expectError("draft.delete", { projectId, draftId: "iso" }, "busy");
+  // Every other command is admitted beside the turn.
+  await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso 3\n\nRoles:\n\n- Helper\n" });
+  // A compile beside the turn: the state reports each, the turn first
+  // in the activity and the compile beside it.
+  const gears = () => a.messages.filter((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.line.startsWith("→ gears2fsm")).length;
+  const beside = a.command("draft.compile", { projectId, draftId: "iso" });
+  await until(() => gears() === 1, 20_000, "the compile beside the turn");
+  const both = a.latest("iso");
+  assert.equal(both?.activity, "turn");
+  assert.equal(both?.compiling, true);
+  assert.equal(both?.state, "compiling");
+  await a.expectOk("compile.abort", { playbookId: "iso", instance: a.instance("iso") });
+  const besideReply = await beside;
+  assert.ok(!besideReply.ok && besideReply.error.code === "aborted");
+  await until(() => a.latest("iso")?.compiling === false && a.latest("iso")?.activity === "turn", 10_000, "the turn alone");
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
   await until(() => a.turnStarts("iso").includes("queued"), 10_000, "the queued turn");
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
@@ -986,14 +1055,14 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
 
   // The activity table during a compile.
   const compiling = a.command("draft.compile", { projectId, draftId: "iso" });
-  await a.waitFor((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.line.startsWith("→ gears2fsm"), 20_000);
+  await until(() => gears() === 2, 20_000, "the compile");
   assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "later" }), { accepted: true, queued: true });
-  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
-  await a.expectError("draft.source.write", { projectId, draftId: "iso", content: "# x\n" }, "busy");
-  await a.expectError("draft.register", { projectId, draftId: "iso", command: "iso", intent: "x", bindings: {} }, "busy");
-  await a.expectError("draft.delete", { projectId, draftId: "iso" }, "busy");
+  // And beside the compile.
+  await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso 4\n\nRoles:\n\n- Helper\n" });
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: false });
-  await a.expectOk("compile.abort", { playbookId: "iso" });
+  // A cancel naming no session reaches no session's compile.
+  await a.expectError("compile.abort", { playbookId: "iso" }, "not_found");
+  await a.expectOk("compile.abort", { playbookId: "iso", instance: a.instance("iso") });
   const reply = await compiling;
   assert.ok(!reply.ok && reply.error.code === "aborted");
   await until(() => a.turnStarts("iso").includes("later"), 10_000, "the message queued during the compile");
@@ -1008,6 +1077,31 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   const chips = a.states("iso").map((d) => d.state).filter((v, i, all) => i === 0 || v !== all[i - 1]);
   assert.deepEqual(chips.slice(0, 2), ["no-source", "draft"]);
   assert.ok(chips.includes("compiling"));
+
+  // A session made again under its id is another session: a command
+  // naming the former instance is a conflict.
+  const former = a.instance("iso");
+  await a.expectOk("draft.delete", { projectId, draftId: "iso" });
+  const successor = await a.expectOk("draft.create", { projectId, draftId: "iso" });
+  assert.notEqual(successor.instance, former);
+  await a.expectError("draft.send", { projectId, draftId: "iso", instance: former, text: "late" }, "conflict");
+  await a.expectError("draft.delete", { projectId, draftId: "iso", instance: former }, "conflict");
+  // Its compile is its own: progress names the successor, and a cancel
+  // naming the former instance reaches nothing.
+  await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso\n\nRoles:\n\n- Helper\n" });
+  const running = () => a.messages.filter((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.instance === successor.instance && m.line.startsWith("→ gears2fsm")).length;
+  const successorCompile = a.command("draft.compile", { projectId, draftId: "iso" });
+  await until(() => running() === 1, 20_000, "the successor's compile");
+  // A second compile of the instance while its first runs is refused.
+  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
+  await a.expectError("compile.abort", { playbookId: "iso", instance: former }, "not_found");
+  assert.equal(a.latest("iso")?.activity, "compiling");
+  assert.equal(a.latest("iso")?.compiling, true);
+  await a.expectOk("compile.abort", { playbookId: "iso", instance: successor.instance });
+  const canceled = await successorCompile;
+  assert.ok(!canceled.ok && canceled.error.code === "aborted");
+  assert.equal(running(), 1, "the refused compile ran no compiler");
+  await a.waitFor((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.instance === successor.instance && m.line === "◇ compile canceled");
 
   a.close();
   b.close();
@@ -1031,7 +1125,7 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const files = authoringFiles(clone, "visual");
     await client.expectOk("draft.create", {projectId, draftId: "visual"});
     await client.expectOk("subscribe", {channel: {kind: "draft", draftId: "visual"}});
-    const owner = {kind: "draft" as const, projectId, id: "visual"};
+    const owner = {kind: "draft" as const, projectId, id: "visual", instance: client.instance("visual")};
     const uploadId = randomUUID();
     await client.expectOk("media.begin", {owner, uploadId, name: "selected.png", mimeType: "image/png", byteLength: image.length});
     await client.expectOk("media.chunk", {uploadId, offset: 0, data: image.toString("base64")});
@@ -1070,4 +1164,1057 @@ test("draft media preserves file-only input, native bytes, owned output and text
     const retained = await client.expectOk("media.read", {owner, assetId: asset.assetId, offset: 0, length: 65536});
     assert.deepEqual(Buffer.from(retained.data, "base64"), image);
   } finally { client.close(); await harness.service.stop(); }
+});
+
+test("media-18: an authoring turn's output whose session was replaced while it was prepared is refused, the successor untouched", {timeout: 30_000}, async () => {
+  const output = Buffer.from("native screenshot bytes of the former session");
+  const harness = await startHarness({script: {fallback: {
+    result: "Observed.",
+    media: [{mimeType: "image/png", source: {type: "base64", data: output.toString("base64")}, name: "screen.png", toolUseId: "screenshot-1"}],
+  }}, slc: stubSlcSource("['Inspector']")});
+  // The core's own private publication, held once its content is prepared.
+  const media = (harness.service as unknown as {media: ApplicationMedia}).media;
+  const importInto = media.importInto;
+  let entered!: () => void;
+  const prepared = new Promise<void>((resolve) => { entered = resolve; });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let publication: Promise<unknown> | undefined;
+  media.importInto = (prepare, place) => {
+    if (publication) return importInto.call(media, prepare, place);
+    const result = importInto.call(media, async (stage) => { const reference = await prepare(stage); entered(); await held; return reference; }, place);
+    publication = result;
+    return result;
+  };
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    const {projectId, clone} = harness;
+    const files = authoringFiles(clone, "replaced");
+    await client.expectOk("draft.create", {projectId, draftId: "replaced"});
+    await client.expectOk("subscribe", {channel: {kind: "draft", draftId: "replaced"}});
+    const former = client.instance("replaced");
+    await client.expectOk("draft.send", {projectId, draftId: "replaced", text: "Look"});
+    await prepared;
+    // The session is deleted and made again under its id while the
+    // former's output stands prepared.
+    await client.expectOk("draft.delete", {projectId, draftId: "replaced", instance: former});
+    const successor = (await client.expectOk("draft.create", {projectId, draftId: "replaced"})).instance!;
+    assert.notEqual(successor, former);
+    release();
+    const refused = await publication!.then(() => undefined, (error: unknown) => error);
+    assert.ok(refused instanceof DraftChangedError && !refused.gone, String(refused));
+    assert.ok(!existsSync(join(files.assets, createHash("sha256").update(output).digest("hex"))), "nothing lands in the successor");
+    assert.deepEqual(readdirSync(join(harness.dataDir, "local", "asset-staging")), [], "the private stage is gone");
+    // The former turn goes on to its own end; none of its later records
+    // — its event, its player's and its turn's finish — reaches the
+    // successor, whose transcript is never made (playbook-library-70).
+    const live = Reflect.get(Reflect.get(harness.service, "authors"), "live") as Map<string, { turn?: unknown }>;
+    await until(() => !live.get(former)?.turn, 10_000, "the former turn's end");
+    assert.ok(!existsSync(files.records), "no transcript of the successor is made");
+    client.close();
+    await harness.service.stop();
+  } finally { media.importInto = importInto; client.close(); await harness.service.stop(); }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-100: one job writes an artifact folder at a time
+// ---------------------------------------------------------------------------
+
+test("playbook-library-100: one compile or packaging job writes a playbook artifact's folder at a time (core-service-97)", {timeout: 120_000}, async (t) => {
+  const script: FakeScript = {
+    rules: [
+      // The turn waits on its approval until the test answers it, then
+      // replies with its compile directive.
+      { match: /Boss: compile please$/, response: { deltas: ["asking"], result: "Compile it.\n```spex\nkind: compile\n```",
+        approval: { toolName: "desktop.inspect", input: { app: "Task-owned Example", operation: "read-window", target: "solo" }, reason: "Hold the turn", expiresInMs: 600_000 } } },
+      { match: /Boss: hold on$/, response: { deltas: ["holding"], result: "", untilAborted: true } },
+    ],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "other")) })).id;
+  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", id, "playbooks", "en", id);
+  const release = (id: string, folder = "project") => writeFileSync(join(artifactDir(id, folder), STUB_SLC_RELEASE_FILE), "");
+  let writer: number | undefined;
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    for (const [id, folder] of [["solo", "project"], ["solo", "other"]] as const) if (existsSync(artifactDir(id, folder))) release(id, folder);
+    if (writer !== undefined) closeSync(writer);
+    client.close();
+    await harness.service.stop();
+  });
+  // The session's working folder again, through a link to it: a project
+  // of its own whose artifact folders are the session's.
+  const linked = join(dir, "project-link");
+  symlinkSync(join(dir, "project"), linked, "junction");
+  const alias = (await client.expectOk("project.register", { path: linked })).id;
+  assert.notEqual(alias, projectId);
+  // And through another case spelling of it, where the scratch
+  // filesystem folds case.
+  const respelled = join(dir, "PROJECT");
+  const folds = existsSync(respelled);
+  const caseAlias = folds ? (await client.expectOk("project.register", { path: respelled })).id : undefined;
+  if (caseAlias === undefined) t.diagnostic("the scratch filesystem keeps case: no case alias");
+  else assert.ok(caseAlias !== projectId && caseAlias !== alias);
+  const runs = (id: string, folder = "project") => {
+    const counter = join(artifactDir(id, folder), ".stub-slc-runs");
+    return existsSync(counter) ? Number(readFileSync(counter, "utf8")) : 0;
+  };
+  const holding = (id: string, n: number) => until(() => client.progress(id).filter((line) => line.startsWith("→ normalize")).length >= n, 20_000, `${id} held ×${n}`);
+  const idle = (id: string) => until(() => client.latest(id)?.activity === "idle" && client.latest(id)?.compiling === false, 20_000, `${id} idle`);
+  const SRC = "# Solo\n\nRoles:\n\n- Helper\n";
+  const ONE_SHOT = { playbookId: "solo", sourceText: SRC, roles: ["Helper"], command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } };
+  await client.expectOk("draft.create", { projectId, draftId: "solo" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "solo" } });
+  await client.expectOk("draft.source.write", { projectId, draftId: "solo", content: SRC });
+
+  // The session's second Compile and its agent's directive while its
+  // first compile runs on a source since edited: both refused, the
+  // folder and the session holding the first's run and outcome.
+  await client.expectOk("draft.send", { projectId, draftId: "solo", text: "compile please" });
+  await client.waitFor((m) => m.type === "approval.state" && m.state.pending.some((request) => request.owner.kind === "draft" && request.owner.id === "solo"), 10_000);
+  await until(() => client.latest("solo")?.activity === "turn", 10_000, "the turn awaiting its approval");
+  const first = client.command("draft.compile", { projectId, draftId: "solo" });
+  await holding("solo", 1);
+  writeFileSync(join(artifactDir("solo"), "solo.md"), `${SRC}\nEdited meanwhile.\n`);
+  assert.equal(client.latest("solo")?.activity, "turn", "the refusal comes while the turn runs");
+  const refused = (await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message;
+  assert.match(refused, /^a compile is writing /);
+  assert.ok(refused.includes(join("spex-packages", "solo", "playbooks", "en", "solo")), refused);
+  // A one-shot compile of the id in the session's working folder too,
+  // and through the project at the link to that folder.
+  assert.match((await client.expectError("compile.run", { ...ONE_SHOT, projectId }, "busy")).message, /a compile is writing/);
+  const aliased = await within(client.command("compile.run", { ...ONE_SHOT, projectId: alias }));
+  assert.ok(aliased && !aliased.ok && aliased.error.code === "busy", `the linked folder is the same folder: ${JSON.stringify(aliased)}`);
+  assert.match(aliased.error.message, /a compile is writing/);
+  if (caseAlias !== undefined) {
+    const respelledRun = await within(client.command("compile.run", { ...ONE_SHOT, projectId: caseAlias }));
+    assert.ok(respelledRun && !respelledRun.ok && respelledRun.error.code === "busy", `the respelled folder is the same folder: ${JSON.stringify(respelledRun)}`);
+    assert.match(respelledRun.error.message, /a compile is writing/);
+  }
+  // Answered, the turn replies with its directive while the first
+  // compile still runs.
+  const approvals = await client.expectOk("approval.list", {});
+  const asked = approvals.pending.find((request) => request.owner.kind === "draft" && request.owner.id === "solo");
+  assert.ok(asked, JSON.stringify(approvals));
+  await client.expectOk("approval.respond", { generation: approvals.generation, requestId: asked.id, owner: asked.owner, decision: "allow_once" });
+  await until(() => client.statusLines("solo").some((line) => line.startsWith("◇ Compile skipped: a compile is writing")), 20_000, "the directive skipped");
+  release("solo");
+  assert.ok((await first).ok);
+  await idle("solo");
+  assert.equal(runs("solo"), 1, "one compiler ran in the folder");
+  assert.equal(client.latest("solo")?.compile?.outcome, "ok");
+  assert.equal(client.latest("solo")?.state, "changed", "the outcome is the first compile's, over the source it started on");
+
+  // The same id in another project's working folder runs beside it.
+  const again = client.command("draft.compile", { projectId, draftId: "solo" });
+  await holding("solo", 2);
+  const elsewhere = client.command("compile.run", { ...ONE_SHOT, projectId: other });
+  await holding("solo", 3);
+  release("solo");
+  release("solo", "other");
+  assert.ok((await again).ok);
+  const elsewhereReply = await elsewhere;
+  assert.ok(elsewhereReply.ok, JSON.stringify(elsewhereReply));
+  assert.equal(runs("solo", "other"), 1);
+  await idle("solo");
+
+  // Once the session's compile succeeded, its Compile and its enabling
+  // while a one-shot compile writes its folder: both refused, with a
+  // turn running and with the session idle.
+  await client.expectOk("draft.send", { projectId, draftId: "solo", text: "hold on" });
+  await until(() => client.latest("solo")?.activity === "turn", 10_000, "the held turn");
+  const oneShot = client.command("compile.run", { ...ONE_SHOT, projectId });
+  await holding("solo", 4);
+  assert.equal(client.latest("solo")?.activity, "turn", "the compile refused while the turn runs");
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message, /a compile is writing/);
+  assert.equal(client.latest("solo")?.activity, "turn", "the enabling refused while the turn runs");
+  assert.match((await client.expectError("draft.register", { projectId, draftId: "solo", command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } }, "busy")).message, /a compile is writing/);
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "solo" }), { aborted: true });
+  await idle("solo");
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message, /a compile is writing/);
+  assert.match((await client.expectError("draft.register", { projectId, draftId: "solo", command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } }, "busy")).message, /a compile is writing/);
+  release("solo");
+  const oneShotReply = await oneShot;
+  assert.ok(oneShotReply.ok, JSON.stringify(oneShotReply));
+  assert.equal(runs("solo"), 3);
+
+  // A one-shot compile's picked file read while another writer changes
+  // `<id>.md`: refused as a conflict before the compiler runs, the
+  // other writer's bytes standing (playbook-library-12).
+  const fifo = join(dir, "picked.md");
+  execFileSync("mkfifo", [fifo]);
+  const { sourceText: _text, ...picked } = ONE_SHOT;
+  const piped = client.command("compile.run", { ...picked, playbookId: "piped", command: "piped", sourcePath: fifo, projectId: other });
+  // The core opened the picked file for reading only after it read
+  // `<id>.md`'s version: a writer may open the pipe once it waits.
+  await until(() => {
+    try { writer = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK); return true; }
+    catch { return false; }
+  }, 20_000, "the core reading the picked file");
+  writeFileSync(join(artifactDir("piped", "other"), "piped.md"), "# Theirs\n");
+  writeSync(writer!, SRC);
+  closeSync(writer!);
+  writer = undefined;
+  // Released ahead: a compiler run against the check finishes at once.
+  release("piped", "other");
+  const conflict = await piped;
+  assert.ok(!conflict.ok && conflict.error.code === "conflict", JSON.stringify(conflict));
+  assert.match(conflict.error.message, /piped\.md changed meanwhile; retry/);
+  assert.equal(readFileSync(join(artifactDir("piped", "other"), "piped.md"), "utf8"), "# Theirs\n");
+  assert.equal(runs("piped", "other"), 0, "no compiler ran");
+
+  client.close();
+  await harness.service.stop();
+});
+
+/** A stub slc that outlives its SIGTERM: it marks the signal, then
+ * runs on until `.stub-exit` lands beside the source, exiting on its
+ * own after a minute whatever the test does. */
+const STUBBORN_SLC = `
+const fs = require("node:fs");
+const path = require("node:path");
+const src = process.argv.slice(2).filter((_, i, all) => all[i] !== "--config" && all[i - 1] !== "--config")[1];
+const dir = path.dirname(src);
+const base = path.basename(src, ".md");
+process.on("SIGTERM", () => fs.writeFileSync(path.join(dir, ".stub-sigterm"), ""));
+process.stderr.write("→ normalize (writing " + base + ".playbook/" + base + ".normalize)\\n");
+setTimeout(() => process.exit(3), 60000);
+setInterval(() => {
+  const exit = path.join(dir, ".stub-exit");
+  if (fs.existsSync(exit)) { fs.rmSync(exit); process.exit(1); }
+}, 50);
+`;
+
+test("playbook-library-100: a canceled compile holds its folder until its compiler exits", {
+  timeout: 90_000,
+  // A Windows child cannot ignore the termination a cancel sends it.
+  skip: process.platform === "win32" && "SIGTERM cannot be ignored on Windows",
+}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: STUBBORN_SLC });
+  const { dir, projectId } = harness;
+  const client = new Client(harness.service.port());
+  const folder = join(dir, "project", "spex-packages", "late", "playbooks", "en", "late");
+  const exit = () => { if (existsSync(folder)) writeFileSync(join(folder, ".stub-exit"), ""); };
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "late" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "late", content: "# Late\n\nRoles:\n\n- Helper\n" });
+    const first = client.command("draft.compile", { projectId, draftId: "late" });
+    await until(() => client.progress("late").some((line) => line.startsWith("→ normalize")), 20_000, "the compiler running");
+    await client.expectOk("compile.abort", { playbookId: "late", instance: client.instance("late") });
+    await until(() => existsSync(join(folder, ".stub-sigterm")), 10_000, "the compiler signaled");
+    // The canceled compiler still runs: its job still holds the folder.
+    const held = await within(client.command("draft.compile", { projectId, draftId: "late" }));
+    assert.ok(held && !held.ok && held.error.code === "busy", `refused while the canceled compiler runs: ${JSON.stringify(held)}`);
+    assert.match(held.error.message, /^a compile is writing /);
+    assert.equal(harness.slcCalls.length, 1, "the refused compile ran no compiler");
+    // Once it exits, the cancel settles and a Compile is admitted.
+    exit();
+    const canceled = await first;
+    assert.ok(!canceled.ok && canceled.error.code === "aborted", JSON.stringify(canceled));
+    await until(() => client.latest("late")?.compile?.outcome === "canceled" && client.latest("late")?.compiling === false, 10_000, "canceled");
+    const again = client.command("draft.compile", { projectId, draftId: "late" });
+    await until(() => harness.slcCalls.length === 2, 20_000, "the next compiler running");
+    exit();
+    const ended = await again;
+    assert.ok(!ended.ok && ended.error.code !== "busy", JSON.stringify(ended));
+  } finally {
+    exit();
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile whose project was rebound as it started writes neither folder", {timeout: 60_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  // The compile's start held where it prepares the config, or at its
+  // toolchain's first probe; probes are counted apart from compilers.
+  const options = Reflect.get(Reflect.get(harness.service, "authors"), "options") as { prepareConfig?: () => Promise<void>; compileSpawner?: LineSpawner };
+  const prepare = options.prepareConfig;
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let hold: { at: "config" | "probe"; entered: boolean; gate: Promise<void>; release: () => void } | undefined;
+  const wait = async (at: "config" | "probe") => {
+    const current = hold;
+    if (current?.at !== at || current.entered) return;
+    current.entered = true;
+    await current.gate;
+  };
+  let probes = 0;
+  options.prepareConfig = async () => { await wait("config"); await prepare?.(); };
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (args.length === 1 && args[0] === "--version") { probes += 1; await wait("probe"); }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  try {
+    await client.open();
+    let paired = join(dir, "project");
+    for (const [at, id, to] of [["config", "moved", "rebound"], ["probe", "probed", "rebound-again"]] as const) {
+      await client.expectOk("draft.create", { projectId, draftId: id });
+      await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
+      const folder = join(paired, "spex-packages", id, "playbooks", "en", id);
+      const before = readdirSync(folder).sort();
+      const source = readFileSync(join(folder, `${id}.md`), "utf8");
+      const record = authoringFiles(clone, id).record;
+      const recordBefore = readFileSync(record, "utf8");
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const current = { at, entered: false, gate, release };
+      hold = current;
+      const compiled = client.command("draft.compile", { projectId, draftId: id });
+      await until(() => current.entered, 10_000, `the compile held at its ${at}`);
+      const rebound = workingFolder(join(dir, to));
+      await client.expectOk("project.rebind", { projectId, path: rebound });
+      current.release();
+      const reply = await compiled;
+      assert.ok(!reply.ok && reply.error.code === "conflict", `${at}: ${JSON.stringify(reply)}`);
+      assert.match(reply.error.message, new RegExp(`${id} changed meanwhile; retry`));
+      assert.deepEqual(readdirSync(folder).sort(), before, `${at}: the folder paired at its start is unchanged`);
+      assert.equal(readFileSync(join(folder, `${id}.md`), "utf8"), source);
+      assert.ok(!existsSync(join(rebound, "spex-packages", id, "playbooks", "en", id)), `${at}: nor is the folder paired now made`);
+      assert.equal(harness.slcCalls.length, 0, `${at}: no compiler ran`);
+      if (at === "probe") {
+        // Refused before its start writes a marker.
+        assert.equal((JSON.parse(readFileSync(record, "utf8")) as { compile?: unknown }).compile, undefined, "probe: no marker written");
+        assert.equal(readFileSync(record, "utf8"), recordBefore, "probe: the session file is as it was");
+      } else {
+        // Its marker, written before the config, settles as any refused
+        // start does.
+        await until(() => client.latest(id)?.compile?.outcome === "failed" && client.latest(id)?.compiling === false, 10_000, `${at}: the marker settled`);
+      }
+      paired = rebound;
+    }
+    assert.ok(probes >= 2, `each compile probed its toolchain (${probes})`);
+  } finally {
+    hold?.release();
+    options.prepareConfig = prepare;
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile whose probe returns after a rebind and a newer compile leaves the newer marker standing", {timeout: 60_000}, async () => {
+  // Every compiler run holds in its first phase until the test releases it.
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  const authors = Reflect.get(harness.service, "authors") as object;
+  // The older compile held at its first toolchain probe; the newer one's
+  // probe passes.
+  const options = Reflect.get(authors, "options") as { compileSpawner?: LineSpawner };
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let entered = false;
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (!entered && args.length === 1 && args[0] === "--version") { entered = true; await gate; }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  // One fixed clock: the older compile's admission and the newer one's
+  // marker read the same time, so only a marker actually written is the
+  // older compile's.
+  const now = Reflect.get(authors, "now") as () => number;
+  Reflect.set(authors, "now", () => 1_000);
+  let heldCompiler: string | undefined;
+  try {
+    await client.open();
+    const content = "# race\n\nRoles:\n\n- Helper\n";
+    await client.expectOk("draft.create", { projectId, draftId: "race" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
+    const oldFolder = join(dir, "project", "spex-packages", "race", "playbooks", "en", "race");
+    const oldListing = readdirSync(oldFolder).sort();
+    const oldSource = readFileSync(join(oldFolder, "race.md"), "utf8");
+    const record = authoringFiles(clone, "race").record;
+    const marker = () => (JSON.parse(readFileSync(record, "utf8")) as { compile?: { at: number; outcome: string; roles?: string[] } }).compile;
+    const older = client.command("draft.compile", { projectId, draftId: "race" });
+    await until(() => entered, 10_000, "the older compile held at its probe");
+    const raced = workingFolder(join(dir, "raced"));
+    await client.expectOk("project.rebind", { projectId, path: raced });
+    await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
+    heldCompiler = join(raced, "spex-packages", "race", "playbooks", "en", "race");
+    const newer = client.command("draft.compile", { projectId, draftId: "race" });
+    await until(() => harness.slcCalls.length === 1 && client.progress("race").some((line) => line.startsWith("→ normalize")), 20_000, "the newer compile's compiler held");
+    const newerMarker = marker();
+    assert.equal(newerMarker?.outcome, "running", "the newer compile's marker");
+    const newerBytes = readFileSync(record, "utf8");
+    release();
+    const olderReply = await older;
+    assert.ok(!olderReply.ok && olderReply.error.code === "conflict", `older: ${JSON.stringify(olderReply)}`);
+    assert.match(olderReply.error.message, /race changed meanwhile; retry/);
+    assert.equal(readFileSync(record, "utf8"), newerBytes, "older: the newer marker stands, the session file as it was");
+    writeFileSync(join(heldCompiler, STUB_SLC_RELEASE_FILE), "");
+    const newerReply = await newer;
+    assert.ok(newerReply.ok, `newer: ${JSON.stringify(newerReply)}`);
+    const settled = marker();
+    assert.deepEqual({ at: settled?.at, outcome: settled?.outcome, roles: settled?.roles }, { at: newerMarker?.at, outcome: "ok", roles: newerReply.result.roles }, "newer: its success recorded on its own marker");
+    assert.equal(harness.slcCalls.length, 1, "one compiler ran, the newer compile's");
+    assert.deepEqual(readdirSync(oldFolder).sort(), oldListing, "the older compile's folder is as it was");
+    assert.equal(readFileSync(join(oldFolder, "race.md"), "utf8"), oldSource);
+  } finally {
+    release();
+    if (heldCompiler !== undefined && existsSync(heldCompiler)) writeFileSync(join(heldCompiler, STUB_SLC_RELEASE_FILE), "");
+    Reflect.set(authors, "now", now);
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile canceled while its toolchain or config is prepared writes no artifacts", {timeout: 60_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  // The compile held at its first toolchain probe, before its start, or
+  // where its start prepares the config, after its marker.
+  const options = Reflect.get(Reflect.get(harness.service, "authors"), "options") as { prepareConfig?: () => Promise<void>; compileSpawner?: LineSpawner };
+  const prepare = options.prepareConfig;
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let hold: { at: "probe" | "config"; entered: boolean; gate: Promise<void>; release: () => void } | undefined;
+  const wait = async (at: "probe" | "config") => {
+    const current = hold;
+    if (current?.at !== at || current.entered) return;
+    current.entered = true;
+    await current.gate;
+  };
+  // Or answered by a Node older than the compiler's floor; probes are
+  // counted apart from compilers.
+  let oldNode = false;
+  let probes = 0;
+  options.prepareConfig = async () => { await wait("config"); await prepare?.(); };
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (args.length === 1 && args[0] === "--version") {
+      probes += 1;
+      if (oldNode) { onLine("v20.11.0"); return 0; }
+      await wait("probe");
+    }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  try {
+    await client.open();
+    // The probe first: with no marker of its own, its case fails on the
+    // marker even where the start's own check stops the compiler.
+    for (const [at, id] of [["probe", "cut"], ["config", "held"]] as const) {
+      await client.expectOk("draft.create", { projectId, draftId: id });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: id } });
+      await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
+      const record = authoringFiles(clone, id).record;
+      const marker = () => (JSON.parse(readFileSync(record, "utf8")) as { compile?: { at: number; outcome: string } }).compile;
+      const folder = join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+      const recordBefore = readFileSync(record, "utf8");
+      const listing = readdirSync(folder).sort();
+      const source = readFileSync(join(folder, `${id}.md`), "utf8");
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const current = { at, entered: false, gate, release };
+      hold = current;
+      const compiled = client.command("draft.compile", { projectId, draftId: id });
+      await until(() => current.entered, 10_000, `the compile held at its ${at}`);
+      const standing = marker();
+      if (at === "probe") assert.equal(standing, undefined, "probe: no marker before the start");
+      else assert.equal(standing?.outcome, "running", "config: the start's marker stands while the config is prepared");
+      await client.expectOk("compile.abort", { playbookId: id, instance: client.instance(id) });
+      current.release();
+      const reply = await compiled;
+      assert.ok(!reply.ok && reply.error.code === "aborted", `${at}: ${JSON.stringify(reply)}`);
+      assert.equal(harness.slcCalls.length, 0, `${at}: no compiler ran`);
+      if (at === "probe") {
+        assert.equal(marker(), undefined, "probe: no marker written");
+        assert.equal(readFileSync(record, "utf8"), recordBefore, "probe: the session file is as it was");
+      } else {
+        // The start's own marker settles canceled.
+        await until(() => marker()?.outcome === "canceled", 10_000, "config: the marker settled");
+        assert.equal(marker()?.at, standing?.at, "config: the marker is the start's own");
+      }
+      assert.ok(!client.statusLines(id).some((line) => line.startsWith("◇ Compiling")), `${at}: no compile line`);
+      assert.deepEqual(readdirSync(folder).sort(), listing, `${at}: the folder is as it was`);
+      assert.equal(readFileSync(join(folder, `${id}.md`), "utf8"), source, `${at}: the source is as it was`);
+    }
+    // A probe whose verdict refuses the toolchain: the refusal recorded
+    // after the start's marker as failed at the toolchain, with its
+    // guidance, and no compiler run.
+    oldNode = true;
+    await client.expectOk("draft.create", { projectId, draftId: "old" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "old", content: "# old\n\nRoles:\n\n- Helper\n" });
+    const probesBefore = probes;
+    const refused = await client.command("draft.compile", { projectId, draftId: "old" });
+    assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
+    assert.ok(refused.error.message.includes(`Node >= ${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}`) && refused.error.message.includes("found v20.11.0"), refused.error.message);
+    assert.ok(probes > probesBefore, "old: the toolchain was probed");
+    const failed = (JSON.parse(readFileSync(authoringFiles(clone, "old").record, "utf8")) as { compile?: { outcome: string; phase?: string; output?: string } }).compile;
+    assert.deepEqual({ outcome: failed?.outcome, phase: failed?.phase, output: failed?.output }, { outcome: "failed", phase: "toolchain", output: refused.error.message }, "old: recorded failed at the toolchain");
+    assert.equal(harness.slcCalls.length, 0, "old: no compiler ran");
+  } finally {
+    oldNode = false;
+    hold?.release();
+    options.prepareConfig = prepare;
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-96: files changed beside the core, read at each use
+// ---------------------------------------------------------------------------
+
+test("playbook-library-96: the authoring store reads its files at use and writes under the version it read", {timeout: 120_000}, async (t) => {
+  const script: FakeScript = { fallback: { deltas: ["Noted."], result: "Noted." } };
+  // Every compile holds in its first phase until the test releases it.
+  const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId, clone, dataDir } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+  const held = (id: string) => client.waitFor((m) => m.type === "compile.progress" && m.playbookId === id && m.line.startsWith("→ normalize"), 20_000);
+  const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    const root = join(dir, "project", "spex-packages");
+    if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
+    client.close();
+    await harness.service.stop();
+  });
+  const turnsDone = (id: string, n: number) => until(() => client.latest(id)?.activity === "idle" && client.records(id).filter((m) => m.record.type === "turn_finished").length >= n, 20_000, `${id} turn ${n}`);
+  const SRC = "# Held\n\nRoles:\n\n- Helper\n";
+
+  // A transcript replaced under the same instance: served whole, the
+  // next record after its last, the next turn reseeded with no resume.
+  await client.expectOk("draft.create", { projectId, draftId: "hist" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "hist" } });
+  await client.expectOk("draft.send", { projectId, draftId: "hist", text: "hello" });
+  await turnsDone("hist", 1);
+  const hist = authoringFiles(clone, "hist");
+  const original = readFileSync(hist.records, "utf8");
+  // Another writer's history: the Boss's words differ, and one record more.
+  const lines = original.trimEnd().split("\n").length;
+  const replaced = `${original.replaceAll('"prompt":"hello"', '"prompt":"rewritten"')}${JSON.stringify({ seq: lines + 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ elsewhere" } })}\n`;
+  assert.notEqual(replaced, original);
+  const count = lines + 1;
+  writeFileSync(hist.records, replaced);
+  const reopened = await client.expectOk("draft.open", { projectId, draftId: "hist" });
+  assert.equal(reopened.records.length, count, "the replacement served whole");
+  assert.equal(reopened.records.find((r) => r.record.type === "turn_started")?.record.type === "turn_started" &&
+    (reopened.records.find((r) => r.record.type === "turn_started")!.record as { turn: { prompt: string } }).turn.prompt, "rewritten");
+  await client.expectOk("draft.send", { projectId, draftId: "hist", text: "next" });
+  await turnsDone("hist", 2);
+  const next = client.records("hist").find((m) => m.record.type === "turn_started" && (m.record as { turn: { prompt: string } }).turn.prompt === "next");
+  assert.equal(next?.seq, count + 1, "numbered after the replacement's last record");
+  assert.equal(harness.stats.runs[1].resume, undefined, "the replaced history drops the resume");
+  assert.match(harness.stats.runs[1].prompt, /Conversation so far:\nBoss: rewritten\nAgent: Noted\./);
+
+  // A damaged transcript repaired while the core runs takes a message,
+  // and its diagnostic leaves the next report.
+  const reported = async (file: string) => (await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === file);
+  const good = readFileSync(hist.records);
+  appendFileSync(hist.records, "{not json");
+  assert.match((await client.expectError("draft.send", { projectId, draftId: "hist", text: "x" }, "invalid_request")).message, /damaged transcript/);
+  assert.ok(await reported(hist.records), "the damage is reported");
+  writeFileSync(hist.records, good);
+  assert.ok(!(await reported(hist.records)), "the repaired transcript reports nothing");
+  await client.expectOk("draft.send", { projectId, draftId: "hist", text: "repaired" });
+  await turnsDone("hist", 3);
+
+  // A damaged session file deleted beside the core reports nothing more.
+  await client.expectOk("draft.create", { projectId, draftId: "broken" });
+  const broken = authoringFiles(clone, "broken");
+  writeFileSync(broken.record, "{not json");
+  await client.expectError("draft.send", { projectId, draftId: "broken", instance: client.instance("broken"), text: "x" }, "invalid_request");
+  assert.ok(await reported(broken.record), "the damaged session file is reported");
+  rmSync(broken.record);
+  assert.ok(!(await reported(broken.record)), "a session file gone reports nothing");
+
+  // A transcript that will not read at all — a folder in its place — is
+  // one scoped row naming it; the report and another session stand.
+  const histBytes = readFileSync(hist.records);
+  rmSync(hist.records);
+  mkdirSync(hist.records);
+  const rows = (await client.expectOk("storage.diagnostics", {})).filter((entry) => entry.file === hist.records);
+  assert.equal(rows.length, 1, JSON.stringify(rows));
+  assert.equal(rows[0].blocking, false);
+  await client.expectOk("draft.create", { projectId, draftId: "usable" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "usable" } });
+  await client.expectOk("draft.send", { projectId, draftId: "usable", text: "still here" });
+  await turnsDone("usable", 1);
+  rmSync(hist.records, { recursive: true });
+  writeFileSync(hist.records, histBytes);
+  assert.ok(!(await reported(hist.records)), "the restored transcript reports nothing");
+
+  // A transcript standing without its session file keeps the id.
+  const orphan = join(clone, "authoring", "orphan.records.jsonl");
+  writeFileSync(orphan, '{"seq":1,"record":{"type":"captain_status","turnId":null,"timestamp":1,"message":"theirs"}}\n');
+  const orphanBytes = readFileSync(orphan);
+  await client.expectError("draft.create", { projectId, draftId: "orphan" }, "invalid_request");
+  assert.deepEqual(readFileSync(orphan), orphanBytes, "the transcript's bytes stand");
+  assert.ok(!existsSync(join(clone, "authoring", "orphan.json")));
+
+  // Deleted beside the core while its compile runs, then made again:
+  // the former compile's settlement writes nothing into the successor,
+  // and a command naming the former instance is refused.
+  await client.expectOk("draft.create", { projectId, draftId: "again" });
+  const former = client.instance("again");
+  await client.expectOk("draft.source.write", { projectId, draftId: "again", content: SRC });
+  const formerCompile = client.command("draft.compile", { projectId, draftId: "again" });
+  await held("again");
+  const again = authoringFiles(clone, "again");
+  rmSync(again.record);
+  rmSync(again.records, { force: true });
+  const successor = await client.expectOk("draft.create", { projectId, draftId: "again" });
+  assert.notEqual(successor.instance, former);
+  // The successor is another session: idle beside the former's compile,
+  // it takes a message at once.
+  assert.equal(successor.activity, "idle");
+  assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "again", instance: successor.instance!, text: "beside" }), { accepted: true, queued: false });
+  // Its compile is refused while the former's writes their folder.
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "again", instance: successor.instance! }, "busy")).message, /a compile is writing/);
+  await until(() => client.latest("again")?.instance === successor.instance && client.latest("again")?.activity === "idle", 20_000, "the successor's turn");
+  await client.expectOk("compile.abort", { playbookId: "again", instance: former });
+  await formerCompile;
+  await sleep(200);
+  const stored = JSON.parse(readFileSync(again.record, "utf8")) as { instance: string; compile?: unknown };
+  assert.equal(stored.instance, successor.instance);
+  assert.equal(stored.compile, undefined, "the former compile settled nowhere");
+  assert.ok(!existsSync(again.records) || !readFileSync(again.records, "utf8").includes("Compile canceled"));
+  await client.expectError("draft.send", { projectId, draftId: "again", instance: former, text: "late" }, "conflict");
+  await client.expectError("draft.compile", { projectId, draftId: "again", instance: former }, "conflict");
+
+  // A session file rewritten during a compile: the settlement keeps the
+  // newer queue and proposal, the queued message dispatching first.
+  await client.expectOk("draft.create", { projectId, draftId: "queue" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "queue" } });
+  await client.expectOk("draft.source.write", { projectId, draftId: "queue", content: SRC });
+  const compiling = client.command("draft.compile", { projectId, draftId: "queue" });
+  await held("queue");
+  const queue = authoringFiles(clone, "queue");
+  const proposal = { command: "queue", intent: "Written elsewhere", players: { Helper: "dev.coder" } };
+  const rewritten = { ...JSON.parse(readFileSync(queue.record, "utf8")), queued: [{ text: "from elsewhere" }], proposal };
+  // A write under the bytes read before the rewrite is refused.
+  const location = { key: projectId, authoringDir: join(clone, "authoring"), workingFolder: join(dir, "project") };
+  const beside = new DraftStore(() => [location]);
+  const before = beside.load("queue");
+  writeFileSync(queue.record, JSON.stringify(rewritten));
+  assert.throws(() => beside.write({ ...before.draft, failures: 7 }, before.version), DraftChangedError);
+  assert.deepEqual(JSON.parse(readFileSync(queue.record, "utf8")), rewritten);
+  release("queue");
+  assert.ok((await compiling).ok);
+  await until(() => client.turnStarts("queue").includes("from elsewhere"), 20_000, "the queued message");
+  const dispatched = harness.stats.runs.find((run) => run.prompt.endsWith("Boss: from elsewhere"));
+  assert.match(dispatched?.prompt ?? "", /The compile of queue succeeded[^]*Boss: from elsewhere$/);
+  await turnsDone("queue", 1);
+  assert.deepEqual(client.latest("queue")?.proposal, proposal);
+  assert.deepEqual(client.latest("queue")?.queued, []);
+
+  // A source edited while the compiler runs: the success reads Changed.
+  await client.expectOk("draft.create", { projectId, draftId: "edit" });
+  await client.expectOk("draft.source.write", { projectId, draftId: "edit", content: SRC });
+  const editing = client.command("draft.compile", { projectId, draftId: "edit" });
+  await held("edit");
+  writeFileSync(join(artifactDir("edit"), "edit.md"), `${SRC}\nEdited meanwhile.\n`);
+  release("edit");
+  assert.ok((await editing).ok);
+  await until(() => client.latest("edit")?.compile?.outcome === "ok", 20_000, "the compile");
+  assert.equal(client.latest("edit")?.state, "changed");
+
+  // A clone moved under the home: the next record lands where it stands
+  // now, and nothing is made at the former path.
+  const moves = join(dir, "moves");
+  const fromClone = join(moves, "tester", "a-spex");
+  const toClone = join(moves, "tester", "b-spex");
+  mkdirSync(fromClone, { recursive: true });
+  let current = { key: "tester/a-spex", authoringDir: join(fromClone, "authoring"), workingFolder: join(dir, "project") };
+  const moving = new DraftStore(() => [current]);
+  const made = moving.create("moved", 1, current, "local");
+  renameSync(fromClone, toClone);
+  current = { ...current, key: "tester/b-spex", authoringDir: join(toClone, "authoring") };
+  moving.append("moved", made.instance, { type: "captain_status", turnId: null, timestamp: 2, message: "after the move" } as never);
+  assert.match(readFileSync(join(toClone, "authoring", "moved.records.jsonl"), "utf8"), /after the move/);
+  assert.ok(!existsSync(fromClone), "the former clone path is not made again");
+
+  // Another device's running compile and open turn, and an earlier
+  // version's unmarked turn, stand after a restart; this device's own
+  // are closed as interrupted.
+  client.close();
+  await harness.service.stop();
+  const device = Home.load(dataDir).device;
+  const seeds = new DraftStore(() => [location]);
+  const seed = (id: string, owner: string | undefined) => {
+    const draft = seeds.create(id, 1000, location, "local");
+    seeds.append(id, draft.instance, { type: "turn_started", turnId: 1, timestamp: 1001, ...(owner ? { device: owner } : {}), turn: { id: 1, prompt: "hi", timestamp: 1001 } } as never);
+    seeds.write({ ...draft, compile: { at: 1002, by: "boss", outcome: "running", ...(owner ? { device: owner } : {}) } }, seeds.load(id).version);
+  };
+  seed("peer", "00000000-0000-4000-8000-000000000000");
+  seed("mine", device);
+  seed("legacy", undefined);
+  // A player chosen by an earlier version, kept by id: for the session
+  // written then, without an instance, and for a session of another id
+  // made since under a fresh one.
+  seeds.create("earlier", 1000, location, "local");
+  const { instance: _fresh, ...unmarked } = JSON.parse(readFileSync(seeds.recordFile("earlier"), "utf8")) as Record<string, unknown>;
+  writeFileSync(seeds.recordFile("earlier"), JSON.stringify(unmarked));
+  seeds.create("successor", 1000, location, "local");
+  const prefsFile = join(dataDir, "local", "prefs.json");
+  const kept = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, "utf8")) as { format: 1; prefs: Record<string, unknown> } : { format: 1 as const, prefs: {} };
+  kept.prefs["authoring:earlier:player"] = "dev.reviewer";
+  kept.prefs["authoring:successor:player"] = "dev.reviewer";
+  writeFileSync(prefsFile, JSON.stringify(kept));
+  const restarted = await startHarness({ script, slc: stubSlcSource("['Helper']"), dir });
+  const after = new Client(restarted.service.port());
+  await after.open();
+  for (const id of ["peer", "legacy"]) {
+    const opened = await after.expectOk("draft.open", { projectId, draftId: id });
+    assert.equal(opened.draft.compile?.outcome, "running", `${id}'s compile stands`);
+    assert.deepEqual(opened.records.map((r) => r.record.type), ["turn_started"], `${id}'s turn stands open`);
+  }
+  const mine = await after.expectOk("draft.open", { projectId, draftId: "mine" });
+  assert.equal(mine.draft.compile?.outcome, "interrupted");
+  assert.deepEqual(mine.records.map((r) => r.record.type), ["turn_started", "turn_aborted", "captain_status"]);
+  const legacyOpened = await after.expectOk("draft.open", { projectId, draftId: "earlier" });
+  assert.equal(legacyOpened.draft.instance, legacyInstance("earlier", 1000));
+  assert.equal(legacyOpened.draft.player, "dev.reviewer");
+  assert.equal((await after.expectOk("draft.open", { projectId, draftId: "successor" })).draft.player, null);
+  const moved = JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> };
+  assert.equal(moved.prefs[`authoring:${legacyInstance("earlier", 1000)}:player`], "dev.reviewer");
+  assert.equal(moved.prefs["authoring:earlier:player"], undefined);
+  after.close();
+  await restarted.service.stop();
+});
+
+test("core-service-97: a sync receiving a session's replaced transcript announces it with its instance", {timeout: 120_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).trim();
+  const synced = async () => {
+    const after = client.messages.length;
+    assert.deepEqual(await client.expectOk("space.sync", { repository: projectId }), { accepted: true });
+    const phaseOf = (message: ServerMessage) => message.type === "space.state"
+      ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === projectId)?.sync
+      : undefined;
+    const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after && ["done", "stopped"].includes(phaseOf(message)?.phase ?? ""), 60_000);
+    assert.equal(phaseOf(settled)?.phase, "done", JSON.stringify(phaseOf(settled)));
+  };
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "synced" });
+    await client.expectOk("draft.send", { projectId, draftId: "synced", text: "hello" });
+    await until(() => client.latest("synced")?.activity === "idle" && harness.stats.runs.length === 1, 20_000, "the turn");
+    const remote = join(dir, "remote.git");
+    git(dir, "init", "--quiet", "--bare", "--initial-branch=spex", remote);
+    await client.expectOk("space.remote.set", { repository: projectId, url: remote });
+    await synced();
+    // Another device rewrites the history, the same records in number.
+    const other = join(dir, "other");
+    git(dir, "clone", "--quiet", "--branch", "spex", remote, other);
+    const transcript = join(other, "authoring", "synced.records.jsonl");
+    const before = readFileSync(transcript, "utf8");
+    writeFileSync(transcript, before.replaceAll('"prompt":"hello"', '"prompt":"rewritten"'));
+    git(other, "-c", "user.name=Other", "-c", "user.email=other@example.test", "commit", "--quiet", "-am", "rewrite elsewhere");
+    git(other, "push", "--quiet", "origin", "spex");
+    const heard = client.messages.length;
+    await synced();
+    const announced = client.messages.slice(heard).find((m) => m.type === "draft.history-replaced" && m.draftId === "synced");
+    assert.ok(announced && announced.type === "draft.history-replaced");
+    assert.equal(announced.instance, client.instance("synced"));
+    const reopened = await client.expectOk("draft.open", { projectId, draftId: "synced" });
+    assert.equal(reopened.records.length, before.trimEnd().split("\n").length);
+    assert.ok(reopened.records.some((r) => r.record.type === "turn_started" && (r.record as { turn: { prompt: string } }).turn.prompt === "rewritten"));
+    assert.ok(existsSync(join(clone, "authoring", "synced.json")));
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("space-37: a sync taking the host's side of a transcript stops while this core's turn appends to it, and so does its retry", {timeout: 120_000}, async () => {
+  const script: FakeScript = {
+    rules: [{ match: /Boss: hold$/, response: { deltas: ["holding"], result: "", untilAborted: true } }],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).trim();
+  const sync = async (choices?: Record<string, "remote">) => {
+    const after = client.messages.length;
+    assert.deepEqual(await client.expectOk("space.sync", { repository: projectId, ...(choices ? { choices } : {}) }), { accepted: true });
+    const phaseOf = (message: ServerMessage) => message.type === "space.state"
+      ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === projectId)?.sync
+      : undefined;
+    const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after && ["done", "stopped", "choices"].includes(phaseOf(message)?.phase ?? ""), 60_000);
+    return phaseOf(settled)!;
+  };
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "held" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "held" } });
+    await client.expectOk("draft.send", { projectId, draftId: "held", text: "hello" });
+    await until(() => client.latest("held")?.activity === "idle" && harness.stats.runs.length === 1, 20_000, "the first turn");
+    const remote = join(dir, "remote.git");
+    git(dir, "init", "--quiet", "--bare", "--initial-branch=spex", remote);
+    await client.expectOk("space.remote.set", { repository: projectId, url: remote });
+    assert.equal((await sync()).phase, "done");
+    // Another device rewrites the history and pushes it.
+    const elsewhere = join(dir, "elsewhere");
+    git(dir, "clone", "--quiet", "--branch", "spex", remote, elsewhere);
+    const theirs = join(elsewhere, "authoring", "held.records.jsonl");
+    writeFileSync(theirs, readFileSync(theirs, "utf8").replaceAll('"prompt":"hello"', '"prompt":"rewritten"'));
+    git(elsewhere, "-c", "user.name=Other", "-c", "user.email=other@example.test", "commit", "--quiet", "-am", "rewrite elsewhere");
+    git(elsewhere, "push", "--quiet", "origin", "spex");
+    // A turn of this core appends to the transcript while the sync,
+    // taking the host's side, would replace it.
+    await client.expectOk("draft.send", { projectId, draftId: "held", text: "hold" });
+    await until(() => client.records("held").some((m) => m.record.type === "player_event" && JSON.stringify(m.record).includes("holding")), 10_000, "the turn under way");
+    const records = authoringFiles(clone, "held").records;
+    // Both sides changed the unit: the reader takes the host's side.
+    assert.equal((await sync()).phase, "choices");
+    const stopped = await sync({ "authoring/held": "remote" });
+    assert.equal(stopped.phase, "stopped", JSON.stringify(stopped));
+    assert.match(JSON.stringify(stopped), /held/, "the stop names the session");
+    const kept = readFileSync(records, "utf8");
+    assert.ok(kept.includes('"prompt":"hello"') && !kept.includes('"prompt":"rewritten"'), "the transcript is left as it was");
+    const marker = join(clone, ".spex-apply.json");
+    assert.ok(existsSync(marker), "the repair marker stands");
+    // Its Retry while the turn still runs: the repair stops the same way.
+    const retried = await sync();
+    assert.equal(retried.phase, "stopped", JSON.stringify(retried));
+    assert.match(JSON.stringify(retried), /held/, "the retry's stop names the session");
+    assert.ok(existsSync(marker), "the repair marker still stands");
+    assert.equal(readFileSync(records, "utf8"), kept, "the retry left the transcript as it was");
+    // The turn goes on; every record it writes lands in its transcript.
+    await client.expectOk("draft.abort", { projectId, draftId: "held" });
+    await until(() => client.latest("held")?.activity === "idle", 10_000, "the turn's end");
+    const seqs = readFileSync(records, "utf8").trimEnd().split("\n").map((line) => (JSON.parse(line) as { seq: number }).seq);
+    assert.deepEqual(seqs, seqs.map((_seq, index) => index + 1), "one unbroken transcript");
+    assert.ok(client.records("held").some((m) => m.record.type === "turn_aborted"), "the turn's end is recorded");
+    assert.equal(client.records("held").at(-1)?.seq, seqs.at(-1));
+    // Positive control: a turn the transcript records unfinished, of this
+    // very device, with no turn of this core running, refuses nothing.
+    const device = (Reflect.get(harness.service, "store") as { home: { device: string } }).home.device;
+    const open = seqs.length + 1;
+    appendFileSync(records, `${JSON.stringify({ seq: open, record: { type: "turn_started", turnId: 99, timestamp: 1, device, turn: { id: 99, prompt: "unfinished", timestamp: 1 } } })}\n`);
+    // The local tail changed since the stopped selection was saved: a
+    // fresh comparison asks again, and the host's side chosen applies.
+    const asked = await sync();
+    assert.equal(asked.phase, "choices", JSON.stringify(asked));
+    const applied = await sync({ "authoring/held": "remote" });
+    assert.equal(applied.phase, "done", JSON.stringify(applied));
+    const replaced = readFileSync(records, "utf8");
+    assert.ok(replaced.includes('"prompt":"rewritten"') && !replaced.includes('"prompt":"unfinished"'), "the host's history, whole");
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("core-service-97: a moved clone's authoring session is announced under its new project", {timeout: 60_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dataDir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  try {
+    await client.open();
+    const created = await client.expectOk("draft.create", { projectId, draftId: "moving" });
+    // The clone is moved on disk, the store follows, and the service's
+    // own callback runs, as a rename the host reports does (space-60).
+    const to = "tester/moved-spex";
+    renameSync(clone, join(dataDir, "workspace", ...to.split("/")));
+    const store = Reflect.get(harness.service, "store") as { moveRepositories(moves: { from: string; to: string }[]): void };
+    store.moveRepositories([{ from: projectId, to }]);
+    const heard = client.messages.length;
+    await (Reflect.get(harness.service, "repositoriesMoved") as (moves: { from: string; to: string }[]) => Promise<void>).call(harness.service, [{ from: projectId, to }]);
+    const announced = await client.waitFor((m) => client.messages.indexOf(m) >= heard && m.type === "draft.state" && m.draft.id === "moving" && m.draft.projectId === to);
+    assert.ok(announced.type === "draft.state");
+    assert.equal(announced.draft.instance, created.instance, "the same session, under its new project");
+    assert.deepEqual(await client.expectOk("draft.send", { projectId: to, draftId: "moving", text: "after the move" }), { accepted: true, queued: false });
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-96: work goes on beside work, settling only what is its own, resuming only over its own records", {timeout: 120_000}, async (t) => {
+  const script: FakeScript = {
+    rules: [
+      // Anchored to the prompt's end: a reseed quotes earlier messages.
+      { match: /Boss: hold$/, response: { deltas: ["holding"], result: "", untilAborted: true } },
+      { match: /Boss: slow$/, response: { deltas: ["thinking"], result: "Slow reply.", delayMs: 1500 } },
+    ],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+  const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    const root = join(dir, "project", "spex-packages");
+    if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
+    client.close();
+    await harness.service.stop();
+  });
+  const held = (id: string, n = 1) => until(() => client.progress(id).filter((line) => line.startsWith("→ normalize")).length >= n, 20_000, `${id} held ×${n}`);
+  const SRC = "# Held\n\nRoles:\n\n- Helper\n";
+  const make = async (id: string) => {
+    await client.expectOk("draft.create", { projectId, draftId: id });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: id } });
+    await client.expectOk("draft.source.write", { projectId, draftId: id, content: SRC });
+  };
+  const stored = (id: string) => JSON.parse(readFileSync(authoringFiles(clone, id).record, "utf8")) as { compile?: { outcome: string; device?: string; at: number } };
+
+  // Deleted while its compile runs: admitted; the compile, ending, makes
+  // nothing of the session again.
+  await make("gone");
+  const goneCompile = client.command("draft.compile", { projectId, draftId: "gone" });
+  await held("gone");
+  assert.equal(await client.expectOk("draft.delete", { projectId, draftId: "gone" }), null);
+  release("gone");
+  await goneCompile;
+  await sleep(200);
+  for (const path of Object.values(authoringFiles(clone, "gone"))) assert.ok(!existsSync(path), `${path} stays gone`);
+
+  // Deleted and made again while a turn of the former instance runs:
+  // none of that turn's records reach the successor, whose transcript
+  // is never made.
+  await make("turned");
+  const formerTurned = client.instance("turned");
+  await client.expectOk("draft.send", { projectId, draftId: "turned", text: "slow" });
+  await until(() => client.records("turned").some((m) => m.record.type === "player_event" && JSON.stringify(m.record).includes("thinking")), 10_000, "the former turn under way");
+  await client.expectOk("draft.delete", { projectId, draftId: "turned", instance: formerTurned });
+  const successorTurned = await client.expectOk("draft.create", { projectId, draftId: "turned" });
+  assert.notEqual(successorTurned.instance, formerTurned);
+  const live = Reflect.get(Reflect.get(harness.service, "authors"), "live") as Map<string, { turn?: unknown }>;
+  await until(() => !live.get(formerTurned)?.turn, 10_000, "the former turn's end");
+  assert.ok(!existsSync(authoringFiles(clone, "turned").records), "no record of the former turn reaches the successor");
+  assert.equal(client.latest("turned")?.activity, "idle");
+
+  // A running marker a sync replaced with another device's: the
+  // settlement leaves it as it stands.
+  await make("peer");
+  const peerCompile = client.command("draft.compile", { projectId, draftId: "peer" });
+  await held("peer");
+  const peerFile = authoringFiles(clone, "peer").record;
+  const synced = JSON.parse(readFileSync(peerFile, "utf8")) as { compile: { device: string } };
+  synced.compile.device = "00000000-0000-4000-8000-0000000000ff";
+  writeFileSync(peerFile, JSON.stringify(synced));
+  release("peer");
+  await peerCompile;
+  await sleep(200);
+  assert.deepEqual(stored("peer").compile, synced.compile, "another device's marker stands");
+  assert.ok(!client.statusLines("peer").some((line) => line.startsWith("◇ Compiled")));
+
+  // A compile settling while a turn runs: its follow-up waits for the
+  // turn and starts after it, never beside it.
+  await make("wait");
+  await client.expectOk("draft.send", { projectId, draftId: "wait", text: "hold" });
+  await until(() => client.latest("wait")?.activity === "turn", 10_000, "the turn");
+  const waitCompile = client.command("draft.compile", { projectId, draftId: "wait" });
+  await held("wait");
+  release("wait");
+  assert.ok((await waitCompile).ok);
+  await sleep(300);
+  assert.deepEqual(client.turnStarts("wait"), ["hold"], "nothing beside the running turn");
+  await client.expectOk("draft.abort", { projectId, draftId: "wait" });
+  await until(() => client.turnStarts("wait").length === 2, 10_000, "the follow-up");
+  assert.match(client.turnStarts("wait")[1], /^Spex: the compile succeeded/);
+  await until(() => client.latest("wait")?.activity === "idle", 20_000, "idle");
+
+  // A success owing its follow-up, then a newer compile canceled before
+  // the turn ends: the latest outcome owes nothing, so nothing starts.
+  await make("stale");
+  await client.expectOk("draft.send", { projectId, draftId: "stale", text: "hold" });
+  await until(() => client.latest("stale")?.activity === "turn", 10_000, "the turn");
+  const succeeded = client.command("draft.compile", { projectId, draftId: "stale" });
+  await held("stale");
+  release("stale");
+  assert.ok((await succeeded).ok);
+  const canceled = client.command("draft.compile", { projectId, draftId: "stale" });
+  await held("stale", 2);
+  await client.expectOk("compile.abort", { playbookId: "stale", instance: client.instance("stale") });
+  const cut = await canceled;
+  assert.ok(!cut.ok && cut.error.code === "aborted");
+  await until(() => client.latest("stale")?.compile?.outcome === "canceled", 10_000, "the newer outcome recorded");
+  await client.expectOk("draft.abort", { projectId, draftId: "stale" });
+  await until(() => client.latest("stale")?.activity === "idle", 10_000, "idle");
+  await sleep(300);
+  assert.deepEqual(client.turnStarts("stale"), ["hold"], "no stale follow-up starts");
+  assert.ok(!harness.stats.runs.some((run) => run.prompt.includes("The compile of stale succeeded")), "no stale success text reaches the agent");
+
+  // A success owing its follow-up, then its record replaced beside the
+  // core — a sync bringing another device's compile — before the turn
+  // ends: the follow-up is owed no more, and the queued message goes
+  // without it.
+  await make("replaced");
+  await client.expectOk("draft.send", { projectId, draftId: "replaced", text: "hold" });
+  await until(() => client.latest("replaced")?.activity === "turn", 10_000, "the turn");
+  const owed = client.command("draft.compile", { projectId, draftId: "replaced" });
+  await held("replaced");
+  release("replaced");
+  assert.ok((await owed).ok);
+  await until(() => client.latest("replaced")?.compile?.outcome === "ok", 10_000, "the success recorded");
+  const replacedFile = authoringFiles(clone, "replaced").record;
+  const elsewhere = JSON.parse(readFileSync(replacedFile, "utf8")) as Record<string, unknown>;
+  elsewhere.compile = { at: 9_999_999_999_999, by: "boss", outcome: "running", device: "00000000-0000-4000-8000-0000000000ee" };
+  writeFileSync(replacedFile, JSON.stringify(elsewhere));
+  assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "replaced", text: "queued after" }), { accepted: true, queued: true });
+  await client.expectOk("draft.abort", { projectId, draftId: "replaced" });
+  await until(() => client.turnStarts("replaced").includes("queued after"), 10_000, "the queued message");
+  await until(() => client.latest("replaced")?.activity === "idle", 20_000, "idle");
+  await sleep(300);
+  assert.deepEqual(client.turnStarts("replaced"), ["hold", "queued after"], "no stale follow-up turn");
+  const after = harness.stats.runs.find((run) => run.prompt.endsWith("Boss: queued after"));
+  assert.ok(after && !after.prompt.includes("The compile of replaced succeeded"), "no stale preface");
+
+  // Resume: only over a transcript this run alone wrote.
+  await make("resume");
+  const records = authoringFiles(clone, "resume").records;
+  const runOf = (text: string) => harness.stats.runs.find((run) => run.prompt.endsWith(`Boss: ${text}`))!;
+  const turn = async (text: string) => {
+    const before = client.turnStarts("resume").length;
+    await client.expectOk("draft.send", { projectId, draftId: "resume", text });
+    await until(() => client.latest("resume")?.activity === "idle" && client.turnStarts("resume").length > before, 20_000, text);
+  };
+  const foreign = () => {
+    const last = readFileSync(records, "utf8").trimEnd().split("\n").length;
+    appendFileSync(records, `${JSON.stringify({ seq: last + 1, record: { type: "captain_status", turnId: null, timestamp: 1, message: "◇ elsewhere" } })}\n`);
+  };
+  // Change the transcript once the provider has streamed and before it
+  // returns its token.
+  const midway = async (text: string, change: () => void) => {
+    const from = client.records("resume").length;
+    await client.expectOk("draft.send", { projectId, draftId: "resume", text });
+    await until(() => client.records("resume").slice(from).some((m) => m.record.type === "player_event" && JSON.stringify(m.record).includes("thinking")), 10_000, `${text} under way`);
+    change();
+    await until(() => client.latest("resume")?.activity === "idle", 20_000, `${text} done`);
+  };
+  await turn("hello");
+  await turn("own");
+  assert.match(runOf("own").resume ?? "", /^fake-resume-/, "a transcript only this run wrote resumes");
+  // Another writer's record after the provider's input, while it ran.
+  await midway("slow", foreign);
+  await turn("after suffix");
+  assert.equal(runOf("after suffix").resume, undefined, "a foreign suffix during the call reseeds");
+  assert.match(runOf("after suffix").prompt, /Conversation so far:/);
+  await turn("again");
+  assert.match(runOf("again").resume ?? "", /^fake-resume-/);
+  // Another writer's record between turns.
+  foreign();
+  await turn("after between");
+  assert.equal(runOf("after between").resume, undefined, "history added between turns reseeds");
+  // The history replaced while the provider ran.
+  await midway("slow", () => writeFileSync(records, readFileSync(records, "utf8").replaceAll('"prompt":"hello"', '"prompt":"rewritten"')));
+  await turn("after replacement");
+  assert.equal(runOf("after replacement").resume, undefined, "a replaced history during the call reseeds");
+  assert.match(runOf("after replacement").prompt, /Boss: rewritten/);
+
+  client.close();
+  await harness.service.stop();
 });

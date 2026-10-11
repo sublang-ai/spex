@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Document, isMap, parseDocument } from "yaml";
 
-import { writeApplicationBytes } from "../app-storage.js";
+import { readVersioned, writeApplicationBytes, writeVersionedBytes } from "../files.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME } from "./exports.js";
 import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
@@ -334,12 +334,15 @@ export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage,
   const wrote = ensureBuiltinRequest(cloneDir, pkg.version);
   const lockFile = join(cloneDir, "spex.lock");
   if (existsSync(lockFile)) return wrote;
-  const text = readFileSync(join(cloneDir, "spex.yaml"), "utf8");
+  const { bytes } = readVersioned(join(cloneDir, "spex.yaml"));
+  if (bytes === null) return wrote;
+  const text = bytes.toString("utf8");
   let requested: string[];
   try { requested = Object.keys(parseRequests(text).packages); } catch { return wrote; }
   if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return wrote;
   try {
-    writeApplicationBytes(lockFile, serializeLock(builtinLock(pkg, registryUrl, text)));
+    // Written only where no lock stands yet (DR-111).
+    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, registryUrl, text)), null);
   } catch (error) {
     // The first resolve writes it instead.
     console.error(`spex: ${cloneDir} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
@@ -351,14 +354,17 @@ export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage,
  * Request the built-in spec package at a caret requirement in a spex
  * repository's `spex.yaml` where it is not requested (environments-11,
  * storage-6): written synchronously, so a clone's first commit already
- * holds it; comments and key order of an existing file are kept. A
- * file that does not read is left as it is. Returns whether it wrote.
+ * holds it; comments and key order of an existing file are kept, and the
+ * file is written under the version read, so a file changed meanwhile is
+ * refused as a conflict (DR-111). A file that does not read is left as
+ * it is. Returns whether it wrote.
  */
 export function ensureBuiltinRequest(cloneDir: string, version: string): boolean {
   const file = join(cloneDir, "spex.yaml");
-  let text = "";
-  if (existsSync(file)) {
-    text = readFileSync(file, "utf8");
+  mkdirSync(cloneDir, { recursive: true });
+  const read = readVersioned(file);
+  const text = read.bytes === null ? "" : read.bytes.toString("utf8");
+  if (read.bytes !== null) {
     try {
       if (parseRequests(text).packages[BUILTIN_PACKAGE_NAME]) return false;
     } catch {
@@ -370,8 +376,7 @@ export function ensureBuiltinRequest(cloneDir: string, version: string): boolean
   doc.setIn(["packages", BUILTIN_PACKAGE_NAME], doc.createNode({ version: `^${version}` }));
   const next = doc.toString({ lineWidth: 0 });
   parseRequests(next);
-  mkdirSync(cloneDir, { recursive: true });
-  writeApplicationBytes(file, next);
+  writeVersionedBytes(file, next, read.version);
   return true;
 }
 

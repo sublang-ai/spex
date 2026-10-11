@@ -43,6 +43,7 @@ import {
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
+import { sha256, type FileVersion } from "./files.js";
 import { defaultOwnName, Home } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";
@@ -1788,7 +1789,13 @@ export interface LoadedConfig {
 export async function loadConfig(
   path: string,
   loadModule?: LoadModule,
-  options: { modules?: PlaybookModules } = {},
+  options: {
+    modules?: PlaybookModules;
+    /** Told the version of the bytes composed — the file as migrated —
+     * before composition begins, so a caller can check it still stands
+     * (DR-111). */
+    read?: (version: FileVersion) => void;
+  } = {},
 ): Promise<LoadedConfig> {
   // A profiles-era file migrates in place first (DR-019, launcher
   // parity): the shared config composes whichever host loads it, and
@@ -1805,8 +1812,9 @@ export async function loadConfig(
         `the original is at ${migration.backupPath}\n`,
     );
   }
-  const text = readFileSync(path, "utf8");
-  const raw: unknown = parseYaml(text);
+  const bytes = readFileSync(path);
+  options.read?.(sha256(bytes));
+  const raw: unknown = parseYaml(bytes.toString("utf8"));
   const composed = await composeConfig(raw, loadModule, path, { ...(options.modules ? { modules: options.modules } : {}) });
   return { path, raw, composed };
 }

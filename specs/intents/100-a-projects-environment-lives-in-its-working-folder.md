@@ -6,7 +6,7 @@
 ## Status
 
 Proposed (2026-10-10).
-Its tasks precede the versioned environment writes of [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)'s delivery, which then land on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts them.
+Its tasks precede the completion of [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)'s versioned environment writes, already implemented on the spex repository's clone, which then adapt to the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts them.
 
 ## Intent
 

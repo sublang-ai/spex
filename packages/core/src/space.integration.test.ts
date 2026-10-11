@@ -12,7 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
@@ -22,7 +22,7 @@ import type { Command } from "./protocol.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, prefsOf, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, sleep, sleeperPid, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
+const { scratch, git, bareRepo, gitFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, hangingCompileSpawner, COMPILE_INPUT, startHome, runTurn, peerClone, peerPush, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 // ---------------------------------------------------------------------------
@@ -186,53 +186,156 @@ test("space-37: the first sync pushes spex to the empty host, sets the upstream 
   assert.equal(git(empty, "rev-parse", "spex"), git(joined.clone, "rev-parse", "spex"));
 });
 
-test("space-37: a turn in flight, an out-of-band lease and a running compile refuse their repository's sync by name while another's proceeds", async (t) => {
-  const home = await startHome("blockers", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
+/** Release a lease in a test's cleanup: one already gone with its clone
+ * — a removal that went through — answers ENOENT, which must not replace
+ * the failed assertion that let it go through. */
+async function releaseLease(lease: { release(): Promise<unknown> } | undefined): Promise<void> {
+  try { await lease?.release(); }
+  catch (error) {
+    const gone = (error as NodeJS.ErrnoException).code === "ENOENT" || ((error as { cause?: NodeJS.ErrnoException }).cause)?.code === "ENOENT";
+    if (!gone) throw error;
+  }
+}
+
+test("space-37: a running compile and an out-of-band lease refuse no sync", async (t) => {
+  const home = await startHome("unrefused", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  const other = await addFolder(home, gitFolder("blockers-other"));
   const sessionId = await runTurn(home, key, "Settle first");
   await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
-  await home.client.expectOk("space.remote.set", { repository: other.key, url: bareRepo() });
-  assert.equal((await home.client.settle("space.sync", { repository: key })).sync.phase, "done");
-  const proceeds = async (repository: string, why: string): Promise<void> => {
-    const synced = await home.client.settle("space.sync", { repository });
-    assert.equal(synced.sync.phase, "done", `${why}: ${JSON.stringify(synced.sync)}`);
+  const synced = async (why: string): Promise<void> => {
+    const done = await home.client.settle("space.sync", { repository: key });
+    assert.equal(done.sync.phase, "done", `${why}: ${JSON.stringify(done.sync)}`);
   };
-  // A turn in flight.
-  await home.client.expectOk("turn.submit", { sessionId, text: "slow: keep going" });
-  await home.client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && m.session.turnActive === true);
-  await home.client.expectError("space.sync", { repository: key }, "busy", /Wait for “Settle first” in/);
-  await proceeds(other.key, "another repository's sync never waits for this one's turn");
-  await home.client.waitFor((m) => m.type === "session.state" && m.session.id === sessionId && !m.session.live && (m.session.turns ?? 0) >= 2, 20_000);
-  // A management lease taken out of band.
+  // A running compile belongs to the project whose working folder holds
+  // its spec package (environments-10): it refuses no sync (space-21).
+  const compile = home.client.command("compile.run", { ...COMPILE_INPUT, projectId: key });
+  await home.client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
+  await synced("a compile refuses no sync");
+  // A management lease taken out of band: the sync, which writes no
+  // session here, proceeds (space-11).
+  const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await shared.prepare();
+  const lease = await shared.acquireManagement(sessionId);
+  try { await synced("a lease refuses no sync"); }
+  finally { await releaseLease(lease); }
+  await home.client.expectOk("compile.abort", { playbookId: "demo" });
+  await compile;
+});
+
+test("projects-33: a removal is refused at its own instant by a session's lease alone, a clone gone while its leasing waits is a change, and released it completes beside a compile", async (t) => {
+  const home = await startHome("removal", { env: { SPEX_SLC: "fake-slc" }, extra: { compileSpawner: hangingCompileSpawner() } });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Settle first");
+  const compile = home.client.command("compile.run", { ...COMPILE_INPUT, projectId: key });
+  await home.client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
+  // A management lease taken out of band refuses the removal, which would
+  // delete it, at its own instant (projects-10).
   const shared = createSessionStore({ sessionsDir: join(clone, "sessions") });
   await shared.prepare();
   const lease = await shared.acquireManagement(sessionId);
   try {
-    await home.client.expectError("space.sync", { repository: key }, "busy", /“Settle first” (is in use elsewhere|ownership cannot be verified)/);
-    await proceeds(other.key, "a lease in one clone holds no other");
-  } finally { await lease.release(); }
-  // A running compile belongs to the project whose working folder holds
-  // its spec package (environments-10).
-  const compile = home.client.command("compile.run", { ...COMPILE_INPUT, projectId: key });
-  await home.client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
-  await home.client.expectError("space.sync", { repository: key }, "busy", /demo is compiling/);
-  await proceeds(other.key, "a compile holds only its own repository");
+    await home.client.expectError("project.remove", { projectId: key, confirm: true }, "busy", /running turn/);
+    assert.ok(existsSync(clone), "nothing is deleted under a held lease");
+  } finally { await releaseLease(lease); }
+  // A session standing only as a live writer's lease, before any record,
+  // refuses it as well.
+  const leaseOnly = await shared.acquireManagement(randomUUID());
+  try {
+    await home.client.expectError("project.remove", { projectId: key, confirm: true }, "busy", /running turn/);
+    assert.ok(existsSync(clone), "nothing is deleted under a lease-only session");
+  } finally { await releaseLease(leaseOnly); }
+  // A session appearing while the removal takes its leases is refused at
+  // its final check as changed meanwhile.
+  const repositoryOfStore = (): { store: typeof shared } => (Reflect.get(home.service, "store") as { repository(key: string): { store: typeof shared } }).repository(key);
+  let repository = repositoryOfStore();
+  let sessions = repository.store;
+  let entered!: () => void, release!: () => void;
+  const leasing = new Promise<void>((resolve) => { entered = resolve; });
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  repository.store = { ...sessions, acquireManagement: async (id: string) => {
+    const held = await sessions.acquireManagement(id);
+    entered(); await barrier;
+    return held;
+  } };
+  let appeared: Awaited<ReturnType<typeof shared.acquireManagement>> | undefined;
+  try {
+    const removal = home.client.expectError("project.remove", { projectId: key, confirm: true }, "conflict", /changed meanwhile/);
+    await Promise.race([leasing, removal]);
+    appeared = await shared.acquireManagement(randomUUID());
+    release();
+    await removal;
+  } finally {
+    release();
+    repository.store = sessions;
+    await releaseLease(appeared);
+  }
+  assert.ok(existsSync(clone), "the clone stands after the conflict");
+  // The clone moved away while the removal's leasing waits before the
+  // real acquisition: the removal is a change, never a running turn, and
+  // the acquisition makes nothing where the clone stood.
+  const away = `${clone}.away`;
+  const pausing = new Promise<void>((resolve) => { entered = resolve; });
+  const paused = new Promise<void>((resolve) => { release = resolve; });
+  repository.store = { ...sessions, acquireManagement: async (id: string) => {
+    entered(); await paused;
+    return sessions.acquireManagement(id);
+  } };
+  try {
+    const removal = home.client.expectError("project.remove", { projectId: key, confirm: true }, "conflict", /changed meanwhile/);
+    await Promise.race([pausing, removal]);
+    renameSync(clone, away);
+    release();
+    await removal;
+    assert.ok(!existsSync(clone), "nothing is made where the clone stood");
+    assert.ok(existsSync(join(away, "sessions", `${sessionId}.json`)), "the moved clone keeps its session");
+  } finally {
+    release();
+    repository.store = sessions;
+    if (existsSync(away) && !existsSync(clone)) renameSync(away, clone);
+  }
+  // The store reads the clone where it stands again, by a new handle.
+  repository = repositoryOfStore();
+  sessions = repository.store;
+  // The home file going while the removal takes its leases refuses it at
+  // its final check too; the file is not written back.
+  const homeFile = Home.file(home.dataDir);
+  const homeBytes = readFileSync(homeFile);
+  const leasingAgain = new Promise<void>((resolve) => { entered = resolve; });
+  const barrierAgain = new Promise<void>((resolve) => { release = resolve; });
+  repository.store = { ...sessions, acquireManagement: async (id: string) => {
+    const held = await sessions.acquireManagement(id);
+    entered(); await barrierAgain;
+    return held;
+  } };
+  try {
+    const removal = home.client.expectError("project.remove", { projectId: key, confirm: true }, "invalid_request", /home\.yaml changed meanwhile; retry/);
+    await Promise.race([leasingAgain, removal]);
+    rmSync(homeFile);
+    release();
+    await removal;
+    assert.ok(!existsSync(homeFile), "the home file is not written back from memory");
+  } finally {
+    release();
+    repository.store = sessions;
+    writeFileSync(homeFile, homeBytes);
+  }
+  assert.ok(existsSync(clone), "the clone stands after the home refusal");
+  // Released, the removal runs with the compile still running: it waits
+  // for no other work.
+  assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null);
+  assert.ok(!existsSync(clone), "the clone is gone");
   await home.client.expectOk("compile.abort", { playbookId: "demo" });
   await compile;
-  const settled = await home.client.settle("space.sync", { repository: key });
-  assert.equal(settled.sync.phase, "done");
 });
 
-test("space-37: while a check runs, writes beneath that clone are refused naming the sync, another repository's are admitted, and Stop ends the child", async (t) => {
+test("space-37: while a check runs, writes beneath that clone are admitted, a second Sync or Check joins it, and Stop ends the child", async (t) => {
   const { script, pidFile } = sleepingSsh();
-  const home = await startHome("gate", { env: { GIT_SSH_COMMAND: script }, extra: { spaceTransportTimeoutMs: 60_000 } });
+  const home = await startHome("unrefused-check", { env: { GIT_SSH_COMMAND: script }, extra: { spaceTransportTimeoutMs: 60_000 } });
   t.after(() => home.stop());
   const { key, clone } = await addFolder(home, home.projectDir);
-  const other = await addFolder(home, gitFolder("gate-other"));
-  const sessionId = await runTurn(home, key, "Gate me");
-  const otherSession = await runTurn(home, other.key, "Elsewhere");
+  const sessionId = await runTurn(home, key, "Beside the check");
   await home.client.expectOk("space.remote.set", { repository: key, url: "ssh://localhost/x" });
   const before = git(clone, "rev-parse", "HEAD");
   await home.client.expectOk("intent.queue", { projectId: key, text: "Saved by the sync" });
@@ -241,23 +344,18 @@ test("space-37: while a check runs, writes beneath that clone are refused naming
   // Stop is offered once the step's Git child runs (space-16).
   const running = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
   assert.ok(running.sync.phase === "running" && running.sync.cancelable);
-  for (const [type, fields] of [
-    ["turn.submit", { sessionId, text: "blocked" }],
-    ["session.create", { projectId: key }],
-    ["session.viewed", { sessionId, turnId: 1 }],
-    ["intent.queue", { projectId: key, text: "blocked" }],
-    ["project.rebind", { projectId: key, path: home.projectDir }],
-  ] as const) {
-    const reply = await home.client.command(type as Command["type"], fields as never);
-    assert.ok(!reply.ok && reply.error.code === "busy", `${type} must be refused busy: ${JSON.stringify(reply)}`);
-    assert.match(reply.error.message, /-spex is syncing; wait for it to finish/);
-  }
-  await home.client.expectError("space.sync", { repository: key }, "busy", /Already syncing/);
-  await home.client.expectError("space.fetch", { repository: key }, "busy", /Already syncing/);
-  // Other spex repositories stay writable (space-21).
-  await home.client.expectOk("intent.queue", { projectId: other.key, text: "elsewhere" });
-  await runTurn(home, other.key, "Admitted elsewhere", otherSession);
+  // Nothing beneath the clone is refused (space-21): a turn, a viewed
+  // marker, an intent, a pairing and a settings edit all land, the
+  // runtime's own rules alone deciding the turn.
+  await runTurn(home, key, "Admitted beside the check", sessionId);
+  await home.client.expectOk("session.viewed", { sessionId, turnId: 1 });
+  const queued = await home.client.expectOk("intent.queue", { projectId: key, text: "Admitted beside the check" });
+  assert.ok(existsSync(join(clone, "intents", `${queued.id}.json`)), "the intent is written");
+  await home.client.expectOk("project.rebind", { projectId: key, path: home.projectDir });
   await home.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { model: "claude-test-edited" } } });
+  // A second Sync or Check joins the running one rather than being refused.
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  assert.deepEqual(await home.client.expectOk("space.fetch", { repository: key }), { accepted: true });
   const pid = await sleeperPid(pidFile);
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: true });
   const after = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "stopped");
@@ -270,8 +368,38 @@ test("space-37: while a check runs, writes beneath that clone are refused naming
   }
   assert.throws(() => process.kill(pid, 0), "the sleeping child is gone");
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: key }), { stopped: false });
-  // The gate is lifted: writes go through again.
-  await home.client.expectOk("intent.queue", { projectId: key, text: "after the stop" });
+});
+
+test("space-37: a Sync asked while a check stands held makes no Save commit until that check ends, then saves and completes", async (t) => {
+  // The check's transport, held inside Git before it runs.
+  const shim = holdingGit("ls-remote");
+  const home = await startHome("follows-check", { env: { PATH: shim.path } });
+  t.after(() => { shim.release(); return home.stop(); });
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const bare = bareRepo();
+  await home.client.expectOk("space.remote.set", { repository: key, url: bare });
+  const queued = await home.client.expectOk("intent.queue", { projectId: key, text: "Saved once the check ends" });
+  const before = git(clone, "rev-parse", "HEAD");
+  shim.hold();
+  const from = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.fetch", { repository: key }), { accepted: true });
+  await shim.held();
+  // The Sync follows the check (space-21): accepted at once, and through
+  // a bounded watch from that reply no Save lands and no sync begins.
+  assert.deepEqual(await home.client.expectOk("space.sync", { repository: key }), { accepted: true });
+  const accepted = Date.now();
+  while (Date.now() - accepted < 3_000) {
+    assert.equal(git(clone, "rev-parse", "HEAD"), before, "no Save commit while the check stands");
+    const syncing = home.client.messages.slice(from).some((message) => message.type === "space.state" && message.state.groups.some((group) => group.repositories.some((repository) => repository.key === key && repository.sync.phase === "running" && repository.sync.op === "sync")));
+    assert.equal(syncing, false, "the sync has not begun while the check runs");
+    await sleep(100);
+  }
+  shim.release();
+  const done = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done" || repository.sync.phase === "stopped");
+  assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
+  assert.notEqual(git(clone, "rev-parse", "HEAD"), before, "the Save commit came once the check ended");
+  assert.ok(git(clone, "ls-files").split("\n").includes(`intents/${queued.id}.json`));
+  assert.equal(git(bare, "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
 });
 
 test("space-37: a MERGE_HEAD planted in a clone reads as a pending merge and refuses its sync", async (t) => {
@@ -297,6 +425,24 @@ test("space-37: a MERGE_HEAD planted in a clone reads as a pending merge and ref
 const PROJECT_CONFIG = "playbooks:\n  code:\n    roles:\n      coder: dev.coder\n";
 const PEER_CONFIG = "playbooks:\n  review:\n    roles:\n      reviewer: dev.reviewer\n";
 
+
+test("space-37: a blocking diagnostic of one clone's session refuses that clone's sync alone, a clone whose path prefixes it admitted", async (t) => {
+  const first = await startHome("blocking-scope", { project: false });
+  const short = await addFolder(first, gitFolder("scope"));
+  const long = await addFolder(first, gitFolder("scope-spex-b"));
+  assert.ok(long.clone.startsWith(short.clone), "one clone's path is a string prefix of the other's");
+  await first.stop();
+  const damaged = join(long.clone, "sessions", `${randomUUID()}.json`);
+  writeFileSync(damaged, "{ not a manifest", { mode: 0o600 });
+  const home = await startHome("blocking-scope-again", { dataDir: first.dataDir, project: false });
+  t.after(() => home.stop());
+  const state = await home.client.expectOk("space.get", {});
+  assert.ok(state.diagnostics.some((d) => d.blocking && d.file.endsWith(basename(damaged))), JSON.stringify(state.diagnostics));
+  for (const { key } of [short, long]) await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  const admitted = await home.client.settle("space.sync", { repository: short.key });
+  assert.equal(admitted.sync.phase, "done", JSON.stringify(admitted.sync));
+  await home.client.expectError("space.sync", { repository: long.key }, "invalid_request", new RegExp(basename(damaged)));
+});
 test("space-39: local changes of every unit kind list in order, incoming units after a peer pushes, diffs, and the explorer", async (t) => {
   const bare = bareRepo();
   const home = await startHome("explorer");

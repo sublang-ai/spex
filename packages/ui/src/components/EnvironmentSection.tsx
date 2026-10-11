@@ -10,8 +10,9 @@
 // the conflict report, Resolve again and Install where they apply, and
 // Remove behind the inline confirm. The ways to add a spec package —
 // from the registry, a folder or Git — stand apart at the surface's
-// foot. Every control waits while that spex repository syncs, naming
-// the sync; a change the core refuses shows its cause in place.
+// foot. A sync, a resolve or an install running beside them refuses
+// nothing (DR-111): its progress shows by the heading, and a change the
+// core refuses shows its cause in place.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
@@ -43,10 +44,10 @@ const INPUT =
 const ERROR =
   "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
 
-/** Why every control waits right now: the sync, then the core's own
- * work on this environment. */
-function holdOf(state: EnvironmentState | undefined, sync: string | undefined): string | undefined {
-  return sync ?? busyWord(state?.busy ?? null);
+/** What the core is doing to this environment right now, as its line
+ * reads; progress only, never a reason to wait. */
+function progressOf(state: EnvironmentState | undefined): string | undefined {
+  return busyWord(state?.busy ?? null);
 }
 
 /** The packages in the order the section draws them: each requested
@@ -79,14 +80,12 @@ function PackageRow({
   pkg,
   depth,
   state,
-  hold,
   onRemove,
 }: {
   name: string;
   pkg: EnvironmentPackage | undefined;
   depth: number;
   state: EnvironmentState;
-  hold: string | undefined;
   onRemove: () => Promise<void>;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -172,8 +171,8 @@ function PackageRow({
               ref={removeRef}
               type="button"
               data-testid={`env-remove-${name}`}
-              disabled={busy || hold !== undefined}
-              title={hold ?? i18n._("Stop requesting this spec package")}
+              disabled={busy}
+              title={i18n._("Stop requesting this spec package")}
               aria-label={i18n._("Remove {name}", { name })}
               onClick={() => setConfirming(true)}
               className={BUTTON}
@@ -225,11 +224,8 @@ function PackageRow({
 /** The environment of one spex repository (playbook-library-92). */
 export function EnvironmentSection({
   repository,
-  sync,
 }: {
   repository: string;
-  /** Why the controls wait for this repository's sync, if it syncs. */
-  sync: string | undefined;
 }) {
   const state = useAppStore((store) => store.environments[repository]);
   const loadError = useAppStore((store) => store.environmentErrors[repository]);
@@ -238,7 +234,7 @@ export function EnvironmentSection({
   const remove = useAppStore((store) => store.removeSpecPackage);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState<"resolve" | "install">();
-  const hold = holdOf(state, sync);
+  const progress = progressOf(state);
 
   function act(kind: "resolve" | "install"): void {
     setPending(kind);
@@ -304,8 +300,8 @@ export function EnvironmentSection({
               <button
                 type="button"
                 data-testid="environment-resolve"
-                disabled={hold !== undefined || pending !== undefined}
-                title={hold ?? i18n._("Resolve the requests into a new lock and install it")}
+                disabled={pending !== undefined}
+                title={i18n._("Resolve the requests into a new lock and install it")}
                 onClick={() => act("resolve")}
                 className={PRIMARY}
               >
@@ -318,8 +314,8 @@ export function EnvironmentSection({
               <button
                 type="button"
                 data-testid="environment-install"
-                disabled={hold !== undefined || pending !== undefined}
-                title={hold ?? i18n._("Install the locked files on this device")}
+                disabled={pending !== undefined}
+                title={i18n._("Install the locked files on this device")}
                 onClick={() => act("install")}
                 className={PRIMARY}
               >
@@ -339,7 +335,6 @@ export function EnvironmentSection({
                 pkg={row.pkg}
                 depth={row.depth}
                 state={state}
-                hold={hold}
                 onRemove={() => remove(repository, row.name)}
               />
             ))}
@@ -362,10 +357,10 @@ export function EnvironmentSection({
         <span className="min-w-0 truncate font-mono text-xs text-neutral-500" title={repository}>
           {repository}
         </span>
-        {hold ? (
+        {progress ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-neutral-500">
             <RunningMark running />
-            <span data-testid="environment-hold">{hold}</span>
+            <span data-testid="environment-progress">{progress}</span>
           </span>
         ) : null}
       </div>
@@ -381,19 +376,15 @@ type AddMode = "registry" | "folder" | "git";
  * inside the working folder, or from Git at a rev. */
 export function AddSpecPackages({
   repository,
-  sync,
   folder,
 }: {
   repository: string;
-  sync: string | undefined;
   /** The working folder paired with the repository on this device. */
   folder: string | null | undefined;
 }) {
-  const state = useAppStore((store) => store.environments[repository]);
   const request = useAppStore((store) => store.requestSpecPackage);
   const [mode, setMode] = useState<AddMode>();
   const [added, setAdded] = useState<string>();
-  const hold = holdOf(state, sync);
 
   async function add(name: string, next: EnvironmentRequest): Promise<void> {
     await request(repository, name, next);
@@ -427,7 +418,7 @@ export function AddSpecPackages({
       <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Add a spec package")}</h2>
       <div className="flex flex-wrap items-center gap-2">
         {modes.map((entry) => {
-          const why = hold ?? entry.disabledWhy;
+          const why = entry.disabledWhy;
           return (
             <button
               key={entry.key}
@@ -446,29 +437,22 @@ export function AddSpecPackages({
             </button>
           );
         })}
-        {hold ? (
-          <span data-testid="add-hold" className="text-xs text-neutral-500">
-            {hold}
-          </span>
-        ) : null}
       </div>
       {added ? (
         <p data-testid="add-note" role="status" className="text-xs text-neutral-500">
           {i18n._("Requested {name}", { name: added })}
         </p>
       ) : null}
-      {mode === "registry" ? <RegistrySearch hold={hold} onAdd={add} /> : null}
-      {mode === "folder" && folder ? <FolderRequest folder={folder} hold={hold} onAdd={add} /> : null}
-      {mode === "git" ? <GitRequest hold={hold} onAdd={add} /> : null}
+      {mode === "registry" ? <RegistrySearch onAdd={add} /> : null}
+      {mode === "folder" && folder ? <FolderRequest folder={folder} onAdd={add} /> : null}
+      {mode === "git" ? <GitRequest onAdd={add} /> : null}
     </section>
   );
 }
 
 function RegistrySearch({
-  hold,
   onAdd,
 }: {
-  hold: string | undefined;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const search = useAppStore((store) => store.searchRegistry);
@@ -535,7 +519,7 @@ function RegistrySearch({
       {results && results.length > 0 ? (
         <ul className="flex flex-col gap-1.5">
           {results.map((result) => (
-            <RegistryResultRow key={result.name} result={result} hold={hold} onAdd={onAdd} />
+            <RegistryResultRow key={result.name} result={result} onAdd={onAdd} />
           ))}
         </ul>
       ) : null}
@@ -545,11 +529,9 @@ function RegistrySearch({
 
 function RegistryResultRow({
   result,
-  hold,
   onAdd,
 }: {
   result: RegistryResult;
-  hold: string | undefined;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const [version, setVersion] = useState(result.versions[0] ?? "");
@@ -582,8 +564,8 @@ function RegistryResultRow({
         <button
           type="button"
           data-testid={`registry-add-${result.name}`}
-          disabled={busy || !version || hold !== undefined}
-          title={hold ?? i18n._("Request {requirement}", { requirement: caretOf(version) })}
+          disabled={busy || !version}
+          title={i18n._("Request {requirement}", { requirement: caretOf(version) })}
           onClick={() => {
             setBusy(true);
             setError(undefined);
@@ -615,13 +597,11 @@ function nameRefusal(name: string): string | undefined {
 
 function RequestForm({
   testId,
-  hold,
   fields,
   ready,
   onSubmit,
 }: {
   testId: string;
-  hold: string | undefined;
   fields: ReactNode;
   ready: boolean;
   onSubmit: () => Promise<void>;
@@ -633,7 +613,7 @@ function RequestForm({
       data-testid={testId}
       onSubmit={(event) => {
         event.preventDefault();
-        if (busy || !ready || hold) return;
+        if (busy || !ready) return;
         setBusy(true);
         setError(undefined);
         void onSubmit()
@@ -652,8 +632,7 @@ function RequestForm({
         <button
           type="submit"
           data-testid={`${testId}-submit`}
-          disabled={busy || !ready || hold !== undefined}
-          title={hold}
+          disabled={busy || !ready}
           className={PRIMARY}
         >
           {busy ? i18n._({ id: "Adding…", comment: "the request is being written" }) : i18n._({ id: "Add", comment: "request this spec package at the chosen version" })}
@@ -674,11 +653,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function FolderRequest({
   folder,
-  hold,
   onAdd,
 }: {
   folder: string;
-  hold: string | undefined;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -688,7 +665,6 @@ function FolderRequest({
   return (
     <RequestForm
       testId="folder-request"
-      hold={hold}
       ready={name.trim().length > 0 && path.trim().length > 0}
       onSubmit={async () => {
         const why = nameRefusal(name.trim());
@@ -734,10 +710,8 @@ function FolderRequest({
 }
 
 function GitRequest({
-  hold,
   onAdd,
 }: {
-  hold: string | undefined;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -747,7 +721,6 @@ function GitRequest({
   return (
     <RequestForm
       testId="git-request"
-      hold={hold}
       ready={name.trim().length > 0 && git.trim().length > 0 && rev.trim().length > 0}
       onSubmit={async () => {
         const why = nameRefusal(name.trim());

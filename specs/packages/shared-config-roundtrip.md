@@ -12,7 +12,9 @@ Settings edits it, the core service loads and revalidates it, the Library regist
 
 ### shared-config-roundtrip-1
 
-Where any Spex surface writes the shared config — a Settings save or a Library registration — when the write lands, the core service shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another.
+Where any Spex surface writes the shared config — a Settings save or a Library registration — the core service shall land the write only on the bytes the edit was applied to, and once it lands shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another:
+
+- the file's version is checked at the instant before the write; a file changed meanwhile — while the candidate composed — is refused `conflict`, changed meanwhile, retry, and keeps its newer bytes ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### shared-config-roundtrip-2
 
@@ -26,7 +28,9 @@ Where any Spex surface submits a shared-config change that violates the shared f
 
 ### shared-config-roundtrip-3
 
-Where a commented fixture config is edited through the Settings protocol commands, then extended by a stub-compiled playbook registration, the integration suite shall assert that the core service reloads each intermediate config without a validation failure [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], and that the fixture's comments survive the Settings save and the registration write alike [[shared-config-roundtrip-2](#shared-config-roundtrip-2)] — one rule set, observed at every seam.
+Where a commented fixture config is edited through the Settings protocol commands, then extended by a stub-compiled playbook registration, the integration suite shall assert that the core service reloads each intermediate config without a validation failure [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], and that the fixture's comments survive the Settings save and the registration write alike [[shared-config-roundtrip-2](#shared-config-roundtrip-2)] — one rule set, observed at every seam:
+
+- with the candidate's composition held, a config edit whose file another writer changes meanwhile is refused `conflict` and the other writer's bytes stand [[shared-config-roundtrip-1](#shared-config-roundtrip-1)].
 
 ### shared-config-roundtrip-4
 

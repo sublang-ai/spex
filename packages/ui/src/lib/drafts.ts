@@ -11,6 +11,7 @@ import type {
   AgentBlockInput,
   AgentSummary,
   DraftInfo,
+  MediaUploadOwner,
 } from "@sublang/spex-core/protocol";
 
 import { phaseLabel } from "./compile-log.js";
@@ -20,6 +21,12 @@ import type { StatusTone } from "./labels.js";
 
 /** A playbook id names the spec package, the file, and the /command;
  * it is an Agent Skills name as well (DR-104, playbook-library-51). */
+/** The media owner a draft's files belong to: the session named by its
+ * instance (media-4); none for a session file that will not read. */
+export function draftMediaOwner(draft: DraftInfo): MediaUploadOwner | undefined {
+  return draft.instance ? { kind: "draft", projectId: draft.projectId, id: draft.id, instance: draft.instance } : undefined;
+}
+
 export const DRAFT_ID_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const DRAFT_ID_MAX = 64;
 
@@ -163,24 +170,6 @@ export function draftChipTitle(draft: DraftInfo, now: number): string | undefine
         ? i18n._("Compiled {age}; the source changed since", { age })
         : i18n._("Compiled {age}", { age });
   }
-}
-
-/** Why a control that writes the source or starts a compile must wait,
- * in the words its tooltip or caption uses (playbook-library-56/57). */
-export function busyReason(draft: DraftInfo): string | undefined {
-  if (draft.activity === "turn") {
-    return i18n._({
-      id: "Waits for the reply",
-      comment: "why a control is held: the draft's agent turn is running",
-    });
-  }
-  if (draft.activity === "compiling") {
-    return i18n._({
-      id: "Compiling",
-      comment: "why a control is held: the draft's compile is running",
-    });
-  }
-  return undefined;
 }
 
 /** The agent block a new lane minted from a draft carries: the draft's

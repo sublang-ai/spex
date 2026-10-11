@@ -67,7 +67,7 @@ function replay() {
 
 function History({ kind = "session" }: { kind?: "session" | "draft" }) {
   const view = replay();
-  return <MediaOwnerProvider owner={kind === "session" ? { kind, id: "s1" } : { kind, projectId: "me/demo-spex", id: "authoring" }}>
+  return <MediaOwnerProvider owner={kind === "session" ? { kind, id: "s1" } : { kind, projectId: "me/demo-spex", id: "authoring", instance: "72000000-0000-4000-8000-0000000000aa" }}>
     <CaptainPane view={view} />
     <PlayerPane view={view.players.inspector} />
   </MediaOwnerProvider>;
@@ -110,7 +110,7 @@ test("run-view-161: reopened authoring figures retain recorded identity without 
     }} as TmuxPlayRecord,
   }];
   const conversation = () => <DraftConversation
-    draft={{id: "authoring", projectId: "me/demo-spex", createdAt: 1, touchedAt: 2, firstLine: null, activity: "idle", state: "draft", queued: [], player: "current-selection", agent: {adapter: "claude"}, ready: true, failures: 0}}
+    draft={{id: "authoring", instance: "72000000-0000-4000-8000-0000000000aa", projectId: "me/demo-spex", createdAt: 1, touchedAt: 2, firstLine: null, activity: "idle", state: "draft", queued: [], player: "current-selection", agent: {adapter: "claude"}, ready: true, failures: 0}}
     draftView={{view: applyRecords(initialSessionView([{id: "author"}]), records), lineSeqs: []}}
     players={[]} readiness={[]} connected={false} composerText=""
     onComposerChange={() => {}} onSend={async () => {}} onAbort={() => {}} onPickAgent={async () => {}}

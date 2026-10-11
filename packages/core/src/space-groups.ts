@@ -12,6 +12,7 @@
 // (git-host-11), each keeping the host's own words whole.
 
 import {
+  CredentialChanged,
   HostError,
   type GitHostClient,
   type HostAccount,
@@ -185,6 +186,12 @@ export function nameTaken(name: string, group: string): string {
  * host's words kept whole wherever it carried them, nothing claimed it
  * did not say. */
 export function relayHostError(error: unknown, host: string): string {
+  if (error instanceof CredentialChanged) {
+    return i18n._({
+      id: "The sign-in changed meanwhile; try again",
+      comment: "A step refused because a sign-in, a token refresh or a sign-out replaced the stored credential while it ran",
+    });
+  }
   if (!(error instanceof HostError)) return error instanceof Error ? error.message : String(error);
   switch (error.kind) {
     case "pending":

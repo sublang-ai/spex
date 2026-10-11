@@ -16,6 +16,7 @@ Amends ([DR-046](046-decision-record-evolution.md)):
 - [DR-008](008-native-shell-bridge.md): the bridge gains a second capability, `revealPath(path)`, which clears the bridge's own bar.
 
 Amended by [DR-103](103-the-home-and-its-groups.md): every project and group has a spex repository of its own, cloned under `workspace/` and synced on its own, instead of one repository with one remote, and Spex signs in to a Git host, consults it, and keeps its sign-in under `local/`; the surface, renamed Groups, keeps its duties and its sync, applied to the `spex` branch of each spex repository; the four duties and the sync machine stand, applied per mount.
+Amended by [DR-111](111-the-core-coordinates-as-git-does.md) in its admission: a sync is no longer admitted only between turns and while nothing runs, no gate is set before its checks, and its apply refuses a replacement its pre-write check finds changed since Save; the surface's duties and the sync's steps stand.
 
 ## Context
 

@@ -3,18 +3,24 @@
 
 // The authoring store (DR-058, playbook-library-70, storage-23): an
 // authoring session lives in the spex repository of the project it
-// belongs to — `authoring/<id>.json`, replaced atomically, beside
-// `authoring/<id>.records.jsonl`, appended, and `authoring/<id>.assets/`
-// — written under the Spex home lease the store holds; its spec package
-// under development stands in the project's working folder at
-// `spex-packages/<id>/`, the source at `playbooks/en/<id>/<id>.md`
-// (environments-10). No provider token enters any file.
+// belongs to — `authoring/<id>.json`, replaced atomically under the
+// version read, beside `authoring/<id>.records.jsonl`, appended, and
+// `authoring/<id>.assets/` — written under the Spex home lease the
+// store holds; its spec package under development stands in the
+// project's working folder at `spex-packages/<id>/`, the source at
+// `playbooks/en/<id>/<id>.md` (environments-10). No provider token
+// enters any file. Nothing here is a picture of the files: every
+// location, package path and transcript fact is read at use (DR-111),
+// the transcript's tail through a cache its file's stat validates.
 
 import {
   appendFileSync,
   chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -22,11 +28,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
-import { knownFormat, StorageFormatError, writeApplicationFile, type StorageDiagnostic } from "./app-storage.js";
-import { mediaAttachmentsSchema, type MessageContent } from "./protocol.js";
+import { knownFormat, StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
+import { mediaAttachmentsSchema, UUID_PATTERN, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
 import { sanitizeRecord } from "./stream-fold.js";
 import type {
@@ -53,12 +59,16 @@ export interface StoredDraftCompile {
   /** The source's digest at a successful compile, from which the
    * "Changed" state derives. */
   sourceSha256?: string;
+  /** The home's device running it, while it runs (storage-23). */
+  device?: string;
 }
 
 /** `<clone>/authoring/<id>.json`, exactly (storage-23). */
 export interface StoredDraft {
   format: 1;
   id: string;
+  /** The session's identity, minted at creation (storage-23). */
+  instance: string;
   createdAt: number;
   touchedAt: number;
   /** The spec package under development, relative to the working folder. */
@@ -82,6 +92,25 @@ function readPackagePath(file: string, id: string): string {
     if (typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..")) return path;
   } catch { /* the default below */ }
   return draftPackagePath(id);
+}
+
+/** The instance a file written before `instance` existed reads as
+ * (storage-23): one UUID from its id and creation time, so the same
+ * bytes read alike on every device. */
+export function legacyInstance(id: string, createdAt: number): string {
+  const hex = createHash("sha256").update(`authoring:${id}:${createdAt}`).digest("hex").slice(0, 32).split("");
+  hex[12] = "8";
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const h = hex.join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** A versioned write found the file other than the writer read it:
+ * changed, replaced, or gone meanwhile (DR-111). */
+export class DraftChangedError extends Error {
+  constructor(readonly gone: boolean) {
+    super(gone ? "the session's file is gone" : "the session's file changed meanwhile");
+  }
 }
 
 const OUTCOMES: readonly string[] = ["running", "ok", "failed", "canceled", "interrupted"];
@@ -161,7 +190,7 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     i18n._({ id: "expected an object", comment: "Diagnostic for a damaged file: its top level is not an object" }),
   );
   knownFormat(value, file);
-  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["compile", "proposal"], file);
+  closedKeys(value, ["format", "id", "createdAt", "touchedAt", "package", "queued", "failures"], ["instance", "compile", "proposal"], file);
   need(
     typeof value.package === "string" && value.package.length > 0 && !value.package.startsWith("/") && !value.package.split("/").includes(".."),
     file,
@@ -174,6 +203,11 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
       id: "draft id disagrees with its file name",
       comment: "Diagnostic for a damaged draft file: the id it names is not the one its folder does",
     }),
+  );
+  need(
+    value.instance === undefined || (isText(value.instance) && UUID_PATTERN.test(value.instance)),
+    file,
+    i18n._({ id: "invalid instance", comment: "Diagnostic for a damaged authoring file: the identity it records will not read" }),
   );
   need(
     isTimestamp(value.createdAt) && isTimestamp(value.touchedAt),
@@ -200,8 +234,9 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
   if (value.compile !== undefined) {
     const compile = value.compile;
     need(isObject(compile), file, invalidCompile());
-    closedKeys(compile, ["at", "by", "outcome"], ["phase", "output", "questions", "relay", "roles", "sourceSha256"], file);
+    closedKeys(compile, ["at", "by", "outcome"], ["device", "phase", "output", "questions", "relay", "roles", "sourceSha256"], file);
     need(isTimestamp(compile.at) && (compile.by === "boss" || compile.by === "agent") && OUTCOMES.includes(String(compile.outcome)), file, invalidCompile());
+    need(compile.device === undefined || isText(compile.device), file, invalidCompile());
     need(compile.relay === undefined || RELAYS.includes(String(compile.relay)), file, invalidCompile());
     need(
       compile.phase === undefined || isText(compile.phase),
@@ -253,7 +288,20 @@ export function parseStoredDraft(value: unknown, file: string, id?: string): Sto
     closedKeys(proposal, ["command", "intent", "players"], [], file);
     need(isText(proposal.command) && isText(proposal.intent) && isObject(proposal.players) && Object.values(proposal.players).every(isText), file, invalidProposal());
   }
-  return value as unknown as StoredDraft;
+  const draft = value as unknown as Omit<StoredDraft, "instance"> & { instance?: string };
+  // The file's own order, the instance after the id (storage-23).
+  return {
+    format: 1,
+    id: draft.id,
+    instance: draft.instance ?? legacyInstance(draft.id, draft.createdAt),
+    createdAt: draft.createdAt,
+    touchedAt: draft.touchedAt,
+    package: draft.package,
+    queued: draft.queued,
+    failures: draft.failures,
+    ...(draft.compile !== undefined ? { compile: draft.compile } : {}),
+    ...(draft.proposal !== undefined ? { proposal: draft.proposal } : {}),
+  };
 }
 
 /** The version token of a source's bytes: a digest prefix, as the
@@ -297,39 +345,37 @@ export function authoringManifest(id: string, org: string): string {
   ].join("\n");
 }
 
+/** A file's stat, as Git's index keys a cached fact by it. */
+function statKey(file: string): string | undefined {
+  try {
+    const stat = statSync(file, { bigint: true });
+    return `${stat.ino}:${stat.size}:${stat.mtimeNs}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export class DraftStore {
-  /** Which spex repository holds each authoring session. */
-  private locations = new Map<string, AuthoringLocation>();
-  /** Each session's spec package path inside its working folder. */
-  private packages = new Map<string, string>();
+  /** Each transcript's last sequence and damage, keyed by its file and
+   * valid only while the file's stat is the one it was read under. */
+  private readonly tails = new Map<string, { stat: string; lastSeq: number; incompleteAfterSeq?: number }>();
+  /** Each session file's instance, validated the same way. */
+  private readonly instances = new Map<string, { stat: string; instance: string | undefined }>();
 
   constructor(
-    /** Every clone's `authoring/` directory, read on each rescan. */
+    /** Every clone's `authoring/` directory, read at each use. */
     private readonly repositories: () => AuthoringLocation[],
-  ) {
-    this.refresh();
-  }
+  ) {}
 
-  /** Re-read which clone holds which session (space-20). */
-  refresh(): void {
-    const next = new Map<string, AuthoringLocation>();
-    const packages = new Map<string, string>();
-    for (const location of this.repositories()) {
-      if (!existsSync(location.authoringDir)) continue;
-      for (const name of readdirSync(location.authoringDir)) {
-        if (!name.endsWith(".json")) continue;
-        const id = name.slice(0, -5);
-        if (!DRAFT_ID.test(id) || next.has(id)) continue;
-        next.set(id, location);
-        packages.set(id, readPackagePath(join(location.authoringDir, name), id));
-      }
-    }
-    this.locations = next;
-    this.packages = packages;
+  /** The clone holding the session now: the first the home lists whose
+   * `authoring/` holds `<id>.json` (playbook-library-70). */
+  private locate(id: string): AuthoringLocation | undefined {
+    if (!DRAFT_ID.test(id)) return undefined;
+    return this.repositories().find((location) => existsSync(join(location.authoringDir, `${id}.json`)));
   }
 
   private location(id: string): AuthoringLocation {
-    const location = this.locations.get(id);
+    const location = this.locate(id);
     if (!location) throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
       id: "no draft {draftId}", comment: "Refusal: no playbook draft of this id is open", values: { draftId: id } }));
     return location;
@@ -337,7 +383,7 @@ export class DraftStore {
 
   /** The project whose spex repository holds the session. */
   projectOf(id: string): string | undefined {
-    return this.locations.get(id)?.key;
+    return this.locate(id)?.key;
   }
 
   recordFile(id: string): string {
@@ -356,12 +402,14 @@ export class DraftStore {
   /** The working folder holding the session's spec package, on this
    * device; null where the project has none here. */
   workingFolder(id: string): string | null {
-    return this.locations.get(id)?.workingFolder ?? null;
+    return this.locate(id)?.workingFolder ?? null;
   }
 
-  /** The spec package path inside the working folder (storage-23). */
+  /** The spec package path inside the working folder (storage-23), as
+   * the session file names it now. */
   packagePath(id: string): string {
-    return this.packages.get(id) ?? draftPackagePath(id);
+    const location = this.locate(id);
+    return location ? readPackagePath(join(location.authoringDir, `${id}.json`), id) : draftPackagePath(id);
   }
 
   /** The spec package under development: `<working folder>/<package>`
@@ -384,37 +432,103 @@ export class DraftStore {
     return dir === null ? null : join(dir, `${id}.md`);
   }
 
-  /** Every id holding an authoring file, sorted. */
+  /** Every id holding an authoring file, sorted, each once. */
   ids(): string[] {
-    return [...this.locations.keys()].filter((id) => existsSync(this.recordFile(id))).sort();
+    const ids = new Set<string>();
+    for (const location of this.repositories()) {
+      if (!existsSync(location.authoringDir)) continue;
+      for (const name of readdirSync(location.authoringDir)) {
+        if (name.endsWith(".json") && DRAFT_ID.test(name.slice(0, -5))) ids.add(name.slice(0, -5));
+      }
+    }
+    return [...ids].sort();
   }
 
   exists(id: string): boolean {
-    return this.locations.has(id) && existsSync(this.recordFile(id));
+    return this.locate(id) !== undefined;
   }
 
   /** Read one record; a damaged file throws a StorageFormatError. */
   read(id: string): StoredDraft {
+    return this.load(id).draft;
+  }
+
+  /** The record with the version of the bytes it was read from. */
+  load(id: string): { draft: StoredDraft; version: string } {
     const file = this.recordFile(id);
+    let bytes: Buffer;
     let value: unknown;
     try {
-      value = JSON.parse(readFileSync(file, "utf8"));
+      bytes = readFileSync(file);
+      value = JSON.parse(bytes.toString("utf8"));
     } catch (error) {
       throw new StorageFormatError(file, (error as Error).message);
     }
-    return parseStoredDraft(value, file, id);
+    return { draft: parseStoredDraft(value, file, id), version: sourceDigest(bytes) };
   }
 
-  /** Replace the authoring file atomically. */
-  write(draft: StoredDraft): void {
-    mkdirSync(this.location(draft.id).authoringDir, { recursive: true, mode: 0o700 });
-    writeApplicationFile(this.recordFile(draft.id), parseStoredDraft(draft, this.recordFile(draft.id), draft.id));
+  /** The version of the session file's bytes as they stand: what a
+   * damaged file is deleted under, having no instance to name. */
+  fileVersion(id: string): string | undefined {
+    const location = this.locate(id);
+    if (!location) return undefined;
+    try {
+      return sourceDigest(readFileSync(join(location.authoringDir, `${id}.json`)));
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The instance the session file records now; undefined where it is
+   * gone or will not read. */
+  instanceOf(id: string): string | undefined {
+    const location = this.locate(id);
+    if (!location) return undefined;
+    const file = join(location.authoringDir, `${id}.json`);
+    const stat = statKey(file);
+    if (stat === undefined) return undefined;
+    const cached = this.instances.get(file);
+    if (cached?.stat === stat) return cached.instance;
+    let instance: string | undefined;
+    try {
+      instance = this.read(id).instance;
+    } catch {
+      instance = undefined;
+    }
+    this.instances.set(file, { stat, instance });
+    return instance;
+  }
+
+  /** Replace the session file atomically under the version it was read
+   * at: refused where, at the instant before the rename, the file is
+   * gone or holds other bytes (playbook-library-70). */
+  write(draft: StoredDraft, version: string): void {
+    const location = this.locate(draft.id);
+    if (!location) throw new DraftChangedError(true);
+    const file = join(location.authoringDir, `${draft.id}.json`);
+    const bytes = JSON.stringify(parseStoredDraft(draft, file, draft.id));
+    const stage = `${file}.${randomUUID()}.tmp`;
+    const fd = openSync(stage, "wx", 0o600);
+    try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
+    try {
+      let current: Buffer;
+      try {
+        current = readFileSync(file);
+      } catch {
+        throw new DraftChangedError(true);
+      }
+      if (sourceDigest(current) !== version) throw new DraftChangedError(false);
+      renameSync(stage, file);
+    } catch (error) {
+      rmSync(stage, { force: true });
+      throw error;
+    }
   }
 
   /** Make the spec package under development in the working folder —
    * its `meta.yaml` unless a folder brought in already holds one — and
-   * the record in the project's spex repository (playbook-library-70,
-   * playbook-library-51, storage-23). */
+   * the record, with a fresh instance, in the project's spex repository
+   * (playbook-library-70, playbook-library-51, storage-23). */
   create(id: string, now: number, location: AuthoringLocation, org: string): StoredDraft {
     if (location.workingFolder === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
@@ -423,36 +537,52 @@ export class DraftStore {
         values: { projectId: location.key },
       }));
     }
+    const file = join(location.authoringDir, `${id}.json`);
+    const records = join(location.authoringDir, `${id}.records.jsonl`);
+    // A transcript left behind without its session file is someone's
+    // history: it stays, and the id waits until it is moved aside.
+    if (existsSync(records) && !existsSync(file)) {
+      throw new StorageFormatError(records, i18n._({
+        id: "a transcript of {id} stands without its session file; move it aside or delete it first",
+        values: { id },
+        comment: "Refusal: an authoring transcript with no session file holds the id a new playbook asked for",
+      }));
+    }
     const packagePath = draftPackagePath(id);
     const dir = join(location.workingFolder, ...packagePath.split("/"));
     mkdirSync(join(dir, "playbooks", AUTHORING_LANGUAGE, id), { recursive: true });
     if (!existsSync(join(dir, "meta.yaml"))) writeFileSync(join(dir, "meta.yaml"), authoringManifest(id, org));
-    this.locations.set(id, location);
-    this.packages.set(id, packagePath);
-    // A transcript left behind without its record would put the new
-    // draft's first records after a stranger's; it goes first.
-    rmSync(this.recordsFile(id), { force: true });
-    const draft: StoredDraft = { format: 1, id, createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
-    this.write(draft);
+    // `authoring/` inside a clone that stands: a clone gone is not made.
+    if (!existsSync(location.authoringDir)) mkdirSync(location.authoringDir, { mode: 0o700 });
+    const draft: StoredDraft = { format: 1, id, instance: randomUUID(), createdAt: now, touchedAt: now, package: packagePath, queued: [], failures: 0 };
+    const stage = `${file}.${randomUUID()}.tmp`;
+    writeFileSync(stage, JSON.stringify(parseStoredDraft(draft, file, id)), { mode: 0o600 });
+    try {
+      if (existsSync(file)) throw new DraftChangedError(false);
+      renameSync(stage, file);
+    } catch (error) {
+      rmSync(stage, { force: true });
+      throw error;
+    }
     return draft;
   }
 
-  /** Remove the record, transcript and attachments, leaving the spec
-   * package folder in the working folder (playbook-library-63). */
-  retire(id: string): void {
-    if (!this.locations.has(id)) return;
-    rmSync(this.assetsDir(id), { recursive: true, force: true });
-    rmSync(this.recordsFile(id), { force: true });
-    rmSync(this.recordFile(id), { force: true });
-    this.locations.delete(id);
-    this.packages.delete(id);
+  /** Delete the session — its record, transcript and attachments; the
+   * spec package folder stays (playbook-library-63, playbook-library-70)
+   * — where its file still records the instance, or for a file that
+   * will not read still holds the version, the caller read. */
+  delete(id: string, expected: { instance: string } | { version: string }): void {
+    const location = this.locate(id);
+    if (!location) throw new DraftChangedError(true);
+    const matches = "instance" in expected
+      ? this.instanceOf(id) === expected.instance
+      : this.fileVersion(id) === expected.version;
+    if (!matches) throw new DraftChangedError(false);
+    rmSync(join(location.authoringDir, `${id}.assets`), { recursive: true, force: true });
+    rmSync(join(location.authoringDir, `${id}.records.jsonl`), { force: true });
+    rmSync(join(location.authoringDir, `${id}.json`), { force: true });
   }
 
-  /** Delete the session: its record, transcript and attachments; the
-   * spec package folder stays (playbook-library-63, playbook-library-70). */
-  delete(id: string): void {
-    this.retire(id);
-  }
   /** The transcript's readable prefix: newline-terminated `{seq,record}`
    * lines in sequence order; an incomplete final line is not a record. */
   records(id: string): ReadDraftRecords {
@@ -486,11 +616,40 @@ export class DraftStore {
     return { records, ...(incompleteAfterSeq !== undefined ? { incompleteAfterSeq } : {}) };
   }
 
-  /** Append one record; tokens never reach the file. */
-  append(id: string, seq: number, record: TmuxPlayRecord): DraftRecord {
-    mkdirSync(this.location(id).authoringDir, { recursive: true, mode: 0o700 });
-    const stored: DraftRecord = { seq, record: sanitizeRecord(record) };
-    appendFileSync(this.recordsFile(id), `${JSON.stringify(stored)}\n`);
+  /** The transcript's last sequence and damage as the file holds them
+   * now: read whole only where its stat moved since last read. */
+  transcript(id: string): { lastSeq: number; incompleteAfterSeq?: number } {
+    const file = this.recordsFile(id);
+    const stat = statKey(file);
+    if (stat === undefined) return { lastSeq: 0 };
+    const cached = this.tails.get(file);
+    if (cached?.stat === stat) return cached;
+    const read = this.records(id);
+    const tail = { stat, lastSeq: read.records.at(-1)?.seq ?? 0, ...(read.incompleteAfterSeq !== undefined ? { incompleteAfterSeq: read.incompleteAfterSeq } : {}) };
+    this.tails.set(file, tail);
+    return tail;
+  }
+
+  /** The transcript file's version as its stat gives it — inode, size
+   * and nanosecond mtime — or undefined where it is absent: any write
+   * to it moves this, as Git's index tells a changed file. */
+  transcriptStat(id: string): string | undefined {
+    return statKey(this.recordsFile(id));
+  }
+
+  /** Append one record after the last the transcript holds, while the
+   * session file records `instance`; tokens never reach the file. A
+   * damaged transcript takes nothing (playbook-library-70). */
+  append(id: string, instance: string, record: TmuxPlayRecord): DraftRecord {
+    const current = this.instanceOf(id);
+    if (current !== instance) throw new DraftChangedError(current === undefined && !this.exists(id));
+    const tail = this.transcript(id);
+    if (tail.incompleteAfterSeq !== undefined) throw new DraftChangedError(false);
+    const file = this.recordsFile(id);
+    const stored: DraftRecord = { seq: tail.lastSeq + 1, record: sanitizeRecord(record) };
+    appendFileSync(file, `${JSON.stringify(stored)}\n`);
+    const stat = statKey(file);
+    if (stat !== undefined) this.tails.set(file, { stat, lastSeq: stored.seq });
     return stored;
   }
 

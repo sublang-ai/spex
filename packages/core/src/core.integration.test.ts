@@ -1053,7 +1053,7 @@ const COMPILE_INPUT = {
   newPlayers: { "dev.helper": { adapter: "claude" } },
 };
 
-test("CORE-27: a second compile.run for the same playbook rejects busy", async () => {
+test("CORE-27: a second compile.run for the same playbook and project is refused busy; one abort cancels the first", async () => {
   const harness = await startHarness(VALID_CONFIG, {
     env: { SPEX_SLC: "fake-slc" },
     compileSpawner: hangingCompileSpawner(),
@@ -1061,22 +1061,21 @@ test("CORE-27: a second compile.run for the same playbook rejects busy", async (
   const client = new Client(harness.service.port());
   await client.open();
   const { id: projectId } = await client.expectOk("project.register", { path: harness.projectDir });
+  const working = () => client.messages.filter((m) => m.type === "compile.progress" && m.line === "slc: working").length;
 
   const first = client.command("compile.run", { ...COMPILE_INPUT, projectId });
-  await client.waitFor(
-    (m) => m.type === "compile.progress" && m.line === "slc: working",
-  );
+  await client.waitFor((m) => m.type === "compile.progress" && m.line === "slc: working");
+  // One job writes the artifact folder at a time (core-service-25).
   const second = await client.command("compile.run", { ...COMPILE_INPUT, projectId });
-  assert.ok(!second.ok, "duplicate compile must be rejected");
-  if (!second.ok) {
-    assert.equal(second.error.code, "busy");
-    assert.match(second.error.message, /already running for demo/);
-  }
+  assert.ok(!second.ok && second.error.code === "busy", JSON.stringify(second));
+  assert.match(second.error.message, /^a compile is writing /);
+  assert.ok(second.error.message.includes(join("spex-packages", "demo", "playbooks", "en", "demo")), second.error.message);
+  await sleep(50);
+  assert.equal(working(), 1, "the refused compile spawned nothing");
 
-  // Cancel so the pending first command settles before teardown.
   await client.expectOk("compile.abort", { playbookId: "demo" });
-  const firstReply = await first;
-  assert.ok(!firstReply.ok && firstReply.error.code === "aborted");
+  const reply = await first;
+  assert.ok(!reply.ok && reply.error.code === "aborted", JSON.stringify(reply));
 
   client.close();
   await harness.service.stop();
@@ -5044,4 +5043,87 @@ test("core-service-2: a project's config file changed on disk reloads without a 
   seen = client.messages.length;
   writeFileSync(projectConfig, "playbooks: {}\n");
   await announcedAfter(seen, (state) => state.status === "valid" && !offered(state).includes("/review"));
+});
+
+// ---------------------------------------------------------------------------
+// storage-29: a session's open makes its clone's sessions/, never the clone
+// ---------------------------------------------------------------------------
+
+test("storage-29: session.create makes a paired clone's missing sessions/ privately and never a clone gone before or during its open", { timeout: 60_000 }, async (t) => {
+  const harness = await startHarness();
+  const client = new Client(harness.service.port());
+  // The open's last preparation, the Captain's factory, held once on
+  // `hold()` until released.
+  type Factory = (...args: unknown[]) => Promise<unknown>;
+  const sessions = (harness.service as unknown as { sessions: { options: { captainFactory: Factory } } }).sessions;
+  const factory = sessions.options.captainFactory;
+  let release = (): void => {};
+  let reached: Promise<void> = Promise.resolve();
+  const hold = (): void => {
+    let arrived = (): void => {};
+    reached = new Promise((resolveReached) => { arrived = resolveReached; });
+    const held = new Promise<void>((resolveHeld) => { release = resolveHeld; });
+    let holding = true;
+    sessions.options.captainFactory = async (...args) => {
+      if (holding) { holding = false; arrived(); await held; }
+      return factory(...args);
+    };
+  };
+  t.after(async () => { release(); client.close(); await harness.service.stop(); });
+  await client.open();
+  const workspace = join(harness.dataDir, "workspace");
+  const homeFile = join(harness.dataDir, "home.yaml");
+  const cloneOf = (key: string): string => join(workspace, ...key.split("/"));
+  const folder = (name: string): string => {
+    const path = join(harness.dir, name);
+    mkdirSync(path);
+    execFileSync("git", ["init", "-q", path]);
+    return path;
+  };
+  const opens = async (key: string): Promise<void> => {
+    const sessionsDir = join(cloneOf(key), "sessions");
+    assert.equal(existsSync(sessionsDir), false, `${key} has no sessions/ before the open`);
+    const created = await client.command("session.create", { projectId: key });
+    assert.ok(created.ok, `${key}: ${JSON.stringify(created)}`);
+    assert.equal(statSync(sessionsDir).mode & 0o777, 0o700, `${key}'s sessions/ is private`);
+  };
+
+  // A clone another process put under workspace/, paired by an editor.
+  mkdirSync(cloneOf("acme/tool-spex"), { recursive: true });
+  writeFileSync(join(cloneOf("acme/tool-spex"), "project.json"), JSON.stringify({ format: 1, name: "Tool", remote: null }));
+  const home =parseYaml(readFileSync(homeFile, "utf8")) as { folders: { path: string; repository: string }[] };
+  home.folders.push({ path: folder("tool"), repository: "acme/tool-spex" });
+  writeFileSync(homeFile, stringifyYaml(home));
+  await opens("acme/tool-spex");
+
+  // A clone with no sessions/, bound to a working folder.
+  mkdirSync(cloneOf(`${OWN}/kept-spex`), { recursive: true });
+  writeFileSync(join(cloneOf(`${OWN}/kept-spex`), "project.json"), JSON.stringify({ format: 1, name: "Kept", remote: null }));
+  await client.expectOk("project.rebind", { projectId: `${OWN}/kept-spex`, path: folder("kept") });
+  await opens(`${OWN}/kept-spex`);
+
+  // A registered project whose sessions/ was removed.
+  const registered = await client.expectOk("project.register", { path: harness.projectDir });
+  rmSync(join(cloneOf(registered.id), "sessions"), { recursive: true, force: true });
+  await opens(registered.id);
+
+  // A clone removed before the open: refused, and not made again.
+  const gone = await client.expectOk("project.register", { path: folder("gone") });
+  rmSync(cloneOf(gone.id), { recursive: true, force: true });
+  const refused = await client.command("session.create", { projectId: gone.id });
+  assert.ok(!refused.ok && refused.error.code === "not_found", JSON.stringify(refused));
+  assert.equal(existsSync(cloneOf(gone.id)), false);
+
+  // A clone removed while the open prepares: refused at the open, and
+  // neither it nor its sessions/ made.
+  const late = await client.expectOk("project.register", { path: folder("late") });
+  rmSync(join(cloneOf(late.id), "sessions"), { recursive: true, force: true });
+  hold();
+  const pending = client.command("session.create", { projectId: late.id });
+  await reached;
+  rmSync(cloneOf(late.id), { recursive: true, force: true });
+  release();
+  const lateRefused = await pending;
+  assert.ok(!lateRefused.ok && lateRefused.error.code === "not_found", JSON.stringify(lateRefused));
+  assert.equal(existsSync(cloneOf(late.id)), false);
 });

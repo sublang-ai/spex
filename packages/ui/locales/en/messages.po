@@ -1042,10 +1042,6 @@ msgstr "always"
 msgid "An agent failed"
 msgstr "An agent failed"
 
-#: src/components/SpaceSurface.tsx
-msgid "Another operation is running"
-msgstr "Another operation is running"
-
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
 msgstr "Answer below, or drop the run"
@@ -1109,6 +1105,10 @@ msgstr "Approved once; native execution is reported separately."
 #: src/components/SpecGraph.tsx
 msgid "arrow — cites"
 msgstr "arrow — cites"
+
+#: src/components/AuthoringWorkspace.tsx
+msgid "as the last run left them, not compiled"
+msgstr "as the last run left them, not compiled"
 
 #: src/components/CompileBand.tsx
 msgid "asked by the agent"
@@ -1758,7 +1758,6 @@ msgstr "Compiles first"
 #. draft state chip, at most 14 characters: a compile is running
 #. the draft's compile is running
 #. why a control is held: the draft's compile is running
-#. why a control is held: the draft's compile is running
 #: src/components/AuthoringWorkspace.tsx
 #: src/lib/drafts.ts
 msgid "Compiling"
@@ -2101,14 +2100,6 @@ msgstr "Delete this session? It was run from the terminal; its history goes too.
 #: src/components/NavRail.tsx
 msgid "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
 msgstr "Delete this session? It was run from the terminal; its history goes too. Its unsent draft goes with it."
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's compile is running"
-msgstr "Delete waits: the session's compile is running"
-
-#: src/components/LibrarySurface.tsx
-msgid "Delete waits: the session's turn is running"
-msgstr "Delete waits: the session's turn is running"
 
 #. a sync unit's change: it is gone on this side
 #: src/components/SpaceSync.tsx
@@ -2772,10 +2763,6 @@ msgstr "from the compile before this change"
 #: src/components/SpaceSync.tsx
 msgid "From the host ({count})"
 msgstr "From the host ({count})"
-
-#: src/components/AuthoringWorkspace.tsx
-msgid "from the last good compile"
-msgstr "from the last good compile"
 
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -6237,21 +6224,6 @@ msgstr "waiting for your reply"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "waiting for your verdict"
-
-#. why a control is held: the draft's agent turn is running
-#. why a control is held: the draft's agent turn is running
-#: src/components/AuthoringWorkspace.tsx
-#: src/lib/drafts.ts
-msgid "Waits for the reply"
-msgstr "Waits for the reply"
-
-#: src/components/DraftConversation.tsx
-msgid "Waits for the reply — the agent switches on the next turn"
-msgstr "Waits for the reply — the agent switches on the next turn"
-
-#: src/lib/environments.ts
-msgid "Waits for the sync of {repository}"
-msgstr "Waits for the sync of {repository}"
 
 #: src/components/SpaceSync.tsx
 msgid "Where a project lives is recorded on this device only; this never syncs."

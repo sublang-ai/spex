@@ -176,9 +176,13 @@ const PROJECT = {
   repository: { key: PROJECT_ID, name: "demo-spex", group: "me", own: true },
 };
 
+/** The session's recorded instance every command on it names. */
+const INSTANCE = "72000000-0000-4000-8000-0000000000aa";
+
 function draftInfo(overrides: Partial<DraftInfo> = {}): DraftInfo {
   return {
     id: "triage",
+    instance: INSTANCE,
     projectId: PROJECT_ID,
     createdAt: now - 10 * HOUR,
     touchedAt: now - 9 * HOUR,
@@ -563,7 +567,7 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     fireEvent.click(screen.getByTestId("draft-delete-triage"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE }),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("draft-row-triage")).toBeNull());
     // The folder stays, and the surface says where.
@@ -584,15 +588,14 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     expect(useAppStore.getState().openDraftId).toBeUndefined();
   });
 
-  test("a working draft refuses Delete, naming which activity runs", () => {
+  test("a working draft is deleted all the same", async () => {
     seed({ drafts: { triage: draftInfo({ activity: "compiling", state: "compiling" }) } });
     render(<LibrarySurface />);
     fireEvent.click(screen.getByTestId("draft-delete-triage"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(screen.getByTestId("draft-row-error-triage").textContent).toBe(
-      "Delete waits: the session's compile is running",
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.delete", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE }),
     );
-    expect(commandMock).not.toHaveBeenCalledWith("draft.delete", expect.anything());
   });
 });
 
@@ -683,21 +686,20 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.queryByTestId("compile-band")).toBeNull();
   });
 
-  test("a draft with a source compiles; a turn and a compile hold it with their reasons", async () => {
+  test("a draft with a source compiles beside a turn; a running compile holds it with its reason", async () => {
     renderWorkspace(draftInfo());
     const compile = () => screen.getByTestId("compile-button") as HTMLButtonElement;
     expect(compile().disabled).toBe(false);
     expect(screen.getByTestId("tab-dot-source")).toBeTruthy();
     fireEvent.click(compile());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.compile", { projectId: PROJECT_ID, draftId: "triage" }, { timeoutMs: 0 }),
+      expect(commandMock).toHaveBeenCalledWith("draft.compile", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE }, { timeoutMs: 0 }),
     );
 
     act(() => {
       deliverServerMessageForTests({ type: "draft.state", draft: draftInfo({ activity: "turn" }) });
     });
-    expect(compile().disabled).toBe(true);
-    expect(compile().title).toBe("Waits for the reply");
+    expect(compile().disabled).toBe(false);
 
     act(() => {
       deliverServerMessageForTests({
@@ -710,6 +712,36 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     // The chip wears the running mark, whose word is read, not seen.
     expect(screen.getByTestId("draft-chip").textContent).toBe("runningCompiling");
     expect(screen.getByTestId("compile-band").getAttribute("data-outcome")).toBe("running");
+  });
+
+  test("playbook-library-101: a compile the core refuses because another job writes the folder shows that refusal, Compile staying enabled", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "draft.compile") throw Object.assign(new Error("a compile is writing /work/spex-packages/triage/playbooks/en/triage; retry once it ends"), { code: "busy" });
+      if (type === "draft.list") return Object.values(useAppStore.getState().drafts);
+      if (type === "compile.check") return { node: { ok: true, version: "v23.6.0", command: "node" }, slc: { ok: true, command: ["npx"] } };
+      return null;
+    });
+    renderWorkspace(draftInfo(), { view: foldView(THREAD) });
+    const compile = () => screen.getByTestId("compile-button") as HTMLButtonElement;
+    fireEvent.click(compile());
+    await vi.waitFor(() => expect(screen.getByTestId("draft-error").textContent).toContain("a compile is writing"));
+    expect(compile().disabled).toBe(false);
+    expect(compile().textContent).toBe("Compile");
+  });
+
+  test("a turn and a compile at once: Abort and the turn's clock stand beside Compiling… and Cancel", () => {
+    renderWorkspace(
+      draftInfo({ activity: "turn", compiling: true, state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }),
+      { view: foldView(THREAD.slice(0, 5)), lines: ["→ normalize (writing triage.playbook/triage.normalize)"], times: [now] },
+    );
+    expect(screen.getByTestId("draft-abort").textContent).toBe("Abort");
+    expect(screen.getByTestId("draft-working").textContent).toMatch(/^working · /);
+    expect((screen.getByTestId("draft-composer") as HTMLTextAreaElement).placeholder).toBe("Sends after the reply…");
+    const compile = screen.getByTestId("compile-button") as HTMLButtonElement;
+    expect(compile.textContent).toBe("Compiling…");
+    expect(compile.disabled).toBe(true);
+    expect(screen.getByTestId("compile-cancel")).toBeTruthy();
+    expect(screen.getByTestId("draft-chip").textContent).toBe("runningCompiling");
   });
 
   test("a successful compile fills Gears and Machine, enables Enable with a dot, and Changed captions the artifacts", async () => {
@@ -742,7 +774,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("tab-dot-source")).toBeTruthy();
   });
 
-  test("an interrupted compile says so with Compile enabled; a failure after a good compile keeps the last artifacts", async () => {
+  test("an interrupted compile says so with Compile enabled; a failure shows the outputs as the run left them, not compiled", async () => {
     renderWorkspace(
       draftInfo({ state: "interrupted", compile: { at: now - HOUR, by: "boss", outcome: "interrupted" } }),
     );
@@ -758,7 +790,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
     expect(tab("Enable").disabled).toBe(true);
     fireEvent.click(tab("Machine"));
-    expect(screen.getByTestId("artifact-caption").textContent).toBe("from the last good compile");
+    expect(screen.getByTestId("artifact-caption").textContent).toBe("as the last run left them, not compiled");
   });
 });
 
@@ -812,7 +844,7 @@ describe("playbook-library-57/58: the compile band", () => {
     expect((screen.getByTestId("compile-button") as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByTestId("compile-cancel"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("compile.abort", { playbookId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("compile.abort", { playbookId: "triage", instance: INSTANCE }),
     );
     expect((screen.getByTestId("compile-button") as HTMLButtonElement).disabled).toBe(true);
     // The recorded cancellation lands in the log, and the compile
@@ -969,6 +1001,7 @@ describe("playbook-library-53: the conversation pane", () => {
       deliverServerMessageForTests({
         type: "draft.record",
         draftId: "triage",
+        instance: INSTANCE,
         seq: 3,
         record: event(3, t0 + 2, {
           type: "permission_request",
@@ -1012,7 +1045,7 @@ describe("playbook-library-54: the composer", () => {
     fireEvent.change(field, { target: { value: "Triage issues into labels" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", text: "Triage issues into labels" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, text: "Triage issues into labels" }),
     );
     await vi.waitFor(() => expect(field.value).toBe(""));
   });
@@ -1027,7 +1060,7 @@ describe("playbook-library-54: the composer", () => {
     expect(queue.textContent).toContain("sends after the reply");
     fireEvent.click(screen.getByTestId("draft-abort"));
     expect(screen.getByTestId("draft-abort").textContent).toBe("Aborting…");
-    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, draftId: "triage" }));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.abort", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE }));
     // A canceled turn leaves the queue standing.
     expect(screen.getByTestId("draft-queue").textContent).toContain("Also cite the label definitions");
   });
@@ -1092,17 +1125,17 @@ describe("playbook-library-55: the agent picker", () => {
     expect(within(picker).getByLabelText("dev.reviewer: codex · gpt-6-astra (not ready)")).toBeTruthy();
     fireEvent.click(within(picker).getByTestId("agent-option-dev.reviewer"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.player.set", { projectId: PROJECT_ID, draftId: "triage", playerId: "dev.reviewer" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.player.set", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, playerId: "dev.reviewer" }),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("agent-picker")).toBeNull());
     expect(screen.getByTestId("draft-agent").textContent).toContain("dev.reviewer");
   });
 
-  test("the picker is disabled while a turn runs, its tooltip saying so", () => {
+  test("the picker stays open while a turn runs; a choice applies to the next", () => {
     renderWorkspace(draftInfo({ activity: "turn" }), { view: foldView(THREAD.slice(0, 5)) });
     const chip = screen.getByTestId("draft-agent") as HTMLButtonElement;
-    expect(chip.disabled).toBe(true);
-    expect(chip.title).toBe("Waits for the reply — the agent switches on the next turn");
+    expect(chip.disabled).toBe(false);
+    expect(chip.title).toBe("Choose which agent answers");
   });
 });
 
@@ -1121,6 +1154,7 @@ describe("playbook-library-56: the Source tab", () => {
       expect(commandMock).toHaveBeenCalledWith("draft.source.write", {
         projectId: PROJECT_ID,
         draftId: "triage",
+        instance: INSTANCE,
         content: "# Triage\n\nRewritten.",
         baseVersion: "v1",
       }),
@@ -1145,38 +1179,32 @@ describe("playbook-library-56: the Source tab", () => {
     expect(within(strip).getByTestId("editor-reload")).toBeTruthy();
     fireEvent.click(within(strip).getByTestId("editor-overwrite"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", content: "# Triage\n\nMine." }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, content: "# Triage\n\nMine." }),
     );
   });
 
-  test("Save waits for the reply while a turn runs; Edit and Paste stay open while compiling, their writes waiting", () => {
+  test("Save and Use as source write beside a turn or a compile", async () => {
     renderWorkspace(draftInfo({ activity: "turn" }));
     fireEvent.click(screen.getByTestId("source-edit"));
     fireEvent.change(screen.getByTestId("editor-text"), { target: { value: "changed" } });
     const save = screen.getByTestId("editor-save") as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
-    expect(save.title).toBe("Waits for the reply");
-
-    // A compile reads the file: the Boss may prepare an edit through it
-    // and paste a replacement, but neither writes until it ends.
-    cleanup();
-    renderWorkspace(draftInfo({ activity: "compiling", state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }));
-    const edit = screen.getByTestId("source-edit") as HTMLButtonElement;
-    expect(edit.disabled).toBe(false);
-    fireEvent.click(edit);
-    fireEvent.change(screen.getByTestId("editor-text"), { target: { value: "changed while compiling" } });
-    const saveWhileCompiling = screen.getByTestId("editor-save") as HTMLButtonElement;
-    expect(saveWhileCompiling.disabled).toBe(true);
-    expect(saveWhileCompiling.title).toBe("Compiling");
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", expect.objectContaining({ draftId: "triage", instance: INSTANCE, content: "changed" })),
+    );
 
     cleanup();
     renderWorkspace(draftInfo({ activity: "compiling", state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }));
     fireEvent.click(screen.getByTestId("source-paste"));
     fireEvent.change(screen.getByTestId("paste-text"), { target: { value: "# Pasted" } });
     const use = screen.getByTestId("paste-use") as HTMLButtonElement;
-    expect(use.disabled).toBe(true);
-    expect(use.title).toBe("Compiling");
-    expect(screen.getByTestId("paste-caption").textContent).toBe("Compiling");
+    expect(use.disabled).toBe(false);
+    expect(screen.getByTestId("paste-caption").textContent).toBe("Replaces the playbook's source");
+    fireEvent.click(use);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", expect.objectContaining({ content: "# Pasted", instance: INSTANCE })),
+    );
   });
 
   test("Paste writes the text, or the picked file's path over it", async () => {
@@ -1188,7 +1216,7 @@ describe("playbook-library-56: the Source tab", () => {
     fireEvent.change(screen.getByTestId("paste-text"), { target: { value: "# Secaudit\n\nRoles:\n- Auditor" } });
     fireEvent.click(use());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", content: "# Secaudit\n\nRoles:\n- Auditor" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, content: "# Secaudit\n\nRoles:\n- Auditor" }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("source-view")).toBeTruthy());
     expect(screen.getByTestId("source-caption").textContent).toBe("Updated just now by you");
@@ -1198,7 +1226,7 @@ describe("playbook-library-56: the Source tab", () => {
     expect(screen.getByTestId("paste-caption").textContent).toBe("The file is copied in as the playbook's source");
     fireEvent.click(use());
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", sourcePath: "/tmp/skill.md" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.source.write", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, sourcePath: "/tmp/skill.md" }),
     );
   });
 
@@ -1374,6 +1402,7 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(commandMock).toHaveBeenCalledWith("draft.register", {
       projectId: PROJECT_ID,
       draftId: "triage",
+      instance: INSTANCE,
       command: "triage",
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
@@ -1436,7 +1465,7 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(screen.getByTestId("side-own").getAttribute("aria-pressed")).toBe("true");
   });
 
-  test("a refusal names the rule inline and leaves the form standing; a busy session holds Enable", async () => {
+  test("a refusal names the rule inline and leaves the form standing; a working session enables all the same", async () => {
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "draft.register") throw new Error("player dev.triager collides with a reserved id");
@@ -1454,8 +1483,7 @@ describe("playbook-library-61: the Enable tab", () => {
       deliverServerMessageForTests({ type: "draft.state", draft: { ...COMPILED, activity: "turn" } });
     });
     const submit = screen.getByTestId("register-submit") as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    expect(submit.title).toBe("Waits for the reply");
+    expect(submit.disabled).toBe(false);
   });
 
   test("with no prose paragraph the intent defaults to the source's title, so the app's own example enables on its defaults", async () => {
@@ -1636,10 +1664,11 @@ describe("playbook-library-62: restore on open", () => {
       deliverServerMessageForTests({
         type: "draft.record",
         draftId: "triage",
+        instance: INSTANCE,
         seq: 10,
         record: { type: "captain_status", turnId: null, timestamp: now, message: "◇ Compile failed at Machine — sent to the agent" } as unknown as TmuxPlayRecord,
       });
-      deliverServerMessageForTests({ type: "draft.source", draftId: "triage", markdown: "# Triage\n\nFixed.", version: "v10", mtime: now });
+      deliverServerMessageForTests({ type: "draft.source", draftId: "triage", instance: INSTANCE, markdown: "# Triage\n\nFixed.", version: "v10", mtime: now });
     });
     expect(screen.getAllByTestId("system-line").map((line) => line.textContent)).toContain(
       "◇ Compile failed at Machine — sent to the agent",
@@ -1654,8 +1683,271 @@ test("run-view-159: authoring queues an attachment-only message and clears only 
   const asset = { assetId: `sha256:${"c".repeat(64)}` as const, name: "flow.png", mimeType: "image/png", byteLength: 4 };
   renderWorkspace(draftInfo({ activity: "turn", queued: [{ text: "", attachments: [asset] }] }), { view: foldView(THREAD.slice(0, 5)) });
   expect(screen.getByTestId("draft-queue").textContent).toContain("flow.png");
-  act(() => useAppStore.getState().stageAttachmentAssets("draft:triage", { kind: "draft", projectId: PROJECT_ID, id: "triage" }, [asset]));
+  act(() => useAppStore.getState().stageAttachmentAssets("draft:triage", { kind: "draft", projectId: PROJECT_ID, id: "triage", instance: INSTANCE }, [asset]));
   fireEvent.click(screen.getByTestId("draft-send"));
-  await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", text: "", attachments: [asset] }));
+  await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.send", { projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE, text: "", attachments: [asset] }));
   await vi.waitFor(() => expect(useAppStore.getState().attachmentDrafts["draft:triage"]).toEqual([]));
+});
+
+describe("playbook-library-97: a history replaced on disk, and a session replaced under its id", () => {
+  test("a reconnect and a record out of sequence reload the whole thread; another instance makes the former's late words inert", async () => {
+    const OTHER = "72000000-0000-4000-8000-0000000000bb";
+    const boss = (prompt: string) => rec(1, { type: "turn_started", turnId: 1, timestamp: t0, turn: { id: 1, prompt, timestamp: t0 } });
+    let served = THREAD;
+    let player: ((info: DraftInfo) => void) | undefined;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      switch (type) {
+        case "draft.open":
+          return { draft: useAppStore.getState().drafts.triage ?? draftInfo(), source: SOURCE, records: served };
+        case "draft.player.set":
+          return new Promise((resolve) => { player = resolve; });
+        case "draft.list":
+          return [useAppStore.getState().drafts.triage];
+        case "config.get":
+          return CONFIG_STATE;
+        case "readiness.get":
+          return READINESS;
+        case "project.list":
+          return [PROJECT];
+        case "session.list":
+          return [];
+        default:
+          return base(type, params);
+      }
+    });
+    seed({ drafts: { triage: draftInfo() } });
+    render(<LibrarySurface />);
+    fireEvent.click(screen.getByTestId("draft-open-triage"));
+    await vi.waitFor(() => expect(screen.getByTestId("boss-bubble").textContent).toContain("I want a playbook that triages issues"));
+    act(() => {
+      useAppStore.getState().setDraftComposer("triage", "kept words");
+      useAppStore.getState().setDraftSourceMode("triage", { mode: "paste", pasteText: "kept paste" });
+      useAppStore.getState().setDraftForm("triage", { command: "kept", players: {}, newPlayers: {} });
+    });
+    const kept = () => {
+      const state = useAppStore.getState();
+      expect(state.draftComposers.triage?.draft).toBe("kept words");
+      expect(state.draftSourceModes.triage?.pasteText).toBe("kept paste");
+      expect(state.draftForms.triage?.command).toBe("kept");
+    };
+
+    // A reconnect: the same sequence numbers, another history.
+    served = [boss("Rewritten elsewhere"), ...THREAD.slice(1)];
+    await act(async () => { await useAppStore.getState().refresh(); });
+    await vi.waitFor(() => expect(screen.getByTestId("boss-bubble").textContent).toContain("Rewritten elsewhere"));
+    expect(screen.getAllByTestId("boss-bubble")).toHaveLength(1);
+    kept();
+
+    // A record not following the thread's last: the thread is read again.
+    served = [boss("A third history"), rec(2, { type: "turn_finished", turnId: 1, timestamp: t0 + 1 })];
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.record", draftId: "triage", instance: INSTANCE, seq: 3, record: { type: "captain_status", turnId: null, timestamp: now, message: "◇ out of sequence" } as unknown as TmuxPlayRecord });
+    });
+    await vi.waitFor(() => expect(screen.getByTestId("boss-bubble").textContent).toContain("A third history"));
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(2);
+    kept();
+
+    // A sync's announcement: the same length, another history again.
+    served = [boss("Synced from elsewhere"), rec(2, { type: "turn_finished", turnId: 1, timestamp: t0 + 1 })];
+    act(() => { deliverServerMessageForTests({ type: "draft.history-replaced", draftId: "triage", instance: INSTANCE }); });
+    await vi.waitFor(() => expect(screen.getByTestId("boss-bubble").textContent).toContain("Synced from elsewhere"));
+    kept();
+
+    // Cancel names the instance shown.
+    await act(async () => { await useAppStore.getState().abortDraftCompile("triage"); });
+    expect(commandMock).toHaveBeenCalledWith("compile.abort", { playbookId: "triage", instance: INSTANCE });
+
+    // Another instance under the id: the former's state goes, and its
+    // late reply, record, source and removal change nothing.
+    const late = useAppStore.getState().setDraftPlayer("triage", "dev.reviewer");
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.state", draft: draftInfo({ instance: OTHER, firstLine: "# Successor" }) });
+    });
+    const state = useAppStore.getState();
+    expect(state.drafts.triage?.instance).toBe(OTHER);
+    expect(state.draftComposers.triage).toBeUndefined();
+    expect(state.draftForms.triage).toBeUndefined();
+    expect(state.draftViews.triage).toBeUndefined();
+    expect(state.openDraftId).toBeUndefined();
+    player!(draftInfo({ player: "dev.reviewer" }));
+    await late;
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.record", draftId: "triage", instance: INSTANCE, seq: 1, record: { type: "captain_status", turnId: null, timestamp: now, message: "◇ late" } as unknown as TmuxPlayRecord });
+      deliverServerMessageForTests({ type: "draft.source", draftId: "triage", instance: INSTANCE, markdown: "# Former", version: "v0", mtime: now });
+      deliverServerMessageForTests({ type: "draft.removed", projectId: PROJECT_ID, draftId: "triage", instance: INSTANCE });
+    });
+    const after = useAppStore.getState();
+    expect(after.drafts.triage?.instance).toBe(OTHER);
+    expect(after.drafts.triage?.player).toBeNull();
+    expect(after.draftViews.triage).toBeUndefined();
+    expect(after.draftSources.triage).toBeUndefined();
+    // The former's compile lines are not the successor's.
+    act(() => {
+      deliverServerMessageForTests({ type: "compile.progress", playbookId: "triage", instance: INSTANCE, line: "→ gears2fsm (former)" });
+      deliverServerMessageForTests({ type: "compile.progress", playbookId: "triage", instance: OTHER, line: "→ normalize (successor)" });
+    });
+    expect(useAppStore.getState().compileProgress.triage).toEqual(["→ normalize (successor)"]);
+  });
+
+  test("a record naming another instance than the thread shown changes nothing, live or buffered while the thread is read", async () => {
+    const SHOWN = "72000000-0000-4000-8000-0000000000ee";
+    const record = (instance: string, seq: number, message: string) => deliverServerMessageForTests({ type: "draft.record", draftId: "triage", instance, seq, record: { type: "captain_status", turnId: null, timestamp: now, message } as unknown as TmuxPlayRecord });
+    let opening: ((value: unknown) => void) | undefined;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      switch (type) {
+        case "draft.open":
+          return new Promise((resolve) => { opening = resolve; });
+        case "draft.list":
+          return [useAppStore.getState().drafts.triage];
+        case "config.get":
+          return CONFIG_STATE;
+        case "readiness.get":
+          return READINESS;
+        case "project.list":
+          return [PROJECT];
+        case "session.list":
+          return [];
+        default:
+          return base(type, params);
+      }
+    });
+    const shown = draftInfo({ instance: SHOWN });
+    seed({ drafts: { triage: shown } });
+    render(<LibrarySurface />);
+    fireEvent.click(screen.getByTestId("draft-open-triage"));
+    await vi.waitFor(() => expect(opening).toBeDefined());
+    // Buffered while the thread is read: the former's record, numbered
+    // right after what the reply holds, goes; the shown session's lands.
+    act(() => {
+      record(INSTANCE, THREAD.length + 1, "◇ former, buffered");
+      record(SHOWN, THREAD.length + 1, "◇ shown, buffered");
+    });
+    await act(async () => { opening!({ draft: shown, source: SOURCE, records: THREAD }); });
+    await vi.waitFor(() => expect(useAppStore.getState().draftViews.triage?.loading).toBe(false));
+    const thread = () => JSON.stringify(useAppStore.getState().draftViews.triage?.view.captain);
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 1);
+    expect(thread()).toContain("◇ shown, buffered");
+    expect(thread()).not.toContain("◇ former, buffered");
+
+    // Live with the thread open: the former's record numbered right
+    // after the thread's last changes nothing; the shown one's extends it.
+    const before = thread();
+    act(() => { record(INSTANCE, THREAD.length + 2, "◇ former, live"); });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 1);
+    expect(thread()).toBe(before);
+    act(() => { record(SHOWN, THREAD.length + 2, "◇ shown, live"); });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 2);
+    expect(thread()).toContain("◇ shown, live");
+  });
+
+  test("replies late for a replaced session change nothing of the successor's; a record after removal makes no thread", async () => {
+    const OTHER = "72000000-0000-4000-8000-0000000000dd";
+    const settle: Record<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }> = {};
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      ["draft.open", "draft.artifacts", "draft.register", "draft.send"].includes(type)
+        ? new Promise((resolve, reject) => { settle[type] = { resolve, reject }; })
+        : base(type, params));
+    seed({ drafts: { triage: COMPILED }, openDraftId: "triage" });
+    const store = useAppStore.getState();
+    const pending = [
+      store.refreshDraftSource("triage"),
+      store.loadDraftArtifacts("triage"),
+      store.registerDraft("triage", { command: "triage", intent: "Triage", bindings: {} }),
+      store.sendDraft("triage", "late").catch(() => undefined),
+    ];
+    // Another session is made under the id; the reader opens it and types.
+    act(() => { deliverServerMessageForTests({ type: "draft.state", draft: draftInfo({ instance: OTHER, firstLine: "# Successor" }) }); });
+    act(() => {
+      useAppStore.setState({ openDraftId: "triage" });
+      useAppStore.getState().setDraftComposer("triage", "successor words");
+    });
+    const enabled = { ...CONFIG_STATE };
+    settle["draft.open"].resolve({ draft: COMPILED, source: { markdown: "# Former", version: "v0", mtime: now }, records: [] });
+    settle["draft.artifacts"].resolve(ARTIFACTS);
+    settle["draft.register"].resolve(enabled);
+    settle["draft.send"].reject(new Error("conflict: triage changed meanwhile; retry"));
+    await act(async () => { await Promise.all(pending); });
+    const after = useAppStore.getState();
+    expect(after.drafts.triage?.instance).toBe(OTHER);
+    expect(after.draftSources.triage).toBeUndefined();
+    expect(after.draftArtifacts.triage).toBeUndefined();
+    expect(after.draftErrors.triage).toBeUndefined();
+    expect(after.draftComposers.triage?.draft).toBe("successor words");
+    expect(after.openDraftId).toBe("triage");
+    expect(after.revealPlaybook).toBeUndefined();
+    // The config the enabling wrote is everyone's.
+    expect(after.configState).toBe(enabled);
+
+    // Removed, the session leaves no trace, and a record arriving after
+    // makes no thread.
+    act(() => {
+      deliverServerMessageForTests({ type: "draft.removed", projectId: PROJECT_ID, draftId: "triage", instance: OTHER });
+      deliverServerMessageForTests({ type: "draft.record", draftId: "triage", instance: OTHER, seq: 1, record: { type: "captain_status", turnId: null, timestamp: now, message: "◇ late" } as unknown as TmuxPlayRecord });
+    });
+    expect(useAppStore.getState().drafts.triage).toBeUndefined();
+    expect(useAppStore.getState().draftViews.triage).toBeUndefined();
+  });
+
+  test("a list read before a state was heard leaves that state standing", async () => {
+    const OTHER = "72000000-0000-4000-8000-0000000000cc";
+    let answer!: (infos: DraftInfo[]) => void;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "draft.list" ? new Promise((resolve) => { answer = resolve; }) : base(type, params));
+    seed({ drafts: { triage: draftInfo() } });
+    const listing = useAppStore.getState().listDrafts();
+    act(() => { deliverServerMessageForTests({ type: "draft.state", draft: draftInfo({ instance: OTHER }) }); });
+    answer([draftInfo()]);
+    await listing;
+    expect(useAppStore.getState().drafts.triage?.instance).toBe(OTHER);
+  });
+
+  test("a list no longer naming a session forgets it, open workspace and all, unless something newer was heard", async () => {
+    let answer!: (infos: DraftInfo[]) => void;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "draft.list" ? new Promise((resolve) => { answer = resolve; }) : base(type, params));
+    const listedDraft = draftInfo({ id: "listed", projectId: "elsewhere" });
+    seed({
+      drafts: { triage: draftInfo(), listed: draftInfo({ id: "listed" }) },
+      openDraftId: "triage",
+      draftViews: { triage: foldView(THREAD) },
+      draftComposers: { triage: { draft: "words" }, listed: { draft: "kept" } },
+    });
+
+    // Late: a session created and one opened after the list was asked
+    // survive a reply that names neither.
+    const late = useAppStore.getState().listDrafts();
+    await act(async () => {
+      await useAppStore.getState().createDraft("fresh");
+    });
+    answer([listedDraft]);
+    await late;
+    let state = useAppStore.getState();
+    expect(state.drafts.fresh).toBeDefined();
+    expect(state.openDraftId).toBe("fresh");
+    // Unheard since and unnamed, the former open session went.
+    expect(state.drafts.triage).toBeUndefined();
+    expect(state.draftViews.triage).toBeUndefined();
+    expect(state.draftComposers.triage).toBeUndefined();
+    // Listed under the same instance, moved or not, its composer stands.
+    expect(state.drafts.listed?.projectId).toBe("elsewhere");
+    expect(state.draftComposers.listed?.draft).toBe("kept");
+
+    // Authoritative: a list asked after the open that names it not
+    // closes the workspace and drops what the page kept.
+    act(() => { useAppStore.getState().setDraftComposer("fresh", "typed"); });
+    const fresh = useAppStore.getState().listDrafts();
+    answer([listedDraft]);
+    await fresh;
+    state = useAppStore.getState();
+    expect(state.drafts.fresh).toBeUndefined();
+    expect(state.draftViews.fresh).toBeUndefined();
+    expect(state.draftComposers.fresh).toBeUndefined();
+    expect(state.openDraftId).toBeUndefined();
+    expect(state.draftComposers.listed?.draft).toBe("kept");
+  });
 });

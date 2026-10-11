@@ -81,18 +81,10 @@ export function syncRefusal(
   if (repo.branch?.mergePending) {
     return i18n._("Finish or abort the merge in your terminal");
   }
-  // A blocking diagnostic of this clone: its file lies beneath it.
-  const blocking = groups.diagnostics.find(
-    (entry) =>
-      entry.blocking &&
-      (entry.repair?.repository === repo.key ||
-        entry.file.includes(`workspace/${repo.key}/`) ||
-        entry.file.startsWith(`${repo.key}/`)),
-  );
-  if (blocking) return `${blocking.file}: ${blocking.reason}`;
-  if (repo.sync.phase === "running" && repo.sync.op !== "sync") {
-    return i18n._("Another operation is running");
-  }
+  // A diagnostic shown under issues refuses nothing here: it may be
+  // stale once its file is fixed, and Save validates the files as they
+  // stand. An operation running here refuses nothing either (space-21):
+  // its progress stands on the row instead.
   return undefined;
 }
 

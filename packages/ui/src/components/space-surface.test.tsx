@@ -176,6 +176,29 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     expect(onOpenProject).toHaveBeenCalledWith("jane/infra-spex");
   });
 
+  test("a repair stays answerable while its spex repository syncs: the sync refuses nothing (space-47, space-21)", async () => {
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "project.rebind") return { id: KEY, name: "academy", path: fields.path, registeredAt: 1 };
+      if (type === "project.list") return [];
+      return (await import("../fixtures/groups.js")).answer(type, fields);
+    });
+    const repair = unpaired({ repository: KEY, name: KEY.split("/")[1], key: `${KEY}|/code/infra` });
+    await renderGroups(
+      repoState(
+        { sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } },
+        { diagnostics: [{ file: `workspace/${KEY}`, reason: "no working folder pairs it", blocking: false, repair }] },
+      ),
+      { open: false },
+    );
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const row = screen.getByTestId("space-repair");
+    const add = within(row).getByRole("button", { name: "Add project" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+    expect((within(row).getByRole("button", { name: "Choose folder…" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(add);
+    await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/code/infra", aliases: ["/code/infra"] }]));
+  });
+
   test("a working folder whose clone is missing offers to forget the folder, behind an inline confirm (space-46, projects-9)", async () => {
     const { answer } = await import("../fixtures/groups.js");
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
@@ -483,16 +506,15 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     expect(caption.textContent).toBe("Finish or abort the merge in your terminal");
     expect(syncControl().getAttribute("aria-describedby")).toBe(caption.id);
     cleanup();
-    // A blocking diagnostic beneath this clone refuses it, and the
-    // issues list stands by itself.
+    // A displayed blocking diagnostic beneath this clone, perhaps stale
+    // once its file is fixed, still shows under issues but leaves Sync
+    // usable: Save validates the files as they stand.
     await renderGroups(repoState({}, { diagnostics: [{ file: `workspace/${KEY}/intents/x.json`, reason: "malformed intent", blocking: true }] }));
-    expect(syncControl().disabled).toBe(true);
-    expect(screen.getByTestId(`space-row-caption-${KEY}`).textContent).toBe(`workspace/${KEY}/intents/x.json: malformed intent`);
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
-    cleanup();
-    // Another repository's blocking diagnostic refuses nothing here.
-    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/other-spex/intents/x.json", reason: "malformed intent", blocking: true }] }));
     expect(syncControl().disabled).toBe(false);
+    expect(syncControl().getAttribute("aria-describedby")).toBeNull();
+    fireEvent.click(syncControl());
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
   });
 
   test("a busy refusal from the core lands beside the control", async () => {

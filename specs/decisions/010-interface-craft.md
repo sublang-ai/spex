@@ -13,6 +13,7 @@ A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.m
 §8's type scale is sharpened on the owner's audience review (2026-09-02): the small step is 12px, and an arbitrary 10–11px size lives only inside a tooltip.
 A tenth principle, key phrases rather than sentences, is added by [DR-069](069-key-phrases-not-sentences.md).
 An eleventh principle, the interface speaks the reader's language, is added by [DR-078](078-the-interface-speaks-the-readers-language.md).
+§5's concurrent duplicates are amended by [DR-111](111-the-core-coordinates-as-git-does.md) for Space operations, a duplicate joining the one running and a Sync following its clone's Check, and for environment commands, which start beside one another.
 
 ## Context
 

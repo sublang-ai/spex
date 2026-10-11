@@ -6,7 +6,7 @@
 // transport limit and Stop, and stderr classified into the causes the
 // surface explains in plain words (space-15).
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { i18n } from "./i18n.js";
 import type { SyncCause } from "./protocol.js";
@@ -480,6 +480,15 @@ export class SpaceGit {
       LANG: "C",
       ...(this.captured.GIT_SSH_COMMAND ? {} : { GIT_SSH_COMMAND: "ssh -oBatchMode=yes" }),
     };
+  }
+
+  /** Run one local Git command synchronously — a config read or write
+   * that must share one core turn with its check (DR-111); never a
+   * transport. A non-zero exit is a result, not an exception. */
+  runSync(args: string[]): GitRun {
+    const run = spawnSync("git", ["-C", this.home, ...args], { env: this.environment(), stdio: ["ignore", "pipe", "pipe"] });
+    if (run.error) throw run.error;
+    return { code: run.status, stdout: run.stdout, stderr: run.stderr.toString("utf8") };
   }
 
   /** Run one Git command; a non-zero exit is a result, not an exception. */

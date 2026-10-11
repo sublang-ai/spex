@@ -126,7 +126,8 @@ test("media-4: media owners name a repository by key and an intent by its UUID",
   const read = (owner: unknown) => parseCommand({ type: "media.read", id: "m1", owner, assetId, offset: 0, length: 10 });
   assert.ok(read({ kind: "project", id: "alice/a-spex" }).ok);
   assert.ok(read({ kind: "intent", projectId: "alice/a-spex", intentId: "72000000-0000-4000-8000-000000000001" }).ok);
-  assert.ok(read({ kind: "draft", projectId: "alice/a-spex", id: "triage" }).ok);
+  assert.ok(read({ kind: "draft", projectId: "alice/a-spex", id: "triage", instance: "72000000-0000-4000-8000-000000000002" }).ok);
+  assert.ok(!read({ kind: "draft", projectId: "alice/a-spex", id: "triage" }).ok, "a draft owner names its instance");
   assert.ok(!read({ kind: "project", id: "72000000-0000-4000-8000-000000000001" }).ok);
   assert.ok(!read({ kind: "intent", projectId: "alice/a-spex", intentId: "A" }).ok);
   assert.ok(!read({ kind: "draft", id: "triage" }).ok);
@@ -158,23 +159,24 @@ test("parseCommand accepts every draft command", () => {
     { type: "draft.list", id: "d3" },
     { type: "draft.create", id: "d4", projectId: "alice/a-spex", draftId: "triage" },
     { type: "draft.open", id: "d5", projectId: "alice/a-spex", draftId: "triage", afterSeq: 4 },
-    { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", text: "Compile it." },
-    { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage" },
-    { type: "draft.source.write", id: "d8", projectId: "alice/a-spex", draftId: "triage", content: "# Triage", baseVersion: "v1" },
-    { type: "draft.source.write", id: "d9", projectId: "alice/a-spex", draftId: "triage", sourcePath: "/tmp/triage.md" },
-    { type: "draft.compile", id: "d10", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.send", id: "d6", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", text: "Compile it." },
+    { type: "draft.abort", id: "d7", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002" },
+    { type: "draft.source.write", id: "d8", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", content: "# Triage", baseVersion: "v1" },
+    { type: "draft.source.write", id: "d9", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", sourcePath: "/tmp/triage.md" },
+    { type: "draft.compile", id: "d10", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002" },
     {
       type: "draft.register",
       id: "d11",
-      projectId: "alice/a-spex", draftId: "triage",
+      projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002",
       command: "triage",
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
       newPlayers: { "dev.triager": { adapter: "claude", model: "opus" } },
     },
-    { type: "draft.player.set", id: "d12", projectId: "alice/a-spex", draftId: "triage", playerId: "dev.reviewer" },
-    { type: "draft.player.set", id: "d13", projectId: "alice/a-spex", draftId: "triage", playerId: null },
-    { type: "draft.delete", id: "d14", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.player.set", id: "d12", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", playerId: "dev.reviewer" },
+    { type: "draft.player.set", id: "d13", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", playerId: null },
+    { type: "draft.delete", id: "d14", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002" },
+    { type: "draft.delete", id: "d14b", projectId: "alice/a-spex", draftId: "triage", fileVersion: "ab".repeat(32) },
     { type: "draft.artifacts", id: "d15", projectId: "alice/a-spex", draftId: "triage" },
   ];
   for (const command of commands) {
@@ -193,8 +195,16 @@ test("parseCommand rejects a draft id outside the Agent Skills name rule", () =>
 });
 
 test("parseCommand rejects an empty draft message", () => {
-  const parsed = parseCommand({ type: "draft.send", id: "d17", projectId: "alice/a-spex", draftId: "triage", text: "" });
+  const parsed = parseCommand({ type: "draft.send", id: "d17", projectId: "alice/a-spex", draftId: "triage", instance: "72000000-0000-4000-8000-000000000002", text: "" });
   assert.ok(!parsed.ok);
+});
+
+test("parseCommand rejects a command on an existing draft that names no instance", () => {
+  for (const command of [
+    { type: "draft.send", id: "d19", projectId: "alice/a-spex", draftId: "triage", text: "x" },
+    { type: "draft.abort", id: "d20", projectId: "alice/a-spex", draftId: "triage" },
+    { type: "draft.compile", id: "d21", projectId: "alice/a-spex", draftId: "triage", instance: "not-a-uuid" },
+  ]) assert.ok(!parseCommand(command).ok, command.type);
 });
 
 test("parseCommand rejects a draft registration missing its fields", () => {
