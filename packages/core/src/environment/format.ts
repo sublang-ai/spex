@@ -525,12 +525,26 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
 const SKIPPED_DIRECTORIES = new Set([".git", "node_modules"]);
 const SKIPPED_FILES = new Set([".DS_Store"]);
 
+/** What the compiler keeps beside a playbook for itself — `.slc/`, its
+ * incremental build history, and `.slc-verify/`, its verifier's
+ * support — which the playbook needs not at run time: no path under a
+ * playbook artifact's folder with one of these components is a release
+ * file (environments-1). */
+const COMPILER_OWN = new Set([".slc", ".slc-verify"]);
+
+function compilerOwn(path: string): boolean {
+  const parts = path.split("/");
+  // Under `playbooks/<language>/<id>/`.
+  return parts[0] === "playbooks" && parts.slice(3).some((part) => COMPILER_OWN.has(part));
+}
+
 export function sha256Hex(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-/** Every file of a folder with its digest and executable bit; a link
- * or a special file is an issue, never followed. */
+/** Every file of a folder with its digest and executable bit, but what
+ * the compiler keeps for itself beside a playbook; a link or a special
+ * file is an issue, never followed. */
 export async function listReleaseFiles(dir: string): Promise<{ files: ReleaseFile[]; issues: Issue[] }> {
   const files: ReleaseFile[] = [];
   const issues: Issue[] = [];
@@ -539,6 +553,7 @@ export async function listReleaseFiles(dir: string): Promise<{ files: ReleaseFil
     const entries = (await readdir(absolute)).sort();
     for (const name of entries) {
       const path = relative ? `${relative}/${name}` : name;
+      if (compilerOwn(path)) continue;
       const stat = await lstat(join(absolute, name));
       if (stat.isDirectory()) {
         if (SKIPPED_DIRECTORIES.has(name)) continue;

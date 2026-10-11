@@ -25,7 +25,7 @@ When the core reads a release — from the registry, a Git commit, a path inside
 | `sources/<language>/<id>/` | source material entered at `SOURCE.md`, attachments beside it |
 | `specs/<language>/<pkg>.md` | the one spec file, with its sections, item ids and citations kept whole |
 | `skills/<language>/<id>/` | an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
-| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them |
+| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except its `.slc/` build history and `.slc-verify/` verifier support, which a folder read as a release leaves out wherever they stand in it |
 | `applets/<id>/` | a browser-server application in its native layout |
 
 | `meta.yaml` field | Content |
@@ -277,7 +277,7 @@ When an integration suite starts a real core on a fresh scratch home with no reg
 
 #### environments-24
 
-When an integration suite runs an authoring session that writes a spec package in a working folder, compiles its playbook, requests it by path, enables it and starts a session with it, then publishes it to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)], its manifest carrying a `description` and a `license`, while a dry run of the folder with `license` taken out of its `meta.yaml` was refused naming the field with nothing reaching the registry [[environments-10](#environments-10)] [[environments-17](#environments-17)].
+When an integration suite runs an authoring session that writes a spec package in a working folder, compiles its playbook, requests it by path, enables it and starts a session with it, then publishes it to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)], none of them under a `.slc/` or `.slc-verify/` placed in the playbook's folder, in the preview or at the registry [[environments-1](#environments-1)], its manifest carrying a `description` and a `license`, while a dry run of the folder with `license` taken out of its `meta.yaml` was refused naming the field with nothing reaching the registry [[environments-10](#environments-10)] [[environments-17](#environments-17)].
 
 #### environments-25
 

@@ -338,6 +338,17 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const catalog = (JSON.parse(readFileSync(manifestFile, "utf8")) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
   assert.equal(catalog.triage?.from, pathToFileURL(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")).href);
 
+  // What the compiler keeps beside the playbook for itself — its build
+  // history and its verifier's support — is no release file
+  // (environments-1).
+  const playbookFolder = join(folder, "playbooks", "en", "triage");
+  const compilerOwn = [".slc/builds/0001/triage.md", "triage.playbook/.slc/latest", "triage.playbook/.slc-verify/support.mjs"];
+  for (const path of compilerOwn) {
+    mkdirSync(dirname(join(playbookFolder, path)), { recursive: true });
+    writeFileSync(join(playbookFolder, path), `${path}\n`);
+  }
+  const ownedByCompiler = (path: string): boolean => /(^|\/)\.slc(-verify)?\//.test(path);
+
   // Publishing: a manifest without the license the registry requires is
   // refused naming the field, the preview as the upload, before
   // anything reaches the registry (environments-10).
@@ -358,6 +369,8 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const declared = (await readRelease(folder)).files;
   assert.deepEqual(preview.preview, { name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
+  assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
+  assert.ok(preview.preview?.files.includes("playbooks/en/triage/triage.registry.mjs"), "the compiled module uploads");
   const from = core.client.mark();
   assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage" }), { accepted: true });
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
@@ -367,6 +380,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // its manifest carrying the description and license.
   const resource = await (await fetch(`${registry.url}/api/v1/packages/${ORG}/triage/0.1.0`)).json() as { files: { path: string; sha256: string }[]; description?: string; license?: string };
   assert.deepEqual(resource.files.map((file) => [file.path, file.sha256]), declared.map((file) => [file.path, file.sha256]));
+  assert.deepEqual(resource.files.map((file) => file.path).filter(ownedByCompiler), [], "the registry received none of the compiler's own files");
   assert.deepEqual([resource.description, resource.license], ["The triage playbook", "Apache-2.0"]);
 
   // A second home requests the published version from the registry.
