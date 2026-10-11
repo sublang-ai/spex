@@ -154,6 +154,7 @@ export const BRANCH: NonNullable<RepositoryState["branch"]> = {
   hostEmpty: false,
   unrelated: false,
   mergePending: false,
+  agreed: null,
 };
 
 /** The opened project's spex repository, reachable, nothing changed. */

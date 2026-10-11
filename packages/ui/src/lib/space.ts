@@ -22,7 +22,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { relativeAge } from "./time.js";
+import { relativeAge, shortMoment } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
  * the full path rides the title. Only the two POSIX layouts the app
@@ -55,6 +55,14 @@ export function waitingPhrase(waiting: NonNullable<RepositoryState["waiting"]>):
     : i18n._("Waiting for a member who can prepare its branch in {group}", { group: waiting.group });
 }
 
+/** A spex repository's last sync (space-61): this device's last
+ * completed sync of it, else the last one its clone holds — current
+ * where the clone's `spex` is still the host's — else none. */
+export function lastSyncOf(repo: RepositoryState): { at: number; current: boolean } | null {
+  if (repo.lastSync) return { at: repo.lastSync.at, current: true };
+  return repo.branch?.agreed ?? null;
+}
+
 /** What a spex repository's row reads for its state (space-61): a
  * waiting step's phrase stands in place of the state's (space-64). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number): string {
@@ -62,14 +70,21 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number): strin
   switch (repo.state) {
     case "local-only":
       return i18n._("On this device only");
-    case "reachable":
-      return repo.lastSync
+    case "reachable": {
+      const last = lastSyncOf(repo);
+      if (!last) return i18n._("Never synced");
+      return last.current
         ? i18n._({
             id: "Synced {age}",
-            values: { age: relativeAge(repo.lastSync.at, now) },
+            values: { age: relativeAge(last.at, now) },
             comment: "a spex repository's row: when it last synced",
           })
-        : i18n._("Never synced");
+        : i18n._({
+            id: "Not synced since {moment}",
+            values: { moment: shortMoment(last.at) },
+            comment: "a spex repository's row: this device and the host have differed since that moment, when they last agreed",
+          });
+    }
     case "read-only":
       return repo.reason
         ? i18n._("Read-only: {reason}", { reason: repo.reason })
@@ -396,6 +411,18 @@ export function openExternalBridge(): ((url: string) => Promise<boolean>) | unde
   return typeof native?.openExternal === "function"
     ? (native.openExternal as (url: string) => Promise<boolean>)
     : undefined;
+}
+
+/** Follow a link to a page at the host (space-1, space-62): through
+ * the native bridge's system browser where the shell has one, else as
+ * the link itself does, in a new tab. */
+export function openHostPage(event: { preventDefault(): void }, url: string): void {
+  const open = openExternalBridge();
+  if (!open) return;
+  event.preventDefault();
+  void open(url).then((shown) => {
+    if (!shown) window.open(url, "_blank", "noreferrer");
+  });
 }
 
 /** The native bridge's directory picker, where the shell offers one

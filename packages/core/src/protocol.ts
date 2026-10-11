@@ -1862,6 +1862,11 @@ export interface RepositoryState {
     hostEmpty: boolean;
     unrelated: boolean;
     mergePending: boolean;
+    /** The last sync the clone holds (space-61): the commit `spex` last
+     * shared with the host's `spex` as the clone last fetched or pushed
+     * it — its commit time, and whether `spex` is that commit; null
+     * where the clone holds none. */
+    agreed: { at: number; current: boolean } | null;
   } | null;
   local: SpaceUnit[];
   incoming: SpaceUnit[];

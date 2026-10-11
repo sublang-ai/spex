@@ -154,6 +154,45 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
 });
 
+test("space-37: a fresh core with no sync of a clone recorded reads the last sync the clone holds", async (t) => {
+  const host = await startHost();
+  const home = await startHome("agreed", { host });
+  t.after(() => home.stop());
+  await addFolder(home, home.projectDir);
+  const from = home.client.mark();
+  await signIn(home, host);
+  const synced = await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  assert.ok(synced.lastSync, "the sign-in's sync is recorded");
+  const clone = clonePath(home.dataDir, HOST_OWN);
+  const pushed = git(clone, "rev-parse", "spex");
+  assert.equal(git(clone, "rev-parse", "refs/remotes/origin/spex"), pushed);
+  const at = Number(git(clone, "log", "-1", "--format=%ct", pushed)) * 1000;
+  assert.deepEqual(synced.branch?.agreed, { at, current: true });
+  await home.stop();
+  // The record gone — a sync made elsewhere, or a home that kept none —
+  // the clone itself still holds its last sync (space-61, DR-111).
+  const prefsFile = join(home.dataDir, "local", "prefs.json");
+  const file = JSON.parse(readFileSync(prefsFile, "utf8")) as { prefs: Record<string, unknown> };
+  delete file.prefs[`sync:${HOST_OWN}:last`];
+  writeFileSync(prefsFile, JSON.stringify(file));
+  const again = await startHome("agreed-again", { dataDir: home.dataDir, project: false, host });
+  t.after(() => again.stop());
+  const read = await again.client.expectOk("space.get", {});
+  const own = repositoryOf(read, HOST_OWN);
+  assert.equal(own.lastSync, null);
+  assert.deepEqual(own.branch?.agreed, { at, current: true });
+  // A project's clone the host's `spex` never reached holds no sync.
+  const project = repositoryOf(read, `${LOGIN}/${basename(home.projectDir)}-spex`);
+  assert.equal(project.state, "local-only");
+  assert.ok(project.branch, "the project's clone is read");
+  assert.equal(project.branch.agreed, null);
+  // A commit on `spex` alone: the clone and the host last agreed on the
+  // pushed commit, and no longer do.
+  git(clone, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "Only here");
+  const ahead = await again.client.repository(HOST_OWN);
+  assert.deepEqual(ahead.branch?.agreed, { at, current: false });
+});
+
 test("space-37: the device sign-in links the stand-in's code, names the host, and completes on approval; a denied code ends failed", async (t) => {
   const host = await startHost();
   const home = await startHome("signin-device", { host, project: false });

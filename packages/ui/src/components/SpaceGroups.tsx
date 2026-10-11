@@ -29,13 +29,15 @@ import {
   displayRemote,
   isGroupRepository,
   lastSegment,
+  lastSyncOf,
+  openHostPage,
   pickDirectoryBridge,
   repositoryStatePhrase,
   sameRemote,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { GroupNameEditor, MembersPanel, pageHost } from "./SpaceMembers.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
@@ -139,7 +141,11 @@ export function GroupsList({
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
-      {groups.account?.canCreateGroup ? <NewGroup connected={connected} onNote={onNote} /> : null}
+      {groups.account?.canCreateGroup ? (
+        <NewGroup connected={connected} onNote={onNote} />
+      ) : groups.account ? (
+        <NewGroupAtHost groups={groups} />
+      ) : null}
       {groups.groups.map((group) => (
         <GroupSection
           key={group.fullPath}
@@ -192,6 +198,39 @@ function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
   );
 }
 
+/** Where the host's read says the person may not create a group, the
+ * host's own site, where a group at the top is then made (space-1,
+ * DR-118): the origin of your own group's page as the read gives it,
+ * named by its host. Nothing stands before a read gives that page. */
+function NewGroupAtHost({ groups }: { groups: GroupsState }) {
+  const page = groups.groups.find((group) => group.own)?.url ?? null;
+  let site: string | null = null;
+  try {
+    site = page ? new URL(page).origin : null;
+  } catch {
+    site = null;
+  }
+  if (!site || site === "null") return null;
+  const label = i18n._({
+    id: "New group at {site}",
+    comment: "link to the Git host's own site, where a group at the top is made when Spex may not create one; {site} is that site's host name",
+    values: { site: pageHost(site, groups) },
+  });
+  return (
+    <a
+      data-testid="space-new-group-at-host"
+      href={site}
+      target="_blank"
+      rel="noreferrer"
+      title={label}
+      onClick={(event) => openHostPage(event, site)}
+      className="min-w-0 max-w-full self-start truncate text-xs text-brand-600 hover:underline dark:text-brand-300"
+    >
+      {label}
+    </a>
+  );
+}
+
 /** One group (space-1): its heading — with Members and, where the
  * host lets the person, "New subgroup" on a group of the host, your
  * own group's carrying neither (DR-114) — and its repositories' rows.
@@ -219,9 +258,19 @@ function GroupSection({
   const membersRef = useRef<HTMLButtonElement>(null);
   const subgroupRef = useRef<HTMLButtonElement>(null);
   // Your own group is called so, never by a folder's or this device's
-  // user name; its path shows once the host names it (space-1).
+  // user name; its path shows once the host names it, and until then
+  // the key phrase says it will (space-1). A group's path stands beside
+  // its name only where the two differ.
   const name = group.own ? i18n._("Your own group") : group.name;
-  const path = group.own && !groups.account ? null : group.fullPath;
+  const beside =
+    group.own && !groups.account
+      ? i18n._({
+          id: "named after your login at sign-in",
+          comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
+        })
+      : group.fullPath !== name
+        ? group.fullPath
+        : null;
   // Your own group takes no subgroup and no member: what is there is
   // shared on its spex repositories (DR-114).
   const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
@@ -242,12 +291,22 @@ function GroupSection({
     >
       <div className="flex min-w-0 items-center gap-1">
         <h2 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
-          <span className="min-w-0 truncate" title={path ?? undefined}>
+          <span className="min-w-0 truncate" title={group.own && !groups.account ? undefined : group.fullPath}>
             {name}
           </span>
-          {path !== null && path !== name ? (
-            <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
-              {group.fullPath}
+          {/* What stands beside the name follows a separator, so a
+              name and a path never read as one (space-1). The space
+              between the two is the flex gap's; this one keeps the
+              heading's text in words. */}
+          {beside !== null ? " " : null}
+          {beside !== null ? (
+            <span
+              data-testid={`space-heading-beside-${group.fullPath}`}
+              className="min-w-0 truncate text-xs font-normal text-neutral-500"
+              title={beside}
+            >
+              <span aria-hidden>· </span>
+              {beside}
             </span>
           ) : null}
         </h2>
@@ -596,14 +655,16 @@ function RepositoryRow({
   const dot = statusDot(repo);
   const branch = repo.branch;
   const counted = branch && branch.checkedAt !== null && !branch.unrelated;
+  // The last sync recorded, else the one the clone holds (space-61).
+  const last = lastSyncOf(repo);
   const stateTitle = repo.waiting
     ? repo.waiting.message
     : readOnly
       ? i18n._("{state} · new sessions stay on this device", { state })
-      : repo.lastSync && repo.state !== "reachable"
-        ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(repo.lastSync.at) })
-        : repo.lastSync
-          ? absoluteTitle(repo.lastSync.at)
+      : last && repo.state !== "reachable"
+        ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) })
+        : last
+          ? absoluteTitle(last.at)
           : state;
   // The row is named by the repository alone, its code, counts and
   // state describing it: a name that holds still while the state's age

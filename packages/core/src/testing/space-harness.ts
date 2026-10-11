@@ -169,7 +169,7 @@ const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", 
 
 const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
-const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
+const BRANCH_KEYS = ["agreed", "ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
 const PHASES = new Set(["idle", "running", "choices", "unrelated", "stopped", "done"]);
 
@@ -213,6 +213,8 @@ export function assertGroupsState(state: GroupsState): void {
       assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
       assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
       if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);
+      const agreed = repository.branch?.agreed;
+      if (agreed) assert.ok(Object.keys(agreed).sort().join() === "at,current" && typeof agreed.at === "number" && typeof agreed.current === "boolean", JSON.stringify(agreed));
       for (const unit of [...repository.local, ...repository.incoming, ...repository.conflicts.map((c) => c.unit)]) {
         assert.ok(typeof unit.unit === "string" && typeof unit.label === "string" && CHANGES.has(unit.change) && Array.isArray(unit.paths) && typeof unit.diff === "boolean", JSON.stringify(unit));
       }

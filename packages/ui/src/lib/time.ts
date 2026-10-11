@@ -84,6 +84,18 @@ export function absoluteTitle(at: number): string {
   return new Date(at).toLocaleString(currentLocale());
 }
 
+/** A moment named briefly, for a phrase that says since when — "Oct 9,
+ * 2:05 PM", or as the locale writes a day and a time — always paired
+ * with `absoluteTitle` for the full moment. */
+export function shortMoment(at: number): string {
+  return new Date(at).toLocaleString(currentLocale(), {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** A message's clock time for its stamp — "5:22 PM", or "17:22" where
  * the locale says so — always paired with `absoluteTitle` for the date. */
 export function clockTime(at: number): string {

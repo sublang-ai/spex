@@ -10,12 +10,12 @@
 // words. Nothing is retried, derived or cached: the members are read on
 // opening, on Refresh, and come back with each share and removal.
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { GroupsState, HostMemberInfo } from "@sublang/spex-core/protocol";
 
 import { useAppStore, type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { openExternalBridge } from "../lib/space.js";
+import { openHostPage } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { siteName } from "./SpaceSignIn.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
@@ -33,7 +33,7 @@ function focusLater(ref: { current: HTMLElement | null }): void {
 
 /** The host name of the host's page a link opens (space-62), else the
  * host as the sign-in names it. */
-function pageHost(url: string, groups: GroupsState): string {
+export function pageHost(url: string, groups: GroupsState): string {
   try {
     return new URL(url).hostname || siteName(groups);
   } catch {
@@ -262,15 +262,6 @@ export function MembersPanel({
     onNote(line);
   };
 
-  const openPage = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
-    const open = openExternalBridge();
-    if (!open) return;
-    event.preventDefault();
-    void open(url).then((shown) => {
-      if (!shown) window.open(url, "_blank", "noreferrer");
-    });
-  };
-
   return (
     <section
       data-testid={`space-members-${id}`}
@@ -333,7 +324,7 @@ export function MembersPanel({
               href={result.membersUrl}
               target="_blank"
               rel="noreferrer"
-              onClick={(event) => openPage(event, result.membersUrl)}
+              onClick={(event) => openHostPage(event, result.membersUrl)}
               className="min-w-0 truncate text-xs text-brand-600 hover:underline dark:text-brand-300"
             >
               {i18n._({
