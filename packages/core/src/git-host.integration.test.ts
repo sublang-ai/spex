@@ -788,6 +788,97 @@ test("git-host-8: members with the host's role names and members page", async ()
   }
 });
 
+test("git-host-5, git-host-8: the host's roles, what it lets the person do per group and repository, and a group's members with their source", async () => {
+  const t = await setup();
+  try {
+    const s = t.host.script;
+    const research = s.groups.find((group) => group.fullPath === "acme/research");
+    assert.ok(research);
+    research.can = { createSubgroup: false, manageMembers: true };
+    research.members = [{ id: "1003", login: "grace", displayName: "Grace Hopper", role: "Developer" }];
+    const managed = s.addRepository({ group: "acme", name: "a-spex", role: "Owner" });
+    const reader = s.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
+    await browserSignIn(t.client);
+
+    // The roles as the host lists them, least first (git-host-5).
+    const described = await t.client.describe();
+    assert.deepEqual(described.roles, [
+      { id: "reporter", name: "Reporter", mayPush: false },
+      { id: "developer", name: "Developer", mayPush: true },
+      { id: "maintainer", name: "Maintainer", mayPush: true },
+      { id: "owner", name: "Owner", mayPush: true },
+    ]);
+    assert.equal((await t.client.me()).canCreateGroup, true);
+    s.canCreateGroup = false;
+    assert.equal((await t.client.me()).canCreateGroup, false);
+    const groups = await t.client.groups();
+    assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
+      ["ada", { createSubgroup: false, manageMembers: false }],
+      ["acme", { createSubgroup: true, manageMembers: true }],
+      ["acme/research", { createSubgroup: false, manageMembers: true }],
+    ]);
+    const repositories = await t.client.repositories();
+    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true }], [reader.id, { manageMembers: false }]]);
+
+    // A group's members: its own first, then those it inherits, each
+    // with the group it comes through (git-host-8).
+    const { members, membersUrl } = await t.client.members({ kind: "group", id: "2003" });
+    assert.deepEqual(members.map((m) => [m.login, m.role, m.direct, m.via]), [["grace", "Developer", true, null], ["ada", "Owner", false, "acme"]]);
+    assert.equal(membersUrl, `${t.host.url}/acme/research/-/group_members`);
+    const inherited = await t.client.members({ kind: "repository", id: managed.id });
+    assert.deepEqual(inherited.members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
+  } finally {
+    await t.dispose();
+  }
+});
+
+test("git-host-15, git-host-16, git-host-17: group creation and member writes answer as the host does, its words kept whole", async () => {
+  const t = await setup();
+  try {
+    const s = t.host.script;
+    const repo = s.addRepository({ group: "acme", name: "team-spex" });
+    await browserSignIn(t.client);
+
+    // Creation at the top and inside a group, the path derived from the
+    // name (git-host-15).
+    const top = await t.client.createGroup({ name: "Lumen Labs", parentId: null });
+    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true }]);
+    assert.equal(typeof top.id, "string");
+    const sub = await t.client.createGroup({ name: "Team One", parentId: "2002" });
+    assert.equal(sub.fullPath, "acme/team-one");
+    assert.ok((await t.client.groups()).some((group) => group.id === sub.id && group.fullPath === "acme/team-one"));
+    await assert.rejects(t.client.createGroup({ name: "Lumen Labs", parentId: null }), hostError("name_taken", { words: "Failed to save group: Path has already been taken." }));
+    s.takenGroups.push("elsewhere");
+    await assert.rejects(t.client.createGroup({ name: "Elsewhere", parentId: null }), hostError("name_taken"));
+    s.refuseGroupCreate("You cannot create groups here.");
+    await assert.rejects(t.client.createGroup({ name: "Other", parentId: "2002" }), hostError("host_refused", { words: "You cannot create groups here." }));
+    s.refuseGroupCreate(null);
+
+    // Addition by login at a role's id, to a group and to a repository
+    // (git-host-16).
+    const added = await t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "grace", role: "maintainer" });
+    assert.deepEqual([added.login, added.displayName, added.role, added.direct, added.via], ["grace", "Grace Hopper", "Maintainer", true, null]);
+    const toRepo = await t.client.addMember({ kind: "repository", id: repo.id }, { login: "bob", role: "developer" });
+    assert.equal(toRepo.role, "Developer");
+    assert.deepEqual((await t.client.members({ kind: "repository", id: repo.id })).members.map((m) => [m.login, m.role]), [["ada", "Owner"], ["bob", "Developer"]]);
+    await assert.rejects(t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "zed", role: "developer" }), hostError("not_found", { words: "No account is named zed." }));
+    await assert.rejects(t.client.addMember({ kind: "group", id: sub.id ?? "" }, { login: "grace", role: "developer" }), hostError("host_refused", { words: "Member already exists" }));
+    s.refuseMembers("You need the Owner role to add members.");
+    await assert.rejects(t.client.addMember({ kind: "repository", id: repo.id }, { login: "alan", role: "reporter" }), hostError("host_refused", { words: "You need the Owner role to add members." }));
+
+    // Removal of a membership of its own (git-host-17).
+    await assert.rejects(t.client.removeMember({ kind: "repository", id: repo.id }, "bob"), hostError("host_refused", { words: "You need the Owner role to add members." }));
+    s.refuseMembers(null);
+    await t.client.removeMember({ kind: "repository", id: repo.id }, "bob");
+    await t.client.removeMember({ kind: "group", id: sub.id ?? "" }, "grace");
+    assert.deepEqual((await t.client.members({ kind: "group", id: sub.id ?? "" })).members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
+    await assert.rejects(t.client.removeMember({ kind: "group", id: "2003" }, "ada"), hostError("not_found", { words: "ada is not a direct member of acme/research." }));
+    await assert.rejects(t.client.removeMember({ kind: "group", id: "2003" }, "zed"), hostError("not_found", { words: "No account is named zed." }));
+  } finally {
+    await t.dispose();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // git-host-9: the credential and the helper
 
