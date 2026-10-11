@@ -503,6 +503,27 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
       "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
     );
   });
+
+  test("[playbook-library-1] a project whose config enables nothing lists your own group's enabled playbook under Enabled, never as empty", async () => {
+    // Neither config enables anything a side lists alone: one your own
+    // group enables only in its own environment still counts.
+    await renderLibrary(
+      { project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }, { ...CODE_OWN, repository: PROJECT_ID }], own: [CODE_OWN, REVIEW_NOWHERE] },
+      { playbooksSide: "project" },
+    );
+    const enabled = screen.getByTestId("playbooks-enabled");
+    const code = within(enabled).getByTestId("playbook-card-code");
+    expect(within(code).getByTestId("playbook-enabled-code").textContent).toBe("Enabled in your own group");
+    // Enable still writes the project's config.
+    expect(within(code).getByTestId("playbook-enable-code").textContent).toBe("Enable");
+    expect(within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-review")).toBeTruthy();
+    expect(screen.queryByTestId("playbooks-empty")).toBeNull();
+
+    cleanup();
+    await renderLibrary({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }], own: [CODE_OWN] }, { playbooksSide: "project" });
+    expect(within(screen.getByTestId("playbooks-enabled")).queryByTestId("playbook-card-code")).toBeNull();
+    expect(screen.queryByTestId("playbooks-empty")).toBeNull();
+  });
 });
 
 describe("playbook-library-2: invalid entries stand marked", () => {
