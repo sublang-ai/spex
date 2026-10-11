@@ -8,6 +8,7 @@
 Accepted (2026-10-11).
 Amends [DR-103](103-the-home-and-its-groups.md) in "What Spex does on a Git host": creating a group and adding a member join the list, leaving the Git host's pages for what remains.
 Amends [DR-064](064-honest-remote-failure.md) in its guidance: where membership decides, the failure now names Share beside the host's members page.
+Amended by [DR-118](118-the-host-page-a-first-group-is-made-on.md) in "where the host does not let this person act, nothing is shown": where the host's read says the person may not create a group, the list's head carries a link "New group at <site>" to the host's site in place of "New group".
 
 ## Context
 
