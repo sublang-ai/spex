@@ -2872,6 +2872,7 @@ export class CoreService {
       case "space.join":
         return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
+        if (command.repository === undefined) throw new CoreError("invalid_request", "space.members names a repository");
         return this.requireSpace().members(command.repository);
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);

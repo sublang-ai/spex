@@ -854,6 +854,7 @@ class RepositorySync {
     const state: RepositoryState = {
       key: this.key,
       name: splitKey(this.key).name,
+      can: { manageMembers: false },
       id: repo.root ? repo.id : null,
       own: this.key === store.home.own(),
       code,
@@ -2743,7 +2744,7 @@ export class SpaceManager {
 
   /** A spex repository's members as the host reports them (space-62,
    * git-host-8), read on each ask and held nowhere. */
-  async members(key: string): Promise<{ members: { id: string; login: string; displayName: string | null; role: string; url: string | null }[]; membersUrl: string }> {
+  async members(key: string): Promise<{ members: { id: string; login: string; displayName: string | null; role: string; url: string | null; direct: boolean; via: string | null }[]; membersUrl: string }> {
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     let id: string | null;
     if (this.host.store.repository(key)) {
@@ -2761,7 +2762,7 @@ export class SpaceManager {
     if (id === null) throw new CoreError("not_found", noLongerShared());
     try {
       const answer = await this.host.client.members(id);
-      return { members: answer.members.map((member) => ({ ...member })), membersUrl: answer.membersUrl };
+      return { members: answer.members.map((member) => ({ direct: true, via: null, ...member })), membersUrl: answer.membersUrl };
     } catch (error) {
       throw new CoreError(error instanceof HostError && error.kind === "not_found" ? "not_found" : "invalid_request", relayHostError(error, this.hostName()));
     }
@@ -3024,10 +3025,11 @@ export class SpaceManager {
       home: resolve(this.host.home),
       git: await this.probe.version(),
       host: { url: host.url, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
-      account: store.home.account(),
+      account: ((a) => (a ? { ...a, canCreateGroup: false } : null))(store.home.account()),
       signIn: this.signInView(),
       readAt: this.signedIn() ? this.view?.readAt ?? null : null,
       groups: this.groupsOf(repositories),
+      roles: [],
       diagnostics,
       // One number, so the header and the list cannot drift (space-1):
       // what the reader has not answered, and everything unfolded.
@@ -3092,6 +3094,7 @@ export class SpaceManager {
       rows.push({
         key,
         name: repository.path,
+        can: { manageMembers: false },
         id: repository.id,
         own: false,
         code,
@@ -3123,18 +3126,19 @@ export class SpaceManager {
     const view = this.signedIn() ? this.view : undefined;
     const user = userGroup(view);
     type Entry = GroupsState["groups"][number];
-    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, repositories: [] };
+    const noCan = { createSubgroup: false, manageMembers: false };
+    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, can: noCan, repositories: [] };
     const entries = new Map<string, Entry>([[ownName, own]]);
     for (const group of view?.groups ?? []) {
       if (group.kind === "user") continue;
-      entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, repositories: [] });
+      entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, can: noCan, repositories: [] });
     }
     for (const row of rows) {
       let path = splitKey(row.key).group;
       if (user && path === user.fullPath) path = ownName;
       let entry = entries.get(path);
       if (!entry) {
-        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, url: null, own: false, repositories: [] };
+        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, url: null, own: false, can: noCan, repositories: [] };
         entries.set(path, entry);
       }
       entry.repositories.push(row);
