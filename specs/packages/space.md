@@ -576,7 +576,7 @@ interface GroupsState {
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
-            can: { createSubgroup: boolean; addMember: boolean };   // what the host's last read said the person may do there; both false until one is held
+            can: { createSubgroup: boolean; manageMembers: boolean };   // what the host's last read said the person may do there; both false until one is held
             repositories: RepositoryState[] }[];
   roles: { id: string; name: string; mayPush: boolean }[];   // the host's own roles in its order, empty until a read is held
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: Repair }[];
@@ -593,7 +593,7 @@ interface RepositoryState {
   reason: string | null;                 // the host's words for read-only or unreachable
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null; visibility: string | null;
-  can: { addMember: boolean };           // what the host's last read said the person may do on it; false until one is held
+  can: { manageMembers: boolean };           // what the host's last read said the person may do on it; false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
             hostEmpty: boolean; unrelated: boolean; mergePending: boolean } | null;
   local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[];
