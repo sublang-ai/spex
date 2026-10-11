@@ -3689,10 +3689,12 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   assert.equal(slcEnvs[0]?.SLC_EFFORT, undefined);
   const artifactDir = join(harness.projectDir, "spex-packages", "pair", "playbooks", "en", "pair");
   assert.ok(existsSync(join(artifactDir, "pair.registry.mjs")), "the module stands in the playbook artifact's folder");
-  // The project's environment requests it by path; its config entry
+  // The project's environment requests it by path, named under the
+  // project's default org (playbook-library-69); its config entry
   // binds each derived role by its own id, and names no module.
   const clone = clonePath(harness.dataDir, project.id);
-  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), /local\/pair:\n\s+path: spex-packages\/pair\n/);
+  const org = project.id.split("/")[0]!;
+  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/pair\\n`));
   const config = readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8");
   const start = config.indexOf("  pair:\n");
   assert.ok(start >= 0, "the pair entry is written");
