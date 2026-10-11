@@ -2036,6 +2036,11 @@ msgstr "Create"
 msgid "Create a new repository at this path"
 msgstr "Create a new repository at this path"
 
+#. the built-in /branch playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "create and check out a new branch for a GitHub issue or request before pull-request delivery"
+msgstr "create and check out a new branch for a GitHub issue or request before pull-request delivery"
+
 #: src/components/SettingsSurface.tsx
 msgid "Created a starter config at <0>{path}</0>"
 msgstr "Created a starter config at <0>{path}</0>"
@@ -2960,6 +2965,11 @@ msgstr "idle, held a failure"
 msgid "image"
 msgstr "image"
 
+#. the built-in /code playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
+msgstr "implement a coding intent in reviewed, one-commit phases, using an intent record when needed"
+
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
@@ -2977,6 +2987,11 @@ msgstr "Inherit the player (off)"
 #: src/components/BindingEditor.tsx
 msgid "Inherit the player (on)"
 msgstr "Inherit the player (on)"
+
+#. the built-in /inspect playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
+msgstr "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
 
 #. install the locked files that are missing on this device
 #: src/components/EnvironmentSection.tsx
@@ -4157,6 +4172,11 @@ msgstr "pin a value…"
 msgid "Places the six-line example as your first message"
 msgstr "Places the six-line example as your first message"
 
+#. the built-in /dev playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
+msgstr "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
+
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts
 msgid "playbook"
@@ -4303,6 +4323,11 @@ msgstr "PRs"
 #: src/components/DraftRegisterTab.tsx
 msgid "Publish"
 msgstr "Publish"
+
+#. the built-in /pr playbook's intent, as its registry entry states it; `code` is the /code playbook
+#: src/lib/playbook-intent.ts
+msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
+msgstr "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Published {name} {version}"
@@ -4841,6 +4866,11 @@ msgstr "Retry browser support check"
 #: src/components/SpaceSync.tsx
 msgid "Retrying…"
 msgstr "Retrying…"
+
+#. the built-in /review playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "review a supplied scope of committed work until no unsettled findings remain"
+msgstr "review a supplied scope of committed work until no unsettled findings remain"
 
 #. attention row control: say this turn has been read
 #: src/components/DashboardSurface.tsx
@@ -5655,6 +5685,11 @@ msgstr "Synced {age} · {sent} sent · {received} received"
 #: src/components/SpaceGroups.tsx
 msgid "Syncing…"
 msgstr "Syncing…"
+
+#. the built-in /decide playbook's intent, as its registry entry states it
+#: src/lib/playbook-intent.ts
+msgid "synthesize independent Coder and Reviewer proposals into an approved spec-design commit"
+msgstr "synthesize independent Coder and Reviewer proposals into an approved spec-design commit"
 
 #: src/components/SettingsSurface.tsx
 msgid "System"

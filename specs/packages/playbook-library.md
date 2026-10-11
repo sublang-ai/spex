@@ -15,7 +15,7 @@ Verification requires integration coverage of the surface's compile, request, en
 
 #### playbook-library-1
 
-When the Playbooks surface is opened, the Playbooks surface shall list every playbook the environments of the current project and your own group export [[environments-8](environments.md#environments-8)], showing for each its id, command, intent, the spec package and version it comes from with its source, each required role with the session player bound to it and what that binding effectively runs, and where it is enabled — in the project's config, in your own group's, or in neither ([DR-032](../decisions/032-session-players.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
+When the Playbooks surface is opened, the Playbooks surface shall list every playbook the environments of the current project and your own group export [[environments-8](environments.md#environments-8)], showing for each its id, command, intent (a built-in's in the interface language [[localization-4](localization.md#localization-4)]), the spec package and version it comes from with its source, each required role with the session player bound to it and what that binding effectively runs, and where it is enabled — in the project's config, in your own group's, or in neither ([DR-032](../decisions/032-session-players.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - a playbook both environments export is listed once per environment, each row naming its origin;
 - the list stands under a switch between the current project and your own group, each side showing that spex repository's environment and config; with no project chosen, your own group's alone stands;
@@ -321,7 +321,7 @@ While a playbook is listed, the Playbooks surface shall label its spec package a
 
 #### playbook-library-34
 
-When the Playbooks surface is opened, the surface shall list each playbook of the built-in spec package [[environments-11](environments.md#environments-11)] enabled in neither config with its command, intent, required roles, and browsable source markdown, and shall offer an enable flow — one "Enable" action per playbook, acknowledging while it writes — that gives each role a player and enables the playbook in the chosen spex repository's config [[playbook-library-16](#playbook-library-16)]:
+When the Playbooks surface is opened, the surface shall list each playbook of the built-in spec package [[environments-11](environments.md#environments-11)] enabled in neither config with its command, its intent in the interface language [[localization-4](localization.md#localization-4)], required roles, and browsable source markdown, and shall offer an enable flow — one "Enable" action per playbook, acknowledging while it writes — that gives each role a player and enables the playbook in the chosen spex repository's config [[playbook-library-16](#playbook-library-16)]:
 
 - The built-in spec package carries `code`, `review`, `decide`, `dev`, `branch`, `pr`, and `inspect`, omitting an entry only when the installed artifact cannot load its module.
 - Browsing a built-in's source requires no config change.

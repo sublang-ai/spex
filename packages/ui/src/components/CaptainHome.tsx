@@ -17,6 +17,7 @@ import type {
 import { i18n } from "../i18n.js";
 import { canSubmitContent, type ComposerAttachmentControls } from "./ComposerAttachments.js";
 import type { AgentPatch } from "../lib/config-ops.js";
+import { playbookIntent } from "../lib/playbook-intent.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { useAppStore, type StagedIntent } from "../state/store.js";
 import { Rich } from "./Rich.js";
@@ -451,7 +452,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                   /{playbook.command}
                 </span>
                 <span className="truncate text-xs text-neutral-500">
-                  {playbook.intent}
+                  {playbookIntent(playbook.intent)}
                 </span>
               </button>
             ))}
