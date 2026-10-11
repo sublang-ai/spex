@@ -332,14 +332,19 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
     expect(liveRow.getAttribute("aria-label")).toContain("2m ago");
     expect(liveRow.getAttribute("aria-label")).toContain("2 turns");
 
-    // A failure the session's last turn held that no longer summons is
-    // history, not a summons (run-view-73).
+    // A failure still standing that summons nothing is history, not a
+    // summons; an idle session whose failure no longer stands reads
+    // plain idle (run-view-73, core-service-32).
     expect(
       screen.getByTestId("sidebar-mark-a-failed").dataset.life,
     ).toBe("idle-failed");
     expect(
       screen.getByTestId("sidebar-session-a-failed").getAttribute("aria-label"),
     ).toContain("held a failure");
+    expect(screen.getByTestId("sidebar-mark-old-0").dataset.life).toBe("idle");
+    expect(
+      screen.getByTestId("sidebar-session-old-0").getAttribute("aria-label"),
+    ).not.toContain("held a failure");
 
     // A session that never spoke says so instead of faking a name.
     expect(screen.getByTestId("sidebar-session-a-bare").textContent).toContain(

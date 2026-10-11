@@ -682,6 +682,42 @@ playbooks:
       reviewer: dev.reviewer
 `;
 
+test("core-service-32: a session's failure stands only until a later turn settles clean", async (t) => {
+  // The Captain's hidden decision call fails on a "fail" prompt; every
+  // other turn runs clean through the real lifecycle.
+  const harness = await startHarness(VALID_CONFIG, {
+    script: {
+      rules: [
+        { match: "route: fail", response: { result: "adapter sign-in expired", status: "error" } },
+        { match: "route:", response: { result: '{"decision":"dispatch"}' } },
+      ],
+      fallback: { deltas: ["done"], result: "done" },
+    },
+  });
+  const client = new Client(harness.service.port());
+  t.after(async () => {
+    client.close();
+    await harness.service.stop();
+    rmSync(harness.dir, { recursive: true, force: true });
+  });
+  await client.open();
+  const project = await client.expectOk("project.register", { path: harness.projectDir });
+  const session = await client.expectOk("session.create", { projectId: project.id });
+  const turn = async (text: string, turns: number): Promise<SessionInfo | undefined> => {
+    await client.expectOk("turn.submit", { sessionId: session.id, text });
+    await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id &&
+      m.session.turns === turns && !m.session.turnActive && !m.session.live);
+    return (await client.expectOk("session.list", {})).find((item) => item.id === session.id);
+  };
+
+  // The first turn failed; the later clean turns stand it down.
+  assert.equal((await turn("fail the first attempt", 1))?.failed, true);
+  assert.equal((await turn("do it properly", 2))?.failed, false);
+  assert.equal((await turn("commit the work", 3))?.failed, false);
+  // The latest turn failing stands again.
+  assert.equal((await turn("fail once more", 4))?.failed, true);
+});
+
 test("CORE-23: readiness is adapter-keyed with positions and requirements", async () => {
   const harness = await startHarness(READINESS_CONFIG, {
     env: { ANTHROPIC_API_KEY: "test-key" },

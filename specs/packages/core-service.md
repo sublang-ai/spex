@@ -165,7 +165,7 @@ When a client requests the session list, the core service shall reply with every
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
 - each entry carries a title — the first Boss turn's text — absent when the session held no turn;
-- each entry carries its turn count and whether it ended holding a failure record;
+- each entry carries its turn count and whether a failure still stands, read from its visible records ([DR-061](../decisions/061-run-state-from-frames.md)): a run remains parked on a failure [[core-service-107](#core-service-107)], or a `runtime_error` other than the one an intentional stop leaves [[core-service-6](#core-service-6)] [[core-service-39](#core-service-39)] was recorded in a turn — one naming no turn counting as recorded in the latest turn started — and no turn started after that one, a restore's report among them [[core-service-82](#core-service-82)], has since settled without such a record;
 - each entry carries cumulative active time from complete stored history for every agent with a measured finished call [[core-service-102](#core-service-102)];
 - each entry carries, for every agent whose runtime reported a call's model, the latest such report with the settings its call began under [[core-service-115](#core-service-115)], which a client compares with what the agent is set to run ([DR-091](../decisions/091-models-named-by-the-runtime.md));
 - each entry carries the session's own agent settings [[core-service-100](#core-service-100)], which a client reads over the config's to say what each of the session's agents is set to run ([DR-067](../decisions/067-tuning-for-one-conversation.md));
@@ -697,7 +697,13 @@ Where a scripted captain calls one player twice within a turn, bracketing each c
 
 #### core-service-33
 
-Where a stored session held two turns and a failure record, and a second stored session held neither, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]: the first entry carries the first turn's text as its title, a turn count of two, and the failure marker; the second entry carries no title, a zero count, and no marker.
+Where stored sessions hold, respectively, a failed first turn followed by two turns settled clean; a latest settled turn whose failure named no turn, followed by a turn not yet settled; only a stop's own error; a run parked on a failure through a later clean turn; and no turn, the test suite shall assert the listing contract of [[core-service-32](#core-service-32)]:
+
+- the first entry carries its first turn's text as its title, a turn count of three, and no failure marker;
+- the second carries the marker, loses it once its unsettled turn settles clean, and carries it again once a later turn fails;
+- the stopped entry carries no marker;
+- the parked entry carries the marker until its run leaves the failure state;
+- the last entry carries no title, a zero count, and no marker.
 
 #### core-service-35
 

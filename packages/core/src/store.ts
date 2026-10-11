@@ -66,6 +66,7 @@ import {
   type UsageEntry,
   type UsageTotals,
 } from "./stream-fold.js";
+import { failureStands } from "./ledger.js";
 
 export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
@@ -1645,9 +1646,6 @@ export class Store {
     const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort(
       (a, b) => a.turnId - b.turnId,
     );
-    const failed = (this.records.get(meta.id) ?? []).some(
-      (entry) => hasPresentationHeader(entry.record) && entry.record.type === "runtime_error",
-    );
     const costed = (this.usage.get(meta.id) ?? []).filter(
       (entry) => entry.totalCostUsd !== undefined,
     );
@@ -1660,6 +1658,12 @@ export class Store {
     // (core-service-102, core-service-115).
     const complete = meta.streamIncompleteAfterSeq === undefined;
     const records = this.records.get(meta.id) ?? [];
+    // Whether a failure still stands, read from the visible stream as
+    // the ledger reads it — never whether one was ever recorded
+    // (core-service-32, DR-061). A record without a presentation
+    // header is opaque and says nothing (core-service-10).
+    const failed = failureStands(records.filter((entry) =>
+      hasPresentationHeader(entry.record) && !isHidden(entry.record)));
     const agentActiveMs = complete ? foldAgentActiveMs(records) : undefined;
     const agentReportedModels = complete ? foldAgentReportedModels(records) : undefined;
     return sessionInfo(
