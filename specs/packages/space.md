@@ -25,6 +25,7 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 - the groups list stands beneath the header: your own group first, headed "Your own group" with its full path beside it only while signed in, then every group the host lists, each with its full path, and under each group one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories;
+- while signed in, "New group" stands at the list's head where the host's view says the person may create one, and a group's heading carries "New subgroup" and "Share" where the view says the person may create a subgroup in it and add a member to it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-69](#space-69)] — nothing else is shown for an act the host does not let this person take, your own group's heading carrying neither ([DR-114](../decisions/114-groups-and-sharing-from-spex.md));
 - a spex repository's row carries its name, where its code lives — the remote `project.json` names, "Group records" for a group's own, "Code not on a remote" for a project's whose `project.json` names none, or "Not on this device" — its reachability, its local-changes count [[space-7](#space-7)], the time of its last sync, and its Sync control, titled as sending what is here and bringing back anything new, or the control its state offers [[space-61](#space-61)];
 - activating a row opens that spex repository's Sync and Explore tabs beneath the list;
 - while signed in, the surface ends in one quiet line, "Spex keeps this device's files in <home>", the home's absolute path `~`-shortened under the user's home directory, selectable, with the full path in its title and no control.
@@ -125,9 +126,35 @@ The Groups surface shall show each spex repository in exactly one of these state
 
 #### space-62
 
-When the reader activates Members on a reachable spex repository's row, the surface shall list its members as the host reports them [[git-host-8](git-host.md#git-host-8)] — login, display name and the host's own role name — with a link to the host's members page, and shall say in one phrase that members are changed there, naming that page by its host name ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When the reader activates Members on a reachable spex repository's row, the surface shall list its members as the host reports them [[git-host-8](git-host.md#git-host-8)] — login, display name and the host's own role name — with Share where the view says the person may add a member to it [[git-host-5](git-host.md#git-host-5)] [[space-69](#space-69)] and a link reading "Open at <host name>" to the host's members page ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
 
-- the list is read on activation and on Refresh, never cached across reads.
+- the list is read on activation, on Refresh and after a share, never cached across reads.
+
+#### space-68
+
+When the reader activates "New group" at the groups list's head, or "New subgroup" on a group's heading, the surface shall open an inline editor in that place with one field captioned "Group name", Create and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Create shall send `space.group.create` with the name and, from a group, that group as the parent [[git-host-15](git-host.md#git-host-15)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+
+- Create reads "Creating…" and the editor refuses a second submission while the command runs;
+- a success closes the editor, the group appearing in the list with its full path at the host read the core begins [[space-2](#space-2)];
+- a refusal — the name taken there, or the host's words — shows in the editor with the name kept;
+- an empty name disables Create.
+
+#### space-69
+
+When the reader activates Share — on a group of the host, or in a spex repository's members panel [[space-62](#space-62)] — the surface shall open an inline editor there with a field captioned "Login at <host name>", a listbox of the host's roles in its order preselecting the least that may push [[git-host-16](git-host.md#git-host-16)], Add and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Add shall send `space.share` naming that group or spex repository, the login and the role ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+
+- Add reads "Adding…" and the editor refuses a second submission while the command runs;
+- a success closes the editor and says in one line "@<login> added as <role>", a members panel standing open listing the members the reply carries;
+- a refusal — no account under that login, the account already a member, or the host's words — shows in the editor with the login kept;
+- an empty login disables Add.
+
+#### space-72
+
+When the reader activates Remove on a member in a members panel [[space-62](#space-62)], the surface shall ask with the inline confirm — "Remove" and "Keep", Keep focused, Escape keeping ([DR-010](../decisions/010-interface-craft.md) §4) — and on Remove shall send `space.unshare` naming that group or spex repository and the member's login [[git-host-17](git-host.md#git-host-17)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+
+- the row reads "Removing…" until the reply;
+- a success lists the members the reply carries and says in one line "@<login> removed";
+- a refusal — the host's words — shows on the row with the member kept.
 
 #### space-63
 
@@ -496,7 +523,7 @@ The Groups surface shall fit its pane at every width down to the 320-pixel floor
 - below 42rem the header's at-a-glance words yield — the read time, then the account's host name — and below 20rem the header's fields stack with the primary control last and full-width;
 - in each repository row and change row the label owns the slack and truncates with its title, the code remote and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss;
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, New subgroup, Share, Create, Creating…, Add;
 - the surface scrolls inside its own box and the page never scrolls.
 
 ## Internal Behavior
@@ -517,6 +544,8 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
 | `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here) |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
+| `space.group.create` | `{ name, parent: string \| null }` — `parent` a group's host id | `{ group: { id, fullPath, name } }` after the host answered, the read that lists it following as state [[git-host-15](git-host.md#git-host-15)] | `invalid_request` (signed out; a blank name; the name taken there; the host refused, with its words), `not_found` (a parent the view does not list) |
+| `space.share` | `{ group?: string, repository?: string, login, role }` — exactly one of `group`, a host id, and `repository`, a key | `{ members: Member[], membersUrl }` as the host lists them after the addition [[git-host-16](git-host.md#git-host-16)] | `invalid_request` (signed out; neither or both targets; a blank login; a role not among the view's; the host refused, with its words), `not_found` (no account under the login, with the host's words; a group or spex repository the view does not list) |
 | `space.remote.set` | `{ repository, url: string \| null }` | `GroupsState` | `invalid_request` (no Git; not initialized; a malformed, credential-bearing or host-origin URL [[space-5](#space-5)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only) |
 | `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `invalid_request` (local only, merge pending, blocking diagnostic [[space-11](#space-11)]; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)]) |
@@ -539,13 +568,15 @@ interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
   host: { url: string; displayName: string | null };
-  account: { id: string; login: string; displayName: string | null } | null;
+  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;   // canCreateGroup: as the host's last read said, false until one is held
   signIn: { phase: "idle"; signedOut?: { by: "host"; login: string } }   // signedOut: the host signed this device out, for the core's run
     | { phase: "running"; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
+            can: { createSubgroup: boolean; addMember: boolean };   // what the host's last read said the person may do there; both false until one is held
             repositories: RepositoryState[] }[];
+  roles: { id: string; name: string; mayPush: boolean }[];   // the host's own roles in its order, empty until a read is held
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: Repair }[];
   issues: number;
   // Repair: { kind: "repository" | "folder"; repository?: string; name?: string; group?: string;
@@ -560,6 +591,7 @@ interface RepositoryState {
   reason: string | null;                 // the host's words for read-only or unreachable
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null; visibility: string | null;
+  can: { addMember: boolean };           // what the host's last read said the person may do on it; false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
             hostEmpty: boolean; unrelated: boolean; mergePending: boolean } | null;
   local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[];
@@ -775,6 +807,16 @@ Where the Groups surface renders over a home whose issues list holds three unans
 - the second's add leaves the live region reading "All issues resolved." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
 - the declined repair's add leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
+#### space-70
+
+Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme` and add members to it, may do neither in a group `other`, and may add members to the repository `a-spex` but not to `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+
+- "New group" stands at the list's head, `acme`'s heading carries "New subgroup" and "Share", `other`'s and your own group's carry neither, and `a-spex`'s members panel carries Share while `b-spex`'s does not [[space-1](#space-1)] [[space-62](#space-62)];
+- "New subgroup" opens the inline editor with the field "Group name", Create disabled until a name is typed, Escape closing it; Create sends `space.group.create` naming `acme` as the parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it [[space-68](#space-68)];
+- Share on `acme` opens the editor with "Login at <host name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
+- Share in `a-spex`'s members panel sends `space.share` naming the repository and lists the members the reply carries [[space-69](#space-69)] [[space-62](#space-62)];
+- every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
+
 #### space-66
 
 Where the Groups surface renders over a signed-out home, when the reader signs in through each flow, the test suite shall assert through the surface:
@@ -820,6 +862,10 @@ Where the harness boots the served shell with the demo project registered and a 
 - an empty directory of a tracked kind — `intents/` before any queued intent — reads "Not yet shared", never "Stays here" [[space-23](#space-23)];
 - "Stays on this device" names the eight families with their reasons [[space-25](#space-25)];
 - the served page offers Copy path beside the repository and no reveal control, and acknowledges the copy [[space-26](#space-26)].
+
+#### space-71
+
+Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path after the read the core begins; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them; a second addition of the same login refused in place with the stand-in's words; and a login the stand-in knows no account for refused naming it [[space-68](#space-68)] [[space-69](#space-69)] [[space-1](#space-1)].
 
 #### space-43
 

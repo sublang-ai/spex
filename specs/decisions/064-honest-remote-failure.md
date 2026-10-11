@@ -8,6 +8,7 @@
 Accepted (2026-09-14) on the owner's report of a private repository reported as absent.
 Amends ([DR-046](046-decision-record-evolution.md)) [DR-057](057-space-surface.md) §"One shared branch, synced by the core": the app still stores no credential and still prompts for none, and it now says which identity a remote form presents, because refusing to hold a secret was never a reason to withhold what the failure meant.
 Amended by [DR-103](103-the-home-and-its-groups.md): where you are signed in to a Git host, Spex consults its answer, keeps its sign-in under `local/`, and gives Git a credential through a credential helper; the rule to claim only what the host said, and the refusal of a remote URL embedding a credential, stand.
+Amended by [DR-114](114-groups-and-sharing-from-spex.md): where membership decides, Share in Spex stands beside the host's members page as the way to change it; the failure still claims only what the host said.
 
 ## Context
 
