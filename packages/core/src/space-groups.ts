@@ -18,6 +18,7 @@ import {
   type HostAccount,
   type HostGroup,
   type HostRepository,
+  type HostRole,
   type SignInCause,
 } from "./git-host.js";
 import { i18n } from "./i18n.js";
@@ -36,11 +37,15 @@ export interface HostListing {
   members: number | null;
 }
 
-/** The host's last answer (git-host-5). */
+/** The host's last answer (git-host-5): with the roles it grants, and
+ * what it lets the person do — create a group (`account`), create a
+ * subgroup and manage members in each group (`groups[].can`), manage
+ * each spex repository's members (`repository.can`) — as it said. */
 export interface HostView {
   readAt: number;
   displayName: string;
   gitOrigin: string;
+  roles: HostRole[];
   account: HostAccount;
   groups: HostGroup[];
   listings: HostListing[];
@@ -64,10 +69,12 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
 }
 
 /**
- * Read the host in one pass (git-host-5): its name and Git origin, the
- * person, every group, every spex repository across its pages, and for
- * each its read-only and branch state and its members' count. Any
- * failure fails the whole read, so a view is never half a host.
+ * Read the host in one pass (git-host-5): its name, Git origin and
+ * roles, the person, every group, every spex repository across its
+ * pages — each as the host says what the person may do there — and for
+ * each repository its read-only and branch state and its members'
+ * count. Any failure fails the whole read, so a view is never half a
+ * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
   const [described, account, groups, repositories] = await Promise.all([
@@ -77,7 +84,7 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
     client.repositories(),
   ]);
   const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, async (repository): Promise<HostListing> => {
-    const [detail, members] = await Promise.all([client.repository(repository.id), client.members(repository.id)]);
+    const [detail, members] = await Promise.all([client.repository(repository.id), client.members({ kind: "repository", id: repository.id })]);
     return {
       repository,
       readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
@@ -85,7 +92,7 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
       members: members.members.length,
     };
   });
-  return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, account, groups, listings };
+  return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, listings };
 }
 
 /** The key a listed repository's clone takes under `workspace/`: its
@@ -179,6 +186,79 @@ export function nameTaken(name: string, group: string): string {
     id: "{name} is taken in {group}; choose another name",
     values: { name, group },
     comment: "Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path",
+  });
+}
+
+/** A new group's name the host reports taken there (git-host-15): inside
+ * its parent group, or at the top of the host. */
+export function groupNameTaken(name: string, parent: string | null, host: string): string {
+  return parent === null
+    ? i18n._({
+        id: "{name} is taken at {host}; choose another name",
+        values: { name, host },
+        comment: "Refusal of a new top-level group's name; {name} is the name typed, {host} the Git host's display name",
+      })
+    : nameTaken(name, parent);
+}
+
+/** A `not_found` the host answered a group or member write with
+ * (git-host-11, git-host-16, git-host-17): the host's own words, which
+ * name what it found no trace of, kept whole. */
+export function notFoundAt(host: string, words: string | null): string {
+  return words
+    ? i18n._({
+        id: "Not found at {host}: {words}",
+        values: { host, words },
+        comment: "The Git host found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole",
+      })
+    : i18n._({
+        id: "Not found at {host}",
+        values: { host },
+        comment: "The Git host found nothing a write named, and gave no words of its own; {host} is its display name",
+      });
+}
+
+/** Refusal: a new group needs a name (git-host-15). */
+export function nameTheGroup(): string {
+  return i18n._({ id: "Name the group", comment: "Refusal of a new group whose name is blank" });
+}
+
+/** Refusal: a share or an unshare names no account (git-host-16,
+ * git-host-17). */
+export function nameTheLogin(host: string): string {
+  return i18n._({
+    id: "Name the account's login at {host}",
+    values: { host },
+    comment: "Refusal of a share or a removal whose login is blank; {host} is the Git host's display name",
+  });
+}
+
+/** Refusal: a role the host's description in the current view does not
+ * list (git-host-16). */
+export function notARole(role: string, host: string): string {
+  return i18n._({
+    id: "{role} is not one of the roles {host} grants",
+    values: { role, host },
+    comment: "Refusal of a share at a role the Git host does not list; {role} is the role named, {host} the host's display name",
+  });
+}
+
+/** Refusal: a command must name one group or one spex repository
+ * (space-29). */
+export function nameOneTarget(): string {
+  return i18n._({
+    id: "Name one group or one spex repository",
+    comment: "Refusal of a members, share or removal command naming neither or both a group and a spex repository",
+  });
+}
+
+/** Refusal: a group the home's current view does not list (git-host-8,
+ * git-host-15, git-host-16, git-host-17). */
+export function groupNotListed(group: string, host: string): string {
+  return i18n._({
+    id: "{host} listed no group {group}",
+    values: { group, host },
+    comment: "Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name",
   });
 }
 

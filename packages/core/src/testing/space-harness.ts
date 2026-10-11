@@ -165,9 +165,9 @@ class Client {
 
 function sleep(ms: number): Promise<void> { return new Promise((resolveSleep) => setTimeout(resolveSleep, ms)); }
 
-const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "signIn"];
+const GROUPS_KEYS = ["account", "diagnostics", "git", "groups", "home", "host", "issues", "readAt", "roles", "signIn"];
 
-const REPOSITORY_KEYS = ["branch", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
+const REPOSITORY_KEYS = ["branch", "can", "code", "conflicts", "folder", "id", "incoming", "key", "lastSync", "local", "members", "name", "noticed", "own", "reason", "remote", "state", "sync", "visibility", "waiting"];
 
 const BRANCH_KEYS = ["ahead", "behind", "checkedAt", "hostEmpty", "mergePending", "unrelated"];
 
@@ -190,10 +190,26 @@ export function assertGroupsState(state: GroupsState): void {
   } else if (signIn.phase === "idle") {
     assert.deepEqual(Object.keys(signIn), ["phase"]);
   }
+  // What the host's last read said the person may do, and its roles
+  // (DR-114): booleans, and nothing in your own group.
+  if (state.account !== null) {
+    assert.deepEqual(Object.keys(state.account).sort(), ["canCreateGroup", "displayName", "id", "login"]);
+    assert.equal(typeof state.account.canCreateGroup, "boolean");
+  }
+  assert.ok(Array.isArray(state.roles));
+  for (const role of state.roles) {
+    assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
+    assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
+  }
   for (const group of state.groups) {
-    assert.deepEqual(Object.keys(group).sort(), ["fullPath", "id", "name", "own", "repositories", "url"]);
+    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories", "url"]);
+    assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "manageMembers"]);
+    assert.ok(typeof group.can.createSubgroup === "boolean" && typeof group.can.manageMembers === "boolean", JSON.stringify(group.can));
+    if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false }, "your own group takes no subgroup or member");
     for (const repository of group.repositories) {
       assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
+      assert.deepEqual(Object.keys(repository.can), ["manageMembers"]);
+      assert.equal(typeof repository.can.manageMembers, "boolean");
       assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
       assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
       if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);

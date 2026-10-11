@@ -2872,8 +2872,15 @@ export class CoreService {
       case "space.join":
         return this.requireSpace().join(command.hostId, command.folder === undefined ? undefined : expandPath(command.folder, this.home));
       case "space.members":
-        if (command.repository === undefined) throw new CoreError("invalid_request", "space.members names a repository");
-        return this.requireSpace().members(command.repository);
+        return this.requireSpace().members({ repository: command.repository, group: command.group });
+      // Groups and sharing (git-host-15..17, DR-114): the host is asked,
+      // and its answer is the reply.
+      case "space.group.create":
+        return this.requireSpace().createGroup(command.name, command.parent);
+      case "space.share":
+        return this.requireSpace().share({ repository: command.repository, group: command.group, login: command.login, role: command.role });
+      case "space.unshare":
+        return this.requireSpace().unshare({ repository: command.repository, group: command.group, login: command.login });
       case "space.remote.set":
         return this.requireSpace().setRemote(command.repository, command.url);
       case "space.fetch":

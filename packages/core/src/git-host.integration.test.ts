@@ -150,7 +150,7 @@ test("git-host-2: the browser flow signs in through the loopback and stores the 
     assert.equal(back.status, 200);
     assert.match(await back.text(), /may close this browser window/);
     const account = await flow.done;
-    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace" });
+    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace", canCreateGroup: true });
 
     const file = credentialsPath(t.home);
     assert.equal(mode(file), 0o600);
@@ -779,9 +779,9 @@ test("git-host-8: members with the host's role names and members page", async ()
       members: [{ id: "1002", login: "grace", displayName: "Grace Hopper", role: "Developer" }, { id: "1003", login: "alan", displayName: null, role: "Guest" }],
     });
     await browserSignIn(t.client);
-    const { members, membersUrl } = await t.client.members(repo.id);
+    const { members, membersUrl } = await t.client.members({ kind: "repository", id: repo.id });
     assert.deepEqual(members.map((m) => [m.login, m.displayName, m.role]), [["ada", "Ada Lovelace", "Owner"], ["grace", "Grace Hopper", "Developer"], ["alan", null, "Guest"]]);
-    assert.ok(members.every((m) => typeof m.id === "string" && m.url !== null));
+    assert.ok(members.every((m) => typeof m.id === "string" && m.url !== null && m.direct && m.via === null));
     assert.equal(membersUrl, `${t.host.url}/acme/team-spex/-/project_members`);
   } finally {
     await t.dispose();
@@ -820,7 +820,8 @@ test("git-host-9: the credential is the host's for its own Git origin and refuse
   const t = await setup();
   try {
     await browserSignIn(t.client);
-    assert.deepEqual(await t.client.describe(), { displayName: "Stand-in Git host", gitOrigin: t.host.gitOrigin });
+    const described = await t.client.describe();
+    assert.deepEqual([described.displayName, described.gitOrigin], ["Stand-in Git host", t.host.gitOrigin]);
     const credential = await t.client.credential(t.host.gitOrigin);
     const stored = await fileCredentialStore(t.home, t.host.url).read();
     assert.equal(credential.username, "oauth2");
@@ -985,7 +986,16 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
   try {
     const describe = await fetch(`${host.url}/api/v1/host`);
     assert.equal(describe.headers.get("cache-control"), "no-store");
-    assert.deepEqual(await describe.json(), { display_name: "Test Host", git_origin: `${host.url}/git` });
+    assert.deepEqual(await describe.json(), {
+      display_name: "Test Host",
+      git_origin: `${host.url}/git`,
+      roles: [
+        { id: "reporter", name: "Reporter", may_push: false },
+        { id: "developer", name: "Developer", may_push: true },
+        { id: "maintainer", name: "Maintainer", may_push: true },
+        { id: "owner", name: "Owner", may_push: true },
+      ],
+    });
     const unauth = await fetch(`${host.url}/api/v1/host/me`);
     assert.equal(unauth.status, 401);
     assert.deepEqual(((await unauth.json()) as { error: { code: string } }).error.code, "unauthenticated");

@@ -89,7 +89,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const page = await (await fetch(redirect.headers.get("location") ?? "")).text();
   assert.match(page, /You may close this browser window/);
   const signed = await home.client.waitSpace(from, (state) => state.account !== null && state.signIn.phase === "idle", 30_000);
-  assert.deepEqual(signed.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace" });
+  assert.deepEqual(signed.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace", canCreateGroup: true });
   assert.equal(signed.host.displayName, HOST_NAME);
   assert.equal(typeof signed.readAt, "number");
   assert.deepEqual(signed.groups.map((group) => [group.fullPath, group.own]), [[LOGIN, true], ["acme", false], ["acme/research", false]]);
@@ -130,7 +130,10 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const readsBefore = reads();
   const fromStart = again.client.mark();
   const [reread] = await Promise.all([again.client.expectOk("space.get", {}), again.client.expectOk("space.get", {})]);
-  assert.deepEqual(reread.account, signed.account);
+  // What the host lets the person do waits for a read held since the
+  // start, as do its roles (DR-114).
+  assert.deepEqual(reread.account, { ...signed.account, canCreateGroup: false });
+  assert.deepEqual(reread.roles, []);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
@@ -141,6 +144,8 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.equal(typeof read.readAt, "number");
   assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
   assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
+  assert.deepEqual(read.account, signed.account);
+  assert.deepEqual(read.roles, signed.roles);
   await again.client.expectOk("space.get", {});
   await sleep(300);
   assert.equal(reads() - readsBefore, 1, "one read of the host for every ask since the start");
