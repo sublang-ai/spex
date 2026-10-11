@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 24;
+export const PROTOCOL_VERSION = 25;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -893,6 +893,11 @@ export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
 export const playbookIdSchema = z.string().max(64).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 /** An authoring session's id is its playbook's (DR-058). */
 export const draftIdSchema = playbookIdSchema;
+/** The license a new spec package names: an SPDX expression on one
+ * line, never empty or edged with spaces (playbook-library-51); the
+ * core refuses another naming the rule (core-service-96), as it does
+ * an org outside the manifest's name rule (environments-1). */
+export const PACKAGE_LICENSE_PATTERN = /^\S(?:[^\r\n]*\S)?$/;
 /** The instance an authoring session's file records (storage-23): every
  * command on an existing session names the one it read (core-service-96). */
 const draftInstanceSchema = z.string().regex(UUID_PATTERN);
@@ -1250,7 +1255,18 @@ export const commandSchema = z.discriminatedUnion("type", [
   // repository of the project `projectId` names; one activity per
   // session, Boss messages queue while a turn or compile runs.
   z.object({ type: z.literal("draft.list"), id }),
-  z.object({ type: z.literal("draft.create"), id, projectId: repositoryKeySchema, draftId: draftIdSchema }),
+  // What a new playbook of the project starts from (playbook-library-103).
+  z.object({ type: z.literal("draft.defaults"), id, projectId: repositoryKeySchema }),
+  z.object({
+    type: z.literal("draft.create"),
+    id,
+    projectId: repositoryKeySchema,
+    draftId: draftIdSchema,
+    /** The new spec package's `org` and `license` (playbook-library-51),
+     * each refused `invalid_request` naming its rule (core-service-96). */
+    org: z.string(),
+    license: z.string(),
+  }),
   z.object({
     type: z.literal("draft.open"),
     id,
@@ -1426,6 +1442,9 @@ export interface CommandResults {
   "space.read": SpaceReadResult;
   "space.repair.decline": GroupsState;
   "draft.list": DraftInfo[];
+  /** The org and license a new playbook of the project starts from,
+   * null where no license is derived (playbook-library-103). */
+  "draft.defaults": { org: string; license: string | null };
   "draft.create": DraftInfo;
   "draft.open": { draft: DraftInfo; source: DraftSource | null; records: DraftRecord[] };
   /** Replies when the message is accepted, never when the turn ends. */

@@ -86,6 +86,8 @@ for (const theme of ["light", "dark"] as const) {
 
     // The authoring workspace, state by state (DR-058).
     const idField = page.getByTestId("new-playbook-id");
+    // The project's defaults fill Org and License (playbook-library-51).
+    await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
     await idField.fill("triage");
     await idField.press("Enter");
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();

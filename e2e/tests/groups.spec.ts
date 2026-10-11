@@ -844,7 +844,7 @@ async function arrangeChoices(app: App): Promise<void> {
   for (const text of ["Add a README badge", "Tighten the expiry tests", "Retire the legacy sessions"]) {
     await app.core.command("intent.queue", { projectId, text });
   }
-  await app.core.command("draft.create", { projectId, draftId: "triage" });
+  await app.core.command("draft.create", { projectId, draftId: "triage", org: "acme", license: "Apache-2.0" });
   appendFileSync(join(clone, "spex.yaml"), "# requested for the team\n");
   const code = JSON.parse(readFileSync(join(clone, "project.json"), "utf8")) as Record<string, unknown>;
   writeFileSync(join(clone, "project.json"), `${JSON.stringify({ ...code, remote: "git@example.com:acme/demo-project.git" }, null, 2)}\n`);

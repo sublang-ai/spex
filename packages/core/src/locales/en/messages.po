@@ -271,6 +271,11 @@ msgstr "{name} requested in spex.yaml"
 msgid "{path} already exists, so the clone cannot follow the host there"
 msgstr "{path} already exists, so the clone cannot follow the host there"
 
+#. Refusal: the manifest lacks a field the registry requires to publish; {issues} name each field in the checks' own words
+#: src/environments.ts
+msgid "{path} cannot be published: {issues}"
+msgstr "{path} cannot be published: {issues}"
+
 #. Refusal of a join: the host's names hold characters a folder under the home cannot
 #: src/space.ts
 msgid "{path} cannot stand as a folder on this device"
@@ -601,6 +606,11 @@ msgstr "a dispatched intent's text is history"
 #: src/space.ts
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
+
+#. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
+#: src/service.ts
+msgid "a new playbook needs a license on one line, such as Apache-2.0"
+msgstr "a new playbook needs a license on one line, such as Apache-2.0"
 
 #. Refusal: an edit to a project's config file that only your own group's file may take
 #: src/config-edit.ts
@@ -1433,7 +1443,9 @@ msgid "no one"
 msgstr "no one"
 
 #. Refusal: no project of this id is registered
+#. Refusal: no project of this id is registered
 #: src/service.ts
+#: src/session.ts
 msgid "no project {projectId}"
 msgstr "no project {projectId}"
 
@@ -1517,6 +1529,7 @@ msgid "Nothing on this device was deleted."
 msgstr "Nothing on this device was deleted."
 
 #. Guidance where a file under the home failed validation before the save
+#. Guidance where a file under the home failed validation before the save
 #: src/space.ts
 msgid "Nothing was saved. Fix or remove the file, then sync again."
 msgstr "Nothing was saved. Fix or remove the file, then sync again."
@@ -1555,6 +1568,11 @@ msgstr "only a finished intent confirms done"
 #: src/authoring.ts
 msgid "Optimize"
 msgstr "Optimize"
+
+#. Refusal: the org a new playbook's spec package names breaks the manifest's name rule
+#: src/service.ts
+msgid "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 
 #. compile phase: Spex packages the artifacts
 #: src/authoring.ts

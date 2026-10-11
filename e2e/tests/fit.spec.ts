@@ -486,6 +486,8 @@ test("run-view-105, dashboard-43/58: chrome fits at every width, in both sidebar
       name: "Playbook draft",
       show: async () => {
         const idField = page.getByTestId("new-playbook-id");
+        // The project's defaults fill Org and License (playbook-library-51).
+        await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
         await idField.fill("triage");
         await idField.press("Enter");
         await expect(page.getByTestId("authoring-workspace")).toBeVisible();

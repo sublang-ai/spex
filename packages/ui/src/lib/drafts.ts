@@ -49,6 +49,17 @@ export function draftIdRuleText(): string {
   return i18n._("Lowercase letters and digits in words joined by single hyphens, at most 64 characters");
 }
 
+/** A new spec package's org follows the manifest's name rule, the one
+ * an id follows (environments-1, playbook-library-51). */
+export function isPackageOrg(org: string): boolean {
+  return isDraftId(org);
+}
+
+/** The org rule, as the refusal names it (playbook-library-51). */
+export function packageOrgRuleText(): string {
+  return i18n._("Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters");
+}
+
 /** The spec package folder under development, in the working folder
  * (playbook-library-70). */
 export function draftPackagePath(draft: DraftInfo): string {

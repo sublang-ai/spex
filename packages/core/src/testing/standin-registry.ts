@@ -5,9 +5,11 @@
 // serving the format 2 interface (spex.pub DR-016, DR-017) — version
 // index, version resources, raw files, release archives and search —
 // from a directory of releases, with a publish endpoint that validates
-// as the core does and stores the archive. Scripted yank, suppression,
-// private namespaces honouring app tokens, and outages let the core's
-// tests and the browser journeys drive every registry answer.
+// as the core's publishing does — the release checks and the fields the
+// registry requires (environments-10) — and stores the archive.
+// Scripted yank, suppression, private namespaces honouring app tokens,
+// and outages let the core's tests and the browser journeys drive every
+// registry answer.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -16,7 +18,7 @@ import { dirname, join } from "node:path";
 import { stringify } from "yaml";
 
 import { unpackRelease } from "../environment/archive.js";
-import { artifactLanguages, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../environment/format.js";
+import { artifactLanguages, publishIssues, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../environment/format.js";
 import { compareVersions, isVersion } from "../environment/semver.js";
 
 export type ReleaseFixture =
@@ -106,13 +108,16 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   const requests: string[] = [];
   let outages = 0;
 
-  function store(org: string, pkg: string, version: string, tgz: Uint8Array, publishedAt: string): Issue[] {
+  /** Keep a release; a publish also holds it to the fields the
+   * registry requires, which a release already served may lack. */
+  function store(org: string, pkg: string, version: string, tgz: Uint8Array, publishedAt: string, publishing = false): Issue[] {
     const unpacked = unpackRelease(tgz, pkg);
     const issues = [...unpacked.issues];
     const manifest = unpacked.manifest;
     if (manifest && (manifest.org !== org || manifest.name !== pkg || manifest.version !== version)) {
       issues.push({ path: "meta.yaml", rule: "identity", message: `the manifest names ${manifest.org}/${manifest.name} ${manifest.version}, not ${org}/${pkg} ${version}` });
     }
+    if (manifest && publishing) issues.push(...publishIssues(manifest));
     if (!manifest || issues.length > 0) return issues;
     const name = `${org}/${pkg}`;
     const versions = releases.get(name) ?? new Map<string, Stored>();
@@ -252,7 +257,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
         if (!isVersion(version)) { sendError(res, 400, "bad_request", `${version} is not a version`); return; }
         const body = await readBody(req);
         if (releases.get(name)?.has(version)) { sendError(res, 409, "version_exists", `${name} ${version} is already published`); return; }
-        const issues = store(org, pkg, version, body, new Date().toISOString());
+        const issues = store(org, pkg, version, body, new Date().toISOString(), true);
         if (issues.length > 0) { sendError(res, 422, "invalid_artifact", `${name} ${version} is not a valid release`, issues); return; }
         const target = join(dir, org, pkg, version);
         mkdirSync(target, { recursive: true });

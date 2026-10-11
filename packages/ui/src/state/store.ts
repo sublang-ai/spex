@@ -417,11 +417,15 @@ export interface AppState extends AttachmentState {
   publishSpecPackage(repository: string, path: string): Promise<void>;
 
   listDrafts(): Promise<void>;
+  /** What New playbook fills its Org and License with for a project
+   * (playbook-library-51, playbook-library-103). */
+  loadDraftDefaults(projectId: string): Promise<CommandResults["draft.defaults"]>;
   /** Create a draft in the spex repository of the workspace's current
-   * project, else the first registered one, and open its workspace;
-   * the core refuses an id a configured playbook or built-in holds.
-   * With no project registered there is nowhere to keep it. */
-  createDraft(draftId: string): Promise<DraftInfo>;
+   * project, else the first registered one, its spec package naming
+   * the org and license given, and open its workspace; the core
+   * refuses an id a configured playbook or built-in holds. With no
+   * project registered there is nowhere to keep it. */
+  createDraft(draftId: string, fields: { org: string; license: string }): Promise<DraftInfo>;
   /** Open a draft's workspace: subscribe, replay its records and
    * source, then stream (playbook-library-62). */
   openDraft(draftId: string): Promise<void>;
@@ -2654,10 +2658,14 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ draftsLoaded: true });
     },
 
-    async createDraft(draftId: string): Promise<DraftInfo> {
+    async loadDraftDefaults(projectId: string): Promise<CommandResults["draft.defaults"]> {
+      return getClient().command("draft.defaults", { projectId });
+    },
+
+    async createDraft(draftId: string, fields: { org: string; license: string }): Promise<DraftInfo> {
       const projectId = workingProject(get());
       if (!projectId) throw new Error(draftNeedsProject());
-      const draft = await getClient().command("draft.create", { projectId, draftId });
+      const draft = await getClient().command("draft.create", { projectId, draftId, org: fields.org, license: fields.license });
       adoptDraft(draft);
       await get().openDraft(draft.id);
       return draft;

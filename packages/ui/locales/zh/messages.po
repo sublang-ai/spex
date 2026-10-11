@@ -1696,6 +1696,11 @@ msgstr "折叠侧栏"
 msgid "Collapse the sidebar ({keys})"
 msgstr "折叠侧栏（{keys}）"
 
+#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage
+#: src/components/LibrarySurface.tsx
+msgid "Commit {folder} with your code"
+msgstr "把 {folder} 和代码一起提交"
+
 #: src/lib/failure-catalogue.ts
 msgid "Commit or discard them"
 msgstr "提交或丢弃它们"
@@ -2327,6 +2332,10 @@ msgstr "放弃中…"
 #: src/components/AgentEditor.tsx
 msgid "e.g. .git, docs/generated"
 msgstr "例如 .git、docs/generated"
+
+#: src/components/LibrarySurface.tsx
+msgid "e.g. Apache-2.0"
+msgstr "例如 Apache-2.0"
 
 #: src/components/LibrarySurface.tsx
 msgid "e.g. triage"
@@ -3236,6 +3245,11 @@ msgstr "租约与锁"
 msgid "legacy session sidecar"
 msgstr "旧版会话附属文件"
 
+#. field of New playbook: the SPDX license its spec package is published under
+#: src/components/LibrarySurface.tsx
+msgid "License"
+msgstr "许可证"
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -4022,6 +4036,20 @@ msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — �
 #: src/lib/compile-log.ts
 msgid "Optimize"
 msgstr "优化"
+
+#. field of New playbook: the registry org its spec package is published under
+#: src/components/LibrarySurface.tsx
+msgid "Org"
+msgstr "组织"
+
+#. the example's prefill waits for New playbook's Org and License
+#: src/components/LibrarySurface.tsx
+msgid "Org and License first"
+msgstr "请先填写组织和许可证"
+
+#: src/lib/drafts.ts
+msgid "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
+msgstr "组织：由单个连字符连接的小写字母和数字，最多 64 个字符"
 
 #: src/lib/space.ts
 msgid "original files kept from an upgrade"

@@ -45,12 +45,16 @@ playbooks:
 `;
 
 /** The demo project: a git-initialized directory holding the staged
- * Academy corpus (DR-015) — the same example the app seeds for users. */
+ * Academy corpus (DR-015) — the same example the app seeds for users —
+ * and a `LICENSE` opening as the Apache License 2.0 does, as a
+ * scaffolded project's does, so New playbook's License starts as
+ * `Apache-2.0` (playbook-library-103). */
 export function seedDemoProject(projectDir: string): void {
   mkdirSync(projectDir, { recursive: true });
   execFileSync("git", ["init", "-q", projectDir]);
   cpSync(academyCorpusDir(), projectDir, { recursive: true });
   writeFileSync(join(projectDir, "README.md"), "# Demo project\n");
+  writeFileSync(join(projectDir, "LICENSE"), "\n                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n");
   execFileSync("git", ["-C", projectDir, "add", "-A"]);
   // Identity and no signing: the host's global git config must not
   // decide whether a scratch repository can commit.

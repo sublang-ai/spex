@@ -33,7 +33,7 @@ import { stripLeadingComments } from "./artifacts.js";
 import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
-import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
+import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type NewPackageFields, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { parseManifestText } from "./environment/format.js";
 import { i18n } from "./i18n.js";
 import type { ApplicationMedia, AssetPlace } from "./media.js";
@@ -113,9 +113,6 @@ export interface AuthorManagerOptions {
   /** Ids a playbook of the project's or your own group's environment
    * holds; a new session never takes one (playbook-library-51). */
   reservedIds: (projectId: string) => string[];
-  /** The `org` a new spec package names: the account's login, else
-   * `local` (playbook-library-70). */
-  org: () => string;
   /** The home's interface language as the core resolves it for its own
    * prose (core-service-108): a new session's language where neither
    * its package nor its project names one (playbook-library-70). */
@@ -901,7 +898,9 @@ export class AuthorManager {
 
   // -- commands -------------------------------------------------------------
 
-  create(id: string, location: { key: string; authoringDir: string; workingFolder: string | null }): DraftInfo {
+  /** Create a session whose new spec package names the org and license
+   * given (playbook-library-51, playbook-library-70). */
+  create(id: string, location: { key: string; authoringDir: string; workingFolder: string | null }, fields: NewPackageFields): DraftInfo {
     // An id naming a session already standing opens it: the page reads
     // the conflict as "open it" (playbook-library-51).
     if (this.drafts.exists(id)) {
@@ -926,7 +925,7 @@ export class AuthorManager {
     }
     let draft: StoredDraft;
     try {
-      draft = this.drafts.create(id, this.now(), location, this.options.org(), this.options.homeLanguage());
+      draft = this.drafts.create(id, this.now(), location, fields, this.options.homeLanguage());
     } catch (error) {
       if (error instanceof DraftChangedError) throw changedMeanwhile(id);
       throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));

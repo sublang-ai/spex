@@ -54,6 +54,7 @@ import {
 import {
   CAPTAIN_AGENT_ID,
   parseCommand,
+  PACKAGE_LICENSE_PATTERN,
   PROTOCOL_VERSION,
   type AdapterName,
   type Channel,
@@ -98,12 +99,13 @@ import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath } from "./drafts.js";
+import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, newPackageDefaults } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   builtinPackage,
   isGitSource,
   isPathSource,
+  isKebabName,
   isSkillName,
   playbookModuleCandidates,
   prepareBuiltinEnvironment,
@@ -111,8 +113,8 @@ import {
   writeExcludeBlock,
   type BuiltinPackage,
 } from "./environment/index.js";
-import { kebab, splitKey } from "./home.js";
-import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, PublishPreview, RoleBindingSummary } from "./protocol.js";
+import { splitKey } from "./home.js";
+import type { CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
   parseSpecTree,
   readRecordCommitTimes,
@@ -657,7 +659,6 @@ export class CoreService {
       readiness: (adapter) => this.readinessByAdapter.get(adapter) ?? null,
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
-      org: () => this.packageOrg(),
       homeLanguage: () => this.homeLanguage(),
       enabled: (id) => this.draftEnabled(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
@@ -741,14 +742,6 @@ export class CoreService {
     } catch (error) {
       throw new Error(relayHostError(error, this.space.hostName()));
     }
-  }
-
-  /** The `org` of a new spec package: the account's login, else `local`
-   * (playbook-library-70). */
-  private packageOrg(): string {
-    const host = this.store.home.host;
-    const login = host.account && !host.signedOut ? kebab(host.account.login).slice(0, 64) : "";
-    return login || "local";
   }
 
   /** Playbook ids a new authoring session of a project may not take:
@@ -2491,7 +2484,13 @@ export class CoreService {
           // authoring language, else the home's (playbook-library-70).
           const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
           mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
-          if (!existsSync(join(packageDir, "meta.yaml"))) writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, this.packageOrg(), language));
+          if (!existsSync(join(packageDir, "meta.yaml"))) {
+            // No one is asked here: the project's defaults stand, with
+            // no license where none is derived (playbook-library-69).
+            const defaults = newPackageDefaults(project.id, project.path);
+            const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
+            writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, fields, language));
+          }
           excludeEngineLinks(project.path);
           const libraryDir = join(packageDir, "playbooks", language);
           let result;
@@ -2918,19 +2917,17 @@ export class CoreService {
       // messages queue, the manager holds the matrix.
       case "draft.list":
         return this.authors.list();
+      case "draft.defaults": {
+        // What New playbook fills in, read from the project now
+        // (playbook-library-103).
+        const { project, repository } = this.draftHome(command.projectId);
+        return newPackageDefaults(repository.key, project.path);
+      }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as
         // its files stand (DR-111).
         await this.settledConfig();
-        const project = this.store.getProject(command.projectId);
-        const repository = this.store.repository(command.projectId);
-        if (!project || !repository) {
-          throw new CoreError("invalid_request", i18n._({
-            id: "{projectId} has no working folder on this device",
-            comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
-            values: { projectId: command.projectId },
-          }));
-        }
+        const { project, repository } = this.draftHome(command.projectId);
         // The id names the spec package, the file and the command: the
         // Agent Skills name rule (playbook-library-51).
         if (!isSkillName(command.draftId)) throw invalidPlaybookId(command.draftId);
@@ -2941,7 +2938,27 @@ export class CoreService {
             comment: "Refusal: the id offered for a new playbook is another project's authoring session",
           }));
         }
-        return this.authors.create(command.draftId, { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path });
+        // The org and license the New playbook field holds go into the
+        // new package's manifest (playbook-library-51, -70): the org by
+        // the manifest's name rule (environments-1), the license given.
+        if (!isKebabName(command.org)) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters",
+            values: { org: JSON.stringify(command.org) },
+            comment: "Refusal: the org a new playbook's spec package names breaks the manifest's name rule",
+          }));
+        }
+        if (!PACKAGE_LICENSE_PATTERN.test(command.license)) {
+          throw new CoreError("invalid_request", i18n._({
+            id: "a new playbook needs a license on one line, such as Apache-2.0",
+            comment: "Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces",
+          }));
+        }
+        return this.authors.create(
+          command.draftId,
+          { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path },
+          { org: command.org, license: command.license },
+        );
       }
       case "draft.open":
         this.requireDraft(command.projectId, command.draftId);
@@ -3357,6 +3374,22 @@ export class CoreService {
       }), failure.details);
     }
     return this.configState;
+  }
+
+  /** The project a new authoring session would live in, with its spex
+   * repository, or `invalid_request` where its working folder is not on
+   * this device (core-service-96). */
+  private draftHome(projectId: string): { project: ProjectInfo; repository: SpexRepository } {
+    const project = this.store.getProject(projectId);
+    const repository = this.store.repository(projectId);
+    if (!project || !repository) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{projectId} has no working folder on this device",
+        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
+        values: { projectId },
+      }));
+    }
+    return { project, repository };
   }
 
   /** An authoring session of the named project, or `not_found`

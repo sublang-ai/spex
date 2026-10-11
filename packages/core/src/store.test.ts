@@ -935,9 +935,9 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const location = { key: "tester/proj-spex", authoringDir, workingFolder };
   const drafts = new DraftStore(() => [location]);
   // `authoring/` is made inside a clone that stands, never the clone.
-  assert.throws(() => drafts.create("triage", 1000, location, "local", "en"), /ENOENT/);
+  assert.throws(() => drafts.create("triage", 1000, location, { org: "local", license: "MIT" }, "en"), /ENOENT/);
   mkdirSync(join(authoringDir, ".."), { recursive: true });
-  const draft = drafts.create("triage", 1000, location, "local", "en");
+  const draft = drafts.create("triage", 1000, location, { org: "local", license: "MIT" }, "en");
   // The spec package under development stands in the working folder
   // with its manifest (environments-10, playbook-library-70).
   const packageDir = join(workingFolder, "spex-packages", "triage");

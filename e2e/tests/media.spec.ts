@@ -164,6 +164,8 @@ test.describe("authoring media output", () => {
     test.setTimeout(90_000);
     await open(page, app);
     await nav(page, "Playbooks").click();
+    // The project's defaults fill Org and License (playbook-library-51).
+    await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
     await page.getByTestId("new-playbook-id").fill("visual");
     await page.getByTestId("new-playbook-id").press("Enter");
     const workspace = page.getByTestId("authoring-workspace");

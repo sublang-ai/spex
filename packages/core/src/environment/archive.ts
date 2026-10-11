@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { checkRelease, parseManifestText, portablePathIssues, readRelease, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "./format.js";
+import { checkRelease, parseManifestText, portablePathIssues, readPublishableRelease, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "./format.js";
 import type { RegistrySource } from "./registry.js";
 import { gunzip, gzip, readTar, writeTar } from "./tar.js";
 
@@ -81,9 +81,10 @@ export function unpackRelease(tgz: Uint8Array, pkg: string): UnpackedRelease {
 }
 
 /** Publish a release folder as it is (environments-10): read and check
- * it as the core reads any release, pack its declared files, upload. */
+ * it as the core reads any release, with the fields the registry
+ * requires, pack its declared files, upload. */
 export async function publishRelease(registry: RegistrySource, dir: string): Promise<{ name: string; version: string; checksum: string }> {
-  const { manifest, files } = await readRelease(dir);
+  const { manifest, files } = await readPublishableRelease(dir);
   const tgz = packRelease(dir, manifest, files);
   const name = `${manifest.org}/${manifest.name}`;
   await registry.publish(name, manifest.version, tgz);

@@ -382,7 +382,7 @@ test("storage-29: a home file damaged under a running core routes no command int
   const write = await client.command("specs.write", { projectId, path: "map.md", content: "remembered\n" });
   assert.ok(!write.ok && write.error.code === "not_found" && write.error.message === `no project ${projectId}`, JSON.stringify(write));
   assert.equal(readFileSync(spec, "utf8"), "edited\n");
-  const draft = await client.command("draft.create", { projectId, draftId: "remembered" });
+  const draft = await client.command("draft.create", { projectId, draftId: "remembered", org: "acme", license: "MIT" });
   assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId} has no working folder on this device`, JSON.stringify(draft));
   assert.equal(existsSync(join(clone, "authoring", "remembered.json")), false);
   const compile = await client.command("compile.run", {
@@ -429,7 +429,7 @@ test("storage-29: a compile admitted before home.yaml is damaged settles as this
   const clone = join(scratch, "state", "workspace", ...projectId.split("/"));
   const homeFile = join(scratch, "state", "home.yaml");
   const device = (parseYaml(readFileSync(homeFile, "utf8")) as { device: string }).device;
-  const created = await client.command("draft.create", { projectId, draftId: "held" });
+  const created = await client.command("draft.create", { projectId, draftId: "held", org: "acme", license: "MIT" });
   assert.ok(created.ok, JSON.stringify(created));
   const instance = (created.result as { instance: string }).instance;
   const source = await client.command("draft.source.write", { projectId, draftId: "held", instance, content: "# Held\n\nRoles:\n\n- Helper\n" });

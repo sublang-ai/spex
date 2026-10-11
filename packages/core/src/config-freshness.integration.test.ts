@@ -284,7 +284,7 @@ test("core-service-117: commands, turns and compiles read the config files as th
   // Authoring: each turn — a Boss turn and a queued one alike — reads
   // the config as it stands when it starts; a running turn keeps its own.
   // Every later command names the session's recorded instance (storage-23).
-  const { instance } = await client.ok("draft.create", { projectId: project.id, draftId: "fresh" });
+  const { instance } = await client.ok("draft.create", { projectId: project.id, draftId: "fresh", org: "acme", license: "MIT" });
   assert.ok(instance, "the new session records its instance");
   writeFileSync(configPath, CONFIG("claude-author"));
   const runs = () => stats.runs.filter((run) => run.cwd?.endsWith("fresh"));

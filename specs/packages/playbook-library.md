@@ -135,9 +135,11 @@ When the Playbooks surface is opened with a project chosen, the surface shall li
 
 #### playbook-library-51
 
-When the user activates "New playbook" — at the Authoring section's foot, or from the Captain home's slash menu ([DR-009](../decisions/009-at-hand-interaction.md)) — the Playbooks surface shall ask for the playbook id in an inline field captioned "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it", create the authoring session and its spec package under development [[playbook-library-70](#playbook-library-70)] on Enter, and open its workspace [[playbook-library-52](#playbook-library-52)]:
+When the user activates "New playbook" — at the Authoring section's foot, or from the Captain home's slash menu ([DR-009](../decisions/009-at-hand-interaction.md)) — the Playbooks surface shall ask for the playbook id in an inline field captioned "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it", beside the fields "Org" and "License" ([DR-069](../decisions/069-key-phrases-not-sentences.md)), create the authoring session and its spec package under development with that org and license [[playbook-library-70](#playbook-library-70)] on Enter, and open its workspace [[playbook-library-52](#playbook-library-52)]:
 
 - an id outside the Agent Skills name rule — `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 64 characters — or one a playbook of the project's or your own group's environment holds, is refused in place naming the rule, and nothing is created;
+- "Org" and "License" stand filled with the project's defaults [[playbook-library-103](#playbook-library-103)], read as the field is shown for that project, and the person edits both freely;
+- an org outside the manifest's name rule — lowercase kebab-case of at most 64 characters [[environments-1](environments.md#environments-1)] — is refused in place naming the rule, and nothing is created; "New playbook" stays disabled while the id, the org or the license is empty;
 - an id naming an existing authoring session opens that session;
 - an existing spec package folder at `spex-packages/<id>/` in the working folder with no authoring session becomes the new session's package, so a folder brought in by Git can be worked on.
 
@@ -240,7 +242,9 @@ While an authoring session's last compile succeeded, the Enable tab shall presen
 - a proposal's roles match the derived roles case-insensitively; a role whose normally derived, letter-leading own lane the roster already holds receives that lane as its default only when neither another role explicitly selects it nor an earlier role received that named default, while a fallback base names only a new-lane candidate; otherwise its default is its new option; assigning named defaults in compiled-role order remains independent of the Boss choosing a row's new option; automatic new players and offered new options take the first free `-2`, `-3`, … suffix against the roster, all explicit new selections and proposals, and earlier automatic allocations in that order, so defaults do not accidentally share a conversation and enabling never overwrites a player; explicit equal ids preserve the Boss's or proposal's intentional sharing, and a selected new id remains that row's offered new option;
 - a proposal naming a role the entry lacks, or missing a derived role, is shown beside the form as a mismatch with the derived roles authoritative;
 - Enable is disabled until every role has a player and command and intent are non-empty, and reads "Enabling…" while it writes, whatever turn or compile runs beside it;
-- a refusal names the violated rule inline and leaves the form standing; success lists the playbook among the enabled [[playbook-library-10](#playbook-library-10)], the chip reads "Enabled", and the list opens with the new card in view; the authoring session stays, so the playbook can be worked on further and published [[playbook-library-93](#playbook-library-93)].
+- a refusal names the violated rule inline and leaves the form standing; success lists the playbook among the enabled [[playbook-library-10](#playbook-library-10)], the chip reads "Enabled", and the list opens with the new card in view;
+- the new card's success line adds the key phrase "Commit ⟨folder⟩ with your code", ⟨folder⟩ being the spec package's folder in the working folder [[playbook-library-70](#playbook-library-70)] set as code, and stands until the surface is left, the reader committing the package with the code as the environment requesting it ([DR-069](../decisions/069-key-phrases-not-sentences.md), [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md));
+- the authoring session stays, so the playbook can be worked on further and published [[playbook-library-93](#playbook-library-93)].
 
 #### playbook-library-62
 
@@ -347,7 +351,8 @@ When the Playbooks surface is opened, the surface shall present a two-agent work
 
 - the example's six-line source is slc's demo with the two limits the bundled compiler asked about settled — the first agent's judgments count per loop, its last one in a loop being the conclusion, and the 2nd loop's commit ends the workflow without another review — and its normalized text says the same in slc's normalized form ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md));
 - sources and gears served for display drop their leading maintainer comment headers;
-- the prefill is offered only with a project chosen, since an authoring session lives in a project.
+- the prefill is offered only with a project chosen, since an authoring session lives in a project;
+- the prefill creates the session with the org and license the New playbook field holds [[playbook-library-51](#playbook-library-51)], and stands disabled, reading "Org and License first", while that org breaks its rule or that license is empty.
 
 ### Compile Cancellation
 
@@ -527,7 +532,7 @@ When an authoring session's compile settles, the conversation runner shall start
 
 When an authoring session's playbook is enabled, the enabling path shall re-package the retained compiler outputs with the confirmed command and intent without rerunning the compiler [[playbook-library-14](#playbook-library-14)], request the spec package by path from the chosen environment where it lives [[environments-26](environments.md#environments-26)], unless it is already requested, and resolve and install it [[environments-15](environments.md#environments-15)], write any player the submission names but your own group's roster lacks first, then write the `playbooks.<id>` entry re-keyed onto the derived role ids [[playbook-library-32](#playbook-library-32)] through the config writer [[playbook-library-16](#playbook-library-16)], reload the config, and mark the session enabled [[playbook-library-70](#playbook-library-70)]:
 
-- the one-shot `compile.run` is an authoring-style compile followed by this same path in one reply, so both share one helper;
+- the one-shot `compile.run` is an authoring-style compile followed by this same path in one reply, so both share one helper, its `meta.yaml`, where the folder holds none, made as a session's [[playbook-library-70](#playbook-library-70)] with the project's defaults for org and license [[playbook-library-103](#playbook-library-103)], no license where none is derived;
 - each write is an ordinary write of its own file under the version it read [[environments-15](environments.md#environments-15)] [[shared-config-roundtrip-1](shared-config-roundtrip.md#shared-config-roundtrip-1)]; any failure after one of the writes leaves them written, undoes nothing, and the refusal names the writes made — the request, the lock, the install, each player, the entry — with the failure's own code and words ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - a refused write leaves the session standing with its artifacts, so a corrected submission enables without recompiling.
 
@@ -539,7 +544,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 | Case | Behavior |
 | --- | --- |
-| create | make `<working folder>/spex-packages/<id>/` with `meta.yaml` — `format: 2`, `org` the account's login or `local`, `name` and one `playbook` artifact `<id>` in the session's language, version `0.1.0` — and `authoring/<id>.json` in the clone with a fresh instance; the session's language is the one the `meta.yaml` of a folder brought in [[playbook-library-51](#playbook-library-51)] already gives the playbook, else the project's authoring language where the working folder's `specs/meta.md` declares one by its marker line [[meta-27](../meta.md#meta-27)], else the home's interface language [[core-service-108](core-service.md#core-service-108)], recorded in the session file [[storage-23](storage.md#storage-23)], and the playbook's folder, its source file and the compile's folder [[playbook-library-12](#playbook-library-12)] follow it; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
+| create | make `<working folder>/spex-packages/<id>/` with, where the folder holds none, `meta.yaml` — `format: 2`, `org` and `license` as the creation names them [[playbook-library-51](#playbook-library-51)], `name` `<id>`, version `0.1.0`, `description` "The `<id>` playbook", and one `playbook` artifact `<id>` in the session's language — and `authoring/<id>.json` in the clone with a fresh instance; the session's language is the one the `meta.yaml` of a folder brought in [[playbook-library-51](#playbook-library-51)] already gives the playbook, else the project's authoring language where the working folder's `specs/meta.md` declares one by its marker line [[meta-27](../meta.md#meta-27)], else the home's interface language [[core-service-108](core-service.md#core-service-108)], recorded in the session file [[storage-23](storage.md#storage-23)], and the playbook's folder, its source file and the compile's folder [[playbook-library-12](#playbook-library-12)] follow it; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
 | open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
 | write source | replace `<id>.md` atomically under the token, whatever runs beside it |
 | write | replace the session file only where, at the instant before the rename, it still holds the bytes read and records the instance the writer names; else refuse, changed meanwhile, writing nothing |
@@ -551,6 +556,15 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 - a player choice an earlier version kept as `authoring:<id>:player` moves, at its first read, under the instance of the one session whose instance its id and creation time derive [[storage-23](storage.md#storage-23)], and no other session of that id reads it;
 - no write recreates a session file or a clone gone since it was read, and work a session started finishes or fails on its own, writing nothing into another session of its id;
 - an unreadable record or transcript is a scoped diagnostic that blocks that session alone, read from the files at each report, gone once the file reads again or the session's file is gone.
+
+#### playbook-library-103
+
+When a client sends `draft.defaults` for a project, the authoring store shall reply with the `org` and `license` a new playbook of that project starts from, read at the reply:
+
+| Field | Default |
+| --- | --- |
+| `org` | the first `/`-separated segment of the project's spex repository key — `slbeta1` for `slbeta1/workshop/graph-crate-spex` |
+| `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
 
@@ -693,6 +707,29 @@ Where the core runs with the scripted fake adapter, when authoring sessions are 
 
 - a session created on a `zh` home keeps its folder after the home's language changes.
 
+#### playbook-library-104
+
+Where the core runs with the scripted fake adapter, when `draft.defaults` is sent for a project whose working folder's `LICENSE` stands as each case below, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` replied per case and that each reply's `org` is the first segment of the project's key [[playbook-library-103](#playbook-library-103)]:
+
+| `LICENSE` | `license` replied |
+| --- | --- |
+| the Apache License 2.0 text | `Apache-2.0` |
+| an MIT License text | `MIT` |
+| another license's text | none |
+| absent | none |
+
+- the session's `meta.yaml` names the org and the license `draft.create` gave, its package named under that org [[playbook-library-70](#playbook-library-70)];
+- the one-shot compile's `meta.yaml` names the project's defaults [[playbook-library-69](#playbook-library-69)].
+
+#### playbook-library-105
+
+Where the Playbooks surface renders over a project through a client whose `draft.defaults` replies are scripted, when the New playbook field is shown and worked and a session's enabling succeeds, the test suite shall assert:
+
+- "Org" and "License" read the defaults replied for the project, and a reply with no license leaves "License" empty, "New playbook" and the example's prefill standing disabled until it is filled [[playbook-library-51](#playbook-library-51)] [[playbook-library-35](#playbook-library-35)];
+- an org of `Acme`, `acme_co`, `-acme` or 65 characters is refused in place naming the rule with nothing created, and Enter with an edited org and license creates the session with them [[playbook-library-51](#playbook-library-51)];
+- the example's prefill creates its session with the field's org and license [[playbook-library-35](#playbook-library-35)];
+- the enabled card's success line reads "Commit spex-packages/triage with your code" in English and "把 spex-packages/triage 和代码一起提交" in Chinese, the folder set as code, and still stands once the card's highlight is gone [[playbook-library-61](#playbook-library-61)].
+
 #### playbook-library-88
 
 Where the Enable tab renders a compiled authoring session over a roster holding `dev.coder` and `dev.reviewer`, the test suite shall assert, as an explicit case matrix, each role row's default [[playbook-library-61](#playbook-library-61)]:
@@ -765,14 +802,14 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell with the authoring fake script and the stub `slc` named as the configured compiler, when the journey works a new playbook through the page, the test suite shall assert:
 
-- "New playbook" asks for the id inline, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the two openers, and an Authoring row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-84](#playbook-library-84)] [[playbook-library-50](#playbook-library-50)];
+- "New playbook" asks for the id inline beside "Org" and "License" filled with the project's defaults, refuses `Triage` naming the rule, and opens `triage` as the workspace with the divider, the tab strip, the two openers, and an Authoring row on returning [[playbook-library-51](#playbook-library-51)] [[playbook-library-52](#playbook-library-52)] [[playbook-library-84](#playbook-library-84)] [[playbook-library-50](#playbook-library-50)];
 - "Try the example" places the example's prose in the composer and sends nothing; "Use a SKILL.md…" with no file pick on the page opens the Source tab's paste mode with its text focused and places the adapt sentence, and with a page-supplied pick on a session with no source writes the picked file as the source, shown in the Source tab with its path, with the adapt sentence placed [[playbook-library-84](#playbook-library-84)];
 - a sent message stands as a Boss bubble, the agent's write as a tool card, its compile block as the "Asked to compile" card, and the Source tab shows the written markdown before the turn ends [[playbook-library-53](#playbook-library-53)] [[playbook-library-56](#playbook-library-56)];
 - the band lists the phases in human words with the running one's output age, "asked by the agent", and Cancel [[playbook-library-57](#playbook-library-57)];
 - a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
 - a message sent during the compile queues with "Send next" and dispatches afterwards [[playbook-library-54](#playbook-library-54)];
 - Edit, Save, and a forced conflict behave as specified, and Paste's "Use as source" writes the file [[playbook-library-56](#playbook-library-56)];
-- the Enable tab opens prefilled from the proposal and Enable lists `/triage` as enabled with the chip reading "Enabled" and the package requested by path on the project's side [[playbook-library-61](#playbook-library-61)] [[playbook-library-92](#playbook-library-92)];
+- the Enable tab opens prefilled from the proposal and Enable lists `/triage` as enabled with the chip reading "Enabled", the card's success line reading "Commit spex-packages/triage with your code", and the package requested by path on the project's side [[playbook-library-61](#playbook-library-61)] [[playbook-library-92](#playbook-library-92)];
 - the agent picker offers "Captain" and each roster player, and a switch survives a reload with its system line [[playbook-library-55](#playbook-library-55)];
 - a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
 - a session seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];

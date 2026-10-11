@@ -22,8 +22,9 @@ import {
   type App,
 } from "../src/harness";
 
-/** The authoring session's playbook, its spec package named after the
- * signed-in account (playbook-library-70). */
+/** The authoring session's playbook, its spec package named under the
+ * org New playbook gives it — here the signed-in account's — with the
+ * license the registry requires (playbook-library-51, -70). */
 const ID = "triage";
 const PACKAGE = `${HOST_LOGIN}/${ID}`;
 
@@ -33,7 +34,7 @@ const PACKAGE = `${HOST_LOGIN}/${ID}`;
  * per role. */
 async function arrangeEnabled(app: App): Promise<void> {
   const projectId = app.projectId!;
-  const { instance } = await app.core.command("draft.create", { projectId, draftId: ID });
+  const { instance } = await app.core.command("draft.create", { projectId, draftId: ID, org: HOST_LOGIN, license: "Apache-2.0" });
   await app.core.command("draft.source.write", {
     projectId,
     draftId: ID,

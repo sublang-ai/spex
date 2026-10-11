@@ -25,14 +25,14 @@ When the core reads a release — from the registry, a Git commit, a path inside
 | `sources/<language>/<id>/` | source material entered at `SOURCE.md`, attachments beside it |
 | `specs/<language>/<pkg>.md` | the one spec file, with its sections, item ids and citations kept whole |
 | `skills/<language>/<id>/` | an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
-| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them |
+| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except its `.slc/` build history and `.slc-verify/` verifier support, which a folder read as a release leaves out wherever they stand in it |
 | `applets/<id>/` | a browser-server application in its native layout |
 
 | `meta.yaml` field | Content |
 | --- | --- |
 | `format` | `2` |
 | `org`, `name`, `version` | lowercase kebab-case names of at most 64 characters, and a Semantic Versioning 2.0.0 version [[2]] |
-| `description`, `license`, `repository` | a description, the license, an optional repository URL |
+| `description`, `license`, `repository` | a description and the license, both required to publish [[environments-10](#environments-10)], and an optional repository URL |
 | `dependencies` | optional: `<org>/<pkg>` to a version requirement [[environments-4](#environments-4)] |
 | `artifacts` | artifact id to `{kind, language, from, requires, generated-by}` |
 
@@ -159,6 +159,7 @@ When a session starts in a working folder, the core shall hand the launcher the 
 When an authoring session [[storage-23](storage.md#storage-23)] writes a spec package under development, the core shall keep it as a folder in the release layout inside the working folder, compile its playbooks there with the compiler in the playbook's artifact folder [[playbook-library-57](playbook-library.md#playbook-library-57)], and offer to request it from the project's environment by `path` and to publish it ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - publishing uploads the declared release files only, after the same checks the core makes on a release [[environments-1](#environments-1)], to the registry as the signed-in account [[environments-12](#environments-12)];
+- a manifest without a `description` or a `license`, which the registry requires, is refused naming each missing field before any upload, its preview included [[environments-17](#environments-17)];
 - to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry;
 - a working folder may hold any number of spec packages under development.
 
@@ -224,7 +225,7 @@ The core shall expose environments through these commands and one message, each 
 | `environment.resolve` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.install` | `{ repository }` | `{ accepted: true }` | `not_found` |
 | `environment.search` | `{ query }` | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out and the registry refusing) |
-| `environment.publish` | `{ repository, path }` | `{ accepted: true }` | `invalid_request` (not a release; not signed in) |
+| `environment.publish` | `{ repository, path, dryRun? }` | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { name, version, files }` | `invalid_request` (not a release; no `description` or `license`; not signed in) |
 
 - `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish and sync-applied lock; a long command replies `accepted` at once and reports through state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5).
 
@@ -276,7 +277,7 @@ When an integration suite starts a real core on a fresh scratch home with no reg
 
 #### environments-24
 
-When an integration suite runs an authoring session that writes a spec package in a working folder, compiles its playbook, requests it by path, enables it and starts a session with it, then publishes it to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)].
+When an integration suite runs an authoring session that writes a spec package in a working folder, compiles its playbook, requests it by path, enables it and starts a session with it, then publishes it to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)], none of them under a `.slc/` or `.slc-verify/` placed in the playbook's folder, in the preview or at the registry [[environments-1](#environments-1)], its manifest carrying a `description` and a `license`, while a dry run of the folder with `license` taken out of its `meta.yaml` was refused naming the field with nothing reaching the registry [[environments-10](#environments-10)] [[environments-17](#environments-17)].
 
 #### environments-25
 

@@ -45,6 +45,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 
 import { LibrarySurface } from "./LibrarySurface.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
+import { activateLanguage } from "../i18n.js";
 import { applyRecord, initialSessionView } from "../state/reducer.js";
 import {
   AUTHOR_PLAYER,
@@ -131,6 +132,8 @@ function playbookLists(extra: ReturnType<typeof available>[] = []): CommandResul
 }
 
 let lists: CommandResults["environment.playbooks"];
+/** The license `draft.defaults` derives from the project's LICENSE. */
+let defaultLicense: string | null;
 
 const ARTIFACTS = {
   source: "# Triage",
@@ -313,6 +316,15 @@ function renderWorkspace(
   return render(<LibrarySurface />);
 }
 
+/** New playbook's Org and License once the core's defaults landed
+ * (playbook-library-51). */
+async function defaultsShown(org = "me", license = "Apache-2.0"): Promise<void> {
+  await vi.waitFor(() => {
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe(org);
+    expect((screen.getByTestId("new-playbook-license") as HTMLInputElement).value).toBe(license);
+  });
+}
+
 function tab(name: string): HTMLButtonElement {
   return screen.getByRole("tab", { name }) as HTMLButtonElement;
 }
@@ -328,6 +340,7 @@ beforeEach(() => {
   });
   commandMock.mockReset();
   lists = playbookLists();
+  defaultLicense = "Apache-2.0";
   commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
     const state = useAppStore.getState();
     switch (type) {
@@ -347,6 +360,10 @@ beforeEach(() => {
         const id = String(params?.draftId);
         return { draft: state.drafts[id] ?? draftInfo({ id }), source: state.draftSources[id] ?? null, records: [] };
       }
+      case "draft.defaults":
+        // The core's defaults (playbook-library-103): the key's first
+        // segment, and the license this test's LICENSE names.
+        return { org: String(params?.projectId).split("/")[0], license: defaultLicense };
       case "draft.create":
         return draftInfo({ id: String(params?.draftId), state: "no-source", firstLine: null, touchedAt: now, createdAt: now });
       case "draft.artifacts":
@@ -495,11 +512,12 @@ describe("playbook-library-51: New playbook asks for the id", () => {
   test("Enter creates the draft and opens its workspace; an existing draft's id opens that draft", async () => {
     seed({ drafts: { changelog: { ...COMPILED, id: "changelog" } } });
     render(<LibrarySurface />);
+    await defaultsShown();
     const input = screen.getByTestId("new-playbook-id");
     fireEvent.change(input, { target: { value: "triage" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: "triage", org: "me", license: "Apache-2.0" }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("authoring-workspace")).toBeTruthy());
     const header = screen.getByTestId("authoring-workspace").querySelector("header")!;
@@ -521,22 +539,24 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     const other = { ...PROJECT, id: "acme/tools-spex", name: "tools", repository: { key: "acme/tools-spex", name: "tools-spex", group: "acme", own: false } };
     seed({ projects: [PROJECT, other], currentProjectId: "acme/tools-spex" });
     render(<LibrarySurface />);
+    await defaultsShown("acme");
     const input = screen.getByTestId("new-playbook-id");
     fireEvent.change(input, { target: { value: "triage" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "triage" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "triage", org: "acme", license: "Apache-2.0" }),
     );
     cleanup();
 
     commandMock.mockClear();
     seed({ projects: [other, PROJECT], currentProjectId: undefined });
     render(<LibrarySurface />);
+    await defaultsShown("acme");
     const field = screen.getByTestId("new-playbook-id");
     fireEvent.change(field, { target: { value: "intake" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "intake" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "intake", org: "acme", license: "Apache-2.0" }),
     );
   });
 
@@ -550,6 +570,78 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     expect(screen.getByTestId("new-playbook-caption").textContent).toBe("Add a project first");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
+  });
+});
+
+describe("playbook-library-105: New playbook's Org and License, and the commit line after enabling", () => {
+  test("Org and License read the project's defaults; with no license both New playbook and the example's prefill wait for one", async () => {
+    defaultLicense = null;
+    seed();
+    render(<LibrarySurface />);
+    await defaultsShown("me", "");
+    expect(commandMock).toHaveBeenCalledWith("draft.defaults", { projectId: PROJECT_ID });
+    const button = screen.getByTestId("new-playbook-button") as HTMLButtonElement;
+    const prefill = screen.getByTestId("example-prefill") as HTMLButtonElement;
+    fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "triage" } });
+    expect(button.disabled).toBe(true);
+    expect(prefill.disabled).toBe(true);
+    expect(prefill.title).toBe("Org and License first");
+    fireEvent.keyDown(screen.getByTestId("new-playbook-id"), { key: "Enter" });
+    expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
+
+    // Filled, both stand ready; the example's prefill takes the field's
+    // org and license (playbook-library-35).
+    fireEvent.change(screen.getByTestId("new-playbook-license"), { target: { value: "MIT" } });
+    expect(button.disabled).toBe(false);
+    expect(prefill.disabled).toBe(false);
+    fireEvent.click(prefill);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: SLC_DEMO.playbookId, org: "me", license: "MIT" }),
+    );
+  });
+
+  test("an org outside the manifest's name rule is refused in place; Enter creates with the org and license as edited", async () => {
+    seed();
+    render(<LibrarySurface />);
+    await defaultsShown();
+    const id = screen.getByTestId("new-playbook-id");
+    const org = screen.getByTestId("new-playbook-org");
+    fireEvent.change(id, { target: { value: "triage" } });
+    for (const bad of ["Acme", "acme_co", "-acme", "a".repeat(65)]) {
+      fireEvent.change(org, { target: { value: bad } });
+      fireEvent.keyDown(id, { key: "Enter" });
+      expect(screen.getByTestId("new-playbook-error").textContent, bad).toBe(
+        "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters",
+      );
+    }
+    expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
+    fireEvent.change(org, { target: { value: "workshop" } });
+    fireEvent.change(screen.getByTestId("new-playbook-license"), { target: { value: " MIT OR Apache-2.0 " } });
+    fireEvent.keyDown(org, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: "triage", org: "workshop", license: "MIT OR Apache-2.0" }),
+    );
+  });
+
+  test.each(["en", "zh"] as const)("the enabled card's success line names the folder to commit, standing past its highlight (%s)", async (language) => {
+    activateLanguage(language);
+    try {
+      lists = playbookLists([
+        available({ id: "triage", package: "me/triage", version: "0.1.0", source: "path", repository: PROJECT_ID, roles: ["Triager"], enabled: ["project"] }),
+      ]);
+      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/triage" }) }, revealPlaybook: "triage" });
+      render(<LibrarySurface />);
+      const card = await screen.findByTestId("playbook-card-triage");
+      const line = await within(card).findByTestId("enabled-commit");
+      expect(line.textContent).toBe(
+        language === "zh" ? "把 spex-packages/triage 和代码一起提交" : "Commit spex-packages/triage with your code",
+      );
+      expect(line.querySelector("code")?.textContent).toBe("spex-packages/triage");
+      await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage").className).not.toContain("ring-2"), { timeout: 4000 });
+      expect(within(screen.getByTestId("playbook-card-triage")).getByTestId("enabled-commit").textContent).toBe(line.textContent);
+    } finally {
+      activateLanguage("en");
+    }
   });
 });
 
@@ -1433,6 +1525,8 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("fromme/triage 0.1.0· path");
     // [playbook-library-10] sessions started before must restart.
     expect(screen.getByTestId("enabled-note").textContent).toContain("restarted to use it");
+    // [playbook-library-61] and the package folder is committed with the code.
+    expect(screen.getByTestId("enabled-commit").textContent).toBe("Commit spex-packages/triage with your code");
     expect(screen.getByTestId("library-live").textContent).toBe("Enabled /triage");
     // The session stays, to be worked on further and published; its
     // chip reads Enabled once the core says so.
@@ -1628,9 +1722,10 @@ describe("playbook-library-35: the example opens a draft in paste mode", () => {
     seed();
     render(<LibrarySurface />);
     expect(screen.getByTestId("example-prefill").textContent).toBe("Prefill");
+    await defaultsShown();
     fireEvent.click(screen.getByTestId("example-prefill"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: SLC_DEMO.playbookId }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: SLC_DEMO.playbookId, org: "me", license: "Apache-2.0" }),
     );
     await vi.waitFor(() => expect(screen.getByTestId("source-paste")).toBeTruthy());
     expect((screen.getByTestId("paste-text") as HTMLTextAreaElement).value).toBe(SLC_DEMO.stages.normalized);
@@ -1922,7 +2017,7 @@ describe("playbook-library-97: a history replaced on disk, and a session replace
     // survive a reply that names neither.
     const late = useAppStore.getState().listDrafts();
     await act(async () => {
-      await useAppStore.getState().createDraft("fresh");
+      await useAppStore.getState().createDraft("fresh", { org: "me", license: "MIT" });
     });
     answer([listedDraft]);
     await late;
