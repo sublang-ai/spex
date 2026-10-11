@@ -1141,6 +1141,11 @@ msgstr "invalid intent ID"
 msgid "invalid JSON"
 msgstr "invalid JSON"
 
+#. Diagnostic for a damaged authoring file: the language its playbook is authored in will not read
+#: src/drafts.ts
+msgid "invalid language"
+msgstr "invalid language"
+
 #. Media storage failure
 #: src/media.ts
 msgid "Invalid media read range."

@@ -1141,6 +1141,11 @@ msgstr "意图 ID 无效"
 msgid "invalid JSON"
 msgstr "JSON 无效"
 
+#. Diagnostic for a damaged authoring file: the language its playbook is authored in will not read
+#: src/drafts.ts
+msgid "invalid language"
+msgstr "语言无效"
+
 #. Media storage failure
 #: src/media.ts
 msgid "Invalid media read range."

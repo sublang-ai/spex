@@ -385,8 +385,9 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   });
   // storage-23: the record lands in the project's spex repository.
   const record = JSON.parse(readFileSync(files.record, "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "instance", "package", "queued", "touchedAt"]);
+  assert.deepEqual(Object.keys(record).sort(), ["createdAt", "failures", "format", "id", "instance", "language", "package", "queued", "touchedAt"]);
   assert.equal(record.format, 1);
+  assert.equal(record.language, "en");
   assert.equal(record.id, "triage");
   assert.equal(record.package, "spex-packages/triage");
   assert.deepEqual(record.queued, []);
@@ -952,6 +953,94 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
   assert.match(next, /kind: \[unclosed/);
   assert.match(next, /Boss: next$/);
   assert.equal(client.latest("triage")?.malformedDirectives, undefined);
+
+  client.close();
+  await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-102: the session's language
+// ---------------------------------------------------------------------------
+
+test("playbook-library-102: a session takes its folder's, its project's, else the home's language, and its prompt names it", {timeout: 120_000}, async () => {
+  const harness = await startHarness({ script: {}, slc: stubSlcSource("['Triager', 'Verifier']") });
+  const { dir, dataDir, projectId, stats } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  // The harness's project declares Chinese by the marker line (meta-27);
+  // a second project declares nothing.
+  const declared = join(dir, "project");
+  mkdirSync(join(declared, "specs"), { recursive: true });
+  writeFileSync(join(declared, "specs", "meta.md"), "# meta: Spec Definition\n\n### meta-27\n\nAuthoring language: zh\n");
+  const plain = workingFolder(join(dir, "plain"));
+  const plainId = await pairedProject(harness.service.port(), plain);
+  // A spec package folder brought in by Git, its playbook in Chinese.
+  const keptManifest = "format: 2\norg: acme\nname: kept\nversion: 0.2.0\nartifacts:\n  kept:\n    kind: playbook\n    language: zh\n";
+  mkdirSync(join(plain, "spex-packages", "kept", "playbooks", "zh", "kept"), { recursive: true });
+  writeFileSync(join(plain, "spex-packages", "kept", "meta.yaml"), keptManifest);
+
+  /** Create a session, send it one message, and read where it stands
+   * and what its first prompt said. */
+  const author = async (project: string, folder: string, id: string) => {
+    const created = await client.expectOk("draft.create", { projectId: project, draftId: id });
+    await client.expectOk("draft.send", { projectId: project, draftId: id, text: `Draft ${id}` });
+    const first = () => stats.runs.find((run) => run.prompt.includes(`Boss: Draft ${id}`));
+    await until(() => first() !== undefined && client.latest(id)?.activity === "idle", 60_000, `the first turn of ${id}`);
+    const packageDir = join(folder, "spex-packages", id);
+    return {
+      created,
+      prompt: first()!.prompt,
+      manifest: readFileSync(join(packageDir, "meta.yaml"), "utf8"),
+      record: JSON.parse(readFileSync(join(dataDir, "workspace", ...project.split("/"), "authoring", `${id}.json`), "utf8")) as { language?: string },
+      packageDir,
+    };
+  };
+  const expectLanguage = (session: Awaited<ReturnType<typeof author>>, id: string, language: string, name: string) => {
+    assert.equal(session.created.sourcePath, `spex-packages/${id}/playbooks/${language}/${id}/${id}.md`, `${id}: the source path`);
+    assert.ok(existsSync(join(session.packageDir, "playbooks", language, id)), `${id}: the playbook folder`);
+    assert.equal((parseYaml(session.manifest) as { artifacts: Record<string, { language?: string }> }).artifacts[id]?.language, language, `${id}: the manifest's language`);
+    assert.equal(session.record.language, language, `${id}: the session file's language`);
+    assert.ok(session.prompt.includes(join("spex-packages", id, "playbooks", language, id, `${id}.md`)), `${id}: the prompt's source path`);
+    assert.ok(session.prompt.includes(`Write the playbook in ${name} (\`${language}\`)`), `${id}: the prompt names ${name}`);
+    // A role name is one word in every language (playbook-library-65).
+    assert.ok(session.prompt.includes('Each role name is one word: slc reads only the first word after "Captain shall prompt" and refuses a role name with a space, so write a two-word role as one CamelCase word, e.g. `RiskOfficer`, `ClientAdvocate`.'), `${id}: the one-word role rule`);
+    // A step's three repository effects, in every language.
+    assert.ok(session.prompt.includes("- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit."), `${id}: the three repository effects`);
+  };
+  // The words slc reads literally, kept in English for another language.
+  const KEPT = /Keep in English, exactly as written, the words slc recognizes literally: the headings `Roles:` and `Results:`, the clauses `Captain shall prompt <Role>`, `Captain shall relay … to <Role>` and `Output shall include`/;
+  const LEAD_IN = /write the lead-in "in quotes \(`>`\)" exactly so/;
+
+  // The project's authoring language over an English home.
+  await client.expectOk("language.set", { language: "en" });
+  const triage = await author(projectId, declared, "triage");
+  expectLanguage(triage, "triage", "zh", "Chinese");
+  assert.match(triage.prompt, KEPT);
+  assert.match(triage.prompt, LEAD_IN);
+
+  // No marker: the home's language, Chinese.
+  await client.expectOk("language.set", { language: "zh" });
+  const relabel = await author(plainId, plain, "relabel");
+  expectLanguage(relabel, "relabel", "zh", "Chinese");
+  assert.match(relabel.prompt, KEPT);
+  assert.match(relabel.prompt, LEAD_IN);
+
+  // No marker on an English home: English, no word to keep.
+  await client.expectOk("language.set", { language: "en" });
+  const sorter = await author(plainId, plain, "sorter");
+  expectLanguage(sorter, "sorter", "en", "English");
+  assert.doesNotMatch(sorter.prompt, /Keep in English/);
+  assert.doesNotMatch(sorter.prompt, LEAD_IN);
+  // A session keeps the folder it was created in when the home's
+  // language changes.
+  const listed = await client.expectOk("draft.list", {});
+  assert.equal(listed.find((draft) => draft.id === "relabel")?.sourcePath, "spex-packages/relabel/playbooks/zh/relabel/relabel.md");
+
+  // A folder brought in keeps its manifest's language, the file untouched.
+  const kept = await author(plainId, plain, "kept");
+  expectLanguage(kept, "kept", "zh", "Chinese");
+  assert.equal(kept.manifest, keptManifest);
+  assert.match(kept.prompt, KEPT);
 
   client.close();
   await harness.service.stop();
@@ -1829,7 +1918,7 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   mkdirSync(fromClone, { recursive: true });
   let current = { key: "tester/a-spex", authoringDir: join(fromClone, "authoring"), workingFolder: join(dir, "project") };
   const moving = new DraftStore(() => [current]);
-  const made = moving.create("moved", 1, current, "local");
+  const made = moving.create("moved", 1, current, "local", "en");
   renameSync(fromClone, toClone);
   current = { ...current, key: "tester/b-spex", authoringDir: join(toClone, "authoring") };
   moving.append("moved", made.instance, { type: "captain_status", turnId: null, timestamp: 2, message: "after the move" } as never);
@@ -1844,7 +1933,7 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   const device = Home.load(dataDir).device;
   const seeds = new DraftStore(() => [location]);
   const seed = (id: string, owner: string | undefined) => {
-    const draft = seeds.create(id, 1000, location, "local");
+    const draft = seeds.create(id, 1000, location, "local", "en");
     seeds.append(id, draft.instance, { type: "turn_started", turnId: 1, timestamp: 1001, ...(owner ? { device: owner } : {}), turn: { id: 1, prompt: "hi", timestamp: 1001 } } as never);
     seeds.write({ ...draft, compile: { at: 1002, by: "boss", outcome: "running", ...(owner ? { device: owner } : {}) } }, seeds.load(id).version);
   };
@@ -1854,10 +1943,10 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   // A player chosen by an earlier version, kept by id: for the session
   // written then, without an instance, and for a session of another id
   // made since under a fresh one.
-  seeds.create("earlier", 1000, location, "local");
+  seeds.create("earlier", 1000, location, "local", "en");
   const { instance: _fresh, ...unmarked } = JSON.parse(readFileSync(seeds.recordFile("earlier"), "utf8")) as Record<string, unknown>;
   writeFileSync(seeds.recordFile("earlier"), JSON.stringify(unmarked));
-  seeds.create("successor", 1000, location, "local");
+  seeds.create("successor", 1000, location, "local", "en");
   const prefsFile = join(dataDir, "local", "prefs.json");
   const kept = existsSync(prefsFile) ? JSON.parse(readFileSync(prefsFile, "utf8")) as { format: 1; prefs: Record<string, unknown> } : { format: 1 as const, prefs: {} };
   kept.prefs["authoring:earlier:player"] = "dev.reviewer";

@@ -889,9 +889,9 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const location = { key: "tester/proj-spex", authoringDir, workingFolder };
   const drafts = new DraftStore(() => [location]);
   // `authoring/` is made inside a clone that stands, never the clone.
-  assert.throws(() => drafts.create("triage", 1000, location, "local"), /ENOENT/);
+  assert.throws(() => drafts.create("triage", 1000, location, "local", "en"), /ENOENT/);
   mkdirSync(join(authoringDir, ".."), { recursive: true });
-  const draft = drafts.create("triage", 1000, location, "local");
+  const draft = drafts.create("triage", 1000, location, "local", "en");
   // The spec package under development stands in the working folder
   // with its manifest (environments-10, playbook-library-70).
   const packageDir = join(workingFolder, "spex-packages", "triage");
@@ -902,7 +902,8 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.equal(drafts.projectOf("triage"), "tester/proj-spex");
   // Creation mints the session's instance, a fresh UUID each time.
   assert.match(draft.instance, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", queued: [], failures: 0 });
+  // The session's language is recorded with it (storage-23).
+  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", language: "en", queued: [], failures: 0 });
   const full: StoredDraft = {
     ...draft, touchedAt: 2000, queued: [{text: "next"}, {text: "after"}], failures: 2,
     compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], relay: "stopped", roles: ["Coder"], sourceSha256: "ab".repeat(32) },
@@ -911,7 +912,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const read = drafts.load("triage");
   drafts.write(full, read.version);
   const bytes = JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(bytes), ["format", "id", "instance", "createdAt", "touchedAt", "package", "queued", "failures", "compile", "proposal"]);
+  assert.deepEqual(Object.keys(bytes), ["format", "id", "instance", "createdAt", "touchedAt", "package", "language", "queued", "failures", "compile", "proposal"]);
   assert.deepEqual(bytes, full);
   assert.deepEqual(drafts.read("triage"), full);
   assert.deepEqual(drafts.ids(), ["triage"]);
@@ -929,11 +930,16 @@ test("storage-23: authoring session encodings are written and read back exactly"
   writeFileSync(drafts.recordFile("triage"), legacy);
   const derived = drafts.read("triage").instance;
   assert.equal(derived, legacyInstance("triage", 1000));
+  // A file without `language` reads as `en`, and its next write adds none.
+  assert.equal(drafts.read("triage").language, undefined);
+  assert.equal(drafts.language("triage"), "en");
+  assert.equal(drafts.sourcePath("triage"), join(packageDir, "playbooks", "en", "triage", "triage.md"));
   assert.match(derived, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(new DraftStore(() => [{ key: "elsewhere/proj-spex", authoringDir: otherDir, workingFolder: null }]).read("triage").instance, derived);
   const old = drafts.load("triage");
   drafts.write({ ...old.draft, touchedAt: 1001 }, old.version);
   assert.equal(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")).instance, derived);
+  assert.equal(Object.hasOwn(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), "language"), false);
   drafts.write(full, drafts.load("triage").version);
   // A fresh store finds the session by its clone.
   assert.deepEqual(new DraftStore(() => [location]).ids(), ["triage"]);
@@ -956,7 +962,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   assert.equal(drafts.records("triage").incompleteAfterSeq, 2);
   // Every key is closed: a stray field, an unknown format or a wrong id is a scoped diagnostic.
   const base = '"id":"triage","createdAt":1,"touchedAt":1,"package":"spex-packages/triage","queued":[],"failures":0';
-  for (const damaged of [`{"format":2,${base}}`, `{"format":1,${base},"token":"x"}`, `{"format":1,${base.replace('"triage"', '"other"')}}`, `{"format":1,${base},"compile":{"at":1,"by":"boss","outcome":"failed","relay":"lost"}}`, `{"format":1,${base.replace('"spex-packages/triage"', '"../out"')}}`, `{"v":2,${base}}`, "{broken"]) {
+  for (const damaged of [`{"format":2,${base}}`, `{"format":1,${base},"token":"x"}`, `{"format":1,${base},"language":"../zh"}`, `{"format":1,${base},"language":7}`, `{"format":1,${base.replace('"triage"', '"other"')}}`, `{"format":1,${base},"compile":{"at":1,"by":"boss","outcome":"failed","relay":"lost"}}`, `{"format":1,${base.replace('"spex-packages/triage"', '"../out"')}}`, `{"v":2,${base}}`, "{broken"]) {
     writeFileSync(drafts.recordFile("triage"), damaged);
     assert.throws(() => drafts.read("triage"), StorageFormatError, damaged);
   }

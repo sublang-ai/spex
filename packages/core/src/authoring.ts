@@ -33,7 +33,7 @@ import { stripLeadingComments } from "./artifacts.js";
 import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
-import { AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
+import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { parseManifestText } from "./environment/format.js";
 import { i18n } from "./i18n.js";
 import type { ApplicationMedia, AssetPlace } from "./media.js";
@@ -116,6 +116,10 @@ export interface AuthorManagerOptions {
   /** The `org` a new spec package names: the account's login, else
    * `local` (playbook-library-70). */
   org: () => string;
+  /** The home's interface language as the core resolves it for its own
+   * prose (core-service-108): a new session's language where neither
+   * its package nor its project names one (playbook-library-70). */
+  homeLanguage: () => string;
   /** Whether a session's playbook is enabled (playbook-library-69). */
   enabled: (id: string) => boolean;
   /** List a working folder's engine links in its `info/exclude`. */
@@ -336,6 +340,29 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
 function firstLineOf(markdown: string): string | null {
   const line = markdown.split(/\r?\n/).find((entry) => entry.trim() !== "");
   return line === undefined ? null : line.trim();
+}
+
+/** Whether a language tag is English, whose source needs no word kept. */
+function isEnglish(tag: string): boolean {
+  return tag.split("-")[0]!.toLowerCase() === "en";
+}
+
+/** The words slc recognizes literally, which a source in another
+ * language keeps in English (playbook-library-65): its source check
+ * finds a relayed blockquote only by the English lead-in. */
+const KEEP_ENGLISH = [
+  "Keep in English, exactly as written, the words slc recognizes literally: the headings `Roles:` and `Results:`, the clauses `Captain shall prompt <Role>`, `Captain shall relay … to <Role>` and `Output shall include`, role names (capitalized ASCII identifiers), and result names such as `fixed` or `noFindings`.",
+  'Before every blockquote that relays a runtime value, write the lead-in "in quotes (`>`)" exactly so; a sentence in the playbook\'s language may surround it, e.g. "Captain 应以引用形式（in quotes (`>`)）附上请求：".',
+].join(" ");
+
+/** A language tag's English name, for the agent's prompt: `zh` reads
+ * "Chinese"; a tag Intl cannot name reads as itself. */
+function languageName(tag: string): string {
+  try {
+    const name = new Intl.DisplayNames(["en"], { type: "language" }).of(tag);
+    if (name && name !== tag) return name;
+  } catch { /* the tag itself below */ }
+  return tag;
 }
 
 
@@ -643,7 +670,7 @@ export class AuthorManager {
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
       firstLine: source ? firstLineOf(source.markdown) : null,
-      ...this.packageFields(id, draft.package, dir),
+      ...this.packageFields(id, draft.package, draft.language ?? DEFAULT_AUTHORING_LANGUAGE, dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled,
       activity,
@@ -663,8 +690,8 @@ export class AuthorManager {
 
   /** Where the session's spec package stands (playbook-library-52,
    * -56, -70): its name as its manifest gives it, its folder and its
-   * source relative to the working folder. */
-  private packageFields(id: string, packagePath: string, dir: string | null): Pick<DraftInfo, "package" | "packagePath" | "sourcePath"> {
+   * source, in the session's language, relative to the working folder. */
+  private packageFields(id: string, packagePath: string, language: string, dir: string | null): Pick<DraftInfo, "package" | "packagePath" | "sourcePath"> {
     let name: string | undefined;
     if (dir !== null) {
       try {
@@ -675,7 +702,7 @@ export class AuthorManager {
     return {
       ...(name ? { package: name } : {}),
       packagePath,
-      sourcePath: [packagePath, "playbooks", AUTHORING_LANGUAGE, id, `${id}.md`].join("/"),
+      sourcePath: [packagePath, "playbooks", language, id, `${id}.md`].join("/"),
     };
   }
 
@@ -705,7 +732,7 @@ export class AuthorManager {
       createdAt: at,
       touchedAt: at,
       firstLine: source ? firstLineOf(source.markdown) : null,
-      ...this.packageFields(id, this.drafts.packagePath(id), dir),
+      ...this.packageFields(id, this.drafts.packagePath(id), this.drafts.language(id), dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled: this.options.enabled(id),
       activity: this.activity(id),
@@ -899,7 +926,7 @@ export class AuthorManager {
     }
     let draft: StoredDraft;
     try {
-      draft = this.drafts.create(id, this.now(), location, this.options.org());
+      draft = this.drafts.create(id, this.now(), location, this.options.org(), this.options.homeLanguage());
     } catch (error) {
       if (error instanceof DraftChangedError) throw changedMeanwhile(id);
       throw new CoreError("invalid_request", error instanceof StorageFormatError ? error.reason : error instanceof Error ? error.message : String(error));
@@ -1057,7 +1084,7 @@ export class AuthorManager {
     }
     const packagePath = this.drafts.packagePath(id);
     const roles = draft.compile.roles;
-    const libraryDir = join(packageDir, "playbooks", AUTHORING_LANGUAGE);
+    const libraryDir = join(packageDir, "playbooks", draft.language ?? DEFAULT_AUTHORING_LANGUAGE);
     let result: CompileResult;
     try {
       // The repackaging is the one job writing the folder
@@ -1540,7 +1567,8 @@ export class AuthorManager {
   }
 
   private preamble(id: string, draft: StoredDraft, resolved: ResolvedAuthorAgent): string {
-    const sourcePath = this.drafts.sourcePath(id) ?? join(draft.package, "playbooks", AUTHORING_LANGUAGE, id, `${id}.md`);
+    const language = draft.language ?? DEFAULT_AUTHORING_LANGUAGE;
+    const sourcePath = this.drafts.sourcePath(id) ?? join(draft.package, "playbooks", language, id, `${id}.md`);
     const packageDir = this.drafts.draftDir(id) ?? draft.package;
     const documents = authoringDocuments();
     const width = Math.max(...documents.map((document) => document.path.length)) + 2;
@@ -1554,13 +1582,21 @@ export class AuthorManager {
     const roster = (composed?.players ?? []).map((player) => `${player.id} (${player.adapter}${player.model ? ` · ${player.model}` : ""})`);
     return [
       `You are helping the Boss write a Spex playbook: a markdown source the slc compiler turns into a state machine that coordinates agents. It is the playbook artifact of a spec package under development at ${packageDir}. Write and edit exactly one file — ${sourcePath} — with your file tools, and, where it helps, the \`description\` line of ${join(packageDir, "meta.yaml")}; nothing else. Never run slc, git, or npm; Spex compiles when asked.`,
+      // The session's language (playbook-library-70): the source's own
+      // text is the team's; the words slc recognizes literally stay its.
+      `Write the playbook in ${languageName(language)} (\`${language}\`), the language of its spec package: its title, its prose, and every prompt a player reads.`,
+      ...(isEnglish(language) ? [] : [KEEP_ENGLISH]),
       "",
       "What a source is (read the documents below before writing anything non-trivial):",
       "- An H1 title, then `Roles:` — a list of capitalized, unique role names (two or three is right).",
+      // slc reads one word after "Captain shall prompt" (playbook-library-65).
+      '- Each role name is one word: slc reads only the first word after "Captain shall prompt" and refuses a role name with a space, so write a two-word role as one CamelCase word, e.g. `RiskOfficer`, `ClientAdvocate`.',
       '- Behaviors as prose: "When <condition>, Captain shall prompt <Role>:" followed by the prompt as a blockquote, one point per line, or a fenced ```markdown instruction block introduced as the instruction.',
       '- Runtime values the role cannot otherwise see are relayed in quotes (`>`) as <placeholders>: "> Original request: <caller-input>".',
       "- `Results:` bullets only where a behavior has several outcomes, or a later prompt consumes its output; a relayed whole reply is declared as `<field>: <verbatim final text>`.",
       "- Each outcome has exactly one repository effect: one that may either commit or leave the repository unchanged is two outcomes (e.g. `drafted` commits, `noChanges` leaves it unchanged); slc's link refuses an outcome with both.",
+      // slc's link takes three effects per step (playbook-library-65).
+      "- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit.",
       '- A nested call: "Captain shall call playbook `id`:" with the input template blockquoted.',
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
@@ -1660,7 +1696,7 @@ export class AuthorManager {
         roles: [],
         command: id,
         intent: "(draft)",
-        libraryDir: join(packageDir, "playbooks", AUTHORING_LANGUAGE),
+        libraryDir: join(packageDir, "playbooks", this.drafts.language(id)),
         env: this.options.env,
         // Once admitted: the marker, the config as its files stand, and
         // the block that answers the draft as the compile's agent
