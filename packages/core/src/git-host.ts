@@ -736,12 +736,12 @@ export class GitHostClient {
 
   /**
    * `POST /api/v1/host/groups` (git-host-15): a private group named
-   * `name`, inside the group `parentId` or at the top where it is null.
-   * A taken name throws `name_taken`, the host's refusal `host_refused`
-   * with its words.
+   * `name` at the path `path`, inside the group `parentId` or at the top
+   * where it is null. A taken name throws `name_taken`, the host's
+   * refusal `host_refused` with its words.
    */
-  async createGroup(input: { name: string; parentId: string | null }): Promise<HostGroup> {
-    const body = record((await this.call("POST", "/api/v1/host/groups", { name: input.name, parent_id: input.parentId })).json);
+  async createGroup(input: { name: string; path: string; parentId: string | null }): Promise<HostGroup> {
+    const body = record((await this.call("POST", "/api/v1/host/groups", { name: input.name, path: input.path, parent_id: input.parentId })).json);
     return groupFrom(body.group);
   }
 

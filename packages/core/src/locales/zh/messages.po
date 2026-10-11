@@ -1031,6 +1031,11 @@ msgstr "未安装 GitHub CLI（gh）。请先安装，然后运行 `gh auth logi
 msgid "GitHub CLI is not authenticated. Run `gh auth login`."
 msgstr "GitHub CLI 尚未登录。请运行 `gh auth login`。"
 
+#. Refusal of a new group whose path at the Git host is blank
+#: src/space-groups.ts
+msgid "Give the group a path"
+msgstr "请为群组填写路径"
+
 #. The act that gives access to a remote of an unread form, inside a sentence
 #: src/space-git.ts
 msgid "give this machine access to it"

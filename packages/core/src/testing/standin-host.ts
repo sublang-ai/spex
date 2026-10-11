@@ -247,6 +247,9 @@ interface MembersPlace {
   remove(login: string): void;
 }
 
+/** A Git host group path a body may give (host-26). */
+const GROUP_PATH = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+
 /** A group's path derived from its name as spex.pub derives it (host-26):
  * lower-cased, each run outside letters, digits, `.`, `_` and `-` one
  * `-`, leading and trailing `-` and `.` dropped. */
@@ -1044,16 +1047,20 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   }
 
   /** `POST /api/v1/host/groups` (host-26): a private group at the top or
-   * inside a group the person's view lists, its path derived from its
-   * name; a path standing there is taken. */
+   * inside a group the person's view lists, at the path the body gives or,
+   * where none, the one derived from its name; a path standing there is
+   * taken. */
   async function createGroup(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const body = await readJson(req);
     if (!isRecord(body)) return envelope(res, 400, "bad_request", "The body must be a JSON object.");
-    const { name, parent_id: parentId } = body;
+    const { name, path, parent_id: parentId } = body;
     if (typeof name !== "string" || name.trim().length === 0 || name.length > 255) return envelope(res, 400, "bad_request", "A name of at most 255 characters is required.");
+    if (path !== undefined && (typeof path !== "string" || !GROUP_PATH.test(path) || path.length > 255)) {
+      return envelope(res, 400, "bad_request", "The path must be letters, digits, \"_\", \".\" and \"-\", not starting with \"-\" or \".\", at most 255 characters.");
+    }
     if (parentId !== null && typeof parentId !== "string") return envelope(res, 400, "bad_request", "The parent_id must be a string or null.");
-    const segment = groupPath(name.trim());
-    if (segment.length === 0) return envelope(res, 400, "bad_request", "The name gives the group no path.");
+    const segment = typeof path === "string" ? path : groupPath(name.trim());
+    if (segment.length === 0) return envelope(res, 400, "bad_request", "A path is required where the name gives the group none.");
     const parent = parentId === null ? null : script.groups.find((g) => g.kind === "group" && g.id === parentId);
     if (parent === undefined) return envelope(res, 404, "not_found", "The group is not known.");
     if (groupCreateRefusal !== null) return envelope(res, 403, "host_refused", groupCreateRefusal);

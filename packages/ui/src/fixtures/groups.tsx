@@ -325,10 +325,8 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
       return { flow: "browser", url: "https://gitlab.example/login/app?client_id=spex&state=s" };
     case "space.members":
       return { members: MEMBERS, membersUrl: MEMBERS_URL };
-    case "space.group.create": {
-      const name = fields.name as string;
-      return { group: { id: "90", fullPath: name, name } };
-    }
+    case "space.group.create":
+      return { group: { id: "90", fullPath: fields.path as string, name: fields.name as string } };
     case "space.share": {
       // The host lists the account it added at the role it was given.
       const role = ROLES.find((entry) => entry.id === fields.role)?.name ?? (fields.role as string);

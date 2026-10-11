@@ -219,7 +219,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
 });
 
 describe("GROUPS: New group and New subgroup (space-68)", () => {
-  test("New subgroup opens the editor in place: Create disabled until a name, Escape closing, Creating… until the reply, a refusal kept, a success closing", async () => {
+  test("New subgroup opens the editor in place: the path following the name until edited, Create disabled until both hold text, Escape closing, Creating… until the reply, a refusal kept, a success closing", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
       if (type !== "space.group.create") return core(type, fields);
@@ -233,10 +233,21 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     expect(control.getAttribute("aria-expanded")).toBe("true");
     const editor = screen.getByTestId("space-subgroup-acme");
     const field = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    const pathField = within(editor).getByLabelText("Path") as HTMLInputElement;
     expect(document.activeElement).toBe(field);
+    expect(pathField.value).toBe("");
     const create = within(editor).getByRole("button", { name: "Create" }) as HTMLButtonElement;
     expect(create.disabled).toBe(true);
     fireEvent.change(field, { target: { value: "   " } });
+    expect(pathField.value).toBe("");
+    expect(create.disabled).toBe(true);
+    // The path follows the name as the host derives it.
+    fireEvent.change(field, { target: { value: "Lumen Labs" } });
+    expect(pathField.value).toBe("lumen-labs");
+    expect(create.disabled).toBe(false);
+    // A name that derives no path leaves it empty, and Create disabled.
+    fireEvent.change(field, { target: { value: "华芯智造" } });
+    expect(pathField.value).toBe("");
     expect(create.disabled).toBe(true);
     fireEvent.keyDown(field, { key: "Enter" });
     // Escape closes it, sending nothing, focus back on the control.
@@ -248,7 +259,9 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     fireEvent.click(control);
     const again = screen.getByTestId("space-subgroup-acme");
     const name = within(again).getByLabelText("Group name") as HTMLInputElement;
+    const path = within(again).getByLabelText("Path") as HTMLInputElement;
     fireEvent.change(name, { target: { value: "Team 1" } });
+    expect(path.value).toBe("team-1");
     const createAgain = within(again).getByTestId("space-subgroup-acme-create") as HTMLButtonElement;
     expect(createAgain.disabled).toBe(false);
     fireEvent.click(createAgain);
@@ -256,20 +269,32 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     expect(createAgain.disabled).toBe(true);
     // A second submission while the command runs sends nothing.
     fireEvent.keyDown(name, { key: "Enter" });
-    expect(calls("space.group.create")).toEqual([{ name: "Team 1", parent: ACME }]);
+    expect(calls("space.group.create")).toEqual([{ name: "Team 1", path: "team-1", parent: ACME }]);
     // The host reports the name taken: in the editor, the name kept.
     replies[0]!.reject(new SpexCommandError("invalid_request", "Team 1 is taken in acme; name another"));
     await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Team 1 is taken in acme; name another"));
     expect(name.value).toBe("Team 1");
+    expect(path.value).toBe("team-1");
     expect(createAgain.textContent).toBe("Create");
     expect(document.activeElement).toBe(name);
     expect(live()).toBe("Team 1 is taken in acme; name another");
 
-    fireEvent.change(name, { target: { value: "Team 2" } });
-    fireEvent.keyDown(name, { key: "Enter" });
+    // A name in Chinese: the reader gives the path, which then no longer
+    // follows the name; an empty path disables Create.
+    fireEvent.change(name, { target: { value: "华芯智造" } });
+    expect(path.value).toBe("");
+    expect(createAgain.disabled).toBe(true);
+    fireEvent.change(path, { target: { value: "huaxin-mfg" } });
+    expect(createAgain.disabled).toBe(false);
+    fireEvent.change(name, { target: { value: "华芯智造 Lab" } });
+    expect(path.value).toBe("huaxin-mfg");
+    fireEvent.change(path, { target: { value: "  " } });
+    expect(createAgain.disabled).toBe(true);
+    fireEvent.change(path, { target: { value: "huaxin-lab" } });
+    fireEvent.keyDown(path, { key: "Enter" });
     await waitFor(() => expect(calls("space.group.create")).toHaveLength(2));
-    expect(calls("space.group.create")[1]).toEqual({ name: "Team 2", parent: ACME });
-    replies[1]!.resolve({ group: { id: "70", fullPath: "acme/team-2", name: "Team 2" } });
+    expect(calls("space.group.create")[1]).toEqual({ name: "华芯智造 Lab", path: "huaxin-lab", parent: ACME });
+    replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
     await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
     // The read the core begins lists it with its full path.
@@ -278,10 +303,10 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
       ...listed,
       groups: [
         ...listed.groups,
-        { id: "70", fullPath: "acme/team-2", name: "Team 2", url: null, own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", url: null, own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
       ],
     });
-    expect(within(region("acme/team-2")).getByRole("heading", { level: 2 }).textContent).toBe("Team 2acme/team-2");
+    expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 2 }).textContent).toBe("华芯智造 Labacme/huaxin-lab");
   });
 
   test("New group at the list's head creates at the top", async () => {
@@ -292,7 +317,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     const editor = screen.getByTestId("space-new-group-editor");
     fireEvent.change(within(editor).getByLabelText("Group name"), { target: { value: "Workshop" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(calls("space.group.create")).toEqual([{ name: "Workshop", parent: null }]));
+    await waitFor(() => expect(calls("space.group.create")).toEqual([{ name: "Workshop", path: "workshop", parent: null }]));
     await waitFor(() => expect(screen.queryByTestId("space-new-group-editor")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
     // Cancel closes it too.

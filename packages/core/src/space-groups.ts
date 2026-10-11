@@ -223,6 +223,11 @@ export function nameTheGroup(): string {
   return i18n._({ id: "Name the group", comment: "Refusal of a new group whose name is blank" });
 }
 
+/** Refusal: a new group needs a path (git-host-15). */
+export function pathTheGroup(): string {
+  return i18n._({ id: "Give the group a path", comment: "Refusal of a new group whose path at the Git host is blank" });
+}
+
 /** Refusal: a share or an unshare names no account (git-host-16,
  * git-host-17). */
 export function nameTheLogin(host: string): string {

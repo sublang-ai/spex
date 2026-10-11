@@ -1386,7 +1386,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   // Signed out: nothing is held of the host, and nothing is asked of it.
   const before = await home.client.expectOk("space.get", {});
   assert.deepEqual(before.roles, []);
-  await home.client.expectError("space.group.create", { name: "Lumen Labs", parent: null }, "invalid_request", /^Sign in first$/);
+  await home.client.expectError("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null }, "invalid_request", /^Sign in first$/);
   const from = home.client.mark();
   const signed = await signIn(home, host);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
@@ -1409,15 +1409,20 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   assert.deepEqual(repositoryOf(signed, "acme/b-spex").can, { manageMembers: false });
   assert.deepEqual((await home.client.repository(HOST_OWN)).can, { manageMembers: true });
 
-  // A group at the top and one in acme, each replied with its full path
-  // and listed by the read its creation begins (git-host-15).
+  // A group at the top and one in acme, each named as typed at the path
+  // given, replied with its full path and listed by the read its creation
+  // begins (git-host-15).
   const fromTop = home.client.mark();
-  const top = await home.client.expectOk("space.group.create", { name: "Lumen Labs", parent: null });
+  const top = await home.client.expectOk("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null });
   assert.deepEqual([top.group.fullPath, top.group.name], ["lumen-labs", "Lumen Labs"]);
   const listedTop = await home.client.waitSpace(fromTop, (state) => state.groups.some((group) => group.id === top.group.id));
   assert.deepEqual(listedTop.groups.find((group) => group.id === top.group.id)?.can, { createSubgroup: true, manageMembers: true });
+  const fromNamed = home.client.mark();
+  const named = await home.client.expectOk("space.group.create", { name: "华芯智造", path: "huaxin-mfg", parent: null });
+  assert.deepEqual([named.group.fullPath, named.group.name], ["huaxin-mfg", "华芯智造"]);
+  await home.client.waitSpace(fromNamed, (state) => state.groups.some((group) => group.id === named.group.id && group.fullPath === "huaxin-mfg"));
   const fromSub = home.client.mark();
-  const sub = await home.client.expectOk("space.group.create", { name: "Team One", parent: "2002" });
+  const sub = await home.client.expectOk("space.group.create", { name: "Team One", path: "team-one", parent: "2002" });
   assert.deepEqual([sub.group.fullPath, sub.group.name], ["acme/team-one", "Team One"]);
   await home.client.waitSpace(fromSub, (state) => state.groups.some((group) => group.id === sub.group.id && group.fullPath === "acme/team-one"));
   assert.ok(host.script.groups.some((group) => group.id === sub.group.id), "the stand-in holds it");
@@ -1425,24 +1430,25 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   // A taken name is refused saying so there, the stand-in's refusal in
   // its words; the host is asked whatever the view said, research's
   // refusal its own (git-host-15, git-host-11).
-  const taken = await home.client.expectError("space.group.create", { name: "Lumen Labs", parent: null }, "invalid_request");
+  const taken = await home.client.expectError("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null }, "invalid_request");
   assert.equal(taken, `Lumen Labs is taken at ${HOST_NAME}; choose another name`);
-  const takenSub = await home.client.expectError("space.group.create", { name: "team one", parent: "2002" }, "invalid_request");
+  const takenSub = await home.client.expectError("space.group.create", { name: "team one", path: "team-one", parent: "2002" }, "invalid_request");
   assert.equal(takenSub, "team one is taken in acme; choose another name");
   host.script.refuseGroupCreate("You need the Owner role in acme to create subgroups.");
-  const refused = await home.client.expectError("space.group.create", { name: "Other", parent: "2002" }, "invalid_request");
+  const refused = await home.client.expectError("space.group.create", { name: "Other", path: "other", parent: "2002" }, "invalid_request");
   assert.equal(refused, `${HOST_NAME} refused: You need the Owner role in acme to create subgroups.`);
   host.script.refuseGroupCreate(null);
   const asked = host.script.requests.length;
-  const notAllowed = await home.client.expectError("space.group.create", { name: "Lab", parent: "2003" }, "invalid_request");
+  const notAllowed = await home.client.expectError("space.group.create", { name: "Lab", path: "lab", parent: "2003" }, "invalid_request");
   assert.equal(notAllowed, `${HOST_NAME} refused: You are not allowed to create subgroups in acme/research.`);
   assert.deepEqual(apiRequests(host, asked), ["POST /api/v1/host/groups"]);
 
-  // A blank name and a parent the view does not list are refused before
-  // any request reaches the stand-in.
+  // A blank name, a blank path and a parent the view does not list are
+  // refused before any request reaches the stand-in.
   const quiet = host.script.requests.length;
-  await home.client.expectError("space.group.create", { name: "   ", parent: null }, "invalid_request", /^Name the group$/);
-  await home.client.expectError("space.group.create", { name: "Lab", parent: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
+  await home.client.expectError("space.group.create", { name: "   ", path: "lab", parent: null }, "invalid_request", /^Name the group$/);
+  await home.client.expectError("space.group.create", { name: "华芯智造", path: "   ", parent: null }, "invalid_request", /^Give the group a path$/);
+  await home.client.expectError("space.group.create", { name: "Lab", path: "lab", parent: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   assert.deepEqual(apiRequests(host, quiet), []);
 
   // What the person may do is the host's last read's.
@@ -1537,6 +1543,6 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   assert.equal(zhUnknown, `在 ${HOST_NAME} 上未找到：No account is named zed.`);
   const zhExisting = await home.client.expectError("space.share", { group: "2002", login: "alan", role: "developer" }, "invalid_request");
   assert.equal(zhExisting, `${HOST_NAME} 拒绝了：Member already exists`);
-  const zhTaken = await home.client.expectError("space.group.create", { name: "Acme", parent: null }, "invalid_request");
+  const zhTaken = await home.client.expectError("space.group.create", { name: "Acme", path: "acme", parent: null }, "invalid_request");
   assert.equal(zhTaken, `Acme 在 ${HOST_NAME} 上已被占用；请另选一个名称`);
 });
