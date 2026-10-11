@@ -99,6 +99,7 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
     lastSync: null,
     noticed: true,
     sync: { phase: "idle" },
+    can: { manageMembers: false },
     ...over,
   };
 }
@@ -116,7 +117,7 @@ export function home(
     home: "/home/me/.spex",
     git: { ok: true, version: "2.45.0" },
     host: { url: "https://gitlab.example", displayName: "GitLab" },
-    account: options.account === undefined ? { id: "7", login: "me", displayName: "Me" } : options.account,
+    account: options.account === undefined ? { id: "7", login: "me", displayName: "Me", canCreateGroup: false } : options.account,
     signIn: { phase: "idle" },
     readAt: NOW,
     groups: [
@@ -126,12 +127,14 @@ export function home(
         name: "me",
         url: null,
         own: true,
+        can: { createSubgroup: false, manageMembers: false },
         repositories: [
           repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) }),
           repository({ sync: sync(PROJECT_ID) }),
         ],
       },
     ],
+    roles: [],
     diagnostics: [],
     issues: 0,
   };

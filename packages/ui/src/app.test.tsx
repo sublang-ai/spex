@@ -869,12 +869,12 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
       key: "p1", name: "alpha-spex", id: null, own: false, code: null, folder: "/tmp/alpha",
       remote: null, state, reason: null, waiting: null, members: null, visibility: null,
       branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false,
-      sync: { phase: "idle" }, ...extra,
+      sync: { phase: "idle" }, can: { manageMembers: false }, ...extra,
     });
     const groups = (repository: object) => ({
       home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
-      account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0,
-      groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, repositories: [repository] }],
+      account: null, signIn: { phase: "idle" }, readAt: null, diagnostics: [], issues: 0, roles: [],
+      groups: [{ id: null, fullPath: "me", name: "me", url: null, own: true, can: { createSubgroup: false, manageMembers: false }, repositories: [repository] }],
     });
     commandMock.mockImplementation(async (type: string) =>
       type === "space.get"

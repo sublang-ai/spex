@@ -1191,7 +1191,30 @@ export const commandSchema = z.discriminatedUnion("type", [
     noticed: z.boolean().optional(),
   }).strict(),
   z.object({ type: z.literal("space.join"), id, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
-  z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema }).strict(),
+  // Members of a spex repository by key, or of a group by its host id;
+  // exactly one (space-29).
+  z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
+  // Groups and sharing (DR-114, space-29).
+  z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
+  z
+    .object({
+      type: z.literal("space.share"),
+      id,
+      group: z.string().min(1).optional(),
+      repository: repositoryKeySchema.optional(),
+      login: z.string().min(1),
+      role: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("space.unshare"),
+      id,
+      group: z.string().min(1).optional(),
+      repository: repositoryKeySchema.optional(),
+      login: z.string().min(1),
+    })
+    .strict(),
   /** The way a test or a reader gives a clone a remote until the Git
    * host sets it up (DR-103); null removes it. */
   z.object({ type: z.literal("space.remote.set"), id, repository: repositoryKeySchema, url: z.string().nullable() }).strict(),
@@ -1387,6 +1410,9 @@ export interface CommandResults {
   "space.pick": { accepted: true };
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[]; membersUrl: string };
+  "space.group.create": { group: { id: string; fullPath: string; name: string } };
+  "space.share": { members: HostMemberInfo[]; membersUrl: string };
+  "space.unshare": { members: HostMemberInfo[]; membersUrl: string };
   "space.remote.set": GroupsState;
   "space.fetch": { accepted: true };
   "space.sync": { accepted: true };
@@ -1804,6 +1830,9 @@ export interface RepositoryState {
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null;
   visibility: string | null;
+  /** What the host's last read said the person may do on it (space-30,
+   * DR-114): false until a read is held. */
+  can: { manageMembers: boolean };
   branch: {
     ahead: number | null;
     behind: number | null;
@@ -1822,13 +1851,25 @@ export interface RepositoryState {
 
 /** The home, its groups and their spex repositories (space-30). */
 /** A spex repository's member as the host reports them (space-62). */
-export interface HostMemberInfo { id: string; login: string; displayName: string | null; role: string; url: string | null }
+export interface HostMemberInfo {
+  id: string;
+  login: string;
+  displayName: string | null;
+  role: string;
+  url: string | null;
+  /** The repository's or group's own membership (space-30, DR-114). */
+  direct: boolean;
+  /** The full path of the group the membership comes through where it is
+   * not direct, else null. */
+  via: string | null;
+}
 
 export interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
   host: { url: string; displayName: string | null };
-  account: { id: string; login: string; displayName: string | null } | null;
+  /** `canCreateGroup`: as the host's last read said (DR-114); false until one is held. */
+  account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;
   signIn:
     /** `signedOut`: the host signed this device out (git-host-4), with
      * the login the account bore; held for the core's run, until the
@@ -1843,8 +1884,13 @@ export interface GroupsState {
     name: string;
     url: string | null;
     own: boolean;
+    /** What the host's last read said the person may do there (DR-114):
+     * both false until a read is held, and for your own group. */
+    can: { createSubgroup: boolean; manageMembers: boolean };
     repositories: RepositoryState[];
   }[];
+  /** The host's own roles in its order, empty until a read is held (DR-114). */
+  roles: { id: string; name: string; mayPush: boolean }[];
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.

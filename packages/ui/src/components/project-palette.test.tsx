@@ -263,15 +263,17 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   const row = (key: string, extra: object = {}) => ({
     key, name: key.split("/").pop(), id: null, own: false, code: null, folder: "/tmp/gamma",
     remote: null, state: "local-only", reason: null, waiting: null, members: null, visibility: null,
-    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" }, ...extra,
+    branch: null, local: [], incoming: [], conflicts: [], lastSync: null, noticed: false, sync: { phase: "idle" },
+    can: { manageMembers: false }, ...extra,
   });
+  const can = { createSubgroup: false, manageMembers: false };
   const groups = (account: boolean, repositories: object[]) => ({
     home: "/home/.spex", git: { ok: true, version: "2.50" }, host: { url: "https://host.test", displayName: "Host" },
-    account: account ? { id: "1", login: "ada", displayName: null } : null,
-    signIn: { phase: "idle" }, readAt: 1, diagnostics: [], issues: 0,
+    account: account ? { id: "1", login: "ada", displayName: null, canCreateGroup: false } : null,
+    signIn: { phase: "idle" }, readAt: 1, diagnostics: [], issues: 0, roles: [],
     groups: [
-      { id: "10", fullPath: "ada", name: "ada", url: null, own: true, repositories },
-      { id: "20", fullPath: "acme", name: "acme", url: null, own: false, repositories: [] },
+      { id: "10", fullPath: "ada", name: "ada", url: null, own: true, can, repositories },
+      { id: "20", fullPath: "acme", name: "acme", url: null, own: false, can, repositories: [] },
     ],
   }) as never;
 

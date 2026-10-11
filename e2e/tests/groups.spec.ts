@@ -8,8 +8,9 @@
 // under the push, Stop against a sleeping transport and the members
 // (space-41); the explorer with its privacy panel and Copy path
 // (space-42); fit at every width in both sidebar states (space-43);
-// axe in both themes (space-44); and a second device joining a project
-// a peer pushed (space-36). Every host is the in-process stand-in on
+// axe in both themes (space-44); a second device joining a project a
+// peer pushed (space-36); and the organizer creating groups and
+// sharing them (space-71). Every host is the in-process stand-in on
 // loopback, every peer plain Git on its bare repositories, and the
 // exploring journey's remote a bare path: hermetic, no network, no
 // credential of the machine's.
@@ -359,6 +360,138 @@ test.describe("a folder added while signed in", () => {
 });
 
 // ---------------------------------------------------------------------------
+// space-71: the organizer's groups and members
+// ---------------------------------------------------------------------------
+
+test.describe("organizing", () => {
+  test.use({ appOptions: { host: true, signedIn: true } });
+
+  test("space-71: a group at the head and a subgroup in acme, a member added, refused twice and removed", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(120_000);
+    const host = app.host!;
+    // The stand-in lets the person create groups at the top, and
+    // subgroups and members in `acme`, whose `can` it leaves unset
+    // (git-host-12): what the sign-in's read already said.
+    host.script.canCreateGroup = true;
+    const MEMBER = host.script.accounts.find((account) => account.login === "grace")!;
+    const UNKNOWN = "zed";
+    expect(host.script.accounts.some((account) => account.login === UNKNOWN)).toBe(false);
+    const standinGroup = (fullPath: string) => host.script.groups.find((group) => group.fullPath === fullPath);
+    const standinMembers = (fullPath: string) => (standinGroup(fullPath)?.members ?? []).map((m) => `${m.login}:${m.role}`);
+
+    await open(page, app);
+    await showGroups(page);
+    const list = page.getByTestId("space-groups");
+
+    // "New group" stands at the list's head; Create names the group and
+    // the read the core begins lists it with its full path (space-1,
+    // space-68).
+    const newGroup = list.getByTestId("space-new-group");
+    await expect(newGroup).toHaveText("New group");
+    await newGroup.click();
+    const top = list.getByTestId("space-new-group-editor");
+    await expect(top).toContainText("Group name");
+    await top.getByTestId("space-new-group-editor-name").fill("Platform");
+    await top.getByTestId("space-new-group-editor-create").click();
+    await expect(top).toBeHidden();
+    const platform = list.getByTestId("space-group-platform");
+    await expect(platform.getByRole("heading")).toContainText("Platform");
+    await expect(platform.getByRole("heading")).toContainText("platform");
+    expect(standinGroup("platform")?.name).toBe("Platform");
+
+    // "New subgroup" on `acme`'s heading creates inside it, the subgroup
+    // listed under its full path (space-1, space-68).
+    await list.getByTestId(`space-group-subgroup-${HOST_GROUP}`).click();
+    const sub = list.getByTestId(`space-subgroup-${HOST_GROUP}`);
+    await expect(sub).toContainText("Group name");
+    await sub.getByTestId(`space-subgroup-${HOST_GROUP}-name`).fill("Design Team");
+    await sub.getByTestId(`space-subgroup-${HOST_GROUP}-create`).click();
+    await expect(sub).toBeHidden();
+    const SUBGROUP = `${HOST_GROUP}/design-team`;
+    const design = list.getByTestId(`space-group-${SUBGROUP}`);
+    await expect(design.getByRole("heading")).toContainText("Design Team");
+    await expect(design.getByRole("heading")).toContainText(SUBGROUP);
+    expect(standinGroup(SUBGROUP)?.name).toBe("Design Team");
+
+    // Share on the subgroup stands in the members panel its heading's
+    // Members opens, listing the person who created it (space-69).
+    await design.getByTestId(`space-group-members-${SUBGROUP}`).click();
+    const PANEL = `group:${SUBGROUP}`;
+    const members = design.getByTestId(`space-members-${PANEL}`);
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
+    await expect(members.getByTestId(`space-member-${MEMBER.login}`)).toHaveCount(0);
+
+    // Share adds a login at Maintainer: the line says so, the panel
+    // lists the member the reply carries, and the stand-in holds them
+    // (space-69).
+    const hostName = new URL(host.url).hostname;
+    const share = members.getByTestId(`space-share-${PANEL}`);
+    await share.click();
+    const editor = members.getByTestId(`space-share-${PANEL}-editor`);
+    await expect(editor).toContainText(`Login at ${hostName}`);
+    const login = editor.getByTestId(`space-share-${PANEL}-login`);
+    await login.fill(MEMBER.login);
+    await editor.getByTestId(`space-share-${PANEL}-role`).selectOption({ label: "Maintainer" });
+    await editor.getByTestId(`space-share-${PANEL}-add`).click();
+    await expect(editor).toBeHidden();
+    await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveText(`@${MEMBER.login} added as Maintainer`);
+    const row = members.getByTestId(`space-member-${MEMBER.login}`);
+    await expect(row).toContainText(MEMBER.displayName!);
+    await expect(row).toContainText("Maintainer");
+    expect(standinMembers(SUBGROUP)).toContain(`${MEMBER.login}:Maintainer`);
+
+    // The same login again is refused in place with the stand-in's
+    // words, the login kept (space-69).
+    await share.click();
+    await expect(editor).toBeVisible();
+    await login.fill(MEMBER.login);
+    await editor.getByTestId(`space-share-${PANEL}-add`).click();
+    await expect(editor.getByRole("alert")).toContainText("Member already exists");
+    await expect(login).toHaveValue(MEMBER.login);
+    expect(standinMembers(SUBGROUP).filter((entry) => entry.startsWith(`${MEMBER.login}:`))).toHaveLength(1);
+
+    // A login the stand-in knows no account for is refused naming it,
+    // the login kept (space-69).
+    await login.fill(UNKNOWN);
+    await editor.getByTestId(`space-share-${PANEL}-add`).click();
+    await expect(editor.getByRole("alert")).toContainText(`No account is named ${UNKNOWN}`);
+    await expect(login).toHaveValue(UNKNOWN);
+    await editor.getByTestId(`space-share-${PANEL}-cancel`).click();
+    await expect(editor).toBeHidden();
+
+    // The new controls fit at the 320-pixel floor with the sidebar
+    // collapsed, the subgroup editor and Share open (space-28).
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await list.getByTestId(`space-group-subgroup-${HOST_GROUP}`).click();
+    await expect(sub).toBeVisible();
+    await share.click();
+    await expect(editor).toBeVisible();
+    const defects: string[] = [];
+    record("Groups organizing · 320", await measure(page, ['[data-testid^="space-group-"]']), defects);
+    expect(defects, defects.join("\n")).toEqual([]);
+    await editor.getByTestId(`space-share-${PANEL}-cancel`).click();
+    await sub.getByTestId(`space-subgroup-${HOST_GROUP}-cancel`).click();
+    await page.setViewportSize({ width: 1280, height: TALL });
+
+    // Remove asks with the inline confirm, Keep focused; Remove takes
+    // the member out, the panel listing the reply's members and the
+    // stand-in no longer holding them (space-72).
+    await row.getByTestId(`space-member-remove-${MEMBER.login}`).click();
+    const confirm = row.getByTestId(`space-member-confirm-${MEMBER.login}`);
+    await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveText(`@${MEMBER.login} removed`);
+    await expect(row).toHaveCount(0);
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
+    expect(standinMembers(SUBGROUP).some((entry) => entry.startsWith(`${MEMBER.login}:`))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // space-41: the daily sync with conflicts
 // ---------------------------------------------------------------------------
 
@@ -544,7 +677,7 @@ test.describe("daily sync", () => {
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
     const link = members.getByTestId(`space-members-link-${TEAM_KEY}`);
-    await expect(link).toHaveText(`Members change at ${new URL(host.url).hostname}`);
+    await expect(link).toHaveText(`Open at ${new URL(host.url).hostname}`);
     await expect(link).toHaveAttribute("href", `${host.url}/${TEAM_KEY}/-/project_members`);
     await scanVocabulary(page, "members", words);
 

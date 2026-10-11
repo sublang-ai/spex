@@ -126,6 +126,14 @@ export type PlaybookLists = CommandResults["environment.playbooks"] & {
 /** One spec package the registry's search found (playbook-library-92). */
 export type RegistryResult = CommandResults["environment.search"]["packages"][number];
 
+/** Whose members a Groups command names (space-62, DR-114): a group by
+ * its host id, or a spex repository by its key. */
+export type SpaceMembersTarget = { group: string } | { repository: string };
+
+/** The members of a group or a spex repository as the host lists them,
+ * with the host's members page (space-62). */
+export type SpaceMembersReply = { members: HostMemberInfo[]; membersUrl: string };
+
 export interface ComposerState {
   /** Submissions waiting for the turn to end (RUN-8). A staged
    * intent's id rides its entry, so the chip follows the pending
@@ -303,9 +311,20 @@ export interface AppState extends AttachmentState {
   /** Clone a spex repository the host lists and this device lacks
    * (space-63), pairing it with a folder. Accepted at once. */
   spaceJoin(hostId: string, folder?: string): Promise<void>;
-  /** A spex repository's members as the host reports them, read on
-   * every call and held nowhere (space-62). */
-  spaceMembers(repository: string): Promise<{ members: HostMemberInfo[]; membersUrl: string }>;
+  /** A group's or a spex repository's members as the host reports
+   * them, read on every call and held nowhere (space-62). */
+  spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
+  /** Create a group on the host at the path `path`, at the top or inside
+   * the group whose host id is `parent` (space-68); the read that lists
+   * it follows as state. */
+  spaceGroupCreate(name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Add the account of `login` to a group or a spex repository at one
+   * of the host's roles, by its id (space-69); the reply lists the
+   * members after the addition. */
+  spaceShare(target: SpaceMembersTarget, login: string, role: string): Promise<SpaceMembersReply>;
+  /** Remove a member the group or spex repository holds of its own
+   * (space-72); the reply lists the members afterwards. */
+  spaceUnshare(target: SpaceMembersTarget, login: string): Promise<SpaceMembersReply>;
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
@@ -1724,7 +1743,13 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
 
-    spaceMembers: (repository: string) => getClient().command("space.members", { repository }),
+    spaceMembers: (target) => getClient().command("space.members", { ...target }),
+
+    spaceGroupCreate: (name, path, parent) => getClient().command("space.group.create", { name, path, parent }),
+
+    spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
+
+    spaceUnshare: (target, login) => getClient().command("space.unshare", { ...target, login }),
 
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
       const space = await getClient().command("space.repair.decline", { repair, declined });

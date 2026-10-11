@@ -11,10 +11,14 @@
 // the group picker (space-58), the folder a Join clones into
 // (space-63), the members the host reports (space-62), the first-push
 // notice (space-57) and the joining of unrelated histories (space-13).
+// Signed in, "New group" heads the list where the host lets the person
+// create one, and a group of the host carries Members and, where the
+// host lets them, "New subgroup" on its heading (space-68, DR-114);
+// your own group's heading carries neither.
 // Every act is a command whose outcome arrives as state (space-29).
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import type { GroupsState, HostMemberInfo, RepositoryState } from "@sublang/spex-core/protocol";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
@@ -25,13 +29,13 @@ import {
   displayRemote,
   isGroupRepository,
   lastSegment,
-  openExternalBridge,
   pickDirectoryBridge,
   repositoryStatePhrase,
   sameRemote,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 type Group = GroupsState["groups"][number];
@@ -108,7 +112,8 @@ function rowControl(groups: GroupsState, group: Group, repo: RepositoryState): R
   }
 }
 
-/** The groups list (space-1): each group with its full path and,
+/** The groups list (space-1): "New group" at its head where the host
+ * lets the person create one, then each group with its full path and,
  * under it, one row per spex repository in the core's order. */
 export function GroupsList({
   groups,
@@ -134,54 +139,195 @@ export function GroupsList({
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
-      {groups.groups.map((group) => {
-        // Your own group is called so, never by a folder's or this
-        // device's user name; its path shows once the host names it
-        // (space-1).
-        const name = group.own ? i18n._("Your own group") : group.name;
-        const path = group.own && !groups.account ? null : group.fullPath;
-        return (
-          <div
-            key={group.fullPath}
-            role="group"
-            aria-label={group.own ? name : group.fullPath}
-            data-testid={`space-group-${group.fullPath}`}
-            className="flex min-w-0 flex-col gap-1"
-          >
-            <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-medium">
-              <span className="min-w-0 truncate" title={path ?? undefined}>
-                {name}
-              </span>
-              {path !== null && path !== name ? (
-                <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
-                  {group.fullPath}
-                </span>
-              ) : null}
-            </h2>
-            {group.repositories.length === 0 ? (
-              <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
-            ) : (
-              <ul className="flex min-w-0 flex-col gap-0.5">
-                {group.repositories.map((repo) => (
-                  <RepositoryRow
-                    key={repo.key}
-                    groups={groups}
-                    group={group}
-                    repo={repo}
-                    now={now}
-                    selected={repo.key === selected}
-                    connected={connected}
-                    refreshes={refreshes}
-                    onSelect={() => onSelect(repo.key)}
-                    onNote={onNote}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
+      {groups.account?.canCreateGroup ? <NewGroup connected={connected} onNote={onNote} /> : null}
+      {groups.groups.map((group) => (
+        <GroupSection
+          key={group.fullPath}
+          groups={groups}
+          group={group}
+          now={now}
+          selected={selected}
+          connected={connected}
+          refreshes={refreshes}
+          onSelect={onSelect}
+          onNote={onNote}
+        />
+      ))}
     </section>
+  );
+}
+
+/** "New group" at the list's head (space-1, space-68): a group at the
+ * top of the host, named in place. */
+function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
+  const [open, setOpen] = useState(false);
+  const controlRef = useRef<HTMLButtonElement>(null);
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <button
+        ref={controlRef}
+        type="button"
+        data-testid="space-new-group"
+        aria-expanded={open}
+        className={`${SECONDARY} self-start whitespace-nowrap`}
+        disabled={!connected}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {i18n._({ id: "New group", comment: "create a group on the Git host" })}
+      </button>
+      {open ? (
+        <GroupNameEditor
+          testId="space-new-group-editor"
+          parent={null}
+          connected={connected}
+          onClose={() => {
+            setOpen(false);
+            // Closing never strands focus (DR-010 §6).
+            setTimeout(() => controlRef.current?.focus(), 0);
+          }}
+          onNote={onNote}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** One group (space-1): its heading — with Members and, where the
+ * host lets the person, "New subgroup" on a group of the host, your
+ * own group's carrying neither (DR-114) — and its repositories' rows.
+ * What a heading's control opens stands beneath the heading. */
+function GroupSection({
+  groups,
+  group,
+  now,
+  selected,
+  connected,
+  refreshes,
+  onSelect,
+  onNote,
+}: {
+  groups: GroupsState;
+  group: Group;
+  now: number;
+  selected?: string;
+  connected: boolean;
+  refreshes: number;
+  onSelect(key: string): void;
+  onNote: Note;
+}) {
+  const [opened, setOpened] = useState<"members" | "subgroup">();
+  const membersRef = useRef<HTMLButtonElement>(null);
+  const subgroupRef = useRef<HTMLButtonElement>(null);
+  // Your own group is called so, never by a folder's or this device's
+  // user name; its path shows once the host names it (space-1).
+  const name = group.own ? i18n._("Your own group") : group.name;
+  const path = group.own && !groups.account ? null : group.fullPath;
+  // Your own group takes no subgroup and no member: what is there is
+  // shared on its spex repositories (DR-114).
+  const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
+  const close = (ref: { current: HTMLButtonElement | null }) => {
+    setOpened(undefined);
+    // Closing never strands focus (DR-010 §6).
+    setTimeout(() => ref.current?.focus(), 0);
+  };
+  const toggle = (which: "members" | "subgroup") => setOpened((was) => (was === which ? undefined : which));
+  const membersLabel = i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" });
+
+  return (
+    <div
+      role="group"
+      aria-label={group.own ? name : group.fullPath}
+      data-testid={`space-group-${group.fullPath}`}
+      className="@container flex min-w-0 flex-col gap-1"
+    >
+      <div className="flex min-w-0 items-center gap-1">
+        <h2 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
+          <span className="min-w-0 truncate" title={path ?? undefined}>
+            {name}
+          </span>
+          {path !== null && path !== name ? (
+            <span className="min-w-0 truncate text-xs font-normal text-neutral-500" title={group.fullPath}>
+              {group.fullPath}
+            </span>
+          ) : null}
+        </h2>
+        {hostGroup !== null ? (
+          <button
+            ref={membersRef}
+            type="button"
+            data-testid={`space-group-members-${group.fullPath}`}
+            aria-label={membersLabel}
+            title={membersLabel}
+            aria-expanded={opened === "members"}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            disabled={!connected}
+            onClick={() => toggle("members")}
+          >
+            {/* Below @md the control keeps its name and shows its mark
+                (DR-041). */}
+            <span className="hidden @md:inline">{membersLabel}</span>
+            <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
+          </button>
+        ) : null}
+        {hostGroup !== null && group.can.createSubgroup ? (
+          <button
+            ref={subgroupRef}
+            type="button"
+            data-testid={`space-group-subgroup-${group.fullPath}`}
+            aria-expanded={opened === "subgroup"}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            disabled={!connected}
+            onClick={() => toggle("subgroup")}
+          >
+            {i18n._({ id: "New subgroup", comment: "create a group inside this group on the Git host" })}
+          </button>
+        ) : null}
+      </div>
+      {opened === "subgroup" && hostGroup !== null ? (
+        <div className="ml-6 min-w-0">
+          <GroupNameEditor
+            testId={`space-subgroup-${group.fullPath}`}
+            parent={hostGroup}
+            connected={connected}
+            onClose={() => close(subgroupRef)}
+            onNote={onNote}
+          />
+        </div>
+      ) : null}
+      {opened === "members" && hostGroup !== null ? (
+        <MembersPanel
+          groups={groups}
+          target={{ group: hostGroup }}
+          id={`group:${group.fullPath}`}
+          name={group.fullPath}
+          canManage={group.can.manageMembers}
+          connected={connected}
+          refreshes={refreshes}
+          onClose={() => close(membersRef)}
+          onNote={onNote}
+        />
+      ) : null}
+      {group.repositories.length === 0 ? (
+        <p className="pl-2 text-xs text-neutral-500">{i18n._("No spex repositories here yet")}</p>
+      ) : (
+        <ul className="flex min-w-0 flex-col gap-0.5">
+          {group.repositories.map((repo) => (
+            <RepositoryRow
+              key={repo.key}
+              groups={groups}
+              group={group}
+              repo={repo}
+              now={now}
+              selected={repo.key === selected}
+              connected={connected}
+              refreshes={refreshes}
+              onSelect={() => onSelect(repo.key)}
+              onNote={onNote}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -637,7 +783,17 @@ function RepositoryRow({
         />
       ) : null}
       {opened === "members" ? (
-        <MembersList groups={groups} repo={repo} refreshes={refreshes} onClose={() => close("members")} />
+        <MembersPanel
+          groups={groups}
+          target={{ repository: repo.key }}
+          id={repo.key}
+          name={repo.name}
+          canManage={repo.can.manageMembers}
+          connected={connected}
+          refreshes={refreshes}
+          onClose={() => close("members")}
+          onNote={onNote}
+        />
       ) : null}
       {opened === "notice" ? (
         <div data-testid="space-notice-confirm" className="pl-6">
@@ -946,110 +1102,5 @@ export function GroupPicker({
         ) : null}
       </div>
     </div>
-  );
-}
-
-/** A spex repository's members as the host reports them (space-62):
- * read when the list opens and on each Refresh, held nowhere else, with
- * the host's members page where members are changed. */
-/** The host name of the host's page a phrase names (space-62), else
- * the host as the core names it. */
-function pageHost(url: string, fallback: string): string {
-  try {
-    return new URL(url).hostname || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function MembersList({
-  groups,
-  repo,
-  refreshes,
-  onClose,
-}: {
-  groups: GroupsState;
-  repo: RepositoryState;
-  refreshes: number;
-  onClose(): void;
-}) {
-  const spaceMembers = useAppStore((state) => state.spaceMembers);
-  const [result, setResult] = useState<{ members: HostMemberInfo[]; membersUrl: string }>();
-  const [error, setError] = useState<string>();
-  const host = groups.host.displayName ?? groups.host.url;
-
-  useEffect(() => {
-    let cancelled = false;
-    setResult(undefined);
-    setError(undefined);
-    spaceMembers(repo.key)
-      .then((read) => {
-        if (!cancelled) setResult(read);
-      })
-      .catch((cause: Error) => {
-        if (!cancelled) setError(cause.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [repo.key, refreshes, spaceMembers]);
-
-  const openPage = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
-    const open = openExternalBridge();
-    if (!open) return;
-    event.preventDefault();
-    void open(url).then((shown) => {
-      if (!shown) window.open(url, "_blank", "noreferrer");
-    });
-  };
-
-  return (
-    <section
-      data-testid={`space-members-${repo.key}`}
-      aria-label={i18n._("Members of {name}", { name: repo.name })}
-      className="ml-6 flex min-w-0 flex-col gap-1 rounded border border-neutral-200 p-2 text-sm dark:border-neutral-800"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      {error ? (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : !result ? (
-        <p className="text-xs text-neutral-500">{i18n._("Reading members…")}</p>
-      ) : (
-        <>
-          <ul className="flex min-w-0 flex-col gap-0.5">
-            {result.members.map((member) => (
-              <li key={member.id} data-testid={`space-member-${member.login}`} className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate font-medium" title={member.login}>
-                  {member.displayName ?? member.login}
-                </span>
-                {member.displayName ? (
-                  <span className="hidden min-w-0 truncate text-xs text-neutral-500 @md:inline">{member.login}</span>
-                ) : null}
-                <span className="ml-auto shrink-0 text-xs text-neutral-500">{member.role}</span>
-              </li>
-            ))}
-          </ul>
-          {/* Members change at the host, never here (space-62): one
-              phrase, the link to the host's own page. */}
-          <a
-            data-testid={`space-members-link-${repo.key}`}
-            href={result.membersUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => openPage(event, result.membersUrl)}
-            className="self-start text-xs text-brand-600 hover:underline dark:text-brand-300"
-          >
-            {i18n._("Members change at {host}", { host: pageHost(result.membersUrl, host) })}
-          </a>
-        </>
-      )}
-    </section>
   );
 }

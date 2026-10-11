@@ -12,6 +12,7 @@ import { vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type {
   GroupsState,
+  HostMemberInfo,
   RepositoryState,
   SpaceConflict,
   SpaceEntry,
@@ -177,6 +178,7 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     lastSync: null,
     noticed: true,
     sync: { phase: "idle" },
+    can: { manageMembers: false },
     ...over,
   };
 }
@@ -194,6 +196,20 @@ export const OWN_REPO: RepositoryState = repo({
   lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },
 });
 
+/** The host's own roles in its order, Developer upward may push
+ * (DR-114): what a host read brings. */
+export const ROLES: GroupsState["roles"] = [
+  { id: "10", name: "Guest", mayPush: false },
+  { id: "20", name: "Reporter", mayPush: false },
+  { id: "30", name: "Developer", mayPush: true },
+  { id: "40", name: "Maintainer", mayPush: true },
+  { id: "50", name: "Owner", mayPush: true },
+];
+
+/** What the host's last read says the person may do in a group: nothing
+ * unless a test says otherwise. */
+export const NO_CAN: GroupsState["groups"][number]["can"] = { createSubgroup: false, manageMembers: false };
+
 /** A signed-in home: your own group with its own spex repository
  * first, then the given ones. */
 export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] = [repo()]): GroupsState {
@@ -201,12 +217,13 @@ export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] =
     home: HOME,
     git: { ok: true, version: "2.45.0" },
     host: { url: "https://gitlab.example", displayName: "GitLab" },
-    account: { id: "7", login: "jane", displayName: "Jane" },
+    account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
     readAt: NOW - MIN,
     groups: [
-      { id: "1", fullPath: "jane", name: "jane", url: null, own: true, repositories: [OWN_REPO, ...repos] },
+      { id: "1", fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
     ],
+    roles: ROLES,
     diagnostics: [],
     // The core carries the count (space-1); the fixture derives it the
     // same way, so a test state can never claim an impossible pair.
@@ -268,6 +285,13 @@ export const READS: Record<string, SpaceReadResult> = {
   "sessions/s2.json": { kind: "withheld", reason: "可能包含提供方令牌——不予显示" },
 };
 
+/** The members the host lists: the repository's own two. */
+export const MEMBERS: HostMemberInfo[] = [
+  { id: "7", login: "jane", displayName: "Jane", role: "Owner", url: null, direct: true, via: null },
+  { id: "8", login: "bob", displayName: null, role: "Developer", url: null, direct: true, via: null },
+];
+export const MEMBERS_URL = "https://gitlab.example/jane/academy-spex/-/project_members";
+
 /** What `space.get` answers: the tests set it, and a handler may move
  * it as the core would. */
 export const home: { current: GroupsState } = { current: base() };
@@ -300,13 +324,20 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.signin.start":
       return { flow: "browser", url: "https://gitlab.example/login/app?client_id=spex&state=s" };
     case "space.members":
+      return { members: MEMBERS, membersUrl: MEMBERS_URL };
+    case "space.group.create":
+      return { group: { id: "90", fullPath: fields.path as string, name: fields.name as string } };
+    case "space.share": {
+      // The host lists the account it added at the role it was given.
+      const role = ROLES.find((entry) => entry.id === fields.role)?.name ?? (fields.role as string);
+      const login = fields.login as string;
       return {
-        members: [
-          { id: "7", login: "jane", displayName: "Jane", role: "Owner", url: null },
-          { id: "8", login: "bob", displayName: null, role: "Developer", url: null },
-        ],
-        membersUrl: "https://gitlab.example/jane/academy-spex/-/project_members",
+        members: [...MEMBERS, { id: "9", login, displayName: null, role, url: null, direct: true, via: null }],
+        membersUrl: MEMBERS_URL,
       };
+    }
+    case "space.unshare":
+      return { members: MEMBERS.filter((member) => member.login !== fields.login), membersUrl: MEMBERS_URL };
     case "space.diff":
       return {
         patch: `--- a/${fields.path}\n+++ b/${fields.path}\n@@ -1 +1 @@\n-old: 1\n+new: 2\n`,
