@@ -545,6 +545,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Create says why a project's first commit failed in the app's own words:
+  that Git could not make the first commit, naming commit signing with no
+  key configured, a signing program that failed, or a missing Git name and
+  email, with Git's own output kept beneath and the guidance to finish the
+  commit in a terminal, then Add.
 - Playbook authoring turns no longer fail Cligent's validation of an absolute
   writable-path grant, including chat, compile-failure repair and registration
   proposals ([DR-112](specs/decisions/112-authoring-permissions-use-the-package-working-directory.md)).

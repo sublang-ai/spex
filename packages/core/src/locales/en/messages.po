@@ -981,11 +981,6 @@ msgstr "Finish or abort the merge in your terminal"
 msgid "folder {path} is paired twice"
 msgstr "folder {path} is paired twice"
 
-#. Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action
-#: src/forge.ts
-msgid "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
-msgstr "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
-
 #. A join's stop where git failed to clone the code and printed nothing
 #: src/space.ts
 msgid "Git could not clone the code"
@@ -1000,6 +995,26 @@ msgstr "Git could not commit"
 #: src/space.ts
 msgid "Git could not diff"
 msgstr "Git could not diff"
+
+#. Project creation refusal: Git signs commits and has no signing key; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+
+#. Project creation refusal: Git signs commits and its signing program failed; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: commit signing is on, but signing failed. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git could not make the first commit: commit signing is on, but signing failed. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+
+#. Project creation refusal: Git has no user name and email to commit with; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit: no Git name and email are configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git could not make the first commit: no Git name and email are configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+
+#. Project creation refusal at the initial commit for a cause the app does not recognize; Git's own output is shown beneath, and Add is the palette action
+#: src/forge.ts
+msgid "Git could not make the first commit. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
+msgstr "Git could not make the first commit. The generated files stay in the folder: finish the initial commit in your terminal, then use Add."
 
 #. Guidance where git exists but failed to run; {detail} is the failure's own text, relayed
 #: src/space-git.ts

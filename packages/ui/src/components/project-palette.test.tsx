@@ -15,6 +15,7 @@ import {
 afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
+import { SpexCommandError } from "../lib/client.js";
 import { useAppStore } from "../state/store.js";
 import {
   applyRecords,
@@ -214,6 +215,47 @@ describe("projects-26: the palette's path actions, live rows and plain words", (
       ),
     ];
     expect(words.filter((word) => /forge/i.test(word))).toEqual([]);
+  });
+});
+
+describe("projects-35: a Create refusal shows Git's words beneath the app's", () => {
+  const WORDS =
+    "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.";
+  const GIT =
+    "fatal: either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured";
+
+  async function refuse(error: Error) {
+    const onCreatePath = vi.fn(async (): Promise<never> => {
+      throw error;
+    });
+    const { onPick, onClose } = renderPalette({ onCreatePath });
+    fireEvent.change(screen.getByTestId("palette-path"), {
+      target: { value: "/tmp/new-repo" },
+    });
+    fireEvent.click(screen.getByTestId("palette-create"));
+    await vi.waitFor(() => expect(screen.getByTestId("palette-error")).toBeTruthy());
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    return screen.getByTestId("palette-error");
+  }
+
+  test("an output detail stands whole beneath the refusal's words", async () => {
+    // The refusal as the client raises it from the core's reply
+    // (projects-34): the words, and Git's output as its detail.
+    const box = await refuse(new SpexCommandError("invalid_request", WORDS, { output: GIT }));
+    const detail = screen.getByTestId("palette-error-detail");
+    expect(box.contains(detail)).toBe(true);
+    expect(box.firstChild?.textContent).toBe(WORDS);
+    expect(detail.textContent).toBe(GIT);
+    expect(
+      box.firstChild!.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  test("a refusal with no detail shows its words alone", async () => {
+    const box = await refuse(new SpexCommandError("invalid_request", "git init failed: denied"));
+    expect(box.textContent).toBe("git init failed: denied");
+    expect(screen.queryByTestId("palette-error-detail")).toBeNull();
   });
 });
 

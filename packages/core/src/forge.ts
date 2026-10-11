@@ -163,6 +163,49 @@ export function suppliedScaffold(
   return undefined;
 }
 
+/** The create flow's refusal at its initial commit (projects-34): the
+ * core's own words, and Git's output carried whole beside them, which
+ * the reply sends as its `output` detail. */
+export class InitialCommitRefusal extends Error {
+  constructor(
+    message: string,
+    readonly output: string,
+  ) {
+    super(message);
+    this.name = "InitialCommitRefusal";
+  }
+}
+
+/** What a refused initial commit reads as (projects-34): one whole
+ * sentence per case Git's output names, each carrying the way on, so
+ * no language is handed a frame around a fragment (DR-079). Git's
+ * words are matched as Git prints them; a case not recognized keeps
+ * the plain sentence, and Git's output says the rest. */
+function initialCommitRefusal(output: string): string {
+  if (/user\.signingkey[^\n]*needs to be configured/i.test(output)) {
+    return i18n._({
+      id: "Git could not make the first commit: commit signing is on, but no key is configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+      comment: "Project creation refusal: Git signs commits and has no signing key; Git's own output is shown beneath, and Add is the palette action",
+    });
+  }
+  if (/failed to sign/i.test(output)) {
+    return i18n._({
+      id: "Git could not make the first commit: commit signing is on, but signing failed. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+      comment: "Project creation refusal: Git signs commits and its signing program failed; Git's own output is shown beneath, and Add is the palette action",
+    });
+  }
+  if (/Please tell me who you are|Author identity unknown|Committer identity unknown|no email was given|empty ident name/i.test(output)) {
+    return i18n._({
+      id: "Git could not make the first commit: no Git name and email are configured. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+      comment: "Project creation refusal: Git has no user name and email to commit with; Git's own output is shown beneath, and Add is the palette action",
+    });
+  }
+  return i18n._({
+    id: "Git could not make the first commit. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
+    comment: "Project creation refusal at the initial commit for a cause the app does not recognize; Git's own output is shown beneath, and Add is the palette action",
+  });
+}
+
 export interface CreateProjectOptions {
   path: string;
   scaffold?: boolean;
@@ -205,15 +248,13 @@ export async function createProjectRepo(
     }
   };
   // The initial commit is the one step whose failure leaves a repository
-  // the person must finish by hand (projects-3): the refusal says so.
+  // the person must finish by hand (projects-3): the refusal says so, in
+  // the app's words, and keeps Git's beside them (projects-34).
   const initialCommit = async (args: string[]): Promise<void> => {
     const result = await run("git", ["commit", ...args], options.path);
     if (result.code !== 0) {
-      throw new Error(i18n._({
-        id: "git commit failed: {output}. The generated files stay in the folder: finish the initial commit in your terminal, then use Add.",
-        values: { output: result.stderr.trim() || result.stdout.trim() || String(result.code) },
-        comment: "Project creation refusal at the initial commit; Git's output is verbatim and Add is the palette action",
-      }));
+      const output = result.stderr.trim() || result.stdout.trim() || String(result.code);
+      throw new InitialCommitRefusal(initialCommitRefusal(output), output);
     }
   };
   const agentInstructionFiles = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];

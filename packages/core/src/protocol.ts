@@ -1967,7 +1967,9 @@ export type ReplyMessage =
       id: string;
       ok: false;
       /** `details` carries the facts a page acts on — never its words
-       * (core-service-111): a conflict's registered path, for one. */
+       * (core-service-111): a conflict's registered path, for one, or
+       * a refused initial commit's `output`, Git's own words relayed
+       * whole beneath the core's (projects-34). */
       error: { code: ErrorCode; message: string; details?: Record<string, unknown> };
     };
 
