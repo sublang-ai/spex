@@ -37,7 +37,10 @@ When the home's choice changes [[core-service-109](core-service.md#core-service-
 
 #### localization-4
 
-When the interface renders, every text it composes — labels, headings, captions, placeholders, titles, accessible names, notifications and dialogs — shall render from the catalog of the resolved language [[localization-2](#localization-2)], with placeholders, plurals and selections expressed in ICU MessageFormat [[1]], so a count takes the language's own plural forms and no text is assembled from fragments.
+When the interface renders, every text it composes — labels, headings, captions, placeholders, titles, accessible names, notifications and dialogs — and the intent of each playbook of the built-in spec package [[environments-11](environments.md#environments-11)] shall render from the catalog of the resolved language [[localization-2](#localization-2)], with placeholders, plurals and selections expressed in ICU MessageFormat [[1]], so a count takes the language's own plural forms and no text is assembled from fragments:
+
+- a built-in playbook's intent is the message whose English text is, byte for byte, the intent its registry entry carries, so wherever the interface shows a playbook's intent, one equal to a built-in's reads in the resolved language;
+- any other intent, a team's own playbook's among them, renders as its registry entry gives it.
 
 #### localization-5
 
@@ -70,7 +73,7 @@ Where a speaking package's catalogs stand beside its source, when the package's 
 
 #### localization-9
 
-Where the UI renders against fixture state with `zh` resolved, the test suite shall assert that the navigation rail, the Dashboard and the Settings surface read their Chinese labels [[localization-4](#localization-4)], that the document's language attribute reads `zh` [[localization-3](#localization-3)], that a count's phrase takes the Chinese plural form and a clock time formats for `zh` [[localization-5](#localization-5)], and that with no stored choice the browser languages `zh-CN`, `zh-Hans-SG` and `["fr", "zh-CN"]` resolve to `zh` while `zh-TW`, `fr` and `["en-GB", "zh-CN"]` resolve to `en` [[localization-2](#localization-2)].
+Where the UI renders against fixture state with `zh` resolved, the test suite shall assert that the navigation rail, the Dashboard and the Settings surface read their Chinese labels [[localization-4](#localization-4)], that the quick-start card, the slash menu and the Playbooks surface show each built-in playbook's intent — as the installed Playbook's registry entry carries it — in Chinese while a team's own playbook's intent reads as given [[localization-4](#localization-4)], that the document's language attribute reads `zh` [[localization-3](#localization-3)], that a count's phrase takes the Chinese plural form and a clock time formats for `zh` [[localization-5](#localization-5)], and that with no stored choice the browser languages `zh-CN`, `zh-Hans-SG` and `["fr", "zh-CN"]` resolve to `zh` while `zh-TW`, `fr` and `["en-GB", "zh-CN"]` resolve to `en` [[localization-2](#localization-2)].
 
 ### Browser Journeys
 

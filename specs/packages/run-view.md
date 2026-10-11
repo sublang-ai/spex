@@ -311,8 +311,8 @@ While the Captain home is shown, when the user submits composer text, the run vi
 
 The run view shall make configured playbooks discoverable at the composer:
 
-- when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent as the hint, and inserts the selected command into the composer without dispatching it;
-- the Captain home shows highlighted playbooks as a quick start card that the user can dismiss, with the dismissal persisting across launches.
+- when the user types `/` at the start of a composer, the run view shows the configured playbooks filtered by the typed prefix, each with its intent — a built-in's in the interface language [[localization-4](localization.md#localization-4)] — as the hint, and inserts the selected command into the composer without dispatching it;
+- the Captain home shows highlighted playbooks, each with its command and that intent, as a quick start card that the user can dismiss, with the dismissal persisting across launches.
 
 #### run-view-30
 
