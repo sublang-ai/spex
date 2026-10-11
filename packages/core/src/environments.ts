@@ -439,12 +439,21 @@ export class EnvironmentManager {
     return this.run(key, (step) => this.settleNow(key, mode, strict, step, progress));
   }
 
-  /** An operation overtaken by a change of the files it read: it writes
-   * nothing more and reports the change as its outcome, "changed
-   * meanwhile, retry"; a strict caller has it as its reply (DR-111). */
-  private overtaken(state: CloneState, stage: "resolve" | "install", error: VersionConflictError, strict: boolean): void {
-    state.error = failurePhrase(stage, error);
+  /** An operation overtaken by a change of the files it read writes
+   * nothing more, and its refusal is its own outcome alone: a strict
+   * caller has it as its reply, "changed meanwhile, retry", and the
+   * state, read from the files, records no failure (DR-111). */
+  private overtaken(error: VersionConflictError, strict: boolean): void {
     if (strict) throw conflictError(error);
+  }
+
+  /** The input file an operation read that no longer holds the bytes it
+   * read, if any: a failure met meanwhile is obsolete, never recorded
+   * over what a later operation left (environments-5, environments-7). */
+  private changedSince(requestsPath: string, requestsVersion: FileVersion, lockPath: string, lockVersion: FileVersion): VersionConflictError | null {
+    if (fileVersion(requestsPath) !== requestsVersion) return new VersionConflictError(requestsPath);
+    if (fileVersion(lockPath) !== lockVersion) return new VersionConflictError(lockPath);
+    return null;
   }
 
   private async settleNow(key: string, mode: SettleMode, strict: boolean, step: (busy: Busy) => void, progress?: SettleProgress): Promise<void> {
@@ -472,7 +481,7 @@ export class EnvironmentManager {
     // No requests and no lock: nothing to install, and no exports to keep;
     // a strict caller, which requested a package, finds them gone.
     if (read === null && locked === null) {
-      if (strict) this.overtaken(state, "resolve", new VersionConflictError(requestsPath), true);
+      if (strict) this.overtaken(new VersionConflictError(requestsPath), true);
       return;
     }
     let lock = locked?.lock ?? null;
@@ -485,11 +494,16 @@ export class EnvironmentManager {
       try {
         result = await resolve({ requests: read.requests, requestsText: read.text, registry, workingFolder, git: this.git, gitCredential: this.options.gitCredential });
       } catch (error) {
+        const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
+        if (changed) return this.overtaken(changed, strict);
         state.error = failurePhrase("resolve", error);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
       if (!result.ok) {
+        // A no-solution found for files changed since is no outcome.
+        const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
+        if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
         state.error = null;
         if (strict) throw new CoreError("invalid_request", this.conflictPhrase(result.conflicts));
@@ -501,17 +515,18 @@ export class EnvironmentManager {
         if (fileVersion(requestsPath) !== read.version) throw new VersionConflictError(requestsPath);
         lockVersion = sha256(await writeLock(lockPath, result.lock, lockVersion));
       } catch (error) {
-        if (error instanceof VersionConflictError) return this.overtaken(state, "resolve", error, strict);
+        if (error instanceof VersionConflictError) return this.overtaken(error, strict);
         state.error = failurePhrase("resolve", error);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
       if (progress) progress.lockWritten = true;
-      state.conflicts = null;
+      if (!this.changedSince(requestsPath, read.version, lockPath, lockVersion)) state.conflicts = null;
       lock = result.lock;
     }
     if (lock === null) return;
     step("installing");
+    let obsolete: VersionConflictError | null = null;
     try {
       const report = await install({
         cloneDir: dir,
@@ -531,6 +546,9 @@ export class EnvironmentManager {
       // stale phrases say resolving again is needed (environments-7),
       // and an awaiting caller is refused with them.
       if (report.stale) {
+        // A stale report on files changed since is no outcome either.
+        const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
+        if (changed) return this.overtaken(changed, strict);
         state.error = null;
         if (strict) {
           let current: string | null = null;
@@ -545,14 +563,22 @@ export class EnvironmentManager {
       if (fileVersion(lockPath) !== lockVersion) throw new VersionConflictError(lockPath);
       if (!this.installedWhole(dir, lock)) throw new VersionConflictError(join(dir, "packages"));
       await this.exportNow(dir, key, lock);
-      state.error = null;
+      // A success clears a failure only while its files still stand as
+      // it read and wrote them; its exports stand either way.
+      obsolete = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
+      if (!obsolete) state.error = null;
     } catch (error) {
-      if (error instanceof VersionConflictError) return this.overtaken(state, "install", error, strict);
+      // The stale lock's refusal above is the strict caller's reply alone.
+      if (error instanceof CoreError) throw error;
+      if (error instanceof VersionConflictError) return this.overtaken(error, strict);
+      const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
+      if (changed) return this.overtaken(changed, strict);
       state.error = failurePhrase("install", error);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
     this.options.changed?.(key);
+    if (obsolete) this.overtaken(obsolete, strict);
   }
 
   /** Every registry and Git source of a lock installed as it locks it. */

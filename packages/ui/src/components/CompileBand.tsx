@@ -140,7 +140,7 @@ export function CompileBand({
 }) {
   const compile = draft.compile;
   const fold = useMemo(() => foldCompileLog(lines, times), [lines, times]);
-  const running = draft.activity === "compiling" || compile?.outcome === "running";
+  const running = (draft.compiling ?? draft.activity === "compiling") || compile?.outcome === "running";
   const now = useClock(running);
   if (!compile && lines.length === 0) return null;
 

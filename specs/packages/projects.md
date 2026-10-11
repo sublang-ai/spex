@@ -248,7 +248,7 @@ Where a fixture repository is registered with a local-only spex repository holdi
 
 #### projects-33
 
-Where a project's session is held under a management lease taken out of band and a compile of that project runs, the test suite shall assert that its removal is refused `busy` deleting nothing, as it is under a live lease of a session that has no record yet; that a session whose lease appears while the removal's own leasing is held refuses it as changed meanwhile, the clone standing and the project's upload in flight resuming from its received offset to a finish; that a home file deleted while that leasing is held refuses it as changed meanwhile as well, the clone standing and the file not written back, an upload in flight resuming to a finish once the file is restored; and that once every lease is released the removal completes with the compile still running [[projects-10](#projects-10)].
+Where a project's session is held under a management lease taken out of band and a compile of that project runs, the test suite shall assert that its removal is refused `busy` deleting nothing, as it is under a live lease of a session that has no record yet; that a session whose lease appears while the removal's own leasing is held refuses it as changed meanwhile, the clone standing; that a clone moved away while that leasing is held refuses it as changed meanwhile, nothing made where the clone stood and the moved clone keeping its session [[projects-10](#projects-10)]; that a home file deleted while that leasing is held refuses it as changed meanwhile as well, the clone standing and the file not written back; and that once every lease is released the removal completes with the compile still running [[projects-10](#projects-10)].
 
 ### Label Coverage
 

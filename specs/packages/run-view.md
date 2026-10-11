@@ -811,7 +811,7 @@ While a session is the workspace's shown session with its transcript loaded [[ru
 - the condition holds however the reader arrived and whether or not this core can continue the conversation, so a session synced from another device or written by the CLI clears like any other;
 - a turn still in flight is never named, so a turn the reader has not seen end still summons [[dashboard-4](dashboard.md#dashboard-4)];
 - a session listed, streamed, prefetched, or restored into a tab the reader has not shown is never marked — being drawn in a list is not a gesture taken on a conversation ([DR-065](../decisions/065-repairs-the-reader-answers.md));
-- a refused write leaves the condition standing, so the next fold the core publishes asserts it again [[space-21](space.md#space-21)];
+- a refused write [[core-service-48](core-service.md#core-service-48)] [[core-service-86](core-service.md#core-service-86)] leaves the condition standing, so the next fold the core publishes asserts it again;
 - the marker clears the session's unread-turn entry alone and no intent entry, whose verdict is owed regardless of reading [[dashboard-4](dashboard.md#dashboard-4)].
 
 #### run-view-91

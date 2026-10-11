@@ -22,9 +22,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   renames, so a renamed Mac still reclaims its own dead lease; an owner
   from another machine is still never broken, and a legacy record left
   by an older writer is reclaimed only under the old same-host rule.
-  The app requires Playbook 17.6.0, the first release publishing that
-  identity. Every retirement — a dead owner's or a normal release — moves
-  the lease to `.lease.retired/<token>/` and keeps it, so a delayed
+  Playbook 17.6.0 is the first release publishing that identity.
+  Every retirement — a dead owner's or a normal release — moves the
+  lease to `.lease.retired/<token>/` and keeps it, so a delayed
   reclaimer can no longer delete a successor's lease; only `ESRCH`
   proves an owner dead; a mutating storage command reclaims a dead local
   owner instead of refusing every existing lease; and `Ctrl+C` in
@@ -233,6 +233,27 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- The core coordinates its writers as Git does ([DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md)).
+  A command is no longer refused merely because a sync, check, join,
+  move, removal, compile, install or enabling runs. A write whose file
+  changed since it was read is refused "changed meanwhile; retry", and
+  you retry it; a session's lease still refuses removing its project,
+  and now also a sign-in's or the host's rename of its clone. A
+  repeated Sync or Check joins the one running, and a Sync asked during
+  a Check follows it. A playbook can compile while its authoring
+  conversation's turn runs, but a second compile or packaging job for
+  the same artifact folder is refused while the first runs, a canceled
+  one until its compiler has exited; a failed or canceled compile's
+  partial outputs show as the last run left them, not compiled. A sync
+  whose Apply would replace an authoring session's transcript while its
+  turn runs here stops naming the session; Retry finishes it once the
+  turn ends. A damaged `home.yaml` reads as no projects, and writes that
+  need it are refused, until it is repaired; this device keeps its id
+  meanwhile. Protocol
+  version 24: every command on an existing authoring session names the
+  session's recorded instance (an unreadable session's Delete its file
+  version instead), as do its records, source, compile progress, media
+  and approval owners.
 - Every record lives in a spex repository ([DR-103](specs/decisions/103-the-home-and-its-groups.md)).
   Each project's sessions, intents and authoring sessions live in its own
   clone, `workspace/<group>/<name>-spex/`, synced on its `spex` branch; your
@@ -246,7 +267,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   asking again while it holds records the host has not received, and never
   touches the working folder. Groups syncs each spex repository on its own,
   and `scripts/storage-git.mjs` takes `--repository <key>`.
-- The app requires Playbook 17.6.0, slc 0.15.1 and Cligent 0.33.3 ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
+- The app requires Playbook 17.7.0, slc 0.15.1 and Cligent 0.33.3 ([DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md), [DR-108](specs/decisions/108-the-root-lease-names-the-machine.md), [DR-105](specs/decisions/105-playbook-17-5-0-adoption.md), [DR-088](specs/decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md),
   [DR-092](specs/decisions/092-playbook-17-1-slc-0-13-cligent-0-28-adoption.md),
   [DR-093](specs/decisions/093-a-players-subagent-model.md),
   [DR-094](specs/decisions/094-the-compiler-adopts-the-apps-cligent.md),
@@ -490,7 +511,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - A new Spex home's starter configuration, a new player lane and a new
   role assignment start on `claude-opus-5-5`, the latest Claude model,
   where they started on `claude-opus-5`.
-- Protocol version 21 (from 11), in full in `packages/core/src/protocol.ts`:
+- Protocol changes, in full in `packages/core/src/protocol.ts`:
   `session.restore` replaces `session.retry`; `session.agent.set`,
   `language.get`, `language.set` and `space.repair.decline` join, with
   the `language.state` message; `session.control` may name the action

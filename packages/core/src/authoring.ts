@@ -30,7 +30,7 @@ import type { PlayerAdapterImports, TmuxPlayApprovalHandler } from "@sublang/cli
 
 import { loadAgentAdapter } from "./agent-runtime.js";
 import { stripLeadingComments } from "./artifacts.js";
-import { compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives } from "./directives.js";
 import { AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
@@ -134,8 +134,8 @@ export interface AuthorManagerEvents {
   onSource: (message: DraftSourceMessage) => void;
   onProgress: (draftId: string, instance: string, line: string) => void;
   onRemoved: (draftId: string, projectId: string, instance?: string) => void;
-  /** A sync applied the session's spex repository: its files may hold
-   * another history now (core-service-96). */
+  /** The core rescanned the session's spex repository: its files may
+   * hold another history now (core-service-118). */
   onHistory: (draftId: string, instance: string) => void;
 }
 
@@ -152,8 +152,9 @@ type TurnOrigin =
 interface LiveDraft {
   /** Set before the runner starts, so a message arriving next queues. */
   turn?: { controller: AbortController; done?: Promise<void> };
-  /** Each compile of this instance in flight: ordinary processes, any
-   * number at once, each removed by its own end (core-service-96). */
+  /** Each compile of this instance in flight, an ordinary process
+   * removed by its own end; one per artifact folder runs at a time
+   * (core-service-96, playbook-library-99). */
   compiles: Set<AbortController>;
   /** The turn a settled compile owes the agent, waiting behind the
    * running turn and the Boss's queue (playbook-library-68). */
@@ -180,7 +181,18 @@ interface LiveDraft {
 type CompileSettled =
   | { outcome: "ok"; roles: string[] }
   | { outcome: "canceled" }
-  | { outcome: "failed"; phase: string; message: string };
+  | { outcome: "failed"; phase: string; message: string; code: CoreError["code"] };
+
+/** What one compile of a session learns as it runs: its marker's time,
+ * the source digest it started on, and the compiler's lines. */
+interface CompileJob {
+  /** Its running marker's `at`, once that marker is written. */
+  startedAt?: number;
+  input?: string;
+  lines: string[];
+  sawCompiler: boolean;
+  sawPackaging: boolean;
+}
 
 interface ResolvedAuthorAgent {
   playerId: string | null;
@@ -363,7 +375,6 @@ export class AuthorManager {
   /** Keyed by the session's instance: a session made again under its
    * id is another session and inherits nothing (playbook-library-70). */
   private readonly live = new Map<string, LiveDraft>();
-  private readonly problems = new Map<string, StorageDiagnostic>();
   private readonly now: () => number;
   private stopping = false;
 
@@ -388,8 +399,7 @@ export class AuthorManager {
       let draft: StoredDraft;
       try {
         draft = this.drafts.read(id);
-      } catch (error) {
-        this.problems.set(id, this.drafts.diagnostic(error, id));
+      } catch {
         continue;
       }
       this.closeDanglingTurn(id, draft.instance, device);
@@ -436,8 +446,28 @@ export class AuthorManager {
     await Promise.allSettled(pending);
   }
 
+  /** Each session's damage as its files hold it at this report: a
+   * session repaired or gone reports none (playbook-library-70). */
   diagnostics(): StorageDiagnostic[] {
-    return [...this.problems.values()];
+    const out: StorageDiagnostic[] = [];
+    for (const id of this.drafts.ids()) {
+      // The file being read when a read fails: the session's, then its
+      // transcript's, so a row names the file that would not read.
+      let file: string | undefined;
+      try {
+        file = this.drafts.recordFile(id);
+        this.drafts.read(id);
+        file = this.drafts.recordsFile(id);
+        const damaged = this.transcriptDamage(id);
+        if (damaged) out.push(damaged.diagnostic);
+      } catch (error) {
+        if (!this.drafts.exists(id)) continue;
+        out.push(error instanceof StorageFormatError || file === undefined
+          ? this.drafts.diagnostic(error, id)
+          : { file, reason: String(error), blocking: false });
+      }
+    }
+    return out;
   }
 
   // -- reads ----------------------------------------------------------------
@@ -447,9 +477,9 @@ export class AuthorManager {
     for (const id of this.drafts.ids()) {
       try {
         out.push(this.describe(id));
-      } catch (error) {
-        if (error instanceof CoreError) continue;
-        this.problems.set(id, this.drafts.diagnostic(error, id));
+      } catch {
+        // A session gone meanwhile, or one that will not describe, lists
+        // nothing; its damage is reported where diagnostics are read.
       }
     }
     return out;
@@ -464,7 +494,7 @@ export class AuthorManager {
     return this.drafts.instanceOf(id);
   }
 
-  /** Cancel every compile `instance` runs (core-service-96); false
+  /** Cancel the compile `instance` runs (core-service-96); false
    * when it runs none. */
   cancelCompiles(instance: string): boolean {
     const compiles = [...(this.live.get(instance)?.compiles ?? [])];
@@ -472,9 +502,9 @@ export class AuthorManager {
     return compiles.length > 0;
   }
 
-  /** A sync applied `repository`: each of its sessions is announced,
+  /** The core rescanned `repository`: each of its sessions is announced,
    * so a client showing one reads its files again, and its state is
-   * published as the files now say. */
+   * published as the files now say (core-service-118). */
   applied(repository: string): void {
     for (const id of this.drafts.ids()) {
       if (this.drafts.projectOf(id) !== repository) continue;
@@ -493,6 +523,29 @@ export class AuthorManager {
   activity(id: string, instance = this.drafts.instanceOf(id)): DraftInfo["activity"] {
     const live = instance === undefined ? undefined : this.live.get(instance);
     return live?.turn ? "turn" : live && live.compiles.size > 0 ? "compiling" : "idle";
+  }
+
+  /** Whether a compile of `instance` runs, a turn beside it or not: the
+   * activity names the turn first, so this reports the compile
+   * (core-service-96). */
+  private compiling(instance: string): boolean {
+    return (this.live.get(instance)?.compiles.size ?? 0) > 0;
+  }
+
+  /** A sync's apply asks before it replaces a session's files: refused
+   * while a turn this core runs owns the instance the session file
+   * records, the turn's appends being its own (space-19, DR-111). A
+   * turn the transcript records unfinished is history, and a
+   * session of another clone is not this one. */
+  assertTurnWritable(id: string, repository: string): void {
+    if (this.drafts.projectOf(id) !== repository) return;
+    const instance = this.drafts.instanceOf(id);
+    if (instance === undefined || !this.live.get(instance)?.turn) return;
+    throw new CoreError("busy", i18n._({
+      id: "authoring session {id} has a turn running",
+      values: { id },
+      comment: "Refusal of a sync's write: this core's turn is appending to the authoring session's transcript",
+    }));
   }
 
   describe(id: string): DraftInfo {
@@ -523,12 +576,9 @@ export class AuthorManager {
   private read(id: string): StoredDraft {
     if (!this.drafts.exists(id)) throw new CoreError("not_found", noDraft(id));
     try {
-      const draft = this.drafts.read(id);
-      this.problems.delete(id);
-      return draft;
+      return this.drafts.read(id);
     } catch (error) {
       const diagnostic = this.drafts.diagnostic(error, id);
-      this.problems.set(id, diagnostic);
       throw new CoreError("invalid_request", `${diagnostic.file}: ${diagnostic.reason}`);
     }
   }
@@ -567,15 +617,16 @@ export class AuthorManager {
     const id = draft.id;
     const live = this.liveOf(draft.instance);
     // The transcript's state is part of the draft's, read as it stands.
-    const damaged = this.transcriptDamage(id);
+    const damaged = this.transcriptDamage(id)?.message;
     const dir = this.drafts.draftDir(id);
     const dirExists = dir !== null && existsSync(dir);
     const source = dirExists ? this.drafts.readSource(id) : undefined;
     const activity = this.activity(id, draft.instance);
+    const compiling = this.compiling(draft.instance);
     const resolved = this.resolveAgent(draft);
     const compile = draft.compile;
     let state: DraftState;
-    if (activity === "compiling") state = "compiling";
+    if (compiling) state = "compiling";
     else if (!source) state = "no-source";
     else if (compile?.outcome === "failed") state = "failed";
     else if (compile?.outcome === "interrupted") state = "interrupted";
@@ -596,6 +647,7 @@ export class AuthorManager {
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled,
       activity,
+      compiling,
       state,
       queued: [...draft.queued],
       player: resolved.playerId,
@@ -657,6 +709,8 @@ export class AuthorManager {
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled: this.options.enabled(id),
       activity: this.activity(id),
+      // A file that will not read names no instance whose compile runs.
+      compiling: false,
       state: source ? "draft" : "no-source",
       queued: [],
       player: resolved.playerId,
@@ -677,31 +731,33 @@ export class AuthorManager {
   }
 
   /** The transcript's damage as its file holds it now: the diagnostic
-   * that blocks this session alone, gone once the file reads again
-   * (playbook-library-70). */
-  private transcriptDamage(id: string): string | undefined {
+   * that blocks this session alone and the draft's own words for it,
+   * gone once the file reads again (playbook-library-70). */
+  private transcriptDamage(id: string): { diagnostic: StorageDiagnostic; message: string } | undefined {
     const tail = this.drafts.transcript(id);
     if (tail.incompleteAfterSeq === undefined) return undefined;
     const file = this.drafts.recordsFile(id);
-    this.problems.set(id, {
-      file,
-      reason: i18n._({
-        id: "damaged transcript after record {seq}; the draft refuses everything but Delete",
-        values: { seq: tail.incompleteAfterSeq },
-        comment: "Storage diagnostic; Delete is the control's own name on the draft's row",
+    return {
+      diagnostic: {
+        file,
+        reason: i18n._({
+          id: "damaged transcript after record {seq}; the draft refuses everything but Delete",
+          values: { seq: tail.incompleteAfterSeq },
+          comment: "Storage diagnostic; Delete is the control's own name on the draft's row",
+        }),
+        blocking: false,
+      },
+      message: i18n._({
+        id: "{file}: damaged transcript after record {seq}",
+        values: { file, seq: tail.incompleteAfterSeq },
+        comment: "Draft diagnostic: the transcript file, then the last record that still read",
       }),
-      blocking: false,
-    });
-    return i18n._({
-      id: "{file}: damaged transcript after record {seq}",
-      values: { file, seq: tail.incompleteAfterSeq },
-      comment: "Draft diagnostic: the transcript file, then the last record that still read",
-    });
+    };
   }
 
   /** A damaged transcript blocks the draft (playbook-library-70). */
   private assertReadable(id: string): void {
-    const damaged = this.transcriptDamage(id);
+    const damaged = this.transcriptDamage(id)?.message;
     if (damaged) {
       throw new CoreError(
         "invalid_request",
@@ -955,7 +1011,7 @@ export class AuthorManager {
         i18n._({ id: "compile canceled", comment: "Refusal: the compile the Boss awaited was canceled" }),
       );
     }
-    throw new CoreError("invalid_request", settled.message);
+    throw new CoreError(settled.code, settled.message);
   }
 
   /**
@@ -965,11 +1021,12 @@ export class AuthorManager {
    * `compile.run`, which requests the spec package and writes the
    * config — and keep the session, now enabled, so the playbook can be
    * worked on further and published (playbook-library-61); a refused
-   * commit leaves the session standing with its artifacts. It waits on
-   * no turn or compile and claims nothing: the packaging reads the
-   * compiled outputs as they stand when it reads them, and once started
-   * the enabling finishes or fails on its own, whatever becomes of the
-   * session (DR-111) — its writes are the environment's and the config's.
+   * commit leaves the session standing with its artifacts. Its
+   * repackaging is the one job writing the artifact folder, refused
+   * while a compile writes it (playbook-library-99); the commit after it
+   * holds nothing, and once started the enabling finishes or fails on
+   * its own, whatever becomes of the session (DR-111) — its writes are
+   * the environment's and the config's.
    */
   async register(
     id: string,
@@ -999,20 +1056,25 @@ export class AuthorManager {
       }));
     }
     const packagePath = this.drafts.packagePath(id);
+    const roles = draft.compile.roles;
+    const libraryDir = join(packageDir, "playbooks", AUTHORING_LANGUAGE);
     let result: CompileResult;
     try {
+      // The repackaging is the one job writing the folder
+      // (playbook-library-99).
       result = await compilePlaybook({
         playbookId: id,
         source: {},
-        roles: draft.compile.roles,
+        roles,
         command,
         intent,
-        libraryDir: join(packageDir, "playbooks", AUTHORING_LANGUAGE),
+        libraryDir,
         env: this.options.env,
         skipSlc: true,
         ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
       });
     } catch (error) {
+      if (error instanceof ArtifactFolderBusy) throw new CoreError("busy", error.message);
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
     }
     return await commit(result, { packageDir, packagePath, workingFolder });
@@ -1097,7 +1159,6 @@ export class AuthorManager {
       // Cancel and shutdown still reach it.
       if (this.activity(id, instance) === "idle") this.live.delete(instance);
     }
-    this.problems.delete(id);
     this.events.onRemoved(id, projectId, instance);
   }
 
@@ -1561,16 +1622,19 @@ export class AuthorManager {
   // -- compiles -------------------------------------------------------------
 
   /**
-   * Start the draft's compile as the id's one compile (playbook-library-67,
-   * core-service-96). The activity flips before anything awaits, so a
-   * message arriving next queues.
+   * Start the draft's compile as the one job writing its artifact folder
+   * (playbook-library-67, playbook-library-99): refused at once where
+   * another job of this core writes it, before its marker is written.
+   * The activity flips before anything awaits, so a message arriving
+   * next queues.
    */
   beginCompile(id: string, instance: string, by: "boss" | "agent"): { ok: true; done: Promise<CompileSettled> } | { ok: false; code: CoreError["code"]; message: string } {
     const live = this.liveOf(instance);
-    const damaged = this.transcriptDamage(id);
+    const damaged = this.transcriptDamage(id)?.message;
     if (damaged) return { ok: false, code: "invalid_request", message: damaged };
     const sourcePath = this.drafts.sourcePath(id);
-    if (sourcePath === null || !existsSync(sourcePath)) {
+    const packageDir = this.drafts.draftDir(id);
+    if (sourcePath === null || packageDir === null || !existsSync(sourcePath)) {
       return {
         ok: false,
         code: "invalid_request",
@@ -1581,59 +1645,13 @@ export class AuthorManager {
       };
     }
     // A handle to cancel it by, and nothing that holds anything else
-    // back: a turn, a source write or another compile go on beside it.
+    // back: a turn or a source write goes on beside it.
     const controller = new AbortController();
+    const job: CompileJob = { lines: [], sawCompiler: false, sawPackaging: false };
     live.compiles.add(controller);
-    return { ok: true, done: this.runCompile(id, instance, live, by, controller) };
-  }
-
-  private async runCompile(id: string, instance: string, live: LiveDraft, by: "boss" | "agent", controller: AbortController): Promise<CompileSettled> {
-    let startedAt = this.now();
-    const lines: string[] = [];
-    let sawCompiler = false;
-    let sawPackaging = false;
-    let settled: CompileSettled;
-    // The digest of the source the compiler starts on: an edit made
-    // while it runs reads "Changed" after (playbook-library-67).
-    let input: string | undefined;
+    let compiled: Promise<CompileResult>;
     try {
-      // The device marks the compile as this one's to close should the
-      // core stop under it (storage-23).
-      // Its `at` is its marker: later than any before it, so a compile
-      // settling after a newer one started settles nothing.
-      const started = this.change(id, instance, (draft) => {
-        startedAt = Math.max(startedAt, (draft.compile?.at ?? 0) + 1);
-        draft.compile = { at: startedAt, by, outcome: "running", device: this.options.device() };
-      });
-      // The compiler's agent is the config's as its files stand (DR-111);
-      // a refusal settles the compile its marker started.
-      await this.options.prepareConfig?.();
-      this.status(
-        id,
-        instance,
-        by === "boss"
-          ? i18n._({
-              id: "◇ Compiling — asked by you",
-              comment: "Draft thread status line: the Boss started this compile; the ◇ stays",
-            })
-          : i18n._({
-              id: "◇ Compiling — asked by the agent",
-              comment: "Draft thread status line: the draft's agent started this compile; the ◇ stays",
-            }),
-      );
-      this.publish(id);
-      const packageDir = this.drafts.draftDir(id);
-      if (packageDir === null) throw new Error(i18n._({
-        id: "the spec package of {id} is missing from the working folder",
-        values: { id },
-        comment: "Refusal: the authoring session's spec package folder is not on this device",
-      }));
-      // The engine links the compile provisions stay out of the working
-      // folder's Git (playbook-library-12).
-      const workingFolder = this.drafts.workingFolder(id);
-      if (workingFolder !== null) this.options.excludeEngineLinks?.(workingFolder);
-      input = this.drafts.readSource(id)?.sha256;
-      const result = await compilePlaybook({
+      compiled = compilePlaybook({
         playbookId: id,
         // The `<id>.md` already in the playbook artifact's folder of the
         // spec package under development: nothing is copied
@@ -1644,20 +1662,83 @@ export class AuthorManager {
         intent: "(draft)",
         libraryDir: join(packageDir, "playbooks", AUTHORING_LANGUAGE),
         env: this.options.env,
-        // The compile runs on the block that answers the draft
+        // Once admitted: the marker, the config as its files stand, and
+        // the block that answers the draft as the compile's agent
         // (playbook-library-42).
-        agent: compilerAgentOf(this.resolveAgent(started).agent),
+        start: () => this.startCompile(id, instance, by, job, packageDir, controller.signal),
         ...(this.options.compileRuntime ? { runtime: this.options.compileRuntime } : {}),
         signal: controller.signal,
         ...(this.options.compileSpawner ? { spawner: this.options.compileSpawner } : {}),
         onProgress: (line) => {
           if (controller.signal.aborted) return;
-          if (line.startsWith("running:")) sawCompiler = true;
-          if (line.startsWith("packaging:")) sawPackaging = true;
-          lines.push(line);
+          if (line.startsWith("running:")) job.sawCompiler = true;
+          if (line.startsWith("packaging:")) job.sawPackaging = true;
+          job.lines.push(line);
           this.events.onProgress(id, instance, line);
         },
       });
+    } catch (error) {
+      live.compiles.delete(controller);
+      if (error instanceof ArtifactFolderBusy) return { ok: false, code: "busy", message: error.message };
+      throw error;
+    }
+    return { ok: true, done: this.runCompile(id, instance, live, controller, compiled, job) };
+  }
+
+  /** The admitted compile's start, before the compiler writes anything:
+   * the session's running marker, the config read as its files stand
+   * (DR-111), the thread's line, and the agent the compile runs on;
+   * `packageDir` is the folder the job was admitted for, `signal` its
+   * cancel handle. */
+  private async startCompile(id: string, instance: string, by: "boss" | "agent", job: CompileJob, packageDir: string, signal: AbortSignal): Promise<CompilerAgent> {
+    // A rebind since its admission pairs another folder: refused before
+    // its marker replaces another's (DR-111).
+    if (this.drafts.draftDir(id) !== packageDir) throw changedMeanwhile(id);
+    // The device marks the compile as this one's to close should the
+    // core stop under it (storage-23).
+    // Its `at` is its marker: later than any before it, so a compile
+    // settling after another device's marker came records nothing; the
+    // job holds it only once it is written.
+    const started = this.change(id, instance, (draft) => {
+      draft.compile = { at: Math.max(this.now(), (draft.compile?.at ?? 0) + 1), by, outcome: "running", device: this.options.device() };
+    });
+    job.startedAt = started.compile?.at;
+    // A refusal settles the compile its marker started.
+    await this.options.prepareConfig?.();
+    // Canceled meanwhile, the compile goes no further (playbook-library-67).
+    signal.throwIfAborted();
+    // A rebind meanwhile pairs another folder: the compile writes neither
+    // (DR-111).
+    if (this.drafts.draftDir(id) !== packageDir) throw changedMeanwhile(id);
+    this.status(
+      id,
+      instance,
+      by === "boss"
+        ? i18n._({
+            id: "◇ Compiling — asked by you",
+            comment: "Draft thread status line: the Boss started this compile; the ◇ stays",
+          })
+        : i18n._({
+            id: "◇ Compiling — asked by the agent",
+            comment: "Draft thread status line: the draft's agent started this compile; the ◇ stays",
+          }),
+    );
+    this.publish(id);
+    // The engine links the compile provisions stay out of the working
+    // folder's Git (playbook-library-12).
+    const workingFolder = this.drafts.workingFolder(id);
+    if (workingFolder !== null) this.options.excludeEngineLinks?.(workingFolder);
+    // The digest of the source the compiler starts on: an edit made
+    // while it runs reads "Changed" after (playbook-library-67).
+    job.input = this.drafts.readSource(id)?.sha256;
+    return compilerAgentOf(this.resolveAgent(started).agent);
+  }
+
+  private async runCompile(id: string, instance: string, live: LiveDraft, controller: AbortController, compiled: Promise<CompileResult>, job: CompileJob): Promise<CompileSettled> {
+    const { lines } = job;
+    let settled: CompileSettled;
+    try {
+      const result = await compiled;
       settled = { outcome: "ok", roles: result.roles };
     } catch (error) {
       if (controller.signal.aborted) settled = { outcome: "canceled" };
@@ -1671,10 +1752,13 @@ export class AuthorManager {
         const failed = failedPhaseOf(lines);
         const phase =
           clarification?.phase ?? failed?.phase ??
-          (sawPackaging ? "packaging" : sawCompiler ? (openPhaseOf(lines) ?? "slc") : "toolchain");
+          (job.sawPackaging ? "packaging" : job.sawCompiler ? (openPhaseOf(lines) ?? "slc") : "toolchain");
         settled = {
           outcome: "failed",
           phase,
+          // A start the core refused keeps its own code; a compiler's
+          // failure is the request's (core-service-96).
+          code: error instanceof CoreError ? error.code : "invalid_request",
           // The Boss reads this one as the refusal his Compile earns;
           // the compiler's own phase id and words are relayed.
           message: phase === "toolchain"
@@ -1690,7 +1774,7 @@ export class AuthorManager {
       live.compiles.delete(controller);
     }
     if (this.stopping) return settled;
-    this.settleCompile(id, instance, live, settled, lines, startedAt, input);
+    this.settleCompile(id, instance, live, settled, lines, job.startedAt, job.input);
     return settled;
   }
 
@@ -1698,7 +1782,7 @@ export class AuthorManager {
    * on the session file as it stands, only while it still records the
    * instance that started the compile and this compile's marker — one
    * settling after a newer compile started records nothing. */
-  private settleCompile(id: string, instance: string, live: LiveDraft, settled: CompileSettled, lines: string[], startedAt: number, input: string | undefined): void {
+  private settleCompile(id: string, instance: string, live: LiveDraft, settled: CompileSettled, lines: string[], startedAt: number | undefined, input: string | undefined): void {
     let preface: string | undefined;
     let relay = false;
     let queued = false;
@@ -1709,7 +1793,8 @@ export class AuthorManager {
         const base = draft.compile;
         // Its own marker only: the `at` it wrote, still running on this
         // device — a sync may have brought a peer's running marker.
-        if (base?.at !== startedAt || base.outcome !== "running" || base.device !== this.options.device()) throw new Superseded();
+        // A compile that wrote no marker records nothing.
+        if (startedAt === undefined || base?.at !== startedAt || base.outcome !== "running" || base.device !== this.options.device()) throw new Superseded();
         queued = draft.queued.length > 0;
         if (settled.outcome === "ok") {
           draft.compile = { at: base.at, by: base.by, outcome: "ok", roles: settled.roles, ...(input ? { sourceSha256: input } : {}) };

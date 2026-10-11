@@ -646,23 +646,28 @@ test("environments-21 through a real core: the registry presents the access secr
 
 /** A registry fetch that holds the first call a matcher picks while
  * armed, until the test lets it go. */
-function heldFetch(): { fetch: typeof fetch; arm(match: (path: string) => boolean): void; reached(): boolean; release(): void } {
+function heldFetch(): { fetch: typeof fetch; arm(match: (path: string) => boolean, fail?: boolean): void; reached(): boolean; release(): void } {
   let matcher: ((path: string) => boolean) | undefined;
   let gate: Promise<void> | undefined;
   let open: (() => void) | undefined;
   let hit = false;
+  // Where armed to fail, the held request is answered 503 once released.
+  let failing = false;
   return {
     fetch: async (input, init) => {
       const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
       if (matcher?.(url.pathname) && gate) {
         const wait = gate;
+        const fail = failing;
         matcher = undefined;
+        failing = false;
         hit = true;
         await wait;
+        if (fail) return new Response("unavailable", { status: 503 });
       }
       return fetch(input, init);
     },
-    arm(match) { matcher = match; hit = false; gate = new Promise((resolve) => { open = resolve; }); },
+    arm(match, fail = false) { matcher = match; failing = fail; hit = false; gate = new Promise((resolve) => { open = resolve; }); },
     reached: () => hit,
     release() { open?.(); gate = undefined; },
   };
@@ -685,7 +690,7 @@ const managerOf = (core: Core): EnvironmentManager => (core.service as unknown a
 
 const refusedWith = (code: string) => (error: unknown): boolean => error instanceof CoreError && error.code === code;
 
-test("environments-25: a request is admitted while another's resolution is held, an overtaken resolution writes no lock and says so, a clone's files decide its next settle, and a stopped core starts no work", { timeout: 180_000 }, async (t) => {
+test("environments-25: a request is admitted while another's resolution is held, an overtaken or obsolete resolution writes no lock and records no failure while its awaiting caller is refused, a resolve asked of a clone reads its files, and a stopped core starts no work", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-side-registry-") });
   t.after(() => registry.close());
   for (const name of ["slow", "lint"]) {
@@ -722,17 +727,18 @@ test("environments-25: a request is admitted while another's resolution is held,
     const lock = readFileSync(lockPath, "utf8");
 
     // Let the first go: overtaken by the second's write, it writes no
-    // lock, and its outcome says what changed.
+    // lock and records no failure over the second's success.
     mark = client.mark();
     held.release();
     const idle = await client.environment(key, mark, (state) => state.busy === null);
     assert.equal(readFileSync(lockPath, "utf8"), lock, "the overtaken resolution wrote nothing");
-    assert.match(idle.error ?? "", /^Resolving stopped: .*spex\.yaml changed meanwhile; retry$/);
+    assert.equal(idle.error, null, "an overtaken resolution records no failure");
     assert.equal(idle.stale, null);
     assert.ok(["acme/slow", "acme/lint"].every((name) => idle.packages.some((pkg) => pkg.name === name && pkg.installed)));
 
     // spex.lock rewritten by hand during a held resolution, spex.yaml as
-    // it was: the lock's own check refuses the write, reported (environments-5).
+    // it was: the lock's own check refuses the write, and no failure is
+    // recorded (environments-5).
     held.arm((path) => path === "/api/v1/packages/acme/slow");
     await client.expectOk("environment.resolve", { repository: key });
     await until(held.reached, 30_000, "the held resolution");
@@ -742,16 +748,67 @@ test("environments-25: a request is admitted while another's resolution is held,
     held.release();
     const refused = await client.environment(key, mark, (state) => state.busy === null);
     assert.equal(readFileSync(lockPath, "utf8"), edited, "the hand-edited lock stands");
-    assert.match(refused.error ?? "", /^Resolving stopped: .*spex\.lock changed meanwhile; retry$/);
+    assert.equal(refused.error, null);
+    // The enabling path's awaited resolution, overtaken the same way, is
+    // refused as its reply alone.
+    held.arm((path) => path === "/api/v1/packages/acme/slow");
+    const strict = managerOf(core).installNow(key, true, { lockWritten: false, installed: false });
+    strict.catch(() => {});
+    await until(held.reached, 30_000, "the held strict resolution");
+    const rewritten = `${lock}# edited by hand again\n`;
+    writeFileSync(lockPath, rewritten);
+    held.release();
+    await assert.rejects(strict, (error: unknown) => refusedWith("conflict")(error) && /spex\.lock changed meanwhile; retry$/.test((error as Error).message));
+    assert.equal(readFileSync(lockPath, "utf8"), rewritten);
+    assert.equal((await client.expectOk("environment.get", { repository: key })).error, null);
 
-    // A clone whose lock and installed files go is settled again at the
-    // next change of the repositories, its files deciding (environments-5).
+    // A resolution failing at the registry once spex.yaml changed under
+    // it, after a later resolution succeeded, records nothing over it.
+    held.arm((path) => path === "/api/v1/packages/acme/slow", true);
+    await client.expectOk("environment.resolve", { repository: key });
+    await until(held.reached, 30_000, "the held failing resolution");
+    const requestsPath = join(clone, "spex.yaml");
+    writeFileSync(requestsPath, `${readFileSync(requestsPath, "utf8")}# edited meanwhile\n`);
+    mark = client.mark();
+    await client.expectOk("environment.resolve", { repository: key });
+    await client.environment(key, mark, (state) => state.stale === null && state.error === null && state.busy === "resolving");
+    mark = client.mark();
+    held.release();
+    const outlived = await client.environment(key, mark, (state) => state.busy === null);
+    assert.equal(outlived.error, null, "the obsolete failure is recorded nowhere");
+    assert.equal(outlived.stale, null);
+    assert.ok(["acme/slow", "acme/lint"].every((name) => outlived.packages.some((pkg) => pkg.name === name && pkg.installed)));
+
+    // A resolution finding no solution once released, after a later
+    // request's resolution failed on the files as they stand, leaves
+    // that later failure standing (environments-5).
+    held.arm((path) => path === "/api/v1/packages/acme/slow");
+    await client.expectOk("environment.request", { repository: key, name: "acme/slow", request: { kind: "registry", version: "^2.0.0" } });
+    await until(held.reached, 30_000, "the held unsolvable resolution");
+    mark = client.mark();
+    await client.expectOk("environment.request", { repository: key, name: "acme/local", request: { kind: "path", path: "missing-kit" } });
+    const failed = await client.environment(key, mark, (state) => /missing-kit is missing/.test(state.error ?? "") && state.busy === "resolving");
+    mark = client.mark();
+    held.release();
+    const kept = await client.environment(key, mark, (state) => state.busy === null);
+    assert.equal(kept.error, failed.error, "the obsolete no-solution clears no later failure");
+    assert.equal(kept.conflicts, null);
+    // Back to requests that resolve.
+    await client.expectOk("environment.remove", { repository: key, name: "acme/local" });
+    mark = client.mark();
+    await client.expectOk("environment.request", { repository: key, name: "acme/slow", request: { kind: "registry", version: "^1.0.0" } });
+    await client.environment(key, mark, (state) => state.busy === null && state.error === null && state.conflicts === null
+      && ["acme/slow", "acme/lint"].every((name) => state.packages.some((pkg) => pkg.name === name && pkg.installed)));
+
+    // A clone whose lock and installed files go, asked to resolve,
+    // resolves from its files as they stand and installs (environments-5).
     rmSync(lockPath);
     rmSync(join(clone, "packages"), { recursive: true, force: true });
     mark = client.mark();
-    await client.expectOk("project.register", { path: gitFolder(join(dir, "other")) });
+    await client.expectOk("environment.resolve", { repository: key });
     const resettled = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed));
     assert.ok(existsSync(lockPath), "the lock is resolved again");
+    assert.ok(["acme/slow", "acme/lint"].every((name) => resettled.packages.some((pkg) => pkg.name === name && pkg.installed)));
     assert.equal(resettled.error, null);
 
     // Once the core stops, strict environment work is refused before any write.
@@ -767,7 +824,7 @@ test("environments-25: a request is admitted while another's resolution is held,
   }
 });
 
-test("environments-21 through a real core: an install whose lock or requests changed during its held download publishes nothing and says so, a removed clone is not made again, and installed means installed as locked", { timeout: 180_000 }, async (t) => {
+test("environments-21 through a real core: an install whose lock or requests changed during its held download publishes nothing and records no failure, one whose files change after its swap leaves the exports standing, a removed clone is not made again, and installed means installed as locked", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-held-registry-") });
   t.after(() => registry.close());
   const kit = (version: string, files: Record<string, string>): Promise<void> => makeRelease(join(scratchDir("spex-env-held-release-"), "kit"), {
@@ -777,7 +834,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
   const skillMd = (body: string): string => `---\nname: tidy\ndescription: The tidy skill\n---\n\n${body}\n`;
   // Each later release holds a subset of the first's file names.
   await kit("1.0.0", { "skills/en/tidy/SKILL.md": skillMd("one"), "skills/en/tidy/notes.txt": "notes\n" });
-  for (const [version, body] of [["1.1.0", "two"], ["1.2.0", "three"], ["1.3.0", "four"]] as const) await kit(version, { "skills/en/tidy/SKILL.md": skillMd(body) });
+  for (const [version, body] of [["1.1.0", "two"], ["1.2.0", "three"], ["1.3.0", "four"], ["1.4.0", "five"], ["1.5.0", "six"]] as const) await kit(version, { "skills/en/tidy/SKILL.md": skillMd(body) });
   const held = heldFetch();
   const dir = scratchDir("spex-env-held-");
   const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
@@ -812,7 +869,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.deepEqual(readFileSync(join(clone, "spex.lock")), lock, "the replaced lock stands");
     assert.equal(installedVersion(), "1.0.0", "the outdated install published nothing");
     assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed, state.stale], ["1.0.0", true, null]);
-    assert.match(state.error ?? "", /^Installing stopped; the last files stay: .*spex\.lock changed meanwhile; retry$/);
+    assert.equal(state.error, null, "the overtaken install records no failure");
 
     // spex.yaml gone while its lock stands installed: the enabling path's
     // awaited install is refused, resolving again needed, never a success.
@@ -823,6 +880,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
         refusedWith("invalid_request")(error) && /resolve again to install/.test((error as Error).message));
       assert.deepEqual(progress, { lockWritten: false, installed: false });
       assert.deepEqual(readFileSync(join(clone, "spex.lock")), lock);
+      assert.equal((await client.expectOk("environment.get", { repository: key })).error, null, "the awaited refusal is its reply alone");
     } finally {
       writeFileSync(join(clone, "spex.yaml"), requests);
     }
@@ -842,7 +900,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.equal(existsSync(join(clone, "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md")), true);
     assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed], ["1.2.0", false]);
     assert.deepEqual(state.stale, ["Requests changed; resolve again to install"]);
-    assert.match(state.error ?? "", /spex\.yaml changed meanwhile; retry$/);
+    assert.equal(state.error, null, "the overtaken install records no failure; the state reads stale");
     // Installing the stale lock installs and exports nothing, and reports
     // the stale reasons alone, no change meanwhile invented (environments-7).
     const exported = join(dir, "project", ".claude", "skills", "tidy", "SKILL.md");
@@ -855,11 +913,107 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.equal(installedVersion(), "1.0.0");
     assert.equal(statSync(exported).ino, exportedBefore, "no export of the stale lock");
 
+    // The exports' own check (environments-7): an install the enabling
+    // path awaits whose lock is rewritten, or whose install record is
+    // removed, after its swap and before its exports — the progress
+    // setter runs at that instant — is refused as changed meanwhile, the
+    // exports standing as they were; the swapped-in files stay.
+    const exports = [exported, join(clone, "skills", "tidy", "SKILL.md")];
+    const exportsNow = (): [Buffer, number][] => exports.map((file) => [readFileSync(file), statSync(file).ino]);
+    const exportsBefore = exportsNow();
+    const afterSwap = (change: () => void): { lockWritten: boolean; installed: boolean } => {
+      let installed = false;
+      return {
+        lockWritten: false,
+        get installed() { return installed; },
+        set installed(value: boolean) { installed = value; if (value) change(); },
+      };
+    };
+    const manager = managerOf(core);
+    await manager.ensureRequested(key, "acme/kit", { version: "1.1.0" });
+    const lockRewritten = afterSwap(() => writeFileSync(join(clone, "spex.lock"), lock));
+    await assert.rejects(manager.installNow(key, true, lockRewritten), (error: unknown) =>
+      refusedWith("conflict")(error) && /spex\.lock changed meanwhile; retry$/.test((error as Error).message));
+    assert.deepEqual([lockRewritten.lockWritten, lockRewritten.installed], [true, true]);
+    assert.deepEqual(exportsNow(), exportsBefore, "the exports stand, byte for byte on the same inodes");
+    assert.equal(installedVersion(), "1.1.0", "the swapped-in files stay");
+    await manager.ensureRequested(key, "acme/kit", { version: "1.2.0" });
+    const recordRemoved = afterSwap(() => rmSync(join(clone, "packages", ".spex-install.json")));
+    await assert.rejects(manager.installNow(key, true, recordRemoved), (error: unknown) =>
+      refusedWith("conflict")(error) && /packages changed meanwhile; retry$/.test((error as Error).message));
+    assert.deepEqual([recordRemoved.lockWritten, recordRemoved.installed], [true, true]);
+    assert.deepEqual(exportsNow(), exportsBefore, "the exports stand, byte for byte on the same inodes");
+    assert.equal(installedVersion(), "1.2.0", "the swapped-in files stay");
+    assert.equal((await client.expectOk("environment.get", { repository: key })).error, null, "a refusal awaited is recorded nowhere");
+
+    // A download failing once released, after spex.yaml changed under it
+    // and a later install succeeded, is an obsolete failure recorded
+    // nowhere: the later installed state stands (environments-7).
+    held.arm(download("1.4.0"), true);
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.4.0" } });
+    await until(held.reached, 30_000, "the held failing download of 1.4.0");
+    mark = client.mark();
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.2.0" } });
+    await client.environment(key, mark, (current) => current.busy === "installing" && current.stale === null && current.error === null
+      && kitOf(current)?.version === "1.2.0" && kitOf(current)?.installed === true);
+    mark = client.mark();
+    held.release();
+    state = await client.environment(key, mark, (current) => current.busy === null);
+    assert.equal(state.error, null, "the obsolete download failure is recorded nowhere");
+    assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed, state.stale], ["1.2.0", true, null]);
+    assert.equal(installedVersion(), "1.2.0");
+
+    // A failure recorded by a held download failing once released, the
+    // files unchanged meanwhile (environments-7).
+    held.arm(download("1.5.0"), true);
+    await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.5.0" } });
+    await until(held.reached, 30_000, "the held failing download of 1.5.0");
+    mark = client.mark();
+    held.release();
+    const failure = (await client.environment(key, mark, (current) => current.busy === null)).error;
+    assert.match(failure ?? "", /acme\/kit/, "the failed download is recorded");
+    // An awaited install succeeding while spex.yaml changes after its
+    // swap is refused as changed meanwhile, the earlier failure standing;
+    // its installed files and exports stand.
+    const requestsPath = join(clone, "spex.yaml");
+    const requestsChanged = afterSwap(() => writeFileSync(requestsPath, `${readFileSync(requestsPath, "utf8")}# edited after the swap\n`));
+    await assert.rejects(manager.installNow(key, false, requestsChanged), (error: unknown) =>
+      refusedWith("conflict")(error) && /spex\.yaml changed meanwhile; retry$/.test((error as Error).message));
+    assert.deepEqual([requestsChanged.lockWritten, requestsChanged.installed], [false, true]);
+    assert.equal((await client.expectOk("environment.get", { repository: key })).error, failure, "the earlier failure stands");
+    assert.equal(installedVersion(), "1.5.0", "the installed files stand");
+    assert.equal(readFileSync(exported, "utf8"), skillMd("six"), "the exports stand");
+    // A stale report on files changed since is no outcome either: a path
+    // source's manifest and spex.yaml rewritten once the lock is written
+    // refuse the awaited install as changed meanwhile, never with the
+    // stale reasons, the earlier failure standing.
+    const local = skillRelease("acme", "local");
+    const localDir = await makeRelease(join(dir, "project", "kits", "local"), local.manifest, local.files);
+    await manager.ensureRequested(key, "acme/local", { path: "kits/local" });
+    let lockWritten = false;
+    const staleAfterLock = {
+      get lockWritten() { return lockWritten; },
+      set lockWritten(value: boolean) {
+        lockWritten = value;
+        if (!value) return;
+        writeFileSync(join(localDir, "meta.yaml"), stringifyYaml({ ...local.manifest, version: "1.0.1" }));
+        writeFileSync(requestsPath, `${readFileSync(requestsPath, "utf8")}# edited with the manifest\n`);
+      },
+      installed: false,
+    };
+    await assert.rejects(manager.installNow(key, true, staleAfterLock), (error: unknown) =>
+      refusedWith("conflict")(error) && /spex\.yaml changed meanwhile; retry$/.test((error as Error).message));
+    assert.deepEqual([staleAfterLock.lockWritten, staleAfterLock.installed], [true, false]);
+    assert.equal((await client.expectOk("environment.get", { repository: key })).error, failure, "the earlier failure stands");
+    // Back to the registry kit alone, settled.
+    mark = client.mark();
+    await client.expectOk("environment.remove", { repository: key, name: "acme/local" });
+    await client.environment(key, mark, (current) => current.busy === null && current.error === null && !current.packages.some((pkg) => pkg.name === "acme/local"));
+
     // A clone removed while the download is held is never made again,
     // by the install or its exports. The request's own operation is
     // awaited to its end: a missing clone is announced nowhere and read
     // as not found.
-    const manager = managerOf(core);
     const original = manager.request;
     let done = undefined as Promise<void> | undefined;
     manager.request = async (...args) => {
@@ -881,6 +1035,9 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.equal(existsSync(clone), false, "the install made no folder at the clone's address");
     assert.deepEqual(existsSync(join(core.dataDir, "cache", "staging")) ? readdirSync(join(core.dataDir, "cache", "staging")) : [], [], "no staged tree outlives the refusal");
     await client.expectError("environment.get", { repository: key }, "not_found");
+    // A request or removal naming the clone gone is refused at once.
+    await client.expectError("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.0.0" } }, "not_found");
+    await client.expectError("environment.remove", { repository: key, name: "acme/kit" }, "not_found");
     // The enabling path's strict steps are refused there, no folder made.
     await assert.rejects(manager.installNow(key, false, { lockWritten: false, installed: false }), refusedWith("not_found"));
     await assert.rejects(manager.ensureRequested(key, "acme/kit", { version: "1.0.0" }), refusedWith("not_found"));
@@ -925,7 +1082,7 @@ test("environments-14: an operation held while its clone moves announces its end
     const mark = client.mark();
     held.release();
     const ended = await client.environment(to, mark, (state) => state.busy === null, 30_000);
-    assert.match(ended.error ?? "", /changed meanwhile; retry$/, "the held resolution found its files moved");
+    assert.equal(ended.error, null, "the held resolution, overtaken by the move, records no failure");
     assert.equal(existsSync(source), false, "nothing was made at the old address");
     assert.deepEqual(readFileSync(join(target, "spex.lock")), lock, "the held resolution wrote no lock");
   } finally {

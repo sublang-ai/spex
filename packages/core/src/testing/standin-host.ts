@@ -12,7 +12,7 @@
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -244,6 +244,16 @@ function userCode(): string {
 
 function normalizeUserCode(code: string): string {
   return code.toUpperCase().replace(/-/g, "");
+}
+
+/** Whether two paths name one file, as two spellings do on a filesystem
+ * that folds case. */
+function sameFile(a: string, b: string): boolean {
+  try {
+    const one = statSync(a);
+    const two = statSync(b);
+    return one.dev === two.dev && one.ino === two.ino;
+  } catch { return false; }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -534,7 +544,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       const path = change.name ?? repo.path;
       const bare = bareFor(group, path);
       if (bare !== repo.bare) {
-        if (existsSync(bare)) throw new Error(`stand-in: ${group.fullPath}/${path} exists`);
+        // A case-only change on a case-folding filesystem names the same
+        // bare repository: its metadata changes, no other is overwritten.
+        if (existsSync(bare) && !sameFile(repo.bare, bare)) throw new Error(`stand-in: ${group.fullPath}/${path} exists`);
         mkdirSync(dirname(bare), { recursive: true });
         renameSync(repo.bare, bare);
       }

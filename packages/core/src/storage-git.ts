@@ -41,6 +41,7 @@ export const UPLOAD_STAGING = ".spex-uploads";
 
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
 const SESSION_UNIT = /^sessions\/[0-9a-f-]{36}$/;
+const AUTHORING_UNIT = /^authoring\/[a-z0-9][a-z0-9_-]*$/;
 const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: string): Buffer =>
   execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env } : {}), ...(input === undefined ? {} : { input }) });
 const revision = (dir: string, ref: string): string => git(dir, ["rev-parse", "--verify", `${ref}^{commit}`]).toString().trim();
@@ -292,6 +293,12 @@ export interface ApplyStorageOptions {
   /** Runs after the complete candidate validated and before the first
    * file is replaced: the core records its repair marker here (space-31). */
   beforeWrite?: () => void;
+  /** Runs at an authoring unit's write, after the clone and the unit's
+   * version are checked and before its first file is replaced, with
+   * nothing awaited between; a throw refuses the write as `lease`, naming
+   * the session (space-19). The core refuses an authoring session whose
+   * turn runs; the storage Git tool passes none. */
+  beforeAuthoringWrite?: (unit: string) => void;
   /** `local/prefs.json`, whose viewed markers of written sessions clear. */
   prefsFile?: string;
   validate?: Omit<ValidateStorageOptions, "selectedSessionIds">;
@@ -438,20 +445,35 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
         const moved = (): StorageWriteRefused => new StorageWriteRefused(unit.name, "moved", [...written], "the clone moved or was removed");
         let lease: { release(): Promise<unknown> } | undefined;
         if (SESSION_UNIT.test(unit.name)) {
-          // Playbook's lease makes the sessions folder where it is missing.
+          // The store opens before the clone is checked, so no import
+          // stands between that check and the acquisition, which never
+          // makes the sessions folder or an ancestor: one missing is made
+          // here alone, on its own, while the clone stands.
+          sessions ??= options.sessions ?? (await import("@sublang/playbook/session-store")).createSessionStore({ sessionsDir: join(dir, "sessions"), createSessionsDir: false });
           if (!stands()) throw moved();
-          sessions ??= options.sessions ?? (await import("@sublang/playbook/session-store")).createSessionStore({ sessionsDir: join(dir, "sessions") });
+          try { mkdirSync(join(dir, "sessions"), { mode: 0o700 }); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
           try { lease = await sessions.acquireManagement(unit.name.slice(9)); }
-          catch (error) { throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error)); }
+          catch (error) {
+            // A clone gone during the acquisition is moved, never a lease
+            // another writer holds.
+            if (!stands()) throw moved();
+            throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error));
+          }
         }
+        let refused = false;
         try {
-          // The instant of the write: after the last await the clone is
-          // checked, the unit read and replaced with nothing awaited between.
+          // The instant of the write: the clone, the unit's version and its
+          // authoring check, then its files, with nothing awaited between.
           if (!stands()) throw moved();
           const disk = unitOnDisk(dir, unit, versioned);
           const paths = [...new Set([...disk.keys(), ...wanted.keys(), ...version.keys()])].sort((a, b) => publicationOrder(a) - publicationOrder(b) || a.localeCompare(b));
           const changed = paths.find((path) => disk.get(path) !== version.get(path) && disk.get(path) !== wanted.get(path));
           if (changed) throw new StorageWriteRefused(unit.name, "changed", [...written], `${changed} changed since it was read`);
+          if (AUTHORING_UNIT.test(unit.name)) {
+            try { options.beforeAuthoringWrite?.(unit.name); }
+            catch (error) { throw new StorageWriteRefused(unit.name, "lease", [...written], error instanceof Error ? error.message : String(error)); }
+          }
           for (const file of paths) {
             const target = join(dir, file); const oid = wanted.get(file);
             if (oid) {
@@ -471,7 +493,15 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
           // A local hint belongs to the previous exact checkpoint, never the selected branch.
           if (SESSION_UNIT.test(unit.name)) rmSync(join(dir, `${unit.name}.hints.json`), { force: true });
           written.push(unit.name);
-        } finally { await lease?.release(); }
+        } catch (error) {
+          refused = true;
+          throw error;
+        } finally {
+          // A refusal stands as the answer: a release failing beside it —
+          // a lease gone with a moved clone — never replaces it.
+          if (refused) await lease?.release().catch(() => undefined);
+          else await lease?.release();
+        }
       }
       // Complete, every changed session holds its selection — one an
       // interrupted apply wrote before a crash among them — and loses its

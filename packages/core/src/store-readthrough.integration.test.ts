@@ -19,8 +19,10 @@ import { WebSocket } from "ws";
 
 import { CoreService } from "./service.js";
 import { Store } from "./store.js";
+import { defaultSpawner, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { scratchDir } from "./testing/scratch.js";
+import { stubSlcSource } from "./testing/stub-slc.js";
 import type { Command, ServerMessage } from "./protocol.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -41,7 +43,7 @@ function folderIn(scratch: string, name: string): string {
 const intentFile = (fields: Record<string, unknown> & { id: string }): string =>
   JSON.stringify({ format: 1, text: fields.id, createdAt: 1, ...fields });
 
-test("home pairs, project names and clones changed outside the core read through on the next query, which makes no folder", (t) => {
+test("storage-29: home pairs, project names and clones changed outside the core read through on the next query, which makes no folder", (t) => {
   const { store, dir, scratch } = openStore();
   t.after(() => store.close());
   const folder = folderIn(scratch, "work");
@@ -103,7 +105,7 @@ test("home pairs, project names and clones changed outside the core read through
   assert.equal(existsSync(own), false);
 });
 
-test("intent files added, edited, damaged, repaired and removed outside the core read through on the next query, damaged bytes untouched", (t) => {
+test("storage-29: intent files added, edited, damaged, repaired and removed outside the core read through on the next query, damaged bytes untouched", (t) => {
   const { store, dir, scratch } = openStore();
   t.after(() => store.close());
   const project = store.registerProject(folderIn(scratch, "work"), "work");
@@ -159,7 +161,7 @@ test("intent files added, edited, damaged, repaired and removed outside the core
   assert.equal(existsSync(join(intents, `${elsewhere}.json`)), false);
 });
 
-test("a damaged home file refuses its writes until repaired, a deleted one stays refused, and damage found at the open recovers on repair", (t) => {
+test("storage-29: a damaged home file refuses its writes until repaired, a deleted one stays refused, and damage found at the open recovers on repair", (t) => {
   const { store, dir, scratch } = openStore();
   let open: Store = store;
   t.after(() => open.close());
@@ -168,38 +170,100 @@ test("a damaged home file refuses its writes until repaired, a deleted one stays
   const blocked = (reader: Store): boolean => reader.storageDiagnostics().some((report) => report.blocking && report.file.endsWith("home.yaml"));
 
   // Damaged under the running store: reported, every write needing it
-  // refused, its bytes kept; unrelated preferences stay available.
+  // refused, its bytes kept, and no pair answered from an earlier
+  // reading; unrelated preferences stay available.
   const good = readFileSync(homeFile);
+  const paired = (reader: Store): string[] => reader.listProjects().map((project) => project.id).sort();
+  assert.deepEqual(paired(store), [first.id]);
+  const device = (parseYaml(good.toString("utf8")) as { device: string }).device;
+  assert.equal(store.home.device, device);
   writeFileSync(homeFile, "format: 2\n");
   assert.ok(blocked(store));
+  assert.deepEqual(paired(store), []);
+  assert.equal(store.getProject(first.id), undefined);
+  assert.equal(store.getProjectByPath(first.path), undefined);
+  // One unsaved home stands for the whole damaged period, keeping the
+  // device read before the damage.
+  assert.equal(store.home.device, device);
+  assert.equal(store.home.device, device);
   assert.throws(() => store.registerProject(folderIn(scratch, "second"), "second"), /home\.yaml/);
   assert.equal(readFileSync(homeFile, "utf8"), "format: 2\n");
   store.setPref("unrelated", 1);
   assert.equal(store.getPref("unrelated"), 1);
 
-  // Repaired by hand: the report leaves and the next write proceeds.
+  // Repaired by hand: the report leaves, its pairs read again, and the
+  // next write proceeds.
   writeFileSync(homeFile, good);
   assert.ok(!blocked(store));
+  assert.deepEqual(paired(store), [first.id]);
+  assert.equal(store.getProjectByPath(first.path)?.id, first.id);
+  assert.equal(store.home.device, device);
   const second = store.registerProject(folderIn(scratch, "second"), "second");
 
-  // Deleted once read: refused, never written again.
+  // Deleted once read: no pairs, refused, never written again.
   const latest = readFileSync(homeFile);
   rmSync(homeFile);
   assert.ok(blocked(store));
+  assert.deepEqual(paired(store), []);
+  assert.equal(store.home.device, device);
+  assert.equal(store.getProject(second.id), undefined);
   assert.throws(() => store.registerProject(folderIn(scratch, "third"), "third"), /home\.yaml changed meanwhile; retry/);
   assert.equal(existsSync(homeFile), false);
+  assert.equal(store.getPref("unrelated"), 1);
   store.close();
 
   // Damaged at the open: the store starts, refuses, and recovers once the
   // file is repaired, its pairs read from it.
   writeFileSync(homeFile, "format: 2\n");
+  // No device was read yet, so the open's placeholder has its own.
   open = new Store({ machineIdentity, dir, own: "tester" });
   assert.ok(blocked(open));
   assert.deepEqual(open.listProjects(), []);
+  assert.notEqual(open.home.device, device);
   writeFileSync(homeFile, latest);
   assert.ok(!blocked(open));
+  assert.equal(open.home.device, device);
   assert.deepEqual(open.listProjects().map((project) => project.id).sort(), [first.id, second.id].sort());
   open.registerProject(folderIn(scratch, "third"), "third");
+});
+
+test("storage-29: a damaged session file's and forge cache's reports follow their files: gone once the file is, another standing, damage found again reported", async (t) => {
+  const { store, dir, scratch } = openStore();
+  t.after(() => store.close());
+  const project = store.registerProject(folderIn(scratch, "work"), "work");
+  await store.initializeSessions();
+  const sessions = join(dir, "workspace", "tester", "work-spex", "sessions");
+  const gone = "72000000-0000-4000-8000-000000000001";
+  const kept = "72000000-0000-4000-8000-000000000002";
+  for (const id of [gone, kept]) writeFileSync(join(sessions, `${id}.json`), "{ damaged");
+  await store.adoptForeignSessions(project.id);
+  const reported = (id: string) => store.sessionDiagnostics().find((report) => report.file === join(sessions, `${id}.json`));
+  const untracked = (): string[] => store.untrackedSessionPaths(project.id);
+  assert.ok(reported(gone)?.blocking && reported(kept)?.blocking, "both damaged sessions are reported as blocking");
+  assert.throws(() => store.assertWritable({ sessionId: gone }), (error: Error & { file?: string }) => error.file === join(sessions, `${gone}.json`));
+  assert.ok(untracked().includes(join("sessions", `${gone}.json`)));
+
+  // Removed from outside, with no reload: its report and its untracked
+  // mark leave; the other, still damaged, stays reported and refused.
+  rmSync(join(sessions, `${gone}.json`));
+  assert.equal(reported(gone), undefined);
+  assert.doesNotThrow(() => store.assertWritable({ sessionId: gone }));
+  assert.ok(!untracked().some((path) => path.includes(gone)));
+  assert.ok(reported(kept)?.blocking);
+  assert.throws(() => store.assertWritable({ sessionId: kept }), (error: Error & { file?: string }) => error.file === join(sessions, `${kept}.json`));
+  assert.ok(untracked().includes(join("sessions", `${kept}.json`)));
+
+  // The forge cache, read again where its file changed.
+  const cache = join(dir, "local", "forge-cache.json");
+  const cacheReport = () => store.storageDiagnostics().find((report) => report.file === cache);
+  writeFileSync(cache, "{ damaged");
+  assert.equal(cacheReport()?.blocking, false);
+  rmSync(cache);
+  assert.equal(cacheReport(), undefined, "a removed cache is no longer reported");
+  writeFileSync(cache, "{ damaged again");
+  assert.equal(cacheReport()?.blocking, false, "a cache damaged again is reported again");
+  writeFileSync(cache, JSON.stringify({ format: 1, entries: {} }));
+  assert.equal(cacheReport(), undefined, "a repaired cache is no longer reported");
 });
 
 class Client {
@@ -224,7 +288,7 @@ class Client {
   }
 }
 
-test("a source an intent took while another queue's attachments were adopted refuses that queue: one file, one conflict", async (t) => {
+test("core-service-55: a source an intent took while another queue's attachments were adopted refuses that queue: one file, one conflict", async (t) => {
   const scratch = scratchDir("spex-readthrough-core-");
   const env = { PATH: process.env.PATH ?? "", HOME: join(scratch, "user"), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
   const folder = folderIn(scratch, "work");
@@ -287,4 +351,106 @@ test("a source an intent took while another queue's attachments were adopted ref
   const late = await slow;
   assert.ok(!late.ok && late.error.code === "conflict", JSON.stringify(late));
   assert.deepEqual(holders("pr", "9"), [(fast.result as { id: string }).id]);
+});
+
+test("storage-29: a home file damaged under a running core routes no command into the working folder it paired", async (t) => {
+  const scratch = scratchDir("spex-readthrough-home-core-");
+  const env = { PATH: process.env.PATH ?? "", HOME: join(scratch, "user"), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const folder = folderIn(scratch, "work");
+  execFileSync("git", ["init", "-q", folder]);
+  const service = await CoreService.start({
+    token: "test", dataDir: join(scratch, "state"), env, home: env.HOME, machineIdentity,
+    adapterImports: fakeAdapterImports({}).imports, adapterRuntime: () => ({ usable: true }), watchConfig: false,
+  });
+  const client = new Client(service.port());
+  t.after(async () => { client.close(); await service.stop(); });
+  await client.open();
+  const registered = await client.command("project.register", { path: folder });
+  assert.ok(registered.ok, JSON.stringify(registered));
+  const projectId = (registered.result as { id: string }).id;
+  const clone = join(scratch, "state", "workspace", ...projectId.split("/"));
+  const spec = join(folder, "specs", "map.md");
+  mkdirSync(join(folder, "specs"), { recursive: true });
+  writeFileSync(spec, "original\n");
+  // The write reaches the folder while the pair reads.
+  const written = await client.command("specs.write", { projectId, path: "map.md", content: "edited\n" });
+  assert.ok(written.ok, JSON.stringify(written));
+  assert.equal(readFileSync(spec, "utf8"), "edited\n");
+
+  // Damaged: the pair is no longer read, so no command acts in the folder.
+  writeFileSync(join(scratch, "state", "home.yaml"), "format: 2\n");
+  const write = await client.command("specs.write", { projectId, path: "map.md", content: "remembered\n" });
+  assert.ok(!write.ok && write.error.code === "not_found" && write.error.message === `no project ${projectId}`, JSON.stringify(write));
+  assert.equal(readFileSync(spec, "utf8"), "edited\n");
+  const draft = await client.command("draft.create", { projectId, draftId: "remembered" });
+  assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId} has no working folder on this device`, JSON.stringify(draft));
+  assert.equal(existsSync(join(clone, "authoring", "remembered.json")), false);
+  const compile = await client.command("compile.run", {
+    projectId, playbookId: "remembered", sourceText: "# Remembered\n", roles: ["coder"], command: "remembered", intent: "Remembered",
+    bindings: { coder: "dev.coder" },
+  });
+  assert.ok(!compile.ok && compile.error.code === "not_found" && compile.error.message === `no project ${projectId}`, JSON.stringify(compile));
+  assert.equal(existsSync(join(folder, "spex-packages")), false);
+});
+
+test("storage-29: a compile admitted before home.yaml is damaged settles as this device's while the file does not read", { timeout: 60_000 }, async (t) => {
+  const scratch = scratchDir("spex-readthrough-compile-");
+  const stub = join(scratch, "stub-slc.cjs");
+  writeFileSync(stub, stubSlcSource("['Helper']"));
+  const env = {
+    PATH: process.env.PATH ?? "", HOME: join(scratch, "user"), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1",
+    SPEX_SLC: `${process.execPath} ${stub}`,
+  };
+  const folder = folderIn(scratch, "work");
+  execFileSync("git", ["init", "-q", folder]);
+  // The compiler seam: the toolchain probe answers a system Node, and
+  // the stub slc, once admitted, waits until released, then runs.
+  let release = (): void => {};
+  const held = new Promise<void>((resolveHeld) => { release = resolveHeld; });
+  let arrived = (): void => {};
+  const reached = new Promise<void>((resolveReached) => { arrived = resolveReached; });
+  const compileSpawner: LineSpawner = async (command, args, cwd, onLine, signal, spawnEnv) => {
+    const probe = args.length === 1 && args[0] === "--version";
+    if (probe && command !== process.execPath) { onLine("v24.1.0"); return 0; }
+    if (!probe) { arrived(); await held; }
+    return defaultSpawner(command, args, cwd, onLine, signal, spawnEnv);
+  };
+  const service = await CoreService.start({
+    token: "test", dataDir: join(scratch, "state"), env, home: env.HOME, machineIdentity,
+    adapterImports: fakeAdapterImports({ fallback: { deltas: ["Noted."], result: "Noted." } }).imports,
+    adapterRuntime: () => ({ usable: true }), watchConfig: false, compileSpawner,
+  });
+  const client = new Client(service.port());
+  t.after(async () => { release(); client.close(); await service.stop(); });
+  await client.open();
+  const registered = await client.command("project.register", { path: folder });
+  assert.ok(registered.ok, JSON.stringify(registered));
+  const projectId = (registered.result as { id: string }).id;
+  const clone = join(scratch, "state", "workspace", ...projectId.split("/"));
+  const homeFile = join(scratch, "state", "home.yaml");
+  const device = (parseYaml(readFileSync(homeFile, "utf8")) as { device: string }).device;
+  const created = await client.command("draft.create", { projectId, draftId: "held" });
+  assert.ok(created.ok, JSON.stringify(created));
+  const instance = (created.result as { instance: string }).instance;
+  const source = await client.command("draft.source.write", { projectId, draftId: "held", instance, content: "# Held\n\nRoles:\n\n- Helper\n" });
+  assert.ok(source.ok, JSON.stringify(source));
+  const marker = (): { outcome: string; device?: string } | undefined =>
+    (JSON.parse(readFileSync(join(clone, "authoring", "held.json"), "utf8")) as { compile?: { outcome: string; device?: string } }).compile;
+
+  // Admitted under the device read: its running marker names it.
+  const compiled = client.command("draft.compile", { projectId, draftId: "held", instance });
+  await reached;
+  const running = marker();
+  assert.equal(running?.outcome, "running");
+  assert.equal(running?.device, device);
+
+  // Damaged before the compiler finishes: the compile still settles as
+  // this device's, its outcome recorded and never left running.
+  writeFileSync(homeFile, "format: 2\n");
+  release();
+  const reply = await compiled;
+  assert.ok(reply.ok, JSON.stringify(reply));
+  assert.deepEqual((reply.result as { roles: string[] }).roles, ["Helper"]);
+  assert.equal(marker()?.outcome, "ok");
+  assert.equal(readFileSync(homeFile, "utf8"), "format: 2\n");
 });

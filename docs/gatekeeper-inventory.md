@@ -21,7 +21,7 @@ This corrects the historical legend, whose "no race remains" and "a lock or a no
 
 | Disposition | Meaning |
 | --- | --- |
-| Removed | A Space cross-operation refusal, reservation or barrier that is actually gone from the tree. |
+| Removed | A Space cross-operation refusal, reservation or barrier, or another named holder, that is actually gone from the tree. |
 | Own write/read | The core checks the file, value or recorded instance at its own write, or validates a cache at use, in one synchronous core turn. Not a lock against independent processes. |
 | Kept: *kind* | Runtime admission, UI reply ordering, a process handle, a last host answer, progress, a cache, or an existing product rule — named per row. Not every retained Map is a file mirror. |
 | Absent at base | An archived mechanism not present at cb73fd8b. Not removed, not restored. |
@@ -55,11 +55,12 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 - **Independent writers** keep ordinary filesystem behavior. A read/check/rename is one synchronous core turn, not an OS compare-and-swap; another process can still race it. The design deliberately locks no working tree.
 - **Git's real primitives remain:** `update-ref <new> <old>` is a real conditional ref update; ref and index locks and rejected pushes stand. `git config --fixed-value` is not a compare-and-swap and is not claimed. `existsSync` plus `renameSync` is not a no-replace rename.
 - **Partial writes remain.** A multi-unit Apply or a multi-file enabling may stop after some writes; completed writes stand and are reported, nothing is rolled back, and a refused Apply records no merge commit. Sessions-first ordering reduces one dangling-reference case; Retry does not repair every partial cross-unit relationship.
-- **Retained, not file coordination:** runtime and session leases and admission, one working turn per project, sign-in admission and refresh single-flight, UI request and reply ordering, process handles, the synchronous owner-only umask around a new clone's `init` and commits, progress, last host answers, and the forge, registry and content caches.
+- **Retained, not file coordination:** runtime and session leases and admission, one working turn per project, the per-clone Git machine's one operation at a time (a duplicate joining, a Sync following its clone's Check; no other command or process held off), sign-in admission and refresh single-flight, UI request and reply ordering, process handles, the synchronous owner-only umask around a new clone's `init` and commits, progress, last host answers, and the forge, registry and content caches.
+- **Local writer boundaries ([DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)):** this core admits one compiler or packaging job per actual artifact destination, a duplicate refused naming the destination and the work running, released when that job ends, a canceled compiler's job ending only after its child exits; and an apply or its repair is refused at the synchronous instant it would replace an authoring unit whose current recorded instance has this core's active turn. Both are in-process: no lock file, no PID recovery, no inference from unfinished records; independent processes keep ordinary filesystem behavior.
 - **Join's umask** is scoped to each Git child's synchronous spawn: the child inherits `0o077`, and the core's own umask is restored before anything is awaited, so no concurrent join or other work runs under it.
 - **Not restored:** archived ownership/lifetime plumbing, the sticky keeper, the run handshake, and DR-110 records-based own-repository discovery.
-- **Not built:** compiler-output staging or source-conditioned artifact swaps, a move journal, a stable repository handle, a filesystem-wide transaction, a dependency graph, an auth-flow framework.
-- **Folder rename and Home save** are not crash-atomic; existing repair behavior covers the gap. Playbook's management-lease acquisition may recreate an empty `sessions/` parent at a moved clone's old path; the core refuses payload publication into the wrong clone.
+- **Not built:** a persistent compile lock, compiler-output staging or source-conditioned artifact swaps, a move journal, a stable repository handle, a filesystem-wide transaction, a dependency graph, an auth-flow framework.
+- **Folder rename and Home save** are not crash-atomic; existing repair behavior covers the gap. Every clone's session store is opened with Playbook's `createSessionsDir: false` — honored only from Playbook 17.7.0, the core's floor, and silently ignored by 17.6.0 — and the core makes `sessions/` itself, synchronously and non-recursively, only while the clone it checked still stands at that path, so no acquisition recreates a moved or removed clone's old path. An acquisition may still write lease metadata into an existing path an independent process replaced; the clone check after acquisition keeps payload out of the wrong clone, with no claim that the acquisition had no effect.
 - **E13:** the exports manifest names folders, not content hashes; no content-matched export deletion.
 - **CF:** finite known inputs only (post-migration YAML bytes, `spex.lock`, lock-placed entries) checked per invocation through a callback; no import graph, no universal `execute` wait. The compile marker precedes the async `prepareConfig`, and post-publication current-result validation is integrated.
 - **Legacy authoring identity** stays deterministic until the next write; peer or unmarked activity is left untouched, which proves no peer alive or dead.
@@ -74,7 +75,7 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | G9 | Kept: last host answer. `waiting` holds the host's pending outcome under the machine's current key; failed or unrelated retry keeps it, success, remote-present or clone-gone settles it. Not a durable queue. | OP |
 | G10–G12 | Kept: host observation and read/attach ordering, where present at base. Not file authority or a local claim; no persisted candidates. | OP |
 | G13–G14 | `facts` kept as last reading with decision-time refresh. Removed: the cached RepositoryState row; assembly reads the current clone. | OP |
-| G15–G18 | Kept: phase/progress and last check, choice and plan outcomes. Check joins Check/Sync; Sync joins Sync or follows Check. Lists and plans are recomputed from current Git inputs where needed; the picker holds the offered plan. Declined: reflog-derived replacement. | OP |
+| G15–G18 | Kept: the per-clone Git machine, one operation per clone at a time ([DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)): Check joins Check or Sync; Sync joins Sync or follows its clone's Check; no other command or process is held off. Kept with it: phase/progress and last check, choice and plan outcomes. Lists and plans are recomputed from current Git inputs where needed; the picker holds the offered plan. Declined: reflog-derived replacement. | OP |
 | G19 | Kept: host override as an observed transport/host answer. No host-id registry. | OP |
 | G20–G21 | Removed: the broad held-session set. Apply's progress stays local to its operation; it takes and releases each session's management lease around that unit's write, writes sessions first, preserves partial writes, distinguishes changed-unit from held-lease refusal, and records no merge commit on refusal. | SY |
 | G22–G23 | Removed: watcher pause, the sync's process umask change, and Join's process umask held across its awaited clone. Each Join Git child is spawned under `0o077` with the core's umask restored before the child is awaited; storage-git's synchronous `init` and commits keep their umask around synchronous calls only. End-of-operation notifications and rescans stay; an observer may still see intermediate multi-file state. | SY, OP, JN |
@@ -82,17 +83,17 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | G27–G28 | Removed: busy skip of answer pruning and busy refusal of sign-out. Normal pruning, sign-out effects and progress stay. | OP |
 | G29 | Kept: duplicate sign-in refusal as the sign-in workflow's own admission (scope correction to the archive; not a Space blocker). Credential publication is G48–G49. | OP |
 | G30–G33 | Kept: last signed-out answer, host view/read errors, read/setup coalescing, machine registry as host/process/progress state. Machine rows read current files; setup reserves nothing. | OP |
-| G34–G35 | Removed: own and host-driven move deferrals, blockers and environment drain. Synchronous key, address and occupancy checks then relocation; a host-driven rename first compares current origin and recorded id with its Check's input. No crash-atomic rename+Home, no move journal. | OP, HI |
+| G34–G35 | Removed: own and host-driven move deferrals, blockers and environment drain. Synchronous key, address and occupancy checks then relocation, a session lease naming a live or unverifiable writer refusing the move as it refuses a removal; a host-driven rename first compares current origin and recorded id with its Check's input. No crash-atomic rename+Home, no move journal. | OP, HI |
 | G36 | Archived `holdRemoval` absent at base. The actual removal gate is replaced by acquiring real Playbook leases over every session-named entry (lease-only and records-only included), then a final synchronous project/Home/clone check, reading a fresh Home, before invalidation and removal; a Home deleted or invalid at that check refuses the removal with uploads still resumable. No compile or upload drain. | OP, RM, ST |
 | G37–G38 | Removed: joined code-clone gate and record-id busy skip. Private clone, progress and current remote-value publication remain. | OP |
 | G39 | Own write: a per-unit version check after the last await replaces the single status check. A changed unit drops the marker with no merge, then re-Saves and replans once or stops. Partial files stand. | SY |
 | G40 | Kept: Git ref/index locks and rejected-push handling. Save reads HEAD before staging, validates the exact staged tree, commits on that parent and publishes with `update-ref <new> <old>`. Later working-tree edits stay local changes. | SY |
 | G41 | Kept: the existing Apply journal (not a new transaction system). A held lease keeps the marker for repair; a changed unit or obsolete unlanded marker drops it without recording the merge; completed repair clears hints and viewed markers for every changed unit. | SY |
-| G42–G43 | Kept: current Git readiness and damage refusals. A cached refresh finding no longer refuses Sync; repair runs before the admission's blocking check; a validated Save clears the stale report; the UI no longer disables Sync for it. Other diagnostic holders remain. | SY, OP |
+| G42–G43 | Kept: current Git readiness and damage refusals, counting this clone's and the home-wide files' blocking diagnostics as read from current files (T11–T13), never another clone's. A cached refresh finding no longer refuses Sync; the marker repair runs as the first step of the sync under the clone's existing machine, so a second admission joins it, and the blocking diagnostics are counted after it; startup repair is unchanged; a validated Save clears the stale report; the UI no longer disables Sync for it. | SY, OP |
 | G44 | Kept: the runtime scanner's untracked-session policy. ST refreshes repository descriptors per query; SY validates exact staged bytes at Save. The async scanner was not rewritten. | ST, SY |
-| G45–G46 | Own read: prefs stat cache, Home refresh before use and write. An invalid or deleted loaded Home refuses dependent writes and answers from a diagnosed last-good reading until repaired; never auto-recreated. | OP, ST |
+| G45–G46 | Own read: prefs stat cache, Home refresh before use and write. An invalid or deleted loaded Home refuses dependent writes and answers with no pairs, keeping the last-read device id, until repaired; never auto-recreated. | OP, ST |
 | G47 | Own write: current occupancy and same-inode checks immediately precede the synchronous move. Ordinary check plus rename, not an atomic no-replace rename. | OP, HI |
-| G48–G49 | Own write: the in-process serial queue no longer guards correctness; each credential write names the pair its writer read — sign-in publication, refresh success and refusal, cancelled or failed sign-in cleanup, sign-out — and the file-owned `replace(expected, next)` compares and writes in one synchronous step, a lost write refused as changed meanwhile with nothing stored. Not exclusion of another process. Sign-in admission and refresh single-flight kept; no auth-flow framework, retry loop or epoch. | CR |
+| G48–G49 | Removed: the in-process serial queue. Own write: each credential write names the pair its writer read — sign-in publication, refresh success and refusal, cancelled or failed sign-in cleanup, sign-out — and the file-owned `replace(expected, next)` compares and writes in one synchronous step, a lost write refused as changed meanwhile with nothing stored. Not exclusion of another process. Sign-in admission and refresh single-flight kept; no auth-flow framework, retry loop or epoch. | CR |
 | G50 | Kept: transport child/cancel handle (process control). | — |
 
 ## Service, sessions, Store and environments — CS1–CS30, N1–N11, T1–T18, E1–E13
@@ -102,16 +103,16 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | CS1–CS2 | Removed: dispatch gate and `spaceBlocker`. Current-file and lease refusals remain. | OP |
 | CS3–CS4 | Archived holdRemoval absent at base. Removal acquires Playbook's per-session management leases and checks every session-named entry, the current clone and Home at the final synchronous boundary before media invalidation. | OP, RM, ST |
 | CS5 | Kept: pending-unit count and second confirmation (product rule); not a reservation of future deletions. | — |
-| CS6 | Removed: the session-creation count used only as a Space blocker. Runtime admission and leases remain; Playbook may still create empty parent folders. | OP |
+| CS6 | Removed: the session-creation count used only as a Space blocker. Runtime admission and leases remain; no acquisition recreates a missing `sessions/` folder (see the folder-rename limit). | OP |
 | CS7–CS9 | Kept, outside DR-111: submission, settlement, handoff ownership and ordered runtime admission. Their intent reads use current files. Not filesystem locks. | ST |
 | CS10–CS11 | Own read/write: intents read, written and diagnosed from current files; intent edit compares after the media await; a duplicate-source capture checks again after adoption, immediately before the new file's publication. Absence check plus rename is not an OS-exclusive create. No per-field merge. | OP, ST |
 | CS12–CS13 | Kept: active-project rebind refusal, runtime session delete/discard live checks and the Playbook lease, as runtime/product policy. Only their Space/media drain dependencies were removed (narrowing the archive's promise). | OP |
-| CS14–CS16 | Removed: compile-wide and per-id claims (`activeCompiles`, `compileHolders`) and authoring coupling. Standalone per-request and AU per-instance controller sets remain for progress, cancel and shutdown only. The compiler is an independent process with ordinary output writes. | OP, AU |
+| CS14–CS16 | Removed: the home-wide per-id claim and `compileHolders` as Space blockers, and the authoring coupling that held a session idle for `compile.run`. Replaced by [DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)'s admission: one compiler or packaging job per actual artifact destination — a draft's Compile, the agent's directive, `compile.run`, an enabling's repackaging — a duplicate refused naming the destination and the work running, released when that job ends, a canceled compiler's job ending only after its child exits; in-process, no lock file. Controller sets give progress, cancel and shutdown. A compile runs beside its session's turn. slc writes ordinary outputs; a failed or canceled job may leave partial ones. | OP, AU |
 | CS17 | Archived per-await `held/stillHeld` lifetime plumbing absent at base. AU checks the persisted instance for the session's own writes only. | AU |
 | CS18–CS19 | Own write: config read/compose/write records target bytes and checks before its own rename, refusing a changed or missing target; non-recursive child-folder creation never recreates a missing clone. Not exclusion of an external editor. | EN |
 | CS20 | Own write: initial validation writes nothing; each later request/lock/install/player/entry write uses its own input version. A later failure reports completed steps; nothing rolls back. No single multi-file publication. | EN |
 | CS21–CS23 | Removed: Space media gate, global pending counter, retire/drain reservation. Private preparation then a small synchronous owner/clone/instance check and per-file publication, shared by upload, adopt and authoring output. `retireOwner` remains as synchronous invalidation, not a gate. | OP, AU, ME |
-| CS24 | Kept: duplicate browser preparation joins its promise; cancel/disconnect is process control. | OP |
+| CS24 | Kept: a preparation asked again under the same operation ID joins the one running; a different operation ID runs beside it, Cligent's installer coordinating the browser cache. Cancel/disconnect is process control. | OP |
 | CS25 | Own read: post-migration YAML bytes and known lock/entry inputs are stamped and checked at related use; a bounded recompose or refusal discards overtaken success or error publication. Authoring turn/compile input selection and `draft.player.set` use the callback; the compile marker precedes the await; `config.edit` and enabling results validate after reload. Invocation inputs and generation kept for reply ordering only. No digest broadcast, dependency graph or universal execute wait. Integrated by task 6. | CF |
 | CS26–CS27 | Removed: watcher pause. Kept: the scanner read-order chain (runtime observation and UI delivery). | SY |
 | CS28 | Kept: forge cache as a bounded remote-answer cache under existing keys/TTL. Declined: binding-keyed cache. | — |
@@ -119,17 +120,17 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | N1–N8 | Kept: opening, recovering, live, settling, turn-control, failed-dispose and lease-error rules as runtime policy; their Space-blocker role removed. Leases are not shortened or relabelled. | OP |
 | N9–N11 | Kept: admission re-reads Playbook lease ownership; restore append under the lease; parked controls device-local. No new runtime session model. | ST |
 | T1 | Kept: root lease. | — |
-| T2–T4 | Own read: current clone walk and Home/project files at use. The descriptor Map keeps path/store handles only; queries create no folder. Home refreshed before dependent writes, with the diagnosed last-good reading. | ST, OP |
+| T2–T4 | Own read: current clone walk and Home/project files at use. The descriptor Map keeps path/store handles only; queries create no folder, and a session's open makes its clone's `sessions/` non-recursively, never the clone. Home refreshed before dependent writes; a damaged Home answers no pairs with the last-read device id. | ST, OP |
 | T5–T6 | Kept: session locations and local-session ownership markers (runtime/scanner state). An explicit key with a missing clone is refused rather than falling back to own. | ST |
 | T7 | Removed: sync `managedSessions`; leases released per written unit before refresh. Absent from the tree at reading. | SY |
 | T8 | Kept: runtime records/turns/usage folds and the session scanner. Project labels and paths read current project/Home data. Not a sequence merge of Git records. | ST |
 | T9–T10 | Kept: local prefs with stat validation and current-file key writes; key migration on moves; AU's instance-qualified player key. Declined: sync facts into Git. | OP, ST, AU |
-| T11–T13 | Own read: intent/project/Home diagnostics reread current files; repaired or deleted problems clear. Kept separately: prefs stat cache, session-scanner and forge-cache diagnostics, current-target write checks. | ST |
+| T11–T13 | Own read: intent, project, Home and session diagnostics are read from current files where served or consulted; a repaired or deleted file's problem clears, a session's with it. Kept separately: prefs stat cache, forge-cache diagnostics, current-target write checks. | ST |
 | T14–T15 | Kept: move/reload compatibility methods for runtime descriptors, prefs, forge cache and notifications; they no longer maintain project/intent mirrors. Reload may prepare session folders on its explicit write path. No multi-holder move transaction. | ST, OP |
 | T16–T17 | Removal per CS3–CS4. Project allocation reads the current clone path and Home pairs, with no stale descriptor check; synchronous existence/create is not an OS-exclusive no-replace. No in-memory name reservation. | ST, RM |
 | T18 | Kept: startup reset of this core's runtime liveness. | — |
 | E1–E2 | Removed: clone chain/queue, busy blocker and the `busyFor`/`idle` compatibility methods. Per-operation running sets give progress and shutdown waiting, never command admission. | EN |
-| E3–E4 | Conflicts carry the requests digest and show only while current; error/published stay last operation reports. Removed: the settled set; need derives from current requests, lock and install record. | EN |
+| E3–E4 | Conflicts carry the requests digest and show only while current; error/published stay last operation reports, recorded only while `spex.yaml` and `spex.lock` hold the bytes the operation read or wrote, an overtaken report discarded. Removed: the settled set; need derives from current requests, lock and install record. | EN |
 | E5 | Kept: private install stage with a current clone/request/path-source/lock check before the synchronous tree swap; failed-rename restoration is swap cleanup, not transaction rollback. | EN |
 | E6–E7 | Removed: request/lock rollback. Versioned requests, resolve input and old-lock checks; a stopped command keeps and reports completed writes. | EN |
 | E8 | Removed: Space's environment idle/drain. In-flight old-path work refuses at its own publication; progress follows the moved key; no stable repository handle. | OP, EN |
@@ -140,7 +141,7 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 
 | Rows | Final disposition | Ev. |
 | --- | --- | --- |
-| A1–A2 | Kept: a runtime Map keyed by recorded instance for turn/compile/prompt/resume state only; file facts and damage read from DraftStore at use. Not a central lifetime owner. | AU |
+| A1–A2 | Kept: a runtime Map keyed by recorded instance for turn/compile/prompt/resume state only; file facts, damage and authoring diagnostics read from the current authoring files at use, a deleted or repaired file's row gone. Not a central lifetime owner. | AU |
 | A3–A6 | Archived forget/owns/holder/reread machinery absent at base. Persisted-instance checks at own writes and current history/stat correspondence; sync sends a history replacement without retiring the session. Removal or move cancels no independent process. | AU |
 | A7 | Removed: author turn as Space blocker. Kept: runtime turn admission. | OP |
 | A8 | Startup repairs only this device's compile/turn-start markers; peer or unmarked legacy work untouched. `home.device` provenance only where needed; no writer registry. | AU |
@@ -148,15 +149,16 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | A11–A13 | Kept: source digest for notification dedup and validated tail/instance stat caches. Metadata, transcript and next sequence come from files; damaged metadata gets no made-up instance; a legacy instance is not written on read. | AU |
 | A14–A16 | Own write: transcript damage refuses writes except safe delete; metadata compares current bytes before its rename; append reads the tail and checks the instance, never recreating an absent session or clone. No sequence merge. | AU |
 | A17–A18 | Kept: home-wide id uniqueness, first-clone duplicate policy and ordered Boss messages. Creation refuses an occupied metadata/transcript target. Sticky keeper not restored. | AU |
-| A19–A24 | Removed: source write, manual compile, register, player selection and deletion refusals because other work runs (`assertIdle` cross-operation uses). Source digest and recorded instance protect only core-owned targets; enabling targets use EN versions. Compiler output is ordinary filesystem writes. | AU, EN |
+| A19, A22–A24 | Removed: source write, player selection and deletion refusals because other work runs (`assertIdle` cross-operation uses). Source digest and recorded instance protect only core-owned targets. | AU |
+| A20–A21 | Removed: the compile's "Waits for the reply" refusal and register's idle refusal; a compile runs beside its session's turn ([DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)). Kept, narrowed: a compile or an enabling's repackaging over a destination where a job runs is refused naming it (CS14–CS16, [DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)). Enabling targets use EN versions; compiler output is ordinary filesystem writes. | AU, EN |
 | A25–A27 | Kept: one runtime turn per instance and owner-specific controller cleanup. Provider resume only for complete corresponding input plus that invocation's own records; otherwise reseed. No handshake or lifetime bus. | AU |
 | A28–A30 | Removed: broad id claim/release coupling. Per-instance compile handles for progress/cancel; cancel targets all of the instance's handles; settlement updates only its own marker; an obsolete compile follow-up is dropped at dispatch, Boss ordering kept. | AU |
-| A31 | Source digest captured before the compiler starts; a child's later reread may conservatively show Changed. No control of the child's reads or atomic output binding. | AU |
-| A32 | Archived unused retireMedia/lifetime hook not restored. Asset imports use the shared publisher with the captured instance at publication. | ME |
+| A31 | Source digest captured before the compiler starts; a child's later reread may conservatively show Changed. Two of this core's jobs no longer interleave one folder's outputs (CS14–CS16); only a successful job's outputs are recorded compiled and enabled. No control of the child's reads or atomic output binding. | AU |
+| A32 | Removed: the unused `retireMedia` option, present at cb73fd8b and never called. Asset imports use the shared publisher with the captured instance at publication. | ME |
 | D1–D4 | Own read: locations, package and duplicate picture from current files, keeping home-wide unique id and first-clone-by-key. Sticky keeper absent; no keeper/restart change. | AU |
 | D5–D7 | Archived onKeptChanged/retire/rekey/write-on-read absent at base. A move resolves the same instance at its new address and republishes; the legacy instance is recorded on next write only. | AU |
 | D8–D13 | Own write: metadata/source compare target bytes and expected instance; delete checks instance (or unreadable fileVersion); create refuses orphan/occupied files; append takes sequence from disk; list derives from files. No external CAS, no transcript union. | AU |
-| AS1–AS5 | Removed: draft Space dispatch/compile blockers and the shared `activeCompiles` claim; standalone and authoring compile handles are separate, cancel/progress only. | OP, AU |
+| AS1–AS5 | Removed: draft Space dispatch/compile blockers and the shared per-id `activeCompiles` claim; compile admission is per artifact destination (CS14–CS16); standalone and authoring compile handles otherwise serve cancel and progress. | OP, AU |
 | AS6–AS8 | Own write: command/cancel/approval owner includes the expected instance; persisted identity checked after relevant awaits; events and replies carry the instance (protocol 24). Archived instance-keyed channels not restored. | AU |
 | AS9 | Kept: end-of-sync history/state, move republish, rescan and runtime notifications. They maintain no authoritative metadata mirror. | AU, SY |
 | AS10 | No author `held` guard on independent config/environment writes; EN versions them and keeps completed writes on late failure. | EN |
@@ -168,7 +170,7 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | U5–U6 | Kept: source/artifact render state, reloaded on notifications. The source `by` heuristic is not write provenance; no origin field or build stamp. | AU |
 | U7–U11 | Kept: user input and UI-local request/progress ordering. Expected instance travels in commands and late completions; the forget helper clears replaced slots; same-instance history replacement keeps composer, Source edits and Enable form. | AU |
 | U12–U15 | Listing forgets absent ids only where nothing newer superseded it; create/open adopt successors; reconnect lists before reopening; a source-write reply applies to its captured instance only. | AU |
-| U16–U17 | Removed: dead busy-refusal handling (`runCompile` busy branch) and controls disabled for unrelated sync/turn/compile. A request's own in-flight controls remain. | AU, OP |
+| U16–U17 | Removed: dead busy-refusal handling (`runCompile` busy branch) and controls disabled for unrelated sync/turn/compile. A request's own in-flight controls remain: Compile is offered during a turn and disabled only while the shown instance's own compile runs; a `busy` the core returns for another job writing the folder is shown as the command's refusal, Compile staying enabled; and the turn's Abort and the compile's Cancel both show while both run ([DR-111](../specs/decisions/111-the-core-coordinates-as-git-does.md)). | AU, OP |
 
 ## Files two writers touch — final answers
 
@@ -176,7 +178,7 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 
 | # | File | Final answer | Ev. |
 | --- | --- | --- | --- |
-| 1 | Runtime session files | Playbook lease kept; Apply takes the management lease per unit write; authoring uses the recorded instance under the root lease. Both-side changes are whole-unit choices, never sequence merges. | SY, AU |
+| 1 | Runtime session files | Playbook lease kept; Apply takes the management lease per unit write; authoring uses the recorded instance under the root lease, an apply refused under this core's own active turn on it (DR-111). Both-side changes are whole-unit choices, never sequence merges. | SY, AU |
 | 2 | Intent | Current-file edit/check; whole-unit sync. | ST, OP, SY |
 | 3 | Config | Byte-versioned composition and publication; whole-unit sync; CF governs read currency. | EN, SY, CF |
 | 4 | Requests, lock, packages | Each own file versioned; the private install stage checks current lock/requests/clone at swap. A move means failure and retry, not redirect. | EN |
@@ -199,7 +201,7 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 | `spex.lock` + `packages/` | Current inputs at own lock write and swap; whole environment unit in Git. The two-rename swap is not a multi-file transaction. | EN |
 | Intents | Current files and the post-await edit check; whole-unit Git choice. | ST, OP |
 | Runtime session files | Lease and runtime folds kept; Apply's pre-write check. No guarantee against a racing independent process. | SY |
-| Authoring source and artifacts | Tail, recorded instance and source digest; child output is ordinary filesystem, no staged swap. | AU |
+| Authoring source and artifacts | Tail, recorded instance and source digest; one job per artifact destination (DR-111); child output is ordinary filesystem, no staged swap. | AU |
 | `home.yaml` | Synchronous read/mutate/write with invalid/deleted refusal; no lock-and-rename protocol. | ST, OP |
 | `local/prefs.json` | Not moved to Git; stat cache and current-key writes. | OP |
 | Exclude and exports | Versioned managed block; skill mirroring keeps folder ownership; no content-manifest deletion. | EN |
@@ -210,18 +212,18 @@ Not claimed anywhere here: full core, UI or e2e suites green, test totals, or an
 
 | # | File | Final answer | Ev. |
 | --- | --- | --- | --- |
-| 1 | Transcript | Current tail for local append; whole unit on sync conflict, never sequence merge. | AU, SY |
+| 1 | Transcript | Current tail for local append; whole unit on sync conflict, never sequence merge; not replaced by an apply under this core's own active turn (DR-111). | AU, SY |
 | 2 | Metadata | Own byte/version check; no automatic reapply. | AU |
 | 3 | Running markers | Own-device recovery only; peer and unmarked legacy work untouched. | AU |
 | 4 | Source | Core digest write; input digest captured before compile; no guarantee of what the child reads. | AU |
-| 5 | Compiler outputs | Ordinary subprocess writes; no staging or transaction. | AU |
+| 5 | Compiler outputs | One job per destination in this core (DR-111); ordinary subprocess writes; no staging or transaction. | AU |
 | 6 | Enabling configs | Independent file versions, no-write initial validation, partial writes reported, no rollback; CF read currency. | EN, CF |
 | 7 | Requests/lock | EN boundary. | EN |
 | 8 | Assets | Shared private publisher with captured instance and current owner. | ME |
 | 9 | Player preference | Instance key, limited legacy migration; no garbage collector. | AU |
 | 10 | Orphan transcript | Preserved and create refused; no instance/writer field added; not removed or quarantined. | AU |
 | 11 | Duplicate id/keeper | Home-wide uniqueness and first-clone policy unchanged; sticky keeper not implemented. | AU |
-| 12 | Late own session writes | Expected instance and target existence refuse append/metadata write; no lifetime cancellation; Playbook lease internals may still leave empty parents. | AU |
+| 12 | Late own session writes | Expected instance and target existence refuse append/metadata write; no lifetime cancellation; no lease acquisition recreates a missing clone's folders (see the folder-rename limit). | AU |
 
 ## Historical reader's notes: closure
 
@@ -229,7 +231,7 @@ All notes below are historical (9766578a) and answered by the rows named.
 
 - **Groups notes.** (1) Latched diagnostics → G42–G43. (2) Prefs lost update → G24–G26, G45, Groups case 10. (3) `pairJoined` ending unpaired → G5–G8 (hold removed; owner-specific join completion). (4) `renameOwn` early key list → G34–G35. (5) Collision check outside the rename → G47: corrected, not closed; still check plus rename, not no-replace. (6) Cancel storing a token and (7) refresh restoring a removed token → G48–G49, CR: closed by the expected-pair writes. (8) `space.repair.decline` spec drift → space-29 now lists only `invalid_request`. (9) Spec wording collisions → amended with the gate removals; #16/#24's reflog proposals were declined (G15–G18), so space-31's "persists nowhere" stands. (10) Left-out items unchanged.
 - **Service notes.** (1) Missing spec ids at 9766578a: historical. (2) Gate state → G rows. (3) Lost-update writes → CS18–CS19, CS10–CS11, E6–E7; the single helper is `writeVersionedBytes`. (4) Mutable-name mirrors: project/intent mirrors, `settled`, `compileHolders`, `watchersPaused` removed; repository descriptors, `sessionLocations`, prefs sync keys, forge cache, environment `CloneState` (key-following) and `moveRepositories`/`moved()` kept as named rows say. (5) N1 kept. (6) Viewed marker gate removed → CS29–CS30.
-- **Authoring notes.** (1) Compile source digest → A31. (2) Startup interrupting a peer → A8. (3) Keeper from memory → D1–D4, Authoring case 11: unchanged, no follow-up implemented. (4) Unused `retireMedia` → A32, not restored. (5) Player key and approval owner by id → T9–T10, P4, Authoring case 9. (6) `touchedAt` stays.
+- **Authoring notes.** (1) Compile source digest → A31. (2) Startup interrupting a peer → A8. (3) Keeper from memory → D1–D4, Authoring case 11: unchanged, no follow-up implemented. (4) Unused `retireMedia` → A32, removed. (5) Player key and approval owner by id → T9–T10, P4, Authoring case 9. (6) `touchedAt` stays.
 
 ## State at the source freeze
 

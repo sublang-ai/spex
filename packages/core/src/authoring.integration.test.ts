@@ -10,8 +10,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
+import { clearTimeout as clearTimer, setTimeout as setTimer } from "node:timers";
 import { WebSocket } from "ws";
 import { parse as parseYaml } from "yaml";
 import type { PermissionPolicy } from "@sublang/cligent";
@@ -22,7 +23,7 @@ import { mapPermissionsToOpenCodeOptions } from "@sublang/cligent/adapters/openc
 
 import { CoreService } from "./service.js";
 import { authoringDocuments } from "./authoring.js";
-import { defaultSpawner, type LineSpawner } from "./compile.js";
+import { defaultSpawner, MIN_NODE_MAJOR, MIN_NODE_MINOR, type LineSpawner } from "./compile.js";
 import { fakeAdapterImports, type FakeAdapterStats, type FakeScript } from "./testing/fake-adapter.js";
 import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
@@ -223,6 +224,18 @@ async function until(check: () => boolean, timeoutMs = 60_000, what = "condition
   while (!check()) {
     if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${what}`);
     await sleep(15);
+  }
+}
+
+/** A reply within `ms`, else undefined: a refusal comes at once, and a
+ * job wrongly admitted behind a held stub fails the test without
+ * waiting on that stub. */
+async function within<T>(reply: Promise<T>, ms = 10_000): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([reply, new Promise<undefined>((resolve) => { timer = setTimer(() => resolve(undefined), ms); })]);
+  } finally {
+    clearTimer(timer);
   }
 }
 
@@ -634,10 +647,12 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
 
 const IN_FLIGHT: FakeScript = { fallback: { deltas: ["working"], result: "", untilAborted: true } };
 
-test("playbook-library-74: messages queue behind a turn or compile; every other command is admitted beside them", async () => {
+test("playbook-library-74: messages queue behind a turn or compile; every other command is admitted beside them", async (t) => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
   const { projectId } = harness;
   const client = new Client(harness.service.port());
+  // However the test ends, the stop kills the blocking compiler.
+  t.after(async () => { client.close(); await harness.service.stop(); });
   await client.open();
   await client.expectOk("draft.create", { projectId, draftId: "matrix" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "matrix" } });
@@ -657,17 +672,22 @@ test("playbook-library-74: messages queue behind a turn or compile; every other 
   assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: true });
   await until(() => client.records("matrix").some((m) => m.record.type === "turn_aborted" && m.record.turnId === 1), 10_000, "turn 1 aborted");
 
-  // During a compile: the queue waits for it; a second compile runs too.
+  // During a compile: the queue waits for it; a second compile of its
+  // folder is refused, the first running on (playbook-library-99).
   await until(() => client.latest("matrix")?.activity === "compiling", 10_000, "compiling");
   assert.ok(!client.turnStarts("matrix").includes("second"), "the queue waits for the compile");
-  const second = client.command("draft.compile", { projectId, draftId: "matrix" });
-  await until(() => blocking() === 2, 20_000, "two compiles at once");
+  const second = await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
+  assert.match(second.message, /^a compile is writing /);
+  assert.ok(second.message.includes(join("spex-packages", "matrix", "playbooks", "en", "matrix")), second.message);
+  await sleep(100);
+  assert.equal(blocking(), 1, "the refused compile ran no compiler");
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "third" }), { accepted: true, queued: true });
   assert.deepEqual(client.latest("matrix")?.queued, [{text: "second"}, {text: "third"}]);
   assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "matrix" }), { aborted: false });
-  // One Cancel naming the session ends both.
+  // One Cancel naming the session ends its compile.
   await client.expectOk("compile.abort", { playbookId: "matrix", instance });
-  for (const reply of await Promise.all([first, second])) assert.ok(!reply.ok && reply.error.code === "aborted");
+  const canceledFirst = await first;
+  assert.ok(!canceledFirst.ok && canceledFirst.error.code === "aborted");
   await until(() => client.latest("matrix")?.compile?.outcome === "canceled", 10_000, "canceled");
   await sleep(100);
   assert.equal(client.progress("matrix").at(-1), "◇ compile canceled");
@@ -690,7 +710,7 @@ test("playbook-library-74: messages queue behind a turn or compile; every other 
 // playbook-library-75: restart, reseed, resume, the agent switch, delete
 // ---------------------------------------------------------------------------
 
-test("playbook-library-75: a restart replays the draft, reseeds the conversation, and an agent switch reseeds too", async () => {
+test("playbook-library-75: a restart replays the draft, reseeds the conversation, and an agent switch reseeds too", async (t) => {
   const script: FakeScript = {
     rules: [
       { match: "Conversation so far", response: { deltas: ["Picking up"], result: "Picking up where we left off." } },
@@ -703,6 +723,9 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   const files = authoringFiles(clone, "persist");
   const prefsFile = join(dataDir, "local", "prefs.json");
   const client = new Client(first.service.port());
+  // Each stage's core is stopped however the test ends, killing its
+  // blocking compiler; the stops between stages stand as they are.
+  t.after(async () => { client.close(); await first.service.stop(); });
   await client.open();
   await client.expectOk("draft.create", { projectId, draftId: "persist" });
   await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
@@ -731,15 +754,13 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
 
   // A compile in flight when the core stops.
   await client.expectOk("draft.source.write", { projectId, draftId: "persist", content: "# Persist\n\nRoles:\n\n- Helper\n" });
-  const compiling = client.command("draft.compile", { projectId, draftId: "persist" });
+  // Sent bare: no reply is owed once the endpoint closes.
+  client.sendRaw(JSON.stringify({ type: "draft.compile", id: "persist-compile", projectId, draftId: "persist", instance: client.instance("persist") }));
   await client.waitFor((m) => m.type === "compile.progress" && m.playbookId === "persist" && m.line.startsWith("→ gears2fsm"), 20_000);
   const seqBefore = client.records("persist").at(-1)?.seq ?? 0;
-  // The core's stop cancels the compiler it started, and its reply says
-  // so, while the marker stays as it was for the next start to read.
-  const stopping = first.service.stop();
-  const cut = await compiling;
-  assert.ok(!cut.ok && cut.error.code === "aborted", "the stop cancels the compile");
-  await stopping;
+  // The core's stop cancels the compiler it started, while the marker
+  // stays as it was for the next start to read.
+  await first.service.stop();
   client.close();
   const stored = JSON.parse(readFileSync(files.record, "utf8")) as { compile: { outcome: string } };
   assert.equal(stored.compile.outcome, "running", "the stop leaves the compile as it was");
@@ -747,6 +768,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   // playbook-library-70: the restart reads it as interrupted, relays nothing.
   const second = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client2 = new Client(second.service.port());
+  t.after(async () => { client2.close(); await second.service.stop(); });
   await client2.open();
   await client2.expectOk("subscribe", { channel: { kind: "draft", draftId: "persist" } });
   const opened = await client2.expectOk("draft.open", { projectId, draftId: "persist" });
@@ -807,6 +829,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   appendFileSync(files.records, '{"seq":999,"record":{"type":"junk"}}\n{not json');
   const third = await startHarness({ script, slc: stubSlcBlockingSource("['Helper']"), dir });
   const client3 = new Client(third.service.port());
+  t.after(async () => { client3.close(); await third.service.stop(); });
   await client3.open();
   const damaged = await client3.expectOk("draft.open", { projectId, draftId: "persist" });
   assert.match(damaged.draft.diagnostic ?? "", /records\.jsonl: damaged transcript after record \d+$/);
@@ -938,11 +961,13 @@ test("playbook-library-76: only top-level, well-formed spex blocks act; malforme
 // core-service-97: the command family's refusals, channels, and states
 // ---------------------------------------------------------------------------
 
-test("core-service-97: draft commands refuse by code, stream on the draft channel only, and publish every transition", async () => {
+test("core-service-97: draft commands refuse by code, stream on the draft channel only, and publish every transition", async (t) => {
   const harness = await startHarness({ script: IN_FLIGHT, slc: stubSlcBlockingSource("['Helper']") });
   const { projectId, clone } = harness;
   const a = new Client(harness.service.port());
   const b = new Client(harness.service.port());
+  // However the test ends, the stop kills the blocking compiler.
+  t.after(async () => { a.close(); b.close(); await harness.service.stop(); });
   await a.open();
   await b.open();
   const other = (await a.expectOk("project.register", { path: workingFolder(join(harness.dir, "other")) })).id;
@@ -1002,6 +1027,19 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "queued" }), { accepted: true, queued: true });
   // Every other command is admitted beside the turn.
   await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso 3\n\nRoles:\n\n- Helper\n" });
+  // A compile beside the turn: the state reports each, the turn first
+  // in the activity and the compile beside it.
+  const gears = () => a.messages.filter((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.line.startsWith("→ gears2fsm")).length;
+  const beside = a.command("draft.compile", { projectId, draftId: "iso" });
+  await until(() => gears() === 1, 20_000, "the compile beside the turn");
+  const both = a.latest("iso");
+  assert.equal(both?.activity, "turn");
+  assert.equal(both?.compiling, true);
+  assert.equal(both?.state, "compiling");
+  await a.expectOk("compile.abort", { playbookId: "iso", instance: a.instance("iso") });
+  const besideReply = await beside;
+  assert.ok(!besideReply.ok && besideReply.error.code === "aborted");
+  await until(() => a.latest("iso")?.compiling === false && a.latest("iso")?.activity === "turn", 10_000, "the turn alone");
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
   await until(() => a.turnStarts("iso").includes("queued"), 10_000, "the queued turn");
   assert.deepEqual(await a.expectOk("draft.abort", { projectId, draftId: "iso" }), { aborted: true });
@@ -1017,7 +1055,7 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
 
   // The activity table during a compile.
   const compiling = a.command("draft.compile", { projectId, draftId: "iso" });
-  await a.waitFor((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.line.startsWith("→ gears2fsm"), 20_000);
+  await until(() => gears() === 2, 20_000, "the compile");
   assert.deepEqual(await a.expectOk("draft.send", { projectId, draftId: "iso", text: "later" }), { accepted: true, queued: true });
   // And beside the compile.
   await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso 4\n\nRoles:\n\n- Helper\n" });
@@ -1052,14 +1090,17 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   // naming the former instance reaches nothing.
   await a.expectOk("draft.source.write", { projectId, draftId: "iso", content: "# Iso\n\nRoles:\n\n- Helper\n" });
   const running = () => a.messages.filter((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.instance === successor.instance && m.line.startsWith("→ gears2fsm")).length;
-  const successorCompiles = [a.command("draft.compile", { projectId, draftId: "iso" })];
+  const successorCompile = a.command("draft.compile", { projectId, draftId: "iso" });
   await until(() => running() === 1, 20_000, "the successor's compile");
-  successorCompiles.push(a.command("draft.compile", { projectId, draftId: "iso" }));
-  await until(() => running() === 2, 20_000, "two compiles of one session at once");
+  // A second compile of the instance while its first runs is refused.
+  await a.expectError("draft.compile", { projectId, draftId: "iso" }, "busy");
   await a.expectError("compile.abort", { playbookId: "iso", instance: former }, "not_found");
   assert.equal(a.latest("iso")?.activity, "compiling");
+  assert.equal(a.latest("iso")?.compiling, true);
   await a.expectOk("compile.abort", { playbookId: "iso", instance: successor.instance });
-  for (const canceled of await Promise.all(successorCompiles)) assert.ok(!canceled.ok && canceled.error.code === "aborted");
+  const canceled = await successorCompile;
+  assert.ok(!canceled.ok && canceled.error.code === "aborted");
+  assert.equal(running(), 1, "the refused compile ran no compiler");
   await a.waitFor((m) => m.type === "compile.progress" && m.playbookId === "iso" && m.instance === successor.instance && m.line === "◇ compile canceled");
 
   a.close();
@@ -1165,18 +1206,465 @@ test("media-18: an authoring turn's output whose session was replaced while it w
     assert.ok(refused instanceof DraftChangedError && !refused.gone, String(refused));
     assert.ok(!existsSync(join(files.assets, createHash("sha256").update(output).digest("hex"))), "nothing lands in the successor");
     assert.deepEqual(readdirSync(join(harness.dataDir, "local", "asset-staging")), [], "the private stage is gone");
+    // The former turn goes on to its own end; none of its later records
+    // — its event, its player's and its turn's finish — reaches the
+    // successor, whose transcript is never made (playbook-library-70).
+    const live = Reflect.get(Reflect.get(harness.service, "authors"), "live") as Map<string, { turn?: unknown }>;
+    await until(() => !live.get(former)?.turn, 10_000, "the former turn's end");
+    assert.ok(!existsSync(files.records), "no transcript of the successor is made");
     client.close();
     await harness.service.stop();
-    // The former run's later records reach no file of the successor.
-    assert.ok(!existsSync(files.records) || !readFileSync(files.records, "utf8").includes("\"media\""));
   } finally { media.importInto = importInto; client.close(); await harness.service.stop(); }
+});
+
+// ---------------------------------------------------------------------------
+// playbook-library-100: one job writes an artifact folder at a time
+// ---------------------------------------------------------------------------
+
+test("playbook-library-100: one compile or packaging job writes a playbook artifact's folder at a time (core-service-97)", {timeout: 120_000}, async (t) => {
+  const script: FakeScript = {
+    rules: [
+      // The turn waits on its approval until the test answers it, then
+      // replies with its compile directive.
+      { match: /Boss: compile please$/, response: { deltas: ["asking"], result: "Compile it.\n```spex\nkind: compile\n```",
+        approval: { toolName: "desktop.inspect", input: { app: "Task-owned Example", operation: "read-window", target: "solo" }, reason: "Hold the turn", expiresInMs: 600_000 } } },
+      { match: /Boss: hold on$/, response: { deltas: ["holding"], result: "", untilAborted: true } },
+    ],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId } = harness;
+  const client = new Client(harness.service.port());
+  await client.open();
+  const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "other")) })).id;
+  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", id, "playbooks", "en", id);
+  const release = (id: string, folder = "project") => writeFileSync(join(artifactDir(id, folder), STUB_SLC_RELEASE_FILE), "");
+  let writer: number | undefined;
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    for (const [id, folder] of [["solo", "project"], ["solo", "other"]] as const) if (existsSync(artifactDir(id, folder))) release(id, folder);
+    if (writer !== undefined) closeSync(writer);
+    client.close();
+    await harness.service.stop();
+  });
+  // The session's working folder again, through a link to it: a project
+  // of its own whose artifact folders are the session's.
+  const linked = join(dir, "project-link");
+  symlinkSync(join(dir, "project"), linked, "junction");
+  const alias = (await client.expectOk("project.register", { path: linked })).id;
+  assert.notEqual(alias, projectId);
+  // And through another case spelling of it, where the scratch
+  // filesystem folds case.
+  const respelled = join(dir, "PROJECT");
+  const folds = existsSync(respelled);
+  const caseAlias = folds ? (await client.expectOk("project.register", { path: respelled })).id : undefined;
+  if (caseAlias === undefined) t.diagnostic("the scratch filesystem keeps case: no case alias");
+  else assert.ok(caseAlias !== projectId && caseAlias !== alias);
+  const runs = (id: string, folder = "project") => {
+    const counter = join(artifactDir(id, folder), ".stub-slc-runs");
+    return existsSync(counter) ? Number(readFileSync(counter, "utf8")) : 0;
+  };
+  const holding = (id: string, n: number) => until(() => client.progress(id).filter((line) => line.startsWith("→ normalize")).length >= n, 20_000, `${id} held ×${n}`);
+  const idle = (id: string) => until(() => client.latest(id)?.activity === "idle" && client.latest(id)?.compiling === false, 20_000, `${id} idle`);
+  const SRC = "# Solo\n\nRoles:\n\n- Helper\n";
+  const ONE_SHOT = { playbookId: "solo", sourceText: SRC, roles: ["Helper"], command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } };
+  await client.expectOk("draft.create", { projectId, draftId: "solo" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "solo" } });
+  await client.expectOk("draft.source.write", { projectId, draftId: "solo", content: SRC });
+
+  // The session's second Compile and its agent's directive while its
+  // first compile runs on a source since edited: both refused, the
+  // folder and the session holding the first's run and outcome.
+  await client.expectOk("draft.send", { projectId, draftId: "solo", text: "compile please" });
+  await client.waitFor((m) => m.type === "approval.state" && m.state.pending.some((request) => request.owner.kind === "draft" && request.owner.id === "solo"), 10_000);
+  await until(() => client.latest("solo")?.activity === "turn", 10_000, "the turn awaiting its approval");
+  const first = client.command("draft.compile", { projectId, draftId: "solo" });
+  await holding("solo", 1);
+  writeFileSync(join(artifactDir("solo"), "solo.md"), `${SRC}\nEdited meanwhile.\n`);
+  assert.equal(client.latest("solo")?.activity, "turn", "the refusal comes while the turn runs");
+  const refused = (await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message;
+  assert.match(refused, /^a compile is writing /);
+  assert.ok(refused.includes(join("spex-packages", "solo", "playbooks", "en", "solo")), refused);
+  // A one-shot compile of the id in the session's working folder too,
+  // and through the project at the link to that folder.
+  assert.match((await client.expectError("compile.run", { ...ONE_SHOT, projectId }, "busy")).message, /a compile is writing/);
+  const aliased = await within(client.command("compile.run", { ...ONE_SHOT, projectId: alias }));
+  assert.ok(aliased && !aliased.ok && aliased.error.code === "busy", `the linked folder is the same folder: ${JSON.stringify(aliased)}`);
+  assert.match(aliased.error.message, /a compile is writing/);
+  if (caseAlias !== undefined) {
+    const respelledRun = await within(client.command("compile.run", { ...ONE_SHOT, projectId: caseAlias }));
+    assert.ok(respelledRun && !respelledRun.ok && respelledRun.error.code === "busy", `the respelled folder is the same folder: ${JSON.stringify(respelledRun)}`);
+    assert.match(respelledRun.error.message, /a compile is writing/);
+  }
+  // Answered, the turn replies with its directive while the first
+  // compile still runs.
+  const approvals = await client.expectOk("approval.list", {});
+  const asked = approvals.pending.find((request) => request.owner.kind === "draft" && request.owner.id === "solo");
+  assert.ok(asked, JSON.stringify(approvals));
+  await client.expectOk("approval.respond", { generation: approvals.generation, requestId: asked.id, owner: asked.owner, decision: "allow_once" });
+  await until(() => client.statusLines("solo").some((line) => line.startsWith("◇ Compile skipped: a compile is writing")), 20_000, "the directive skipped");
+  release("solo");
+  assert.ok((await first).ok);
+  await idle("solo");
+  assert.equal(runs("solo"), 1, "one compiler ran in the folder");
+  assert.equal(client.latest("solo")?.compile?.outcome, "ok");
+  assert.equal(client.latest("solo")?.state, "changed", "the outcome is the first compile's, over the source it started on");
+
+  // The same id in another project's working folder runs beside it.
+  const again = client.command("draft.compile", { projectId, draftId: "solo" });
+  await holding("solo", 2);
+  const elsewhere = client.command("compile.run", { ...ONE_SHOT, projectId: other });
+  await holding("solo", 3);
+  release("solo");
+  release("solo", "other");
+  assert.ok((await again).ok);
+  const elsewhereReply = await elsewhere;
+  assert.ok(elsewhereReply.ok, JSON.stringify(elsewhereReply));
+  assert.equal(runs("solo", "other"), 1);
+  await idle("solo");
+
+  // Once the session's compile succeeded, its Compile and its enabling
+  // while a one-shot compile writes its folder: both refused, with a
+  // turn running and with the session idle.
+  await client.expectOk("draft.send", { projectId, draftId: "solo", text: "hold on" });
+  await until(() => client.latest("solo")?.activity === "turn", 10_000, "the held turn");
+  const oneShot = client.command("compile.run", { ...ONE_SHOT, projectId });
+  await holding("solo", 4);
+  assert.equal(client.latest("solo")?.activity, "turn", "the compile refused while the turn runs");
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message, /a compile is writing/);
+  assert.equal(client.latest("solo")?.activity, "turn", "the enabling refused while the turn runs");
+  assert.match((await client.expectError("draft.register", { projectId, draftId: "solo", command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } }, "busy")).message, /a compile is writing/);
+  assert.deepEqual(await client.expectOk("draft.abort", { projectId, draftId: "solo" }), { aborted: true });
+  await idle("solo");
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message, /a compile is writing/);
+  assert.match((await client.expectError("draft.register", { projectId, draftId: "solo", command: "solo", intent: "a solo workflow", bindings: { Helper: "dev.coder" } }, "busy")).message, /a compile is writing/);
+  release("solo");
+  const oneShotReply = await oneShot;
+  assert.ok(oneShotReply.ok, JSON.stringify(oneShotReply));
+  assert.equal(runs("solo"), 3);
+
+  // A one-shot compile's picked file read while another writer changes
+  // `<id>.md`: refused as a conflict before the compiler runs, the
+  // other writer's bytes standing (playbook-library-12).
+  const fifo = join(dir, "picked.md");
+  execFileSync("mkfifo", [fifo]);
+  const { sourceText: _text, ...picked } = ONE_SHOT;
+  const piped = client.command("compile.run", { ...picked, playbookId: "piped", command: "piped", sourcePath: fifo, projectId: other });
+  // The core opened the picked file for reading only after it read
+  // `<id>.md`'s version: a writer may open the pipe once it waits.
+  await until(() => {
+    try { writer = openSync(fifo, constants.O_WRONLY | constants.O_NONBLOCK); return true; }
+    catch { return false; }
+  }, 20_000, "the core reading the picked file");
+  writeFileSync(join(artifactDir("piped", "other"), "piped.md"), "# Theirs\n");
+  writeSync(writer!, SRC);
+  closeSync(writer!);
+  writer = undefined;
+  // Released ahead: a compiler run against the check finishes at once.
+  release("piped", "other");
+  const conflict = await piped;
+  assert.ok(!conflict.ok && conflict.error.code === "conflict", JSON.stringify(conflict));
+  assert.match(conflict.error.message, /piped\.md changed meanwhile; retry/);
+  assert.equal(readFileSync(join(artifactDir("piped", "other"), "piped.md"), "utf8"), "# Theirs\n");
+  assert.equal(runs("piped", "other"), 0, "no compiler ran");
+
+  client.close();
+  await harness.service.stop();
+});
+
+/** A stub slc that outlives its SIGTERM: it marks the signal, then
+ * runs on until `.stub-exit` lands beside the source, exiting on its
+ * own after a minute whatever the test does. */
+const STUBBORN_SLC = `
+const fs = require("node:fs");
+const path = require("node:path");
+const src = process.argv.slice(2).filter((_, i, all) => all[i] !== "--config" && all[i - 1] !== "--config")[1];
+const dir = path.dirname(src);
+const base = path.basename(src, ".md");
+process.on("SIGTERM", () => fs.writeFileSync(path.join(dir, ".stub-sigterm"), ""));
+process.stderr.write("→ normalize (writing " + base + ".playbook/" + base + ".normalize)\\n");
+setTimeout(() => process.exit(3), 60000);
+setInterval(() => {
+  const exit = path.join(dir, ".stub-exit");
+  if (fs.existsSync(exit)) { fs.rmSync(exit); process.exit(1); }
+}, 50);
+`;
+
+test("playbook-library-100: a canceled compile holds its folder until its compiler exits", {
+  timeout: 90_000,
+  // A Windows child cannot ignore the termination a cancel sends it.
+  skip: process.platform === "win32" && "SIGTERM cannot be ignored on Windows",
+}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: STUBBORN_SLC });
+  const { dir, projectId } = harness;
+  const client = new Client(harness.service.port());
+  const folder = join(dir, "project", "spex-packages", "late", "playbooks", "en", "late");
+  const exit = () => { if (existsSync(folder)) writeFileSync(join(folder, ".stub-exit"), ""); };
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "late" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "late", content: "# Late\n\nRoles:\n\n- Helper\n" });
+    const first = client.command("draft.compile", { projectId, draftId: "late" });
+    await until(() => client.progress("late").some((line) => line.startsWith("→ normalize")), 20_000, "the compiler running");
+    await client.expectOk("compile.abort", { playbookId: "late", instance: client.instance("late") });
+    await until(() => existsSync(join(folder, ".stub-sigterm")), 10_000, "the compiler signaled");
+    // The canceled compiler still runs: its job still holds the folder.
+    const held = await within(client.command("draft.compile", { projectId, draftId: "late" }));
+    assert.ok(held && !held.ok && held.error.code === "busy", `refused while the canceled compiler runs: ${JSON.stringify(held)}`);
+    assert.match(held.error.message, /^a compile is writing /);
+    assert.equal(harness.slcCalls.length, 1, "the refused compile ran no compiler");
+    // Once it exits, the cancel settles and a Compile is admitted.
+    exit();
+    const canceled = await first;
+    assert.ok(!canceled.ok && canceled.error.code === "aborted", JSON.stringify(canceled));
+    await until(() => client.latest("late")?.compile?.outcome === "canceled" && client.latest("late")?.compiling === false, 10_000, "canceled");
+    const again = client.command("draft.compile", { projectId, draftId: "late" });
+    await until(() => harness.slcCalls.length === 2, 20_000, "the next compiler running");
+    exit();
+    const ended = await again;
+    assert.ok(!ended.ok && ended.error.code !== "busy", JSON.stringify(ended));
+  } finally {
+    exit();
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile whose project was rebound as it started writes neither folder", {timeout: 60_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  // The compile's start held where it prepares the config, or at its
+  // toolchain's first probe; probes are counted apart from compilers.
+  const options = Reflect.get(Reflect.get(harness.service, "authors"), "options") as { prepareConfig?: () => Promise<void>; compileSpawner?: LineSpawner };
+  const prepare = options.prepareConfig;
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let hold: { at: "config" | "probe"; entered: boolean; gate: Promise<void>; release: () => void } | undefined;
+  const wait = async (at: "config" | "probe") => {
+    const current = hold;
+    if (current?.at !== at || current.entered) return;
+    current.entered = true;
+    await current.gate;
+  };
+  let probes = 0;
+  options.prepareConfig = async () => { await wait("config"); await prepare?.(); };
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (args.length === 1 && args[0] === "--version") { probes += 1; await wait("probe"); }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  try {
+    await client.open();
+    let paired = join(dir, "project");
+    for (const [at, id, to] of [["config", "moved", "rebound"], ["probe", "probed", "rebound-again"]] as const) {
+      await client.expectOk("draft.create", { projectId, draftId: id });
+      await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
+      const folder = join(paired, "spex-packages", id, "playbooks", "en", id);
+      const before = readdirSync(folder).sort();
+      const source = readFileSync(join(folder, `${id}.md`), "utf8");
+      const record = authoringFiles(clone, id).record;
+      const recordBefore = readFileSync(record, "utf8");
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const current = { at, entered: false, gate, release };
+      hold = current;
+      const compiled = client.command("draft.compile", { projectId, draftId: id });
+      await until(() => current.entered, 10_000, `the compile held at its ${at}`);
+      const rebound = workingFolder(join(dir, to));
+      await client.expectOk("project.rebind", { projectId, path: rebound });
+      current.release();
+      const reply = await compiled;
+      assert.ok(!reply.ok && reply.error.code === "conflict", `${at}: ${JSON.stringify(reply)}`);
+      assert.match(reply.error.message, new RegExp(`${id} changed meanwhile; retry`));
+      assert.deepEqual(readdirSync(folder).sort(), before, `${at}: the folder paired at its start is unchanged`);
+      assert.equal(readFileSync(join(folder, `${id}.md`), "utf8"), source);
+      assert.ok(!existsSync(join(rebound, "spex-packages", id, "playbooks", "en", id)), `${at}: nor is the folder paired now made`);
+      assert.equal(harness.slcCalls.length, 0, `${at}: no compiler ran`);
+      if (at === "probe") {
+        // Refused before its start writes a marker.
+        assert.equal((JSON.parse(readFileSync(record, "utf8")) as { compile?: unknown }).compile, undefined, "probe: no marker written");
+        assert.equal(readFileSync(record, "utf8"), recordBefore, "probe: the session file is as it was");
+      } else {
+        // Its marker, written before the config, settles as any refused
+        // start does.
+        await until(() => client.latest(id)?.compile?.outcome === "failed" && client.latest(id)?.compiling === false, 10_000, `${at}: the marker settled`);
+      }
+      paired = rebound;
+    }
+    assert.ok(probes >= 2, `each compile probed its toolchain (${probes})`);
+  } finally {
+    hold?.release();
+    options.prepareConfig = prepare;
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile whose probe returns after a rebind and a newer compile leaves the newer marker standing", {timeout: 60_000}, async () => {
+  // Every compiler run holds in its first phase until the test releases it.
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  const authors = Reflect.get(harness.service, "authors") as object;
+  // The older compile held at its first toolchain probe; the newer one's
+  // probe passes.
+  const options = Reflect.get(authors, "options") as { compileSpawner?: LineSpawner };
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let entered = false;
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (!entered && args.length === 1 && args[0] === "--version") { entered = true; await gate; }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  // One fixed clock: the older compile's admission and the newer one's
+  // marker read the same time, so only a marker actually written is the
+  // older compile's.
+  const now = Reflect.get(authors, "now") as () => number;
+  Reflect.set(authors, "now", () => 1_000);
+  let heldCompiler: string | undefined;
+  try {
+    await client.open();
+    const content = "# race\n\nRoles:\n\n- Helper\n";
+    await client.expectOk("draft.create", { projectId, draftId: "race" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
+    const oldFolder = join(dir, "project", "spex-packages", "race", "playbooks", "en", "race");
+    const oldListing = readdirSync(oldFolder).sort();
+    const oldSource = readFileSync(join(oldFolder, "race.md"), "utf8");
+    const record = authoringFiles(clone, "race").record;
+    const marker = () => (JSON.parse(readFileSync(record, "utf8")) as { compile?: { at: number; outcome: string; roles?: string[] } }).compile;
+    const older = client.command("draft.compile", { projectId, draftId: "race" });
+    await until(() => entered, 10_000, "the older compile held at its probe");
+    const raced = workingFolder(join(dir, "raced"));
+    await client.expectOk("project.rebind", { projectId, path: raced });
+    await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
+    heldCompiler = join(raced, "spex-packages", "race", "playbooks", "en", "race");
+    const newer = client.command("draft.compile", { projectId, draftId: "race" });
+    await until(() => harness.slcCalls.length === 1 && client.progress("race").some((line) => line.startsWith("→ normalize")), 20_000, "the newer compile's compiler held");
+    const newerMarker = marker();
+    assert.equal(newerMarker?.outcome, "running", "the newer compile's marker");
+    const newerBytes = readFileSync(record, "utf8");
+    release();
+    const olderReply = await older;
+    assert.ok(!olderReply.ok && olderReply.error.code === "conflict", `older: ${JSON.stringify(olderReply)}`);
+    assert.match(olderReply.error.message, /race changed meanwhile; retry/);
+    assert.equal(readFileSync(record, "utf8"), newerBytes, "older: the newer marker stands, the session file as it was");
+    writeFileSync(join(heldCompiler, STUB_SLC_RELEASE_FILE), "");
+    const newerReply = await newer;
+    assert.ok(newerReply.ok, `newer: ${JSON.stringify(newerReply)}`);
+    const settled = marker();
+    assert.deepEqual({ at: settled?.at, outcome: settled?.outcome, roles: settled?.roles }, { at: newerMarker?.at, outcome: "ok", roles: newerReply.result.roles }, "newer: its success recorded on its own marker");
+    assert.equal(harness.slcCalls.length, 1, "one compiler ran, the newer compile's");
+    assert.deepEqual(readdirSync(oldFolder).sort(), oldListing, "the older compile's folder is as it was");
+    assert.equal(readFileSync(join(oldFolder, "race.md"), "utf8"), oldSource);
+  } finally {
+    release();
+    if (heldCompiler !== undefined && existsSync(heldCompiler)) writeFileSync(join(heldCompiler, STUB_SLC_RELEASE_FILE), "");
+    Reflect.set(authors, "now", now);
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("playbook-library-100: a compile canceled while its toolchain or config is prepared writes no artifacts", {timeout: 60_000}, async () => {
+  const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  // The compile held at its first toolchain probe, before its start, or
+  // where its start prepares the config, after its marker.
+  const options = Reflect.get(Reflect.get(harness.service, "authors"), "options") as { prepareConfig?: () => Promise<void>; compileSpawner?: LineSpawner };
+  const prepare = options.prepareConfig;
+  const spawner = options.compileSpawner ?? defaultSpawner;
+  let hold: { at: "probe" | "config"; entered: boolean; gate: Promise<void>; release: () => void } | undefined;
+  const wait = async (at: "probe" | "config") => {
+    const current = hold;
+    if (current?.at !== at || current.entered) return;
+    current.entered = true;
+    await current.gate;
+  };
+  // Or answered by a Node older than the compiler's floor; probes are
+  // counted apart from compilers.
+  let oldNode = false;
+  let probes = 0;
+  options.prepareConfig = async () => { await wait("config"); await prepare?.(); };
+  options.compileSpawner = async (command, args, cwd, onLine, signal, env) => {
+    if (args.length === 1 && args[0] === "--version") {
+      probes += 1;
+      if (oldNode) { onLine("v20.11.0"); return 0; }
+      await wait("probe");
+    }
+    return spawner(command, args, cwd, onLine, signal, env);
+  };
+  try {
+    await client.open();
+    // The probe first: with no marker of its own, its case fails on the
+    // marker even where the start's own check stops the compiler.
+    for (const [at, id] of [["probe", "cut"], ["config", "held"]] as const) {
+      await client.expectOk("draft.create", { projectId, draftId: id });
+      await client.expectOk("subscribe", { channel: { kind: "draft", draftId: id } });
+      await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
+      const record = authoringFiles(clone, id).record;
+      const marker = () => (JSON.parse(readFileSync(record, "utf8")) as { compile?: { at: number; outcome: string } }).compile;
+      const folder = join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+      const recordBefore = readFileSync(record, "utf8");
+      const listing = readdirSync(folder).sort();
+      const source = readFileSync(join(folder, `${id}.md`), "utf8");
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const current = { at, entered: false, gate, release };
+      hold = current;
+      const compiled = client.command("draft.compile", { projectId, draftId: id });
+      await until(() => current.entered, 10_000, `the compile held at its ${at}`);
+      const standing = marker();
+      if (at === "probe") assert.equal(standing, undefined, "probe: no marker before the start");
+      else assert.equal(standing?.outcome, "running", "config: the start's marker stands while the config is prepared");
+      await client.expectOk("compile.abort", { playbookId: id, instance: client.instance(id) });
+      current.release();
+      const reply = await compiled;
+      assert.ok(!reply.ok && reply.error.code === "aborted", `${at}: ${JSON.stringify(reply)}`);
+      assert.equal(harness.slcCalls.length, 0, `${at}: no compiler ran`);
+      if (at === "probe") {
+        assert.equal(marker(), undefined, "probe: no marker written");
+        assert.equal(readFileSync(record, "utf8"), recordBefore, "probe: the session file is as it was");
+      } else {
+        // The start's own marker settles canceled.
+        await until(() => marker()?.outcome === "canceled", 10_000, "config: the marker settled");
+        assert.equal(marker()?.at, standing?.at, "config: the marker is the start's own");
+      }
+      assert.ok(!client.statusLines(id).some((line) => line.startsWith("◇ Compiling")), `${at}: no compile line`);
+      assert.deepEqual(readdirSync(folder).sort(), listing, `${at}: the folder is as it was`);
+      assert.equal(readFileSync(join(folder, `${id}.md`), "utf8"), source, `${at}: the source is as it was`);
+    }
+    // A probe whose verdict refuses the toolchain: the refusal recorded
+    // after the start's marker as failed at the toolchain, with its
+    // guidance, and no compiler run.
+    oldNode = true;
+    await client.expectOk("draft.create", { projectId, draftId: "old" });
+    await client.expectOk("draft.source.write", { projectId, draftId: "old", content: "# old\n\nRoles:\n\n- Helper\n" });
+    const probesBefore = probes;
+    const refused = await client.command("draft.compile", { projectId, draftId: "old" });
+    assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
+    assert.ok(refused.error.message.includes(`Node >= ${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}`) && refused.error.message.includes("found v20.11.0"), refused.error.message);
+    assert.ok(probes > probesBefore, "old: the toolchain was probed");
+    const failed = (JSON.parse(readFileSync(authoringFiles(clone, "old").record, "utf8")) as { compile?: { outcome: string; phase?: string; output?: string } }).compile;
+    assert.deepEqual({ outcome: failed?.outcome, phase: failed?.phase, output: failed?.output }, { outcome: "failed", phase: "toolchain", output: refused.error.message }, "old: recorded failed at the toolchain");
+    assert.equal(harness.slcCalls.length, 0, "old: no compiler ran");
+  } finally {
+    oldNode = false;
+    hold?.release();
+    options.prepareConfig = prepare;
+    options.compileSpawner = spawner;
+    client.close();
+    await harness.service.stop();
+  }
 });
 
 // ---------------------------------------------------------------------------
 // playbook-library-96: files changed beside the core, read at each use
 // ---------------------------------------------------------------------------
 
-test("playbook-library-96: the authoring store reads its files at use and writes under the version it read", {timeout: 120_000}, async () => {
+test("playbook-library-96: the authoring store reads its files at use and writes under the version it read", {timeout: 120_000}, async (t) => {
   const script: FakeScript = { fallback: { deltas: ["Noted."], result: "Noted." } };
   // Every compile holds in its first phase until the test releases it.
   const harness = await startHarness({ script, slc: stubSlcScriptedSource(["ok"], "['Helper']", { hold: true }) });
@@ -1186,6 +1674,13 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
   const held = (id: string) => client.waitFor((m) => m.type === "compile.progress" && m.playbookId === id && m.line.startsWith("→ normalize"), 20_000);
   const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    const root = join(dir, "project", "spex-packages");
+    if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
+    client.close();
+    await harness.service.stop();
+  });
   const turnsDone = (id: string, n: number) => until(() => client.latest(id)?.activity === "idle" && client.records(id).filter((m) => m.record.type === "turn_finished").length >= n, 20_000, `${id} turn ${n}`);
   const SRC = "# Held\n\nRoles:\n\n- Helper\n";
 
@@ -1214,13 +1709,42 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   assert.equal(harness.stats.runs[1].resume, undefined, "the replaced history drops the resume");
   assert.match(harness.stats.runs[1].prompt, /Conversation so far:\nBoss: rewritten\nAgent: Noted\./);
 
-  // A damaged transcript repaired while the core runs takes a message.
+  // A damaged transcript repaired while the core runs takes a message,
+  // and its diagnostic leaves the next report.
+  const reported = async (file: string) => (await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === file);
   const good = readFileSync(hist.records);
   appendFileSync(hist.records, "{not json");
   assert.match((await client.expectError("draft.send", { projectId, draftId: "hist", text: "x" }, "invalid_request")).message, /damaged transcript/);
+  assert.ok(await reported(hist.records), "the damage is reported");
   writeFileSync(hist.records, good);
+  assert.ok(!(await reported(hist.records)), "the repaired transcript reports nothing");
   await client.expectOk("draft.send", { projectId, draftId: "hist", text: "repaired" });
   await turnsDone("hist", 3);
+
+  // A damaged session file deleted beside the core reports nothing more.
+  await client.expectOk("draft.create", { projectId, draftId: "broken" });
+  const broken = authoringFiles(clone, "broken");
+  writeFileSync(broken.record, "{not json");
+  await client.expectError("draft.send", { projectId, draftId: "broken", instance: client.instance("broken"), text: "x" }, "invalid_request");
+  assert.ok(await reported(broken.record), "the damaged session file is reported");
+  rmSync(broken.record);
+  assert.ok(!(await reported(broken.record)), "a session file gone reports nothing");
+
+  // A transcript that will not read at all — a folder in its place — is
+  // one scoped row naming it; the report and another session stand.
+  const histBytes = readFileSync(hist.records);
+  rmSync(hist.records);
+  mkdirSync(hist.records);
+  const rows = (await client.expectOk("storage.diagnostics", {})).filter((entry) => entry.file === hist.records);
+  assert.equal(rows.length, 1, JSON.stringify(rows));
+  assert.equal(rows[0].blocking, false);
+  await client.expectOk("draft.create", { projectId, draftId: "usable" });
+  await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "usable" } });
+  await client.expectOk("draft.send", { projectId, draftId: "usable", text: "still here" });
+  await turnsDone("usable", 1);
+  rmSync(hist.records, { recursive: true });
+  writeFileSync(hist.records, histBytes);
+  assert.ok(!(await reported(hist.records)), "the restored transcript reports nothing");
 
   // A transcript standing without its session file keeps the id.
   const orphan = join(clone, "authoring", "orphan.records.jsonl");
@@ -1247,6 +1771,8 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   // it takes a message at once.
   assert.equal(successor.activity, "idle");
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "again", instance: successor.instance!, text: "beside" }), { accepted: true, queued: false });
+  // Its compile is refused while the former's writes their folder.
+  assert.match((await client.expectError("draft.compile", { projectId, draftId: "again", instance: successor.instance! }, "busy")).message, /a compile is writing/);
   await until(() => client.latest("again")?.instance === successor.instance && client.latest("again")?.activity === "idle", 20_000, "the successor's turn");
   await client.expectOk("compile.abort", { playbookId: "again", instance: former });
   await formerCompile;
@@ -1406,6 +1932,88 @@ test("core-service-97: a sync receiving a session's replaced transcript announce
   }
 });
 
+test("space-37: a sync taking the host's side of a transcript stops while this core's turn appends to it, and so does its retry", {timeout: 120_000}, async () => {
+  const script: FakeScript = {
+    rules: [{ match: /Boss: hold$/, response: { deltas: ["holding"], result: "", untilAborted: true } }],
+    fallback: { deltas: ["Noted."], result: "Noted." },
+  };
+  const harness = await startHarness({ script, slc: stubSlcSource("['Helper']") });
+  const { dir, projectId, clone } = harness;
+  const client = new Client(harness.service.port());
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).trim();
+  const sync = async (choices?: Record<string, "remote">) => {
+    const after = client.messages.length;
+    assert.deepEqual(await client.expectOk("space.sync", { repository: projectId, ...(choices ? { choices } : {}) }), { accepted: true });
+    const phaseOf = (message: ServerMessage) => message.type === "space.state"
+      ? message.state.groups.flatMap((group) => group.repositories).find((repository) => repository.key === projectId)?.sync
+      : undefined;
+    const settled = await client.waitFor((message) => client.messages.indexOf(message) >= after && ["done", "stopped", "choices"].includes(phaseOf(message)?.phase ?? ""), 60_000);
+    return phaseOf(settled)!;
+  };
+  try {
+    await client.open();
+    await client.expectOk("draft.create", { projectId, draftId: "held" });
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "held" } });
+    await client.expectOk("draft.send", { projectId, draftId: "held", text: "hello" });
+    await until(() => client.latest("held")?.activity === "idle" && harness.stats.runs.length === 1, 20_000, "the first turn");
+    const remote = join(dir, "remote.git");
+    git(dir, "init", "--quiet", "--bare", "--initial-branch=spex", remote);
+    await client.expectOk("space.remote.set", { repository: projectId, url: remote });
+    assert.equal((await sync()).phase, "done");
+    // Another device rewrites the history and pushes it.
+    const elsewhere = join(dir, "elsewhere");
+    git(dir, "clone", "--quiet", "--branch", "spex", remote, elsewhere);
+    const theirs = join(elsewhere, "authoring", "held.records.jsonl");
+    writeFileSync(theirs, readFileSync(theirs, "utf8").replaceAll('"prompt":"hello"', '"prompt":"rewritten"'));
+    git(elsewhere, "-c", "user.name=Other", "-c", "user.email=other@example.test", "commit", "--quiet", "-am", "rewrite elsewhere");
+    git(elsewhere, "push", "--quiet", "origin", "spex");
+    // A turn of this core appends to the transcript while the sync,
+    // taking the host's side, would replace it.
+    await client.expectOk("draft.send", { projectId, draftId: "held", text: "hold" });
+    await until(() => client.records("held").some((m) => m.record.type === "player_event" && JSON.stringify(m.record).includes("holding")), 10_000, "the turn under way");
+    const records = authoringFiles(clone, "held").records;
+    // Both sides changed the unit: the reader takes the host's side.
+    assert.equal((await sync()).phase, "choices");
+    const stopped = await sync({ "authoring/held": "remote" });
+    assert.equal(stopped.phase, "stopped", JSON.stringify(stopped));
+    assert.match(JSON.stringify(stopped), /held/, "the stop names the session");
+    const kept = readFileSync(records, "utf8");
+    assert.ok(kept.includes('"prompt":"hello"') && !kept.includes('"prompt":"rewritten"'), "the transcript is left as it was");
+    const marker = join(clone, ".spex-apply.json");
+    assert.ok(existsSync(marker), "the repair marker stands");
+    // Its Retry while the turn still runs: the repair stops the same way.
+    const retried = await sync();
+    assert.equal(retried.phase, "stopped", JSON.stringify(retried));
+    assert.match(JSON.stringify(retried), /held/, "the retry's stop names the session");
+    assert.ok(existsSync(marker), "the repair marker still stands");
+    assert.equal(readFileSync(records, "utf8"), kept, "the retry left the transcript as it was");
+    // The turn goes on; every record it writes lands in its transcript.
+    await client.expectOk("draft.abort", { projectId, draftId: "held" });
+    await until(() => client.latest("held")?.activity === "idle", 10_000, "the turn's end");
+    const seqs = readFileSync(records, "utf8").trimEnd().split("\n").map((line) => (JSON.parse(line) as { seq: number }).seq);
+    assert.deepEqual(seqs, seqs.map((_seq, index) => index + 1), "one unbroken transcript");
+    assert.ok(client.records("held").some((m) => m.record.type === "turn_aborted"), "the turn's end is recorded");
+    assert.equal(client.records("held").at(-1)?.seq, seqs.at(-1));
+    // Positive control: a turn the transcript records unfinished, of this
+    // very device, with no turn of this core running, refuses nothing.
+    const device = (Reflect.get(harness.service, "store") as { home: { device: string } }).home.device;
+    const open = seqs.length + 1;
+    appendFileSync(records, `${JSON.stringify({ seq: open, record: { type: "turn_started", turnId: 99, timestamp: 1, device, turn: { id: 99, prompt: "unfinished", timestamp: 1 } } })}\n`);
+    // The local tail changed since the stopped selection was saved: a
+    // fresh comparison asks again, and the host's side chosen applies.
+    const asked = await sync();
+    assert.equal(asked.phase, "choices", JSON.stringify(asked));
+    const applied = await sync({ "authoring/held": "remote" });
+    assert.equal(applied.phase, "done", JSON.stringify(applied));
+    const replaced = readFileSync(records, "utf8");
+    assert.ok(replaced.includes('"prompt":"rewritten"') && !replaced.includes('"prompt":"unfinished"'), "the host's history, whole");
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
+});
+
 test("core-service-97: a moved clone's authoring session is announced under its new project", {timeout: 60_000}, async () => {
   const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Helper']") });
   const { dataDir, projectId, clone } = harness;
@@ -1431,7 +2039,7 @@ test("core-service-97: a moved clone's authoring session is announced under its 
   }
 });
 
-test("playbook-library-96: work goes on beside work, settling only what is its own, resuming only over its own records", {timeout: 120_000}, async () => {
+test("playbook-library-96: work goes on beside work, settling only what is its own, resuming only over its own records", {timeout: 120_000}, async (t) => {
   const script: FakeScript = {
     rules: [
       // Anchored to the prompt's end: a reseed quotes earlier messages.
@@ -1446,6 +2054,13 @@ test("playbook-library-96: work goes on beside work, settling only what is its o
   await client.open();
   const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
   const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
+  // However the test ends, every hold is released before the stop.
+  t.after(async () => {
+    const root = join(dir, "project", "spex-packages");
+    if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
+    client.close();
+    await harness.service.stop();
+  });
   const held = (id: string, n = 1) => until(() => client.progress(id).filter((line) => line.startsWith("→ normalize")).length >= n, 20_000, `${id} held ×${n}`);
   const SRC = "# Held\n\nRoles:\n\n- Helper\n";
   const make = async (id: string) => {
@@ -1466,21 +2081,20 @@ test("playbook-library-96: work goes on beside work, settling only what is its o
   await sleep(200);
   for (const path of Object.values(authoringFiles(clone, "gone"))) assert.ok(!existsSync(path), `${path} stays gone`);
 
-  // Two compiles settling in either order: one records its outcome, the
-  // other finds a marker not its own and records nothing.
-  await make("order");
-  const both = [client.command("draft.compile", { projectId, draftId: "order" })];
-  await held("order");
-  both.push(client.command("draft.compile", { projectId, draftId: "order" }));
-  await held("order", 2);
-  release("order");
-  await until(() => !existsSync(join(artifactDir("order"), STUB_SLC_RELEASE_FILE)), 10_000, "one released");
-  release("order");
-  await Promise.all(both);
-  await until(() => client.latest("order")?.activity === "idle", 20_000, "both settled");
-  await sleep(200);
-  assert.equal(client.statusLines("order").filter((line) => line.startsWith("◇ Compiled")).length, 1);
-  assert.equal(stored("order").compile?.outcome, "ok");
+  // Deleted and made again while a turn of the former instance runs:
+  // none of that turn's records reach the successor, whose transcript
+  // is never made.
+  await make("turned");
+  const formerTurned = client.instance("turned");
+  await client.expectOk("draft.send", { projectId, draftId: "turned", text: "slow" });
+  await until(() => client.records("turned").some((m) => m.record.type === "player_event" && JSON.stringify(m.record).includes("thinking")), 10_000, "the former turn under way");
+  await client.expectOk("draft.delete", { projectId, draftId: "turned", instance: formerTurned });
+  const successorTurned = await client.expectOk("draft.create", { projectId, draftId: "turned" });
+  assert.notEqual(successorTurned.instance, formerTurned);
+  const live = Reflect.get(Reflect.get(harness.service, "authors"), "live") as Map<string, { turn?: unknown }>;
+  await until(() => !live.get(formerTurned)?.turn, 10_000, "the former turn's end");
+  assert.ok(!existsSync(authoringFiles(clone, "turned").records), "no record of the former turn reaches the successor");
+  assert.equal(client.latest("turned")?.activity, "idle");
 
   // A running marker a sync replaced with another device's: the
   // settlement leaves it as it stands.

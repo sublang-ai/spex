@@ -57,9 +57,9 @@ The home file shall encode `home.yaml` as exactly `{format: 1, device, host, own
 
 - each path and each repository key appears at most once; a key names a clone under `workspace/`, so a group's own spex repository is paired like a project's;
 - a folder whose clone is missing, and a clone no folder pairs, are reported as diagnostics [[storage-12](#storage-12)] without deleting either;
-- the store reads `home.yaml` and the clones under `workspace/` as they stand when a command needs them, with no reload; a read creates no folder, and a clone gone since it was read is absent and refused where a command names it, your own group's clone being made only when the store opens ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- the store reads `home.yaml` and the clones under `workspace/` as they stand when a command needs them, with no reload; a read creates no folder, a session's open making its clone's `sessions/` where missing, never the clone, `session.create` refused `not_found` where that clone is gone before or during its open, and a clone gone since it was read is absent and refused where a command names it, your own group's clone being made only when the store opens ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
 - each change the core makes applies to the file as it reads at that instant, read, changed and written in one step, so a change an editor made since stands ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
-- a `home.yaml` that will not read, or that was deleted after it was read, is reported as blocking and refuses every write that needs it, a deleted one as changed meanwhile, the file neither written over nor recreated from memory until it reads again; meanwhile reads answer from its last valid reading, or with no pairs where the store opened on it.
+- a `home.yaml` that will not read, or that was deleted after it was read, is reported as blocking and refuses every write that needs it, a deleted one as changed meanwhile, the file neither written over nor recreated from memory until it reads again; meanwhile reads answer with no pairs, never pairs from an earlier reading, and with this device's id as last read, one damaged when the store opens taking an id minted for that run, so no command acts in a working folder through a pair the file no longer holds, and the pairs and id read from the file once it reads again.
 
 ### storage-3
 
@@ -241,6 +241,7 @@ Before reopening selected state, the validator shall validate the complete selec
 - incompatible modules or unsupported checkpoint relocation permit history only;
 - invalid session data blocks that session's execution and recovery, preserving lease-checked deletion; an invalid intent file blocks that intent alone;
 - invalid shared files block operations that require them; diagnostics name the failing file and reason, while startup, unrelated valid spex repositories and independent configuration or preference edits remain available;
+- a damaged session file's diagnostic leaves once that file is gone; the forge cache's diagnostic follows the cache file as it stands when reported, leaving once the file is repaired or removed and reported again once it is damaged again;
 - a config whose playbook cannot be loaded — the environment lacking it, or its module older than the toolchain — is reported without blocking, the validator telling that case by the failure's kind rather than by its reason's words, so the reason's language decides nothing.
 
 ### storage-13
@@ -312,18 +313,22 @@ When an integration suite merges two real Git branches of a group's own spex rep
 
 ### storage-28
 
-When an integration suite changes the home's files beside a running store, it shall verify that a change to `home.yaml` keeps an editor's change made since the store wrote it, and that once the file is deleted an ordinary change is refused as changed meanwhile without restoring it [[storage-2](#storage-2)]; that an intent edit whose file another writer rewrote during the edit's own wait is refused as changed meanwhile with that rewrite standing, and an intent written after its clone vanished is refused without recreating the clone [[storage-4](#storage-4)]; and that a preference write keeps a marker another writer cleared from `local/prefs.json` cleared, a read following the file [[storage-5](#storage-5)].
+When an integration suite changes the home's files beside a running store, it shall verify that a change to `home.yaml` keeps an editor's change made since the store wrote it [[storage-2](#storage-2)]; that an intent edit whose file another writer rewrote during the edit's own wait is refused as changed meanwhile with that rewrite standing, and an intent written after its clone vanished is refused without recreating the clone [[storage-4](#storage-4)]; and that a preference write keeps a marker another writer cleared from `local/prefs.json` cleared, a read following the file [[storage-5](#storage-5)].
 
 ### storage-29
 
-When the read-through suite `store-readthrough.integration.test.ts` changes the files of a running real store from outside it, it shall verify, with no reload between change and read:
+When an integration suite changes the files of a running real store from outside it, it shall verify, with no reload between change and read:
 
 - a project's name, its working-folder pair and a clone another process added read on the next query, which leaves no `sessions/` in the clone it found [[storage-2](#storage-2)] [[storage-3](#storage-3)];
 - a damaged `project.json` reported with its bytes kept, and its report gone once it is repaired [[storage-3](#storage-3)] [[storage-12](#storage-12)];
 - a clone removed from outside absent from every read with its pair reported as a repair, its session store refused, your own group's clone refused once removed, and neither made again [[storage-2](#storage-2)];
 - intent files added, closed, dispatched, repaired and removed from outside read by the queue, History, source, dispatch and asset reads, and an edit applied to the file as it stands [[storage-4](#storage-4)];
 - a damaged intent file listed nowhere, reported without blocking, refused with its cause, and its bytes left by an edit and by a capture of its id, while a capture of an id another clone holds writes nothing [[storage-4](#storage-4)] [[storage-12](#storage-12)];
-- a damaged `home.yaml` refusing a registration with its bytes kept while preferences stay writable, its repair admitting the next registration, a deleted one refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)].
+- a damaged `home.yaml` answering no pairs, by id or by path, its device unchanged, and refusing a registration with its bytes kept while preferences stay writable, its repair restoring its pairs and admitting the next registration, a deleted one answering no pairs, refused as changed meanwhile and not written again, and one damaged when the store opens recovering its pairs once repaired [[storage-2](#storage-2)];
+- through a real core, a `home.yaml` damaged after a project was paired refusing `specs.write`, `draft.create` and `compile.run` naming that project as no project of this device, with nothing written in its working folder or its clone [[storage-2](#storage-2)];
+- through a real core, a compile admitted before `home.yaml` is damaged settling as this device's while the file does not read, its outcome recorded and never left running, and the file not written [[storage-2](#storage-2)];
+- through a real core, a session created in a paired clone with no `sessions/` — one another process added, one whose `sessions/` was removed, and one a rebind paired — making that folder and succeeding, while one whose clone was removed from outside is refused `not_found` alike before its open and while the open prepares, the clone not made again [[storage-2](#storage-2)];
+- a damaged session file and a damaged forge cache reported, each report gone once its file is removed, another damaged session's report standing, and the forge cache reported again once damaged again and gone once repaired [[storage-12](#storage-12)].
 
 ### storage-27
 

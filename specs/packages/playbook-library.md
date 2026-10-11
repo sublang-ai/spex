@@ -112,6 +112,15 @@ While a compile is running, when a pipeline phase fails, the Playbooks surface s
 
 When a compiled playbook is enabled, the Playbooks surface shall list it with its entry fields, its spec package and enabled state, and shall indicate that project sessions started before enabling must be restarted before the playbook is available in them.
 
+#### playbook-library-99
+
+When a compiler or packaging job is asked for a playbook artifact's folder while another such job of the core writes that folder, the core shall refuse the job asked `busy` before it writes there, naming the folder and the work running in it ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
+
+- the jobs are an authoring session's compile, the Boss's or its agent's directive's [[playbook-library-57](#playbook-library-57)], a one-shot compile's compiling and packaging, and an enabling's repackaging [[playbook-library-69](#playbook-library-69)];
+- the folder is the job's own destination as its real path names it, so a job of the same id over another folder runs beside it, and one over a link to the folder does not;
+- a job holds its folder for its own run alone, until it ends — succeeded, failed or canceled, a canceled compiler's job ending only after its child exits — with nothing written to hold it, so an independent process writing the folder keeps ordinary filesystem behavior;
+- an enabling's environment and config writes after its repackaging hold no folder, and a turn, a source write, a sync and every other command run beside a job [[playbook-library-56](#playbook-library-56)].
+
 ### Authoring Workspace
 
 #### playbook-library-50
@@ -191,9 +200,9 @@ While an authoring session's workspace is open, the Source tab shall render the 
 
 #### playbook-library-57
 
-While an authoring session is idle and has a source, when the Boss activates Compile or the agent's reply carries a compile directive [[playbook-library-66](#playbook-library-66)], the Playbooks surface shall start the session's compile [[playbook-library-67](#playbook-library-67)] and show it in the band under the tab strip: a phase row, the age of the compiler's last line, a folded log, and Cancel [[playbook-library-27](#playbook-library-27)]:
+While an authoring session has a source and no compile of it runs, when the Boss activates Compile or the agent's reply carries a compile directive [[playbook-library-66](#playbook-library-66)], the Playbooks surface shall start the session's compile [[playbook-library-67](#playbook-library-67)] and show it in the band under the tab strip: a phase row, the age of the compiler's last line, a folded log, and Cancel [[playbook-library-27](#playbook-library-27)]:
 
-- Compile is enabled with a source and a resolvable toolchain [[playbook-library-8](#playbook-library-8)] while no compile of the session runs, whatever turn runs beside it; disabled, its tooltip names the reason — "No source yet", "Compiling", or the toolchain guidance; it reads "Compiling…" while a compile runs;
+- Compile is enabled with a source and a resolvable toolchain [[playbook-library-8](#playbook-library-8)] while no compile of the session runs, whatever turn runs beside it; disabled, its tooltip names the reason — "No source yet", "Compiling", or the toolchain guidance; it reads "Compiling…" while a compile runs; a compile the core refuses because another job writes the folder [[playbook-library-99](#playbook-library-99)] shows that refusal;
 - the phase row names the pipeline's phases in human words [[playbook-library-6](#playbook-library-6)] — Normalize, Spec items, Optimize, Prefix, Machine, Link, Package ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)) — the compiler's ids in the tooltips ([DR-010](../decisions/010-interface-craft.md) §2), each waiting, running with its elapsed time, done with its duration, or failed, and a phase the compiler names that the row lacks is appended;
 - "last output ⟨age⟩ ago" ticks beside the running phase from the compiler's last line, heartbeat included, so a silent agent-driven phase reads as alive rather than stuck ([DR-010](../decisions/010-interface-craft.md) §5);
 - the band's caption names who started it — "asked by you" or "asked by the agent" — and a system line in the thread says the same;
@@ -207,7 +216,7 @@ While an authoring session's compile is running, when a phase fails or the compi
 - the band's caption names the same disposition — sent to the agent, three in a row, waiting for the queued message — read from the compile record the session publishes [[playbook-library-70](#playbook-library-70)], never from the line's words;
 - a compile the Boss canceled reads "Compile canceled" and sends nothing;
 - a failure before the compiler ran — the toolchain — shows its guidance in the band and sends nothing;
-- Gears and Machine keep the last successful compile's artifacts, captioned "from the last good compile".
+- Gears and Machine show the outputs as the failed or canceled run left them in the folder, possibly partial, captioned "as the last run left them, not compiled", while a failed run's chip stays "Failed" and Enable stays disabled [[playbook-library-61](#playbook-library-61)] ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 #### playbook-library-59
 
@@ -217,7 +226,7 @@ When an authoring session's workspace is opened after the core stopped while its
 
 When an authoring session's compile succeeds, the Playbooks surface shall set the chip "Compiled", fill the Gears tab as the outline's read-only item rows over the parsed gears and the Machine tab as the FSM code under its pinned state list, each in the stage box idiom [[playbook-library-22](#playbook-library-22)] over the session's artifacts [[playbook-library-24](#playbook-library-24)], enable the Enable tab with a dot, and append the system line "Compiled — roles: ⟨roles⟩":
 
-- before a successful compile the Gears, Machine, and Enable tabs stand disabled with "Compiles first" in their tooltips;
+- before a compile leaves outputs in the folder the Gears and Machine tabs, and before a successful compile the Enable tab, stand disabled with "Compiles first" in their tooltips;
 - the derived roles are the compiled entry's, never the prose's;
 - the dot on Enable stays until the tab is opened after the agent's proposal lands [[playbook-library-68](#playbook-library-68)].
 
@@ -237,7 +246,7 @@ While an authoring session's last compile succeeded, the Enable tab shall presen
 When an authoring session's workspace is opened — in the same run or after a restart — the Playbooks surface shall restore its transcript from the stored records, its source, its queue, its last compile's outcome with the phase output or questions, its compiled tabs where a successful compile is recorded, and its proposal [[playbook-library-70](#playbook-library-70)], so a failed compile is resumed where it stopped ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md)):
 
 - the next message continues the conversation as one thread to the Boss, whatever the provider's own continuity did [[playbook-library-65](#playbook-library-65)];
-- each opening, each reconnect and each `draft.history-replaced` announcement reads the whole transcript [[core-service-96](core-service.md#core-service-96)], and a streamed record not following the thread's last reads it again, so a history replaced on disk replaces the thread while the composer's text, the Source tab's edits and the Enable form's edits stand;
+- each opening and each reconnect [[core-service-96](core-service.md#core-service-96)], and each `draft.history-replaced` announcement [[core-service-118](core-service.md#core-service-118)], reads the whole transcript, and a streamed record not following the thread's last reads it again, so a history replaced on disk replaces the thread while the composer's text, the Source tab's edits and the Enable form's edits stand;
 - the compile band takes progress lines and sends Cancel naming the instance shown [[core-service-96](core-service.md#core-service-96)];
 - a session whose state names another instance than the one shown is another session: what the page kept for the former goes, and a late message or reply naming the former changes nothing;
 - a session whose transcript is unreadable opens with the source intact and a scoped diagnostic in place of the thread.
@@ -374,11 +383,12 @@ When toolchain resolution is requested, the toolchain resolver shall locate the 
 
 #### playbook-library-12
 
-When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in the playbook artifact's folder `<working folder>/<package path>/playbooks/<language>/<id>/` of the spec package under development [[environments-10](environments.md#environments-10)] — materializing in-app source text as a markdown file there, linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)), and provisioning that folder's `node_modules` with links to the app's own `xstate` and `@sublang/playbook`, listed in the working folder's `.git/info/exclude`, which the compiler's machine check and the entry it emits resolve from there ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
+When a compile is started for playbook id `<id>`, the compile runner shall run `slc` as an external child process in the playbook artifact's folder `<working folder>/<package path>/playbooks/<language>/<id>/` of the spec package under development [[environments-10](environments.md#environments-10)] — materializing in-app source text or a picked file's bytes as `<id>.md` there, linking the app-bundled runtime contract ([DR-005](../decisions/005-compilation-integration.md)), and provisioning that folder's `node_modules` with links to the app's own `xstate` and `@sublang/playbook`, listed in the working folder's `.git/info/exclude`, which the compiler's machine check and the entry it emits resolve from there ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) — and shall capture the process output per pipeline phase, reporting phase transitions for progress [[playbook-library-6](#playbook-library-6)] and the failing phase's output on failure [[playbook-library-9](#playbook-library-9)]:
 
 - The runner grants `slc` a stall budget of 2400 seconds through `SLC_STALL_TIMEOUT` unless the environment already sets that variable, because agent-driven phases stay silent longer than `slc`'s ten-minute default.
 - The compiler runs on the Node.js the resolver chose [[playbook-library-11](#playbook-library-11)], with the variable that runtime needs beside the caller's environment — `ELECTRON_RUN_AS_NODE=1` for Electron's, dropped again by the compiler's preload before it starts — so the compiler runs as Node while the agents it spawns inherit no such variable.
-- Compiled outputs of a previously successful compile for the same id are replaced only after the new compile succeeds.
+- The materialized source replaces `<id>.md` in one atomic step, the picked file read once, only where `<id>.md` still holds the bytes it held when the job began, else the compile is refused as a conflict, changed meanwhile, before the compiler runs; the check is Spex's own write's, an independent writer keeping ordinary filesystem behavior ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- `slc` writes its outputs in the folder in place: a failed or canceled compile may leave them partial, and only a successful compile is recorded compiled or enabled ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 #### playbook-library-42
 
@@ -479,7 +489,7 @@ When an authoring turn ends with status success, the conversation runner shall p
 
 | `kind` | Keys | Effect |
 | --- | --- | --- |
-| `compile` | none | starts the session's compile when Compile would be enabled [[playbook-library-57](#playbook-library-57)], else records a system line naming why not |
+| `compile` | none | starts the session's compile as the Boss's Compile starts it [[playbook-library-57](#playbook-library-57)], under the same admission [[playbook-library-99](#playbook-library-99)]; where it cannot start — no source, or another job writing its folder — records the system line "◇ Compile skipped: ⟨why⟩" |
 | `register` | `command`, `intent`, `players: {⟨Role⟩: ⟨player id⟩}` | replaces the session's proposal [[playbook-library-61](#playbook-library-61)]; a role the compiled entry lacks is kept as a mismatch |
 
 - a fence opened inside another fence is content, not a directive; a block missing a key, carrying an unknown key or kind, or failing to parse is left as code, recorded as malformed, and named in the next prompt [[playbook-library-65](#playbook-library-65)];
@@ -487,13 +497,14 @@ When an authoring turn ends with status success, the conversation runner shall p
 
 #### playbook-library-67
 
-When an authoring session's compile starts, the compile runner shall run the pipeline on the `<id>.md` already in the playbook artifact's folder [[playbook-library-12](#playbook-library-12)] — copying nothing, packaging and validating the entry with the session's id as command and a placeholder intent [[playbook-library-14](#playbook-library-14)] [[playbook-library-15](#playbook-library-15)] — as one of its instance's compiles [[core-service-96](core-service.md#core-service-96)], write no config, and record the outcome on the session [[playbook-library-70](#playbook-library-70)]:
+When an authoring session's compile starts, the compile runner shall run the pipeline on the `<id>.md` already in the playbook artifact's folder [[playbook-library-12](#playbook-library-12)] — copying nothing, packaging and validating the entry with the session's id as command and a placeholder intent [[playbook-library-14](#playbook-library-14)] [[playbook-library-15](#playbook-library-15)] — as the one job over that folder [[playbook-library-99](#playbook-library-99)] with its instance's cancel handle [[core-service-96](core-service.md#core-service-96)], write no config, and record the outcome on the session [[playbook-library-70](#playbook-library-70)]:
 
 - progress lines broadcast as compile progress for the session id; the failed phase is the last `✗` line's phase, else the phase the compiler left open when it exited (`slc` when none was), "packaging" for a failure after the compiler finished, and the toolchain for a failure before it ran;
 - an exit status 2 with an `SLC_CLARIFICATION:` line records the report's questions;
+- the toolchain is probed before the running marker, so a compile canceled while it is probed records nothing, and one the probe's verdict refuses is recorded after the marker as failed at the toolchain;
+- the compile runs in the folder its project paired when it began, refused `conflict`, changed meanwhile, before the compiler runs where the project was paired with another working folder since — writing no running marker where the pairing has already changed when it would write that marker, so it never replaces the marker of a later compile in the new folder;
 - success records the derived roles and the SHA-256 of the source as it stood when the compiler started, from which the "Changed" state derives;
-- the outcome replaces only the compile's own running marker — its start time, later than any marker before it, on this device — so a compile settling after a newer one started, or after a sync brought another device's marker, records nothing and owes no follow-up;
-- the compiler is an independent process: what it writes in the artifact's folder is its own, never staged or held back for the session.
+- the outcome replaces only the compile's own running marker — its start time, later than any marker before it, on this device — so a compile settling after a sync brought another device's marker records nothing and owes no follow-up.
 
 #### playbook-library-68
 
@@ -535,7 +546,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 - an id two clones hold is the session of the first clone the home lists, and a moved clone's sessions are found where it stands;
 - a player choice an earlier version kept as `authoring:<id>:player` moves, at its first read, under the instance of the one session whose instance its id and creation time derive [[storage-23](storage.md#storage-23)], and no other session of that id reads it;
 - no write recreates a session file or a clone gone since it was read, and work a session started finishes or fails on its own, writing nothing into another session of its id;
-- an unreadable record or transcript is a scoped diagnostic that blocks that session alone until the file reads again.
+- an unreadable record or transcript is a scoped diagnostic that blocks that session alone, read from the files at each report, gone once the file reads again or the session's file is gone.
 
 #### playbook-library-71
 
@@ -559,7 +570,7 @@ Where the app's own `slc` is missing from the module trees the test names, its p
 
 #### playbook-library-19
 
-Where a stub `slc` fails at a known pipeline phase with error output, when a compile is run, the test suite shall assert that the failing phase is identified, that the phase's captured output is surfaced [[playbook-library-9](#playbook-library-9)], that no config or environment write occurs, and that previously compiled outputs for the same playbook id remain unchanged [[playbook-library-12](#playbook-library-12)].
+Where a stub `slc` fails at a known pipeline phase with error output, when a compile is run, the test suite shall assert that the failing phase is identified, that the phase's captured output is surfaced, and that no config or environment write occurs [[playbook-library-9](#playbook-library-9)].
 
 #### playbook-library-79
 
@@ -655,7 +666,7 @@ Where the stub `slc` fails at `gears2fsm` on its first two runs and exits 2 with
 
 #### playbook-library-74
 
-Where the fake's run stays in flight until aborted and the compile spawner blocks until canceled, the test suite shall assert as an explicit matrix that `draft.send` during a turn and during a compile reply queued; that `draft.source.write`, `draft.player.set` and `draft.compile` during a turn are admitted, the compile running beside the turn; that a second `draft.compile` during a compile is admitted, both running; that `draft.abort` ends the turn with an aborted record and leaves the queue standing; that one `compile.abort` naming the instance cancels both compiles with the canceled line last and no relay; and that the queued messages dispatched in order once the session was idle [[playbook-library-64](#playbook-library-64)] [[playbook-library-67](#playbook-library-67)] [[playbook-library-68](#playbook-library-68)] [[playbook-library-70](#playbook-library-70)].
+Where the fake's run stays in flight until aborted and the compile spawner blocks until canceled, the test suite shall assert as an explicit matrix that `draft.send` during a turn and during a compile reply queued; that `draft.source.write`, `draft.player.set` and `draft.compile` during a turn are admitted, the compile running beside the turn; that a second `draft.compile` during a compile is refused `busy` naming the folder, the first running on [[playbook-library-99](#playbook-library-99)]; that `draft.abort` ends the turn with an aborted record and leaves the queue standing; that one `compile.abort` naming the instance cancels the compile with the canceled line last and no relay; and that the queued messages dispatched in order once the session was idle [[playbook-library-64](#playbook-library-64)] [[playbook-library-67](#playbook-library-67)] [[playbook-library-68](#playbook-library-68)] [[playbook-library-70](#playbook-library-70)].
 
 #### playbook-library-75
 
@@ -682,22 +693,41 @@ Where the Enable tab renders a compiled authoring session over a roster holding 
 Where the core runs with the scripted fake adapter and a stub `slc`, when the test suite changes an authoring session's files beside the core as another writer would, the test suite shall assert, as an explicit case matrix:
 
 - a transcript replaced under the same instance: the next open serves the replacement whole, the next record follows its last, and the next turn reseeds with no resume [[playbook-library-70](#playbook-library-70)] [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)];
-- a session deleted and recreated under its id: a command naming the former instance is refused, the successor reads idle and takes a message while the former's compile runs, the former session's late compile settlement writes nothing into the successor, and no file of the former session is recreated [[playbook-library-70](#playbook-library-70)];
+- a session deleted and recreated under its id: a command naming the former instance is refused, the successor reads idle and takes a message while the former's compile runs, the successor's compile refused `busy` meanwhile [[playbook-library-99](#playbook-library-99)], the former session's late compile settlement writes nothing into the successor, and no file of the former session is recreated [[playbook-library-70](#playbook-library-70)];
+- a session deleted and recreated under its id while a turn of the former instance runs: none of that turn's records reach the successor, whose transcript is never made [[playbook-library-70](#playbook-library-70)];
 - a session deleted with `draft.delete` while its compile runs: the deletion is admitted and the compile, ending, makes no file of the session again [[playbook-library-70](#playbook-library-70)];
-- two compiles of one session settling out of order, and a compile whose running marker a sync replaced with another device's: the settlement finding a marker not its own records nothing [[playbook-library-67](#playbook-library-67)];
+- a compile whose running marker a sync replaced with another device's: the settlement records nothing [[playbook-library-67](#playbook-library-67)];
 - a compile settling while a turn runs: its follow-up waits for that turn, never running beside it; a newer compile canceled before the turn ends leaves none owed; and a compile record another writer replaced before the turn ends leaves none, the queued Boss message going without its preface [[playbook-library-68](#playbook-library-68)];
 - a transcript replaced, or extended by another writer, while the provider ran, and one extended between turns: the next turn reseeds with no resume, while a turn over a transcript only this run wrote resumes [[playbook-library-64](#playbook-library-64)] [[playbook-library-65](#playbook-library-65)];
 - a clone moved under the home: the session's next record lands in the moved clone and nothing is recreated at the former path [[playbook-library-70](#playbook-library-70)];
 - a session file rewritten with a newer queue and proposal during a compile: its settlement keeps both, the queued message dispatching first, and a write against the bytes read before the rewrite is refused [[playbook-library-70](#playbook-library-70)] [[playbook-library-68](#playbook-library-68)];
-- a damaged transcript repaired while the core runs: the session takes a message with no restart [[playbook-library-70](#playbook-library-70)];
+- a damaged transcript repaired while the core runs, and a damaged session deleted beside the core: the session takes a message with no restart, and in both the diagnostic leaves the next report; a transcript that will not read at all is one scoped row naming it, the report and another session standing, gone once the file is back [[playbook-library-70](#playbook-library-70)];
 - a compile running and a turn open that another device recorded, and an earlier version's unmarked turn, stand after a restart, while this device's own are closed as interrupted [[playbook-library-70](#playbook-library-70)];
 - a player choice an earlier version kept by id: the session written without an instance answers with it and holds it under its derived instance after, while a new session of that id made after the former's deletion beside the core answers with the Captain [[playbook-library-70](#playbook-library-70)];
 - a transcript standing without its session file: create refuses and leaves its bytes [[playbook-library-70](#playbook-library-70)];
 - a source edited while the compiler runs: the success reads "Changed" [[playbook-library-67](#playbook-library-67)].
 
+#### playbook-library-100
+
+Where the core runs with the scripted fake adapter and a stub `slc` holding each compile until the test releases it, when the test suite asks for compiles and enablings over one playbook artifact's folder and over another, the test suite shall assert, as an explicit case matrix:
+
+- an authoring session's second Compile, and its agent's compile directive, while its first compile runs on a source since edited: each refused `busy` naming the folder, the directive recording "◇ Compile skipped: ⟨why⟩" [[playbook-library-66](#playbook-library-66)], and the folder and the session holding the first compile's outputs and outcome [[playbook-library-99](#playbook-library-99)];
+- a one-shot compile of the session's id in its working folder while its compile runs, and, once its compile succeeded, its Compile and its enabling while such a one-shot compile runs: each refused `busy`, the running one finishing [[playbook-library-99](#playbook-library-99)];
+- a one-shot compile of that id in another project's working folder: it runs beside the session's compile, both succeeding [[playbook-library-99](#playbook-library-99)];
+- a one-shot compile of that id through a project registered at a link to the session's working folder, and, where the scratch filesystem folds case, through one registered at that folder's path in other case, while its compile runs: each refused `busy` naming the folder [[playbook-library-99](#playbook-library-99)];
+- a Compile asked after `compile.abort` while the canceled compiler, ignoring its termination signal, still runs: refused `busy` with no compiler run, and admitted once that compiler has exited [[playbook-library-99](#playbook-library-99)]; and a Compile whose `compile.abort` naming its instance arrives while its toolchain probe is held, or while its config is prepared: each replying `aborted` once released, with no compiler run, and the folder's listing and source unchanged — the probe's recording no marker and leaving the session file's bytes unchanged, the config's running marker, seen while held, settling `canceled` under its own start time [[playbook-library-67](#playbook-library-67)];
+- a session's compile whose project is rebound while the compile prepares its config, and one rebound while its toolchain probe is held: each refused `conflict`, changed meanwhile, with no compiler run, neither the folder paired at its start nor the one paired now written [[playbook-library-67](#playbook-library-67)];
+- a session's compile whose toolchain probe is held while its project is rebound, and a second compile admitted to the new folder whose compiler is then held with its running marker recorded: releasing the first's probe replies `conflict` with the second's running marker unchanged, releasing the second records its success and roles under its own start time, and the folder paired at the first's start stays untouched [[playbook-library-67](#playbook-library-67)];
+- a Compile whose toolchain probe answers a Node.js below the compiler's floor: the reply carrying the guidance, the session recording the compile failed at `toolchain` with that guidance as its output, and no compiler run [[playbook-library-67](#playbook-library-67)];
+- a one-shot compile whose picked source file is read while another writer changes `<id>.md`: refused as a conflict before the compiler runs, `<id>.md` keeping the other writer's bytes [[playbook-library-12](#playbook-library-12)].
+
 #### playbook-library-97
 
-Where the authoring workspace renders over a simulated core, when that core replaces an open session's transcript under the same instance and then replaces the session under its id, the test suite shall assert that a reconnect, a `draft.history-replaced` announcement and a record not following the thread's last each reload the whole transcript while the composer's text, the Source tab's edits and the Enable form stand, that Cancel names the instance shown, that once another instance is announced a late record, source, progress line or reply — a source refresh, artifacts, an enabling's close, a send's error — naming the former changes nothing of the successor's while the enabling's config stands, and that a record arriving after the session's removal makes no thread [[playbook-library-62](#playbook-library-62)].
+Where the authoring workspace renders over a simulated core, when that core replaces an open session's transcript under the same instance and then replaces the session under its id, the test suite shall assert that a reconnect, a `draft.history-replaced` announcement and a record not following the thread's last each reload the whole transcript while the composer's text, the Source tab's edits and the Enable form stand, that Cancel names the instance shown, that once another instance is announced a late record, source, progress line or reply — a source refresh, artifacts, an enabling's close, a send's error — naming the former changes nothing of the successor's while the enabling's config stands, that with the successor's thread open a former instance's record numbered right after the thread's last changes nothing while the successor's own extends it, that a former instance's record arriving while the successor's transcript is read changes nothing however it is numbered, and that a record arriving after the session's removal makes no thread [[playbook-library-62](#playbook-library-62)].
+
+#### playbook-library-101
+
+Where the authoring workspace renders over a simulated core that refuses `draft.compile` `busy` because another job writes the session's artifact folder, when the Boss activates Compile, the test suite shall assert that the refusal shows and Compile stays enabled, reading "Compile" [[playbook-library-57](#playbook-library-57)].
 
 ### Browser Journeys
 

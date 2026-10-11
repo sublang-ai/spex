@@ -120,7 +120,7 @@ import {
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { checkToolchain, compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, checkToolchain, compilePlaybook, compilerAgentOf, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
@@ -610,7 +610,7 @@ export class CoreService {
         await this.media.reset();
         await this.syncForeignSessions();
         // Its authoring sessions are read from their files again by the
-        // clients showing them (core-service-96).
+        // clients showing them (core-service-118).
         this.authors.applied(repository);
         // A sync applied what the host holds, its lock among it: the
         // environment installs from it and exports (environments-8,
@@ -618,6 +618,9 @@ export class CoreService {
         void this.environments.applied(repository).catch(() => {});
       },
       ledgerChanged: (projectIds) => this.queueLedgerChange(projectIds),
+      // An apply replaces no authoring session's files under a turn this
+      // core runs for it (space-19).
+      assertAuthoringWritable: (key, id) => this.authors.assertTurnWritable(id, key),
       ...(options.spaceTransportTimeoutMs !== undefined ? { transportTimeoutMs: options.spaceTransportTimeoutMs } : {}),
       ...(options.spaceBeforeStep ? { beforeStep: options.spaceBeforeStep } : {}),
       client: this.hostClient,
@@ -919,26 +922,37 @@ export class CoreService {
       return [...ids].sort();
     };
     const clone = identity();
+    const stands = (): boolean => clone !== undefined && this.store.repository(key)?.dir === repository.dir && identity() === clone;
+    const changed = (): CoreError => new CoreError("conflict", i18n._({
+      id: "{what} changed meanwhile; retry",
+      values: { what: splitKey(key).name },
+      comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+    }));
     const held: { sessionId: string; release(): Promise<unknown> }[] = [];
     try {
-      for (const id of sessionIds()) held.push(await repository.store.acquireManagement(id));
-    } catch {
+      for (const id of sessionIds()) {
+        // Each acquisition is asked of the clone where it still stands; a
+        // clone moved or removed meanwhile is a change, never a holder.
+        if (!stands()) throw changed();
+        try { held.push(await repository.store.acquireManagement(id)); }
+        catch {
+          if (!stands()) throw changed();
+          throw new CoreError("busy", i18n._({
+            id: "wait for the project's running turn to finish, or abort it, before removing it",
+            comment: "Refusal: a turn is running in the project being removed",
+          }));
+        }
+      }
+    } catch (error) {
       await Promise.allSettled(held.map((lease) => lease.release()));
-      throw new CoreError("busy", i18n._({
-        id: "wait for the project's running turn to finish, or abort it, before removing it",
-        comment: "Refusal: a turn is running in the project being removed",
-      }));
+      throw error;
     }
     const leased = new Set(held.map((lease) => lease.sessionId));
     return {
       leases: held,
       check: () => {
-        if (this.store.repository(key)?.dir === repository.dir && identity() === clone && sessionIds().every((id) => leased.has(id))) return;
-        throw new CoreError("conflict", i18n._({
-          id: "{what} changed meanwhile; retry",
-          values: { what: splitKey(key).name },
-          comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
-        }));
+        if (stands() && sessionIds().every((id) => leased.has(id))) return;
+        throw changed();
       },
     };
   }
@@ -2453,8 +2467,10 @@ export class CoreService {
         const project = this.store.getProject(command.projectId);
         if (!project) throw noProject(command.projectId);
         if (!isSkillName(command.playbookId)) throw invalidPlaybookId(command.playbookId);
-        // A compile is an independent process (DR-111): a second one of
-        // the same id runs beside it, each with its own cancel handle.
+        // A compile is an independent process with its own cancel handle
+        // (DR-111), and the one job writing its artifact folder while it
+        // compiles and packages (playbook-library-99); the enabling after
+        // it writes the environment and the config on their own.
         const controller = new AbortController();
         const handles = this.standaloneCompiles.get(command.playbookId) ?? new Set<AbortController>();
         handles.add(controller);
@@ -2503,12 +2519,16 @@ export class CoreService {
               },
             });
           } catch (error) {
+            if (error instanceof ArtifactFolderBusy) throw new CoreError("busy", error.message);
             if (controller.signal.aborted) {
               throw new CoreError("aborted", i18n._({
                 id: "compile canceled",
                 comment: "The outcome of a compile the reader stopped",
               }));
             }
+            // `<id>.md` changed under Spex's own write of the source
+            // (playbook-library-12).
+            if (error instanceof VersionConflictError) throw new CoreError("conflict", error.message);
             const message =
               error instanceof Error ? error.message : String(error);
             throw new CoreError("invalid_request", message);
@@ -2530,9 +2550,10 @@ export class CoreService {
         }
       }
       case "compile.abort": {
-        // Naming an authoring session's instance cancels every compile
-        // of that session: a successor under the id is not it. Without
-        // one, every running one-shot compile of the id.
+        // Naming an authoring session's instance cancels that session's
+        // compile: a successor under the id is not it. Without one, every
+        // running one-shot compile of the id, and never a session's
+        // (core-service-25).
         const controllers = command.instance === undefined ? [...(this.standaloneCompiles.get(command.playbookId) ?? [])] : [];
         const canceled = command.instance !== undefined ? this.authors.cancelCompiles(command.instance) : controllers.length > 0;
         if (!canceled) {
@@ -2934,10 +2955,11 @@ export class CoreService {
             comment: "Refusal: no config file exists at the path the core reads",
           }));
         }
-        // Re-package with the confirmed command and intent, then enable
-        // through the shared path — the session held busy throughout and
-        // kept after, enabled; a refused write leaves it standing with
-        // its artifacts (playbook-library-69).
+        // Re-package with the confirmed command and intent, one job over
+        // the artifact folder (playbook-library-99), then enable through
+        // the shared path; the session is not held and stays after,
+        // enabled; a refused write leaves it standing with its artifacts
+        // (playbook-library-69).
         return await this.authors.register(
           command.draftId,
           command.instance,

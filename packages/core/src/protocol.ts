@@ -1508,7 +1508,13 @@ export interface DraftInfo {
    * repository's config enables its id (playbook-library-69); the state
    * then reads "enabled" unless a compile, a failure or a change stands. */
   enabled?: boolean;
+  /** `turn` while its turn runs, else `compiling` while its compile
+   * runs, else `idle`. */
   activity: DraftActivity;
+  /** A compile of the session runs, a turn beside it or not, so a turn
+   * and a compile at once are each reported (core-service-96); the core
+   * always sends it, a client reading its absence from `activity`. */
+  compiling?: boolean;
   state: DraftState;
   /** Boss messages waiting for the draft to go idle, in order. */
   queued: MessageContent[];

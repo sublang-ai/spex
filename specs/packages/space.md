@@ -56,7 +56,7 @@ When a sign-in completes [[git-host-2](git-host.md#git-host-2)] [[git-host-3](gi
 3. create your own group's spex repository on the host where the host lists none, and push it [[space-65](#space-65)]; where one exists, join the two histories as any two [[space-13](#space-13)];
 4. list every local-only spex repository of a project with its "Pick a group" control [[space-58](#space-58)], creating nothing for them unasked.
 
-- a turn in flight refuses the rename as it refuses a sync [[space-11](#space-11)], the sign-in standing complete with the rename retried on the next read;
+- a session lease standing beneath a clone the rename would move refuses the whole rename [[space-59](#space-59)], the sign-in standing complete with the rename retried on the next read;
 - a step the host refuses leaves the later steps for the next read and shows the refusal with the host's words [[space-64](#space-64)].
 
 #### space-5
@@ -97,13 +97,15 @@ When a working folder is added while signed in [[storage-6](storage.md#storage-6
 
 When the account's login differs from the name your own group's folder bears, the core shall rename the folder under `workspace/` and its spex repository `<login>-spex`, rewriting every pair that names it [[storage-2](storage.md#storage-2)] in the same step, and where the host already holds `<login>-spex` pushed from another device, shall join the two histories, every unit on both sides being one choice [[space-13](#space-13)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the rename is one step at its instant — every clone beneath moved by one rename and every pair rewritten, with nothing awaited between — refusing nothing beneath the folder [[space-21](#space-21)]; a destination already taken moves nothing, and the next set-up asks again.
+- the rename is one step at its instant — every clone beneath moved by one rename and every pair rewritten, with nothing awaited between — refusing nothing beneath the folder [[space-21](#space-21)];
+- the rename moves nothing, leaving every clone, pair and session where it was for the next set-up to ask again, where any clone's destination is already taken — by another folder, by the clone itself under another spelling of its group, or by a folder on its path below `workspace/` that stands spelled otherwise — or where any clone beneath holds a session lease `sessions/.<id>.lock` other than a Playbook session-lease record whose `hostname` and `pid` read as a dead owner of this machine by steps 3 and 4 of the root lease's rule [[storage-26](storage.md#storage-26)], such a lease moving with the clone ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)).
 
 #### space-60
 
 When a host read [[git-host-5](git-host.md#git-host-5)] reports a spex repository, known by its id, under another name or group than its clone's path, the core shall move the clone to the new path on that repository's next sync, rewriting every pair that names it and the exports beneath it in the same step, so that its key and name follow the host ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- the move is one rename within the sync at its instant, made only while the clone still reads the remote its check read before asking the host, records the host's id and lies where the home says, and stopping the sync where the destination is taken by anything but the clone itself — a case-only rename's destination is the clone [[space-21](#space-21)];
+- the move is one rename within the sync at its instant, made only while the clone still reads the remote its check read before asking the host, records the host's id and lies where the home says [[space-21](#space-21)];
+- the move stops the sync, the clone, its pairs and its sessions left where they were, where the destination is taken by anything but the clone itself under the same group folder — which a rename changing only the case of the repository's own name moves onto — or a folder on its path below `workspace/` stands spelled otherwise, or where the clone holds a session lease that refuses a sign-in's rename [[space-59](#space-59)], naming that session with Retry [[space-15](#space-15)];
 - a group the host renamed still holds its spex repositories under their own names, since the host renames no repository with its group.
 
 #### space-61
@@ -281,10 +283,10 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 | the home is signed in, or the spex repository's remote is a path this device can reach | "Sign in first" |
 | the spex repository is reachable or read-only [[space-61](#space-61)] | the state's phrase |
 | no Git merge is pending from a terminal in the clone | "Finish or abort the merge in your terminal" |
-| no blocking storage diagnostic stands for it [[core-service-86](core-service.md#core-service-86)], a refresh's finding aside [[space-20](#space-20)] | the file and reason |
+| no blocking storage diagnostic stands for a file inside its clone or for a home file outside `workspace/` [[core-service-86](core-service.md#core-service-86)], a refresh's finding aside [[space-20](#space-20)] and, while its repair marker stands, every diagnostic of a file inside its clone, the repair's own finding among them [[space-67](#space-67)] | the file and reason |
 | `git` runs | the install guidance |
 
-- no turn, session, compile, upload, environment change or operation of any spex repository refuses or delays the sync [[space-21](#space-21)].
+- no turn, session, compile, upload or environment change, and no operation of another spex repository, refuses or delays the sync; an operation of its own clone runs first, the sync joining or following it [[space-21](#space-21)].
 
 #### space-12
 
@@ -304,6 +306,8 @@ When a sync is admitted, the core shall run these steps in order on the clone, t
 | synced | `spex` equals the host's `spex`; the line reads "Synced just now · N sent · M received", or "Everything is in sync" when nothing moved; a read-only repository reads "Brought M; nothing sent" |
 | choices needed | the Save commit stands, nothing merged, no operation running [[space-14](#space-14)] |
 | stopped | the step, cause and way forward shown [[space-15](#space-15)] |
+
+- where the repair marker an interrupted Apply left stands, the sync first runs its repair, before Save [[space-67](#space-67)].
 
 #### space-13
 
@@ -331,7 +335,8 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation | nothing written; the Save commit stands | the unit and reason; the picker stays with the unit marked; Retry |
-| Apply | a written session's lease held elsewhere [[space-19](#space-19)] | no merge commit; the Save commit stands, the units written before it kept with the repair marker | the session and reason; Retry, whose repair finishes the selection [[space-31](#space-31)] |
+| Check | a session lease beneath a clone the host moved [[space-60](#space-60)] | commits stand; the clone where it was | the session and reason; Retry |
+| Apply | a written session's lease held elsewhere, or a written authoring session's turn running [[space-19](#space-19)] | no merge commit; the Save commit stands, the units written before it kept with the repair marker | the session and reason; Retry, whose repair finishes the selection [[space-67](#space-67)] |
 | Apply | a written unit changed since Save on the second cycle [[space-19](#space-19)] | no merge commit; the Save commit stands, the units written before it left as local changes | "The space changed twice while syncing"; Retry |
 | Refresh | a diagnostic | the merge stands committed | the file and reason under issues |
 | Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "The host changed again"; Retry |
@@ -378,18 +383,18 @@ When every conflict has a choice and the user activates Apply, the surface shall
 
 When a sync's Apply step runs, the core shall build the candidate as `select` does [[storage-21](storage.md#storage-21)] — the Save commit's tree with each unit taken whole from its selected side — validate it complete in a private copy before any file is written [[storage-12](storage.md#storage-12)], write each unit whose selected bytes differ from the Save commit's by a versioned replacement naming the Save commit's bytes [[storage-14](storage.md#storage-14)], and, with no Git merge pending, record the candidate's tree as the merge commit with `spex` and the host's `spex` as parents, or move `spex` to the host's commit where that tree equals its tree:
 
-- a unit is every file of it on disk — manifest, records and assets, one added since Save among them — each read as Git reads its path, filters applied, and its write is refused where any file of it holds neither the Save commit's bytes nor the selected ones, where it is a session whose lease is held, or where the clone's folder or its `.git` is no longer the one the apply began in, checked after the last await and before any folder is made; a file already holding the selected bytes is left as it is;
+- a unit is every file of it on disk — manifest, records and assets, one added since Save among them — each read as Git reads its path, filters applied, and its write is one versioned write at its instant [[storage-14](storage.md#storage-14)], made only while the clone's folder and its `.git` are the ones the apply began in, every file of the unit holds the Save commit's bytes or the selected ones, a session's management lease is taken, and no turn this core runs for an authoring session instance [[core-service-96](core-service.md#core-service-96)] owns an authoring unit's current recorded instance, a turn its transcript records unfinished refusing nothing, and otherwise refused with no folder made; a file already holding the selected bytes is left as it is;
 - a unit whose selected bytes equal the Save commit's is neither written nor leased, so a session held elsewhere stops no write but its own;
 - sessions are written before the other units, so an intent naming a session's newer turn is never written ahead of a session refused at its write;
 - each written unit's files are replaced replay before manifest, they and its attachment folder owner-only whatever the process umask or the hand that made the folder, its session's hints and viewed marker cleared [[storage-5](storage.md#storage-5)]; once every unit holds its selection, so are those of every session the selection changed, one written before an interruption among them;
 - the index is set to the candidate's tree and the commit records that tree, never the working tree, so what another process writes beside the apply stays a local change;
 - the working tree never holds Git's own merge output — no conflict marker, no `MERGE_HEAD`;
-- a refused write records no merge commit, the Save commit standing: a held lease stops the sync naming the session with the repair marker kept, so units naming one another are finished together by the next admission's repair [[space-31](#space-31)]; a changed unit removes the marker, leaves the units already written as local changes equal to the host's side, and restarts the sync once from Save, stopping on the second time — where such a change leaves a written unit naming one not written, the restart's Save refuses it, naming the file for the reader to repair [[space-15](#space-15)]; a moved clone stops it with the marker where the clone now lies [[space-15](#space-15)];
-- an apply interrupted before its commit lands is repaired from its recorded selection before the core reopens the clone [[space-31](#space-31)].
+- a refused write records no merge commit, the Save commit standing: a held lease or a running authoring turn stops the sync naming the session with the repair marker kept, so units naming one another are finished together by the next admission's repair [[space-67](#space-67)]; a changed unit removes the marker, leaves the units already written as local changes equal to the host's side, and restarts the sync once from Save, stopping on the second time — where such a change leaves a written unit naming one not written, the restart's Save refuses it, naming the file for the reader to repair [[space-15](#space-15)]; a moved clone stops it with the marker where the clone now lies [[space-15](#space-15)];
+- an apply interrupted before its commit lands is repaired from its recorded selection [[space-67](#space-67)].
 
 #### space-20
 
-When a sync's Apply step has changed the working tree — by merge or fast-forward, by the units it wrote before a changed unit refused its write [[space-19](#space-19)], or by a repair [[space-31](#space-31)] — the core shall re-validate [[storage-12](storage.md#storage-12)] and re-index the clone before the sync pushes, restarts or stops, so every view reflects the working tree without a restart:
+When a sync's Apply step has changed the working tree — by merge or fast-forward, by the units it wrote before a changed unit refused its write [[space-19](#space-19)], or by a repair [[space-67](#space-67)] — the core shall re-validate [[storage-12](storage.md#storage-12)] and re-index the clone before the sync pushes, restarts or stops, so every view reflects the working tree without a restart:
 
 - a session whose bundle changed is announced with its history replaced [[core-service-87](core-service.md#core-service-87)], a new one served and a deleted one forgotten as the shared store's arrivals and departures are [[core-service-60](core-service.md#core-service-60)] [[core-service-76](core-service.md#core-service-76)], and the project's ledger is announced changed [[core-service-51](core-service.md#core-service-51)];
 - the intents, a group's own environment and the preferences are re-read, and the configuration reloads through its ordinary reload [[core-service-2](core-service.md#core-service-2)], that environment's exports refreshed [[environments-8](environments.md#environments-8)];
@@ -401,9 +406,23 @@ While a sync, check, join or move of a spex repository is running, the core shal
 
 - every write beneath the clone lands or is refused at its own instant — a file changed since its writer read it as "changed meanwhile; retry", a session's lease as that session's refusal — and the runtime's own admission of messages stays;
 - each of the core's own writes beneath the clone resolves the clone's address at that write, never at an earlier read, so no write lands where a moved or removed clone stood and no folder is made there again;
-- a second Sync asked while a sync runs, or a Check asked while a sync or a check runs, joins that operation; a Sync asked while a check runs follows it;
+- the clone's own operations run one at a time on its machine [[space-31](#space-31)]: a second Sync asked while a sync runs, or a Check asked while a sync or a check runs, joins that operation, and a Sync asked while a check runs follows it, making no Save until that check has ended; no other command waits for either;
 - a remote or recorded host id the core writes is written only while the clone's remote still reads what the core read before awaiting the host, and refused as changed meanwhile otherwise;
 - an operation's progress is its own, ended by it alone, and what it shows is no reason to wait.
+
+#### space-67
+
+While a clone holds the repair marker an interrupted Apply left [[space-31](#space-31)], the core shall finish the marker's recorded selection before it reopens that clone at its start, and at each sync's admission as the first work of that sync's operation, before its Save, so a second admission joins that work and no two repairs of one marker run at once [[space-21](#space-21)]:
+
+| The repair finds | Outcome |
+| --- | --- |
+| `spex` on the recorded Save commit | each unit written as Apply writes it [[space-19](#space-19)], a file already holding the selected bytes accepted, then the same tree recorded with the same parents and the marker removed |
+| a file holding neither the recorded Save's bytes nor the selected ones | that file left as it stands, the marker removed, no merge commit; the sync goes on from Save and replans |
+| `spex` moved off the recorded Save commit — the merge landed, or a terminal commit moved it on | the marker removed with nothing written |
+| a write refused for a held session lease or a running authoring turn [[space-19](#space-19)], or any other failure | the marker standing as a blocking issue, and the sync admitted stopped naming the session or the cause; the next admission repairs again |
+
+- a sync's repair reads as its Apply step while it runs [[space-12](#space-12)];
+- the sync's blocking issues — those of its own clone's files that its admission set aside while the marker stood among them [[space-11](#space-11)] — are read again once its repair has ended, one standing then stopping the sync before Save with the file and reason.
 
 #### space-22
 
@@ -498,6 +517,7 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
 | `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here) |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
+| `space.remote.set` | `{ repository, url: string \| null }` | `GroupsState` | `invalid_request` (no Git; not initialized; a malformed, credential-bearing or host-origin URL [[space-5](#space-5)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only) |
 | `space.sync` | `{ repository, choices?: Record<unit, "mine" \| "remote">, join?: boolean, noticed?: boolean }` | `{ accepted: true }` | `invalid_request` (local only, merge pending, blocking diagnostic [[space-11](#space-11)]; unknown unit; a choice for a unit that is not a conflict; the notice not seen [[space-57](#space-57)]) |
 | `space.cancel` | `{ repository }` | `{ stopped: boolean }` | — |
@@ -581,18 +601,19 @@ The core shall run every operation of one spex repository on one state machine p
 
 ```text
 idle ─sync/join→ save ─→ check ─→ compare ─→ apply ─→ refresh ─→ push ─→ done ─→ idle
+idle ─sync/join, repair marker standing→ repair ─→ save;  repair: lease | authoring turn | failure | blocking issue → stopped
 idle ─fetch→ check ─→ idle
 save: ignored path staged | validation | commit error → stopped
-check: host refused | reauth | gone | transport | timeout | Stop → stopped;  host empty → push
+check: host refused | reauth | gone | transport | timeout | Stop → stopped;  move: destination taken | lease | changed meanwhile → stopped;  host empty → push
 compare: conflict without choice → choices;  no ancestor and not a join → unrelated;  nothing incoming → push
-apply: a written unit changed since Save (first) → save;  validation | lease | changed twice → stopped
+apply: a written unit changed since Save (first) → save;  validation | lease | authoring turn | moved | changed twice → stopped
 push: rejected (first) → check;  rejected twice | refused | transport | timeout | Stop → stopped;  read-only → done
 choices ─sync with choices→ save;  unrelated ─sync with join→ save;  stopped ─Dismiss or next→ idle
 ```
 
 - one full rescan of the clone runs as `refresh`;
-- before the first file is replaced, `apply` records the plan's revisions, ancestor and choices in an ignored `<clone>/.spex-apply.json` and removes it after the ref update lands or a changed unit refuses its write [[space-19](#space-19)];
-- a marker found at startup is finished before the core reopens that clone, and one found at a sync's admission before that sync's body runs and before the admission reads any blocking issue, so a finding of an earlier repair never refuses the admission that repairs again — each unit written as `apply` writes it [[space-19](#space-19)], a file already holding the selected bytes accepted, then the same tree recorded with the same parents; a file holding neither the recorded Save's bytes nor the selected ones is left as it is, the marker removed and no merge commit recorded, so the sync goes on from Save and replans; a marker whose merge never landed while `spex` moved on since — a commit from a terminal — is removed the same way with nothing written; a held session lease leaves the marker standing as a blocking issue that a later admission's repair retries; a repair that fails once its marker is gone — another admission having finished the same selection — reports nothing and its admission goes on;
+- `check` makes a host rename's move [[space-60](#space-60)]; `apply` handles its unit-write refusals [[space-19](#space-19)];
+- before the first file is replaced, `apply` records the plan's revisions, ancestor and choices in an ignored `<clone>/.spex-apply.json` and removes it after the ref update lands or a changed unit refuses its write [[space-19](#space-19)]; a marker left standing is finished by the repair [[space-67](#space-67)];
 - `sync:<repository>:last` persists in the preferences [[storage-5](storage.md#storage-5)]; the sync's transient state persists nowhere;
 - a row read while an operation runs reads the clone at that instant, keeping that operation's own lists.
 
@@ -674,8 +695,13 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
-- a running compile and a session under a management lease taken out of band each leave the spex repository's `space.sync` to complete, while that lease refuses the project's removal `busy` and, released, the removal completes with the compile still running [[space-11](#space-11)] [[space-21](#space-21)];
+- a running compile and a session under a management lease taken out of band each leave the spex repository's `space.sync` to complete [[space-11](#space-11)] [[space-21](#space-21)];
 - while a check runs against a transport that sleeps, a turn, a viewed marker, an intent, a pairing and a settings edit beneath that clone all land, a second `space.sync` and a `space.fetch` reply `accepted`, joining it, `space.cancel` returns the machine to `stopped` with the Save commit kept, and the sleeping child is gone [[space-21](#space-21)] [[space-47](#space-47)] [[space-16](#space-16)] [[space-32](#space-32)];
+- a `space.sync` asked while a check stands held inside Git replies `accepted` and makes no Save commit until that check ends, then saves and completes [[space-21](#space-21)];
+- a sync of a repository the stand-in renamed stops at Check naming the session, the clone, its pair and its sessions where they were, while a session beneath the clone stands under a lease taken out of band — one with its records and one standing only as its lease file — or under a lease naming another machine, and moves the clone once that lease is released, while a lease left by a dead process of this machine moves with it [[space-60](#space-60)] [[space-15](#space-15)];
+- a sign-in while a session beneath a clone of your own group stands under a lease taken out of band moves none of that group's clones, every pair and session where it was, and a Refresh after the release moves them all [[space-59](#space-59)] [[space-4](#space-4)];
+- a stand-in rename onto a folder already standing stops the sync at Check naming that folder, the clone and the folder unchanged; a sign-in whose destination for a clone of your own group is taken moves no clone, and a Refresh once that folder is gone moves them all [[space-60](#space-60)] [[space-59](#space-59)];
+- where the scratch filesystem folds case, a stand-in rename changing only the repository name's case completes with the clone listed under the new spelling and its pair re-keyed, and one changing only its group's case stops the sync with the clone, `home.yaml`, the project list and the session list unchanged [[space-60](#space-60)]; one changing its group's case and its name, and one moving it into a nested group whose folder stands under another case spelling, each stop the same way with nothing landed under the disk's spelling [[space-60](#space-60)]; a sign-in while an unrelated folder stands under another case spelling of the login moves no clone, every pair and session where it was [[space-59](#space-59)];
 - a remote set from a terminal while `space.remote.set`, a pick or a Check step awaited its own read leaves the terminal's remote alone in the clone's configuration, the command refused `conflict` or the step stopped as changed meanwhile [[space-21](#space-21)] [[space-60](#space-60)];
 - a remote set through `space.remote.set` while a sync's Check step awaits the stand-in's read of a repository it renamed stops that sync as changed meanwhile, the clone not moved and the new remote standing [[space-60](#space-60)];
 - a sign-in moves your own group's folder while a read of it stands held, an intent naming the old key is refused without recreating the former folder, and the held read ends recreating nothing [[space-59](#space-59)];
@@ -683,7 +709,9 @@ When an integration suite starts a real core with substitute agents on a scratch
 - a second join of one repository, admitted while the first's clone stands held, publishes its clone; the first, released, finds the place taken and leaves that clone and every file written into it as they stand, and no private folder of either remains [[space-63](#space-63)];
 - a join whose clone child stands held runs that child under umask `0077` while the core's own umask stays `022`, before and after the child is released, and the folders and pack that child wrote keep no group or other permission once published [[space-32](#space-32)];
 - `space.signout` revokes the device at the stand-in, every repository turns local only or unreachable with nothing deleted, and a later sign-in finds them reachable again [[space-6](#space-6)] [[space-61](#space-61)];
-- a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)].
+- with a bare remote holding another clone's rewrite of an authoring session's transcript, a sync whose host side is chosen for that session while this core's turn appends to it stops naming the session, the transcript left as it was and the turn's records landing in one unbroken sequence, and a Retry while that turn still runs stops again with the repair marker standing and the transcript unchanged [[space-67](#space-67)]; once the turn has ended and the transcript records an unfinished turn of this device, a fresh comparison asks the choice again and the host's side then chosen applies whole [[space-19](#space-19)];
+- a `MERGE_HEAD` planted in a clone reads as a pending merge and refuses its sync [[space-11](#space-11)];
+- a damaged session file standing as a blocking diagnostic in one clone refuses that clone's sync naming the file and admits another clone's whose path is a string prefix of the first's [[space-11](#space-11)].
 
 #### space-38
 
@@ -697,10 +725,11 @@ When an integration suite runs two real cores on two scratch homes sharing one s
 - an incoming intent changed on this device after Save is refused at its write with the change kept and no merge commit, the sync restarting once from Save into a choice for it; with the host's side chosen and the intent changed again before each of two writes the sync stops, and Retry with that choice takes the host's unit whole [[space-19](#space-19)] [[space-15](#space-15)] [[space-31](#space-31)];
 - a push rejected because the peer advanced after the check re-checks once and succeeds; advanced again, it stops "changed again" with the merge kept and `ahead` reported [[space-15](#space-15)];
 - a fast-forward sync leaves `spex` equal to the host's with no merge commit, clears the hints of its changed session, and, under process umask `022`, leaves no `sessions/` entry wider than `0600` [[space-19](#space-19)] [[space-20](#space-20)];
-- a marker planted with a half-written selection is repaired at startup into the recorded commit before `space.get` answers, a marker left standing after its merge landed is cleared with nothing re-applied, a marker whose file was changed since by another hand is removed with that change kept and no merge commit, the next sync saving the change and asking a choice for it, and a marker whose merge never landed under a `spex` a terminal commit moved on is removed with nothing written; a session the interrupted apply had already written whole loses its hint and viewed marker [[space-31](#space-31)] [[space-19](#space-19)];
+- a marker planted with a half-written selection is repaired at startup into the recorded commit before `space.get` answers, a marker left standing after its merge landed is cleared with nothing re-applied, a marker whose file was changed since by another hand is removed with that change kept and no merge commit, the next sync saving the change and asking a choice for it, and a marker whose merge never landed under a `spex` a terminal commit moved on is removed with nothing written; a session the interrupted apply had already written whole loses its hint and viewed marker [[space-67](#space-67)] [[space-19](#space-19)];
 - a terminal commit landing while Save validates refuses the Save with that commit and the changed file kept, and a file rewritten after validation stays a local change while the validated bytes are committed [[space-12](#space-12)] [[space-15](#space-15)]; a file another process leaves invalid during an Apply stands as the refresh's finding, admits the next sync whose Save names it, and once the reader repairs it the sync after goes through with the core still running and the finding cleared [[space-20](#space-20)] [[space-11](#space-11)];
-- a session another process holds through an Apply that writes only an incoming intent stops nothing; held while the Apply would write it, beside an incoming intent dispatched to that session's newer turn, it stops the sync naming it with no merge commit, the marker kept and the intent not yet written; still held across a restart, the startup repair stands as a blocking issue and a Retry is refused, and after its release the next Retry finishes both units into the recorded merge, which the ledger then lists [[space-19](#space-19)] [[space-15](#space-15)] [[space-31](#space-31)] [[space-20](#space-20)];
-- two Syncs admitted together over a marker a released lease left both repair it: the one whose ref update is held until the other's repair has finished is accepted with no repair issue on either, the marker gone and one merge of the recorded sides on the Save commit [[space-31](#space-31)];
+- a session another process holds through an Apply that writes only an incoming intent stops nothing; held while the Apply would write it, beside an incoming intent dispatched to that session's newer turn, it stops the sync naming it with no merge commit, the marker kept and the intent not yet written; still held across a restart, the startup repair stands as a blocking issue and a Retry stops naming the session with the marker kept, and after its release the next Retry finishes both units into the recorded merge, which the ledger then lists [[space-19](#space-19)] [[space-15](#space-15)] [[space-67](#space-67)] [[space-20](#space-20)];
+- a selection half applied — the host's replay of a session both sides changed landed, its manifest not — whose startup repair a session lease held elsewhere refused, standing as a blocking diagnostic of that session's file, admits the Sync asked once the lease is released, which finishes the recorded merge with the host's manifest and replay and leaves no issue [[space-11](#space-11)] [[space-67](#space-67)];
+- two Syncs sent together over a marker a released lease left are both accepted as one operation, with one merge of the recorded sides on the Save commit, the marker gone, and no state broadcast from the first send to that sync's end naming the marker as an issue [[space-67](#space-67)] [[space-21](#space-21)];
 - the stand-in renaming the repository moves the clone on the next sync, every pair rewritten and its key changed in the state [[space-60](#space-60)];
 - the stand-in archiving the repository turns it read-only with the host's reason, a sync bringing the peer's new session without pushing and the core's new session kept with its mark; the stand-in removing the account's membership turns it unreachable on the next read with the clone intact [[space-61](#space-61)] [[space-15](#space-15)] [[space-50](#space-50)];
 - a stand-in whose Git transport answers 401 stops "reauth" and a sleeping one stops "timeout" within a test-shortened limit, each carrying its guidance [[space-15](#space-15)] [[space-32](#space-32)].

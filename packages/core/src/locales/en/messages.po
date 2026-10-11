@@ -567,6 +567,11 @@ msgstr "◇ Now answering: Captain — the conversation so far was replayed to i
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ The provider rejected the resumed conversation — replaying it"
 
+#. Refusal: another compile of this core writes the playbook's artifact folder
+#: src/compile.ts
+msgid "a compile is writing {folder}; retry once it ends"
+msgstr "a compile is writing {folder}; retry once it ends"
+
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "A dispatched intent's content is history."
@@ -682,6 +687,11 @@ msgstr "Archived"
 #: src/storage-git.ts
 msgid "attachments without their intent"
 msgstr "attachments without their intent"
+
+#. Refusal of a sync's write: this core's turn is appending to the authoring session's transcript
+#: src/authoring.ts
+msgid "authoring session {id} has a turn running"
+msgstr "authoring session {id} has a turn running"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
@@ -1896,6 +1906,11 @@ msgstr "Spex desktop and server require macOS or Linux with private POSIX file p
 msgid "Spex did not sign in. You may close this browser window and return to Spex."
 msgstr "Spex did not sign in. You may close this browser window and return to Spex."
 
+#. Refusal: an enabling of this core packages the playbook's artifact folder
+#: src/compile.ts
+msgid "Spex is packaging {folder}; retry once it ends"
+msgstr "Spex is packaging {folder}; retry once it ends"
+
 #. The browser page once a sign-in completed
 #: src/space-groups.ts
 msgid "Spex is signed in. You may close this browser window."
@@ -2228,7 +2243,6 @@ msgstr "the source is empty; nothing was written"
 msgid "The space changed twice while syncing"
 msgstr "The space changed twice while syncing"
 
-#. Refusal: the authoring session's spec package folder is not on this device
 #. Refusal: the authoring session's spec package folder is not on this device
 #. Refusal: the authoring session's spec package folder is not on this device
 #: src/authoring.ts

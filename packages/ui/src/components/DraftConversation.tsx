@@ -372,7 +372,7 @@ export function DraftConversation({
   const entries = useMemo(() => threadEntries(draftView), [draftView]);
   const [windowSize, setWindowSize] = useState(RENDER_WINDOW);
   const turnRunning = draft.activity === "turn";
-  const compiling = draft.activity === "compiling";
+  const compiling = draft.compiling ?? draft.activity === "compiling";
   const lastSeq = draftView?.view.lastSeq ?? 0;
   const { scrollRef, contentRef, onScroll, newBelow, jump, revealAbove } = useStickToBottom(
     `${entries.length}:${lastSeq}:${turnRunning ? 1 : 0}`,

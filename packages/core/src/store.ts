@@ -26,7 +26,7 @@ import {
 import { tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
   intentFileOf, intentInfoOf, parsePrefs, parseProjectFile, readIntentFiles, repairKey, writeIntentFile,
@@ -394,7 +394,10 @@ export function spexRepository(key: string, dir: string): SpexRepository {
     authoringDir: join(dir, "authoring"),
     configPath: join(dir, "config", "playbook.config.yaml"),
     projectFile: join(dir, "project.json"),
-    store: createSessionStore({ sessionsDir }),
+    // Its sessions folder is made by the store's own writes alone, never
+    // by a lease or a record: a clone moved or removed meanwhile is never
+    // made again at its former path (space-19, space-21).
+    store: createSessionStore({ sessionsDir, createSessionsDir: false }),
   };
 }
 
@@ -540,7 +543,7 @@ export class Store {
         // Startup stays available on a damaged home file; every write
         // that needs it refuses with its cause (storage-12).
         this.homeProblem = { file: error.file, reason: error.reason, blocking: true };
-        this.homeFile = Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env });
+        this.homeFile = this.placeholderHome();
       }
     } else {
       this.homeFile = Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env });
@@ -677,16 +680,27 @@ export class Store {
    * change made and saved in one synchronous step is never read over. A
    * change made since this store last read or wrote it — an editor's —
    * is taken; a file that will not read, or was deleted once read, stands
-   * as the home's problem, refusing every write that needs it while the
-   * last reading answers; a repaired file clears it. */
+   * as the home's problem, refusing every write that needs it, and from
+   * its first failed read the store answers with an unsaved empty home
+   * keeping the device last read, so no remembered pair routes a command
+   * and work settling meanwhile stays this device's (storage-2); a
+   * repaired file clears it and its pairs read. */
   private refreshHome(): void {
     try { this.homeFile.refresh(); }
     catch (error) {
       if (!(error instanceof StorageFormatError)) throw error;
+      if (!this.homeProblem) this.homeFile = this.placeholderHome(this.homeFile.device);
       this.homeProblem = { file: error.file, reason: error.reason, blocking: true };
       return;
     }
     if (this.homeProblem && Home.exists(this.dir)) this.homeProblem = undefined;
+  }
+
+  /** A home not yet written, with no pairs: what this store answers
+   * while `home.yaml` does not read (storage-2), keeping `device` where
+   * one was read before. */
+  private placeholderHome(device?: string): Home {
+    return Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env, ...(device ? { device } : {}) });
   }
 
   /** The file the preferences were last read from or written to, by its
@@ -741,12 +755,19 @@ export class Store {
   }
 
   private saveForgeCache(): void {
+    const file = forgeCacheFileOf(this.dir);
     writeAtomic(
-      forgeCacheFileOf(this.dir),
+      file,
       JSON.stringify({ format: 1, entries: Object.fromEntries(this.forgeCache) }),
     );
     this.cacheProblem = undefined;
+    this.cacheStamp = this.stampOf(file);
   }
+
+  /** The forge cache file as last read or written, by the preferences'
+   * stamp: a cache another writer changed, repaired or removed is read
+   * again before its diagnostic is reported (storage-12). */
+  private cacheStamp?: string;
 
   // -- load (the restart fold, CORE-10/52) ----------------------------------
 
@@ -758,15 +779,20 @@ export class Store {
    * rescan.
    */
   reload(): void {
-    this.forgeCache.clear();
-    this.cacheProblem = undefined;
     this.prepareSessionDirs();
     this.loadApplication();
   }
 
   private loadApplication(): void {
     this.loadPrefs();
+    this.loadForgeCache();
+  }
+
+  private loadForgeCache(): void {
     const cacheFile = forgeCacheFileOf(this.dir);
+    this.forgeCache.clear();
+    this.cacheProblem = undefined;
+    this.cacheStamp = this.stampOf(cacheFile);
     try {
       for (const [projectId, entry] of Object.entries(
         readJson<{ entries: Record<string, { at: number; state: ForgeState }> }>(cacheFile)?.entries ?? {},
@@ -787,6 +813,22 @@ export class Store {
    * A key naming no clone now is refused, never served by another's. */
   sessionStore(key?: string): SharedSessionStore {
     return (key === undefined ? this.ownRepository() : this.requireRepository(key)).store;
+  }
+
+  /** A session's open makes its clone's `sessions/` where missing, never
+   * the clone (storage-2): one non-recursive, private mkdir, so a clone
+   * gone since it was read stays absent. False only where that clone is
+   * gone; every other failure is thrown. */
+  openSessionsDir(key: string): boolean {
+    const repository = this.repository(key);
+    if (!repository) return false;
+    try { mkdirSync(repository.sessionsDir, { mode: 0o700 }); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return false;
+      if (code !== "EEXIST") throw error;
+    }
+    return true;
   }
 
   /** The session store of the clone holding a session. */
@@ -990,8 +1032,22 @@ export class Store {
     this.sessions.set(id, { ...unchanged, ...(writer === "idle" ? {} : { externalWriter: writer }) });
   }
 
+  /** Each damaged session file's diagnostic while its file stands
+   * (storage-12): one whose file is gone since leaves, and so does the
+   * mark keeping an unindexed session's files out of Git once none of
+   * them stands. */
   sessionDiagnostics(): { file: string; reason: string; blocking: boolean }[] {
+    for (const id of [...this.sessionProblems.keys()]) this.sessionProblem(id);
     return [...this.sessionProblems.values()];
+  }
+
+  private sessionProblem(id: string): StorageDiagnostic | undefined {
+    const problem = this.sessionProblems.get(id);
+    if (!problem || existsSync(problem.file)) return problem;
+    this.sessionProblems.delete(id);
+    const dir = dirname(problem.file);
+    if (!this.sessions.has(id) && !existsSync(join(dir, `${id}.json`)) && !existsSync(join(dir, `${id}.records.jsonl`))) this.untrackedSessions.delete(id);
+    return undefined;
   }
 
   /** The session files of one clone Playbook has yet to accept, relative
@@ -1037,7 +1093,7 @@ export class Store {
 
   assertWritable(scope: {projectId: string; sessionId?: never} | {projectId?: never; sessionId: string}): void {
     this.assertProjectsWritable();
-    const sessionProblem = scope.sessionId ? this.sessionProblems.get(scope.sessionId) : undefined;
+    const sessionProblem = scope.sessionId ? this.sessionProblem(scope.sessionId) : undefined;
     if (sessionProblem?.blocking) throw new StorageFormatError(sessionProblem.file, sessionProblem.reason);
   }
 
@@ -1378,7 +1434,12 @@ export class Store {
     this.prepareSessionDirs();
     for (const [id, location] of [...this.sessionLocations]) {
       const next = to.get(location);
-      if (next) this.sessionLocations.set(id, next);
+      if (!next) continue;
+      this.sessionLocations.set(id, next);
+      // A damaged session's diagnostic names its file where the clone now lies.
+      const problem = this.sessionProblems.get(id);
+      const inside = problem ? relative(this.homeFile.clonePath(location), problem.file) : "..";
+      if (problem && inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)) this.sessionProblems.set(id, { ...problem, file: join(this.homeFile.clonePath(next), inside) });
     }
     for (const [id, meta] of [...this.sessions]) {
       const next = to.get(meta.projectId);
@@ -1433,6 +1494,7 @@ export class Store {
    * leaves with it. */
   storageDiagnostics(): StorageDiagnostic[] {
     this.currentPrefs();
+    if (this.stampOf(forgeCacheFileOf(this.dir)) !== this.cacheStamp) this.loadForgeCache();
     this.refreshHome();
     const repositories = this.listRepositories();
     const reports: StorageDiagnostic[] = [

@@ -6,14 +6,16 @@
 ## Status
 
 Prepared for review (2026-10-10).
-DR-111 accepted; tasks 2 to 4 and 6 delivered, task 3 with the authoring sessions' busy refusals of task 4.
+DR-111 accepted; tasks 3 and 4 delivered, task 3 with the authoring sessions' busy refusals of task 4; tasks 2 and 6 implemented on the published Playbook 17.7.0.
+DR-111's two in-process admissions — one compiler or packaging job per artifact destination, and an apply refused to replace an authoring unit under this core's own active turn — are implemented and verified on the integrated tree.
+Tasks 2 and 6's folder rule — a session store opened with `createSessionsDir: false` making neither a missing `sessions/` nor an ancestor — is verified against Playbook 17.7.0, whose public package matches the tested candidate file for file; Spex's Playbook floor is `^17.7.0`, with a lock regenerated from the public registry.
 Task 5's versioned environment writes are implemented at the locations before [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md), with no queue or busy refusal, and prepared for review there; task 5 as amended stays pending until that proposed record is accepted and delivered, then adapts them to the files where it puts them.
-Task 6 delivered the store reading the home, clones, project files and intents as they stand; the config read as its files stand at each use, an enabling's result checked after its reload while each of its writes stays versioned on what it read; the credential file written only over the pair its writer read; Join's owner-only umask scoped to each Git child's spawn; space-31's repair wording scoped to startup and a sync's admission; their concurrent-writer cases; and the inventory's final dispositions.
+Task 6 implemented the store reading the home, clones, project files and intents as they stand; the config read as its files stand at each use, an enabling's result checked after its reload while each of its writes stays versioned on what it read; the credential file written only over the pair its writer read; Join's owner-only umask scoped to each Git child's spawn; space-67's repair of an interrupted Apply run at startup and as the first work of the clone's own Sync operation; their concurrent-writer cases; and the inventory's final dispositions.
 
 ## Intent
 
 Remove the core's gatekeeping over operations and keep to Git's rules: one process per home, a version check at the instant of each write, append-only records under their session's lease, a sync that commits what is on disk and refuses a replacement its pre-write check finds changed since Save, and an interface that reads files.
-How the core admits a message to a runtime and how the interface orders its own replies are outside it.
+How the core admits a message to a runtime and how the interface orders its own replies are outside it; DR-111's two in-process admissions stay within it.
 The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); this record carries its delivery.
 
 ## Deliverables
@@ -21,7 +23,9 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 - [x] DR-111 accepted with the inventory of every gate, reservation, claim, blocker and in-memory holder and its disposition.
 - [x] The sync's apply writes each unit under the version it read, with a session's lease taken for that instant; a refused write leaves no merge commit, the sync saves and merges again or stops for a retry, and a unit changed on both sides is a choice.
 - [x] The authoring manager reads session files for its picture and treats the recorded instance as the version of a write to the session's own files.
-- [x] Every "busy" refusal of a command because a sync, check, join, move, removal, compile, install or enabling runs is gone from the core, the protocol and the interface; a session lease's refusal and the runtime's own admission of messages stay; a stale write is refused as "changed meanwhile, retry".
+- [x] Every "busy" refusal of a command because a sync, check, join, move, removal, compile, install or enabling runs is gone from the core, the protocol and the interface; a session lease's refusal, the runtime's own admission of messages and the clone's own machine — a duplicate Space operation joining, a Sync following its Check — stay; a stale write is refused as "changed meanwhile, retry".
+- [x] DR-111's in-process admissions: a duplicate compiler or packaging job over one artifact destination refused naming the work running, an apply refused under this core's own active authoring turn, and a turn and a compile reported apart — implemented and verified.
+- [x] Spex's Playbook floor `^17.7.0` and a lock regenerated from the public registry.
 - [ ] The environment's requests, lock and installs are versioned writes, each prepared privately and published by its own rename, with no queue blocking repository operations; a command that fails after some of its writes reports what it did and undoes nothing — implemented on the spex repository's clone; pending on the files where [DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md) puts a project's environment.
 - [x] The race suites assert no loss and surfaced conflicts under concurrent writers, replacing the gate tests.
 
@@ -36,4 +40,4 @@ The decision is [DR-111](../decisions/111-the-core-coordinates-as-git-does.md); 
 
 ## Verification
 
-Each task's slice ends with `spex lint` clean and its focused checks; the integrated tree then passes one clean core build and one full core, interface and journey gate, whose counts the final pull request records; the concurrent-writer cases fail on the gated code and pass on the versioned one; no spec item refuses a command because a sync, check, join, move, removal, compile, install or enabling runs, while a session lease's refusal and the runtime's admission of messages stay.
+Each task's slice ends with `spex lint` clean and its focused checks; the integrated tree then passes one clean core build and one full core, interface and journey gate, whose counts the final pull request records; the concurrent-writer cases fail on the gated code and pass on the versioned one; no spec item refuses a command because a sync, check, join, move, removal, compile, install or enabling runs, while a session lease's refusal, the runtime's admission of messages, the clone's own machine ordering its operations, and DR-111's duplicate-job and authoring-apply refusals stay.

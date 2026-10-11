@@ -11,8 +11,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, hostname } from "node:os";
 import { basename, join } from "node:path";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
+import { createSessionStore } from "@sublang/playbook/session-store";
 import { CredentialChanged, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
 import { Home } from "./home.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
@@ -858,6 +863,281 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   const picked = await reply;
   assert.ok(!picked.ok && picked.error.code === "conflict" && /changed meanwhile/.test(picked.error.message), JSON.stringify(picked));
   assert.equal(git(clone, "config", "--get-all", "remote.origin.url"), "/elsewhere/terminal.git");
+});
+
+/** A Playbook session lease `sessions/.<id>.lock` planted in a clone as
+ * a writer of another process or machine leaves it, in Playbook's owner
+ * shape; `fields` overrides or adds owner fields. */
+function plantLease(clone: string, id: string, owner: { pid: number; hostname: string }, fields: Record<string, unknown> = {}): string {
+  const dir = join(clone, "sessions", `.${id}.lock`);
+  mkdirSync(dir, { mode: 0o700 });
+  writeFileSync(join(dir, "owner.json"), JSON.stringify({ schemaVersion: 1, kind: "captain-session-lease", sessionId: id, ownerToken: randomUUID(), pid: owner.pid, hostname: owner.hostname, acquiredAt: new Date().toISOString(), ...fields }), { mode: 0o600 });
+  return dir;
+}
+
+/** Release a lease in a test's teardown, once its body failed: one gone
+ * with a clone a defective move took away answers ENOENT, which must not
+ * replace the failed assertion. A body that passed releases strictly. */
+async function releaseLease(lease: { release(): Promise<unknown> }): Promise<void> {
+  try { await lease.release(); }
+  catch (error) {
+    const gone = (error as NodeJS.ErrnoException).code === "ENOENT" || ((error as { cause?: NodeJS.ErrnoException }).cause)?.code === "ENOENT";
+    if (!gone) throw error;
+  }
+}
+
+/** A process of this machine that has exited: a dead owner's pid. */
+const deadPid = (): number => spawnSync(process.execPath, ["-e", ""]).pid as number;
+
+/** Whether the scratch filesystem folds case: `a` written, `A` read. */
+const foldsCase = ((): boolean => {
+  const dir = mkdtempSync(join(fixture.scratch, "case-"));
+  writeFileSync(join(dir, "a"), "");
+  return existsSync(join(dir, "A"));
+})();
+
+/** A project's spex repository created in the stand-in's acme group by a
+ * signed-in home and synced there, with one finished session. */
+async function acmeProject(home: Awaited<ReturnType<typeof startHome>>, name: string): Promise<{ key: string; id: string; clone: string; folder: string; sessionId: string }> {
+  const folder = gitFolder(name);
+  await addFolder(home, folder);
+  const from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/${name}-spex`, choice: { kind: "create", groupId: "2002", name } });
+  const key = `acme/${name}-spex`;
+  const created = await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  const sessionId = await runTurn(home, key, `Work in ${name}`);
+  return { key, id: created.id ?? "", clone: clonePath(home.dataDir, key), folder, sessionId };
+}
+
+test("space-60: a sync moving a renamed repository's clone stops naming a session whose lease stands beneath it, and moves it once released, a dead owner's lease moving with it", async (t) => {
+  const host = await startHost();
+  const home = await startHome("move-leased", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, id, clone, folder, sessionId } = await acmeProject(home, "leased");
+  host.script.rename(id, { name: "relocated-spex" });
+  const renamed = "acme/relocated-spex";
+  const sessions = createSessionStore({ sessionsDir: join(clone, "sessions") });
+  await sessions.prepare();
+  const stopsNaming = async (why: string, named: RegExp): Promise<void> => {
+    const stopped = await home.client.settle("space.sync", { repository: key });
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "lease" && named.test(stopped.sync.message) && stopped.sync.retry, `${why}: ${JSON.stringify(stopped.sync)}`);
+    assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)) && !existsSync(clonePath(home.dataDir, renamed)), `${why}: the clone stays where it was`);
+    assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, `${why}: its pair stays`);
+    assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key), `${why}: its session stays listed there`);
+  };
+  // A live writer's lease of a recorded session, and one standing only as
+  // its lease file, hold the clone where it is (space-60).
+  const live = await sessions.acquireManagement(sessionId);
+  let released = false;
+  try { await stopsNaming("a live lease", /“Work in leased” is in use/); await live.release(); released = true; }
+  finally { if (!released) await releaseLease(live); }
+  const leaseOnly = randomUUID();
+  const onlyLease = await sessions.acquireManagement(leaseOnly);
+  released = false;
+  try { await stopsNaming("a lease-only session", new RegExp(`Session ${leaseOnly.slice(0, 8)} is in use`)); await onlyLease.release(); released = true; }
+  finally { if (!released) await releaseLease(onlyLease); }
+  // Another machine's lease cannot be proven dead here.
+  const foreignId = randomUUID();
+  const foreign = plantLease(clone, foreignId, { pid: process.pid, hostname: "machine-id:v1:00000000-0000-4000-8000-0000000000ff" });
+  try { await stopsNaming("another machine's lease", new RegExp(`Session ${foreignId.slice(0, 8)} is in use`)); }
+  finally { rmSync(foreign, { recursive: true, force: true }); }
+  // A dead process of this machine whose owner record is not Playbook's
+  // supported shape cannot be read as harmless.
+  const identity = await resolveMachineIdentity({ env: process.env, homeDir: process.env.HOME ?? homedir() });
+  const malformedId = randomUUID();
+  const malformed = plantLease(clone, malformedId, { pid: deadPid(), hostname: identity }, { kind: "another-lease" });
+  try { await stopsNaming("a malformed owner", new RegExp(`Session ${malformedId.slice(0, 8)} is in use`)); }
+  finally { rmSync(malformed, { recursive: true, force: true }); }
+  // Leases left by dead processes of this machine — named by its identity
+  // or by its legacy host name — hold nothing: the next sync moves the
+  // clone, every pair and session following it.
+  const deadId = randomUUID();
+  plantLease(clone, deadId, { pid: deadPid(), hostname: identity });
+  const legacyId = randomUUID();
+  plantLease(clone, legacyId, { pid: deadPid(), hostname: hostname() });
+  const fromMove = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  const moved = await home.client.waitRepository(fromMove, renamed, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle");
+  assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
+  assert.ok(!existsSync(clone), "the clone left its former path");
+  assert.ok(existsSync(join(clonePath(home.dataDir, renamed), "sessions", `${sessionId}.json`)));
+  assert.ok(existsSync(join(clonePath(home.dataDir, renamed), "sessions", `.${deadId}.lock`, "owner.json")), "the dead owner's lease moved with it");
+  assert.ok(existsSync(join(clonePath(home.dataDir, renamed), "sessions", `.${legacyId}.lock`, "owner.json")), "the legacy dead owner's lease moved with it");
+  assert.equal(Home.load(home.dataDir).keyForFolder(folder), renamed);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === renamed));
+});
+
+test("space-59: a sign-in while a session's lease stands beneath a clone of your own group moves none of its clones, and a Refresh after the release moves them all", async (t) => {
+  const host = await startHost();
+  const home = await startHome("signin-leased", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the sign-in");
+  // The lease stands in your own group's own clone, which moves last: no
+  // other clone may move before it is read.
+  const sessions = createSessionStore({ sessionsDir: join(ownClone(home.dataDir), "sessions") });
+  await sessions.prepare();
+  const lease = await sessions.acquireManagement(randomUUID());
+  const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
+  let released = false;
+  try {
+    const signed = await signIn(home, host);
+    assert.equal(signed.account?.login, LOGIN);
+    assert.ok(existsSync(ownClone(home.dataDir)), "your own group's clone stays");
+    assert.ok(existsSync(join(clonePath(home.dataDir, key), "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
+    assert.ok(!existsSync(clonePath(home.dataDir, moved)));
+    const file = Home.load(home.dataDir).file;
+    assert.equal(file.own, OWN);
+    assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, key]]);
+    assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
+    await lease.release();
+    released = true;
+  } finally { if (!released) await releaseLease(lease); }
+  // A damaged session in the project's clone stands as a diagnostic once
+  // a core reads it at its start.
+  await home.stop();
+  const damagedId = randomUUID();
+  writeFileSync(join(clonePath(home.dataDir, key), "sessions", `${damagedId}.json`), "{ not a manifest", { mode: 0o600 });
+  const damagedAt = (repositoryKey: string): string => join(clonePath(home.dataDir, repositoryKey), "sessions", `${damagedId}.json`);
+  const again = await startHome("signin-leased-again", { host, dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => again.stop());
+  const reported = (await again.client.expectOk("space.get", {})).diagnostics;
+  assert.ok(reported.some((d) => d.file === damagedAt(key)), `the damaged session is reported: ${damagedAt(key)} in ${JSON.stringify(reported)}`);
+  const from = again.client.mark();
+  await again.client.expectOk("space.refresh", {});
+  // The first state naming the moved clone names the still-damaged
+  // session's file where that clone now lies, never where it stood.
+  const first = await again.client.waitSpace(from, (state) => state.groups.some((group) => group.repositories.some((repository) => repository.key === moved)), 30_000);
+  assert.ok(first.diagnostics.some((d) => d.file === damagedAt(moved)), JSON.stringify(first.diagnostics));
+  assert.ok(!first.diagnostics.some((d) => d.file === damagedAt(key)), JSON.stringify(first.diagnostics));
+  await again.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
+  const file = Home.load(home.dataDir).file;
+  assert.equal(file.own, LOGIN);
+  assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, moved]]);
+  assert.ok((await again.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === moved));
+});
+
+test("space-60, space-59: a destination already standing stops the host's move and the sign-in's rename, each moving nothing until it is gone", async (t) => {
+  const host = await startHost();
+  const home = await startHome("taken", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  // The sign-in's destination for your own group's clone, which moves
+  // last, is taken: the project clone's move stands free.
+  const { key: ownProject } = await addFolder(home, home.projectDir);
+  const destination = clonePath(home.dataDir, HOST_OWN);
+  mkdirSync(destination, { recursive: true });
+  writeFileSync(join(destination, "keep.txt"), "already here\n");
+  await signIn(home, host);
+  assert.ok(existsSync(clonePath(home.dataDir, ownProject)) && existsSync(ownClone(home.dataDir)), "no clone moved");
+  assert.deepEqual(readdirSync(destination), ["keep.txt"], "the folder standing there is untouched");
+  assert.equal(Home.load(home.dataDir).file.own, OWN);
+  rmSync(destination, { recursive: true, force: true });
+  const fromRefresh = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitRepository(fromRefresh, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  assert.equal(Home.load(home.dataDir).keyForFolder(home.projectDir), `${LOGIN}/${basename(home.projectDir)}-spex`, "a Refresh once it is gone moves them all");
+  // The host renames a repository onto a folder standing here.
+  const { key, id, clone } = await acmeProject(home, "occupy");
+  host.script.rename(id, { name: "standing-spex" });
+  const standing = clonePath(home.dataDir, "acme/standing-spex");
+  mkdirSync(standing, { recursive: true });
+  writeFileSync(join(standing, "keep.txt"), "already here\n");
+  const stopped = await home.client.settle("space.sync", { repository: key });
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && /workspace\/acme\/standing-spex already exists/.test(stopped.sync.message), JSON.stringify(stopped.sync));
+  assert.deepEqual(readdirSync(standing), ["keep.txt"], "the standing folder is unchanged");
+  assert.equal(readFileSync(join(standing, "keep.txt"), "utf8"), "already here\n");
+  assert.ok(existsSync(join(clone, ".git")), "the clone stays");
+  assert.equal(Home.load(home.dataDir).file.folders.find((entry) => entry.repository === key)?.repository, key, "its pair stays");
+});
+
+test("space-60: where the filesystem folds case, a rename of the repository's name by case moves the clone, and one of its group's by case stops with nothing moved", { skip: foldsCase ? false : "the scratch filesystem tells case apart" }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("cased", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, id, folder, sessionId } = await acmeProject(home, "cased");
+  // The repository's own name changes case: the clone is its destination.
+  host.script.rename(id, { name: "Cased-spex" });
+  const recased = "acme/Cased-spex";
+  const from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  const moved = await home.client.waitRepository(from, recased, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle");
+  assert.equal(moved.sync.phase, "done", JSON.stringify(moved.sync));
+  const listed = readdirSync(join(home.dataDir, "workspace", "acme"));
+  assert.ok(listed.includes("Cased-spex") && !listed.includes("cased-spex"), JSON.stringify(listed));
+  assert.equal(Home.load(home.dataDir).keyForFolder(folder), recased);
+  assert.ok((await home.client.expectOk("project.list", {})).some((project) => project.id === recased));
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === recased));
+  // Its group changes case: the same folder under another spelling of its
+  // group is no destination, and nothing moves.
+  host.script.groups.push({ id: "2009", fullPath: "Acme", name: "Acme", kind: "group" });
+  host.script.rename(id, { group: "Acme" });
+  const homeBytes = readFileSync(Home.file(home.dataDir));
+  const projects = (await home.client.expectOk("project.list", {})).map((project) => project.id).sort();
+  const stopped = await home.client.settle("space.sync", { repository: recased });
+  assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && /already exists/.test(stopped.sync.message), JSON.stringify(stopped.sync));
+  assert.ok(readdirSync(join(home.dataDir, "workspace")).includes("acme") && !readdirSync(join(home.dataDir, "workspace")).includes("Acme"));
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), homeBytes, "home.yaml is unchanged");
+  assert.deepEqual((await home.client.expectOk("project.list", {})).map((project) => project.id).sort(), projects);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === recased));
+});
+
+test("space-60: where the filesystem folds case, a move whose path below workspace/ stands under another spelling stops with nothing moved, at the group and at a nested group", { skip: foldsCase ? false : "the scratch filesystem tells case apart" }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("cased-path", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const stopsUnmoved = async (why: string, key: string, folder: string, sessionId: string, target: string): Promise<void> => {
+    const homeBytes = readFileSync(Home.file(home.dataDir));
+    const stopped = await home.client.settle("space.sync", { repository: key });
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && /already exists/.test(stopped.sync.message), `${why}: ${JSON.stringify(stopped.sync)}`);
+    assert.ok(existsSync(join(clonePath(home.dataDir, key), "sessions", `${sessionId}.json`)), `${why}: the clone stays where it was`);
+    const parts = target.split("/");
+    assert.ok(!readdirSync(join(home.dataDir, "workspace", ...parts.slice(0, -1))).includes(parts[parts.length - 1]), `${why}: nothing lands under the on-disk spelling`);
+    assert.deepEqual(readFileSync(Home.file(home.dataDir)), homeBytes, `${why}: home.yaml is unchanged`);
+    assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, `${why}: its pair stays`);
+    assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key), `${why}: its session stays listed there`);
+  };
+  // The group changes case and the repository its name: the new leaf is
+  // absent, but its group folder stands as `acme`.
+  const renamed = await acmeProject(home, "regrouped");
+  host.script.groups.push({ id: "2009", fullPath: "Acme", name: "Acme", kind: "group" });
+  host.script.rename(renamed.id, { group: "Acme", name: "elsewhere-spex" });
+  await stopsUnmoved("a group recased with a new name", renamed.key, renamed.folder, renamed.sessionId, "acme/elsewhere-spex");
+  // A nested group's folder stands as `acme/research`; a repository moved
+  // into `acme/Research` would land there.
+  const folder = gitFolder("nested");
+  await addFolder(home, folder);
+  const fromNested = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: `${LOGIN}/nested-spex`, choice: { kind: "create", groupId: "2003", name: "nested" } });
+  await home.client.waitRepository(fromNested, "acme/research/nested-spex", (repository) => repository.sync.phase === "done");
+  const moving = await acmeProject(home, "transferred");
+  host.script.groups.push({ id: "2010", fullPath: "acme/Research", name: "Research", kind: "group" });
+  host.script.rename(moving.id, { group: "acme/Research" });
+  await stopsUnmoved("a nested group recased", moving.key, moving.folder, moving.sessionId, "acme/research/transferred-spex");
+});
+
+test("space-59: where the filesystem folds case, a sign-in into a group folder standing under another spelling moves none of your own group's clones", { skip: foldsCase ? false : "the scratch filesystem tells case apart" }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("cased-own", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the sign-in");
+  // An unrelated folder stands as `Ada`; the login's folder is `ada`.
+  const unrelated = join(home.dataDir, "workspace", LOGIN.toUpperCase().slice(0, 1) + LOGIN.slice(1));
+  mkdirSync(unrelated);
+  writeFileSync(join(unrelated, "keep.txt"), "unrelated\n");
+  const signed = await signIn(home, host);
+  assert.equal(signed.account?.login, LOGIN);
+  assert.ok(existsSync(ownClone(home.dataDir)), "your own group's clone stays");
+  assert.ok(existsSync(join(clonePath(home.dataDir, key), "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
+  assert.deepEqual(readdirSync(unrelated), ["keep.txt"], "the unrelated folder is untouched");
+  const file = Home.load(home.dataDir).file;
+  assert.equal(file.own, OWN);
+  assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, key]]);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
 });
 
 test("space-38: a second home joins a project from the stand-in with its code; a rename moves both clones; an archive turns it read-only; a removed membership unreachable", async (t) => {

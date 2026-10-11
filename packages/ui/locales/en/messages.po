@@ -1106,6 +1106,10 @@ msgstr "Approved once; native execution is reported separately."
 msgid "arrow — cites"
 msgstr "arrow — cites"
 
+#: src/components/AuthoringWorkspace.tsx
+msgid "as the last run left them, not compiled"
+msgstr "as the last run left them, not compiled"
+
 #: src/components/CompileBand.tsx
 msgid "asked by the agent"
 msgstr "asked by the agent"
@@ -2759,10 +2763,6 @@ msgstr "from the compile before this change"
 #: src/components/SpaceSync.tsx
 msgid "From the host ({count})"
 msgstr "From the host ({count})"
-
-#: src/components/AuthoringWorkspace.tsx
-msgid "from the last good compile"
-msgstr "from the last good compile"
 
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)

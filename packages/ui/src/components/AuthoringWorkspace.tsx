@@ -189,9 +189,9 @@ export function AuthoringWorkspace({
     }
   }, [connected]);
 
-  // The compiled tabs draw the artifacts of the last successful
-  // compile (playbook-library-60); a restored failure may still have a
-  // good compile behind it, so any recorded compile asks once.
+  // The compiled tabs draw the outputs the folder holds after each
+  // settled compile (playbook-library-60): a failed run's, possibly
+  // partial, read as not compiled (playbook-library-58).
   const compileAt = draft?.compile?.at;
   const compileOutcome = draft?.compile?.outcome;
   useEffect(() => {
@@ -202,9 +202,10 @@ export function AuthoringWorkspace({
   }, [connected, draftId, compileAt, compileOutcome, loadDraftArtifacts]);
 
   const compiledOk = draft?.compile?.outcome === "ok";
-  // What the draft holds: a registry never written resolves to every
-  // stage absent, which is no compile to show — the tabs stay disabled
-  // until one succeeds (playbook-library-60).
+  // What the folder holds: a registry never written resolves to every
+  // stage absent, which is nothing to show — the tabs stay disabled
+  // until a compile succeeds or a run leaves outputs, a failed run's
+  // shown as it left them (playbook-library-58, playbook-library-60).
   const hasArtifacts = artifacts !== undefined && (artifacts.gears !== null || artifacts.fsm !== null);
   const artifactsReady = compiledOk || hasArtifacts;
   // The Enable tab's dot stays until it is opened after the agent's
@@ -231,7 +232,8 @@ export function AuthoringWorkspace({
     if (shown === undefined || draftShown(draftId, shown)) effect(...args);
   };
   const summary = configState?.status === "valid" ? configState.summary : undefined;
-  const compiling = draft.activity === "compiling";
+  // Its compile, whatever turn runs beside it (core-service-96).
+  const compiling = draft.compiling ?? draft.activity === "compiling";
   // A diagnostic and the toolchain's guidance are the core's own
   // words; the rest is ours.
   const compileReason = draft.diagnostic
@@ -249,7 +251,7 @@ export function AuthoringWorkspace({
     draft.state === "changed"
       ? i18n._("from the compile before this change")
       : !compiledOk && hasArtifacts
-        ? i18n._("from the last good compile")
+        ? i18n._("as the last run left them, not compiled")
         : undefined;
   const sourceDot = Boolean(source) && (!compiledOk || draft.state === "changed");
   const registerDot = registerKey !== undefined && registerSeen !== registerKey;

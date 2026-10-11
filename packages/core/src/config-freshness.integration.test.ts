@@ -119,10 +119,11 @@ test("core-service-117: commands, turns and compiles read the config files as th
   };
   // The compiler records the agent it was handed and fails at once.
   const compilerModels: (string | undefined)[] = [];
+  // Compiler runs only: a toolchain probe is no compiler.
   let spawns = 0;
   const compileSpawner: LineSpawner = async (_command, args, _cwd, onLine, _signal, env) => {
-    spawns += 1;
     if (args.length === 1 && args[0] === "--version") { onLine("v24.1.0"); return 0; }
+    spawns += 1;
     compilerModels.push(env?.SLC_MODEL);
     return 1;
   };
@@ -331,7 +332,7 @@ test("core-service-117: commands, turns and compiles read the config files as th
   // The Boss's compile awaits its outcome: the reply is the refusal, and
   // the session file records it, settling the marker the compile started.
   const refused = await compile;
-  assert.ok(!refused.ok && refused.error.code === "invalid_request" && /changed meanwhile/.test(refused.error.message), JSON.stringify(refused));
+  assert.ok(!refused.ok && refused.error.code === "conflict" && /changed meanwhile/.test(refused.error.message), JSON.stringify(refused));
   await until(compileFailed, 30_000, "the refused compile's record");
   assert.equal(spawns, spawnsBefore, "no compiler ran");
 });

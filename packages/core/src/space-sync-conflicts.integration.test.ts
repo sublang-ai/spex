@@ -223,15 +223,18 @@ test("space-38: a Settings conflict, validation at Apply, a unit changed before 
   assert.equal(existsSync(writtenFile), false);
   assert.deepEqual(readFileSync(seedRecords), seedBytes, "the held session is untouched");
   // Still held across a restart, the startup repair meets the lease and a
-  // Retry is refused with the marker kept; released, the next Retry's
-  // repair finishes the recorded selection — no finding left before stands in.
+  // Retry's own repair stops it naming the session with the marker kept;
+  // released, the next Retry's repair finishes the recorded selection — no
+  // finding left before stands in.
   await b.stop();
   const held = await sessions.acquireManagement(seed);
   const again = await startHome("b3-again", { dataDir: b.dataDir, project: false, env: otherDevice("b3") });
   t.after(() => again.stop());
   try {
     assert.ok((await again.client.expectOk("space.get", {})).diagnostics.some((d) => d.file.endsWith(".spex-apply.json") && d.blocking), "the held lease stands as a repair issue");
-    assert.equal((await again.client.command("space.sync", { repository: key })).ok, false, "a Retry while still held is refused");
+    const stillHeld = await again.client.settle("space.sync", { repository: key });
+    assert.ok(stillHeld.sync.phase === "stopped" && stillHeld.sync.cause === "lease" && /“Seed” is in use/.test(stillHeld.sync.message), JSON.stringify(stillHeld.sync));
+    assert.equal(git(bClone, "rev-parse", "HEAD"), saved, "no merge commit");
     assert.equal(existsSync(join(bClone, ".spex-apply.json")), true);
   } finally { await held.release(); }
   await again.client.expectOk("project.register", { path: bFolder });

@@ -200,9 +200,10 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   // The relay turn fixes the source and asks again.
   await expect(compileCards).toHaveCount(2);
   await expect(band).toHaveAttribute("data-outcome", "running");
-  // No compile has succeeded yet, whatever the failed one's artifacts
-  // request answered: the compiled tabs stand disabled with their
-  // reason (playbook-library-60).
+  // No compile has succeeded yet and the failed run left no outputs:
+  // the compiled tabs stand disabled with their reason; outputs a
+  // failed run leaves show as it left them (playbook-library-58,
+  // playbook-library-60).
   for (const name of ["Gears", "Machine", "Enable"]) {
     await expect(tabs.getByRole("tab", { name, exact: true })).toBeDisabled();
     await expect(tabs.getByRole("tab", { name, exact: true })).toHaveAttribute("title", "Compiles first");

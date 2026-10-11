@@ -714,6 +714,36 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("compile-band").getAttribute("data-outcome")).toBe("running");
   });
 
+  test("playbook-library-101: a compile the core refuses because another job writes the folder shows that refusal, Compile staying enabled", async () => {
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "draft.compile") throw Object.assign(new Error("a compile is writing /work/spex-packages/triage/playbooks/en/triage; retry once it ends"), { code: "busy" });
+      if (type === "draft.list") return Object.values(useAppStore.getState().drafts);
+      if (type === "compile.check") return { node: { ok: true, version: "v23.6.0", command: "node" }, slc: { ok: true, command: ["npx"] } };
+      return null;
+    });
+    renderWorkspace(draftInfo(), { view: foldView(THREAD) });
+    const compile = () => screen.getByTestId("compile-button") as HTMLButtonElement;
+    fireEvent.click(compile());
+    await vi.waitFor(() => expect(screen.getByTestId("draft-error").textContent).toContain("a compile is writing"));
+    expect(compile().disabled).toBe(false);
+    expect(compile().textContent).toBe("Compile");
+  });
+
+  test("a turn and a compile at once: Abort and the turn's clock stand beside Compiling… and Cancel", () => {
+    renderWorkspace(
+      draftInfo({ activity: "turn", compiling: true, state: "compiling", compile: { at: now, by: "boss", outcome: "running" } }),
+      { view: foldView(THREAD.slice(0, 5)), lines: ["→ normalize (writing triage.playbook/triage.normalize)"], times: [now] },
+    );
+    expect(screen.getByTestId("draft-abort").textContent).toBe("Abort");
+    expect(screen.getByTestId("draft-working").textContent).toMatch(/^working · /);
+    expect((screen.getByTestId("draft-composer") as HTMLTextAreaElement).placeholder).toBe("Sends after the reply…");
+    const compile = screen.getByTestId("compile-button") as HTMLButtonElement;
+    expect(compile.textContent).toBe("Compiling…");
+    expect(compile.disabled).toBe(true);
+    expect(screen.getByTestId("compile-cancel")).toBeTruthy();
+    expect(screen.getByTestId("draft-chip").textContent).toBe("runningCompiling");
+  });
+
   test("a successful compile fills Gears and Machine, enables Enable with a dot, and Changed captions the artifacts", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
@@ -744,7 +774,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("tab-dot-source")).toBeTruthy();
   });
 
-  test("an interrupted compile says so with Compile enabled; a failure after a good compile keeps the last artifacts", async () => {
+  test("an interrupted compile says so with Compile enabled; a failure shows the outputs as the run left them, not compiled", async () => {
     renderWorkspace(
       draftInfo({ state: "interrupted", compile: { at: now - HOUR, by: "boss", outcome: "interrupted" } }),
     );
@@ -760,7 +790,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
     expect(tab("Enable").disabled).toBe(true);
     fireEvent.click(tab("Machine"));
-    expect(screen.getByTestId("artifact-caption").textContent).toBe("from the last good compile");
+    expect(screen.getByTestId("artifact-caption").textContent).toBe("as the last run left them, not compiled");
   });
 });
 
@@ -1758,6 +1788,58 @@ describe("playbook-library-97: a history replaced on disk, and a session replace
       deliverServerMessageForTests({ type: "compile.progress", playbookId: "triage", instance: OTHER, line: "→ normalize (successor)" });
     });
     expect(useAppStore.getState().compileProgress.triage).toEqual(["→ normalize (successor)"]);
+  });
+
+  test("a record naming another instance than the thread shown changes nothing, live or buffered while the thread is read", async () => {
+    const SHOWN = "72000000-0000-4000-8000-0000000000ee";
+    const record = (instance: string, seq: number, message: string) => deliverServerMessageForTests({ type: "draft.record", draftId: "triage", instance, seq, record: { type: "captain_status", turnId: null, timestamp: now, message } as unknown as TmuxPlayRecord });
+    let opening: ((value: unknown) => void) | undefined;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      switch (type) {
+        case "draft.open":
+          return new Promise((resolve) => { opening = resolve; });
+        case "draft.list":
+          return [useAppStore.getState().drafts.triage];
+        case "config.get":
+          return CONFIG_STATE;
+        case "readiness.get":
+          return READINESS;
+        case "project.list":
+          return [PROJECT];
+        case "session.list":
+          return [];
+        default:
+          return base(type, params);
+      }
+    });
+    const shown = draftInfo({ instance: SHOWN });
+    seed({ drafts: { triage: shown } });
+    render(<LibrarySurface />);
+    fireEvent.click(screen.getByTestId("draft-open-triage"));
+    await vi.waitFor(() => expect(opening).toBeDefined());
+    // Buffered while the thread is read: the former's record, numbered
+    // right after what the reply holds, goes; the shown session's lands.
+    act(() => {
+      record(INSTANCE, THREAD.length + 1, "◇ former, buffered");
+      record(SHOWN, THREAD.length + 1, "◇ shown, buffered");
+    });
+    await act(async () => { opening!({ draft: shown, source: SOURCE, records: THREAD }); });
+    await vi.waitFor(() => expect(useAppStore.getState().draftViews.triage?.loading).toBe(false));
+    const thread = () => JSON.stringify(useAppStore.getState().draftViews.triage?.view.captain);
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 1);
+    expect(thread()).toContain("◇ shown, buffered");
+    expect(thread()).not.toContain("◇ former, buffered");
+
+    // Live with the thread open: the former's record numbered right
+    // after the thread's last changes nothing; the shown one's extends it.
+    const before = thread();
+    act(() => { record(INSTANCE, THREAD.length + 2, "◇ former, live"); });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 1);
+    expect(thread()).toBe(before);
+    act(() => { record(SHOWN, THREAD.length + 2, "◇ shown, live"); });
+    expect(useAppStore.getState().draftViews.triage?.view.lastSeq).toBe(THREAD.length + 2);
+    expect(thread()).toContain("◇ shown, live");
   });
 
   test("replies late for a replaced session change nothing of the successor's; a record after removal makes no thread", async () => {

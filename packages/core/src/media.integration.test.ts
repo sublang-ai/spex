@@ -643,7 +643,7 @@ test("authenticated media bytes survive client reconnect and core restart with e
 });
 
 
-test("browser capabilities use execution context and owned preparation cancels without saving", {timeout: 30_000}, async () => {
+test("media-21: browser capabilities use execution context; a repeated preparation joins, another runs beside it, and owned preparation cancels without saving", {timeout: 30_000}, async () => {
   const dir = await mkdtemp(join(tmpdir(), "spex-browser-protocol-"));
   const project = join(dir, "project");
   await mkdir(project);
@@ -653,6 +653,7 @@ test("browser capabilities use execution context and owned preparation cancels w
   let block = false;
   let started: () => void = () => {};
   let aborted: () => void = () => {};
+  let abortCount = 0;
   class Adapter implements AgentAdapter<string, boolean, string, string> {
     readonly agent = "codex";
     async isAvailable() { return false; }
@@ -660,7 +661,7 @@ test("browser capabilities use execution context and owned preparation cancels w
       calls.push(options);
       started();
       if (block) await new Promise<void>((resolve) => {
-        const done = () => { aborted(); resolve(); };
+        const done = () => { abortCount += 1; aborted(); resolve(); };
         options.abortSignal?.addEventListener("abort", done, {once: true});
         if (options.abortSignal?.aborted) done();
       });
@@ -688,17 +689,30 @@ test("browser capabilities use execution context and owned preparation cancels w
     assert.deepEqual(progress, ["checking"]);
     block = true;
     const operationId = randomUUID();
+    const before = calls.length;
     const entered = new Promise<void>((resolve) => { started = resolve; });
     const pending = client.command("browser.prepare", {agent, context, operationId});
     await entered;
+    const perPreparation = calls.length - before;
+    // The same operation asked again joins the one running; another
+    // runs its own beside it (media-8).
+    const joined = client.command("browser.prepare", {agent, context, operationId});
+    const besideEntered = new Promise<void>((resolve) => { started = resolve; });
+    const beside = client.command("browser.prepare", {agent, context, operationId: randomUUID()});
+    await besideEntered;
+    assert.equal(calls.length, before + 2 * perPreparation, "one preparation per operation");
     assert.deepEqual(await client.command("browser.cancel", {operationId}), {canceled: true});
     assert.deepEqual(await pending, {status: "cancelled"});
-    const disconnected = new Promise<void>((resolve) => { aborted = resolve; });
+    assert.deepEqual(await joined, {status: "cancelled"});
+    assert.equal(abortCount, 1, "the cancel ends the one shared preparation alone");
+    void beside.catch(() => undefined);
+    const disconnected = new Promise<void>((resolve) => { aborted = () => { if (abortCount >= 3) resolve(); }; });
     const enteredAgain = new Promise<void>((resolve) => { started = resolve; });
     void client.command("browser.prepare", {agent, context, operationId: randomUUID()});
     await enteredAgain;
     client.close();
     await disconnected;
+    assert.equal(abortCount, 3, "the disconnect ends both remaining preparations");
     assert.deepEqual(await readFile(configPath), config);
     assert.equal(runs, 0);
   } finally {

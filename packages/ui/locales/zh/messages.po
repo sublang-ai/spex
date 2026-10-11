@@ -1106,6 +1106,10 @@ msgstr "已允许此次操作；原生执行结果将单独报告。"
 msgid "arrow — cites"
 msgstr "箭头 — 引用"
 
+#: src/components/AuthoringWorkspace.tsx
+msgid "as the last run left them, not compiled"
+msgstr "保持上次运行留下的样子，未编译成功"
+
 #: src/components/CompileBand.tsx
 msgid "asked by the agent"
 msgstr "由智能体发起"
@@ -2759,10 +2763,6 @@ msgstr "来自本次更改前的编译"
 #: src/components/SpaceSync.tsx
 msgid "From the host ({count})"
 msgstr "来自托管平台（{count}）"
-
-#: src/components/AuthoringWorkspace.tsx
-msgid "from the last good compile"
-msgstr "来自上次成功的编译"
 
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)

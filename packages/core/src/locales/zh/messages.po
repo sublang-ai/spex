@@ -567,6 +567,11 @@ msgstr "◇ 现在由 Captain 作答 — 此前的对话已重放给它"
 msgid "◇ The provider rejected the resumed conversation — replaying it"
 msgstr "◇ 服务商拒绝了续接的对话 — 正在重放"
 
+#. Refusal: another compile of this core writes the playbook's artifact folder
+#: src/compile.ts
+msgid "a compile is writing {folder}; retry once it ends"
+msgstr "一个编译正在写入 {folder}；请在它结束后重试"
+
 #. Refusal during attachment admission
 #: src/service.ts
 msgid "A dispatched intent's content is history."
@@ -682,6 +687,11 @@ msgstr "已归档"
 #: src/storage-git.ts
 msgid "attachments without their intent"
 msgstr "附件缺少所属的意图"
+
+#. Refusal of a sync's write: this core's turn is appending to the authoring session's transcript
+#: src/authoring.ts
+msgid "authoring session {id} has a turn running"
+msgstr "编写会话 {id} 有一轮正在运行"
 
 #. Refusal: the session's project has no folder on this device yet
 #: src/service.ts
@@ -1896,6 +1906,11 @@ msgstr "Spex 桌面端与服务端需要支持私有 POSIX 文件权限的 macOS
 msgid "Spex did not sign in. You may close this browser window and return to Spex."
 msgstr "Spex 未能登录。你可以关闭此浏览器窗口并返回 Spex。"
 
+#. Refusal: an enabling of this core packages the playbook's artifact folder
+#: src/compile.ts
+msgid "Spex is packaging {folder}; retry once it ends"
+msgstr "Spex 正在打包 {folder}；请在它结束后重试"
+
 #. The browser page once a sign-in completed
 #: src/space-groups.ts
 msgid "Spex is signed in. You may close this browser window."
@@ -2228,7 +2243,6 @@ msgstr "源文为空；未写入任何内容"
 msgid "The space changed twice while syncing"
 msgstr "同步期间空间被改动了两次"
 
-#. Refusal: the authoring session's spec package folder is not on this device
 #. Refusal: the authoring session's spec package folder is not on this device
 #. Refusal: the authoring session's spec package folder is not on this device
 #: src/authoring.ts

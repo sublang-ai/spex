@@ -159,13 +159,14 @@ export class Home {
     return true;
   }
 
-  /** A new home, not yet written: a fresh device id, the host the
-   * environment names, and this device's user name as your own group. */
-  static create(root: string, options: { own?: string; env?: NodeJS.ProcessEnv } = {}): Home {
+  /** A new home, not yet written: a fresh device id unless one is
+   * supplied, the host the environment names, and this device's user
+   * name as your own group. */
+  static create(root: string, options: { own?: string; env?: NodeJS.ProcessEnv; device?: string } = {}): Home {
     const own = options.own ?? defaultOwnName(options.env);
     return new Home(resolve(root), {
       format: 1,
-      device: randomUUID(),
+      device: options.device ?? randomUUID(),
       host: { url: hostUrlFor(options.env), clientId: CLIENT_ID },
       own,
       folders: [],

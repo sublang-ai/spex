@@ -288,20 +288,30 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 #### core-service-96
 
-The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and run at most one turn per authoring session instance, refusing no other command because a turn, compile or enabling runs ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
+The core service shall accept the authoring command family — `draft.list`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and run at most one turn per authoring session instance, refusing a command because other work runs only as the table and the cases below say ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
 | Command | While a turn runs | While a compile runs |
 | --- | --- | --- |
 | `draft.send` | accepted, queued | accepted, queued |
-| `draft.abort` | ends the turn | `{aborted: false}` |
+| `draft.abort` | ends the turn | `{aborted: false}` where no turn runs beside it |
+| `draft.compile` | admitted | `busy`, the compile writing the session's artifact folder [[playbook-library-99](playbook-library.md#playbook-library-99)] |
 | every other command | admitted | admitted |
 
-- a draft compile is an ordinary process with a cancel handle of its instance's, any number running at once beside a turn, a source write, an enabling, a deletion or another compile; a `compile.abort` naming the instance cancels every compile of that instance and replies `not_found` where none runs, one naming no instance acting as for a standalone compile; its `compile.progress` lines name the instance;
+- a draft compile is an ordinary process with a cancel handle of its instance's, running beside a turn, a source write or a deletion; a `compile.abort` naming the instance cancels its compile and replies `not_found` where none runs, one naming no instance cancelling one-shot compiles alone [[core-service-25](#core-service-25)]; its `compile.progress` lines name the instance;
 - a session made again under an id is another session, whose turn may run beside a former instance's in the same working folder;
-- a session's state carries its recorded instance [[storage-23](storage.md#storage-23)], or, where its file will not read, that file's version instead; `draft.record` and `draft.source` name the instance, and `draft.removed` names it where the file read; after a sync applies a spex repository, each of its sessions is announced to every client as `draft.history-replaced` naming its instance, with its state, and after a clone moves every session's state is announced again under the project now holding it; every command but `draft.list`, `draft.create`, `draft.open` and `draft.artifacts` names the instance it read, `draft.delete` the version where it read none, and replies `conflict`, changed meanwhile, where the session's file no longer records it;
+- `draft.compile` and `draft.register` are refused `busy`, naming the folder and the work running there, while another job of the core writes the session's artifact folder — a former instance's compile, a one-shot compile of its id, or an enabling's repackaging — whatever turn runs [[playbook-library-99](playbook-library.md#playbook-library-99)];
+- a session's state carries its recorded instance [[storage-23](storage.md#storage-23)], or, where its file will not read, that file's version instead, and its `activity` — `turn` while its turn runs, else `compiling` while its compile runs, else `idle` — beside `compiling`, true while its compile runs, so a turn and a compile running at once are each reported; `draft.record` and `draft.source` name the instance, and `draft.removed` names it where the file read; every command but `draft.list`, `draft.create`, `draft.open` and `draft.artifacts` names the instance it read, `draft.delete` the version where it read none, and replies `conflict`, changed meanwhile, where the session's file no longer records it;
 - `draft.create` replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, or for a project with no working folder on this device; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
 - a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an enabled one stays and reads enabled;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
+
+#### core-service-118
+
+When the core rescans a spex repository — after a sync's apply wrote to it, merged or not, or after it was joined or its working folder paired — the core shall announce each authoring session that repository holds to every client as `draft.history-replaced` naming the session's recorded instance, then its state, whether or not the history changed under the same instance, allowing a client showing one to read it again as its files now stand instead of combining histories [[core-service-96](#core-service-96)] ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+
+#### core-service-119
+
+When the core follows a spex repository's clone to a new address, the core shall announce each authoring session that repository holds to every client by its state under the project now holding it, so a client showing one addresses it there [[core-service-96](#core-service-96)] ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### Intent Ledger
 
@@ -652,11 +662,10 @@ The core contract test suite shall exercise the service end to end through the W
 
 #### core-service-25
 
-The core package shall run each `compile.run` as its own toolchain process with its own cancel handle, and accept a `compile.abort` command that cancels every compile in flight for a playbook id ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
+The core package shall run each `compile.run` as its own toolchain process with its own cancel handle, admitted as one job over its artifact folder [[playbook-library-99](playbook-library.md#playbook-library-99)], and accept a `compile.abort` command naming no instance that cancels the one-shot compiles in flight for a playbook id, an authoring session's compile being canceled only by a `compile.abort` naming its instance [[core-service-96](#core-service-96)] ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
-- a further `compile.run` for an id already compiling is refused nothing: it runs beside the first, the compiler being an independent process;
-- `compile.abort` cancels each in-flight compile of the id by terminating its toolchain child process, emits a final canceled progress line, and makes each pending `compile.run` reply with an `aborted` error; no further progress output follows the canceled line.
-- When `compile.abort` names a playbook id with no compile in flight, the core package rejects it with a `not_found` error.
+- `compile.abort` cancels each in-flight `compile.run` of the id by terminating its toolchain child process, emits a final canceled progress line, and makes each pending `compile.run` reply with an `aborted` error; no further progress output follows the canceled line;
+- where no `compile.run` of the id is in flight, an authoring session's compile of that id running or not, the core package rejects it with a `not_found` error.
 
 ### Readiness Reporting
 
@@ -947,16 +956,16 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 
 Where the core service runs with an injected compile spawner whose toolchain run blocks until canceled, the test suite shall start a compile over the protocol and assert that:
 
-- a second `compile.run` for the same playbook id while the first is in flight is admitted, its compile running beside the first [[core-service-25](#core-service-25)];
-- `compile.abort` for that id makes both pending `compile.run` calls reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
-- `compile.abort` for a playbook id with no compile in flight is rejected with a `not_found` error;
-- after cancellation, a new `compile.run` for the same id is accepted.
+- a second `compile.run` for the same playbook id and project while the first is in flight is refused `busy` naming the artifact folder, the first running on [[core-service-25](#core-service-25)];
+- `compile.abort` for that id makes the pending `compile.run` reply with an `aborted` error, and the final progress line broadcast for the playbook is the canceled marker [[core-service-25](#core-service-25)];
+- `compile.abort` for a playbook id with no compile in flight is rejected with a `not_found` error [[core-service-25](#core-service-25)];
+- after cancellation, a new `compile.run` for the same id is accepted [[core-service-25](#core-service-25)].
 
 ### Playbook Draft Coverage
 
 #### core-service-97
 
-Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request` and `conflict` refusals, a command naming a replaced session's former instance among the conflicts, a `compile.abort` naming a former instance refused while its successor's compile runs and the progress lines naming the compile's instance, two compiles of one instance running at once and both canceled by one `compile.abort` naming it, a moved clone's session announced under its new project with its instance, a sync receiving a session's transcript announced as `draft.history-replaced` with its instance, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)].
+Where the core service runs with the scripted fake adapter and a compile spawner that blocks until canceled, the test suite shall drive the authoring command family over the protocol and assert each reply of the activity table, the `not_found`, `invalid_request` and `conflict` refusals, a command naming a replaced session's former instance among the conflicts, a `compile.abort` naming a former instance refused while its successor's compile runs and the progress lines naming the compile's instance, a second compile of an instance refused `busy` while its first runs and one `compile.abort` naming it canceling the first, a turn and a compile running at once each reported in the session's state, that `draft.record` messages arrive in sequence on the draft channel only, that `draft.state` follows every transition, that the session's files land in the project's clone, and that a malformed command is rejected with no state change [[core-service-96](#core-service-96)]; that a `compile.abort` naming no instance is refused `not_found` while the session's compile runs [[core-service-25](#core-service-25)]; that a moved clone's session is announced under its new project with its instance [[core-service-119](#core-service-119)]; that a sync receiving a session's transcript announces it as `draft.history-replaced` with its instance [[core-service-118](#core-service-118)]; and that `draft.compile`, and `draft.register` after a successful compile, are refused `busy` naming the folder while a one-shot compile of the session's id runs, once with the session idle and once with its `activity` read as `turn` before the refusals [[core-service-96](#core-service-96)].
 
 ### Endpoint Coverage
 

@@ -2528,9 +2528,9 @@ export const useAppStore = create<AppState>((set, get) => {
       void getClient()
         .command("session.viewed", { sessionId, turnId })
         .catch(() => {
-          // A refusal — the store held by a Space operation — leaves
-          // the condition standing: the next fold push asserts it
-          // again (space-21).
+          // A refusal — the core's runtime or storage refusing the
+          // write — leaves the condition standing: the next fold push
+          // asserts it again (core-service-48, core-service-86).
           if (sentMarkers.get(sessionId) === turnId) {
             sentMarkers.delete(sessionId);
           }

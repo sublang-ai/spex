@@ -6,19 +6,23 @@
 // clones at once (space-31) — its three-way unit plan with human labels
 // (space-33, space-34), the validated apply that never runs `git merge`
 // (space-19), the refresh that re-indexes the running core (space-20),
-// and the read-only explorer (space-35). No operation refuses another
-// (space-21): each write is checked at its own instant.
+// and the read-only explorer (space-35). A clone's own operations run in
+// order, a Sync following a Check (space-21); each write is checked at
+// its own instant, where a retained session lease or an authoring turn
+// of this core can refuse it (space-19, space-59, space-60).
 
 import { randomUUID } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
-import { hostname, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, type Dirent } from "node:fs";
+import { homedir, hostname, tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import { CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
+import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 import type {
   GroupsState,
   RepositoryState,
@@ -110,6 +114,11 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
+  /** Throws where an Apply or a repair may not replace authoring session
+   * `id` of clone `key` now — its turn runs in this core (space-19):
+   * called synchronously at that unit's write, after its version check
+   * and before its first file is replaced. */
+  assertAuthoringWritable?: (key: string, id: string) => void;
 }
 
 /** What a spex repository's clone says of its host: its origin URL and
@@ -231,9 +240,105 @@ function sameFile(a: string, b: string): boolean {
   } catch { return false; }
 }
 
-/** Whether a move's destination is taken by anything but its source. */
-function occupied(from: string, to: string): boolean {
-  return existsSync(to) && !sameFile(from, to);
+/** Whether a move's destination is taken by anything but its source: a
+ * case-folding rename re-cases the final component alone, so the clone
+ * itself is its destination only under the same parent (space-60); under
+ * another spelling of its group it counts as taken (space-59). A folder
+ * on the destination's path below `workspace` that resolves under
+ * another spelling on disk takes it too, its leaf absent or not: the
+ * rename would land under the disk's spelling while the home records the
+ * new key. A missing folder takes nothing. */
+function occupied(from: string, to: string, workspace: string): boolean {
+  if (existsSync(to) && !(sameFile(from, to) && dirname(from) === dirname(to))) return true;
+  const rel = relative(workspace, dirname(to));
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return false;
+  let parent = workspace;
+  for (const part of rel.split(sep)) {
+    const next = join(parent, part);
+    if (!existsSync(next)) return false;
+    let names: string[];
+    try { names = readdirSync(parent); } catch { return true; }
+    if (!names.includes(part)) return true;
+    parent = next;
+  }
+  return false;
+}
+
+/** Playbook's session lease owner as it writes one (`owner.json`, schema
+ * 1): mirrored here to read a canonical lease, never to write one. */
+const LEASE_OWNER_KEYS = ["acquiredAt", "hostname", "kind", "ownerToken", "pid", "schemaVersion", "sessionId"];
+const PLAYBOOK_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const LEASE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/** Whether a canonical lease `<sessions>/.<id>.lock` is harmless to a
+ * move: a private real directory holding only a private regular
+ * `owner.json` of the supported shape for that session, whose `hostname`
+ * the root lease's rule reads as this machine — its identity, or the
+ * legacy host name — for a process proven dead (storage-26). Anything
+ * else — a symlink, a malformed or unsupported record, another machine's,
+ * a live process, a probe answering neither way — holds the clone. */
+function deadOwnLease(dir: string, id: string, identity: string | undefined): boolean {
+  try {
+    const lease = lstatSync(dir);
+    if (!lease.isDirectory() || (lease.mode & 0o7777) !== 0o700) return false;
+    const names = readdirSync(dir);
+    if (names.length !== 1 || names[0] !== "owner.json") return false;
+    const file = lstatSync(join(dir, "owner.json"));
+    if (!file.isFile() || (file.mode & 0o7777) !== 0o600) return false;
+    const owner = JSON.parse(readFileSync(join(dir, "owner.json"), "utf8")) as Record<string, unknown> | null;
+    if (!owner || typeof owner !== "object" || Array.isArray(owner)) return false;
+    if (Object.keys(owner).sort().join(",") !== LEASE_OWNER_KEYS.join(",")) return false;
+    if (owner.schemaVersion !== 1 || owner.kind !== "captain-session-lease" || owner.sessionId !== id) return false;
+    if (typeof owner.ownerToken !== "string" || !PLAYBOOK_UUID.test(owner.ownerToken)) return false;
+    if (!Number.isSafeInteger(owner.pid) || (owner.pid as number) <= 0) return false;
+    if (typeof owner.acquiredAt !== "string" || !LEASE_TIMESTAMP.test(owner.acquiredAt) || new Date(Date.parse(owner.acquiredAt)).toISOString() !== owner.acquiredAt) return false;
+    if (identity === undefined || typeof owner.hostname !== "string" || owner.hostname.trim().length === 0) return false;
+    if (classifyOwnerMachine(owner.hostname, identity, hostname()) !== "local") return false;
+    return probeProcess(owner.pid as number).state === "dead";
+  } catch { return false; }
+}
+
+/** The first session of a clone whose canonical Playbook lease
+ * `sessions/.<id>.lock` holds the clone where it is (deadOwnLease).
+ * Read synchronously, so a move reads it at its rename's instant; it
+ * takes and waits for no lease. */
+function heldSessionLease(clone: string, identity: string | undefined): string | undefined {
+  const dir = join(clone, "sessions");
+  let names: string[];
+  try { names = readdirSync(dir); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+  for (const name of names.sort()) {
+    const id = /^\.(.+)\.lock$/.exec(name)?.[1];
+    if (!id || !UUID.test(id)) continue;
+    if (!deadOwnLease(join(dir, name), id, identity)) return id;
+  }
+  return undefined;
+}
+
+/** A unit's write refused, or a move stopped, for a session's lease or an
+ * authoring session's running turn, naming the session (space-15). */
+function inUseStop(step: SyncStep, unit: string, store: Store): SpaceStopped {
+  const [kind, id] = unit.split("/") as [string, string];
+  const title = kind === "sessions" ? store.describeSession(id)?.title : undefined;
+  return new SpaceStopped(step, {
+    cause: "lease",
+    message: title
+      ? i18n._({
+          id: "“{title}” is in use",
+          values: { title },
+          comment: "A stopped sync's message: a session is held elsewhere, named by its title",
+        })
+      : i18n._({
+          id: "Session {id} is in use",
+          values: { id: kind === "sessions" ? id.slice(0, 8) : id },
+          comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
+        }),
+    guidance: i18n._({
+      id: "Wait for the session to finish, then Retry.",
+      comment: "Guidance under a sync a held session stopped",
+    }),
+    retry: true,
+  });
 }
 
 /** The refusal of a write whose file changed since it was read (DR-111). */
@@ -1120,14 +1225,9 @@ class RepositorySync {
     if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
     const repo = await this.requireReady();
-    // The repair re-reads its marker now, so a finding it left before
-    // never stands in for what the files say at this admission.
-    await this.repairIfMarked();
-    // A refresh's finding is what the files said when it last re-read
-    // them; it stays under issues but admits the sync, whose Save
-    // validates the exact staged files and names any file still invalid,
-    // so a file the reader repaired is never refused by a stale finding.
-    const blocking = [...this.owner.storageDiagnostics(), ...this.diagnostics().filter((d) => d !== this.refreshProblem)].find((d) => d.blocking);
+    // The operation repairs its marker again first (space-67), so the
+    // finding an earlier repair left never refuses this admission.
+    const blocking = this.blocking(false);
     if (blocking) throw new CoreError("invalid_request", `${blocking.file}: ${blocking.reason}`);
     if (input.choices && Object.keys(input.choices).length > 0) {
       const plan = this.lastPlan?.units ?? [];
@@ -1149,8 +1249,48 @@ class RepositorySync {
     await this.owner.admit(this, { push: true, noticed: input.noticed === true || input.internal === true });
     // A sync begun while this one was admitted is the one it joins.
     if (this.runningOp() === "sync") return { accepted: true };
-    void this.runOperation("sync", () => this.syncBody(repo, choices, input.join === true), this.current?.work);
+    void this.runOperation("sync", async () => {
+      // The marker is repaired inside the operation, so a second
+      // admission joins this repair rather than running its own; the
+      // blocking issues are read once it has ended (space-67).
+      await this.repairIfMarked();
+      const found = this.blocking(true);
+      if (found) {
+        throw new SpaceStopped("save", {
+          cause: "validation",
+          message: `${found.file}: ${found.reason}`,
+          guidance: i18n._({
+            id: "Nothing was saved. Fix or remove the file, then sync again.",
+            comment: "Guidance where a file under the home failed validation before the save",
+          }),
+          retry: false,
+        });
+      }
+      await this.syncBody(repo, choices, input.join === true);
+    }, this.current?.work);
     return { accepted: true };
+  }
+
+  /** The first blocking diagnostic refusing this clone's sync (space-11):
+   * one of a file inside this clone or of a home file outside
+   * `workspace/`, never another clone's. A refresh's finding is what the
+   * files said when it last re-read them; it stays under issues but
+   * admits the sync, whose Save validates the exact staged files. While
+   * the repair marker stands, admission sets aside every diagnostic of a
+   * file inside this clone — the repair's own finding and what a half
+   * applied selection reads as among them — which `repaired` reads again
+   * once this operation's repair has run (space-67). */
+  private blocking(repaired: boolean): StorageDiagnostic | undefined {
+    const deferred = !repaired && existsSync(this.markerPath());
+    const own = deferred ? [] : this.diagnostics().filter((d) => d !== this.refreshProblem && (repaired || !d.file.endsWith(`/${APPLY_MARKER}`)));
+    const home = resolve(this.host.home);
+    const workspace = this.host.store.home.workspace;
+    const within = (dir: string, file: string): boolean => { const rel = relative(dir, file); return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
+    const mine = (file: string): boolean => {
+      const path = resolve(home, file);
+      return within(this.dir, path) ? !deferred : !within(workspace, path);
+    };
+    return [...this.owner.storageDiagnostics().filter((d) => mine(d.file)), ...own].find((d) => d.blocking);
   }
 
   cancel(): boolean {
@@ -1435,29 +1575,22 @@ class RepositorySync {
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }
 
-  /** A session's write refused because its lease is held (space-15). */
+  /** A unit's write refused because its session's lease is held, or its
+   * authoring session's turn runs (space-15). */
   private leaseStop(unit: string): SpaceStopped {
-    const id = unit.slice("sessions/".length);
-    const title = this.host.store.describeSession(id)?.title;
-    return new SpaceStopped("apply", {
-      cause: "lease",
-      message: title
-        ? i18n._({
-            id: "“{title}” is in use",
-            values: { title },
-            comment: "A stopped sync's message: a session is held elsewhere, named by its title",
-          })
-        : i18n._({
-            id: "Session {id} is in use",
-            values: { id: id.slice(0, 8) },
-            comment: "A stopped sync's message: a session is held elsewhere, named by the head of its identifier",
-          }),
-      guidance: i18n._({
-        id: "Wait for the session to finish, then Retry.",
-        comment: "Guidance under a sync a held session stopped",
-      }),
-      retry: true,
-    });
+    return inUseStop("apply", unit, this.host.store);
+  }
+
+  /** The Apply's and the repair's write options: the clone's session
+   * store, whose lease each session's write takes, and the check an
+   * authoring unit's write meets at its instant (space-19). */
+  private writeOptions(): { sessions: SpexRepository["store"]; prefsFile: string; validate: { own: boolean; libraryDir: string }; beforeAuthoringWrite: (unit: string) => void } {
+    return {
+      sessions: this.repository.store,
+      prefsFile: prefsFileOf(this.host.home),
+      validate: this.validation(),
+      beforeAuthoringWrite: (unit) => this.host.assertAuthoringWritable?.(this.key, unit.slice("authoring/".length)),
+    };
   }
 
   /** Step 4 — Apply: the validated selection written unit by unit under
@@ -1473,9 +1606,7 @@ class RepositorySync {
         { ours: pending.head, theirs: pending.origin, base: pending.base, unrelated: pending.base === EMPTY_TREE, units: pending.units },
         Object.fromEntries(pending.resolved),
         {
-          sessions: this.repository.store,
-          prefsFile: prefsFileOf(this.host.home),
-          validate: this.validation(),
+          ...this.writeOptions(),
           beforeWrite: () => {
             const record: ApplyMarker = { v: 1, ours: pending.head, theirs: pending.origin, base: pending.base, choices: Object.fromEntries(pending.resolved), at: Date.now() };
             writeApplicationFile(marker, record);
@@ -1581,7 +1712,7 @@ class RepositorySync {
     throw new SpaceStopped("push", failure);
   }
 
-  // -- repair (space-31) -----------------------------------------------------
+  // -- repair (space-67) -----------------------------------------------------
 
   /** An interrupted apply is repaired from its marker before the core
    * reopens the clone; a failure stands as a blocking issue. */
@@ -1595,25 +1726,27 @@ class RepositorySync {
     }
   }
 
+  /** A sync operation's first work (space-67): the marker read and its
+   * selection finished, the operation running already, so a second
+   * admission joins it. A failure stands as a blocking issue and stops
+   * the sync, naming a held session where its lease refused the write. */
   private async repairIfMarked(): Promise<void> {
     if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
+    // The repair finishes an Apply, and reads as that step.
+    this.phase = { phase: "running", op: "sync", step: "apply", since: Date.now(), cancelable: false };
+    await this.broadcast(false);
     let written: string[];
     try { written = await this.repair(); }
-    catch (error) {
-      // A second admission repairing the same marker loses its lease or
-      // its ref update to the first; the marker gone, that one finished
-      // the selection and nothing failed here (space-31).
-      if (!existsSync(this.markerPath())) { this.repairFailure = undefined; return; }
-      throw this.repairFailed(error);
-    }
+    catch (error) { throw this.repairFailed(error); }
     this.repairFailure = undefined;
     try { await this.reindex(written.includes("config/playbook.config.yaml")); }
     catch (error) { throw this.repairFailed(error); }
   }
 
-  private repairFailed(error: unknown): CoreError {
+  private repairFailed(error: unknown): SpaceStopped {
     this.repairFailure = error instanceof Error ? error.message : String(error);
-    return new CoreError("invalid_request", `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`);
+    if (error instanceof StorageWriteRefused && error.reason === "lease") return this.leaseStop(error.unit);
+    return new SpaceStopped("apply", { cause: "git", message: `${APPLY_MARKER}: ${repairFailureReason(this.repairFailure)}`, guidance: retryGuidance(), retry: true });
   }
 
   /** Finish an interrupted apply from its marker; the units written. */
@@ -1651,9 +1784,7 @@ class RepositorySync {
     // leaves the marker for a later repair.
     let applied: Awaited<ReturnType<typeof applyStorageSelection>>;
     try {
-      applied = await applyStorageSelection(this.dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, {
-        sessions: this.repository.store, prefsFile: prefsFileOf(this.host.home), validate: this.validation(),
-      });
+      applied = await applyStorageSelection(this.dir, { ours: marker.ours, theirs: marker.theirs, base: marker.base, unrelated: marker.base === EMPTY_TREE, units }, choices, this.writeOptions());
     } catch (error) {
       if (error instanceof StorageWriteRefused && error.reason === "changed") { rmSync(this.markerPath(), { force: true }); return error.written; }
       throw error;
@@ -1915,9 +2046,22 @@ export class SpaceManager {
   private readonly joining = new Map<string, SpaceSyncPhase>();
   /** Set once the core stops: nothing is read or announced after. */
   private stopping = false;
+  /** This machine's identity for reading session leases, once read. */
+  private leaseIdentity?: Promise<string | undefined>;
 
   constructor(private readonly host: SpaceHost) {
     this.probe = new SpaceGit(host.home, host.env, host.transportTimeoutMs !== undefined ? { transportTimeoutMs: host.transportTimeoutMs } : {});
+  }
+
+  /** This machine's identity as Playbook's session store reads it for
+   * the leases it writes — the same environment and home (storage-26);
+   * undefined where it cannot be read, so every standing lease holds a
+   * move. */
+  private machineIdentity(): Promise<string | undefined> {
+    // A failure is read again at the next move, as Playbook reads it again.
+    this.leaseIdentity ??= resolveMachineIdentity({ env: process.env, homeDir: process.env.HOME ?? homedir() })
+      .catch(() => { this.leaseIdentity = undefined; return undefined; });
+    return this.leaseIdentity;
   }
 
   // -- the account (git-host-2..4, git-host-10) ------------------------------
@@ -2187,8 +2331,11 @@ export class SpaceManager {
   private async renameOwn(account: HostAccount): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
+    if (!target || target === store.home.ownName) return "none";
+    const identity = await this.machineIdentity();
+    // Nothing is awaited from here to the last rename.
     const current = store.home.ownName;
-    if (!target || target === current) return "none";
+    if (target === current) return "none";
     const ownFrom = `${current}/${current}-spex`;
     const ownTo = `${target}/${target}-spex`;
     // Your own group's clone moves last, so the home names its folder
@@ -2197,7 +2344,17 @@ export class SpaceManager {
       .filter((key) => key.startsWith(`${current}/`))
       .sort((a, b) => Number(a === ownFrom) - Number(b === ownFrom));
     const moves = keys.map((key) => ({ from: key, to: key === ownFrom ? ownTo : `${target}/${key.slice(current.length + 1)}` }));
-    if (moves.some((move) => occupied(store.home.clonePath(move.from), store.home.clonePath(move.to)))) return "conflict";
+    if (moves.some((move) => occupied(store.home.clonePath(move.from), store.home.clonePath(move.to), store.home.workspace))) return "conflict";
+    // A session's lease beneath any clone holds every clone where it is:
+    // its writer resolved that path, and a rename under it would strand
+    // the writer's lease and its records (space-59).
+    try {
+      const held = moves.find((move) => heldSessionLease(store.home.clonePath(move.from), identity) !== undefined);
+      if (held) return "conflict";
+    } catch (error) {
+      console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
+      return "conflict";
+    }
     const done: { from: string; to: string }[] = [];
     try {
       for (const move of moves) {
@@ -2700,10 +2857,15 @@ export class SpaceManager {
     const source = machine.repository.dir;
     const target = store.home.clonePath(to);
     const moved = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${from}`), guidance: retryGuidance(), retry: true });
+    const identity = await this.machineIdentity();
     // Nothing is awaited from here to the rename.
     if (!machine.recordsNow(remote, id)) throw moved();
     if (store.repository(from)?.dir !== source || machine.key !== from) throw moved();
-    if (occupied(source, target)) {
+    // A session's lease beneath the clone holds it where it is: its writer
+    // resolved that path (space-60).
+    const held = heldSessionLease(source, identity);
+    if (held !== undefined) throw inUseStop("check", `sessions/${held}`, store);
+    if (occupied(source, target, store.home.workspace)) {
       throw new SpaceStopped("check", {
         cause: "git",
         message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),

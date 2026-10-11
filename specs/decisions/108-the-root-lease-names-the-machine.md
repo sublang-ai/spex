@@ -10,6 +10,7 @@ Extends [DR-036](036-file-state-store.md) in one scope: the root lease's owner n
 Extends [DR-045](045-unified-session-storage.md) in one scope: the storage Git tool takes the same lease by the same rules and recovers a dead owner of this machine.
 Extends [DR-103](103-the-home-and-its-groups.md) in one scope: beside the home's `.lease/`, whose path stands, the lease stages at `.lease.stage.<token>/` and keeps each retirement at `.lease.retired/<token>/`; a `.lock/` of the former layout is read by the same rule before the migration.
 Amends [DR-105](105-playbook-17-5-0-adoption.md) in its Playbook floor alone, now `^17.6.0`: the core requires Playbook 17.6.0, the first release that publishes `@sublang/playbook/machine-identity` [[2]]; everything else DR-105 decided stands.
+Amended by [DR-111](111-the-core-coordinates-as-git-does.md) in its Playbook floor alone, now `^17.7.0`: the core requires Playbook 17.7.0, whose session store, opened with `createSessionsDir: false`, makes neither a missing sessions folder nor an ancestor; its leases stand whole.
 
 ## Context
 
