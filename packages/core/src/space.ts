@@ -60,6 +60,7 @@ import {
   prepareStorageGitFiles,
   readStorageTree,
   resolveStorageChoices,
+  SET_UP_SUBJECT,
   SPEX_BRANCH,
   storageUnitName,
   StorageWriteRefused,
@@ -1223,10 +1224,12 @@ class RepositorySync {
 
   /** `internal` marks a sync the core starts itself — after a sign-in, a
    * pick or a creation (space-4, space-58) — whose act already said what
-   * a join does (space-13). A Sync asked while a sync runs joins it; one
-   * asked while a check runs follows that check. Nothing beneath the
-   * clone is refused meanwhile (space-21). */
-  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean }): Promise<{ accepted: true }> {
+   * a join does (space-13). `setUp` marks the account's set-up joining
+   * your own group's spex repository, which takes the host's side where
+   * the clone holds nothing of its own (space-59). A Sync asked while a
+   * sync runs joins it; one asked while a check runs follows that check.
+   * Nothing beneath the clone is refused meanwhile (space-21). */
+  async sync(input: { choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean; internal?: boolean; setUp?: boolean }): Promise<{ accepted: true }> {
     if (this.current?.op === "sync") return { accepted: true };
     const choices: Record<string, StorageChoice> = {};
     const repo = await this.requireReady();
@@ -1271,7 +1274,7 @@ class RepositorySync {
           retry: false,
         });
       }
-      await this.syncBody(repo, choices, input.join === true);
+      await this.syncBody(repo, choices, input.join === true, input.join === true && input.setUp === true);
     }, this.current?.work);
     return { accepted: true };
   }
@@ -1310,11 +1313,14 @@ class RepositorySync {
 
   // -- the steps (space-12, space-15) ----------------------------------------
 
-  private async syncBody(repo: ReadyRepository, choices: Record<string, StorageChoice>, join: boolean): Promise<void> {
+  private async syncBody(repo: ReadyRepository, choices: Record<string, StorageChoice>, join: boolean, setUp: boolean): Promise<void> {
     const op: SpaceOp = "sync";
     let restarts = 0;
     let rechecks = 0;
     let savedCommit: string | null = null;
+    // Every commit this operation's Saves made: a set-up join counts them
+    // as its own, never as the clone's (space-59).
+    const saves = new Set<string>();
     let pending: Pending | undefined;
     let counts = { sent: 0, received: 0 };
     let upstream = repo.upstream;
@@ -1328,7 +1334,9 @@ class RepositorySync {
       switch (next) {
         case "save": {
           await this.enter(op, "save", false);
-          savedCommit = (await this.save()) ?? savedCommit;
+          const saved = await this.save();
+          if (saved !== null) saves.add(saved);
+          savedCommit = saved ?? savedCommit;
           next = "check";
           break;
         }
@@ -1347,7 +1355,7 @@ class RepositorySync {
         }
         case "compare": {
           await this.enter(op, "compare", false);
-          const result = await this.compare(choices, join);
+          const result = await this.compare(choices, join, setUp ? saves : undefined);
           if (result.outcome === "unrelated") { this.ended = { phase: "unrelated" }; return; }
           if (result.outcome === "choices") { this.ended = { phase: "choices", savedCommit }; return; }
           if (result.outcome === "nothing") { counts = result.counts; next = "push"; break; }
@@ -1547,8 +1555,11 @@ class RepositorySync {
   }
 
   /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
-   * their ancestor, or the empty tree for a join (space-13, space-14). */
-  private async compare(choices: Record<string, StorageChoice>, join: boolean): Promise<CompareResult> {
+   * their ancestor, or the empty tree for a join (space-13, space-14).
+   * A set-up join, given its own Saves, takes the host's side of every
+   * unit both sides hold where the clone holds nothing of its own — the
+   * selection "All host's" sends (space-17, space-59). */
+  private async compare(choices: Record<string, StorageChoice>, join: boolean, setUpSaves?: ReadonlySet<string>): Promise<CompareResult> {
     const originRef = `refs/remotes/origin/${SPEX_BRANCH}`;
     const head = await this.git.ok(["rev-parse", "HEAD"]);
     const origin = await this.git.ok(["rev-parse", originRef]);
@@ -1567,6 +1578,9 @@ class RepositorySync {
     if (await this.git.succeeds(["merge-base", "--is-ancestor", originRef, "HEAD"])) {
       return { outcome: "nothing", counts: { sent: local.length, received: 0 } };
     }
+    if (setUpSaves && conflicts.length > 0 && Object.keys(choices).length === 0 && await this.holdsNothingOfItsOwn(trees.ours, setUpSaves)) {
+      choices = Object.fromEntries(conflicts.map((c) => [c.name, "theirs" as const]));
+    }
     const mismatch = conflicts.some((c) => choices[c.name] === undefined)
       || Object.keys(choices).some((name) => { const unit = units.find((u) => u.name === name); return !unit || (unit.choice !== "conflict" && unit.choice !== choices[name]); });
     if (mismatch) return { outcome: "choices" };
@@ -1576,6 +1590,34 @@ class RepositorySync {
       received: incoming.length + conflicts.filter((c) => resolved.get(c.name) === "theirs").length,
     };
     return { outcome: "apply", pending: { head, origin, base, units, resolved, counts } };
+  }
+
+  /** Whether this clone holds nothing of its own (space-59): no session,
+   * intent or authoring session among its files or in the tree its Save
+   * recorded, and no commit but the set-up's (storage-6) and `saves`,
+   * the Saves of the operation asking. */
+  private async holdsNothingOfItsOwn(saved: StorageTree, saves: ReadonlySet<string>): Promise<boolean> {
+    const records = /^(?:sessions|intents|authoring)\//;
+    if ([...saved.keys()].some((path) => records.test(path))) return false;
+    for (const folder of ["sessions", "intents", "authoring"]) {
+      let entries: string[];
+      try { entries = readdirSync(join(this.dir, folder)); }
+      catch (error) {
+        // A folder that does not read may hold anything: the join asks.
+        if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+        return false;
+      }
+      if (entries.length > 0) return false;
+    }
+    // A clone the core set up holds one set-up commit beneath the Saves:
+    // one more than those read means a commit of its own.
+    const limit = saves.size + 1;
+    const log = (await this.git.ok(["log", "--no-show-signature", "-n", String(limit + 1), "--format=%H %s", "HEAD"])).split("\n").filter(Boolean);
+    if (log.length > limit) return false;
+    return log.every((line) => {
+      const [commit] = line.split(" ", 1);
+      return saves.has(commit) || line.slice(commit.length + 1).startsWith(SET_UP_SUBJECT);
+    });
   }
 
   private markerPath(): string { return join(this.dir, APPLY_MARKER); }
@@ -2394,7 +2436,7 @@ export class SpaceManager {
     const name = splitKey(key).name;
     const listed = view.listings.find((listing) => listing.repository.group.fullPath === group.fullPath && listing.repository.path === name);
     if (listed) {
-      await this.adopt(machine, listed, true);
+      await this.adopt(machine, listed, true, null, true);
       return;
     }
     await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
@@ -2438,8 +2480,10 @@ export class SpaceManager {
    * first write of its remote, the repository counts as listed as the
    * host answered it until a read begun after this is held (git-host-5),
    * so its row goes straight to its sync. The remote is written only
-   * over `expected`, the one the caller read before asking the host. */
-  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, expected: string | null = null): Promise<void> {
+   * over `expected`, the one the caller read before asking the host.
+   * `setUp` marks the account's set-up joining your own group's spex
+   * repository (space-4, space-59). */
+  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, expected: string | null = null, setUp = false): Promise<void> {
     const { repository } = listing;
     this.changedAfter = this.readsBegun;
     this.attached.set(repository.id, listing);
@@ -2450,7 +2494,7 @@ export class SpaceManager {
     }
     this.waiting.delete(machine.key);
     await this.publish();
-    this.startSync(machine.key, { join });
+    this.startSync(machine.key, { join, ...(setUp ? { setUp } : {}) });
   }
 
   /** Ask the host to create `name` in a group for a clone (git-host-6). */
@@ -2503,7 +2547,7 @@ export class SpaceManager {
         const ask = waiting.create;
         const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
         try {
-          if (found) await this.adopt(machine, found, true, null);
+          if (found) await this.adopt(machine, found, true, null, machine.key === this.host.store.home.own());
           else if (await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet") === "created" && this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key);
         } catch (error) {
           console.error(`spex: ${machine.key} still waits: ${error instanceof Error ? error.message : String(error)}`);
@@ -2525,7 +2569,7 @@ export class SpaceManager {
     }
   }
 
-  private startSync(key: string, input: { join?: boolean }): void {
+  private startSync(key: string, input: { join?: boolean; setUp?: boolean }): void {
     const machine = this.machines.get(key);
     if (!machine || this.stopping) return;
     machine.sync({ ...input, internal: true }).catch((error: unknown) => {
