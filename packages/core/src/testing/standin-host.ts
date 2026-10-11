@@ -11,8 +11,9 @@
 // membership removals, rate limits and outages; and, for groups and
 // sharing (host-1, host-3..5, host-8, host-26..28, DR-114), its roles,
 // what the person may do per group and repository, group creation with
-// taken paths and refusals, and members with their source, added and
-// removed by login with unknown logins and refusals.
+// taken paths, refusals and a listing lagging behind it, and members
+// with their source, added and removed by login with unknown logins and
+// refusals.
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -179,6 +180,10 @@ export interface StandinScript {
   /** While set, creating a group answers 403 `host_refused` with these
    * words (host-26). */
   refuseGroupCreate(message: string | null): void;
+  /** While set, a group the stand-in creates stays out of its groups
+   * listing, as a host's listing may lag behind its creation, though it
+   * answers by its id; clearing it lists every such group again. */
+  lagGroupListing(on: boolean): void;
   /** While set, adding or removing a member answers 403 `host_refused`
    * with these words (host-27, host-28). */
   refuseMembers(message: string | null): void;
@@ -396,6 +401,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let transportSleepMs = 0;
   let listingSleepMs = 0;
   let groupCreateRefusal: string | null = null;
+  let groupListingLag = false;
+  /** Groups created while the listing lags, left out of it. */
+  const lagging = new Set<StandinGroup>();
   let membersRefusal: string | null = null;
   const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
@@ -717,6 +725,10 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       for (let i = 0; i < count; i += 1) hostFaults.push({ kind: "refused", message });
     },
     refuseGroupCreate: (message) => { groupCreateRefusal = message; },
+    lagGroupListing: (on) => {
+      groupListingLag = on;
+      if (!on) lagging.clear();
+    },
     refuseMembers: (message) => { membersRefusal = message; },
   };
 
@@ -941,7 +953,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         can_create_group: script.canCreateGroup,
       });
     }
-    if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.map(listedGroupWire) });
+    if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.filter((g) => !lagging.has(g)).map(listedGroupWire) });
     if (path === "/api/v1/host/groups" && method === "POST") return createGroup(req, res);
     const groupMatch = /^\/api\/v1\/host\/groups\/([^/]+)\/members(?:\/([^/]+))?$/.exec(path);
     if (groupMatch) {
@@ -1081,6 +1093,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       members: [personMember("Owner")],
     };
     script.groups.push(group);
+    if (groupListingLag) lagging.add(group);
     json(res, 201, { group: listedGroupWire(group) });
   }
 

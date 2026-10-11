@@ -20,8 +20,8 @@ import { type StorageDiagnostic } from "./app-storage.js";
 import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
-  CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostMember,
-  type MembersTarget,
+  CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
+  type HostMember, type MembersTarget,
 } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
@@ -2075,6 +2075,10 @@ export class SpaceManager {
    * began, as the host answered them, by id: listed until the next read
    * is held (git-host-5). */
   private readonly attached = new Map<string, HostListing>();
+  /** The groups this core created since the view's read began, as the
+   * host answered them, by full path: listed, like `attached`, until the
+   * next read is held (git-host-5, git-host-15). */
+  private readonly created = new Map<string, HostGroup>();
   /** The sign-in shown on the header (space-30). */
   private signInState: GroupsState["signIn"] = { phase: "idle" };
   /** The login of the account the host signed this device out of
@@ -2233,7 +2237,7 @@ export class SpaceManager {
       this.host.store.signIn(account);
       this.hostSignedOut = undefined;
       this.view = undefined;
-      this.attached.clear();
+      this.releaseHeld();
       this.readFailure = undefined;
       await this.publish();
       await this.setUp();
@@ -2260,7 +2264,7 @@ export class SpaceManager {
     if (account) this.hostSignedOut = account.login;
     this.host.store.signOut();
     this.view = undefined;
-    this.attached.clear();
+    this.releaseHeld();
     void this.publish();
   }
 
@@ -2275,7 +2279,7 @@ export class SpaceManager {
         this.host.store.signOut();
         this.hostSignedOut = undefined;
         this.view = undefined;
-        this.attached.clear();
+        this.releaseHeld();
         this.readFailure = undefined;
         this.waiting.clear();
         // A join still running keeps its progress; its transport holds its
@@ -2323,10 +2327,28 @@ export class SpaceManager {
     await this.publish();
   }
 
+  /** What this core attached or created since the view's read began
+   * stops counting as listed: the view held now, or none, says
+   * (git-host-5). */
+  private releaseHeld(): void {
+    this.attached.clear();
+    this.created.clear();
+  }
+
+  /** The groups a view lists, with those this core created since its
+   * read began, which count as listed until the next read is held
+   * (git-host-5, git-host-15). */
+  private listedGroups(view: Pick<HostView, "groups"> | undefined): HostGroup[] {
+    const groups = view?.groups ?? [];
+    const held = [...this.created.values()].filter((group) => !groups.some((entry) => entry.fullPath === group.fullPath || (group.id !== null && entry.id === group.id)));
+    return [...groups, ...held];
+  }
+
   /** Read the host (git-host-5): one read at a time, the answer held as
    * the current view, a failure keeping the previous view and its time.
-   * A read begun before a clone was attached to a repository cannot
-   * list it: it is made again before it is held. */
+   * A read begun before a clone was attached to a repository, or a
+   * group was created, cannot list it: it is made again before it is
+   * held. */
   readHost(): Promise<HostView> {
     if (this.reading) return this.reading;
     const work = (async (): Promise<HostView> => {
@@ -2338,7 +2360,7 @@ export class SpaceManager {
           view = await readHostView(this.host.client);
         } while (begun <= this.changedAfter);
         this.view = view;
-        this.attached.clear();
+        this.releaseHeld();
         this.described = { displayName: view.displayName, gitOrigin: view.gitOrigin };
         this.readFailure = undefined;
         // A clone matched by its remote records the host's id (git-host-5).
@@ -2464,7 +2486,7 @@ export class SpaceManager {
         await this.adopt(machine, listed, true);
         return "joined";
       }
-      const hostGroup = view.groups.find((entry) => entry.fullPath === group);
+      const hostGroup = this.listedGroups(view).find((entry) => entry.fullPath === group);
       if (!hostGroup) return "local";
       return await this.create(machine, { id: hostGroup.id, fullPath: hostGroup.fullPath }, name, repositoryDescription({ kind: "group", group }), "quiet");
     } catch (error) {
@@ -2614,7 +2636,7 @@ export class SpaceManager {
       }
       const group = choice.groupId === null
         ? (userGroup(view) ?? { id: null, fullPath: this.host.store.home.ownName })
-        : view.groups.find((entry) => entry.id === choice.groupId);
+        : this.listedGroups(view).find((entry) => entry.id === choice.groupId);
       if (!group) throw new CoreError("not_found", i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" }));
       const project = this.projectFile(machine.repository);
       await this.create(machine, { id: group.id, fullPath: group.fullPath }, `${base}-spex`,
@@ -2809,8 +2831,9 @@ export class SpaceManager {
 
   /** Create a group at the host, named as the reader typed, at the path
    * the reader gave, at the top or inside a group the view lists
-   * (git-host-15); its creation begins a host read so the next state
-   * lists it. */
+   * (git-host-15); the group then counts as listed until a read begun
+   * after its creation is held (git-host-5), announced before the
+   * reply. */
   async createGroup(name: string, path: string, parent: string | null): Promise<{ group: { id: string; fullPath: string; name: string } }> {
     if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
     const typed = name.trim();
@@ -2819,7 +2842,7 @@ export class SpaceManager {
     if (given.length === 0) throw new CoreError("invalid_request", pathTheGroup());
     let parentPath: string | null = null;
     if (parent !== null) {
-      const listed = this.view?.groups.find((group) => group.id === parent);
+      const listed = this.listedGroups(this.view).find((group) => group.id === parent);
       if (!listed) throw new CoreError("not_found", groupNotListed(parent, this.hostName()));
       parentPath = listed.fullPath;
     }
@@ -2830,10 +2853,14 @@ export class SpaceManager {
       if (error instanceof HostError && error.kind === "name_taken") throw new CoreError("invalid_request", groupNameTaken(typed, parentPath, this.hostName()));
       throw this.hostWriteRefusal(error);
     }
-    // A read begun before the creation cannot list it: it is made again
-    // before it is held (git-host-5).
+    // The group counts as listed, as the host answered it, until a read
+    // begun after this is held, whether or not that read lists it; one
+    // begun before cannot, and is made again before it is held. No read
+    // is begun here: the host's listing may lag behind its creation
+    // (git-host-5).
     this.changedAfter = this.readsBegun;
-    void this.readHost().catch(() => undefined);
+    if (this.signedIn()) this.created.set(created.fullPath, created);
+    await this.publish();
     return { group: { id: created.id ?? "", fullPath: created.fullPath, name: created.name } };
   }
 
@@ -2903,7 +2930,7 @@ export class SpaceManager {
     const view = this.view;
     if (input.group !== undefined) {
       const group = input.group;
-      if (!view?.groups.some((entry) => entry.id === group)) throw new CoreError("not_found", groupNotListed(group, this.hostName()));
+      if (!this.listedGroups(view).some((entry) => entry.id === group)) throw new CoreError("not_found", groupNotListed(group, this.hostName()));
       return { kind: "group", id: group };
     }
     const key = input.repository as string;
@@ -3304,7 +3331,7 @@ export class SpaceManager {
     const noCan = (): Entry["can"] => ({ createSubgroup: false, manageMembers: false });
     const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, can: noCan(), repositories: [] };
     const entries = new Map<string, Entry>([[ownName, own]]);
-    for (const group of view?.groups ?? []) {
+    for (const group of this.signedIn() ? this.listedGroups(view) : []) {
       if (group.kind === "user") continue;
       const can = { createSubgroup: group.can.createSubgroup, manageMembers: group.can.manageMembers };
       entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, can, repositories: [] });

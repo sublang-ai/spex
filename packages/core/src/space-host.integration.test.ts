@@ -1374,7 +1374,44 @@ function apiRequests(host: StandinHost, from: number): string[] {
   return host.script.requests.slice(from).filter((request) => request.path.startsWith("/api/")).map((request) => `${request.method} ${request.path}`);
 }
 
-test("git-host-5, git-host-15: the read holds the stand-in's roles and what it lets the person do; groups created at the top and in a listed group are listed by the read each begins", async (t) => {
+/** The stand-in's groups listings at or after `from`: one per read of
+ * it begun (git-host-5). */
+function groupsReads(host: StandinHost, from: number): number {
+  return host.script.requests.slice(from).filter((request) => request.method === "GET" && request.path === "/api/v1/host/groups").length;
+}
+
+/** Refresh until a read is held after `readAt`, and return the state it
+ * announced: a Refresh while the last one's set-up still runs joins
+ * that set-up, whose read may already be held. */
+async function refreshRead(home: Awaited<ReturnType<typeof startHome>>, readAt: number | null): Promise<GroupsState> {
+  for (let attempt = 1; ; attempt += 1) {
+    const from = home.client.mark();
+    assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
+    try {
+      return await home.client.waitSpace(from, (state) => state.readAt !== readAt, 5_000);
+    } catch (error) {
+      if (attempt >= 5) throw error;
+    }
+  }
+}
+
+/** The full paths of a state's groups of the host, in its order. */
+const groupPaths = (state: GroupsState): string[] => state.groups.filter((group) => !group.own).map((group) => group.fullPath);
+
+/** Create a group and return the reply with the state broadcast before
+ * it, which lists the group as the core holds it (git-host-15). */
+async function createGroupHeld(home: Awaited<ReturnType<typeof startHome>>, fields: { name: string; path: string; parent: string | null }): Promise<{ group: { id: string; fullPath: string; name: string }; announced: GroupsState }> {
+  const from = home.client.mark();
+  const reply = await home.client.expectOk("space.group.create", fields);
+  const since = home.client.messages.slice(from);
+  const at = since.findIndex((message) => message.type === "reply" && message.ok && (message.result as { group?: { id?: string } }).group?.id === reply.group.id);
+  assert.ok(at >= 0, "the reply arrived");
+  const announced = since.slice(0, at).find((message) => message.type === "space.state" && message.state.groups.some((group) => group.id === reply.group.id));
+  assert.ok(announced?.type === "space.state", `a state broadcast before the reply lists ${reply.group.fullPath}`);
+  return { group: reply.group, announced: announced.state };
+}
+
+test("git-host-5, git-host-15: the read holds the stand-in's roles and what it lets the person do; groups created at the top and in a listed group stand at once, before any read, until a read lists them", async (t) => {
   const host = await startHost();
   const research = host.script.groups.find((group) => group.fullPath === "acme/research");
   assert.ok(research);
@@ -1410,22 +1447,30 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   assert.deepEqual((await home.client.repository(HOST_OWN)).can, { manageMembers: true });
 
   // A group at the top and one in acme, each named as typed at the path
-  // given, replied with its full path and listed by the read its creation
-  // begins (git-host-15).
-  const fromTop = home.client.mark();
-  const top = await home.client.expectOk("space.group.create", { name: "Lumen Labs", path: "lumen-labs", parent: null });
+  // given, replied with its full path (git-host-15), and standing — in a
+  // state broadcast before the reply and in the next space.get, after its
+  // parent, with what the stand-in says the person may do there — with
+  // no read of the stand-in begun (git-host-5).
+  const unread = host.script.requests.length;
+  const top = await createGroupHeld(home, { name: "Lumen Labs", path: "lumen-labs", parent: null });
   assert.deepEqual([top.group.fullPath, top.group.name], ["lumen-labs", "Lumen Labs"]);
-  const listedTop = await home.client.waitSpace(fromTop, (state) => state.groups.some((group) => group.id === top.group.id));
-  assert.deepEqual(listedTop.groups.find((group) => group.id === top.group.id)?.can, { createSubgroup: true, manageMembers: true });
-  const fromNamed = home.client.mark();
-  const named = await home.client.expectOk("space.group.create", { name: "华芯智造", path: "huaxin-mfg", parent: null });
+  assert.deepEqual(top.announced.groups.find((group) => group.id === top.group.id)?.can, { createSubgroup: true, manageMembers: true });
+  const named = await createGroupHeld(home, { name: "华芯智造", path: "huaxin-mfg", parent: null });
   assert.deepEqual([named.group.fullPath, named.group.name], ["huaxin-mfg", "华芯智造"]);
-  await home.client.waitSpace(fromNamed, (state) => state.groups.some((group) => group.id === named.group.id && group.fullPath === "huaxin-mfg"));
-  const fromSub = home.client.mark();
-  const sub = await home.client.expectOk("space.group.create", { name: "Team One", path: "team-one", parent: "2002" });
+  const sub = await createGroupHeld(home, { name: "Team One", path: "team-one", parent: "2002" });
   assert.deepEqual([sub.group.fullPath, sub.group.name], ["acme/team-one", "Team One"]);
-  await home.client.waitSpace(fromSub, (state) => state.groups.some((group) => group.id === sub.group.id && group.fullPath === "acme/team-one"));
   assert.ok(host.script.groups.some((group) => group.id === sub.group.id), "the stand-in holds it");
+  const held = await home.client.expectOk("space.get", {});
+  assert.deepEqual(groupPaths(held), ["acme", "acme/research", "acme/team-one", "huaxin-mfg", "lumen-labs"]);
+  assert.deepEqual(held.groups.find((group) => group.id === sub.group.id)?.can, { createSubgroup: true, manageMembers: true });
+  // A held group is taken as a parent, and its members are read, before
+  // any read (git-host-15, git-host-5).
+  const nested = await createGroupHeld(home, { name: "Studio", path: "studio", parent: top.group.id });
+  assert.equal(nested.group.fullPath, "lumen-labs/studio");
+  assert.deepEqual(groupPaths(nested.announced).slice(-2), ["lumen-labs", "lumen-labs/studio"]);
+  const topMembers = await home.client.expectOk("space.members", { group: top.group.id });
+  assert.deepEqual(topMembers.members.map((member) => [member.login, member.role, member.direct]), [[LOGIN, "Owner", true]]);
+  assert.equal(groupsReads(host, unread), 0, "no read of the stand-in begun");
 
   // A taken name is refused saying so there, the stand-in's refusal in
   // its words; the host is asked whatever the view said, research's
@@ -1451,11 +1496,70 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   await home.client.expectError("space.group.create", { name: "Lab", path: "lab", parent: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   assert.deepEqual(apiRequests(host, quiet), []);
 
-  // What the person may do is the host's last read's.
+  // What the person may do is the host's last read's; that read, begun
+  // after the creations and listing them, keeps every created group
+  // (git-host-5).
   host.script.canCreateGroup = false;
   const fromRefresh = home.client.mark();
   await home.client.expectOk("space.refresh", {});
-  await home.client.waitSpace(fromRefresh, (state) => state.account?.canCreateGroup === false);
+  const reread = await home.client.waitSpace(fromRefresh, (state) => state.account?.canCreateGroup === false);
+  assert.ok(groupsReads(host, unread) > 0, "the Refresh read the stand-in");
+  assert.deepEqual(groupPaths(reread), ["acme", "acme/research", "acme/team-one", "huaxin-mfg", "lumen-labs", "lumen-labs/studio"]);
+});
+
+test("git-host-5, git-host-15: a group created while the stand-in's listing lags stands until a read begun after it drops it; a read begun before it is made again", async (t) => {
+  const host = await startHost();
+  const home = await startHome("groups-lag", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+
+  // A read begins and takes the groups listing before a creation, its
+  // repositories listing sleeping, and answers after it without the
+  // group: it is made again before it is held, and no state from the
+  // creation to that read's end lacks the group (git-host-5).
+  const signedRead = (await home.client.expectOk("space.get", {})).readAt;
+  assert.ok(signedRead !== null);
+  host.script.sleepListing(1_500);
+  t.after(() => host.script.sleepListing(0));
+  const asked = host.script.requests.length;
+  const fromEarly = home.client.mark();
+  assert.deepEqual(await home.client.expectOk("space.refresh", {}), { accepted: true });
+  for (let i = 0; i < 400 && groupsReads(host, asked) === 0; i += 1) await sleep(10);
+  assert.equal(groupsReads(host, asked), 1, "the read took the groups listing");
+  const early = await createGroupHeld(home, { name: "Early", path: "early", parent: "2002" });
+  assert.equal(early.group.fullPath, "acme/early");
+  const afterEarly = await home.client.waitSpace(fromEarly, (state) => state.readAt !== signedRead, 30_000);
+  assert.equal(groupsReads(host, asked), 2, "the read begun before the creation was made again");
+  assert.ok(groupPaths(afterEarly).includes("acme/early"));
+  const creation = home.client.messages.slice(fromEarly).findIndex((message) => message.type === "space.state" && message.state.groups.some((group) => group.id === early.group.id));
+  const lacking = home.client.messages.slice(fromEarly).slice(creation)
+    .filter((message) => message.type === "space.state" && !message.state.groups.some((group) => group.id === early.group.id));
+  assert.equal(lacking.length, 0, "no state from the creation on lacks the group");
+  host.script.sleepListing(0);
+
+  // While the stand-in's listing lags behind its creation, a group
+  // created at the top stands at once, with no read begun (git-host-15).
+  host.script.lagGroupListing(true);
+  t.after(() => host.script.lagGroupListing(false));
+  const unread = host.script.requests.length;
+  const late = await createGroupHeld(home, { name: "Late", path: "late", parent: null });
+  const held = await home.client.expectOk("space.get", {});
+  assert.deepEqual(groupPaths(held), ["acme", "acme/early", "acme/research", "late"]);
+  assert.equal(groupsReads(host, unread), 0, "no read of the stand-in begun");
+
+  // A Refresh whose read the stand-in answers without it drops it
+  // (git-host-5).
+  const dropped = await refreshRead(home, held.readAt);
+  assert.ok(groupsReads(host, unread) > 0, "the Refresh read the stand-in");
+  assert.deepEqual(groupPaths(dropped), ["acme", "acme/early", "acme/research"]);
+  assert.equal(dropped.groups.some((group) => group.id === late.group.id), false);
+
+  // Its listing caught up, the next read lists it again.
+  host.script.lagGroupListing(false);
+  const found = await refreshRead(home, dropped.readAt);
+  assert.deepEqual(groupPaths(found), ["acme", "acme/early", "acme/research", "late"]);
 });
 
 test("git-host-8, git-host-16, git-host-17: a group's members with their source; members added and removed in groups and spex repositories, the stand-in's members replied; its refusals in its words, in English and in Chinese", async (t) => {

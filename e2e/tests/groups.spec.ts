@@ -386,8 +386,8 @@ test.describe("organizing", () => {
     await showGroups(page);
     const list = page.getByTestId("space-groups");
 
-    // "New group" stands at the list's head; Create names the group and
-    // the read the core begins lists it with its full path (space-1,
+    // "New group" stands at the list's head; Create names the group,
+    // which stands with its full path as the editor closes (space-1,
     // space-68).
     const newGroup = list.getByTestId("space-new-group");
     await expect(newGroup).toHaveText("New group");
