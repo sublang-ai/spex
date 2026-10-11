@@ -294,19 +294,28 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     fireEvent.keyDown(path, { key: "Enter" });
     await waitFor(() => expect(calls("space.group.create")).toHaveLength(2));
     expect(calls("space.group.create")[1]).toEqual({ name: "华芯智造 Lab", path: "huaxin-lab", parent: ACME });
-    replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
-    await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
-    await waitFor(() => expect(document.activeElement).toBe(control));
-    // The read the core begins lists it with its full path.
+    // The core holds the created group as listed and announces it before
+    // its reply; the reply closes the editor with the group standing
+    // after acme, its full path beside its name.
     const listed = sharingHome();
+    const [own, acme, other] = listed.groups;
     deliver({
       ...listed,
       groups: [
-        ...listed.groups,
+        own!,
+        acme!,
         { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", url: null, own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        other!,
       ],
     });
+    replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
+    await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(control));
     expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 2 }).textContent).toBe("华芯智造 Labacme/huaxin-lab");
+    const headings = [...screen.getByTestId("space-groups").querySelectorAll("[data-testid^='space-group-']")]
+      .map((element) => element.getAttribute("data-testid"))
+      .filter((id) => id === "space-group-acme" || id === "space-group-acme/huaxin-lab" || id === "space-group-other");
+    expect(headings).toEqual(["space-group-acme", "space-group-acme/huaxin-lab", "space-group-other"]);
   });
 
   test("New group at the list's head creates at the top", async () => {

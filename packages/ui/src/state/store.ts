@@ -315,8 +315,8 @@ export interface AppState extends AttachmentState {
    * them, read on every call and held nowhere (space-62). */
   spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
   /** Create a group on the host at the path `path`, at the top or inside
-   * the group whose host id is `parent` (space-68); the read that lists
-   * it follows as state. */
+   * the group whose host id is `parent` (space-68); the state listing it
+   * arrives before the reply. */
   spaceGroupCreate(name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
   /** Add the account of `login` to a group or a spex repository at one
    * of the host's roles, by its id (space-69); the reply lists the

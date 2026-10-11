@@ -57,8 +57,9 @@ function derivedGroupPath(name: string): string {
  * reader edits it, Create and Cancel, Escape cancelling. Create stays
  * disabled while either is empty, reads "Creating…" while the host is
  * asked and takes no second submission; a refusal stands in the editor
- * with the name kept. The group is listed at the host read the core
- * then begins. */
+ * with the name kept. The group already stands in the list when the
+ * reply closes the editor: the core holds it as listed and announces it
+ * first. */
 export function GroupNameEditor({
   testId,
   parent,

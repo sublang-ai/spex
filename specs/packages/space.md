@@ -137,7 +137,7 @@ When the reader activates "New group" at the groups list's head, or "New subgrou
 
 - Create reads "Creating…" and the editor refuses a second submission while the command runs;
 - a name that derives no path — one in Chinese, say — leaves the path field empty for the reader to fill, and an empty path disables Create;
-- a success closes the editor, the group appearing in the list with its full path at the host read the core begins [[space-2](#space-2)];
+- a success closes the editor, the group already standing in the list with its full path, after its parent where it has one, as the core holds it [[git-host-15](git-host.md#git-host-15)] until a read begun after the creation is held [[git-host-5](git-host.md#git-host-5)];
 - a refusal — the name taken there, or the host's words — shows in the editor with the name kept;
 - an empty name disables Create.
 
@@ -546,7 +546,7 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.pick` | `{ repository, choice: { kind: "join", hostId } \| { kind: "create", groupId: string \| null, name }, noticed?: boolean }` — `name` without its `-spex` suffix, which the core appends | `{ accepted: true }` after the creation or the join is accepted at the host, the push following as state | `invalid_request` (not local only; malformed name; the name taken at the host; the notice not seen for a join into a repository with other members [[space-57](#space-57)]), `conflict` (a remote set meanwhile [[space-21](#space-21)]) |
 | `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here) |
 | `space.members` | `{ repository }` | `{ members: Member[], membersUrl }` | `invalid_request` (local only; signed out), `not_found` |
-| `space.group.create` | `{ name, path, parent: string \| null }` — `path` the group's path on the host, `parent` a group's host id | `{ group: { id, fullPath, name } }` after the host answered, the read that lists it following as state [[git-host-15](git-host.md#git-host-15)] | `invalid_request` (signed out; a blank name or path; the name taken there; the host refused, with its words), `not_found` (a parent the view does not list) |
+| `space.group.create` | `{ name, path, parent: string \| null }` — `path` the group's path on the host, `parent` a group's host id | `{ group: { id, fullPath, name } }` after the host answered and the state listing the group was broadcast [[git-host-15](git-host.md#git-host-15)] | `invalid_request` (signed out; a blank name or path; the name taken there; the host refused, with its words), `not_found` (a parent the view does not list) |
 | `space.share` | `{ group?: string, repository?: string, login, role }` — exactly one of `group`, a host id, and `repository`, a key | `{ members: Member[], membersUrl }` as the host lists them after the addition [[git-host-16](git-host.md#git-host-16)] | `invalid_request` (signed out; neither or both targets; a blank login; a role not among the view's; the host refused, with its words), `not_found` (no account under the login, with the host's words; a group or spex repository the view does not list) |
 | `space.remote.set` | `{ repository, url: string \| null }` | `GroupsState` | `invalid_request` (no Git; not initialized; a malformed, credential-bearing or host-origin URL [[space-5](#space-5)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
 | `space.fetch` | `{ repository }` | `{ accepted: true }` | `invalid_request` (local only) |
@@ -576,7 +576,7 @@ interface GroupsState {
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; url: string | null; own: boolean;
-            can: { createSubgroup: boolean; addMember: boolean };   // what the host's last read said the person may do there; both false until one is held
+            can: { createSubgroup: boolean; manageMembers: boolean };   // what the host's last read said the person may do there; both false until one is held
             repositories: RepositoryState[] }[];
   roles: { id: string; name: string; mayPush: boolean }[];   // the host's own roles in its order, empty until a read is held
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: Repair }[];
@@ -593,7 +593,7 @@ interface RepositoryState {
   reason: string | null;                 // the host's words for read-only or unreachable
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null; visibility: string | null;
-  can: { addMember: boolean };           // what the host's last read said the person may do on it; false until one is held
+  can: { manageMembers: boolean };           // what the host's last read said the person may do on it; false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
             hostEmpty: boolean; unrelated: boolean; mergePending: boolean } | null;
   local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[];
@@ -815,7 +815,7 @@ Where the Groups surface renders over a home whose issues list holds three unans
 Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme` and add members to it, may do neither in a group `other`, and may add members to the repository `a-spex` but not to `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
 - "New group" stands at the list's head, `acme`'s heading carries "New subgroup" and "Share", `other`'s and your own group's carry neither, and `a-spex`'s members panel carries Share while `b-spex`'s does not [[space-1](#space-1)] [[space-62](#space-62)];
-- "New subgroup" opens the inline editor with the fields "Group name" and "Path", the path following the name as "lumen-labs" follows "Lumen Labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape closing it; Create sends `space.group.create` with the name, the path and `acme` as the parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it [[space-68](#space-68)];
+- "New subgroup" opens the inline editor with the fields "Group name" and "Path", the path following the name as "lumen-labs" follows "Lumen Labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape closing it; Create sends `space.group.create` with the name, the path and `acme` as the parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it, the group the core's state carries standing after `acme` with its full path [[space-68](#space-68)];
 - Share on `acme` opens the editor with "Login at <host name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
 - Share in `a-spex`'s members panel sends `space.share` naming the repository and lists the members the reply carries [[space-69](#space-69)] [[space-62](#space-62)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
@@ -868,7 +868,7 @@ Where the harness boots the served shell with the demo project registered and a 
 
 #### space-71
 
-Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path after the read the core begins [[space-68](#space-68)] [[space-1](#space-1)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
+Where the harness boots the served shell signed in at the stand-in host, whose script lets the person create groups and subgroups in `acme` and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created at the head and a subgroup under `acme`, each listed with its full path as Create closes its editor [[space-68](#space-68)] [[space-1](#space-1)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
 
 #### space-43
 
