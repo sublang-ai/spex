@@ -44,6 +44,7 @@ import {
   parseRequests,
   placeOf,
   prepareBuiltinEnvironment,
+  publishIssues,
   publishRelease,
   readRelease,
   RegistryClient,
@@ -829,6 +830,17 @@ export class EnvironmentManager {
         }));
       }
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+    }
+    // The registry refuses a release lacking a field it requires; the
+    // core says so first, naming it, the preview included
+    // (environments-10).
+    const missing = publishIssues(manifest);
+    if (missing.length > 0) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{path} cannot be published: {issues}",
+        comment: "Refusal: the manifest lacks a field the registry requires to publish; {issues} name each field in the checks' own words",
+        values: { path, issues: listed(missing.map((issue) => `${issue.path}: ${issue.message}`)) },
+      }));
     }
     // What the upload would hold: the declared release files, in the
     // archive's order (playbook-library-93).

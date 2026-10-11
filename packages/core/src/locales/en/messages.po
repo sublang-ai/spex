@@ -261,6 +261,11 @@ msgstr "{name} requested in spex.yaml"
 msgid "{path} already exists, so the clone cannot follow the host there"
 msgstr "{path} already exists, so the clone cannot follow the host there"
 
+#. Refusal: the manifest lacks a field the registry requires to publish; {issues} name each field in the checks' own words
+#: src/environments.ts
+msgid "{path} cannot be published: {issues}"
+msgstr "{path} cannot be published: {issues}"
+
 #. Refusal of a join: the host's names hold characters a folder under the home cannot
 #: src/space.ts
 msgid "{path} cannot stand as a folder on this device"

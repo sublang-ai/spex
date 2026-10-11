@@ -338,7 +338,22 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const catalog = (JSON.parse(readFileSync(manifestFile, "utf8")) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
   assert.equal(catalog.triage?.from, pathToFileURL(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")).href);
 
-  // Publishing: the dry run names what would go, then the upload.
+  // Publishing: a manifest without the license the registry requires is
+  // refused naming the field, the preview as the upload, before
+  // anything reaches the registry (environments-10).
+  const metaFile = join(folder, "meta.yaml");
+  const metaText = readFileSync(metaFile, "utf8");
+  const { license: _license, ...unlicensed } = parseYaml(metaText) as Record<string, unknown>;
+  writeFileSync(metaFile, stringifyYaml(unlicensed));
+  registry.script.clearRequests();
+  for (const dryRun of [true, false]) {
+    await core.client.expectError("environment.publish", { repository: project.id, path: "spex-packages/triage", ...(dryRun ? { dryRun } : {}) },
+      "invalid_request", /spex-packages\/triage cannot be published: meta\.yaml: missing required field "license"/);
+  }
+  assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
+  writeFileSync(metaFile, metaText);
+
+  // The dry run names what would go, then the upload.
   const preview = await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage", dryRun: true });
   const declared = (await readRelease(folder)).files;
   assert.deepEqual(preview.preview, { name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
@@ -348,9 +363,11 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
   assert.equal(published.error, null);
   assert.deepEqual(published.published, { name: `${ORG}/triage`, version: "0.1.0", url: `${registry.url}/${ORG}/triage` });
-  // The release at the registry is exactly the folder's declared files.
-  const resource = await (await fetch(`${registry.url}/api/v1/packages/${ORG}/triage/0.1.0`)).json() as { files: { path: string; sha256: string }[] };
+  // The release at the registry is exactly the folder's declared files,
+  // its manifest carrying the description and license.
+  const resource = await (await fetch(`${registry.url}/api/v1/packages/${ORG}/triage/0.1.0`)).json() as { files: { path: string; sha256: string }[]; description?: string; license?: string };
   assert.deepEqual(resource.files.map((file) => [file.path, file.sha256]), declared.map((file) => [file.path, file.sha256]));
+  assert.deepEqual([resource.description, resource.license], ["The triage playbook", "Apache-2.0"]);
 
   // A second home requests the published version from the registry.
   const second = scratchDir("spex-env-second-");

@@ -579,3 +579,24 @@ export async function readRelease(dir: string): Promise<Release> {
   if (!manifest || issues.length > 0) throw new FormatError(issues);
   return { manifest, files: listed.files };
 }
+
+/** The manifest fields the registry requires of a release it takes,
+ * which reading a release leaves optional (environments-10). */
+const PUBLISH_FIELDS = ["description", "license"] as const;
+
+/** Every field the registry requires to publish that the manifest
+ * lacks, named as the registry names it (environments-10). */
+export function publishIssues(manifest: Manifest): Issue[] {
+  return PUBLISH_FIELDS
+    .filter((field) => manifest[field] === undefined)
+    .map((field) => ({ path: "meta.yaml", rule: "field", message: `missing required field "${field}"` }));
+}
+
+/** Read a release folder as publishing takes it (environments-10):
+ * every release check, then the fields the registry requires. */
+export async function readPublishableRelease(dir: string): Promise<Release> {
+  const release = await readRelease(dir);
+  const issues = publishIssues(release.manifest);
+  if (issues.length > 0) throw new FormatError(issues, "publishing");
+  return release;
+}
