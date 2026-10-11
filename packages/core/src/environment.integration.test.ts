@@ -102,6 +102,11 @@ function playbookFiles(id: string, language = "en"): Record<string, ReleaseFixtu
   };
 }
 
+/** A spec file in the GEARS form, its items named after its spec package. */
+function specText(pkg: string): string {
+  return `# ${pkg}: The ${pkg} Spec\n\n## Intent\n\nThe ${pkg} spec.\n\n## External Behavior\n\n### ${pkg}-1\n\nThe ${pkg} tool shall split costs.\n\n## Verification\n\n### ${pkg}-2\n\nWhen run, the suite shall assert the split [[${pkg}-1](#${pkg}-1)].\n`;
+}
+
 /** Publish a release to the stand-in through the real publish path. */
 async function publish(manifest: Record<string, unknown>, files: Record<string, ReleaseFixture>, through: RegistryClient = client): Promise<void> {
   const dir = join(scratchDir("spex-release-"), "release");
@@ -441,6 +446,20 @@ test("environments-20: selection chooses languages in order, takes what a playbo
   await publish(manifestOf("acme/three", "1.0.0", { helper: { kind: "playbook", language: "en" } }), playbookFiles("helper"));
   const playbookClash = await resolveText(home.clone, requestsYaml({ "acme/one": { version: "^1.0.0" }, "acme/three": { version: "^1.0.0" } }));
   assert.equal(playbookClash.ok, false);
+
+  // A spec exports under <org>-<pkg>; under <pkg> where that is longer
+  // than an Agent Skills name may be; under its alias where one is named.
+  await publish(manifestOf("acme/trip-split", "1.0.0", { "trip-split": { kind: "spec", language: "en" } }), { "specs/en/trip-split.md": specText("trip-split") });
+  const spec = locked(await resolveText(home.clone, requestsYaml({ "acme/trip-split": { version: "^1.0.0" } })));
+  assert.deepEqual(spec.packages["acme/trip-split"]!.exports, { "acme-trip-split": "trip-split" });
+  const longOrg = `org-${"o".repeat(36)}`;
+  const longPkg = `pkg-${"p".repeat(26)}`;
+  assert.ok(`${longOrg}-${longPkg}`.length > 64);
+  await publish(manifestOf(`${longOrg}/${longPkg}`, "1.0.0", { [longPkg]: { kind: "spec", language: "en" } }), { [`specs/en/${longPkg}.md`]: specText(longPkg) });
+  const long = locked(await resolveText(home.clone, requestsYaml({ [`${longOrg}/${longPkg}`]: { version: "^1.0.0" } })));
+  assert.deepEqual(long.packages[`${longOrg}/${longPkg}`]!.exports, { [longPkg]: longPkg });
+  const renamed = locked(await resolveText(home.clone, requestsYaml({ "acme/trip-split": { version: "^1.0.0", alias: { "trip-split": "trips" } } })));
+  assert.deepEqual(renamed.packages["acme/trip-split"]!.exports, { trips: "trip-split" });
 });
 
 test("environments-20: the lock is exactly its encoding, and a second home installs it byte for byte resolving nothing", async () => {
@@ -718,7 +737,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const home = makeHome("acme/kit2-spex");
   const workingFolder = join(scratch, "project");
   git(scratch, ["init", "--quiet", "-b", "main", workingFolder]);
-  await makeRelease(join(workingFolder, "tools", "walk"), manifestOf("acme/walker", "0.1.0", { walk: { kind: "playbook", language: "en" } }), playbookFiles("walk"));
+  await makeRelease(join(workingFolder, "tools", "walk"), manifestOf("acme/walker", "0.1.0", { walk: { kind: "playbook", language: "en" }, walker: { kind: "spec", language: "en" } }), { ...playbookFiles("walk"), "specs/en/walker.md": specText("walker") });
   const userHome = join(scratch, "user");
   const projectKey = "acme/kit2-spex";
   const ownKey = "me/me-spex";
@@ -729,7 +748,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const base = { store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache) };
   await installAsOnDisk({ ...base, cloneDir: home.clone, lock: projectLock, workingFolder });
   const report = await exportEnvironment({ cloneDir: home.clone, lock: projectLock, workingFolder, userHome: null, agents: ["claude", "codex"], packagesDir: join(home.clone, "packages") });
-  assert.deepEqual(report.skills, ["format-code", "lint", "ship", "walk"]);
+  assert.deepEqual(report.skills, ["acme-walker", "format-code", "lint", "ship", "walk"]);
   assert.deepEqual(report.unsupportedAgents, ["codex"]);
   assert.deepEqual(report.folders, [{ agent: "claude", level: "project", dir: join(workingFolder, ".claude/skills") }]);
   for (const name of report.skills) {
@@ -747,6 +766,19 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const ship = readFileSync(join(workingFolder, ".claude/skills/ship/SKILL.md"), "utf8");
   assert.match(ship, /^---\nname: ship\ndescription: Runs the ship playbook of acme\/kit2 1\.0\.0 in this working folder\.\n---\n/);
   assert.match(ship, /`ship`.*`acme\/kit2`.*`1\.0\.0`.*through Spex in this working folder/s);
+  // A path source's spec stands as a generated skill: the working
+  // folder's spec file byte for byte, beside a SKILL.md naming the
+  // spec package's org, name, version and description.
+  const walkerDir = join(workingFolder, ".claude/skills/acme-walker");
+  assert.deepEqual(readdirSync(walkerDir).sort(), ["SKILL.md", "walker.md"]);
+  assert.ok(readFileSync(join(walkerDir, "walker.md")).equals(readFileSync(join(workingFolder, "tools/walk/specs/en/walker.md"))));
+  const walker = readFileSync(join(walkerDir, "SKILL.md"), "utf8");
+  const walkerFront = parseYaml(/^---\n([\s\S]*?)\n---\n/.exec(walker)![1]!) as Record<string, string>;
+  assert.deepEqual(Object.keys(walkerFront), ["name", "description"]);
+  assert.equal(walkerFront.name, "acme-walker");
+  assert.match(walkerFront.description!, /acme\/walker 0\.1\.0: The acme\/walker spec package\. Read walker\.md beside this skill\.$/);
+  assert.match(walker, /`acme\/walker` — org `acme`, name `walker`, version `0\.1\.0`: The acme\/walker spec package/);
+  assert.match(walker, /Its spec is `walker\.md` beside this file/);
 
   // Your own group's skills go to the user's home; a name the project
   // also exports stands in both, each from where it came.
@@ -781,7 +813,7 @@ test("environments-22: skills and playbooks export to agent folders, the user's 
   const narrowed = locked(await resolveText(home.clone, requestsYaml({ "acme/kit2": { version: "^1.0.0", select: [{ artifact: "ship" }, { artifact: "fmt" }], alias: { fmt: "format-code" } } }), { workingFolder }));
   await installAsOnDisk({ ...base, cloneDir: home.clone, lock: narrowed, workingFolder });
   const again = await exportEnvironment({ cloneDir: home.clone, lock: narrowed, workingFolder, userHome: null, agents: ["claude"], packagesDir: join(home.clone, "packages") });
-  assert.deepEqual(again.removed.sort(), ["lint", "walk"]);
+  assert.deepEqual(again.removed.sort(), ["acme-walker", "lint", "walk"]);
   assert.equal(existsSync(join(workingFolder, ".claude/skills/lint")), false);
   assert.ok(existsSync(join(workingFolder, ".claude/skills/mine/SKILL.md")));
   assert.ok(!readFileSync(join(workingFolder, ".git/info/exclude"), "utf8").includes("/.claude/skills/lint/"));

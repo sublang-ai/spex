@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Exports (environments-8, environments-9, environments-16, DR-104).
-// Each selected skill is copied — its `name` rewritten where aliased —
-// and one skill is generated per selected playbook, into
-// `<clone>/skills/<name>/`; those are mirrored into the folders where
-// each agent of this device reads skills, kept out of Git there by the
-// working folder's `.git/info/exclude`, and, for your own group, into
-// the agents' home folders. A manifest beside them records what Spex
+// Exports (environments-8, environments-9, environments-16, DR-104,
+// DR-115). Each selected skill is copied — its `name` rewritten where
+// aliased — and one skill is generated per selected playbook, and one
+// per selected spec holding the spec file, into `<clone>/skills/<name>/`;
+// those are mirrored into the folders where each agent of this device
+// reads skills, kept out of Git there by the working folder's
+// `.git/info/exclude`, and, for your own group, into the agents' home
+// folders. A manifest beside them records what Spex
 // wrote, so a re-export removes only its own and a skill the reader put
 // there stays. Playbooks go to the launcher as module locations at
 // launch, bound to the environment whose lock exported them.
@@ -25,7 +26,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { parseDocument } from "yaml";
+import { parseDocument, stringify as stringifyYaml } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
 import { AGENT_FOLDERS } from "./agent-folders.js";
@@ -131,6 +132,44 @@ export function playbookSkill(options: { name: string; id: string; packageName: 
     "---",
     "",
     `Run the playbook \`${id}\` of the spec package \`${packageName}\`, version \`${version}\`, through Spex in this working folder: start the playbook's command in a Spex session of this working folder.`,
+    "",
+  ].join("\n");
+}
+
+/** The Agent Skills limits on a name and a description
+ * (https://agentskills.io/specification). */
+const SKILL_NAME_MAX = 64;
+const SKILL_DESCRIPTION_MAX = 1024;
+
+/** The name a spec package's spec is exported under where no alias
+ * names it (environments-6): `<org>-<pkg>`, or `<pkg>` where that is
+ * longer than an Agent Skills name may be. */
+export function specExportName(packageName: string): string {
+  const joined = packageName.replace("/", "-");
+  return joined.length <= SKILL_NAME_MAX ? joined : packageName.slice(packageName.indexOf("/") + 1);
+}
+
+/** The SKILL.md generated for an exported spec (environments-16): what
+ * spec package it is, and the spec file beside it. */
+export function specSkill(options: { name: string; packageName: string; version: string; description?: string | undefined; file: string }): string {
+  const { name, packageName, version, file } = options;
+  const [org, pkg] = packageName.split("/") as [string, string];
+  const about = (options.description ?? "").replace(/\s+/g, " ").trim();
+  const lead = `The spec of ${packageName} ${version}`;
+  const tail = `. Read ${file} beside this skill.`;
+  // The manifest's description, cut to fit the description's limit.
+  let summary = Array.from(about.replace(/[.。]+$/, ""));
+  const room = SKILL_DESCRIPTION_MAX - lead.length - tail.length - 2;
+  if (summary.length > room) summary = [...Array.from(summary.slice(0, room - 1).join("").trimEnd()), "…"];
+  const description = summary.length > 0 ? `${lead}: ${summary.join("")}${tail}` : `${lead}${tail}`;
+  return [
+    "---",
+    stringifyYaml({ name, description }, { lineWidth: 0 }).trimEnd(),
+    "---",
+    "",
+    `The spec package \`${packageName}\` — org \`${org}\`, name \`${pkg}\`, version \`${version}\`${about ? `: ${about}` : "."}`,
+    "",
+    `Its spec is \`${file}\` beside this file: read it whole when a request names the spec package or works from it. Each of its items states one requirement, cited by its id.`,
     "",
   ].join("\n");
 }
@@ -275,6 +314,15 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
       } else if (artifact.kind === "playbook") {
         mkdirSync(target, { recursive: true });
         writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
+      } else if (artifact.kind === "spec") {
+        // The spec file in its chosen language, byte for byte, beside a
+        // SKILL.md saying what spec package it is (DR-115).
+        const file = join(root, "specs", language, `${id}.md`);
+        if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
+        mkdirSync(target, { recursive: true });
+        copyFileSync(file, join(target, `${id}.md`));
+        chmodSync(join(target, `${id}.md`), 0o644);
+        writeFileSync(join(target, "SKILL.md"), specSkill({ name: exported, packageName: name, version, description: manifest.description, file: `${id}.md` }));
       } else continue;
       report.skills.push(exported);
     }
