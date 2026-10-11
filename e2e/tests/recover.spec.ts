@@ -12,6 +12,9 @@
 //   which really advertises its two controls — the reconciliation a
 //   complete receipt makes a no-op, disabled with its reason, and the
 //   abandonment that runs as a named turn;
+// - a run the real shell parked on its coder's failure (DR-117), whose
+//   resume from an earlier step folds behind one control beside the
+//   retry and opens whole in place (run-view-165);
 // - the Drop-alone fallback, for a session whose controls were never
 //   captured: the notice appearing and standing through settlement,
 //   naming the composer as the way on, refusing an ending the opened
@@ -342,6 +345,109 @@ test.describe("a run parked on real repository evidence", () => {
       { timeout: 120_000 },
     );
     await expect(notice).toHaveCount(0, { timeout: 120_000 });
+    await expect(page.getByTestId("failed-workflow-error")).toHaveCount(0);
+  });
+});
+
+// The resumes folded (run-view-165, DR-117): a run the real shell
+// parked on its coder's failure advertises a retry of that step and a
+// resume from an earlier one, each labelled with the step's own
+// description. The row keeps the retry and Drop; the resume stands
+// behind one control that opens it, whole, in place.
+test.describe("a run parked on a player's failure", () => {
+  test.use({ appOptions: { project: true, failPlayer: true } });
+
+  test("run-view-165: the resumes fold behind one control, open whole in place, and fit at 320px", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await send(page, "Add a line to work.txt");
+
+    const notice = page.getByTestId("failed-workflow");
+    await expect(notice).toBeVisible({ timeout: 120_000 });
+    await expect(notice).toHaveAttribute("data-reason", "failure");
+
+    // Folded: the retry in the runtime's own label, one door to the
+    // resumes, Drop — and no resume drawn.
+    const drawn = page.getByTestId("failed-workflow-action");
+    await expect(drawn).toHaveCount(1);
+    await expect(drawn.first()).toHaveAttribute("data-action-id", /^retry:/);
+    await expect(drawn.first()).toHaveText(/^Retry: /);
+    const door = page.getByTestId("failed-workflow-resumes");
+    await expect(door).toHaveText("Resume from an earlier step…");
+    await expect(door).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("failed-workflow-resume-list")).toHaveCount(0);
+    await expect(page.getByTestId("failed-workflow-drop")).toBeVisible();
+
+    // Opened in place: the resume in the runtime's own label.
+    await door.click();
+    await expect(door).toHaveAttribute("aria-expanded", "true");
+    const resumes = page
+      .getByTestId("failed-workflow-resume-list")
+      .getByTestId("failed-workflow-action");
+    await expect(resumes).toHaveCount(1);
+    const resume = resumes.first();
+    await expect(resume).toHaveAttribute("data-action-id", /^jump:/);
+    await expect(resume).toHaveText(/^Resume from: /);
+    const label = (await resume.textContent()) ?? "";
+
+    // At the reflow floor, the list open: every control under the
+    // words and inside the notice's box, the resume's label wrapping
+    // whole within its row rather than clipped (run-view-128, DR-041).
+    // A simulated document cannot measure layout, so the evidence is
+    // here.
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await settleLayout(page);
+    expect(
+      await notice.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const words = el
+          .querySelector('[data-testid="failed-workflow-what"]')!
+          .getBoundingClientRect();
+        const controls = [...el.querySelectorAll("button")].map((button) =>
+          button.getBoundingClientRect(),
+        );
+        const labels = [
+          ...el.querySelectorAll(
+            '[data-testid="failed-workflow-resume-list"] [data-testid="failed-workflow-action"] > span',
+          ),
+        ];
+        return {
+          // The retry, the door, Drop and the resume: every one weighed.
+          count: controls.length,
+          under: controls.every((c) => c.top >= words.bottom - 1),
+          inside: controls.every(
+            (c) => c.left >= box.left - 1 && c.right <= box.right + 1,
+          ),
+          whole: labels.every(
+            (span) =>
+              span.scrollWidth <= span.clientWidth + 1 &&
+              span.scrollHeight <= span.clientHeight + 1 &&
+              getComputedStyle(span).textOverflow !== "ellipsis",
+          ),
+          wrapped: labels.every(
+            (span) => span.getBoundingClientRect().height > parseFloat(getComputedStyle(span).lineHeight) * 1.5,
+          ),
+          clipped: el.scrollWidth > el.clientWidth + 1,
+        };
+      }),
+    ).toEqual({ count: 4, under: true, inside: true, whole: true, wrapped: true, clipped: false });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await setRail(page, true);
+    await settleLayout(page);
+
+    // The folded resume is a control of its own: it runs as the next
+    // turn, landing in the thread under its own label (run-view-129).
+    await resume.click();
+    await expect(page.getByTestId("captain-pane")).toContainText(label, {
+      timeout: 120_000,
+    });
     await expect(page.getByTestId("failed-workflow-error")).toHaveCount(0);
   });
 });

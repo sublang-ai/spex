@@ -233,6 +233,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- A failed workflow's notice folds its earlier steps behind one control ([DR-117](specs/decisions/117-the-earlier-steps-fold-behind-one-control.md)).
+  The retry and Drop stand in the notice's row as before; every "Resume
+  from: …" action waits behind "Resume from an earlier step…", which
+  opens their list in place with each label whole, so a run interrupted
+  under a long machine no longer reads as a wall of near-identical rows.
+
 - The core coordinates its writers as Git does ([DR-111](specs/decisions/111-the-core-coordinates-as-git-does.md)).
   A command is no longer refused merely because a sync, check, join,
   move, removal, compile, install or enabling runs. A write whose file

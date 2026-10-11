@@ -271,6 +271,39 @@ export function parkingScript(options: { delayMs?: number; held?: boolean } = {}
   };
 }
 
+/**
+ * The script that parks a real run on a player's failure (DR-117): the
+ * Captain's decision starts the real /code root and every coder call
+ * fails before touching the repository, so the run parks in its
+ * failure state with nothing to reconcile and the runtime advertises a
+ * retry of the failed step beside a resume from an earlier one — the
+ * resume the parked-run notice folds. A resume taken re-enters the
+ * step, whose call fails again, so the run parks there again.
+ */
+export function failingScript(options: { delayMs?: number } = {}): FakeScript {
+  const delay = options.delayMs ?? 1;
+  return {
+    rules: [
+      {
+        match: "Original request:",
+        response: { result: "The provider refused the call.", status: "error", delayMs: delay },
+      },
+      {
+        // The Captain's decision: start the real /code root.
+        match: /"action"/,
+        response: {
+          result: JSON.stringify({
+            action: "start",
+            playbookId: "code",
+            input: "Add a line to work.txt",
+          }),
+        },
+      },
+    ],
+    fallback: { result: "Done." },
+  };
+}
+
 /** The player's question, the Captain's relay of it, and the Boss's
  * answer in the asking script (run-view-151). */
 export const ASKING = {

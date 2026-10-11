@@ -4790,6 +4790,11 @@ msgstr "发送前请先恢复中断的轮次。"
 msgid "Restoring…"
 msgstr "恢复中…"
 
+#. act: open the list of earlier steps the parked run can resume from
+#: src/components/ParkedRun.tsx
+msgid "Resume from an earlier step…"
+msgstr "从更早的步骤继续…"
+
 #: src/lib/space.ts
 msgid "resume tokens for this machine's agent conversations; they work nowhere else"
 msgstr "本机智能体对话的续接令牌；在别处无效"

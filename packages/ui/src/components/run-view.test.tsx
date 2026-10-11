@@ -2942,6 +2942,97 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     expect(control.getAttribute("title")).toBe(LABEL);
   });
 
+  test("the resumes fold behind one control that opens their whole labels in place", async () => {
+    // DR-117: a run interrupted under a running /shape drew one Retry,
+    // six near-identical "Resume from" rows and Drop. The row keeps the
+    // failure's own act and Drop; the resumes stand behind one control
+    // and read whole once it opens — each still its own control.
+    const RETRY = {
+      id: "retry:START_SHAPE",
+      label: "Retry: Shaper drafts the intent from the request and the specs it cites.",
+      standing: "ready" as const,
+    };
+    const RESUMES = [1, 2, 3, 4, 5, 6].map((n) => ({
+      id: `jump:step${n}`,
+      label: `Resume from: Shaper runs step ${n} of the shaping pass, drafting the intent, checking every spec it cites, and recording what it changed.`,
+      standing: "ready" as const,
+    }));
+    const FOLDED: SessionInfo = {
+      ...SESSION,
+      parked: {
+        reason: "failure",
+        actions: [RETRY, ...RESUMES],
+        ending: { id: "give-up", label: "Stop /shape" },
+      },
+    };
+    const previous = useAppStore.getState();
+    const command = vi.fn(async () => ({}));
+    setClientForTests({ command } as never);
+    useAppStore.setState({
+      sessions: [FOLDED],
+      views: { s1: failedView() },
+      composers: { s1: { queued: [] } },
+      stagedIntents: {},
+      specTrees: {},
+      activeSessionId: undefined,
+    });
+    try {
+      renderFailed({ session: FOLDED });
+      // Folded: the retry in its own label, the one door to the resumes,
+      // Drop with the ending's label — and no resume drawn.
+      expect(
+        screen.getAllByTestId("failed-workflow-action").map((button) => button.getAttribute("data-action-id")),
+      ).toEqual([RETRY.id]);
+      expect(action(RETRY.id).textContent).toBe(RETRY.label);
+      const toggle = screen.getByTestId("failed-workflow-resumes");
+      expect(toggle.textContent).toBe("Resume from an earlier step…");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("failed-workflow-resume-list")).toBeNull();
+      expect(screen.getByTestId("failed-workflow-drop").getAttribute("title")).toBe("Stop /shape");
+      // Retry stands before the door, and Drop after it.
+      const row = [RETRY.id, "failed-workflow-resumes", "failed-workflow-drop"].map((id) =>
+        id === RETRY.id ? action(id) : screen.getByTestId(id),
+      );
+      for (let i = 1; i < row.length; i += 1) {
+        expect(row[i - 1].compareDocumentPosition(row[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+
+      // Opened in place: the six in the summary's order, each label
+      // whole and set to wrap rather than ellipse, the list bounded to
+      // scroll (run-view-128).
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      const list = screen.getByTestId("failed-workflow-resume-list");
+      expect(screen.getByTestId("failed-workflow").contains(list)).toBe(true);
+      expect(toggle.getAttribute("aria-controls")).toBe(list.id);
+      expect(list.className).toMatch(/\bmax-h-48\b/);
+      expect(list.className).toMatch(/\boverflow-y-auto\b/);
+      const folded = within(list).getAllByTestId("failed-workflow-action");
+      expect(folded.map((button) => button.getAttribute("data-action-id"))).toEqual(RESUMES.map((resume) => resume.id));
+      for (const [i, button] of folded.entries()) {
+        const label = button.querySelector("span")!;
+        expect(label.textContent).toBe(RESUMES[i].label);
+        expect(label.className).not.toMatch(/\btruncate\b/);
+        expect(label.className).toMatch(/\bwhitespace-normal\b/);
+        expect((button as HTMLButtonElement).disabled).toBe(false);
+      }
+      // The retry in the row keeps its ellipsis rule.
+      expect(action(RETRY.id).querySelector("span")!.className).toMatch(/\btruncate\b/);
+
+      // A folded resume is a control of its own: exactly one control
+      // naming its id (run-view-129).
+      await act(async () => fireEvent.click(folded[3]));
+      expect(command).toHaveBeenCalledExactlyOnceWith("session.control", {
+        sessionId: "s1",
+        kind: "recovery",
+        actionId: RESUMES[3].id,
+      });
+    } finally {
+      setClientForTests(undefined);
+      useAppStore.setState(previous, true);
+    }
+  });
+
   test("where the summary published no controls, Drop stands alone and the composer is the other door", () => {
     // A session parked before this rule, or one whose controls were
     // never captured (run-view-128): the notice offers no recovery it
