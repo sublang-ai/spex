@@ -4079,6 +4079,8 @@ msgid "path"
 msgstr "path"
 
 #. field holding a path to select and copy
+#. the field holding a new group's path on the Git host, the last segment of its address
+#: src/components/SpaceMembers.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Path"
 msgstr "Path"

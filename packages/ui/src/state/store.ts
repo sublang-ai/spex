@@ -314,10 +314,10 @@ export interface AppState extends AttachmentState {
   /** A group's or a spex repository's members as the host reports
    * them, read on every call and held nowhere (space-62). */
   spaceMembers(target: SpaceMembersTarget): Promise<SpaceMembersReply>;
-  /** Create a group on the host, at the top or inside the group whose
-   * host id is `parent` (space-68); the read that lists it follows as
-   * state. */
-  spaceGroupCreate(name: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Create a group on the host at the path `path`, at the top or inside
+   * the group whose host id is `parent` (space-68); the read that lists
+   * it follows as state. */
+  spaceGroupCreate(name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
   /** Add the account of `login` to a group or a spex repository at one
    * of the host's roles, by its id (space-69); the reply lists the
    * members after the addition. */
@@ -1745,7 +1745,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
-    spaceGroupCreate: (name, parent) => getClient().command("space.group.create", { name, parent }),
+    spaceGroupCreate: (name, path, parent) => getClient().command("space.group.create", { name, path, parent }),
 
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 

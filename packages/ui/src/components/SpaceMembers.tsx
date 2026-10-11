@@ -41,11 +41,24 @@ function pageHost(url: string, groups: GroupsState): string {
   }
 }
 
-/** A new group's name, asked in place (space-68): "Group name", Create
- * and Cancel, Escape cancelling. Create stays disabled while the name
- * is empty, reads "Creating…" while the host is asked and takes no
- * second submission; a refusal stands in the editor with the name
- * kept. The group is listed at the host read the core then begins. */
+/** A group's path as the host derives it from its name (space-68):
+ * lower-cased, each run outside letters, digits, `.`, `_` and `-` one
+ * `-`, leading and trailing `-` and `.` dropped — empty for a name in
+ * Chinese, say. */
+function derivedGroupPath(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+}
+
+/** A new group's name and path, asked in place (space-68): "Group
+ * name", "Path" following the name as the host derives it until the
+ * reader edits it, Create and Cancel, Escape cancelling. Create stays
+ * disabled while either is empty, reads "Creating…" while the host is
+ * asked and takes no second submission; a refusal stands in the editor
+ * with the name kept. The group is listed at the host read the core
+ * then begins. */
 export function GroupNameEditor({
   testId,
   parent,
@@ -63,6 +76,9 @@ export function GroupNameEditor({
 }) {
   const spaceGroupCreate = useAppStore((state) => state.spaceGroupCreate);
   const [name, setName] = useState("");
+  const [path, setPath] = useState("");
+  // The path follows the name until the reader edits it.
+  const [pathEdited, setPathEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
@@ -72,13 +88,14 @@ export function GroupNameEditor({
   }, []);
 
   const chosen = name.trim();
+  const chosenPath = path.trim();
   const submit = async () => {
-    if (!chosen || inFlight.current) return;
+    if (!chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setRefusal(undefined);
     try {
-      await spaceGroupCreate(chosen, parent);
+      await spaceGroupCreate(chosen, chosenPath, parent);
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
@@ -109,7 +126,10 @@ export function GroupNameEditor({
           ref={fieldRef}
           data-testid={`${testId}-name`}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (!pathEdited) setPath(derivedGroupPath(event.target.value));
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") void submit();
           }}
@@ -121,12 +141,33 @@ export function GroupNameEditor({
           className={FIELD}
         />
       </label>
+      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+        <span className="shrink-0 text-neutral-500">
+          {i18n._({ id: "Path", comment: "the field holding a new group's path on the Git host, the last segment of its address" })}
+        </span>
+        <input
+          data-testid={`${testId}-path`}
+          value={path}
+          onChange={(event) => {
+            setPath(event.target.value);
+            setPathEdited(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void submit();
+          }}
+          readOnly={busy}
+          spellCheck={false}
+          autoComplete="off"
+          autoCapitalize="off"
+          className={FIELD}
+        />
+      </label>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           data-testid={`${testId}-create`}
           className={SECONDARY}
-          disabled={!connected || busy || !chosen}
+          disabled={!connected || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
           {busy
