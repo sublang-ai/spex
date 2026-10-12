@@ -8,6 +8,7 @@
 // as the core's publishing does — the release checks and the fields the
 // registry requires (environments-10) — and stores the archive.
 // Scripted yank, suppression, private namespaces honouring app tokens,
+// the orgs each app token's person may publish to, held as scripted,
 // and outages let the core's tests and the browser journeys drive every
 // registry answer.
 
@@ -70,6 +71,12 @@ export interface StandinRegistryScript {
   /** Make an org private: a request without a bearer finds nothing
    * (404), one whose bearer is not listed is forbidden (403). */
   setPrivate(org: string, tokens: Set<string>): void;
+  /** The orgs the person presenting `token` may publish to, which
+   * `GET /api/v1/account/orgs` lists sorted by name; any other token, or
+   * none, is answered 401. */
+  setOrgs(token: string, orgs: { name: string; path: string; role: string }[]): void;
+  /** Hold each orgs answer `ms` before sending it. */
+  delayOrgs(ms: number): void;
   /** Answer the next `count` requests 500, as an outage. */
   unavailable(count: number): void;
   /** Every request as `<METHOD> <path>`, in order. */
@@ -105,6 +112,8 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   mkdirSync(dir, { recursive: true });
   const releases = new Map<string, Map<string, Stored>>();
   const privateOrgs = new Map<string, Set<string>>();
+  const accountOrgs = new Map<string, { name: string; path: string; role: string }[]>();
+  let orgsDelay = 0;
   const requests: string[] = [];
   let outages = 0;
 
@@ -239,6 +248,14 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       return;
     }
     const segments = url.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+    if (method === "GET" && url.pathname === "/api/v1/account/orgs") {
+      if (orgsDelay > 0) await new Promise((resolve) => setTimeout(resolve, orgsDelay));
+      const header = req.headers.authorization;
+      const orgs = header?.startsWith("Bearer ") ? accountOrgs.get(header.slice(7)) : undefined;
+      if (!orgs) { sendError(res, 401, "unauthenticated", "sign in to list your orgs"); return; }
+      sendJson(res, 200, { orgs: [...orgs].sort((a, b) => a.name.localeCompare(b.name)) });
+      return;
+    }
     if (method === "GET" && url.pathname === "/api/v1/search") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       const results = [...releases.entries()]
@@ -317,6 +334,8 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       yank: (name, version) => { find(name, version).yanked = true; },
       suppress: (name, version) => { find(name, version).suppressed = true; },
       setPrivate: (org, tokens) => { privateOrgs.set(org, new Set(tokens)); },
+      setOrgs: (token, orgs) => { accountOrgs.set(token, orgs.map((org) => ({ ...org }))); },
+      delayOrgs: (ms) => { orgsDelay = ms; },
       unavailable: (count) => { outages = count; },
       requests,
       clearRequests: () => { requests.length = 0; },
