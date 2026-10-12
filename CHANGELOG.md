@@ -843,6 +843,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and PRs come from GitHub and names the host its origin is at, never a
   credential the URL carries; a project with no `origin` remote keeps the
   sentence that asks for one (projects-7).
+- Your own group's spex repository, made at sign-in, and a project picked
+  into "Your own group" were asked of the instance by your own group's
+  id, which an instance looks up only among its own groups, so the
+  creation waited for ever. They now name no group, as the instance
+  expects (git-host-6).
+- One spex repository whose members the instance could not count failed
+  the whole read, so Refresh, set-up and every sync stopped while the
+  instance's own member reads failed. The read now holds that count as
+  unknown and goes on, and a first sync into a repository with an
+  unknown count still says the sharing notice (git-host-5, space-57).
 
 ### Security
 
