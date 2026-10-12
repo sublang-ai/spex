@@ -1012,6 +1012,8 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
     assert.ok(session.prompt.includes('Each role name is one word: slc reads only the first word after "Captain shall prompt" and refuses a role name with a space, so write a two-word role as one CamelCase word, e.g. `RiskOfficer`, `ClientAdvocate`.'), `${id}: the one-word role rule`);
     // A step's three repository effects, in every language.
     assert.ok(session.prompt.includes("- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit."), `${id}: the three repository effects`);
+    // A prompt carries its role's one step, in every language.
+    assert.ok(session.prompt.includes('- A role\'s prompt describes only that role\'s own step and ends by naming the result the step reports; later rounds, the hand-over between roles and the ending belong to the behaviors\' prose, never to a prompt: a prompt that says "then wait for …" or "then the reviewer …" makes the player end its reply waiting, and the runtime reads that reply as the step\'s result and parks the run.'), `${id}: a prompt's one step`);
   };
   // The words slc reads literally, kept in English for another language.
   const KEPT = /Keep in English, exactly as written, the words slc recognizes literally: the headings `Roles:` and `Results:`, the clauses `Captain shall prompt <Role>`, `Captain shall relay … to <Role>` and `Output shall include`/;
