@@ -8,9 +8,10 @@
 // languages and fallback marks, and installed state; the playbooks of
 // both environments once per origin with where each is enabled; Add
 // from registry, from a folder and from Git; Resolve again while the
-// lock is stale; Remove behind Remove or Keep; and every control
-// waiting while that spex repository syncs, naming the sync
-// (playbook-library-1, playbook-library-92).
+// lock is stale; the newer built-in release's line with Update; Remove
+// behind Remove or Keep; and every control waiting while that spex
+// repository syncs, naming the sync (playbook-library-1,
+// playbook-library-92).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -352,6 +353,40 @@ describe("playbook-library-94: the environment's controls", () => {
       "acme/labels — ^0.4.0 by acme/triage; ^1.0.0 by acme/local-tools",
     );
     expect(screen.getByTestId("environment-resolve")).toBeTruthy();
+  });
+
+  test("a newer built-in release reads its line with Update, which resolves again; a state naming none reads no line", async () => {
+    environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, builtinUpdate: { shipped: "17.8.0", locked: "17.4.1" } };
+    await renderSurface();
+    // [playbook-library-92] the line names both releases, with Update
+    // beside it while the lock is current and no Resolve again stands.
+    expect(screen.getByTestId("environment-builtin-update-line").textContent).toBe(
+      "Built-in playbooks 17.8.0 shipped with this app; this environment runs 17.4.1",
+    );
+    expect(screen.queryByTestId("environment-resolve")).toBeNull();
+    const update = screen.getByTestId("environment-update") as HTMLButtonElement;
+    expect(update.textContent).toBe("Update");
+    fireEvent.click(update);
+    // [playbook-library-92] Update sends environment.resolve for this
+    // spex repository, and nothing else.
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.resolve", { repository: PROJECT_ID }),
+    );
+    expect(commandMock).not.toHaveBeenCalledWith("environment.install", expect.anything());
+
+    // The state the core broadcasts once the lock selects the shipped
+    // release names none, and the line goes.
+    act(() => {
+      deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: PROJECT_ENVIRONMENT });
+    });
+    expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
+    expect(screen.queryByTestId("environment-update")).toBeNull();
+
+    // [playbook-library-92] your own group's side, its state naming no
+    // newer release, reads no line.
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
   });
 
   test("Remove asks Remove or Keep; Keep writes nothing", async () => {

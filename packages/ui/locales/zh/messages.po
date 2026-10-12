@@ -1327,6 +1327,10 @@ msgstr "已修复缺陷"
 msgid "built-in"
 msgstr "内置"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Built-in playbooks {shipped} shipped with this app; this environment runs {locked}"
+msgstr "本应用附带内置规程 {shipped}；此环境运行的是 {locked}"
+
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
 msgid "bypass"
@@ -4799,6 +4803,10 @@ msgid "Resolve again"
 msgstr "重新解析"
 
 #: src/components/EnvironmentSection.tsx
+msgid "Resolve the requests again to run {version}"
+msgstr "重新解析请求以运行 {version}"
+
+#: src/components/EnvironmentSection.tsx
 msgid "Resolve the requests into a new lock and install it"
 msgstr "将请求解析为新的锁并安装"
 
@@ -6245,6 +6253,11 @@ msgstr "接下来"
 msgid "Up next: <0>{title}</0>"
 msgstr "接下来：<0>{title}</0>"
 
+#. resolve the environment again to run the built-in playbooks this app ships
+#: src/components/EnvironmentSection.tsx
+msgid "Update"
+msgstr "更新"
+
 #. a sync unit's change: it changed on this side
 #: src/components/SpaceSync.tsx
 msgid "updated"
@@ -6261,6 +6274,11 @@ msgstr "{age}由智能体更新"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "{age}由你更新"
+
+#. the environment is being resolved again to run the built-in playbooks this app ships
+#: src/components/EnvironmentSection.tsx
+msgid "Updating…"
+msgstr "更新中…"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Upload {path} to the registry"

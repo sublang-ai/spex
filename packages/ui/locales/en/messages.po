@@ -1327,6 +1327,10 @@ msgstr "bug fixed"
 msgid "built-in"
 msgstr "built-in"
 
+#: src/components/EnvironmentSection.tsx
+msgid "Built-in playbooks {shipped} shipped with this app; this environment runs {locked}"
+msgstr "Built-in playbooks {shipped} shipped with this app; this environment runs {locked}"
+
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
 msgid "bypass"
@@ -4799,6 +4803,10 @@ msgid "Resolve again"
 msgstr "Resolve again"
 
 #: src/components/EnvironmentSection.tsx
+msgid "Resolve the requests again to run {version}"
+msgstr "Resolve the requests again to run {version}"
+
+#: src/components/EnvironmentSection.tsx
 msgid "Resolve the requests into a new lock and install it"
 msgstr "Resolve the requests into a new lock and install it"
 
@@ -6245,6 +6253,11 @@ msgstr "Up next"
 msgid "Up next: <0>{title}</0>"
 msgstr "Up next: <0>{title}</0>"
 
+#. resolve the environment again to run the built-in playbooks this app ships
+#: src/components/EnvironmentSection.tsx
+msgid "Update"
+msgstr "Update"
+
 #. a sync unit's change: it changed on this side
 #: src/components/SpaceSync.tsx
 msgid "updated"
@@ -6261,6 +6274,11 @@ msgstr "Updated {age} by the agent"
 #: src/components/DraftSourceTab.tsx
 msgid "Updated {age} by you"
 msgstr "Updated {age} by you"
+
+#. the environment is being resolved again to run the built-in playbooks this app ships
+#: src/components/EnvironmentSection.tsx
+msgid "Updating…"
+msgstr "Updating…"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Upload {path} to the registry"
