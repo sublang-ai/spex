@@ -545,6 +545,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- The authoring agent learns before its first compile that a prompt's
+  text stands where its instruction stands, in the source's order: text
+  two instructions need, such as a checklist, is written out at both,
+  not stated once and referred to — which slc refuses as "authored
+  prompt fragments are out of Source order".
 - An authoring session's row on the Playbooks surface is titled by its
   source's first `#` heading, so a source with a license comment above
   that heading no longer reads as the comment; a source with no heading

@@ -1702,6 +1702,8 @@ export class AuthorManager {
       "- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit.",
       // The runtime reads a step's reply as its result (playbook-library-65).
       '- A role\'s prompt describes only that role\'s own step and ends by naming the result the step reports; later rounds, the hand-over between roles and the ending belong to the behaviors\' prose, never to a prompt: a prompt that says "then wait for …" or "then the reviewer …" makes the player end its reply waiting, and the runtime reads that reply as the step\'s result and parks the run.',
+      // slc checks a prompt's text against the source's order (playbook-library-65).
+      '- A prompt\'s text stands where its instruction stands, in the source\'s order; text two instructions need, such as a checklist, is written out at both, never stated once and referred to ("append the checklist above"): slc refuses a compile whose prompt carries text out of the source\'s order, reporting "authored prompt fragments are out of Source order".',
       '- A nested call: "Captain shall call playbook `id`:" with the input template blockquoted.',
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
