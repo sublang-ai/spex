@@ -42,7 +42,10 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useAutoGrow } from "../lib/useAutoGrow.js";
 import { usePopover } from "../lib/usePopover.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
-import { currentSessionOf } from "../lib/sessions.js";
+import {
+  currentSessionOf,
+  hasUnservedFinishedConversation,
+} from "../lib/sessions.js";
 import { contentTitle } from "../lib/message-content.js";
 import { useComposerAttachments } from "../lib/useComposerAttachments.js";
 import { ComposerBox } from "./Composer.js";
@@ -67,6 +70,18 @@ import {
 
 export function firstLine(text: string): string {
   return text.split(/\r?\n/, 1)[0] ?? text;
+}
+
+/** A session's work in its own words: the Boss turn that opened the
+ * work it is doing, as the core names it — never an answer sent while
+ * the run's question stood (core-service-32, DR-119) — its first turn
+ * from a core that names none, and a plain stand-in before any turn.
+ * The Now band and the Running band read this one rule, so the two
+ * never disagree (dashboard-28, dashboard-50). */
+export function sessionWorkTitle(session: SessionInfo): string {
+  return firstLine(
+    session.workTitle ?? session.title ?? i18n._("no messages yet"),
+  );
 }
 
 /** A project's queue in the order the core serves it: oldest first
@@ -527,11 +542,15 @@ const HISTORY_MAX = 24;
 function HistoryBand({
   project,
   tree,
+  chatFinished,
   now,
   onOpenIntent,
 }: {
   project: ProjectInfo;
   tree?: SpecTreeState;
+  /** The project holds a finished conversation serving no intent: its
+   * work is in the sidebar, not here (dashboard-8). */
+  chatFinished: boolean;
   now: number;
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
 }) {
@@ -602,7 +621,16 @@ function HistoryBand({
         >
           {inFlight
             ? i18n._({ id: "Loading…", comment: "a read is still in flight" })
-            : i18n._("Nothing done here yet.")}
+            : chatFinished
+              ? // Work sent as chat turns is no ledger work: one key
+                // phrase says where it is and what lands here
+                // (dashboard-8, DR-038, DR-069).
+                i18n._({
+                  id: "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here",
+                  comment:
+                    "History band, empty while the project's finished conversations served no intent: they list in the sidebar, and only work queued as an intent lists in History",
+                })
+              : i18n._("Nothing done here yet.")}
         </div>
       ) : (
         // The cut edges draw only where the frame overflows, so a short
@@ -763,9 +791,7 @@ function NowBand({
   // Serving no intent, the row leads with the turn that opened the work
   // the session is doing, as the core names it — never an answer sent
   // while the run's question stood (dashboard-28, DR-119).
-  const title = served
-    ? contentTitle(served.intent)
-    : firstLine(session.workTitle ?? session.title ?? i18n._("no messages yet"));
+  const title = served ? contentTitle(served.intent) : sessionWorkTitle(session);
   const playbook = view?.frames[0]?.playbookId;
 
   const drop = async () => {
@@ -1686,6 +1712,10 @@ export function ProjectGroup({
         <HistoryBand
           project={project}
           tree={tree}
+          chatFinished={
+            ledger !== undefined &&
+            hasUnservedFinishedConversation(sessions, intents, project.id)
+          }
           now={now}
           onOpenIntent={onOpenIntent}
         />

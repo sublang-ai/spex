@@ -1652,51 +1652,69 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     expect(document.activeElement).toBe(row);
   });
 
-  test("dashboard-66: serving no intent, the row leads with the turn that opened the work, never the answer", () => {
+  test("dashboard-66: serving no intent, both bands lead with the turn that opened the work, never the answer", () => {
+    const earlier = "/triage-inbox Sort this week's support mail";
     const opening = "/release-notes Milestone M1 (internal alpha): the notes\nfor the client";
     const answer = "Yes, send these notes to the client.";
     const view = initialSessionView([]);
     view.turnActive = true;
-    view.currentTurnId = 2;
+    view.currentTurnId = 3;
     view.frames = [{ playbookId: "release-notes" } as never];
     view.captain.push(
-      { kind: "boss", text: opening, turnId: 1, at: NOW - 6 * MIN },
-      { kind: "question", text: "Send these notes to the client?", turnId: 1, at: NOW - 5 * MIN },
-      { kind: "boss", text: answer, turnId: 2, at: NOW - MIN },
+      { kind: "boss", text: earlier, turnId: 1, at: NOW - 30 * MIN },
+      { kind: "boss", text: opening, turnId: 2, at: NOW - 6 * MIN },
+      { kind: "question", text: "Send these notes to the client?", turnId: 2, at: NOW - 5 * MIN },
+      { kind: "boss", text: answer, turnId: 3, at: NOW - MIN },
     );
-    // The summary as the core folds it: the answer is a turn of the
-    // work that asked, so the work is still the opening turn's.
+    // The summary as the core folds it: the session's first turn was
+    // earlier work, and the answer is a turn of the work that asked, so
+    // the work is still the opening turn's.
     const session = {
       id: "s-live", projectId: "me/alpha-spex", projectPath: "/tmp/alpha",
-      title: opening, workTitle: opening, createdAt: NOW - 6 * MIN,
-      live: true, endedAt: null, players: [], initialVisible: [], turns: 2,
+      title: earlier, workTitle: opening, createdAt: NOW - 30 * MIN,
+      live: true, endedAt: null, players: [], initialVisible: [], turns: 3,
       failed: false, turnActive: true,
     };
     seed({ sessions: [session], views: { "s-live": view } });
     renderSurface();
 
     const row = screen.getByTestId("now-session-me/alpha-spex");
-    // While the answer's turn runs, the row reads the opening turn's
-    // first line, never the answer (dashboard-28, DR-119).
+    const running = within(screen.getByTestId("running-band")).getByTestId(
+      "running-session-s-live",
+    );
+    // While the answer's turn runs, the Now row reads the opening
+    // turn's first line, never the answer nor the session's first turn
+    // (dashboard-28, DR-119).
     expect(row.textContent).toContain("/release-notes Milestone M1 (internal alpha): the notes");
     expect(row.textContent).not.toContain("for the client");
     expect(row.textContent).not.toContain(answer);
+    expect(row.textContent).not.toContain("/triage-inbox");
     expect(row.getAttribute("data-intent-id")).toBeNull();
+    // The Running row reads the same turn by the same rule, so the two
+    // bands agree (dashboard-50).
+    expect(running.textContent).toContain("/release-notes Milestone M1 (internal alpha): the notes");
+    expect(running.textContent).not.toContain("for the client");
+    expect(running.textContent).not.toContain(answer);
+    expect(running.textContent).not.toContain("/triage-inbox");
 
-    // A turn sent once no question stands is new work, leading the row
-    // (dashboard-28).
+    // A turn sent once no question stands is new work, leading both
+    // rows (dashboard-28, dashboard-50).
     const later = initialSessionView([]);
     later.turnActive = true;
-    later.currentTurnId = 3;
+    later.currentTurnId = 4;
     later.captain.push(...view.captain, {
-      kind: "boss", text: "Now tag the release", turnId: 3, at: NOW,
+      kind: "boss", text: "Now tag the release", turnId: 4, at: NOW,
     });
     act(() => useAppStore.setState({
-      sessions: [{ ...session, workTitle: "Now tag the release", turns: 3 }],
+      sessions: [{ ...session, workTitle: "Now tag the release", turns: 4 }],
       views: { "s-live": later },
     }));
     expect(row.textContent).toContain("Now tag the release");
     expect(row.textContent).not.toContain("/release-notes");
+    const next = screen.getByTestId("running-session-s-live");
+    expect(next.textContent).toContain("Now tag the release");
+    expect(next.textContent).not.toContain("/release-notes");
+    expect(next.textContent).not.toContain("/triage-inbox");
   });
 });
 
@@ -2961,6 +2979,51 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     // guides to Projects.
     expect(screen.getByTestId("sources-me/alpha-spex").textContent).toContain(
       "No GitHub connection yet",
+    );
+  });
+
+  test("History with no done work points at the sidebar where a finished conversation served no intent", () => {
+    const CHAT_NOTE =
+      "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here";
+    const session = (
+      id: string,
+      projectId: string,
+      over: Record<string, unknown> = {},
+    ) => ({
+      id, projectId, projectPath: `/tmp/${projectId}`, title: `/code ${id}`,
+      createdAt: NOW - 20 * MIN, live: false, endedAt: NOW - 10 * MIN,
+      players: [], initialVisible: [], turns: 2, failed: false,
+      turnActive: false, ...over,
+    });
+    seed({
+      sessions: [
+        // alpha: work sent as chat turns, its last turn ended.
+        session("s-chat", "me/alpha-spex"),
+        // beta: one conversation still in its turn, and one finished
+        // conversation serving an open intent awaiting its verdict.
+        session("s-busy", "me/beta-spex", { live: true, endedAt: null, turnActive: true }),
+        session("s-served", "me/beta-spex"),
+      ],
+      ledger: {
+        intents: [{
+          intent: info({
+            id: "i-served", projectId: "me/beta-spex", text: "Ship docs",
+            dispatched: { sessionId: "s-served", turnId: 1, at: NOW - 20 * MIN },
+          }),
+          state: "finished",
+        }],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+    // A finished conversation serving no intent: the note says where
+    // that work is, and what lands here (dashboard-8).
+    expect(screen.getByTestId("history-empty-me/alpha-spex").textContent).toBe(CHAT_NOTE);
+    // A conversation in its turn, or one serving an open intent, leaves
+    // the note as it is (dashboard-8).
+    expect(screen.getByTestId("history-empty-me/beta-spex").textContent).toBe(
+      "Nothing done here yet.",
     );
   });
 
