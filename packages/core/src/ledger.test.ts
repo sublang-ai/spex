@@ -2791,6 +2791,212 @@ test("core-service-59: session.viewed clears the un-ledgered turn's review stand
 });
 
 // ---------------------------------------------------------------------------
+// dashboard-65: an answer continues its intent (DR-119)
+// ---------------------------------------------------------------------------
+
+/** A Captain whose `/release` run asks the Boss before it finishes: the
+ * turn that starts it parks the run on a question, and the next turn —
+ * the Boss's answer — moves the run on to its end. Any other turn sent
+ * while no run is parked is plain work that asks nothing. */
+function askingCaptain(): Parameters<typeof createScriptedCaptain>[0] {
+  let parked: string | undefined;
+  let runs = 0;
+  return async (turn, context, session) => {
+    const move = async (runId: string, from: string, to: string, sequence: number) => {
+      await session.emitTelemetry({
+        topic: "playbook.trace",
+        payload: {
+          schemaVersion: 4,
+          sequence,
+          timestamp: Date.now(),
+          type: "fsm.transition",
+          playbookId: "release",
+          depth: 0,
+          sessionId: runId,
+          rootSessionId: runId,
+          payload: { from, to },
+        },
+      });
+      await session.emitTelemetry({
+        topic: "playbook.fsm.state",
+        payload: { from, to },
+      });
+    };
+    if (parked) {
+      await move(parked, "awaitBossReply", "done", 2);
+      parked = undefined;
+      await context.emitReply("Released.");
+      return;
+    }
+    if (turn.prompt.startsWith("/release")) {
+      parked = `run-release-${(runs += 1)}`;
+      await move(parked, "assembling", "awaitBossReply", 1);
+      await context.emitReply("Approve the release?");
+      return;
+    }
+    await context.emitReply("Done.");
+  };
+}
+
+test(
+  "dashboard-65/core-service-59: a stand-in leads with the turn that opened its work, never the answer",
+  { timeout: 30_000 },
+  async (t) => {
+    const harness = await startHarness({ captainScript: askingCaptain() });
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const own = (ledger: LedgerState) =>
+      ledger.attention
+        .filter((entry) => entry.sessionId === session.id)
+        .map((entry) => [entry.band, entry.kind, entry.title, entry.turnId]);
+
+    // Plain chat, no intent bound: the run parks on its question.
+    const ask = "/release v1.2.0 at HEAD";
+    await client.expectOk("turn.submit", { sessionId: session.id, text: ask });
+    await settledTurns(client, harness, session.id, 1);
+    const asked = await client.ledgerUntil(
+      (ledger) => ledger.attention.some(
+        (entry) => entry.sessionId === session.id && entry.kind === "question",
+      ),
+      "the run to park on its question",
+    );
+    assert.deepEqual(own(asked), [["interrupted", "question", ask, 1]]);
+
+    // The answer is a turn of the work that asked (DR-119): the finished
+    // row still leads with the turn that opened it.
+    await client.expectOk("turn.submit", { sessionId: session.id, text: "Yes." });
+    await settledTurns(client, harness, session.id, 2);
+    const answered = await client.ledgerUntil(
+      (ledger) => ledger.attention.some(
+        (entry) => entry.sessionId === session.id && entry.kind === "review",
+      ),
+      "the answered run's finished turn to summon",
+    );
+    assert.deepEqual(own(answered), [["finished", "review", ask, 2]]);
+    assert.deepEqual(answered.intents, [], "no answer becomes an intent");
+
+    // A turn sent once no question stands is new work, leading its own.
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: "Now tag the release",
+    });
+    await settledTurns(client, harness, session.id, 3);
+    const tagged = await client.ledgerUntil(
+      (ledger) => ledger.attention.some(
+        (entry) => entry.sessionId === session.id && entry.turnId === 3,
+      ),
+      "the new work's finished turn to summon",
+    );
+    assert.deepEqual(own(tagged), [["finished", "review", "Now tag the release", 3]]);
+    assert.deepEqual(await turnPrompts(client, session.id), [
+      ask,
+      "Yes.",
+      "Now tag the release",
+    ]);
+  },
+);
+
+test(
+  "dashboard-65/core-service-57: an answer continues its intent, and a dispatch waits for it",
+  { timeout: 30_000 },
+  async (t) => {
+    const harness = await startHarness({ captainScript: askingCaptain() });
+    const client = new Client(harness.service.port());
+    t.after(async () => { client.close(); await harness.service.stop(); });
+    await client.open();
+    const project = await client.expectOk("project.register", {
+      path: harness.projectDir,
+    });
+    const session = await client.expectOk("session.create", {
+      projectId: project.id,
+    });
+    await client.expectOk("subscribe", {
+      channel: { kind: "session", sessionId: session.id },
+    });
+    const release = await client.queue({
+      projectId: project.id,
+      text: "/release v2.0.0 at HEAD\nwith the evidence bundle",
+    });
+    const note = await client.queue({
+      projectId: project.id,
+      text: "Write the release note",
+    });
+    await client.expectOk("turn.submit", {
+      sessionId: session.id,
+      text: release.text,
+      intentId: release.id,
+    });
+    await settledTurns(client, harness, session.id, 1);
+    const asked = await client.ledgerUntil(
+      (ledger) => ledger.attention.some(
+        (entry) => entry.intentId === release.id && entry.kind === "question",
+      ),
+      "the run to park on its question",
+    );
+    assert.equal(stateOf(asked, note.id).next?.standing, "question-park");
+
+    // A dispatch is new work, never an answer: while the question waits
+    // it is refused, starts no turn, and stamps nothing (core-service-47).
+    const refused = await client.command("turn.submit", {
+      sessionId: session.id,
+      text: note.text,
+      intentId: note.id,
+    });
+    assert.ok(!refused.ok && refused.error.code === "conflict", JSON.stringify(refused));
+    assert.match(refused.error.message, /waiting for your reply/);
+    const waiting = await client.expectOk("ledger.get", {});
+    assert.equal(stateOf(waiting, note.id).state, "queued");
+    assert.equal(stateOf(waiting, note.id).intent.dispatched, undefined);
+    assert.equal(stateOf(waiting, release.id).reason, "question");
+    assert.deepEqual(await turnPrompts(client, session.id), [release.text]);
+    // Let the bystander go, so the answer's settlement hands nothing on
+    // (core-service-94) and the ledger holds the asking intent alone.
+    await client.expectOk("intent.close", { intentId: note.id, as: "dropped" });
+
+    // The answer carries no intent: one of the asking intent's turns,
+    // which finishes under its own title (dashboard-33).
+    await client.expectOk("turn.submit", { sessionId: session.id, text: "Yes." });
+    await settledTurns(client, harness, session.id, 2);
+    const finished = await client.ledgerUntil(
+      (ledger) => stateOf(ledger, release.id).state === "finished",
+      "the answered intent to finish",
+    );
+    assert.deepEqual(
+      finished.intents.map((entry) => [entry.intent.id, entry.state]),
+      [[release.id, "finished"]],
+    );
+    assert.equal(stateOf(finished, release.id).intent.dispatched?.turnId, 1);
+    assert.deepEqual(
+      finished.attention
+        .filter((entry) => entry.sessionId === session.id)
+        .map((entry) => [entry.kind, entry.intentId, entry.title, entry.stats?.turns]),
+      [["finish", release.id, "/release v2.0.0 at HEAD", 2]],
+    );
+    assert.deepEqual(await turnPrompts(client, session.id), [release.text, "Yes."]);
+
+    // Confirmed, it lists in History under that same title.
+    await client.expectOk("intent.close", { intentId: release.id, as: "done" });
+    const history = await client.expectOk("ledger.history", {
+      projectId: project.id,
+    });
+    assert.deepEqual(
+      history.intents.map((row) => [row.intent.id, row.intent.text, row.stats?.turns]),
+      [[release.id, release.text, 2]],
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
 // core-service-54/56: restart identity over the protocol, the intent
 // files, and an intent arriving through a sync
 // ---------------------------------------------------------------------------

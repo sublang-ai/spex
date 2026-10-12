@@ -2403,6 +2403,11 @@ msgstr "此审批请求属于之前的核心服务连接。"
 msgid "This approval has already received a different answer."
 msgstr "此审批请求已收到不同的答复。"
 
+#. Refusal: queued work cannot start while a run of this conversation waits on the Boss's answer to its question
+#: src/service.ts
+msgid "this conversation is waiting for your reply; answer it first"
+msgstr "该会话正在等待你的回复；请先回复"
+
 #. Live tool approval refusal
 #: src/approvals.ts
 msgid "This decision was not offered by the agent."

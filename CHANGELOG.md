@@ -570,6 +570,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   project's group, else the first; with none listed, signed out, or no
   answer within two seconds, the key's first segment stands as before.
   A one-shot compile names the same org.
+- An answer continues its intent ([DR-119](specs/decisions/119-an-answer-continues-its-intent.md)).
+  A Dashboard row for a conversation serving no intent no longer reads
+  the Boss's answer to a run's question — "Yes." for a `/release` — but
+  the turn that opened the work, with the answers folded under it; a
+  turn sent once no question stands still titles the rows after it. A
+  queued intent sent while a run waits on the Boss's question is refused
+  with "this conversation is waiting for your reply; answer it first",
+  so queued text never answers by accident and stays queued.
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a

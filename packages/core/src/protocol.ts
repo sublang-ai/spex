@@ -758,7 +758,9 @@ export interface AttentionEntry {
   cause?: FailureCause;
   /** Absent for session stand-in entries. */
   intentId?: string;
-  /** The intent's title, or the session's latest turn text. */
+  /** The intent's title, or, for a session stand-in, the text of the
+   * Boss turn that opened the work the entry stands for — never an
+   * answer sent while a question stood (DR-119). */
   title: string;
   projectId: string;
   sessionId: string;
