@@ -1706,6 +1706,7 @@ export class AuthorManager {
       '- A prompt\'s text stands where its instruction stands, in the source\'s order; text two instructions need, such as a checklist, is written out at both, never stated once and referred to ("append the checklist above"): slc refuses a compile whose prompt carries text out of the source\'s order, reporting "authored prompt fragments are out of Source order".',
       '- A nested call: "Captain shall call playbook `id`:" with the input template blockquoted.',
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
+      "- A Boss's answer reaches only the role that asked, unless a behavior says a later role receives it: where a reviewing role judges work shaped by an answer, write that the role receives the Boss's answers, since the compiler keeps an exchange for a later step only where the source says so.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",
       "",
       "The shortest complete source, adapted from slc's demo:",
