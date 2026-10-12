@@ -61,8 +61,26 @@ test("malformed blocks stay as code: unknown keys or kinds, missing keys, bad pl
   const parsed = parseDirectives(cases.map((body) => `\`\`\`spex\n${body}\n\`\`\``).join("\n\n"));
   assert.equal(parsed.compile, false);
   assert.equal(parsed.register, undefined);
-  assert.deepEqual(parsed.malformed, cases);
+  assert.deepEqual(parsed.malformed.map((b) => b.text), cases);
   assert.ok(parsed.blocks.every((b) => b.malformed));
+  // Each keeps why, and the kind it names where Spex knows that kind.
+  assert.ok(parsed.malformed.every((b) => b.reason !== ""));
+  assert.deepEqual(parsed.malformed.map((b) => b.kind), ["compile", undefined, "register", "register", "register", undefined, undefined]);
+});
+
+test("a block that will not parse keeps the parser's fault as why and the kind its kind line names", () => {
+  const parsed = parseDirectives([
+    "```spex",
+    "kind: register",
+    "command: promote",
+    "intent: Decide where a change goes: write a record, then ask the owner.",
+    "players:",
+    "  Promoter: dev.coder",
+    "```",
+  ].join("\n"));
+  assert.deepEqual(parsed.malformed.map(({ reason, kind }) => ({ reason, kind })), [
+    { reason: "not YAML: Nested mappings are not allowed in compact mappings at line 3, column 9", kind: "register" },
+  ]);
 });
 
 test("CommonMark fences: up to three spaces of indent, tildes, a longer info string, any case of spex", () => {
@@ -98,7 +116,7 @@ test("the thread's split and the core's parse read one reply alike", () => {
   ]);
   const parsed = parseDirectives(text);
   assert.equal(parsed.compile, true);
-  assert.deepEqual(parsed.malformed, ["kind: deploy"]);
+  assert.deepEqual(parsed.malformed, [{ text: "kind: deploy", reason: "unknown kind deploy" }]);
   // YAML the agent may well write reads as the core does, not as a
   // looser line reader would: a folded intent, a quoted colon.
   assert.deepEqual(parseSpexBlock("kind: register\ncommand: c\nintent: >-\n  Draft notes\n  since the last tag\nplayers: {Coder: dev.coder}"), {

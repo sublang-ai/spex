@@ -32,7 +32,7 @@ import { loadAgentAdapter } from "./agent-runtime.js";
 import { stripLeadingComments } from "./artifacts.js";
 import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
-import { parseDirectives } from "./directives.js";
+import { parseDirectives, type MalformedBlock } from "./directives.js";
 import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type NewPackageFields, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
 import { parseManifestText } from "./environment/format.js";
 import { i18n } from "./i18n.js";
@@ -62,8 +62,9 @@ export const AUTHOR_PLAYER = "author";
 const RESEED_CAP_BYTES = 24 * 1024;
 /** The relay carries this much of the compiler's output. */
 const RELAY_OUTPUT_LINES = 200;
-/** Consecutive failed compiles with no Boss message between them that
- * end the automation (playbook-library-68). */
+/** Consecutive failed compiles, or replies owing an unreadable-block
+ * relay, with no Boss message between them that end the automation
+ * (playbook-library-66, playbook-library-68). */
 const RELAY_BOUND = 3;
 
 /** Spex's own packaging step, which a compile reports under either
@@ -175,8 +176,16 @@ interface LiveDraft {
   lastSourceDigest?: string | null;
   /** What changed since the last prompt, for "Since your last reply". */
   changes: string[];
-  /** The last reply's unreadable spex blocks, named in the next prompt. */
-  malformed: string[];
+  /** The last reply's unreadable spex blocks, named with why in the
+   * next prompt (playbook-library-65). */
+  malformed: MalformedBlock[];
+  /** The relay those blocks owe the agent, waiting as a compile's
+   * follow-up waits; whichever turn starts first names the blocks and
+   * pays it (playbook-library-66). */
+  unreadable?: Extract<TurnOrigin, { kind: "system" }>;
+  /** Replies that owed such a relay since the Boss last spoke: the
+   * third relays nothing (playbook-library-66). */
+  unreadableReplies: number;
 }
 
 type CompileSettled =
@@ -321,6 +330,12 @@ export function relayText(id: string, compile: StoredDraftCompile, elapsed: stri
 /** The success text (playbook-library-65). */
 export function successText(id: string, roles: readonly string[]): string {
   return `The compile of ${id} succeeded; the roles are ${roles.join(", ")}. Propose enabling in a register block.`;
+}
+
+/** The unreadable-block relay's text (playbook-library-65): the
+ * blocks and why stand at the prompt's head. */
+export function unreadableText(kind: string): string {
+  return `Write the ${kind} block again so Spex can read it.`;
 }
 
 function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
@@ -680,7 +695,7 @@ export class AuthorManager {
       ...(compile ? { compile: (({ sourceSha256: _digest, device: _device, ...rest }) => rest)(compile) } : {}),
       failures: draft.failures,
       ...(draft.proposal ? { proposal: draft.proposal } : {}),
-      ...(live.malformed.length > 0 ? { malformedDirectives: [...live.malformed] } : {}),
+      ...(live.malformed.length > 0 ? { malformedDirectives: live.malformed.map(({ text, reason }) => ({ text, reason })) } : {}),
       ...(damaged ? { diagnostic: damaged } : {}),
     };
   }
@@ -748,7 +763,7 @@ export class AuthorManager {
   private liveOf(instance: string): LiveDraft {
     let live = this.live.get(instance);
     if (!live) {
-      live = { compiles: new Set(), changes: [], malformed: [] };
+      live = { compiles: new Set(), changes: [], malformed: [], unreadableReplies: 0 };
       this.live.set(instance, live);
     }
     return live;
@@ -947,11 +962,13 @@ export class AuthorManager {
     this.assertReadable(id);
     const live = this.liveOf(instance);
     const queued = this.activity(id, instance) !== "idle";
-    // The Boss spoke: the relay count starts over (playbook-library-68).
+    // The Boss spoke: the relay counts start over (playbook-library-66,
+    // playbook-library-68).
     this.change(id, instance, (draft) => {
       draft.failures = 0;
       if (queued) draft.queued.push(content);
     });
+    live.unreadableReplies = 0;
     if (queued) {
       this.publish(id);
       return { accepted: true, queued: true };
@@ -1286,9 +1303,12 @@ export class AuthorManager {
       // What this turn's prompt owes the agent — the changes since the
       // last prompt and the last reply's unreadable blocks — is taken
       // once, so a reseed re-run after a rejected resume says it too.
+      // The turn naming those blocks pays the relay they owed
+      // (playbook-library-66).
       const pending = { changes: live.changes, malformed: live.malformed };
       live.changes = [];
       live.malformed = [];
+      live.unreadable = undefined;
       for (;;) {
         const prompt = this.composePrompt(id, draft, resolved, origin, mode, pending);
         const run = await this.runAgent(id, instance, turnId, Adapter, resolved.agent, prompt, controller, resume, origin.kind === "boss" ? origin.attachments : undefined);
@@ -1485,8 +1505,10 @@ export class AuthorManager {
         return;
       }
     }
+    let compiling = false;
     if (parsed.compile) {
       const started = this.beginCompile(id, instance, "agent");
+      compiling = started.ok;
       if (!started.ok) {
         this.status(
           id,
@@ -1499,6 +1521,68 @@ export class AuthorManager {
         );
       }
     }
+    // A malformed block naming no kind a readable block of the reply
+    // carries, in a reply that started no compile, is the agent's to
+    // write again now — not once the Boss happens to speak
+    // (playbook-library-66). A compile started here relays its own
+    // outcome, whose prompt names the blocks at its head.
+    const read = new Set(parsed.blocks.filter((block) => !block.malformed).map((block) => block.kind));
+    const unread = parsed.malformed.filter((block) => block.kind === undefined || !read.has(block.kind));
+    if (unread.length > 0 && !compiling) this.oweUnreadable(id, instance, live, unread);
+  }
+
+  /** Owe the agent the relay of its reply's unreadable blocks
+   * (playbook-library-66), bounded as compile failures are: the third
+   * reply to owe one with no Boss message between them relays nothing.
+   * The thread's line says what became of it — sent, stopped, or
+   * carried by the Boss's queued message (playbook-library-53) — and
+   * the relay waits as a compile's follow-up waits. */
+  private oweUnreadable(id: string, instance: string, live: LiveDraft, unread: readonly MalformedBlock[]): void {
+    let queued: boolean;
+    try {
+      queued = this.expect(id, instance).queued.length > 0;
+    } catch {
+      return;
+    }
+    live.unreadableReplies += 1;
+    // The one kind the blocks name, else the fence's own word: a code
+    // word in either language, passed as a value.
+    const kinds = new Set(unread.map((block) => block.kind ?? "spex"));
+    const kind = kinds.size === 1 ? [...kinds][0]! : "spex";
+    const stopped = !queued && live.unreadableReplies >= RELAY_BOUND;
+    this.status(
+      id,
+      instance,
+      queued
+        ? i18n._({
+            id: "◇ Could not read the agent's {kind} block — waiting for your queued message",
+            values: { kind },
+            comment: "Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays",
+          })
+        : stopped
+          ? i18n._({
+              id: "◇ Could not read the agent's {kind} block — three in a row; tell the agent how to proceed",
+              values: { kind },
+              comment: "Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays",
+            })
+          : i18n._({
+              id: "◇ Could not read the agent's {kind} block — sent to the agent",
+              values: { kind },
+              comment: "Draft thread status line; {kind} is the directive's code word (compile, register or spex) and the ◇ stays",
+            }),
+    );
+    if (stopped) return;
+    // The label is the line the thread shows for this turn; `text` is
+    // the prompt the agent reads, after the blocks named at its head.
+    live.unreadable = {
+      kind: "system",
+      label: i18n._({
+        id: "Spex: could not read the agent's {kind} block — asking the agent to write it again",
+        values: { kind },
+        comment: "Draft thread line for a turn Spex started; {kind} is the directive's code word (compile, register or spex), and keep the `Spex: ` opening",
+      }),
+      text: unreadableText(kind),
+    };
   }
 
   /** When the draft is idle — no turn, no compile — start what is owed
@@ -1516,6 +1600,10 @@ export class AuthorManager {
       if (draft.instance !== instance) return;
       if (live.followUp && live.followUp.compile === JSON.stringify(draft.compile)) followUp = live.followUp.origin;
       else live.followUp = undefined;
+      // An unreadable-block relay waits as a compile's follow-up does;
+      // one owed meanwhile goes in its place, its prompt naming the
+      // blocks at its head (playbook-library-66).
+      followUp ??= live.unreadable;
       if (draft.queued.length > 0) {
         this.change(id, instance, (stored) => {
           content = stored.queued.shift();
@@ -1527,6 +1615,7 @@ export class AuthorManager {
     }
     if (content !== undefined) {
       live.followUp = undefined;
+      live.unreadableReplies = 0;
       this.startTurn(id, instance, live, { kind: "boss", ...content, ...(followUp ? { preface: followUp.text } : {}) });
     } else if (followUp) {
       live.followUp = undefined;
@@ -1542,13 +1631,14 @@ export class AuthorManager {
     resolved: ResolvedAuthorAgent,
     origin: TurnOrigin,
     mode: "first" | "later" | "reseed",
-    pending: { changes: readonly string[]; malformed: readonly string[] },
+    pending: { changes: readonly string[]; malformed: readonly MalformedBlock[] },
   ): string {
     const parts: string[] = [];
     if (pending.malformed.length > 0) {
+      // Each block quoted, then why it did not read (playbook-library-65).
       parts.push(
         `Spex could not read ${pending.malformed.length === 1 ? "a spex block" : `${pending.malformed.length} spex blocks`} in your last reply; ${pending.malformed.length === 1 ? "it was" : "they were"} left as code. Each must be YAML with one \`kind\` — \`compile\` alone, or \`register\` with command, intent, and players — and nothing else:\n` +
-          pending.malformed.map((block) => `  > ${block.split("\n").join("\n  > ")}`).join("\n"),
+          pending.malformed.map((block) => `  > ${block.text.split("\n").join("\n  > ")}\n  Why: ${block.reason}`).join("\n"),
       );
     }
     if (mode === "later") {

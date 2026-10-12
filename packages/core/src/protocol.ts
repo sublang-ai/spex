@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 25;
+export const PROTOCOL_VERSION = 26;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -1580,8 +1580,9 @@ export interface DraftInfo {
   /** Consecutive failed compiles with no Boss message between. */
   failures: number;
   proposal?: DraftProposal;
-  /** Fenced spex blocks of the last reply the core could not read. */
-  malformedDirectives?: string[];
+  /** Fenced spex blocks of the last reply the core could not read: each
+   * block's text and why it did not read (playbook-library-66). */
+  malformedDirectives?: { text: string; reason: string }[];
 }
 
 /** One stored authoring record. Shapes: turn_started (Boss or system

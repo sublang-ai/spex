@@ -1034,10 +1034,13 @@ describe("playbook-library-53: the conversation pane", () => {
     // The fence itself never shows as text.
     expect(thread.textContent).not.toContain("```spex");
     expect(thread.textContent).not.toContain("kind: compile");
-    // A block Spex could not read stays as code with the caption.
+    // playbook-library-107: a block Spex could not read stays as code,
+    // its caption saying why in its visible text, not behind a hover.
     const malformed = within(thread).getByTestId("directive-malformed");
     expect(malformed.textContent).toContain("kind: deploy");
-    expect(malformed.textContent).toContain("Spex could not read this block");
+    const caption = within(malformed).getByTestId("directive-malformed-caption");
+    expect(caption.textContent).toBe("Spex could not read this block — unknown kind deploy");
+    expect(caption.getAttribute("title")).toBeNull();
     // The system turn reads as a ◇ line, its message behind a fold.
     const turn = within(thread).getByTestId("system-turn");
     expect(turn.textContent).toContain("◇ Spex: The compile of triage succeeded; the roles are Triager, Verifier.");

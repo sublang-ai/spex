@@ -550,6 +550,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the playbook through Spex and is not for an agent already playing a
   role in a playbook, and its last sentence sends such a player back to
   the step it was given.
+- A spex block the authoring agent writes that Spex cannot read — a
+  register block whose unquoted intent holds `: `, say — no longer waits
+  for the Boss's next message: the agent is asked at once to write it
+  again, told the block and why it did not read, bounded as a failed
+  compile's relay is (three in a row stop it until the Boss speaks), and
+  the thread says so. The block's caption under the code reads why, not
+  only in a tooltip.
 - Create says why a project's first commit failed in the app's own words:
   that Git could not make the first commit, naming commit signing with no
   key configured, a signing program that failed, or a missing Git name and

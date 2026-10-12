@@ -5454,8 +5454,8 @@ msgid "Spex could not create a starter config at <0>{path}</0> — check the fol
 msgstr "Spex 无法在 <0>{path}</0> 创建初始配置 — 请确认该文件夹可写后重试。"
 
 #: src/components/DraftConversation.tsx
-msgid "Spex could not read this block"
-msgstr "Spex 无法读取此代码块"
+msgid "Spex could not read this block — {reason}"
+msgstr "Spex 无法读取此代码块 — {reason}"
 
 #: src/state/store.ts
 msgid "Spex could not read what this would publish."

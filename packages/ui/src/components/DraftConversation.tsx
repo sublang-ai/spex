@@ -137,9 +137,11 @@ function DirectiveCard({
         <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-xs text-neutral-700 dark:text-neutral-300">
           {part.body}
         </pre>
-        {/* Why the block would not parse is the reader's diagnostic. */}
-        <span className="text-xs text-amber-800 dark:text-amber-200" title={part.error}>
-          {i18n._("Spex could not read this block")}
+        {/* Why the block did not read stands in the caption itself, in
+            the parser's words — the YAML error, or the key or kind at
+            fault — never behind a hover (playbook-library-53). */}
+        <span data-testid="directive-malformed-caption" className="text-xs [overflow-wrap:anywhere] text-amber-800 dark:text-amber-200">
+          {i18n._("Spex could not read this block — {reason}", { reason: part.error ?? "" })}
         </span>
       </div>
     );
