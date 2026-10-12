@@ -38,22 +38,24 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-35 a finished row titled with the Boss's last answer | spex PR 126, DR-119 |
 | W-36 the Org default under a nested group | spex PR 125 with spex-pub PR 7 (the orgs API) |
 | W-37 a source's first line as the Library title; W-38 the source-order rule learned only from a failed compile | spex PR 124 |
+| W-40 the repositories listing failing past about twenty-five spex repositories | spex-pub PR 8 |
+| W-41 the pick's first sync before the host's README; W-42 a repository the host leaves empty, and the creation mark lost on a restart | spex PR 128 and PR 129; confirmed on the eleven clones under `spex-internal` |
 
 ## What is still open
 
 - Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects.
-- Groups: W-39 (no "Move to another group" on the surface; the eleven moves below went through the protocol) and W-40 (host reads that stopped completing after one failure; to confirm on the next restart).
+- Groups: W-39 (no "Move to another group" on the surface; the eleven moves below went through the protocol), W-43 (a host's rate limit read as a network failure) and W-44 (the cost of a host read; a design note).
 
 ## Where the records live
 
 Every team's spex repository sits at `spex-internal/claude-workshop-261011/<team>/<name>-spex`: the workshop group is a private subgroup of the internal instance's public top-level group `spex-internal`, with one subgroup per team, all created from the organizer's Spex home, and the organizer shares the workshop group with each team's representative at Maintainer so that projects created there get their first commit.
-The registry org the teams publish to stays the top-level group `claude-workshop-261011`, because spex.pub binds an org to a top-level namespace only.
+The registry org the teams published to is the top-level group `claude-workshop-261011`, claimed while spex.pub bound an org to a top-level group only; it now binds one to a direct subgroup of the instance's group as well (spex-pub DR-023), so the next workshop binds its org to its subgroup and makes no top-level group.
 The records were first placed under `slbeta1/claude-workshop-2026-10-11/<team>` and then under the top-level `claude-workshop-261011/<team>`, both wrong placements corrected on the owner's instruction by moving every repository with its full history through the protocol (W-39); the copies left under the two old paths are orphans the owner may delete.
 
 ### How the placement went wrong, and what changes
 
-- **No concept of the instance's group.** spex.pub told clients nothing of the one group it keeps on GitLab.com; its `can_create_group` was false with the explanation that a first group is "made once on GitLab.com's own pages", and Spex rendered that as the first control on Groups ("New group at gitlab.com", DR-118, written mid-simulation on that wrong premise). Fixed: the host names its group, Spex shows it first and New group creates a private subgroup of it (DR-120).
-- **The registry's org rule pulled the other way.** An org could bind only to a top-level group, so publishing under the workshop's name forced a top-level group of that name — which then looked like the home for the teams. Fixed: an org may bind to a direct subgroup of the instance's group.
+- **No concept of the instance's group.** spex.pub told clients nothing of the one group it keeps on GitLab.com; its `can_create_group` was false with the explanation that a first group is "made once on GitLab.com's own pages", and Spex rendered that as the first control on Groups ("New group at gitlab.com", DR-118, written mid-simulation on that wrong premise). Fixed: the host names its group (spex-pub DR-022, live on the internal instance), Spex shows it first and New group creates a private subgroup of it (spex DR-120, PR 130).
+- **The registry's org rule pulled the other way.** An org could bind only to a top-level group, so publishing under the workshop's name forced a top-level group of that name — which then looked like the home for the teams. Fixed: an org may bind to a direct subgroup of the instance's group (spex-pub DR-023, PR 10, live).
 - **A flat, unmarked list.** Groups listed every host group in name order with nothing marking the instance's group, so an unrelated top-level group the organizer owned read as hers. Fixed with DR-120's order and key phrase.
 - **No page said the right way.** The only text naming the instance's group was the test-environment runbook. Added: [docs/groups.md](../../groups.md).
 - **The simulator's own errors.** It fixed the top-level plan before reading the product or the runbook, created the first group by hand on GitLab.com, and read every later ambiguity through that premise instead of asking at the first one.
