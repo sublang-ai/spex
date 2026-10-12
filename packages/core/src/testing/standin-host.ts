@@ -157,6 +157,13 @@ export interface StandinScript {
   accessLevel(id: string, role: string): void;
   /** While set, creation answers 202 pending with these words. */
   refuseCreate(message: string | null): void;
+  /** While set, a repository the stand-in creates holds no README on
+   * `main` — empty, with no default branch — for its first `reads` reads
+   * of it, its creation's answer among them, as a host answers a
+   * creation before its initial commit lands; the read after them
+   * commits it, and Infinity never does. Clearing it commits every
+   * README held. */
+  holdInitialization(reads: number | null): void;
   /** While set, branch preparation answers 202 pending with these words. */
   refuseBranch(message: string | null): void;
   /** While set, every transport request answers 403 with these words. */
@@ -396,6 +403,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   let nextId = 3001;
   let createRefusal: string | null = null;
   let branchRefusal: string | null = null;
+  let initializationHold: number | null = null;
+  /** Created repositories whose README is held, with the reads left. */
+  const uninitialized = new Map<StandinRepository, number>();
   let transportRefusal: string | null = null;
   let transportUnauthorized = false;
   let transportSleepMs = 0;
@@ -510,7 +520,20 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     }
   }
 
+  /** The host's README on `main`, committed into a created repository
+   * whose initialization was held. */
+  function initialize(repo: StandinRepository): void {
+    uninitialized.delete(repo);
+    commitFile(repo.bare, "refs/heads/main", "README.md", `# ${repo.name}\n`, "Initial commit");
+  }
+
   async function repositoryWire(repo: StandinRepository): Promise<Record<string, unknown>> {
+    // A held README: one read fewer to go, committed once none is.
+    const left = uninitialized.get(repo);
+    if (left !== undefined) {
+      if (left > 0) uninitialized.set(repo, left - 1);
+      else initialize(repo);
+    }
     const heads = await branches(repo.bare);
     const spex = heads.has("spex");
     return {
@@ -710,6 +733,10 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     removeMember: (id) => { findRepository(id).listed = false; },
     accessLevel: (id, role) => { findRepository(id).role = role; },
     refuseCreate: (message) => { createRefusal = message; },
+    holdInitialization: (reads) => {
+      initializationHold = reads;
+      if (reads === null) for (const repo of [...uninitialized.keys()]) initialize(repo);
+    },
     refuseBranch: (message) => { branchRefusal = message; },
     refuseTransport: (message) => { transportRefusal = message; },
     unauthorizeTransport: (on) => { transportUnauthorized = on; },
@@ -1038,7 +1065,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (existsSync(bare) || script.repositories.some((r) => r.group.fullPath === group.fullPath && r.path === name)) {
       return envelope(res, 409, "name_taken", "A repository of that name exists in the group.");
     }
-    initBare(bare, { name, empty: false });
+    initBare(bare, { name, empty: initializationHold !== null });
     const repo: StandinRepository = {
       id: String(nextId++),
       name,
@@ -1055,6 +1082,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       bare,
     };
     script.repositories.push(repo);
+    if (initializationHold !== null) uninitialized.set(repo, initializationHold);
     json(res, 201, { status: "created", repository: await repositoryWire(repo) });
   }
 

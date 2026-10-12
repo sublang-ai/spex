@@ -582,6 +582,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   queued intent sent while a run waits on the Boss's question is refused
   with "this conversation is waiting for your reply; answer it first",
   so queued text never answers by accident and stays queued.
+- A spex repository Spex creates on the host — by picking a group, say —
+  no longer stops its first sync at Check with "<host> holds no default
+  branch for it yet": the host answers a creation before the commit that
+  makes its default branch lands, so that first sync reads the new
+  repository again every 2 s, five times at most, before stopping; every
+  later sync, a Retry among them, stops at once as before (git-host-7).
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a

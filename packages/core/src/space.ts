@@ -149,6 +149,11 @@ const READ_CAP_LINES = 2_000;
 const DIFF_CAP_BYTES = 256 * 1024;
 const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|toml|ini|cfg|csv|gitignore|gitattributes|lock)$/i;
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
+/** A repository this core just created and the host reports empty is
+ * read again this many times, this far apart, before its first sync
+ * stops (git-host-7). */
+const CREATED_REREADS = 5;
+const CREATED_REREAD_MS = 2_000;
 
 // The reader's own words are composed where they are read, never held
 // in a constant a module's first evaluation would freeze in whichever
@@ -2142,6 +2147,10 @@ export class SpaceManager {
   /** Steps at the host waiting for a member with the rights (space-64),
    * by the clone's key; asked again at the next read. */
   private readonly waiting = new Map<string, Waiting>();
+  /** The repositories this core created, by the host's id, until a
+   * check reads them (git-host-7): the host may answer a creation
+   * before committing its default branch. */
+  private readonly justCreated = new Set<string>();
   /** The progress of joins in flight or stopped, by the host's id
    * (space-63): each join's own entry, which only it replaces or
    * removes; no join is refused because another runs. */
@@ -2599,6 +2608,7 @@ export class SpaceManager {
       return "waiting";
     }
     // As the host answered: no `spex` branch yet, nor a members' count.
+    this.justCreated.add(answer.repository.id);
     await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false);
     return "created";
   }
@@ -3055,10 +3065,11 @@ export class SpaceManager {
     if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key, repository.id, facts.remote);
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
     const readOnly = listing.readOnly !== null;
+    const created = this.justCreated.delete(repository.id);
     if (!readOnly && !listing.branchPresent) {
       // `spex` beside the default branch, never as it (git-host-7).
       const group = repository.group.fullPath;
-      if (repository.empty) {
+      if (repository.empty && !(created && await this.defaultBranchArrives(repository.id))) {
         this.waiting.set(machine.key, { step: "branch", group, message: "" });
         throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
       }
@@ -3072,6 +3083,21 @@ export class SpaceManager {
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
     }
     return { remote: repository.remoteUrl, readOnly };
+  }
+
+  /** Whether a repository this core just created, which the host
+   * reported empty, holds its default branch within the bound: read
+   * again every CREATED_REREAD_MS, CREATED_REREADS times at most, as
+   * the host may answer a creation before committing it (git-host-7). */
+  private async defaultBranchArrives(id: string): Promise<boolean> {
+    for (let reads = 0; reads < CREATED_REREADS && !this.stopping; reads += 1) {
+      await new Promise<void>((done) => { setTimeout(done, CREATED_REREAD_MS); });
+      let empty: boolean;
+      try { empty = (await this.host.client.repository(id)).empty; }
+      catch (error) { throw hostStop("check", error, this.hostName()); }
+      if (!empty) return true;
+    }
+    return false;
   }
 
   /** The brokered credential for a transport to the host's Git origin
