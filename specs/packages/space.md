@@ -27,8 +27,8 @@ While the app is connected, the Groups surface — reached from the sidebar's Gr
 - the groups list stands beneath the header: your own group first, headed "Your own group" beside its path while signed in and beside "named after your login at sign-in" while signed out, then, in the order of their paths, every group the host lists, headed by its name beside its path in the instance where the two differ and by its name alone where they are equal, and every other account's login under which the host lists a spex repository, headed by that login; under each, one row per spex repository [[space-61](#space-61)], the group's own repository first; before sign-in the list holds your own group alone with its repositories ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - a row stands under the group the host's last read names for its spex repository [[git-host-5](git-host.md#git-host-5)], and under its key's group only where the host lists nothing for it, so a clone the host moved stands under its new heading, its key unchanged until its sync moves it [[space-60](#space-60)]; no group the host lists displaces your own group or takes its rows;
 - what stands beside a heading's name follows the separator " · " in the surface's secondary tone;
-- while signed in, "New group" stands at the list's head where the host's view says the person may create one, and where the view says the person may not, the phrase "Groups are made by the people who run <display name>" stands there instead, <display name> being the host's, with no link and no control; before a read is held, neither stands ([DR-120](../decisions/120-the-instance-is-the-space.md)); a group's heading carries "New subgroup" and "Share" where the view says the person may create a subgroup in it and add a member to it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-69](#space-69)] — nothing else is shown for an act the host does not let this person take, the headings of your own group and of another account's login carrying none ([DR-114](../decisions/114-groups-and-sharing-from-spex.md));
-- a spex repository's row carries its name, where its code lives — the remote `project.json` names, "Group records" for a group's own, "Code not on a remote" for a project's whose `project.json` names none, or "Not on this device" — its reachability, its local-changes count [[space-7](#space-7)], the time of its last sync, and its Sync control, titled as sending what is here and bringing back anything new, or the control its state offers [[space-61](#space-61)];
+- while signed in, "New group" stands at the list's head where the host's view says the person may create one, and where the view says the person may not, the phrase "Groups are made by the people who run <display name>" stands there instead, <display name> being the host's, with no link and no control; before a read is held, neither stands ([DR-120](../decisions/120-the-instance-is-the-space.md)); a group's heading carries "New subgroup", "Share", "Rename" and "Delete" where the view says the person may create a subgroup in it, add a member to it, rename it and delete it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-69](#space-69)] [[space-76](#space-76)] [[space-77](#space-77)], "Delete" only while the list holds no spex repository under that group and no group inside it ([DR-120](../decisions/120-the-instance-is-the-space.md)) — nothing else is shown for an act the host does not let this person take, the headings of your own group and of another account's login carrying none ([DR-114](../decisions/114-groups-and-sharing-from-spex.md));
+- a spex repository's row carries its name, where its code lives — the remote `project.json` names, "Group records" for a group's own, "Code not on a remote" for a project's whose `project.json` names none, or "Not on this device" — its reachability, its local-changes count [[space-7](#space-7)], the time of its last sync, and its Sync control, titled as sending what is here and bringing back anything new, or the control its state offers [[space-61](#space-61)], and "Move to another group" where the view says the person may move it to another group [[git-host-5](git-host.md#git-host-5)] [[space-78](#space-78)];
 - activating a row opens that spex repository's Sync and Explore tabs beneath the list;
 - while signed in, the surface ends in one quiet line, "Spex keeps this device's files in <home>", the home's absolute path `~`-shortened under the user's home directory, selectable, with the full path in its title and no control;
 - the surface links no page but the sign-in's [[space-3](#space-3)] and prints no URL but the host's own and a code remote as the reader set it ([DR-120](../decisions/120-the-instance-is-the-space.md)).
@@ -165,6 +165,30 @@ When the reader activates Remove on a member in a members panel [[space-62](#spa
 - the row reads "Removing…" until the reply;
 - a success lists the members the reply carries and says in one line "@<login> removed";
 - a refusal — the host's words — shows on the row with the member kept.
+
+#### space-76
+
+When the reader activates "Rename" on a group's heading [[space-1](#space-1)], the surface shall open there the inline editor of [[space-68](#space-68)], its "Group name" field holding the group's name and its "Path" field the group's own path segment, which no longer follows the name, with Save and Cancel, Escape cancelling, and on Save shall send `space.group.rename` naming that group with the name and the path where each differs from the group's [[git-host-18](git-host.md#git-host-18)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+- Save is disabled while neither differs or either is empty, and reads "Saving…" while the command runs, the editor refusing a second submission;
+- a success closes the editor, the group standing in the list under its new name and path, and every group inside it under its new path, as the core holds it [[git-host-18](git-host.md#git-host-18)];
+- a refusal — the path taken there, the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows in the editor with the name kept.
+
+#### space-77
+
+When the reader activates "Delete" on a group's heading [[space-1](#space-1)], the surface shall ask with the inline confirm — "Delete <the group's path>?", "Delete" and "Keep", Keep focused, Escape keeping ([DR-010](../decisions/010-interface-craft.md) §4) — and on Delete shall send `space.group.delete` naming that group [[git-host-19](git-host.md#git-host-19)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+- the heading's control reads "Deleting…" until the reply;
+- a success leaves the list without the group, as the core holds it [[git-host-19](git-host.md#git-host-19)];
+- a refusal — the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows beneath the heading with the group kept.
+
+#### space-78
+
+When the reader activates "Move to another group" on a spex repository's row [[space-1](#space-1)], the surface shall open beneath the row a picker of groups as in [[space-58](#space-58)] — "Your own group" first, then each group the host lists by its path in the instance, never another account's login, the group the row stands under left out — with Cancel, Escape cancelling, and on a pick shall send `space.repository.move` naming the spex repository and that group, or none for your own group [[git-host-20](git-host.md#git-host-20)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+- the row's control reads "Moving…" and the picker refuses a second pick while the command runs;
+- a success closes the picker, the row standing under its new group at once with its key unchanged, as the core holds it [[git-host-20](git-host.md#git-host-20)], and its clone moving on its next sync [[space-60](#space-60)];
+- a refusal — the name taken in that group, a group named like your login, the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows in the picker with the row kept where it stood.
 
 #### space-63
 
@@ -535,7 +559,7 @@ The Groups surface shall fit its pane at every width down to the 320-pixel floor
 - below 42rem the header's at-a-glance words yield — the read time, then the account's host name — and below 20rem the header's fields stack with the primary control last and full-width;
 - in each repository row and change row the label owns the slack and truncates with its title, the code remote and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, New subgroup, Share, Create, Creating…, Add;
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync, Syncing…, Check host, Checking…, Stop, Join, Joining…, Pick a group, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Don't add, Open folder…, Open project, View diff, Hide diff, Keep mine, Take host's, All mine, All host's, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, New subgroup, Share, Create, Creating…, Add, Rename, Delete, Deleting…, Keep, Move…, Moving…, "Move…" bearing "Move to another group" as its title and accessible name;
 - the surface scrolls inside its own box and the page never scrolls.
 
 ## Internal Behavior
@@ -557,6 +581,9 @@ The core shall expose Groups through these commands and one message, each reply 
 | `space.join` | `{ hostId, folder?: string }` | `{ accepted: true }` | `invalid_request` (already here) |
 | `space.members` | `{ group?: string, repository?: string }` — exactly one of `group`, a host id, and `repository`, a key | `{ members: Member[] }` | `invalid_request` (local only; signed out; neither or both targets), `not_found` (a group or spex repository the view does not list) |
 | `space.group.create` | `{ name, path, parent: string \| null }` — `path` the group's own path segment, `parent` a group's host id | `{ group: { id, fullPath, name } }` after the host answered and the state listing the group was broadcast [[git-host-15](git-host.md#git-host-15)] | `invalid_request` (signed out; a blank name or path; the name taken there; the host refused, with its words), `not_found` (a parent the view does not list) |
+| `space.group.rename` | `{ group, name?, path? }` — `group` a group's host id, `path` its own path segment | `{ group: { id, fullPath, name } }` after the host answered and the state holding the group renamed was broadcast [[git-host-18](git-host.md#git-host-18)] | `invalid_request` (signed out; neither a name nor a path; a blank name or path; the path taken there; the host refused, with its words; the host could not be reached), `not_found` (a group of the instance the view does not list; the host found none, with its words) |
+| `space.group.delete` | `{ group }` — a group's host id | `{ deleted: true }` after the host answered and the state without the group was broadcast [[git-host-19](git-host.md#git-host-19)] | `invalid_request` (signed out; a spex repository or a group the view lists under it; the host refused, with its words; the host could not be reached), `not_found` (a group of the instance the view does not list; the host found none, with its words) |
+| `space.repository.move` | `{ repository, groupId: string \| null }` — `groupId` a group's host id, null for your own group | `{ repository: { id, fullPath } }`, `fullPath` its path in the instance after the move, after the host answered and the state holding it in its new group was broadcast [[git-host-20](git-host.md#git-host-20)] | `invalid_request` (signed out; local only; a group held as colliding [[space-61](#space-61)], with that cause; the name taken in that group; the host refused, with its words; the host could not be reached), `not_found` (a spex repository or a group the view does not list; the host found none, with its words) |
 | `space.share` | `{ group?: string, repository?: string, login, role }` — exactly one of `group`, a host id, and `repository`, a key | `{ members: Member[] }` as the host lists them after the addition [[git-host-16](git-host.md#git-host-16)] | `invalid_request` (signed out; neither or both targets; a blank login; a role not among the view's; the host refused, with its words), `not_found` (no account under the login, with the host's words; a group or spex repository the view does not list) |
 | `space.unshare` | `{ group?: string, repository?: string, login }` — exactly one of `group` and `repository` | `{ members: Member[] }` as the host lists them after the removal [[git-host-17](git-host.md#git-host-17)] | `invalid_request` (signed out; neither or both targets; a blank login; the host refused, with its words), `not_found` (no account or no membership of its own under the login, with the host's words; a group or spex repository the view does not list) |
 | `space.remote.set` | `{ repository, url: string \| null }` | `GroupsState` | `invalid_request` (no Git; not initialized; a malformed, credential-bearing or host-origin URL [[space-5](#space-5)]), `conflict` (the clone's remote changed meanwhile [[space-21](#space-21)]) |
@@ -587,7 +614,7 @@ interface GroupsState {
     | { phase: "failed"; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
   readAt: number | null;
   groups: { id: string | null; fullPath: string; name: string; own: boolean;   // id: the host's, null for another account's login and a key's group no read lists; fullPath: the path in the instance, your own group's folder name, or that login
-            can: { createSubgroup: boolean; manageMembers: boolean };   // what the host's last read said the person may do there; both false until one is held
+            can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };   // what the host's last read said the person may do there; all false until one is held
             repositories: RepositoryState[] }[];   // one entry per group by its id, your own once, one per other account's login (space-1)
   roles: { id: string; name: string; mayPush: boolean }[];   // the host's own roles in its order, empty until a read is held
   diagnostics: { file: string; reason: string; blocking: boolean; repair?: Repair }[];
@@ -605,7 +632,7 @@ interface RepositoryState {
   reason: string | null;                 // the host's words for read-only or unreachable
   waiting: { step: "create" | "branch"; group: string; message: string } | null;
   members: number | null; visibility: string | null;
-  can: { manageMembers: boolean };           // what the host's last read said the person may do on it; false until one is held
+  can: { manageMembers: boolean; transfer: boolean };   // what the host's last read said the person may do on it — manage its members, move it to another group; both false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
             hostEmpty: boolean; unrelated: boolean; mergePending: boolean;
             agreed: { at: number; current: boolean } | null } | null;   // null where no clone is here; agreed: the commit `spex` last shared with the host's `spex` as the clone last fetched or pushed it — its commit time, and whether `spex` is that commit; null where the clone holds none (space-61)
@@ -831,6 +858,17 @@ When an integration suite signs a real core in at the stand-in Git host, whose r
 - a check, a push and a join against a stand-in transport answering 500 each stop "<display name> answered with an error" with the status and Retry, no part of the Git origin in message or guidance [[space-15](#space-15)] [[space-32](#space-32)];
 - a push the stand-in refuses with a `remote:` line carrying the clone's own URL, without `.git` and with a trailing `/`, and another URL under its Git origin reports the first as the repository's path in the instance and the second as the stand-in's display name, and turns the repository read-only with the same words [[space-15](#space-15)] [[space-32](#space-32)] [[space-61](#space-61)].
 
+#### space-79
+
+When an integration suite signs a real core in at the stand-in Git host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme`, it shall assert the undo acts over the protocol ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+- the state carries what the stand-in lets the person do: rename and delete on each group of the instance and neither on your own group, transfer on a spex repository the person owns and not on one they may only push to [[space-30](#space-30)];
+- `space.group.rename` of `acme/research` to a new name and path replies its new path, a state broadcast before the reply listing it so, and a path taken there is refused naming it [[space-29](#space-29)] [[space-1](#space-1)];
+- `space.group.delete` of `acme`, which holds the project and a group, is refused with no request reaching the stand-in, and of an empty group created at the root replies, the state no longer listing it [[space-29](#space-29)];
+- `space.repository.move` of the project into the renamed group replies its new path, a state broadcast before the reply listing the row under that group with its key unchanged and its clone where it was, and its next sync moves the clone under that group's folder, reachable; a move with no group named does the same into your own group [[space-1](#space-1)] [[space-60](#space-60)] [[space-29](#space-29)];
+- a rename, a deletion and a move the stand-in refuses each reply `invalid_request` with the stand-in's words, and one the stand-in answers `provider_unavailable` that it could not be reached, the state unchanged [[space-29](#space-29)];
+- no reply or broadcast holds a string under the stand-in's URL but that URL itself, or one naming `gitlab` [[space-30](#space-30)] [[space-1](#space-1)].
+
 ### Surface Coverage
 
 #### space-56
@@ -847,13 +885,17 @@ Where the Groups surface renders over a home whose issues list holds three unans
 
 #### space-70
 
-Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme` and add members to it, may do neither in a group `other`, and may add members to the repository `a-spex` but not to `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other`, may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
 - "New group" stands at the list's head, `acme`'s heading carries "New subgroup" and "Share", `other`'s and your own group's carry neither, and `a-spex`'s members panel carries Share while `b-spex`'s does not [[space-1](#space-1)] [[space-62](#space-62)];
 - rendered again over a read that says the person may not create a group, the list's head holds no "New group" but the phrase "Groups are made by the people who run <display name>", in English and in Chinese, with no link and no control, and neither before a read is held [[space-1](#space-1)];
 - "New subgroup" opens the inline editor with the fields "Group name" and "Path", the path following the name as "lumen-labs" follows "Lumen Labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape closing it; Create sends `space.group.create` with the name, the path and `acme` as the parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it, the group the core's state carries standing after `acme` with its full path [[space-68](#space-68)];
 - Share on `acme` opens the editor with "Login at <host name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
 - Share in `a-spex`'s members panel sends `space.share` naming the repository and lists the members the reply carries [[space-69](#space-69)] [[space-62](#space-62)];
+- `acme`'s heading carries "Rename" and no "Delete", `a-spex` standing under it, `empty`'s carries both, `other`'s and your own group's neither, and `a-spex`'s row carries "Move…" named "Move to another group" while `b-spex`'s carries none [[space-1](#space-1)];
+- "Rename" on `acme` opens the editor holding "acme" and its path, Save disabled until either changes and the path not following the name; Save sends `space.group.rename` naming `acme` with only what changed and reads "Saving…" until the reply, a refusal standing in the editor with the name kept, and a success closing it [[space-76](#space-76)];
+- "Delete" on `empty` asks "Delete empty?" with Keep focused, Escape keeping and sending nothing; Delete sends `space.group.delete` naming `empty` and reads "Deleting…" until the reply, a refusal standing beneath the heading with the group kept [[space-77](#space-77)];
+- "Move…" on `a-spex` opens the picker with "Your own group" first and then every group but `acme` by its path, Escape closing it; a pick sends `space.repository.move` naming `a-spex` and that group, or none for your own, the control reading "Moving…" until the reply, a refusal standing in the picker, and a success closing it [[space-78](#space-78)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-66
@@ -911,6 +953,16 @@ Where the harness boots the served shell signed in at the stand-in host, which b
 #### space-75
 
 Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme` and another account's spex repository listed under `bob`, when the journey shows Groups with that project's members panel open, first in English and then in Chinese, the test suite shall assert that the Groups surface holds no link, and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab`, while `bob`'s heading carries no control [[space-1](#space-1)] [[space-62](#space-62)].
+
+#### space-80
+
+Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme`, the test suite shall assert the undo through the page ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+- a group created at the list's head and renamed through its heading's "Rename" stands under its new name and path, and a rename the stand-in refuses stands in the editor with its words and the name kept [[space-76](#space-76)];
+- `acme`, holding the project, carries no "Delete", while the new group's "Delete" asks with Keep focused, a deletion the stand-in refuses stands beneath the heading with its words, and a second "Delete" leaves the list and the stand-in without the group [[space-1](#space-1)] [[space-77](#space-77)];
+- the project's "Move…" offers "Your own group" and every group but `acme`; a move the stand-in refuses stands in the picker with its words, and a move into `acme/research` lists the row under it at once with its key unchanged, the row's Sync then moving the clone under `workspace/acme/research/` [[space-78](#space-78)];
+- with the editor, the confirm and the picker each open, and in Chinese with the picker open, the surface holds no link and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab` [[space-1](#space-1)];
+- the new controls fit at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-43
 
