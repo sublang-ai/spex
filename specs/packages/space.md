@@ -71,7 +71,8 @@ When a working folder's remote is read for `project.json` [[storage-3](storage.m
 | blank, or containing whitespace or control characters | refused as malformed |
 | carrying anything before the host on `http://` or `https://`, with or without a colon (`https://user:secret@host`, `https://token@host`) | refused naming the rule that the app stores no credential, pointing to SSH keys or the machine's credential helper |
 
-- the Git host's own remote URLs are those it hands over, used as given and never edited by the reader ([DR-103](../decisions/103-the-home-and-its-groups.md)).
+- the Git host's own remote URLs are those it hands over, used as given and never edited by the reader ([DR-103](../decisions/103-the-home-and-its-groups.md));
+- a clone's last check, the host's `spex` it holds and this device's recorded last sync [[space-22](#space-22)] are of the repository it records by the host's id, which survives renames and transfers ([DR-103](../decisions/103-the-home-and-its-groups.md)): the host's remote written for that id keeps all three; taking the remote away clears the last check alone, keeping the id; any other remote — one the reader names, recording no id, or the host's for another id — clears all three, what the old remote held saying nothing of the new one.
 
 #### space-6
 
@@ -661,7 +662,7 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 - environment: the core's captured environment plus `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, `LANG=C`, and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` only where none is set; for a transport to the Git host's origin, `-c credential.helper=` naming the app's own helper and the brokered credential it reads [[git-host-9](git-host.md#git-host-9)], and for any other origin the device's own credential helpers; `process.umask(0o077)` around a new clone's `init` and its commits, which run synchronously, restored after; a join's `clone` and `checkout` children each spawned under `0o077`, the core's own umask restored before it awaits them; a 120-second limit on `ls-remote`, `fetch`, `clone` and `push` after which the child receives `SIGTERM`, then `SIGKILL` after five seconds;
 - commit-writing commands carry `-c commit.gpgsign=false -c core.hooksPath=/dev/null`, and `-c user.name=<display name or login> -c user.email=<login>@users.noreply.<host>` where signed in, else `-c user.name=Spex -c user.email=spex@<hostname>` only where `git var GIT_COMMITTER_IDENT` fails;
 - state: `--version`, `rev-parse --show-toplevel`, `rev-parse --git-dir`, `symbolic-ref -q --short HEAD`, `rev-parse -q --verify HEAD^{commit}`, `rev-parse -q --verify MERGE_HEAD`, `remote get-url origin`, `config --get spex.repositoryId`, `config --get branch.spex.remote`, `rev-parse -q --verify refs/remotes/origin/spex^{commit}`, `rev-list --left-right --count HEAD...refs/remotes/origin/spex`, `rev-list --count HEAD` where the host holds no `spex`, `status --porcelain=v1 -z -uall`, for the last sync a clone holds `merge-base <spex> <origin/spex>` and `log -1 --no-show-signature --format=%ct <commit>` [[space-61](#space-61)], and for a sign-in's join `log --no-show-signature -n <saves+2> --format=%H %s HEAD` to tell a clone holding nothing of its own [[space-59](#space-59)];
-- initialize and the remote: `init -q -b spex`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/spex`; `clone -q --branch spex --single-branch <url> <clone>` for a join, falling back to a clone of the default branch followed by `checkout -q -b spex` where the host holds no `spex` yet; `remote add origin <url>`, `remote set-url origin <url>`, `config spex.repositoryId <id>`;
+- initialize and the remote: `init -q -b spex`, falling back to `init -q` then `symbolic-ref HEAD refs/heads/spex`; `clone -q --branch spex --single-branch <url> <clone>` for a join, falling back to a clone of the default branch followed by `checkout -q -b spex` where the host holds no `spex` yet; `remote add origin <url>`, `remote set-url origin <url>`, `config spex.repositoryId <id>`, `config --remove-section remote.origin` to take the remote away, and for another repository's remote [[space-5](#space-5)] `config --unset spex.repositoryId` where the reader names it, `update-ref -d refs/remotes/origin/spex` and `config --unset branch.spex.remote`;
 - save: the managed-rules writer, `add -A -- .`, `diff --cached --name-only -z`, `write-tree` and `rev-parse HEAD` before validation, `read-tree <tree>` and `checkout-index -a -f --prefix=<private copy>/` under a temporary `GIT_INDEX_FILE`, `rev-parse <that HEAD>^{tree}`, `commit-tree <tree> -p <that HEAD> -m <message>`, `update-ref refs/heads/spex <commit> <that HEAD>`, `reset -q` on refusal; and for every version check, `hash-object --stdin-paths` over a unit's files;
 - check: `ls-remote --exit-code --heads origin refs/heads/spex` (exit 2 means no `spex`), `fetch -q --no-tags origin +refs/heads/spex:refs/remotes/origin/spex`, `merge-base HEAD origin/spex`;
 - plan: `ls-tree -rz --full-tree <rev>` per revision, and for the working tree `add -A -- .` then `write-tree` under a temporary `GIT_INDEX_FILE`;
@@ -799,6 +800,15 @@ When an integration suite reads a working folder's remote carrying a credential,
 
 - a URL carrying a credential in any form is refused before it is written to `project.json` [[space-5](#space-5)];
 - the refused sync names only the host's words and the members page, claims no role, and offers no act the host did not name [[space-15](#space-15)] [[space-50](#space-50)].
+
+#### space-73
+
+When an integration suite signs a real core in at the stand-in Git host, syncs a project's spex repository created in your own group there, and has the stand-in move that repository into `acme` with its id, it shall assert what each remote change keeps of the clone's sync:
+
+- the remote taken away, the row reads local only with the same id, the clone still holding the pushed `origin/spex` and this device the same recorded last sync [[space-5](#space-5)];
+- `space.pick` joining it in `acme` by that id reads, while that pick's sync awaits the stand-in's read, reachable at the new URL [[space-61](#space-61)] with the same id, the same recorded last sync and `branch.agreed` current at the pushed commit, the clone's upstream standing [[space-5](#space-5)], and that sync then moves the clone to `acme/`, still current [[space-60](#space-60)];
+- the remote taken away again and a group picked to create another repository, the row reads no last sync and no `branch.agreed`, the record and `origin/spex` gone [[space-5](#space-5)];
+- a remote the reader then names clears the last sync, `branch.agreed`, the last check and the id [[space-5](#space-5)].
 
 ### Surface Coverage
 
