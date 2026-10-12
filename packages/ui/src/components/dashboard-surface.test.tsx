@@ -1651,6 +1651,53 @@ describe("dashboard-28: the Now band reads the live lane", () => {
     expect(note.textContent).toContain("Dropped “Fix login flow”");
     expect(document.activeElement).toBe(row);
   });
+
+  test("dashboard-66: serving no intent, the row leads with the turn that opened the work, never the answer", () => {
+    const opening = "/release-notes Milestone M1 (internal alpha): the notes\nfor the client";
+    const answer = "Yes, send these notes to the client.";
+    const view = initialSessionView([]);
+    view.turnActive = true;
+    view.currentTurnId = 2;
+    view.frames = [{ playbookId: "release-notes" } as never];
+    view.captain.push(
+      { kind: "boss", text: opening, turnId: 1, at: NOW - 6 * MIN },
+      { kind: "question", text: "Send these notes to the client?", turnId: 1, at: NOW - 5 * MIN },
+      { kind: "boss", text: answer, turnId: 2, at: NOW - MIN },
+    );
+    // The summary as the core folds it: the answer is a turn of the
+    // work that asked, so the work is still the opening turn's.
+    const session = {
+      id: "s-live", projectId: "me/alpha-spex", projectPath: "/tmp/alpha",
+      title: opening, workTitle: opening, createdAt: NOW - 6 * MIN,
+      live: true, endedAt: null, players: [], initialVisible: [], turns: 2,
+      failed: false, turnActive: true,
+    };
+    seed({ sessions: [session], views: { "s-live": view } });
+    renderSurface();
+
+    const row = screen.getByTestId("now-session-me/alpha-spex");
+    // While the answer's turn runs, the row reads the opening turn's
+    // first line, never the answer (dashboard-28, DR-119).
+    expect(row.textContent).toContain("/release-notes Milestone M1 (internal alpha): the notes");
+    expect(row.textContent).not.toContain("for the client");
+    expect(row.textContent).not.toContain(answer);
+    expect(row.getAttribute("data-intent-id")).toBeNull();
+
+    // A turn sent once no question stands is new work, leading the row
+    // (dashboard-28).
+    const later = initialSessionView([]);
+    later.turnActive = true;
+    later.currentTurnId = 3;
+    later.captain.push(...view.captain, {
+      kind: "boss", text: "Now tag the release", turnId: 3, at: NOW,
+    });
+    act(() => useAppStore.setState({
+      sessions: [{ ...session, workTitle: "Now tag the release", turns: 3 }],
+      views: { "s-live": later },
+    }));
+    expect(row.textContent).toContain("Now tag the release");
+    expect(row.textContent).not.toContain("/release-notes");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -203,6 +203,25 @@ export function answeringTurnIds(records: StoredRecord[]): Set<number> {
   return foldConditionsDetail(records).answers;
 }
 
+/** The turn that opened the work a turn belongs to (DR-119): from the
+ * turn named — the latest where none is named or it is not found — back
+ * over the turns that answered a question or asked it back, to the
+ * latest that started while none stood; never the answer sent since.
+ * The one rule a stand-in's title and a summary's work title share
+ * (core-service-49, core-service-32). */
+export function openingTurn<T extends { turnId: number }>(
+  turns: readonly T[],
+  answers: ReadonlySet<number>,
+  turnId?: number | null,
+): T | undefined {
+  let index = typeof turnId === "number"
+    ? turns.findIndex((turn) => turn.turnId === turnId)
+    : -1;
+  if (index < 0) index = turns.length - 1;
+  while (index > 0 && answers.has(turns[index]!.turnId)) index -= 1;
+  return turns[index];
+}
+
 /** Whether a session's failure still stands (core-service-32, DR-061),
  * read from its visible records as the queue standing reads them
  * (core-service-107): a run remains parked on a failure, or a failure —
@@ -906,18 +925,10 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const turns = sessionTurns(lane.sessionId);
     const lastTurn = turns[turns.length - 1];
     // The words are the turn that opened the work an entry stands for
-    // (DR-119): from the turn the entry points at, back over the turns
-    // that answered a question or asked it back, to the latest that
-    // started while none stood — never the answer sent since.
+    // (DR-119) — never the answer sent since.
     const answers = answeringTurnIds(store.getRecords(lane.sessionId));
-    const titleAt = (turnId: number | null | undefined): string => {
-      let index = typeof turnId === "number"
-        ? turns.findIndex((turn) => turn.turnId === turnId)
-        : -1;
-      if (index < 0) index = turns.length - 1;
-      while (index > 0 && answers.has(turns[index]!.turnId)) index -= 1;
-      return turns[index]?.prompt ?? "";
-    };
+    const titleAt = (turnId: number | null | undefined): string =>
+      openingTurn(turns, answers, turnId)?.prompt ?? "";
     const conditions = sessionConditions(lane.sessionId);
     const standsIn = (turnId: number | null): boolean =>
       turnId === null ? owned.size === 0 : !owned.has(turnId);

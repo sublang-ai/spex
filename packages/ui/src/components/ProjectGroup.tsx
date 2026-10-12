@@ -760,11 +760,12 @@ function NowBand({
       (a, b) =>
         (b.intent.dispatched?.at ?? 0) - (a.intent.dispatched?.at ?? 0),
     )[0];
-  const bossTurns = view?.captain.filter((line) => line.kind === "boss") ?? [];
-  const latestBoss = bossTurns[bossTurns.length - 1];
-  const title = served ? contentTitle(served.intent) : latestBoss
-    ? contentTitle(latestBoss)
-    : firstLine(session.title ?? i18n._("no messages yet"));
+  // Serving no intent, the row leads with the turn that opened the work
+  // the session is doing, as the core names it — never an answer sent
+  // while the run's question stood (dashboard-28, DR-119).
+  const title = served
+    ? contentTitle(served.intent)
+    : firstLine(session.workTitle ?? session.title ?? i18n._("no messages yet"));
   const playbook = view?.frames[0]?.playbookId;
 
   const drop = async () => {

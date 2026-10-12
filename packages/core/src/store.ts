@@ -66,7 +66,7 @@ import {
   type UsageEntry,
   type UsageTotals,
 } from "./stream-fold.js";
-import { failureStands } from "./ledger.js";
+import { answeringTurnIds, failureStands, openingTurn } from "./ledger.js";
 
 export type { UsageEntry, UsageTotals } from "./stream-fold.js";
 
@@ -179,6 +179,7 @@ function sessionInfo(
   meta: SessionMeta,
   path: string,
   title: string | undefined,
+  workTitle: string | undefined,
   turns: number,
   failed: boolean,
   costUsd: number | undefined,
@@ -198,6 +199,7 @@ function sessionInfo(
     players: meta.players,
     initialVisible: meta.initialVisible,
     ...(title !== undefined ? { title } : {}),
+    ...(workTitle !== undefined ? { workTitle } : {}),
     turns,
     failed,
     ...(costUsd !== undefined ? { costUsd } : {}),
@@ -1666,10 +1668,19 @@ export class Store {
       hasPresentationHeader(entry.record) && !isHidden(entry.record)));
     const agentActiveMs = complete ? foldAgentActiveMs(records) : undefined;
     const agentReportedModels = complete ? foldAgentReportedModels(records) : undefined;
+    const words = (turn: TurnRow | undefined): string | undefined =>
+      turn?.prompt.trim() ? turn.prompt : turn?.attachmentTitle;
+    // The work the session is doing is named by the turn that opened
+    // it, as its stand-in entries are (core-service-49, DR-119): an
+    // answer sent while a question stood is a turn of that work.
+    const opening = turns.length > 1
+      ? openingTurn(turns, answeringTurnIds(this.getRecords(meta.id)))
+      : turns[0];
     return sessionInfo(
       meta,
       path,
-      turns[0]?.prompt.trim() ? turns[0].prompt : turns[0]?.attachmentTitle,
+      words(turns[0]),
+      words(opening),
       turns.length,
       failed,
       cost,

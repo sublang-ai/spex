@@ -160,7 +160,7 @@ Where a project has done work — intents closed after a turn of theirs ended fi
 
 #### dashboard-28
 
-While the project has a current conversation [[core-service-93](core-service.md#core-service-93)], the group's Now band shall show that session's status mark, its active playbook once a run draws one (nothing in its place before), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip, reading "deciding" or "working" rather than "idle" while a turn is active with no leaf state [[run-view-59](run-view.md#run-view-59)] ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or the latest Boss turn's text for a session serving no intent:
+While the project has a current conversation [[core-service-93](core-service.md#core-service-93)], the group's Now band shall show that session's status mark, its active playbook once a run draws one (nothing in its place before), human-readable engagement state label — tinted by the state's tone, with the raw state id in the tooltip, reading "deciding" or "working" rather than "idle" while a turn is active with no leaf state [[run-view-59](run-view.md#run-view-59)] ([DR-010](../decisions/010-interface-craft.md) §2) — and the session's start as an age ("started 3m ago") with the absolute moment in its tooltip, together with the open intent the session serves, or, for a session serving no intent, the turn that opened the work it is doing [[core-service-32](core-service.md#core-service-32)] — never an answer to a question the run asked ([DR-119](../decisions/119-an-answer-continues-its-intent.md)):
 
 - the band updates as session records arrive, without a manual refresh;
 - the served intent carries Drop beside the session row [[dashboard-41](#dashboard-41)];
@@ -472,6 +472,10 @@ Where Dashboard state is derived across the empty conditions, the test suite sha
 #### dashboard-23
 
 Where a fixture stream holds a live session serving an open intent and carrying an engagement state id, the test suite shall assert that the Now band renders the session's status mark, playbook — nothing in its place while no run has drawn one — human-readable state label with the raw state id in the tooltip, reading "working" for an active turn with no leaf state while a player runs, the start as an age with the absolute moment in its tooltip, and the open intent's title [[dashboard-28](#dashboard-28)], that session-summary activity governs both the mark and the label on Dashboard and Project Overview even with missing or stale transcripts [[dashboard-28](#dashboard-28)] [[dashboard-26](#dashboard-26)], that the Drop beside it asks the inline confirm — Keep returning focus to the control, Drop closing the intent dropped over the protocol with the outcome announced, the control gone, and focus on the session row [[dashboard-41](#dashboard-41)] — and that a project with no live session renders its Now band quiet [[dashboard-28](#dashboard-28)] [[dashboard-8](#dashboard-8)].
+
+#### dashboard-66
+
+Where fixture state holds a project's current conversation serving no intent — its transcript an opening Boss turn, the question its run asked and the Boss's answer, its summary as the core folds them — the test suite shall assert that the Now band's text is the opening turn's while the answer's turn runs, never the answer's, and that once a later turn is sent with no question standing the text is that turn's [[dashboard-28](#dashboard-28)].
 
 ### Browser Journeys
 
