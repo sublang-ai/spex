@@ -349,9 +349,23 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
   };
 }
 
-function firstLineOf(markdown: string): string | null {
-  const line = markdown.split(/\r?\n/).find((entry) => entry.trim() !== "");
-  return line === undefined ? null : line.trim();
+/** The source's title, as a session's row names it (playbook-library-70):
+ * the text of its first `#` heading outside fenced code, closing hashes
+ * dropped — so a license comment above it is passed over — else its
+ * first non-empty line; null for an empty source. */
+function titleOf(markdown: string): string | null {
+  const lines = markdown.split(/\r?\n/).map((entry) => entry.trim());
+  let fenced = false;
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const heading = /^#\s+(.*?)(?:\s+#+)?$/.exec(line)?.[1]?.trim();
+    if (heading) return heading;
+  }
+  return lines.find((line) => line !== "") ?? null;
 }
 
 /** Whether a language tag is English, whose source needs no word kept. */
@@ -681,7 +695,7 @@ export class AuthorManager {
       projectId: this.drafts.projectOf(id) ?? "",
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
-      firstLine: source ? firstLineOf(source.markdown) : null,
+      firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, draft.package, draft.language ?? DEFAULT_AUTHORING_LANGUAGE, dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled,
@@ -743,7 +757,7 @@ export class AuthorManager {
       projectId: this.drafts.projectOf(id) ?? "",
       createdAt: at,
       touchedAt: at,
-      firstLine: source ? firstLineOf(source.markdown) : null,
+      firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, this.drafts.packagePath(id), this.drafts.language(id), dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled: this.options.enabled(id),
@@ -1688,6 +1702,8 @@ export class AuthorManager {
       "- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit.",
       // The runtime reads a step's reply as its result (playbook-library-65).
       '- A role\'s prompt describes only that role\'s own step and ends by naming the result the step reports; later rounds, the hand-over between roles and the ending belong to the behaviors\' prose, never to a prompt: a prompt that says "then wait for …" or "then the reviewer …" makes the player end its reply waiting, and the runtime reads that reply as the step\'s result and parks the run.',
+      // slc checks a prompt's text against the source's order (playbook-library-65).
+      '- A prompt\'s text stands where its instruction stands, in the source\'s order; text two instructions need, such as a checklist, is written out at both, never stated once and referred to ("append the checklist above"): slc refuses a compile whose prompt carries text out of the source\'s order, reporting "authored prompt fragments are out of Source order".',
       '- A nested call: "Captain shall call playbook `id`:" with the input template blockquoted.',
       "- Boss questions resume the same behavior; do not write a second behavior for the answer.",
       "- A source the Boss placed may be a SKILL.md (Agent Skills: YAML frontmatter `name` and `description`, then instructions) or other workflow markdown: rewrite it in place into a source — its description becomes the H1 and the registration intent, its instructions the prompts, its actors the roles.",

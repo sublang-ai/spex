@@ -533,6 +533,17 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     ["triage", "Label new issues", ["Triager", "Verifier"], "path", "acme/triage", "0.1.0", ["project"]]);
   assert.equal(client.latest("triage")?.state, "enabled");
 
+  // playbook-library-70: the list titles the session by its source's
+  // first `#` heading, past a license comment written above it, else
+  // by the source's first non-empty line.
+  const titled = async (content: string) => {
+    await client.expectOk("draft.source.write", { projectId, draftId: "triage", content });
+    return (await client.expectOk("draft.list", {})).find((draft) => draft.id === "triage")?.firstLine;
+  };
+  assert.equal(listed[0]?.firstLine, "triage");
+  assert.equal(await titled(`<!-- SPDX-License-Identifier: Apache-2.0 -->\n${SOURCE}`), "triage");
+  assert.equal(await titled("Triage new issues\n\nRoles:\n\n- Triager\n"), "Triage new issues");
+
   client.close();
   await harness.service.stop();
 });
@@ -1146,6 +1157,8 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
     assert.ok(session.prompt.includes("- A step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step: a draft reviewed before it is committed travels as text in the player's reply, and the final step writes the files and makes the one commit."), `${id}: the three repository effects`);
     // A prompt carries its role's one step, in every language.
     assert.ok(session.prompt.includes('- A role\'s prompt describes only that role\'s own step and ends by naming the result the step reports; later rounds, the hand-over between roles and the ending belong to the behaviors\' prose, never to a prompt: a prompt that says "then wait for …" or "then the reviewer …" makes the player end its reply waiting, and the runtime reads that reply as the step\'s result and parks the run.'), `${id}: a prompt's one step`);
+    // A prompt's text in the source's order, in every language.
+    assert.ok(session.prompt.includes('- A prompt\'s text stands where its instruction stands, in the source\'s order; text two instructions need, such as a checklist, is written out at both, never stated once and referred to ("append the checklist above"): slc refuses a compile whose prompt carries text out of the source\'s order, reporting "authored prompt fragments are out of Source order".'), `${id}: a prompt's text in the source's order`);
   };
   // The words slc reads literally, kept in English for another language.
   const KEPT = /Keep in English, exactly as written, the words slc recognizes literally: the headings `Roles:` and `Results:`, the clauses `Captain shall prompt <Role>`, `Captain shall relay … to <Role>` and `Output shall include`/;
