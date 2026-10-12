@@ -920,7 +920,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (path === "/api/v1/auth/revoke" && method === "POST") return revoke(req, res);
     if (path === "/api/v1/host" && method === "GET") {
       const roles = script.roles.map((role) => ({ id: role.id, name: role.name, may_push: role.mayPush }));
-      return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles });
+      // `groups`: whether root groups can be made, as the person's
+      // `can_create_group` says it (host-1, host-3).
+      return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles, groups: script.canCreateGroup });
     }
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
     if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {

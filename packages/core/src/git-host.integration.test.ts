@@ -833,8 +833,13 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
       { id: "owner", name: "Owner", mayPush: true },
     ]);
     assert.equal((await t.client.me()).canCreateGroup, true);
+    // The description says whether root groups can be made, as spex.pub's
+    // does, and the person's ability says the same (git-host-12).
+    const description = async (): Promise<unknown> => (await fetch(`${t.host.url}/api/v1/host`)).json();
+    assert.equal((await description() as { groups?: unknown }).groups, true);
     s.canCreateGroup = false;
     assert.equal((await t.client.me()).canCreateGroup, false);
+    assert.equal((await description() as { groups?: unknown }).groups, false);
     const groups = await t.client.groups();
     assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
       ["ada", { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
@@ -1121,6 +1126,7 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
         { id: "maintainer", name: "Maintainer", may_push: true },
         { id: "owner", name: "Owner", may_push: true },
       ],
+      groups: true,
     });
     const unauth = await fetch(`${host.url}/api/v1/host/me`);
     assert.equal(unauth.status, 401);
