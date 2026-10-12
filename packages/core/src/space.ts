@@ -149,11 +149,15 @@ const READ_CAP_LINES = 2_000;
 const DIFF_CAP_BYTES = 256 * 1024;
 const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|toml|ini|cfg|csv|gitignore|gitattributes|lock)$/i;
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
-/** A repository this core just created and the host reports empty is
- * read again this many times, this far apart, before its first sync
- * pushes the default branch itself (git-host-7). */
+/** A repository the core created and the host reports empty is read
+ * again this many times, this far apart, before the sync pushes the
+ * default branch itself (git-host-7). */
 const CREATED_REREADS = 5;
 const CREATED_REREAD_MS = 2_000;
+/** The clone's Git configuration key recording, by the host's id, the
+ * core's creation of its repository until a check is done with it
+ * (git-host-7): on the clone, so a restart of the core keeps it. */
+const CREATED_KEY = "spex.created";
 
 // The reader's own words are composed where they are read, never held
 // in a constant a module's first evaluation would freeze in whichever
@@ -717,8 +721,10 @@ class RepositorySync {
    * them, and Git takes its own config lock for each write. An
    * independent process keeps ordinary filesystem behaviour. Returns
    * false, writing nothing, where the remote changed meanwhile.
+   * `created` records the core's creation of that repository
+   * (git-host-7), written first so the remote never stands without it.
    */
-  private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null }): boolean {
+  private publishRemote(expected: string | null, next: { url?: string | null; id?: string | null; created?: string }): boolean {
     const git = (args: string[]): GitRun => {
       const run = this.git.runSync(args);
       if (run.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${lastLines(run.stderr)}`);
@@ -726,6 +732,7 @@ class RepositorySync {
     };
     const current = this.configNow("remote.origin.url");
     if (current !== expected) return false;
+    if (next.created !== undefined) git(["config", CREATED_KEY, next.created]);
     if (next.url !== undefined && next.url !== current) {
       // Taken away, the remote's own section goes alone: the host's `spex`
       // the clone holds and its upstream stay with the repository it
@@ -754,11 +761,23 @@ class RepositorySync {
     return this.configNow("remote.origin.url") === remote && this.configNow("spex.repositoryId") === id;
   }
 
+  /** The host's id of the repository whose creation by the core the
+   * clone records (git-host-7), read at this instant. */
+  createdNow(): string | null {
+    return this.configNow(CREATED_KEY);
+  }
+
+  /** The clone records no creation any more (git-host-7). */
+  forgetCreated(): void {
+    this.git.runSync(["config", "--unset", CREATED_KEY]);
+  }
+
   /** Give the clone the host's own remote and id (space-58, space-63):
    * the URL the host handed over, used as given (space-5), written only
    * over the remote the caller read before asking the host — `expected`
-   * — so a remote set meanwhile is refused, never replaced. */
-  async attachHost(url: string, id: string, expected: string | null): Promise<void> {
+   * — so a remote set meanwhile is refused, never replaced. `created`
+   * marks a repository the core just created (git-host-7). */
+  async attachHost(url: string, id: string, expected: string | null, created = false): Promise<void> {
     const repo = await this.readRepository();
     this.requireGit(repo);
     if (!repo.root) throw new CoreError("invalid_request", initializeFirst());
@@ -766,7 +785,7 @@ class RepositorySync {
     // the host's id survives its renames and transfers (DR-103).
     const same = this.configNow("spex.repositoryId") === id;
     // A remote already at the host's URL is the one this attaches.
-    if (!this.publishRemote(repo.remote === url ? url : expected, { url, id })) {
+    if (!this.publishRemote(repo.remote === url ? url : expected, { url, id, ...(created ? { created: id } : {}) })) {
       throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
     }
     // The same repository keeps what the clone holds of it and this
@@ -2167,10 +2186,6 @@ export class SpaceManager {
   /** Steps at the host waiting for a member with the rights (space-64),
    * by the clone's key; asked again at the next read. */
   private readonly waiting = new Map<string, Waiting>();
-  /** The repositories this core created, by the host's id, until a
-   * check reads them (git-host-7): the host may answer a creation
-   * before committing its default branch. */
-  private readonly justCreated = new Set<string>();
   /** The progress of joins in flight or stopped, by the host's id
    * (space-63): each join's own entry, which only it replaces or
    * removes; no join is refused because another runs. */
@@ -2536,7 +2551,7 @@ export class SpaceManager {
     const name = splitKey(key).name;
     const listed = view.listings.find((listing) => listing.repository.group.fullPath === group.fullPath && listing.repository.path === name);
     if (listed) {
-      await this.adopt(machine, listed, true, null, true);
+      await this.adopt(machine, listed, true, { setUp: true });
       return;
     }
     await this.create(machine, group, name, repositoryDescription({ kind: "group", group: group.fullPath }), "quiet");
@@ -2582,12 +2597,14 @@ export class SpaceManager {
    * so its row goes straight to its sync. The remote is written only
    * over `expected`, the one the caller read before asking the host.
    * `setUp` marks the account's set-up joining your own group's spex
-   * repository (space-4, space-59). */
-  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, expected: string | null = null, setUp = false): Promise<void> {
+   * repository (space-4, space-59), and `created` a repository the core
+   * just created, which the clone records with its remote (git-host-7). */
+  private async adopt(machine: RepositorySync, listing: HostListing, join: boolean, options: { expected?: string | null; setUp?: boolean; created?: boolean } = {}): Promise<void> {
     const { repository } = listing;
+    const { expected = null, setUp = false, created = false } = options;
     this.changedAfter = this.readsBegun;
     this.attached.set(repository.id, listing);
-    try { await machine.attachHost(repository.remoteUrl, repository.id, expected); }
+    try { await machine.attachHost(repository.remoteUrl, repository.id, expected, created); }
     catch (error) {
       this.attached.delete(repository.id);
       throw error;
@@ -2628,8 +2645,7 @@ export class SpaceManager {
       return "waiting";
     }
     // As the host answered: no `spex` branch yet, nor a members' count.
-    this.justCreated.add(answer.repository.id);
-    await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false);
+    await this.adopt(machine, { repository: answer.repository, readOnly: null, branchPresent: false, members: null }, false, { created: true });
     return "created";
   }
 
@@ -2648,7 +2664,7 @@ export class SpaceManager {
         const ask = waiting.create;
         const found = view.listings.find((listing) => listing.repository.group.fullPath === waiting.group && listing.repository.path === ask.name);
         try {
-          if (found) await this.adopt(machine, found, true, null, machine.key === this.host.store.home.own());
+          if (found) await this.adopt(machine, found, true, { setUp: machine.key === this.host.store.home.own() });
           else if (await this.create(machine, { id: ask.groupId, fullPath: waiting.group }, ask.name, ask.description, "quiet") === "created" && this.waiting.get(machine.key) === waiting) this.waiting.delete(machine.key);
         } catch (error) {
           console.error(`spex: ${machine.key} still waits: ${error instanceof Error ? error.message : String(error)}`);
@@ -3085,20 +3101,28 @@ export class SpaceManager {
     if (op === "sync" && key && key !== machine.key) await this.moveInSync(machine, key, repository.id, facts.remote);
     if (facts.remote !== null && facts.remote !== repository.remoteUrl) machine.setOrigin(repository.remoteUrl, facts.remote);
     const readOnly = listing.readOnly !== null;
-    const created = this.justCreated.delete(repository.id);
+    // The core's creation the clone records, read as its other facts
+    // are, is spent by this check once done with the default branch; a
+    // core stopping before then leaves it to the next core (git-host-7).
+    const recorded = machine.createdNow();
+    const created = recorded === repository.id;
     if (!readOnly && !listing.branchPresent) {
       // `spex` beside the default branch, never as it (git-host-7).
       const group = repository.group.fullPath;
-      if (repository.empty && !(created && await this.defaultBranchArrives(repository.id))) {
-        if (!created || this.stopping) {
-          this.waiting.set(machine.key, { step: "branch", group, message: "" });
-          throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+      try {
+        if (repository.empty && !(created && await this.defaultBranchArrives(repository.id))) {
+          if (!created || this.stopping) {
+            this.waiting.set(machine.key, { step: "branch", group, message: "" });
+            throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+          }
+          // Still empty: the host never committed its README — a protected
+          // default branch refusing a Developer's initial commit, say — so
+          // the core pushes that branch itself, and goes on as if the host
+          // had (git-host-7).
+          await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
         }
-        // Still empty: the host never committed its README — a protected
-        // default branch refusing a Developer's initial commit, say — so
-        // the core pushes that branch itself, and goes on as if the host
-        // had (git-host-7).
-        await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
+      } finally {
+        if (recorded !== null && !this.stopping) machine.forgetCreated();
       }
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
       try { answer = await this.host.client.prepareBranch(repository.id); }
@@ -3108,11 +3132,11 @@ export class SpaceManager {
         throw new SpaceStopped("check", { cause: "refused", message: waitingPhrase("branch", group, answer.message), guidance: syncLater(), retry: true });
       }
       if (this.waiting.get(machine.key)?.step === "branch") this.waiting.delete(machine.key);
-    }
+    } else if (recorded !== null) machine.forgetCreated();
     return { remote: repository.remoteUrl, readOnly };
   }
 
-  /** Whether a repository this core just created, which the host
+  /** Whether a repository the core created, which the host
    * reported empty, holds its default branch within the bound: read
    * again every CREATED_REREAD_MS, CREATED_REREADS times at most, as
    * the host may answer a creation before committing it (git-host-7). */

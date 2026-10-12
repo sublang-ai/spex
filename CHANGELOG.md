@@ -596,6 +596,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   titled with the repository's name — and goes on to push `spex` beside
   it. Where the host refuses that push too, the sync stops with the
   host's words (git-host-7).
+- A spex repository Spex creates on the host keeps those re-reads and
+  that push of `main` across a restart of Spex: the creation is now
+  recorded in the clone's Git configuration (`spex.created`) instead of
+  in the running core alone, so quitting Spex — or a crash — before that
+  first sync is done with the default branch no longer leaves it stopped
+  for good with "<host> holds no default branch for it yet"; the next
+  sync finishes it (git-host-7).
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a
