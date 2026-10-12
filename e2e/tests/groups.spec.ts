@@ -9,8 +9,10 @@
 // (space-41); the explorer with its privacy panel and Copy path
 // (space-42); fit at every width in both sidebar states (space-43);
 // axe in both themes (space-44); a second device joining a project a
-// peer pushed (space-36); the organizer creating groups, picking a
-// project into one and sharing them (space-71); the surface naming
+// peer pushed (space-36); a folder picking a team's project, which
+// says the sharing notice first (space-81); the organizer creating
+// groups, picking a project into one and sharing them (space-71); the
+// surface naming
 // nothing behind the instance, in English and in Chinese (space-75);
 // and undo in Spex — a group renamed and deleted, a project moved, each
 // refusal in place (space-80).
@@ -22,7 +24,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { STANDIN_STORAGE, seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
@@ -43,6 +45,7 @@ import {
   nav,
   open,
   pickGroup,
+  repositoryOf,
   runTurn,
   seedHostProject,
   send,
@@ -363,6 +366,85 @@ test.describe("a folder added while signed in", () => {
     ).toBeVisible();
     expect((await app.core.command("project.list", {})).map((project) => project.id)).toEqual([TEAM_KEY]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// space-81: a pick joining a team's project says the sharing notice first
+// ---------------------------------------------------------------------------
+
+test.describe("a folder joining a team's project", () => {
+  test.use({ appOptions: { host: true, signedIn: true } });
+
+  for (const unknown of [false, true]) {
+    test(`space-81: a pick joining a team's project ${unknown ? "whose members' count is unknown" : "with another member"} says the sharing notice in the picker, and Continue joins it`, async ({
+      page,
+      app,
+    }) => {
+      test.setTimeout(120_000);
+      const host = app.host!;
+      // The team's project a peer pushed, `bob` its member beside the
+      // account, its `project.json` as the peer's Spex writes it; this
+      // device's folder holds the same code, added while signed in, so
+      // its spex repository is on this device only and the two agree
+      // on that file.
+      const { key, code } = await seedHostProject(app);
+      await app.peerPush((dir) => writeFileSync(join(dir, "project.json"), JSON.stringify({ format: 1, name: "demo-project", remote: code })));
+      git(dirname(app.projectDir), "clone", "-q", code, app.projectDir);
+      // With every members route failing, the host's read holds no count.
+      if (unknown) host.script.failMembers(true);
+      const before = (await app.core.command("space.get", {})).readAt ?? 0;
+      const fromRead = app.core.mark();
+      await app.core.command("space.refresh", {});
+      await app.core.waitSpace(fromRead, (state) => (state.readAt ?? 0) > before, 30_000);
+      const localKey = (await app.core.command("project.register", { path: app.projectDir })).id;
+      expect(localKey).toBe(`${HOST_LOGIN}/demo-project-spex`);
+      await open(page, app);
+      await showGroups(page);
+      await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
+
+      // Pick a group lists the team's project for the same code, with
+      // its group and its members' count where the host read one
+      // (space-58).
+      await page.getByTestId(`space-row-pick-${localKey}`).click();
+      const picker = page.getByTestId(`space-picker-${localKey}`);
+      const listed = picker.getByTestId(`space-pick-repo-${key}`);
+      await expect(listed).toContainText("demo-project-spex");
+      await expect(listed).toContainText(HOST_GROUP);
+      if (unknown) await expect(listed).not.toContainText("member");
+      else await expect(listed).toContainText("2 members");
+
+      // Picking it says the notice in the picker, beneath it, Cancel
+      // focused; Escape closes the notice alone and sends nothing, focus
+      // back on the repository (space-57).
+      await listed.click();
+      const notice = picker.getByTestId(`space-pick-notice-${localKey}`);
+      await expect(notice).toContainText("Every session goes there whole — hidden parts and attachments included");
+      await expect(notice).toContainText("nothing recalls what others downloaded");
+      await expect(notice.getByRole("button", { name: "Cancel" })).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(notice).toHaveCount(0);
+      await expect(picker).toBeVisible();
+      await expect(listed).toBeFocused();
+      expect(repositoryOf(await app.core.command("space.get", {}), localKey).state).toBe("local-only");
+
+      // Continue joins it: the picker closes, the project's row stands
+      // reachable in the team's group with the notice recorded, and the
+      // peer's records are in the clone, which the stand-in holds
+      // (space-57, space-58, space-13).
+      await listed.click();
+      await notice.getByRole("button", { name: "Continue" }).click();
+      await expect(picker).toHaveCount(0);
+      const row = page.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${key}`);
+      await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
+      await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/, { timeout: 30_000 });
+      const joined = repositoryOf(await app.core.command("space.get", {}), key);
+      expect(joined.noticed).toBe(true);
+      expect(joined.folder).toBe(app.projectDir);
+      const clone = clonePath(app.dataDir, key);
+      expect(git(clone, "rev-parse", "spex")).toBe(git(bareOf(host, key), "rev-parse", "spex"));
+      expect(git(clone, "ls-tree", "-r", "--name-only", "spex").split("\n")).toContain(`sessions/${app.sessionId}.json`);
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------

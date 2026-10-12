@@ -853,6 +853,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
   instance's own member reads failed. The read now holds that count as
   unknown and goes on, and a first sync into a repository with an
   unknown count still says the sharing notice (git-host-5, space-57).
+- Picking a team's spex repository for a project's records, on its row
+  in Groups or as the project is added, no longer stops at "Read the
+  sharing notice before joining …" with nothing to read: where the
+  repository has other members, or its count is unknown, the picker says
+  the sharing notice beneath it, and Continue joins (space-57, space-58).
 
 ### Security
 

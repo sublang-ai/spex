@@ -10,7 +10,9 @@
 // reachable row. What a control opens stands in place beneath its row:
 // the group picker (space-58), the folder a Join clones into
 // (space-63), the members the host reports (space-62), the first-push
-// notice (space-57) and the joining of unrelated histories (space-13).
+// notice (space-57) and the joining of unrelated histories (space-13);
+// a pick joining a repository others may share says the same notice in
+// the picker first.
 // Signed in, "New group" heads the list where the host lets the person
 // create one, and where it says not, the one phrase naming who makes
 // groups, with no link and no control (DR-120); a group of the host
@@ -103,6 +105,22 @@ export function rowSyncRefusal(groups: GroupsState, repo: RepositoryState): stri
   if (!groups.account && !isPathRemote(repo.remote)) return i18n._("Sign in first");
   return syncRefusal(groups, repo);
 }
+
+/** The sharing notice's words (space-57): what goes to a repository
+ * others share, and that a public one's records are public. */
+function sharingNotice(visibility: RepositoryState["visibility"]): string {
+  return visibility === "public"
+    ? i18n._(
+        "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
+      )
+    : i18n._(
+        "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
+      );
+}
+
+/** The notice's acknowledging control (space-57). */
+const continueLabel = (): string =>
+  i18n._({ id: "Continue", comment: "confirm: go on with the first sync, or the pick joining a repository others share" });
 
 /** The control a row's state offers (space-61). */
 type RowControl = "sync" | "unrelated" | "pick" | "retry" | "join" | "none";
@@ -1024,16 +1042,8 @@ function RepositoryRow({
       {opened === "notice" ? (
         <div data-testid="space-notice-confirm" className="pl-6">
           <InlineConfirm
-            question={
-              repo.visibility === "public"
-                ? i18n._(
-                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded. This repository is public, so its records are public.",
-                  )
-                : i18n._(
-                    "Every session goes there whole — hidden parts and attachments included — and nothing recalls what others downloaded.",
-                  )
-            }
-            confirmLabel={i18n._({ id: "Continue", comment: "confirm: go on with the first sync" })}
+            question={sharingNotice(repo.visibility)}
+            confirmLabel={continueLabel()}
             onConfirm={() => {
               setOpened(undefined);
               void start({ noticed: true });
@@ -1243,7 +1253,10 @@ function FolderEditor({
 /** Where a local-only project's records go on the host (space-58): in
  * one picker, the spex repositories the host lists for the same code —
  * each with its group and members' count — and, below them, every
- * group, the new repository's name in an editable field. */
+ * group, the new repository's name in an editable field. Picking a
+ * listed one that may have other members says the sharing notice
+ * beneath it first, and joins with `noticed` only on Continue
+ * (space-57). */
 export function GroupPicker({
   groups,
   repo,
@@ -1281,33 +1294,62 @@ export function GroupPicker({
   const [name, setName] = useState(defaultName);
   const [busy, setBusy] = useState<string>();
   const [refusal, setRefusal] = useState<string>();
+  // The listed spex repository whose sharing notice stands (space-57).
+  const [notice, setNotice] = useState<string>();
+  const pickerRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
 
+  /** Cancel starts nothing; focus returns to the option (DR-010 §6). */
+  const closeNotice = (key: string) => {
+    setNotice(undefined);
+    setTimeout(() => {
+      const option = pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"]`);
+      option?.focus();
+    }, 0);
+  };
+
   const pick = async (
     id: string,
     choice: { kind: "join"; hostId: string } | { kind: "create"; groupId: string | null; name: string },
+    noticed = false,
   ) => {
     setBusy(id);
     setRefusal(undefined);
     try {
-      await spacePick(repo.key, choice);
+      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
-      // A name the host refuses asks for another in place (space-58).
+      // A name the host refuses asks for another in place (space-58); a
+      // refused join hands focus back to its option, its notice closed.
       if (choice.kind === "create") nameRef.current?.focus();
+      else closeNotice(id);
     } finally {
       setBusy(undefined);
     }
   };
 
+  /** Join a listed spex repository (space-58): one whose only member
+   * is the account joins at once; one with others, or whose count the
+   * host's last read lacks, says the notice first unless this device's
+   * reader has seen it for this repository (space-57). */
+  const join = (other: RepositoryState) => {
+    if (!repo.noticed && (other.members === null || other.members > 1)) {
+      setRefusal(undefined);
+      setNotice(other.key);
+      return;
+    }
+    void pick(other.key, { kind: "join", hostId: other.id! });
+  };
+
   const create = (group: GroupsState["groups"][number]) => {
+    setNotice(undefined);
     const chosen = name.trim();
     if (!chosen) {
       setRefusal(i18n._("Name the new spex repository."));
@@ -1330,6 +1372,7 @@ export function GroupPicker({
 
   return (
     <div
+      ref={pickerRef}
       role="group"
       aria-label={i18n._("Pick a group for {name}", { name: repo.name })}
       data-testid={`space-picker-${repo.key}`}
@@ -1355,7 +1398,7 @@ export function GroupPicker({
                   data-testid={`space-pick-repo-${other.key}`}
                   className={option}
                   disabled={disabled}
-                  onClick={() => void pick(other.key, { kind: "join", hostId: other.id! })}
+                  onClick={() => join(other)}
                 >
                   <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
                     {other.name}
@@ -1369,6 +1412,17 @@ export function GroupPicker({
                     </span>
                   ) : null}
                 </button>
+                {notice === other.key ? (
+                  <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
+                    <InlineConfirm
+                      question={sharingNotice(other.visibility)}
+                      confirmLabel={continueLabel()}
+                      disabled={disabled}
+                      onConfirm={() => void pick(other.key, { kind: "join", hostId: other.id! }, true)}
+                      onCancel={() => closeNotice(other.key)}
+                    />
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

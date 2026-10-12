@@ -1874,7 +1874,7 @@ msgstr "连接已恢复。"
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 
-#. confirm: go on with the first sync
+#. confirm: go on with the first sync, or the pick joining a repository others share
 #: src/components/SpaceGroups.tsx
 msgid "Continue"
 msgstr "继续"

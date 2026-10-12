@@ -86,14 +86,15 @@ When the reader activates Sign out, the core shall revoke this device at the hos
 
 While a spex repository has other members and has never been pushed from this device, when a sync of it, or a pick joining it [[space-58](#space-58)], is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing;
+- a sync's notice stands beneath its row, and a pick's in the picker beneath the spex repository picked [[space-58](#space-58)];
+- Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing, focus returning to the control that asked;
 - a spex repository whose only member is the account says nothing, and one whose members' count the host's last read lacks [[git-host-5](git-host.md#git-host-5)] is taken to have other members.
 
 #### space-58
 
 When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)];
+- picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing notice is seen where that repository may have other members [[space-57](#space-57)];
 - picking a group creates `<name>-spex` there [[git-host-6](git-host.md#git-host-6)], the pick naming it by its host id and your own group by none, and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
 - a creation the host refuses for the account's rights leaves the repository local only with "Waiting for a member who can create it in <group>" on its row [[space-64](#space-64)];
 - Cancel leaves the repository local only, under your own group's folder, with "Pick a group" offered again;
@@ -946,6 +947,14 @@ Where the harness boots the served shell with the demo project registered and a 
 - an empty directory of a tracked kind — `intents/` before any queued intent — reads "Not yet shared", never "Stays here" [[space-23](#space-23)];
 - "Stays on this device" names the eight families with their reasons [[space-25](#space-25)];
 - the served page offers Copy path beside the repository and no reveal control, and acknowledges the copy [[space-26](#space-26)].
+
+#### space-81
+
+Where the harness boots the served shell signed in at the stand-in host holding in `acme` a project's spex repository a peer pushed with `bob` as its other member, when a folder holding the same code is added and Groups picks that repository on the folder's row, once with the stand-in counting the members and once with it failing every members route, the test suite shall assert through the page in each case:
+
+- the picker lists the repository with its group, and with "2 members" only where the stand-in counted them [[space-58](#space-58)];
+- picking it says the notice in the picker beneath it with Cancel focused, and Escape closes the notice alone, the repository still local only and focus back on it [[space-57](#space-57)];
+- Continue closes the picker, and the row stands reachable in `acme` with a sync time, its notice recorded, its clone holding the peer's session and agreeing with the stand-in's `spex` [[space-57](#space-57)] [[space-58](#space-58)] [[space-13](#space-13)].
 
 #### space-71
 
