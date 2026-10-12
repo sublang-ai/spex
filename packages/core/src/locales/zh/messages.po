@@ -150,6 +150,16 @@ msgstr "{file}：{reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}：记录 {seq} 之后的对话记录已损坏"
 
+#. Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path
+#: src/space-groups.ts
+msgid "{group} is a group named like your login"
+msgstr "{group} 是一个与你的用户名同名的群组"
+
+#. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
+#: src/space-git.ts
+msgid "{host} answered with an error (HTTP {status})"
+msgstr "{host} 返回了错误（HTTP {status}）"
+
 #. The Git host's rate limit; {retry} is its own Retry-After value, kept as given
 #: src/space-groups.ts
 msgid "{host} asks to wait; try again after {retry}"
@@ -621,6 +631,11 @@ msgstr "已派发的意图无法再修改文本"
 #: src/space.ts
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同步"
+
+#. Why a spex repository is unreachable: its group's path is your login's, so it can have no folder of its own on this device; read after 'Unreachable: '
+#: src/space-groups.ts
+msgid "a group named like your login"
+msgstr "一个与你的用户名同名的群组"
 
 #. Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces
 #: src/service.ts
@@ -1369,6 +1384,11 @@ msgstr "媒体读取的起始位置超出文件长度。"
 msgid "Media storage has stopped."
 msgstr "媒体存储服务已停止。"
 
+#. Guidance under a transfer the Git host refused; Share is the control in the members panel; it claims no role
+#: src/space-git.ts
+msgid "Membership decides who may send here: use Share, or ask a member who may share it."
+msgstr "谁可以向这里发送由成员身份决定：使用“共享”，或请一位可以共享它的成员帮忙。"
+
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #: src/app-storage.ts
@@ -1868,6 +1888,11 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
 
+#. Guidance under a transfer the Git host answered with an error
+#: src/space-git.ts
+msgid "Retry; if it fails again, the host's error stands for now."
+msgstr "请重试；若再次失败，说明托管平台的错误暂时仍在。"
+
 #. Refusal when the registry's scaffold CLI exits non-zero because the app supplied none; command and output are verbatim
 #: src/forge.ts
 msgid "scaffold failed running {command} (the app's own scaffold CLI was not supplied, so the registry's ran): {output}"
@@ -2199,11 +2224,6 @@ msgstr "托管平台再次发生变化"
 #: src/space.ts
 msgid "The host lists no such group"
 msgstr "托管平台没有列出这个群组"
-
-#. Guidance under a transfer the Git host refused; it names the members page and claims no role
-#: src/space-git.ts
-msgid "The host's members page shows who may send here."
-msgstr "托管平台的成员页面列出了谁可以向这里发送。"
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts

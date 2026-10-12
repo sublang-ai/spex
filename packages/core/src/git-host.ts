@@ -64,7 +64,10 @@ export interface HostAccount { id: string; login: string; displayName: string | 
  * the host says nothing, as for a repository's group or your own. */
 export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean }
 
-export interface HostGroup { id: string | null; fullPath: string; name: string; url: string | null; kind: "user" | "group"; can: HostGroupCan }
+/** A group as the host answers it (git-host-5): `fullPath` its path in
+ * the instance, taken as given (DR-120); `kind` `user` for an account's
+ * own group, the person's or another's. No page of the host is held. */
+export interface HostGroup { id: string | null; fullPath: string; name: string; kind: "user" | "group"; can: HostGroupCan }
 
 /** One of the host's own roles (git-host-16): the id a client sends
  * back, the host's name for it, and whether it may push. */
@@ -84,8 +87,8 @@ export interface HostRepository {
   name: string;
   path: string;
   group: HostGroup;
+  /** The Git URL the core hands to Git alone (git-host-5, DR-120). */
   remoteUrl: string;
-  webUrl: string;
   visibility: string;
   archived: boolean;
   empty: boolean;
@@ -103,9 +106,9 @@ export interface HostRepositoryDetail extends HostRepository {
 }
 
 /** A member as the host lists them (git-host-8): `direct` where the
- * membership is the group's or repository's own, else `via` the full
- * path of the group it comes through. */
-export interface HostMember { id: string; login: string; displayName: string | null; role: string; url: string | null; direct: boolean; via: string | null }
+ * membership is the group's or repository's own, else `via` the path in
+ * the instance of the group it comes through. */
+export interface HostMember { id: string; login: string; displayName: string | null; role: string; direct: boolean; via: string | null }
 
 export type HostErrorKind =
   | "pending"
@@ -728,10 +731,10 @@ export class GitHostClient {
 
   /** `GET /api/v1/host/repositories/:id/members` or
    * `GET /api/v1/host/groups/:id/members` (git-host-8): every member with
-   * the host's role name and source, and the host's members page. */
-  async members(target: MembersTarget): Promise<{ members: HostMember[]; membersUrl: string }> {
+   * the host's role name and source. */
+  async members(target: MembersTarget): Promise<{ members: HostMember[] }> {
     const body = record((await this.call("GET", membersPath(target))).json);
-    return { members: list(body.members).map(memberFrom), membersUrl: text(body.members_url) };
+    return { members: list(body.members).map(memberFrom) };
   }
 
   /**
@@ -1007,7 +1010,6 @@ function groupFrom(value: unknown): HostGroup {
     id: optionalText(body.id),
     fullPath: text(body.full_path),
     name: text(body.name),
-    url: optionalText(body.url),
     kind: body.kind === "user" ? "user" : "group",
     can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members) },
   };
@@ -1031,7 +1033,6 @@ function repositoryFrom(value: unknown): HostRepository {
     path: text(body.path),
     group: groupFrom(body.group),
     remoteUrl: text(body.remote_url),
-    webUrl: text(body.web_url),
     visibility: text(body.visibility),
     archived: flag(body.archived),
     empty: flag(body.empty),
@@ -1066,7 +1067,6 @@ function memberFrom(value: unknown): HostMember {
     login: text(body.login),
     displayName: optionalText(body.display_name),
     role: text(body.role),
-    url: optionalText(body.url),
     // A host that says nothing of the source lists the member as the
     // group's or repository's own.
     direct: typeof body.direct === "boolean" ? body.direct : true,

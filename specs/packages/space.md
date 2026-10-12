@@ -370,7 +370,7 @@ When a sync or check step fails, the core shall stop leaving the clone in the st
 | Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the repository turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the repository turns unreachable; nothing deleted |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Retry |
-| Check, Push | the host answering its transport with an error no row above reads | commits stand | "<host> answered with an error", with the HTTP status Git printed where it printed one; Retry |
+| Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<host> answered with an error (HTTP <status>)"; Retry |
 | Compare | unrelated history | unchanged | Join [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation | nothing written; the Save commit stands | the unit and reason; the picker stays with the unit marked; Retry |
 | Check | a session lease beneath a clone the host moved [[space-60](#space-60)] | commits stand; the clone where it was | the session and reason; Retry |
@@ -598,7 +598,8 @@ interface GroupsState {
   //   proposal?: { path: string; from: "recorded" | "beside-projects" } }
 }
 interface RepositoryState {
-  key: string; name: string; id: string | null; own: boolean; code: string | null; folder: string | null;
+  key: string;                           // the clone's path under workspace/; for a row the host lists in a group held as colliding, `<path>@<id>`, naming no clone (space-61)
+  name: string; id: string | null; own: boolean; code: string | null; folder: string | null;
   remote: string | null;                 // the clone's origin URL, one under the host's Git origin as the repository's path in the instance (space-15); null while local only
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";
   reason: string | null;                 // the host's words for read-only or unreachable
@@ -607,7 +608,7 @@ interface RepositoryState {
   can: { manageMembers: boolean };           // what the host's last read said the person may do on it; false until one is held
   branch: { ahead: number | null; behind: number | null; checkedAt: number | null;
             hostEmpty: boolean; unrelated: boolean; mergePending: boolean;
-            agreed: { at: number; current: boolean } | null } | null;   // agreed: the commit `spex` last shared with the host's `spex` as the clone last fetched or pushed it — its commit time, and whether `spex` is that commit; null where the clone holds none (space-61)
+            agreed: { at: number; current: boolean } | null } | null;   // null where no clone is here; agreed: the commit `spex` last shared with the host's `spex` as the clone last fetched or pushed it — its commit time, and whether `spex` is that commit; null where the clone holds none (space-61)
   local: SpaceUnit[]; incoming: SpaceUnit[]; conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
   noticed: boolean;
@@ -677,7 +678,7 @@ The core shall invoke Git as a child process per step, never through a shell, fr
 - labels and diffs: `cat-file blob <oid>` per described file, `log -1 --format=%ct <rev> -- <paths>` for a side's change time, `diff --no-color <ancestor> <side> -- <path>` for `space.diff`;
 - apply: under a temporary `GIT_INDEX_FILE`, `read-tree HEAD`, `update-index -z --index-info` setting or removing each path of a unit taken from the host and `write-tree`, then that tree checked out into a private copy as at Save; `cat-file blob <oid>` per file of a unit written; `read-tree <tree>` and `update-index -q --refresh` on the clone's index; `merge-base --is-ancestor HEAD origin/spex` with `rev-parse origin/spex^{tree}`, `commit-tree <tree> -p HEAD -p origin/spex -m <message>` or none on a fast-forward, `update-ref refs/heads/spex <commit> <old HEAD>`;
 - push: `push -q origin spex`, `push -q -u origin spex` where no upstream is set;
-- stderr classification under `LC_ALL=C`: "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines, or, for a transport to the host's origin, the host's error with the HTTP status Git printed [[space-15](#space-15)]; the last lines and the host's `remote:` words read per space-15's rule for URLs under the host's Git origin before any report carries them.
+- stderr classification under `LC_ALL=C`: "Could not resolve host", "Connection refused", "Network is unreachable" → unreachable; "Authentication failed", "could not read Username", "terminal prompts disabled", "Host key verification failed" → reauth; "Permission denied", "protected branch", "pre-receive hook declined", "You are not allowed" → refused; "Repository not found", "does not appear to be a git repository" → gone; "[rejected]" with "fetch first" or "non-fast-forward" → rejected; a killed child → timeout or stopped; anything else → `git` with the last lines, or, where Git printed an HTTP status on a transport to the host's origin, the host's error with that status [[space-15](#space-15)]; the last lines and the host's `remote:` words read per space-15's rule for URLs under the host's Git origin before any report carries them.
 
 #### space-33
 

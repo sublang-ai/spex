@@ -96,11 +96,41 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
 }
 
 /** The key a listed repository's clone takes under `workspace/`: its
- * group's full path and its path, as on the host; null where the host's
- * names cannot stand as a key. */
+ * group's path in the instance joined to its own, as the host answers
+ * them (git-host-5, DR-120); null where those names cannot stand as a
+ * key. A group held as colliding is the caller's to refuse
+ * ([[collidingGroup]]). */
 export function hostKey(repository: HostRepository): string | null {
   const key = `${repository.group.fullPath}/${repository.path}`;
   return REPOSITORY_KEY_PATTERN.test(key) ? key : null;
+}
+
+/** The logins a view names besides groups (git-host-5, DR-120): your
+ * own group's folder name, the account's login, and every other
+ * account's under which the host lists a spex repository. */
+export function namedLogins(view: Pick<HostView, "listings" | "account">, ownName: string): string[] {
+  const logins = new Set<string>([ownName, view.account.login]);
+  for (const listing of view.listings) if (listing.repository.group.kind === "user") logins.add(listing.repository.group.fullPath);
+  return [...logins];
+}
+
+/** Whether a listed group is held as colliding (git-host-5, DR-120): of
+ * kind `group`, its path equal, ignoring case, to one of `logins` or
+ * beneath one, so no folder of its own could stand apart from that
+ * login's under `workspace/`. */
+export function collidingGroup(group: Pick<HostGroup, "kind" | "fullPath">, logins: readonly string[]): boolean {
+  if (group.kind !== "group") return false;
+  const path = group.fullPath.toLowerCase();
+  return logins.some((login) => {
+    const name = login.toLowerCase();
+    return path === name || path.startsWith(`${name}/`);
+  });
+}
+
+/** Whether two logins or user paths name one account: the host's paths
+ * fold case. */
+export function sameLogin(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
 }
 
 /** Two remote URLs naming the same repository: equal but for a
@@ -178,6 +208,25 @@ export function waitingPhrase(step: "create" | "branch", group: string, words: s
         values: { group },
         comment: "A spex repository's row while its branch preparation waits; {group} is the group's full path",
       });
+}
+
+/** Why a spex repository in a group held as colliding is unreachable
+ * (space-61), read after "Unreachable: ". */
+export function namedLikeYourLogin(): string {
+  return i18n._({
+    id: "a group named like your login",
+    comment: "Why a spex repository is unreachable: its group's path is your login's, so it can have no folder of its own on this device; read after 'Unreachable: '",
+  });
+}
+
+/** Refusal of a join or a pick into a group held as colliding (space-29,
+ * space-61). */
+export function groupNamedLikeYourLogin(group: string): string {
+  return i18n._({
+    id: "{group} is a group named like your login",
+    values: { group },
+    comment: "Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path",
+  });
 }
 
 /** A name the host reports taken (space-58). */

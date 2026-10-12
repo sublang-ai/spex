@@ -85,7 +85,7 @@ export interface SearchResult {
 }
 
 /** An org the signed-in person may publish to (environments-27): its
- * name, its Git host full path, and the person's role there. */
+ * name, its group's path in the instance, and the person's role there. */
 export interface RegistryOrg {
   name: string;
   path: string;
