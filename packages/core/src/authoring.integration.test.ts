@@ -14,7 +14,7 @@ import { appendFileSync, closeSync, constants, existsSync, mkdirSync, openSync, 
 import { join } from "node:path";
 import { clearTimeout as clearTimer, setTimeout as setTimer } from "node:timers";
 import { WebSocket } from "ws";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { PermissionPolicy } from "@sublang/cligent";
 import { mapPermissionsToClaudeOptions } from "@sublang/cligent/adapters/claude-code";
 import { mapPermissionsToCodexOptions } from "@sublang/cligent/adapters/codex";
@@ -41,6 +41,7 @@ import type {
   ServerMessage,
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
+import { startStandinRegistry } from "./testing/standin-registry.js";
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -1203,17 +1204,44 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 // playbook-library-104: a new playbook's org and license
 // ---------------------------------------------------------------------------
 
-test("playbook-library-104: New playbook's defaults come from the project's key and LICENSE, and the manifests name the org and license", { timeout: 120_000 }, async () => {
-  const harness = await startHarness({ script: {}, slc: stubSlcSource("['Helper']") });
-  const { dir, projectId } = harness;
+test("playbook-library-104: New playbook's defaults come from the registry's orgs, else the project's key, and from its LICENSE, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
+  // A home signed in to the stand-in registry, which is its host, with
+  // a second project paired two groups deeper than the home's own.
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-defaults-registry-") });
+  t.after(() => registry.close());
+  const dir = scratchDir("spex-authoring-it-");
+  const nested = "acme/workshop/team/graph-spex";
+  const state = join(dir, "state");
+  mkdirSync(join(state, "workspace", ...nested.split("/")), { recursive: true });
+  mkdirSync(join(state, "local"), { recursive: true, mode: 0o700 });
+  writeFileSync(join(state, "home.yaml"), stringifyYaml({
+    format: 1, device: randomUUID(), own: "tester", folders: [{ path: realpathSync(workingFolder(join(dir, "graph"))), repository: nested }],
+    host: { url: registry.url, clientId: "spex", account: { id: "1", login: "tester", displayName: "Tester" } },
+  }));
+  writeFileSync(join(state, "local", "credentials.yaml"), stringifyYaml({
+    format: 1, hosts: { [registry.url]: { access: "tester-token", accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" } },
+  }), { mode: 0o600 });
+  const harness = await startHarness({ script: {}, slc: stubSlcSource("['Helper']"), dir });
+  const { projectId } = harness;
   const client = new Client(harness.service.port());
   await client.open();
   const folder = join(dir, "project");
   const license = join(folder, "LICENSE");
   const org = projectId.split("/")[0];
-  assert.equal(org, "tester", "the harness's project lives in the home's own group");
+  assert.equal(projectId, "tester/project-spex", "the harness's project lives in the home's own group");
+  const orgsAsked = (): number => registry.script.requests.filter((request) => request === "GET /api/v1/account/orgs").length;
+  /** A reply, the registry asked once while signed in. */
+  const defaults = async (id: string, asked = 1): Promise<CommandResults["draft.defaults"]> => {
+    const before = orgsAsked();
+    const reply = await client.expectOk("draft.defaults", { projectId: id });
+    assert.equal(orgsAsked() - before, asked, `the registry asked ${asked} time(s) for ${id}`);
+    return reply;
+  };
+  const orgsOf = async (asked = 1): Promise<[string, string]> => [(await defaults(projectId, asked)).org, (await defaults(nested, asked)).org];
 
-  // The license each LICENSE opens with, read at each reply.
+  // The license each LICENSE opens with, read at each reply; the
+  // registry refuses this device's token (401), so the key's first
+  // segment stands.
   const cases: [string | null, string | null][] = [
     ["﻿\n                                 Apache License\n                           Version 2.0, January 2004\n", "Apache-2.0"],
     ["MIT License\n\nCopyright (c) 2026 Acme\n", "MIT"],
@@ -1223,8 +1251,26 @@ test("playbook-library-104: New playbook's defaults come from the project's key 
   for (const [text, expected] of cases) {
     if (text === null) rmSync(license, { force: true });
     else writeFileSync(license, text);
-    assert.deepEqual(await client.expectOk("draft.defaults", { projectId }), { org, license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
+    assert.deepEqual(await defaults(projectId), { org, license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
   }
+  assert.deepEqual(await orgsOf(), ["tester", "acme"], "refused");
+
+  // An outage is no answer, and none listed falls back the same way.
+  registry.script.unavailable(2);
+  assert.deepEqual(await orgsOf(), ["tester", "acme"], "out of service");
+  registry.script.setOrgs("tester-token", []);
+  assert.deepEqual(await orgsOf(), ["tester", "acme"], "none listed");
+  // One listed is it, wherever its path.
+  registry.script.setOrgs("tester-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
+  assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011"], "one listed");
+  // Of several, the one at an ancestor of the project's group — never
+  // `acme/work`, a prefix of `acme/workshop` — else the first listed.
+  registry.script.setOrgs("tester-token", [
+    { name: "workshop", path: "acme/workshop", role: "developer" },
+    { name: "alpha", path: "alpha", role: "owner" },
+    { name: "acme-work", path: "acme/work", role: "maintainer" },
+  ]);
+  assert.deepEqual(await orgsOf(), ["acme-work", "workshop"], "several listed");
 
   // The session's manifest names the org and license given, its
   // package named under that org (playbook-library-70).
@@ -1233,14 +1279,20 @@ test("playbook-library-104: New playbook's defaults come from the project's key 
   const meta = parseYaml(readFileSync(join(folder, "spex-packages", "intake", "meta.yaml"), "utf8")) as Record<string, unknown>;
   assert.deepEqual([meta.org, meta.name, meta.license, meta.description], ["workshop", "intake", "BSD-3-Clause", "The intake playbook"]);
 
-  // The one-shot compile asks no one: the project's defaults stand, no
-  // license where none is derived, then the Apache one (playbook-library-69).
+  // The one-shot compile asks no one: the project's defaults stand —
+  // the registry's org, no license where none is derived — then, signed
+  // out, the key's first segment and the Apache license (playbook-library-69).
   const oneShot = (playbookId: string) => client.command("compile.run", {
     projectId, playbookId, sourceText: "# Solo\n\nRoles:\n\n- Helper\n", roles: ["Helper"], command: playbookId, intent: "a solo workflow", bindings: { Helper: "dev.coder" },
   });
   await oneShot("bare");
   const bare = parseYaml(readFileSync(join(folder, "spex-packages", "bare", "meta.yaml"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual([bare.org, "license" in bare], [org, false]);
+  assert.deepEqual([bare.org, "license" in bare], ["acme-work", false]);
+
+  // Signed out, the registry is not asked and the key's first segment
+  // stands.
+  await client.expectOk("space.signout", {});
+  assert.deepEqual(await orgsOf(0), ["tester", "acme"], "signed out");
   writeFileSync(license, cases[0]![0]!);
   await oneShot("licensed");
   const licensed = parseYaml(readFileSync(join(folder, "spex-packages", "licensed", "meta.yaml"), "utf8")) as Record<string, unknown>;

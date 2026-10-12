@@ -35,6 +35,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { knownFormat, StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
 import { isLanguageTag } from "./environment/format.js";
+import type { RegistryOrg } from "./environment/registry.js";
 import { mediaAttachmentsSchema, UUID_PATTERN, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
 import { sanitizeRecord } from "./stream-fold.js";
@@ -416,11 +417,18 @@ const LICENSE_OPENINGS: readonly (readonly [string, string])[] = [
 ];
 
 /** The org and license a new playbook of a project starts from
- * (playbook-library-103): the first segment of its spex repository's
- * key, and the license its working folder's `LICENSE` opens with, read
+ * (playbook-library-103): of the orgs the registry lists the person may
+ * publish to (environments-27), the one whose path is the project's
+ * group — its key without the last segment — or an ancestor of it, else
+ * the first listed, so one listed alone is it; where none is listed or
+ * no list came, the first segment of its spex repository's key. The
+ * license is the one its working folder's `LICENSE` opens with, read
  * now; none where the file is absent or opens otherwise. */
-export function newPackageDefaults(key: string, workingFolder: string): { org: string; license: string | null } {
-  const org = key.split("/")[0] ?? key;
+export function newPackageDefaults(key: string, workingFolder: string, orgs: readonly RegistryOrg[] | null = null): { org: string; license: string | null } {
+  const group = key.split("/").slice(0, -1).join("/");
+  const org = orgs && orgs.length > 0
+    ? (orgs.find((listed) => group === listed.path || group.startsWith(`${listed.path}/`)) ?? orgs[0]!).name
+    : key.split("/")[0] ?? key;
   let text: string;
   try {
     text = readFileSync(join(workingFolder, "LICENSE"), "utf8");

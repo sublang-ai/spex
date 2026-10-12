@@ -84,6 +84,17 @@ export interface SearchResult {
   versions: string[];
 }
 
+/** An org the signed-in person may publish to (environments-27): its
+ * name, its Git host full path, and the person's role there. */
+export interface RegistryOrg {
+  name: string;
+  path: string;
+  role: string;
+}
+
+/** How long the core waits for the registry's orgs (environments-27). */
+export const ORGS_TIMEOUT_MS = 2_000;
+
 /** What resolving and installing read from a registry (environments-12),
  * served by spex.pub, the stand-in and the built-in spec package alike. */
 export interface RegistrySource {
@@ -252,8 +263,8 @@ export class RegistryClient implements RegistrySource {
     throw new RegistryError("unavailable", name, `${about}the registry answered ${response.status}${said}`, code);
   }
 
-  private async json(path: string, name: string | undefined): Promise<unknown> {
-    const response = await this.request(path, name);
+  private async json(path: string, name: string | undefined, init: RequestInit = {}): Promise<unknown> {
+    const response = await this.request(path, name, init);
     try {
       return await response.json();
     } catch (error) {
@@ -290,6 +301,26 @@ export class RegistryClient implements RegistrySource {
       headers: { "content-type": "application/gzip" },
       body: tgz as unknown as BodyInit,
     });
+  }
+
+  /** The orgs the signed-in person may publish to (environments-27):
+   * `GET /api/v1/account/orgs` with the device's app token, read within
+   * the timeout; null for no answer — a refusal, any other status, a
+   * body not in its shape, a network failure, or none in time. */
+  async orgs(timeoutMs = ORGS_TIMEOUT_MS): Promise<RegistryOrg[] | null> {
+    const signal = AbortSignal.timeout(timeoutMs);
+    const late = new Promise<null>((resolve) => signal.addEventListener("abort", () => resolve(null), { once: true }));
+    const asked = (async (): Promise<RegistryOrg[] | null> => {
+      const raw = await this.json("/api/v1/account/orgs", undefined, { signal });
+      if (!isPlainObject(raw) || !Array.isArray(raw.orgs)) return null;
+      const orgs: RegistryOrg[] = [];
+      for (const org of raw.orgs) {
+        if (!isPlainObject(org) || typeof org.name !== "string" || typeof org.path !== "string" || typeof org.role !== "string") return null;
+        orgs.push({ name: org.name, path: org.path, role: org.role });
+      }
+      return orgs;
+    })().catch(() => null);
+    return Promise.race([asked, late]);
   }
 
   async search(query: string): Promise<SearchResult[]> {

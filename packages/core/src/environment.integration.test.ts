@@ -33,6 +33,7 @@ import {
   launchModules,
   lockStoreKeys,
   moduleLocations,
+  ORGS_TIMEOUT_MS,
   packFiles,
   parseRequests,
   parseRequirement,
@@ -715,6 +716,45 @@ test("environments-21: a private namespace installs with the device's app token 
   registry.script.unavailable(1);
   await assert.rejects(resolveText(other.clone, text, { through: member }),
     (error: unknown) => error instanceof RegistryError && error.kind === "unavailable" && error.packageName === "vault/secrets");
+});
+
+// ---------------------------------------------------------------------------
+// environments-28: the orgs a person may publish to
+// ---------------------------------------------------------------------------
+
+test("environments-28: the orgs scripted for the device's app token read sorted by name, and every other answer reads as none", async () => {
+  const asked = (): number => registry.script.requests.filter((request) => request === "GET /api/v1/account/orgs").length;
+  registry.script.setOrgs("publisher-token", [
+    { name: "workshop", path: "acme/workshop", role: "developer" },
+    { name: "alpha", path: "alpha", role: "owner" },
+  ]);
+  const publisher = new RegistryClient({ url: registry.url, token: async () => "publisher-token" });
+  let before = asked();
+  assert.deepEqual(await publisher.orgs(), [
+    { name: "alpha", path: "alpha", role: "owner" },
+    { name: "workshop", path: "acme/workshop", role: "developer" },
+  ]);
+  assert.equal(asked() - before, 1, "one request");
+
+  // Another token, or none, is refused 401; an outage answers 500.
+  assert.equal(await new RegistryClient({ url: registry.url, token: async () => "someone-else" }).orgs(), null);
+  assert.equal(await client.orgs(), null);
+  registry.script.unavailable(1);
+  assert.equal(await publisher.orgs(), null);
+
+  // An answer delayed a second past the timeout is none, once the
+  // timeout has passed.
+  registry.script.delayOrgs(ORGS_TIMEOUT_MS + 1_000);
+  try {
+    before = asked();
+    const started = Date.now();
+    assert.equal(await publisher.orgs(), null);
+    const waited = Date.now() - started;
+    assert.ok(waited >= ORGS_TIMEOUT_MS - 50 && waited < ORGS_TIMEOUT_MS + 1_000, `waited ${waited} ms`);
+    assert.equal(asked() - before, 1, "one request");
+  } finally {
+    registry.script.delayOrgs(0);
+  }
 });
 
 // ---------------------------------------------------------------------------

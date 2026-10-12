@@ -68,6 +68,7 @@ import {
   type Lock,
   type Manifest,
   type ModuleLocation,
+  type RegistryOrg,
   type RegistrySource,
   type Request,
   type Requests,
@@ -272,10 +273,22 @@ export class EnvironmentManager {
   /** The registry: the built-in spec package from this device first,
    * offline, and everything else from the home's host (environments-12). */
   registry(): RegistrySource {
+    return this.registries().source;
+  }
+
+  /** The orgs the registry lists the signed-in person may publish to,
+   * asked once (environments-27); null while signed out, the registry
+   * not asked, and where it gives no answer. */
+  async publishableOrgs(): Promise<RegistryOrg[] | null> {
+    if (!this.signedIn()) return null;
+    return this.registries().remote.orgs();
+  }
+
+  private registries(): { url: string; source: RegistrySource; remote: RegistryClient } {
     const host = this.store.home.host;
     // One source per host: the built-in source reads and packs the
     // shipped release once, not on every resolve.
-    if (this.registryCache?.url === host.url) return this.registryCache.source;
+    if (this.registryCache?.url === host.url) return this.registryCache;
     const remote = new RegistryClient({
       url: host.url,
       token: () => this.token(),
@@ -285,11 +298,11 @@ export class EnvironmentManager {
       builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, url: remote.url, shipped: this.options.builtin }),
       remote,
     );
-    this.registryCache = { url: host.url, source };
-    return source;
+    this.registryCache = { url: host.url, source, remote };
+    return this.registryCache;
   }
 
-  private registryCache?: { url: string; source: RegistrySource };
+  private registryCache?: { url: string; source: RegistrySource; remote: RegistryClient };
 
   /** Whether the home is signed in to its host. */
   signedIn(): boolean {

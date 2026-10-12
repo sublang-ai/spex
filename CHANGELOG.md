@@ -563,6 +563,13 @@ and `npm start` (desktop) or `npm run start:server` (server).
   source's first `#` heading, so a source with a license comment above
   that heading no longer reads as the comment; a source with no heading
   still reads as its first line.
+- New playbook's Org starts from an org you may publish to, not from the
+  first segment of the project's spex repository key, which for a
+  project under a nested group is no registry org: signed in, Spex asks
+  the registry for your orgs and takes the one whose path holds the
+  project's group, else the first; with none listed, signed out, or no
+  answer within two seconds, the key's first segment stands as before.
+  A one-shot compile names the same org.
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a
