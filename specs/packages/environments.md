@@ -171,6 +171,7 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 When the core starts, it shall seed the app's built-in spec package — the playbooks Playbook ships, as one spec package named `sublang/playbooks` at Playbook's version, each playbook an artifact in `en` with `code` and `decide` requiring `review` — into the store, and shall request it with a caret requirement in your own group's environment where that environment lacks it, and in a new project's environment, written at pairing [[storage-6](storage.md#storage-6)], so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)):
 
 - the lock pins its version like any other, so an app update never changes an environment by itself: the newer release is seeded beside the older, which the store keeps while a lock selects it;
+- while an environment's lock selects an older release than the one this app ships and the version requirement its `spex.yaml` requests the built-in spec package at admits the shipped one [[environments-4](#environments-4)], its state [[environments-14](#environments-14)] names both releases, the lock unchanged until the reader resolves again [[environments-5](#environments-5)];
 - the seeded artifacts carry the playbook text and the module as the app's Playbook ships them, the module's engine resolved through the engine links provisioned in each installed playbook artifact's folder as a compile provisions them [[playbook-library-8](playbook-library.md#playbook-library-8)].
 
 ### Sources
@@ -277,7 +278,7 @@ When an integration suite exports an installed environment to a working folder w
 
 #### environments-23
 
-When an integration suite starts a real core on a fresh scratch home with no registry reachable, it shall assert that the built-in spec package is seeded into the store, requested in your own group's environment and, at the working folder's root, in a new project's, every built-in playbook launches from it, and a core started with a newer built-in release seeds it beside the older without changing either lock [[environments-11](#environments-11)].
+When an integration suite starts a real core on a fresh scratch home with no registry reachable, it shall assert that the built-in spec package is seeded into the store, requested in your own group's environment and, at the working folder's root, in a new project's, every built-in playbook launches from it, and a core started with a newer built-in release seeds it beside the older without changing either lock [[environments-11](#environments-11)], each environment's state naming the newer release and the older its lock selects until `environment.resolve` moves that lock to the newer, and naming none for an environment whose lock selects the newer or whose request admits only the older [[environments-11](#environments-11)].
 
 #### environments-24
 
