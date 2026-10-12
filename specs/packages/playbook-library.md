@@ -158,7 +158,8 @@ While an authoring session's workspace is open, the conversation pane shall rend
 
 - input attachments and native output media use the trusted record-driven conversation presentation [[run-view-160](run-view.md#run-view-160)];
 - the cards read "Asked to compile" and "Proposed enabling", the latter listing command, intent, and role → player with "Open Enable";
-- a malformed directive stays visible as code with a "Spex could not read this block" caption;
+- a malformed directive stays visible as code captioned "Spex could not read this block — ⟨reason⟩", ⟨reason⟩ being why it did not read [[playbook-library-66](#playbook-library-66)];
+- a reply owing an unreadable-block relay [[playbook-library-66](#playbook-library-66)] is followed by the system line "Could not read the agent's ⟨kind⟩ block — sent to the agent", or "Could not read the agent's ⟨kind⟩ block — three in a row; tell the agent how to proceed" when the relay stopped, or "Could not read the agent's ⟨kind⟩ block — waiting for your queued message" when a Boss message carries it instead, ⟨kind⟩ being the one kind those blocks name — `compile` or `register` — else `spex`;
 - while a turn runs the pane's header shows the running mark and "working · ⟨elapsed⟩" ticking each second ([DR-010](../decisions/010-interface-craft.md) §5);
 - the pane sticks to its bottom with the jump pill, and mounts only the entries near the viewport.
 
@@ -483,6 +484,7 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 | Reseed — a restart, a switched agent, a rejected resume, a transcript another writer changed | as the first turn, with `Conversation so far:` holding the Boss, system, and agent final texts in order, oldest dropped past 24 KB, before the message |
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
 | Success | "The compile succeeded; the roles are ⟨roles⟩. Propose enabling in a register block" as a system-origin message |
+| Unreadable-block relay | "Write the ⟨kind⟩ block again so Spex can read it" as a system-origin message, ⟨kind⟩ as the thread's line names it [[playbook-library-53](#playbook-library-53)] |
 
 - the preamble names the absolute source path inside the spec package, tells the agent to write and edit only that file and the package's `meta.yaml` description, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending, and says that a source the Boss placed may be a SKILL.md — YAML frontmatter `name` and `description`, then instructions — or other workflow markdown, to rewrite in place into a source with the description as the title and the intent, the instructions as the prompts, and the actors as the roles ([DR-082](../decisions/082-the-first-move-in-a-draft-is-an-act.md));
 - the preamble names the session's language [[playbook-library-70](#playbook-library-70)] as the one the source's title, prose and prompts are written in, and, for a language other than English, the words `slc` recognizes literally that stay in English: the `Roles:` and `Results:` headings, the `Captain shall prompt`, `Captain shall relay` and `Output shall include` clauses, role and result names, and the lead-in "in quotes (`>`)" before a blockquote relaying a runtime value, which a sentence in the session's language may surround;
@@ -490,8 +492,8 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 - the shape also says that a step leaves the repository unchanged, with exactly one new commit, or waiting on a Boss question, never with uncommitted edits for a later step, so a draft reviewed before its commit travels as text in the player's reply and the final step writes the files and makes the one commit;
 - the shape also says that a role's prompt describes only that role's own step and ends by naming the result the step reports, the later rounds, the hand-over between roles and the ending belonging to the behaviors' prose, since a prompt saying "then wait for …" makes the player end its reply waiting, which the runtime reads as the step's result;
 - the documents are the installed package's `slc/text2gears.md`, `reference/sdlc/review.md`, `reference/sdlc/code.md`, and `reference/sdlc/review.playbook/review.gears.md`, resolved from the package the core depends on;
-- the session state names the id, the spec package's path, the source path or "none", the last compile's outcome, and the roster players with adapter and model; a malformed directive from the previous reply is named at the head of the prompt, before anything else;
-- a queued Boss message dispatched after a compile settled carries the relay or success text as its preface instead of a separate turn [[playbook-library-68](#playbook-library-68)].
+- the session state names the id, the spec package's path, the source path or "none", the last compile's outcome, and the roster players with adapter and model; a malformed directive from the previous reply is named at the head of the prompt with why it did not read [[playbook-library-66](#playbook-library-66)], before anything else;
+- a queued Boss message dispatched after a compile settled, or after a reply owing an unreadable-block relay [[playbook-library-66](#playbook-library-66)], carries that relay or success text as its preface instead of a separate turn [[playbook-library-68](#playbook-library-68)].
 
 #### playbook-library-66
 
@@ -502,7 +504,8 @@ When an authoring turn ends with status success, the conversation runner shall p
 | `compile` | none | starts the session's compile as the Boss's Compile starts it [[playbook-library-57](#playbook-library-57)], under the same admission [[playbook-library-99](#playbook-library-99)]; where it cannot start — no source, or another job writing its folder — records the system line "◇ Compile skipped: ⟨why⟩" |
 | `register` | `command`, `intent`, `players: {⟨Role⟩: ⟨player id⟩}` | replaces the session's proposal [[playbook-library-61](#playbook-library-61)]; a role the compiled entry lacks is kept as a mismatch |
 
-- a fence opened inside another fence is content, not a directive; a block missing a key, carrying an unknown key or kind, or failing to parse is left as code, recorded as malformed, and named in the next prompt [[playbook-library-65](#playbook-library-65)];
+- a fence opened inside another fence is content, not a directive; a block missing a key, carrying an unknown key or kind, or failing to parse is left as code, recorded as malformed with why — the YAML error, or the key or kind missing, unknown or invalid — and named in the next prompt [[playbook-library-65](#playbook-library-65)];
+- a reply holding a malformed block that names no kind a readable block of the reply carries, and starting no compile, owes the agent an unreadable-block relay [[playbook-library-65](#playbook-library-65)], started as a compile's follow-up is [[playbook-library-68](#playbook-library-68)], a compile's follow-up owed meanwhile going in its place, unless it is the third reply to owe one with no Boss message between them; a Boss message resets that count, which, like the blocks named, lasts for the app's run;
 - a turn ended by Abort or an error acts on nothing.
 
 #### playbook-library-67
@@ -693,7 +696,17 @@ Where an authoring session holds two turns and a compile was running, when the c
 
 #### playbook-library-76
 
-Where the fake's reply carries, as an explicit case matrix, a block inside a fenced example, two register blocks, a block with an unknown key, a block that fails to parse, and a register block naming a role the entry lacks, the test suite shall assert that only the second register block became the proposal, the nested block acted as nothing, the malformed blocks were recorded malformed and named at the head of the next prompt, and the unknown role stood as a mismatch beside the derived roles [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)].
+Where the fake's reply carries, as an explicit case matrix, a block inside a fenced example, two register blocks, a block with an unknown key, a block that fails to parse, and a register block naming a role the entry lacks, the test suite shall assert that only the second register block became the proposal, the nested block acted as nothing, the malformed blocks were recorded malformed each with why, the block that fails to parse, naming no kind, owed a relay that started at once, its line naming a `spex` block [[playbook-library-53](#playbook-library-53)], and its prompt named both malformed blocks with why at its head, and the unknown role stood as a mismatch beside the derived roles [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)].
+
+#### playbook-library-106
+
+Where the core runs with the scripted fake adapter and a stub `slc` emitting a two-role entry, when an authoring session's compile succeeds and the Boss then sends five messages in order, queuing a sixth behind the last, the test suite shall assert:
+
+- the success turn's register block, whose unquoted intent holds ": ", was recorded with its YAML error as why; a relay turn followed at once whose prompt named the block with that error at its head and closed asking for the register block again, the thread reading "Could not read the agent's register block — sent to the agent"; and the relay's readable register block became the proposal [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)] [[playbook-library-53](#playbook-library-53)];
+- a reply holding a readable register block beside a malformed one replaced the proposal and owed no relay, and a reply holding a malformed register block beside a compile block started the compile and owed none, the compile's success turn naming the block with why at its head [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)];
+- a reply whose every relay is answered with another unreadable block was relayed twice and its third such reply was not, no turn starting after it, the thread reading "Could not read the agent's register block — three in a row; tell the agent how to proceed" [[playbook-library-66](#playbook-library-66)] [[playbook-library-53](#playbook-library-53)];
+- a Boss message after that stop reset the count, its reply's unreadable block relayed again [[playbook-library-66](#playbook-library-66)];
+- with the sixth message queued behind a slow reply, that reply's unreadable block had the thread read "Could not read the agent's register block — waiting for your queued message", and the queued message dispatched next with the block named at its head and the relay text as its preface [[playbook-library-66](#playbook-library-66)] [[playbook-library-65](#playbook-library-65)] [[playbook-library-53](#playbook-library-53)].
 
 #### playbook-library-102
 
@@ -783,6 +796,10 @@ Where the authoring workspace renders over a simulated core, when that core repl
 #### playbook-library-101
 
 Where the authoring workspace renders over a simulated core that refuses `draft.compile` `busy` because another job writes the session's artifact folder, when the Boss activates Compile, the test suite shall assert that the refusal shows and Compile stays enabled, reading "Compile" [[playbook-library-57](#playbook-library-57)].
+
+#### playbook-library-107
+
+Where the authoring workspace renders a transcript whose agent reply holds a spex block of an unknown kind, the test suite shall assert that the block stands as code whose visible caption reads "Spex could not read this block — unknown kind deploy" [[playbook-library-53](#playbook-library-53)].
 
 ### Browser Journeys
 
