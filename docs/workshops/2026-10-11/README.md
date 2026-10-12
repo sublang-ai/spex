@@ -40,11 +40,18 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-37 a source's first line as the Library title; W-38 the source-order rule learned only from a failed compile | spex PR 124 |
 | W-40 the repositories listing failing past about twenty-five spex repositories | spex-pub PR 8 |
 | W-41 the pick's first sync before the host's README; W-42 a repository the host leaves empty, and the creation mark lost on a restart | spex PR 128 and PR 129; confirmed on the eleven workshop clones |
+| W-44 the cost of a host read | spex-pub PR 12 (`project.json` first, the branch only where it is absent, the pair held for a minute per person) |
+| W-47 the pick's join without the sharing notice | spex PR 135 |
+| W-43 a host's rate limit read as a network failure | spex PR 140 (its own cause, the seconds named, Retry waits them out) |
+| W-48 the group picker naming groups by path alone | spex PR 137 |
+| W-50 the Compile control promising 30 to 120 minutes | spex PR 136 |
+| W-51 the Now band titled with the Boss's answer | spex PR 139 |
+| W-52 a package's intent printing its markdown links as typed | spex PR 138 |
 
 ## What is still open
 
 - Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects.
-- Groups: W-43 (a host's rate limit read as a network failure) and W-44 (the cost of a host read; a design note).
+- Dashboard: W-53 (the Running band titled with the session's first turn, not the current work's opening turn; a one-rule change under DR-119 left for a decision); W-49 (a project whose runs were chat turns, not ledger intents, reads "Nothing done here yet" in History; a design question under DR-035 and DR-038, like W-35 was).
 
 ## Where the records live
 
@@ -97,15 +104,15 @@ The check afterwards: no team home's workspace holds a folder under the backend'
 
 ## By the numbers
 
-Read from each home's session list and usage at the end of the simulation (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits).
+Read from each home's session list and usage at the end of the simulation, refreshed on 2026-10-12 for T01 (whose home now also lists the three sessions of the eval-harness project it joined) and T05 (the receipt-scan project and its `/release-notes` run) (tokens count every call's input, cache reads included; commits include the scaffold commit and the playbook-package commits).
 
 | Team | Sessions | Turns | Agent active (min) | Input tokens | Output tokens | Commits (incl. scaffold) |
 | --- | --- | --- | --- | --- | --- | --- |
-| T01 | 3 | 5 | 179 | 48,495,722 | 934,911 | 13 |
+| T01 | 6 | 10 | 213 | 59,689,658 | 1,204,866 | 13 |
 | T02 | 4 | 6 | 101 | 68,902,321 | 1,160,937 | 13 |
 | T03 | 6 | 16 | 90 | 114,229,237 | 1,806,432 | 27 |
 | T04 | 4 | 7 | 94 | 44,492,419 | 809,609 | 13 |
-| T05 | 2 | 8 | 35 | 11,412,683 | 566,161 | 6 |
+| T05 | 3 | 11 | 40 | 14,129,909 | 609,186 | 9 |
 | T06 | 3 | 7 | 46 | 14,552,110 | 210,642 | 9 |
 | T07 | 4 | 8 | 96 | 54,419,764 | 1,379,422 | 14 |
 | T08 | 3 | 5 | 34 | 11,193,936 | 269,955 | 9 |
@@ -118,9 +125,9 @@ Read from each home's session list and usage at the end of the simulation (token
 | --- | --- | --- | --- | --- |
 | T01 | `shape` | `evaluate` (T08) | pass | — |
 | T02 | `verify` (0.1.0, 0.1.1), `release-review` | `requirements` (T07) | committed | `release-review`: approved |
-| T03 | `propose`, `release` | `rollout` (T10) | plan committed, W-23 at the end; on `rollout` 0.1.1 rejected cleanly | `release`: approved |
+| T03 | `propose`, `release` | `rollout` (T10), `release-notes` (T05, from the page) | plan committed, W-23 at the end; on `rollout` 0.1.1 rejected cleanly | `release`: approved |
 | T04 | `sprint-plan` | `shape` (T01) | committed | — |
-| T05 | `design`, `trip-split` (spec only) | `release` (T03) | held with findings, the owner never asked | — |
+| T05 | `design`, `trip-split` (spec only), `release-notes` (from the page) | `release` (T03) | held with findings, the owner never asked | — |
 | T06 | `contrib` | `verify` (T02) | files committed, W-25 at the end; on `verify` 0.1.1 two commits taken, parked on W-27 | — |
 | T07 | `requirements`, `compliance` | `sprint-plan` (T04) | committed, W-23 at the end | `compliance`: passed, twice |
 | T08 | `evaluate`, `promote` | `design` (T05) | enabled | `promote`: promoted to staging |
