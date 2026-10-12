@@ -14,11 +14,14 @@
 // Signed in, "New group" heads the list where the host lets the person
 // create one, and where it says not, the one phrase naming who makes
 // groups, with no link and no control (DR-120); a group of the host
-// carries Members and, where the host lets them, "New subgroup" on its
-// heading (space-68, DR-114); your own group's heading carries neither,
-// nor does another account's login. No part of the list links a page
-// of the host, or names what stands behind the instance (space-1).
-// Every act is a command whose outcome arrives as state (space-29).
+// carries Members and, where the host lets them, "New subgroup",
+// "Rename" and — while the list holds nothing under it — "Delete" on its
+// heading (space-68, space-76, space-77, DR-114); your own group's
+// heading carries none of these, nor does another account's login. A
+// row the host lets the person move carries "Move to another group"
+// (space-78). No part of the list links a page of the host, or names
+// what stands behind the instance (space-1). Every act is a command
+// whose outcome arrives as state (space-29).
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
@@ -227,11 +230,20 @@ function GroupsMadeBy({ groups }: { groups: GroupsState }) {
   );
 }
 
+/** Whether the list holds a spex repository under a group or a group
+ * inside it (space-1): only an empty group offers Delete. */
+function holdsAnything(groups: GroupsState, group: Group): boolean {
+  if (group.repositories.length > 0) return true;
+  const inside = `${group.fullPath}/`.toLowerCase();
+  return groups.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
+}
+
 /** One group (space-1): its heading — with Members and, where the
- * host lets the person, "New subgroup" on a group of the host, your
- * own group's and another account's login's carrying neither (DR-114,
- * DR-120) — and its repositories' rows. What a heading's control opens
- * stands beneath the heading. */
+ * host lets the person, "New subgroup", "Rename" and, on an empty
+ * group, "Delete" on a group of the host, your own group's and another
+ * account's login's carrying none (DR-114, DR-120) — and its
+ * repositories' rows. What a heading's control opens stands beneath
+ * the heading. */
 function GroupSection({
   groups,
   group,
@@ -251,9 +263,14 @@ function GroupSection({
   onSelect(key: string): void;
   onNote: Note;
 }) {
-  const [opened, setOpened] = useState<"members" | "subgroup">();
+  const spaceGroupDelete = useAppStore((state) => state.spaceGroupDelete);
+  const [opened, setOpened] = useState<"members" | "subgroup" | "rename" | "delete">();
+  const [deleting, setDeleting] = useState(false);
+  const [refusal, setRefusal] = useState<string>();
   const membersRef = useRef<HTMLButtonElement>(null);
   const subgroupRef = useRef<HTMLButtonElement>(null);
+  const renameRef = useRef<HTMLButtonElement>(null);
+  const deleteRef = useRef<HTMLButtonElement>(null);
   // Your own group is called so, never by a folder's or this device's
   // user name; its path shows once the host names it, and until then
   // the key phrase says it will (space-1). A group's path stands beside
@@ -277,8 +294,35 @@ function GroupSection({
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => ref.current?.focus(), 0);
   };
-  const toggle = (which: "members" | "subgroup") => setOpened((was) => (was === which ? undefined : which));
+  const toggle = (which: "members" | "subgroup" | "rename" | "delete") => {
+    setRefusal(undefined);
+    setOpened((was) => (was === which ? undefined : which));
+  };
   const membersLabel = i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" });
+  // Delete stands only where the host lets the person and the list holds
+  // nothing under the group (space-1).
+  const deletable = hostGroup !== null && group.can.delete && !holdsAnything(groups, group);
+
+  /** Delete the group (space-77): the heading's control reads
+   * "Deleting…" until the reply; the group leaves the list as the core
+   * holds it gone, and a refusal stands beneath the heading, the group
+   * kept. */
+  const remove = async () => {
+    if (hostGroup === null) return;
+    setOpened(undefined);
+    setDeleting(true);
+    setRefusal(undefined);
+    try {
+      await spaceGroupDelete(hostGroup);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setRefusal(message);
+      onNote(message);
+      setTimeout(() => deleteRef.current?.focus(), 0);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div
@@ -287,8 +331,10 @@ function GroupSection({
       data-testid={`space-group-${group.fullPath}`}
       className="@container flex min-w-0 flex-col gap-1"
     >
-      <div className="flex min-w-0 items-center gap-1">
-        <h2 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
+      {/* The name owns the slack; where the heading's controls leave it
+          too little, they wrap beneath it (DR-041). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <h2 className="flex min-w-24 flex-1 basis-0 items-baseline gap-2 text-sm font-medium">
           <span className="min-w-0 truncate" title={group.own && !groups.account ? undefined : group.fullPath}>
             {name}
           </span>
@@ -339,7 +385,69 @@ function GroupSection({
             {i18n._({ id: "New subgroup", comment: "create a group inside this group on the Git host" })}
           </button>
         ) : null}
+        {hostGroup !== null && group.can.rename ? (
+          <button
+            ref={renameRef}
+            type="button"
+            data-testid={`space-group-rename-${group.fullPath}`}
+            aria-expanded={opened === "rename"}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            disabled={!connected || deleting}
+            onClick={() => toggle("rename")}
+          >
+            {i18n._({ id: "Rename", comment: "rename this group of the instance: its name and its path" })}
+          </button>
+        ) : null}
+        {deletable ? (
+          <button
+            ref={deleteRef}
+            type="button"
+            data-testid={`space-group-delete-${group.fullPath}`}
+            aria-expanded={opened === "delete"}
+            aria-describedby={refusal ? `space-group-refusal-${group.fullPath}` : undefined}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            disabled={!connected || deleting}
+            onClick={() => toggle("delete")}
+          >
+            {deleting
+              ? i18n._({ id: "Deleting…", comment: "the Delete control, while the host deletes the group" })
+              : i18n._({ id: "Delete", comment: "delete this empty group of the instance" })}
+          </button>
+        ) : null}
       </div>
+      {opened === "delete" && hostGroup !== null ? (
+        <div data-testid={`space-group-confirm-${group.fullPath}`} className="ml-6 min-w-0">
+          <InlineConfirm
+            question={i18n._("Delete {group}?", { group: group.fullPath })}
+            confirmLabel={i18n._({ id: "Delete", comment: "confirm: delete the group on the Git host" })}
+            cancelLabel={i18n._({ id: "Keep", comment: "cancel a deletion: leave it as it is" })}
+            onConfirm={() => void remove()}
+            onCancel={() => close(deleteRef)}
+          />
+        </div>
+      ) : null}
+      {refusal ? (
+        <p
+          id={`space-group-refusal-${group.fullPath}`}
+          data-testid={`space-group-refusal-${group.fullPath}`}
+          role="alert"
+          className="ml-6 min-w-0 text-xs text-red-600 dark:text-red-400"
+        >
+          {refusal}
+        </p>
+      ) : null}
+      {opened === "rename" && hostGroup !== null ? (
+        <div className="ml-6 min-w-0">
+          <GroupNameEditor
+            testId={`space-rename-${group.fullPath}`}
+            parent={null}
+            rename={{ group: hostGroup, name: group.name, path: lastSegment(group.fullPath) }}
+            connected={connected}
+            onClose={() => close(renameRef)}
+            onNote={onNote}
+          />
+        </div>
+      ) : null}
       {opened === "subgroup" && hostGroup !== null ? (
         <div className="ml-6 min-w-0">
           <GroupNameEditor
@@ -388,7 +496,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "members" | "notice" | "unrelated";
+type Opened = "pick" | "join" | "folder" | "members" | "notice" | "unrelated" | "move";
 
 /** One spex repository's row (space-1, space-61): the name owns the
  * slack, the code and the counts hide below @md (space-28), and the
@@ -418,7 +526,9 @@ function RepositoryRow({
   const spaceJoin = useAppStore((state) => state.spaceJoin);
   const spaceRefresh = useAppStore((state) => state.spaceRefresh);
   const rebindProject = useAppStore((state) => state.rebindProject);
+  const spaceRepositoryMove = useAppStore((state) => state.spaceRepositoryMove);
   const [opened, setOpened] = useState<Opened>();
+  const [moving, setMoving] = useState(false);
   const [busy, setBusy] = useState<"sync" | "join" | "retry">();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves, so nothing re-enables between the
@@ -428,6 +538,7 @@ function RepositoryRow({
   const controlRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLButtonElement>(null);
   const folderRef = useRef<HTMLButtonElement>(null);
+  const moveRef = useRef<HTMLButtonElement>(null);
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -438,9 +549,9 @@ function RepositoryRow({
 
   const control = rowControl(groups, group, repo);
   const groupRepository = isGroupRepository(group, repo);
-  const close = (focus: "control" | "members" | "folder" = "control") => {
+  const close = (focus: "control" | "members" | "folder" | "move" = "control") => {
     setOpened(undefined);
-    const ref = focus === "members" ? membersRef : focus === "folder" ? folderRef : controlRef;
+    const ref = focus === "members" ? membersRef : focus === "folder" ? folderRef : focus === "move" ? moveRef : controlRef;
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => ref.current?.focus(), 0);
   };
@@ -511,6 +622,26 @@ function RepositoryRow({
     } catch (cause) {
       // The refusal stands beside the row (space-63).
       setError((cause as Error).message);
+    }
+  };
+
+  /** Move the repository into a group, or your own where `groupId` is
+   * null (space-78): the control reads "Moving…" until the reply, after
+   * which the row stands under its new group as the core holds it; a
+   * refusal is the picker's to show. */
+  const move = async (groupId: string | null): Promise<void> => {
+    setMoving(true);
+    try {
+      await spaceRepositoryMove(repo.key, groupId);
+      setOpened(undefined);
+      // The row stands under its new group now: focus follows it there
+      // (DR-010 §6).
+      setTimeout(() => (document.querySelector(`[data-testid="space-row-move-${repo.key}"]`) as HTMLElement | null)?.focus(), 0);
+    } catch (cause) {
+      onNote((cause as Error).message);
+      throw cause;
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -636,6 +767,10 @@ function RepositoryRow({
   // a row with no clone here has nothing to pair (space-61).
   const needsFolder = cloneHere(repo) && !groupRepository && repo.folder === null && repo.state !== "local-only";
   const showMembers = repo.state === "reachable" && groups.account !== null;
+  // On a project's, where the host's last read lets the person move it;
+  // a group's own records stay in their group (space-1, DR-103).
+  const showMove = groups.account !== null && repo.can.transfer && !groupRepository;
+  const moveName = i18n._({ id: "Move to another group", comment: "move a spex repository into another group of the instance, or your own" });
 
   const code = repo.code
     ? displayRemote(repo.code)
@@ -801,6 +936,25 @@ function RepositoryRow({
             <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
           </button>
         ) : null}
+        {showMove ? (
+          <button
+            ref={moveRef}
+            type="button"
+            data-testid={`space-row-move-${repo.key}`}
+            // The long name is its title and its accessible name; the
+            // label keeps to the row's budget (space-28, DR-041).
+            aria-label={moving ? undefined : moveName}
+            title={moveName}
+            aria-expanded={opened === "move"}
+            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+            disabled={disabled || moving}
+            onClick={() => setOpened((was) => (was === "move" ? undefined : "move"))}
+          >
+            {moving
+              ? i18n._({ id: "Moving…", comment: "the Move control, while the host moves the spex repository" })
+              : i18n._({ id: "Move…", comment: "open the groups a spex repository may move to; its full name is 'Move to another group'" })}
+          </button>
+        ) : null}
         {controlButton}
       </div>
       {refusal && !running ? (
@@ -814,6 +968,17 @@ function RepositoryRow({
       ) : null}
       {opened === "pick" ? (
         <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close()} onNote={onNote} />
+      ) : null}
+      {opened === "move" ? (
+        <MovePicker
+          groups={groups}
+          group={group}
+          repo={repo}
+          busy={moving}
+          connected={connected}
+          onMove={move}
+          onClose={() => close("move")}
+        />
       ) : null}
       {opened === "join" ? (
         <FolderEditor
@@ -889,6 +1054,97 @@ function RepositoryRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+/** Where a spex repository moves (space-78): a picker as space-58's,
+ * "Your own group" first, then each group of the instance by its path
+ * — never another account's login, never the group the row stands
+ * under — with Cancel, Escape cancelling. A pick asks the host; a
+ * refusal stands in the picker, the row kept where it stood. */
+function MovePicker({
+  groups,
+  group,
+  repo,
+  busy,
+  connected,
+  onMove,
+  onClose,
+}: {
+  groups: GroupsState;
+  /** The group the row stands under. */
+  group: Group;
+  repo: RepositoryState;
+  busy: boolean;
+  connected: boolean;
+  onMove(groupId: string | null): Promise<void>;
+  onClose(): void;
+}) {
+  const [refusal, setRefusal] = useState<string>();
+  const firstRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+  const own = groups.groups.find((entry) => entry.own);
+  const targets: { key: string; label: string; title: string; groupId: string | null }[] = [
+    ...(own && !group.own ? [{ key: "own", label: i18n._("Your own group"), title: own.fullPath, groupId: null }] : []),
+    ...groups.groups
+      .filter((entry) => !entry.own && entry.id !== null && groupKey(entry) !== groupKey(group))
+      .map((entry) => ({ key: entry.fullPath, label: entry.fullPath, title: entry.name, groupId: entry.id })),
+  ];
+  const pick = async (groupId: string | null) => {
+    if (busy) return;
+    setRefusal(undefined);
+    try {
+      await onMove(groupId);
+    } catch (cause) {
+      setRefusal((cause as Error).message);
+      firstRef.current?.focus();
+    }
+  };
+  const option =
+    "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
+  return (
+    <div
+      role="group"
+      aria-label={i18n._("Move {name} to another group", { name: repo.name })}
+      data-testid={`space-move-${repo.key}`}
+      className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
+      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          if (!busy) onClose();
+        }
+      }}
+    >
+      <ul className="flex min-w-0 flex-col gap-1">
+        {targets.map((target, index) => (
+          <li key={target.key} className="min-w-0">
+            <button
+              ref={index === 0 ? firstRef : undefined}
+              type="button"
+              data-testid={`space-move-group-${target.key}`}
+              className={option}
+              disabled={!connected || busy}
+              title={target.title}
+              onClick={() => void pick(target.groupId)}
+            >
+              <span className="min-w-0 flex-1 truncate">{target.label}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" data-testid={`space-move-cancel-${repo.key}`} className={SECONDARY} disabled={busy} onClick={onClose}>
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+        </button>
+        {refusal ? (
+          <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
+            {refusal}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

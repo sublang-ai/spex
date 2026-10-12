@@ -1369,6 +1369,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -2093,13 +2094,20 @@ msgstr "decisions"
 msgid "Decisions, {count} records"
 msgstr "Decisions, {count} records"
 
+#. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
+#. delete this empty group of the instance
 #. remove the authoring session for good
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Delete"
 msgstr "Delete"
+
+#: src/components/SpaceGroups.tsx
+msgid "Delete {group}?"
+msgstr "Delete {group}?"
 
 #: src/components/LibrarySurface.tsx
 msgid "Delete authoring session {id}"
@@ -2151,8 +2159,10 @@ msgstr "Deleted {id}; its spec package folder stays at {path}"
 msgid "deleting…"
 msgstr "deleting…"
 
+#. the Delete control, while the host deletes the group
 #. the delete request is in flight
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
 
@@ -3201,6 +3211,7 @@ msgstr "Jumped to {id} — shown despite filter"
 msgid "just now"
 msgstr "just now"
 
+#. cancel a deletion: leave it as it is
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
@@ -3222,6 +3233,7 @@ msgstr "just now"
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
@@ -3441,9 +3453,28 @@ msgstr "Models reported by the installed runtime."
 msgid "More details"
 msgstr "More details"
 
+#: src/components/SpaceGroups.tsx
+msgid "Move {name} to another group"
+msgstr "Move {name} to another group"
+
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
+
+#. move a spex repository into another group of the instance, or your own
+#: src/components/SpaceGroups.tsx
+msgid "Move to another group"
+msgstr "Move to another group"
+
+#. open the groups a spex repository may move to; its full name is 'Move to another group'
+#: src/components/SpaceGroups.tsx
+msgid "Move…"
+msgstr "Move…"
+
+#. the Move control, while the host moves the spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Moving…"
+msgstr "Moving…"
 
 #. the new spex repository's name
 #: src/components/SpaceGroups.tsx
@@ -4691,6 +4722,11 @@ msgstr "Removed “{title}”"
 msgid "Removing…"
 msgstr "Removing…"
 
+#. rename this group of the instance: its name and its path
+#: src/components/SpaceGroups.tsx
+msgid "Rename"
+msgstr "Rename"
+
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
@@ -4955,12 +4991,14 @@ msgstr "Same as Captain"
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
+#. rename the group as the fields say on the Git host
 #. sync step: saving this device's changes
 #. write the draft to the file
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Save"
@@ -4990,10 +5028,12 @@ msgstr "Saving changes…"
 #. a save is in flight
 #. a save is in flight
 #. a save is in flight
+#. the Save control, while the host renames the group
 #. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 msgid "Saving…"
 msgstr "Saving…"

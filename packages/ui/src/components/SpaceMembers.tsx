@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Groups and sharing on the Groups surface (DR-114): a group created at
-// the list's head or a subgroup on a group's heading (space-68), and a
-// group's or a spex repository's members panel (space-62) with Share
-// (space-69) and Remove (space-72). An act stands exactly where the
+// the list's head or a subgroup on a group's heading (space-68), or
+// renamed there (space-76, DR-120), and a group's or a spex repository's
+// members panel (space-62) with Share (space-69) and Remove (space-72).
+// An act stands exactly where the
 // host's last read says the person may take it; the host is asked
 // whatever the view said, and its refusal stands in place with its
 // words. Nothing is retried, derived or cached: the members are read on
@@ -41,17 +42,20 @@ function derivedGroupPath(name: string): string {
     .replace(/^[-.]+|[-.]+$/g, "");
 }
 
-/** A new group's name and path, asked in place (space-68): "Group
- * name", "Path" following the name as the host derives it until the
- * reader edits it, Create and Cancel, Escape cancelling. Create stays
- * disabled while either is empty, reads "Creating…" while the host is
- * asked and takes no second submission; a refusal stands in the editor
- * with the name kept. The group already stands in the list when the
- * reply closes the editor: the core holds it as listed and announces it
- * first. */
+/** A group's name and path, asked in place (space-68): "Group name",
+ * "Path" following the name as the host derives it until the reader
+ * edits it, Create and Cancel, Escape cancelling. Create stays disabled
+ * while either is empty, reads "Creating…" while the host is asked and
+ * takes no second submission; a refusal stands in the editor with the
+ * name kept. The group already stands in the list when the reply closes
+ * the editor: the core holds it as listed and announces it first.
+ * Renaming (space-76), the fields hold the group's name and its own
+ * path segment, the path no longer follows the name, and Save sends
+ * only what differs, disabled while nothing does. */
 export function GroupNameEditor({
   testId,
   parent,
+  rename,
   connected,
   onClose,
   onNote,
@@ -59,16 +63,20 @@ export function GroupNameEditor({
   testId: string;
   /** The parent group's host id; null creates at the top. */
   parent: string | null;
+  /** The group renamed: its host id, its name and its own path segment. */
+  rename?: { group: string; name: string; path: string };
   connected: boolean;
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
   onNote: Note;
 }) {
   const spaceGroupCreate = useAppStore((state) => state.spaceGroupCreate);
-  const [name, setName] = useState("");
-  const [path, setPath] = useState("");
-  // The path follows the name until the reader edits it.
-  const [pathEdited, setPathEdited] = useState(false);
+  const spaceGroupRename = useAppStore((state) => state.spaceGroupRename);
+  const [name, setName] = useState(rename?.name ?? "");
+  const [path, setPath] = useState(rename?.path ?? "");
+  // The path follows the name until the reader edits it; a group's own
+  // path never follows a new name.
+  const [pathEdited, setPathEdited] = useState(rename !== undefined);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
@@ -79,13 +87,22 @@ export function GroupNameEditor({
 
   const chosen = name.trim();
   const chosenPath = path.trim();
+  // What a rename changes: the name, the path, or both.
+  const change = rename
+    ? {
+        ...(chosen !== rename.name ? { name: chosen } : {}),
+        ...(chosenPath !== rename.path ? { path: chosenPath } : {}),
+      }
+    : {};
+  const unchanged = rename !== undefined && Object.keys(change).length === 0;
   const submit = async () => {
-    if (!chosen || !chosenPath || inFlight.current) return;
+    if (!chosen || !chosenPath || unchanged || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setRefusal(undefined);
     try {
-      await spaceGroupCreate(chosen, chosenPath, parent);
+      if (rename) await spaceGroupRename(rename.group, change);
+      else await spaceGroupCreate(chosen, chosenPath, parent);
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
@@ -155,14 +172,18 @@ export function GroupNameEditor({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          data-testid={`${testId}-create`}
+          data-testid={`${testId}-${rename ? "save" : "create"}`}
           className={SECONDARY}
-          disabled={!connected || busy || !chosen || !chosenPath}
+          disabled={!connected || busy || !chosen || !chosenPath || unchanged}
           onClick={() => void submit()}
         >
-          {busy
-            ? i18n._({ id: "Creating…", comment: "the Create control, while the host creates the group" })
-            : i18n._({ id: "Create", comment: "create the group named in the field on the Git host" })}
+          {rename
+            ? busy
+              ? i18n._({ id: "Saving…", comment: "the Save control, while the host renames the group" })
+              : i18n._({ id: "Save", comment: "rename the group as the fields say on the Git host" })
+            : busy
+              ? i18n._({ id: "Creating…", comment: "the Create control, while the host creates the group" })
+              : i18n._({ id: "Create", comment: "create the group named in the field on the Git host" })}
         </button>
         <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
@@ -183,8 +204,7 @@ export function GroupNameEditor({
  * its name, the host's own role name and, where the membership comes
  * through a group, "via <group>"; where the host's last read says the
  * person may manage the members, Share stands in the panel and Remove
- * on each member held directly; "Open at <host>" leads to the host's
- * members page for everything else. */
+ * on each member held directly. */
 export function MembersPanel({
   groups,
   target,
