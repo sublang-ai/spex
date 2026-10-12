@@ -33,6 +33,7 @@ import {
   STEP_LINES,
   STEP_NAMES,
   STEP_ORDER,
+  cloneHere,
   groupUnits,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
@@ -1229,7 +1230,7 @@ export function SyncTab({
     );
   }
 
-  if (repo.state === "absent") {
+  if (!cloneHere(repo)) {
     return (
       <div data-testid="space-sync-tab" className="flex flex-col gap-3">
         <p className="text-sm text-neutral-500">{i18n._("Not on this device")}</p>

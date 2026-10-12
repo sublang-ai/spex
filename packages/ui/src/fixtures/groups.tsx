@@ -164,7 +164,8 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     name: "academy-spex",
     id: "42",
     own: false,
-    remote: "https://gitlab.example/jane/academy-spex.git",
+    // A remote at the host reads as its path in the instance (space-30).
+    remote: KEY,
     code: "https://jane@github.com/jane/academy.git",
     folder: "/Users/jane/code/academy",
     state: "reachable",
@@ -190,7 +191,7 @@ export const OWN_REPO: RepositoryState = repo({
   name: "jane-spex",
   id: "7",
   own: true,
-  remote: "https://gitlab.example/jane/jane-spex.git",
+  remote: OWN,
   code: null,
   folder: null,
   branch: null,
@@ -217,12 +218,12 @@ export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] =
   return {
     home: HOME,
     git: { ok: true, version: "2.45.0" },
-    host: { url: "https://gitlab.example", displayName: "GitLab" },
+    host: { url: "https://spex.example", displayName: "Spex Example" },
     account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
     readAt: NOW - MIN,
     groups: [
-      { id: "1", fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
+      { id: "1", fullPath: "jane", name: "jane", own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
     ],
     roles: ROLES,
     diagnostics: [],
@@ -288,10 +289,9 @@ export const READS: Record<string, SpaceReadResult> = {
 
 /** The members the host lists: the repository's own two. */
 export const MEMBERS: HostMemberInfo[] = [
-  { id: "7", login: "jane", displayName: "Jane", role: "Owner", url: null, direct: true, via: null },
-  { id: "8", login: "bob", displayName: null, role: "Developer", url: null, direct: true, via: null },
+  { id: "7", login: "jane", displayName: "Jane", role: "Owner", direct: true, via: null },
+  { id: "8", login: "bob", displayName: null, role: "Developer", direct: true, via: null },
 ];
-export const MEMBERS_URL = "https://gitlab.example/jane/academy-spex/-/project_members";
 
 /** What `space.get` answers: the tests set it, and a handler may move
  * it as the core would. */
@@ -323,9 +323,9 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
     case "space.signin.cancel":
       return { stopped: true };
     case "space.signin.start":
-      return { flow: "browser", url: "https://gitlab.example/login/app?client_id=spex&state=s" };
+      return { flow: "browser", url: "https://spex.example/login/app?client_id=spex&state=s" };
     case "space.members":
-      return { members: MEMBERS, membersUrl: MEMBERS_URL };
+      return { members: MEMBERS };
     case "space.group.create":
       return { group: { id: "90", fullPath: fields.path as string, name: fields.name as string } };
     case "space.share": {
@@ -333,12 +333,11 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
       const role = ROLES.find((entry) => entry.id === fields.role)?.name ?? (fields.role as string);
       const login = fields.login as string;
       return {
-        members: [...MEMBERS, { id: "9", login, displayName: null, role, url: null, direct: true, via: null }],
-        membersUrl: MEMBERS_URL,
+        members: [...MEMBERS, { id: "9", login, displayName: null, role, direct: true, via: null }],
       };
     }
     case "space.unshare":
-      return { members: MEMBERS.filter((member) => member.login !== fields.login), membersUrl: MEMBERS_URL };
+      return { members: MEMBERS.filter((member) => member.login !== fields.login) };
     case "space.diff":
       return {
         patch: `--- a/${fields.path}\n+++ b/${fields.path}\n@@ -1 +1 @@\n-old: 1\n+new: 2\n`,

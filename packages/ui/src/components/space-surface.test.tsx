@@ -537,14 +537,14 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
           op: "sync",
           step: "push",
           cause: "refused",
-          message: "GitLab refused: you are not allowed to push",
-          guidance: "Ask a maintainer of jane on GitLab for a role that can push. Then Retry.",
+          message: "Spex Example refused: you are not allowed to push",
+          guidance: "Ask a maintainer of jane on Spex Example for a role that can push. Then Retry.",
           retry: true,
         },
       }),
     );
     const card = screen.getByTestId("space-stopped");
-    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Push stopped — GitLab refused: you are not allowed to push");
+    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Push stopped — Spex Example refused: you are not allowed to push");
     expect(card.textContent).toContain("a role that can push");
     expect(card.textContent).toContain("saved locally (3 commits ahead)");
     expect(live()).toContain("Push stopped");
@@ -557,11 +557,11 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
 
   test("each transport cause reads in the host's words as the core phrases them (space-15)", async () => {
     const stops: [string, string][] = [
-      ["unreachable", "Could not reach GitLab"],
+      ["unreachable", "Could not reach Spex Example"],
       ["reauth", "Sign in again"],
-      ["refused", "GitLab refused: archived"],
+      ["refused", "Spex Example refused: archived"],
       ["gone", "No longer shared with you"],
-      ["timeout", "No answer from GitLab"],
+      ["timeout", "No answer from Spex Example"],
     ];
     for (const [cause, message] of stops) {
       await renderGroups(
@@ -577,7 +577,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
   test("Retry after a stopped check fetches again; a rejected push reads amber with 'changed again'", async () => {
     await renderGroups(
       repoState({
-        sync: { phase: "stopped", op: "check", step: "check", cause: "unreachable", message: "Could not reach GitLab", guidance: "Check the network.", retry: true },
+        sync: { phase: "stopped", op: "check", step: "check", cause: "unreachable", message: "Could not reach Spex Example", guidance: "Check the network.", retry: true },
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));

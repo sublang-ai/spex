@@ -7,9 +7,11 @@
 // at the list's head, Members and "New subgroup" on a group's heading,
 // Share and Remove in a members panel — the group editor (space-68),
 // Share (space-69), Remove (space-72), and the label budget the fit
-// rests on (space-28). Each act is checked by the command it sends.
+// rests on (space-28); where the person may not create a group, the
+// head's one phrase, and no link to a page of the host anywhere
+// (DR-120). Each act is checked by the command it sends.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, HostMemberInfo, RepositoryState } from "@sublang/spex-core/protocol";
 
@@ -48,7 +50,6 @@ const member = (login: string, role: string, via: string | null = null, displayN
   login,
   displayName,
   role,
-  url: null,
   direct: via === null,
   via,
 });
@@ -57,8 +58,6 @@ const member = (login: string, role: string, via: string | null = null, displayN
 const ACME_MEMBERS = [member("jane", "Owner", null, "Jane"), member("bob", "Developer")];
 /** a-spex's: jane through acme, bob its own. */
 const A_MEMBERS = [member("jane", "Owner", "acme", "Jane"), member("bob", "Developer")];
-const ACME_URL = "https://gitlab.example/groups/acme/-/group_members";
-const A_URL = "https://gitlab.example/acme/a-spex/-/project_members";
 
 /** The host's read: the person may create a group, may create a
  * subgroup in acme and manage its members, may do neither in other,
@@ -81,7 +80,6 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         id: ACME,
         fullPath: "acme",
         name: "acme",
-        url: "https://gitlab.example/acme",
         own: false,
         can: { createSubgroup: true, manageMembers: true },
         repositories: [repository(A_SPEX, "60", true)],
@@ -90,7 +88,6 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         id: OTHER,
         fullPath: "other",
         name: "other",
-        url: "https://gitlab.example/other",
         own: false,
         can: { createSubgroup: false, manageMembers: false },
         repositories: [repository(B_SPEX, "61", false)],
@@ -102,8 +99,8 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
 /** The core's answers with each target's members. */
 async function core(type: string, fields: Record<string, unknown> = {}): Promise<unknown> {
   if (type === "space.members") {
-    if (fields.group === ACME) return { members: ACME_MEMBERS, membersUrl: ACME_URL };
-    if (fields.repository === A_SPEX) return { members: A_MEMBERS, membersUrl: A_URL };
+    if (fields.group === ACME) return { members: ACME_MEMBERS };
+    if (fields.repository === A_SPEX) return { members: A_MEMBERS };
   }
   return answer(type, fields);
 }
@@ -125,14 +122,14 @@ const panel = (id: string) => screen.getByTestId(`space-members-${id}`);
 async function openGroupMembers(path: string): Promise<HTMLElement> {
   fireEvent.click(screen.getByTestId(`space-group-members-${path}`));
   const list = await screen.findByTestId(`space-members-group:${path}`);
-  await within(list).findByTestId(`space-members-link-group:${path}`);
+  await within(list).findAllByTestId(/^space-member-/);
   return list;
 }
 
 async function openRowMembers(key: string): Promise<HTMLElement> {
   fireEvent.click(screen.getByTestId(`space-row-members-${key}`));
   const list = await screen.findByTestId(`space-members-${key}`);
-  await within(list).findByTestId(`space-members-link-${key}`);
+  await within(list).findAllByTestId(/^space-member-/);
   return list;
 }
 
@@ -168,16 +165,15 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
       "Remove @jane",
       "Remove @bob",
     ]);
-    const link = within(acmeList).getByTestId("space-members-link-group:acme") as HTMLAnchorElement;
-    expect(link.textContent).toBe("Open at gitlab.example");
-    expect(link.href).toBe(ACME_URL);
+    // No page of the host is linked (space-62, DR-120).
+    expect(acmeList.querySelector("a")).toBeNull();
 
     // other's panel lists its members with no Share and no Remove.
     const otherList = await openGroupMembers("other");
     expect(calls("space.members")[1]).toEqual({ group: OTHER });
     expect(within(otherList).queryByRole("button", { name: "Share" })).toBeNull();
     expect(within(otherList).queryByRole("button", { name: /Remove/ })).toBeNull();
-    expect(within(otherList).getByTestId("space-members-link-group:other").textContent).toBe("Open at gitlab.example");
+    expect(otherList.querySelector("a")).toBeNull();
   });
 
   test("a-spex's panel carries Share and Remove on its own members, an inherited one reading via its group; b-spex's carries neither", async () => {
@@ -206,35 +202,26 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
     expect(within(own).getByTestId(`space-share-${OWN}`)).toBeTruthy();
   });
 
-  test("where the host's read says no group may be created, the list's head names the host's site instead (DR-118)", async () => {
+  test("where the host's read says no group may be created, the list's head reads who makes groups, with no link and no control (DR-120)", async () => {
     const refused = sharingHome({ canCreateGroup: false });
-    const own = { ...refused.groups[0]!, url: "https://gitlab.example/jane" };
-    await renderGroups({ ...refused, groups: [own, ...refused.groups.slice(1)] }, { open: false });
+    await renderGroups(refused, { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
-    const link = screen.getByTestId("space-new-group-at-host") as HTMLAnchorElement;
-    // One key phrase on the link, at the list's head, and no sentence
-    // explaining what is not offered (DR-069).
-    expect(link.textContent).toBe("New group at gitlab.example");
-    expect(screen.getByTestId("space-groups").firstElementChild).toBe(link);
-    // The host's site: the origin of your own group's page there, in a
-    // new tab; with the bridge, in the system browser.
-    expect(link.getAttribute("href")).toBe("https://gitlab.example");
-    expect(link.target).toBe("_blank");
-    expect(link.rel).toBe("noreferrer");
-    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
-    (window as { spexNative?: unknown }).spexNative = { openExternal };
-    fireEvent.click(link);
-    expect(openExternal).toHaveBeenCalledWith("https://gitlab.example");
-    delete (window as { spexNative?: unknown }).spexNative;
+    const phrase = screen.getByTestId("space-groups-made-by");
+    // One key phrase at the list's head, naming the instance, and no
+    // sentence explaining what is not offered (DR-069).
+    expect(phrase.textContent).toBe("Groups are made by the people who run Spex Example");
+    expect(screen.getByTestId("space-groups").firstElementChild).toBe(phrase);
+    expect(phrase.querySelector("a, button")).toBeNull();
+    expect(screen.getByTestId("space-groups").querySelector("a")).toBeNull();
     cleanup();
     activateLanguage("zh");
-    await renderGroups({ ...refused, groups: [own, ...refused.groups.slice(1)] }, { open: false });
-    expect(screen.getByTestId("space-new-group-at-host").textContent).toBe("在 gitlab.example 新建群组");
+    await renderGroups(refused, { open: false });
+    expect(screen.getByTestId("space-groups-made-by").textContent).toBe("群组由运营 Spex Example 的人创建");
     cleanup();
     activateLanguage("en");
-    // Before a read gives your own group's page, nothing stands.
-    await renderGroups(refused, { open: false });
-    expect(screen.queryByTestId("space-new-group-at-host")).toBeNull();
+    // Before a read is held, neither stands.
+    await renderGroups({ ...refused, readAt: null }, { open: false });
+    expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-new-group")).toBeNull();
   });
 
@@ -243,10 +230,9 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
     expect(screen.queryByTestId("space-new-group")).toBeNull();
     cleanup();
     const out = sharingHome();
-    const page = { ...out.groups[0]!, url: "https://gitlab.example/jane" };
-    await renderGroups({ ...out, account: null, readAt: null, groups: [page, ...out.groups.slice(1)] }, { open: false });
+    await renderGroups({ ...out, account: null, readAt: null }, { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
-    expect(screen.queryByTestId("space-new-group-at-host")).toBeNull();
+    expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-group-members-acme")).toBeNull();
     expect(screen.queryByTestId("space-group-subgroup-acme")).toBeNull();
   });
@@ -338,7 +324,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
       groups: [
         own!,
         acme!,
-        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", url: null, own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
         other!,
       ],
     });
@@ -386,7 +372,7 @@ describe("GROUPS: Share (space-69)", () => {
     fireEvent.click(share);
     expect(share.getAttribute("aria-expanded")).toBe("true");
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    const login = within(editor).getByLabelText("Login at gitlab.example") as HTMLInputElement;
+    const login = within(editor).getByLabelText("Login at spex.example") as HTMLInputElement;
     expect(document.activeElement).toBe(login);
     const roles = within(editor).getByRole("listbox", { name: "Role" }) as HTMLSelectElement;
     expect(within(roles).getAllByRole("option").map((option) => option.textContent)).toEqual([
@@ -410,8 +396,8 @@ describe("GROUPS: Share (space-69)", () => {
     expect(calls("space.share")).toEqual([{ group: ACME, login: "carol", role: "30" }]);
     // No account under that login: the host's words in the editor, the
     // login kept.
-    replies[0]!.reject(new SpexCommandError("not_found", "GitLab has no account named carol"));
-    await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("GitLab has no account named carol"));
+    replies[0]!.reject(new SpexCommandError("not_found", "Spex Example has no account named carol"));
+    await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("Spex Example has no account named carol"));
     expect(login.value).toBe("carol");
     expect(add.textContent).toBe("Add");
 
@@ -421,7 +407,7 @@ describe("GROUPS: Share (space-69)", () => {
     fireEvent.click(add);
     await waitFor(() => expect(calls("space.share")).toHaveLength(2));
     expect(calls("space.share")[1]).toEqual({ group: ACME, login: "carol", role: "40" });
-    replies[1]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer")], membersUrl: ACME_URL });
+    replies[1]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer")] });
     await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
     expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("@carol added as Maintainer");
     expect(live()).toBe("@carol added as Maintainer");
@@ -437,7 +423,7 @@ describe("GROUPS: Share (space-69)", () => {
     const list = await openRowMembers(A_SPEX);
     fireEvent.click(within(list).getByTestId(`space-share-${A_SPEX}`));
     const editor = within(list).getByTestId(`space-share-${A_SPEX}-editor`);
-    fireEvent.change(within(editor).getByLabelText("Login at gitlab.example"), { target: { value: "@dave" } });
+    fireEvent.change(within(editor).getByLabelText("Login at spex.example"), { target: { value: "@dave" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Add" }));
     // The fixture's host lists the added account at the role it got.
     await waitFor(() => expect(calls("space.share")).toEqual([{ repository: A_SPEX, login: "dave", role: "30" }]));
@@ -451,7 +437,7 @@ describe("GROUPS: Share (space-69)", () => {
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     fireEvent.click(share);
-    fireEvent.keyDown(within(list).getByLabelText("Login at gitlab.example"), { key: "Escape" });
+    fireEvent.keyDown(within(list).getByLabelText("Login at spex.example"), { key: "Escape" });
     expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull();
     // The panel itself stays open.
     expect(screen.getByTestId("space-members-group:acme")).toBeTruthy();
@@ -493,15 +479,15 @@ describe("GROUPS: Remove (space-72)", () => {
     await waitFor(() => expect(remove().textContent).toBe("Removing…"));
     expect(remove().disabled).toBe(true);
     expect(calls("space.unshare")).toEqual([{ group: ACME, login: "bob" }]);
-    replies[0]!.reject(new SpexCommandError("invalid_request", "GitLab refused: 403 Forbidden"));
-    await waitFor(() => expect(within(bob()).getByRole("alert").textContent).toBe("GitLab refused: 403 Forbidden"));
+    replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: 403 Forbidden"));
+    await waitFor(() => expect(within(bob()).getByRole("alert").textContent).toBe("Spex Example refused: 403 Forbidden"));
     expect(remove().textContent).toBe("Remove");
     await waitFor(() => expect(document.activeElement).toBe(remove()));
 
     fireEvent.click(remove());
     fireEvent.click(within(within(bob()).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(calls("space.unshare")).toHaveLength(2));
-    replies[1]!.resolve({ members: [ACME_MEMBERS[0]!], membersUrl: ACME_URL });
+    replies[1]!.resolve({ members: [ACME_MEMBERS[0]!] });
     await waitFor(() => expect(within(list).queryByTestId("space-member-bob")).toBeNull());
     expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("@bob removed");
     expect(live()).toBe("@bob removed");
@@ -546,7 +532,7 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     measure();
     fireEvent.change(within(screen.getByTestId("space-new-group-editor")).getByLabelText("Group name"), { target: { value: "Workshop" } });
     fireEvent.click(within(screen.getByTestId("space-new-group-editor")).getByRole("button", { name: "Create" }));
-    fireEvent.change(within(list).getByLabelText("Login at gitlab.example"), { target: { value: "carol" } });
+    fireEvent.change(within(list).getByLabelText("Login at spex.example"), { target: { value: "carol" } });
     fireEvent.click(within(list).getByRole("button", { name: "Add" }));
     fireEvent.click(within(within(list).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(within(list).getByTestId("space-member-remove-bob").textContent).toBe("Removing…"));
@@ -578,10 +564,10 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     expect(share.textContent).toBe("共享");
-    expect(within(list).getByTestId("space-members-link-group:acme").textContent).toBe("在 gitlab.example 打开");
+    expect(list.querySelector("a")).toBeNull();
     fireEvent.click(share);
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    fireEvent.change(within(editor).getByLabelText("gitlab.example 上的用户名"), { target: { value: "carol" } });
+    fireEvent.change(within(editor).getByLabelText("spex.example 上的用户名"), { target: { value: "carol" } });
     fireEvent.click(within(editor).getByRole("button", { name: "添加" }));
     await waitFor(() => expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("已添加 @carol，角色为 Developer"));
   });

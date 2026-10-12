@@ -29,6 +29,7 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import {
   STEP_LINES,
   STEP_NAMES,
+  cloneHere,
   clonePath,
   repositoryStatePhrase,
   revealBridge,
@@ -563,7 +564,9 @@ function RepositoryPanel({
 
   const dot = statusDot(repo);
   const root = clonePath(groups.home, repo.key);
-  const absent = repo.state === "absent";
+  // No clone here: a row the host lists that this device lacks, or one
+  // in a group named like a login (space-61).
+  const absent = !cloneHere(repo);
   return (
     <section
       id="space-repository"

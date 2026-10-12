@@ -2881,6 +2881,11 @@ msgstr "Group records"
 msgid "Groups"
 msgstr "Groups"
 
+#. the groups list's head where the person may not create a group; {name} is the instance's display name; no link, no control
+#: src/components/SpaceGroups.tsx
+msgid "Groups are made by the people who run {name}"
+msgstr "Groups are made by the people who run {name}"
+
 #: src/components/CaptainHome.tsx
 msgid "Heads up — some agents aren't ready yet:"
 msgstr "Heads up — some agents aren't ready yet:"
@@ -3514,11 +3519,6 @@ msgstr "new"
 msgid "New group"
 msgstr "New group"
 
-#. link to the Git host's own site, where a group at the top is made when Spex may not create one; {site} is that site's host name
-#: src/components/SpaceGroups.tsx
-msgid "New group at {site}"
-msgstr "New group at {site}"
-
 #: src/components/SpaceGroups.tsx
 msgid "New in a group"
 msgstr "New in a group"
@@ -3979,11 +3979,6 @@ msgstr "Open {title} — running in {project}"
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
-
-#. link to the Git host's own members page, where everything else about members is changed
-#: src/components/SpaceMembers.tsx
-msgid "Open at {host}"
-msgstr "Open at {host}"
 
 #: src/components/DraftConversation.tsx
 msgid "Open Enable"
