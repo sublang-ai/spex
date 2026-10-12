@@ -16,12 +16,14 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import type { GroupsState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
+import { absoluteTitle, shortMoment } from "../lib/time.js";
 import { setClientForTests } from "../state/store.js";
 import {
   BRANCH,
   GIT_WORDS,
   HOME,
   HOST_WORDS,
+  HOUR,
   KEY,
   MIN,
   NOW,
@@ -175,7 +177,12 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     // name, its repositories only on this device, no row with a control.
     const groups = within(screen.getByTestId("space-groups")).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Your own group"]);
-    expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).toBe("Your own group");
+    // The key phrase stands where its path will, which the sign-in
+    // names after the login (space-1, space-59): no path before it.
+    expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).toBe(
+      "Your own group · named after your login at sign-in",
+    );
+    expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).not.toContain("jane");
     expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("On this device only — shared once you sign in");
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this device only");
     for (const key of [OWN, KEY]) {
@@ -368,12 +375,25 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
 describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", () => {
   test("your own group first, then each group the host lists with its full path, each repository a row", async () => {
     const mine = base({}, [repo({ local: [SESSION_UNIT], lastSync: { at: NOW - 2 * 60 * MIN, sent: 1, received: 0 } })]);
-    await renderGroups({ ...mine, groups: [...mine.groups, teamGroup()] }, { open: false });
+    // A personal group the host names after the login, its path apart
+    // from its name, and a group whose name is its path (space-1).
+    const personal = { ...teamGroup([]), id: "3", fullPath: "jane1", name: "jane", url: "https://gitlab.example/jane1" };
+    const plain = { ...teamGroup([]), id: "4", fullPath: "lab", name: "lab", url: "https://gitlab.example/lab" };
+    await renderGroups({ ...mine, groups: [...mine.groups, teamGroup(), personal, plain] }, { open: false });
     const groups = within(screen.getByTestId("space-groups")).getAllByRole("group");
-    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Your own group", "acme/team"]);
-    // Signed in, your own group's path stands beside its heading.
-    expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).toBe("Your own groupjane");
-    expect(within(groups[1]!).getByRole("heading", { level: 2 }).textContent).toBe("teamacme/team");
+    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Your own group", "acme/team", "jane1", "lab"]);
+    // Signed in, your own group's path stands beside its heading, after
+    // the separator, as a path apart from a group's name does; a path
+    // that is the name reads once.
+    const heading = (index: number) => within(groups[index]!).getByRole("heading", { level: 2 });
+    expect(heading(0).textContent).toBe("Your own group · jane");
+    expect(heading(1).textContent).toBe("team · acme/team");
+    expect(heading(2).textContent).toBe("jane · jane1");
+    expect(heading(3).textContent).toBe("lab");
+    // The separator is the eye's: the heading's name reads its words.
+    expect(screen.getByTestId("space-heading-beside-jane1").firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByTestId("space-heading-beside-jane1").className).toContain("text-neutral-500");
+    expect(screen.queryByTestId("space-heading-beside-lab")).toBeNull();
     // In each group the rows stand in the core's order, its own first.
     expect(within(groups[1]!).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
       "space-row-acme/team/team-spex",
@@ -433,6 +453,35 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       expect(controls, phrase).toEqual([...(members ? ["Members"] : []), ...(controlName ? [controlName] : [])]);
       cleanup();
     }
+  });
+
+  test("a reachable row reads its recorded sync, else the last one its clone holds (space-61)", async () => {
+    const held = (at: number, current: boolean) => ({ ...BRANCH, agreed: { at, current } });
+    const recorded = NOW - 5 * MIN;
+    const agreedAt = NOW - 3 * HOUR;
+    const since = NOW - 26 * HOUR;
+    const cases: [Partial<RepositoryState>, string, number | null][] = [
+      // This device's record stands over what the clone holds.
+      [{ lastSync: { at: recorded, sent: 1, received: 0 }, branch: held(since, false) }, "Synced 5m ago", recorded],
+      // None recorded — a core started afresh after a sync, a joined
+      // clone — the clone's own commits say when it last agreed.
+      [{ lastSync: null, branch: held(agreedAt, true) }, "Synced 3h ago", agreedAt],
+      [{ lastSync: null, branch: held(since, false) }, `Not synced since ${shortMoment(since)}`, since],
+      [{ lastSync: null, branch: { ...BRANCH, agreed: null } }, "Never synced", null],
+    ];
+    for (const [over, phrase, at] of cases) {
+      await renderGroups(base({}, [repo(over)]), { open: false });
+      const state = screen.getByTestId(`space-repo-state-${KEY}`);
+      expect(state.textContent, phrase).toBe(phrase);
+      // The full moment rides the title (DR-010 §2).
+      expect(state.getAttribute("title"), phrase).toBe(at === null ? phrase : absoluteTitle(at));
+      cleanup();
+    }
+    // In the reader's language, the moment as the locale writes it.
+    activateLanguage("zh");
+    await renderGroups(base({}, [repo({ lastSync: null, branch: held(since, false) })]), { open: false });
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe(`自 ${shortMoment(since)} 起未同步`);
+    expect(shortMoment(since)).toMatch(/月/);
   });
 
   test("a project's records naming no code remote read so", async () => {

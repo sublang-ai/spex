@@ -9,7 +9,7 @@
 // Share (space-69), Remove (space-72), and the label budget the fit
 // rests on (space-28). Each act is checked by the command it sends.
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, HostMemberInfo, RepositoryState } from "@sublang/spex-core/protocol";
 
@@ -206,13 +206,47 @@ describe("GROUPS: each act where the host's read says (space-1, space-62)", () =
     expect(within(own).getByTestId(`space-share-${OWN}`)).toBeTruthy();
   });
 
+  test("where the host's read says no group may be created, the list's head names the host's site instead (DR-118)", async () => {
+    const refused = sharingHome({ canCreateGroup: false });
+    const own = { ...refused.groups[0]!, url: "https://gitlab.example/jane" };
+    await renderGroups({ ...refused, groups: [own, ...refused.groups.slice(1)] }, { open: false });
+    expect(screen.queryByTestId("space-new-group")).toBeNull();
+    const link = screen.getByTestId("space-new-group-at-host") as HTMLAnchorElement;
+    // One key phrase on the link, at the list's head, and no sentence
+    // explaining what is not offered (DR-069).
+    expect(link.textContent).toBe("New group at gitlab.example");
+    expect(screen.getByTestId("space-groups").firstElementChild).toBe(link);
+    // The host's site: the origin of your own group's page there, in a
+    // new tab; with the bridge, in the system browser.
+    expect(link.getAttribute("href")).toBe("https://gitlab.example");
+    expect(link.target).toBe("_blank");
+    expect(link.rel).toBe("noreferrer");
+    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(true);
+    (window as { spexNative?: unknown }).spexNative = { openExternal };
+    fireEvent.click(link);
+    expect(openExternal).toHaveBeenCalledWith("https://gitlab.example");
+    delete (window as { spexNative?: unknown }).spexNative;
+    cleanup();
+    activateLanguage("zh");
+    await renderGroups({ ...refused, groups: [own, ...refused.groups.slice(1)] }, { open: false });
+    expect(screen.getByTestId("space-new-group-at-host").textContent).toBe("在 gitlab.example 新建群组");
+    cleanup();
+    activateLanguage("en");
+    // Before a read gives your own group's page, nothing stands.
+    await renderGroups(refused, { open: false });
+    expect(screen.queryByTestId("space-new-group-at-host")).toBeNull();
+    expect(screen.queryByTestId("space-new-group")).toBeNull();
+  });
+
   test("nothing stands for an act the host does not let the person take, nor before sign-in", async () => {
     await renderGroups(sharingHome({ canCreateGroup: false }), { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
     cleanup();
     const out = sharingHome();
-    await renderGroups({ ...out, account: null, readAt: null }, { open: false });
+    const page = { ...out.groups[0]!, url: "https://gitlab.example/jane" };
+    await renderGroups({ ...out, account: null, readAt: null, groups: [page, ...out.groups.slice(1)] }, { open: false });
     expect(screen.queryByTestId("space-new-group")).toBeNull();
+    expect(screen.queryByTestId("space-new-group-at-host")).toBeNull();
     expect(screen.queryByTestId("space-group-members-acme")).toBeNull();
     expect(screen.queryByTestId("space-group-subgroup-acme")).toBeNull();
   });
@@ -311,7 +345,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
     replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
     await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(control));
-    expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 2 }).textContent).toBe("华芯智造 Labacme/huaxin-lab");
+    expect(within(region("acme/huaxin-lab")).getByRole("heading", { level: 2 }).textContent).toBe("华芯智造 Lab · acme/huaxin-lab");
     const headings = [...screen.getByTestId("space-groups").querySelectorAll("[data-testid^='space-group-']")]
       .map((element) => element.getAttribute("data-testid"))
       .filter((id) => id === "space-group-acme" || id === "space-group-acme/huaxin-lab" || id === "space-group-other");

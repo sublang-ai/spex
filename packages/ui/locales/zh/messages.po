@@ -3450,6 +3450,11 @@ msgstr "请填写本设备上的文件夹路径。"
 msgid "Name the new spex repository."
 msgstr "请为新的 spex 仓库命名。"
 
+#. beside the heading 'Your own group' before sign-in: its name and path come from the login
+#: src/components/SpaceGroups.tsx
+msgid "named after your login at sign-in"
+msgstr "登录后以你的用户名命名"
+
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
 msgstr "{project} 指定，此处尚未设置"
@@ -3504,6 +3509,11 @@ msgstr "新增"
 #: src/components/SpaceGroups.tsx
 msgid "New group"
 msgstr "新建群组"
+
+#. link to the Git host's own site, where a group at the top is made when Spex may not create one; {site} is that site's host name
+#: src/components/SpaceGroups.tsx
+msgid "New group at {site}"
+msgstr "在 {site} 新建群组"
 
 #: src/components/SpaceGroups.tsx
 msgid "New in a group"
@@ -3791,6 +3801,11 @@ msgstr "未登录"
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
 msgstr "此模型不支持"
+
+#. a spex repository's row: this device and the host have differed since that moment, when they last agreed
+#: src/lib/space.ts
+msgid "Not synced since {moment}"
+msgstr "自 {moment} 起未同步"
 
 #: src/lib/space.ts
 msgid "Not yet shared"

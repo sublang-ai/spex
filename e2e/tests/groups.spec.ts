@@ -185,7 +185,7 @@ test.describe("first start", () => {
     await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(1);
     await expect(groups.getByTestId("space-group-e2e")).toBeVisible();
     const own = groups.getByRole("group", { name: "Your own group" });
-    await expect(own.getByRole("heading", { level: 2 })).toHaveText("Your own group");
+    await expect(own.getByRole("heading", { level: 2 })).toHaveText("Your own group · named after your login at sign-in");
     const ownRow = own.locator('[data-testid^="space-row-"]');
     await expect(ownRow).toHaveCount(1);
     await expect(ownRow.locator('[data-testid^="space-repo-state-"]')).toHaveText("On this device only — shared once you sign in");
@@ -1040,7 +1040,9 @@ test.describe("second device", () => {
     await editor.getByTestId(`space-join-${key}-path`).fill(folder);
     await editor.getByRole("button", { name: "Join", exact: true }).click();
     await expect(page.getByTestId(`space-row-${key}`)).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
-    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^(Synced just now|Never synced)$/);
+    // The joined clone holds the host's `spex`: it reads synced at the
+    // peer's last push, never "Never synced" (space-61).
+    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/);
     expect(existsSync(join(clonePath(app.dataDir, key), "project.json"))).toBe(true);
     expect(existsSync(join(folder, "README.md"))).toBe(true);
     expect(git(folder, "remote", "get-url", "origin")).toBe(code);

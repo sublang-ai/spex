@@ -130,6 +130,9 @@ export interface SpaceHost {
  * the host's id recorded beside it (git-host-5). */
 interface CloneFacts { remote: string | null; id: string | null }
 
+/** The last sync a clone holds (space-61). */
+type Agreed = NonNullable<NonNullable<RepositoryState["branch"]>["agreed"]>;
+
 /** A step at the host waiting for a member with the rights (space-64). */
 interface Waiting {
   step: "create" | "branch";
@@ -647,6 +650,9 @@ class RepositorySync {
   private repairFailure?: string;
   private refreshProblem?: StorageDiagnostic;
   private mergePending = false;
+  /** The last sync the clone held at its last reading, by the pair of
+   * commits it was read from: a pair always reads the same. */
+  private agreedRead?: { pair: string; agreed: Agreed | null };
 
   constructor(private readonly host: SpaceHost, private readonly owner: SpaceManager, public repository: SpexRepository) {
     this.git = this.makeGit(repository.dir);
@@ -877,6 +883,7 @@ class RepositorySync {
         hostEmpty: this.checkedAt !== null && this.remoteEmpty,
         unrelated: this.unrelated,
         mergePending: repo.mergePending,
+        agreed: repo.head ? await this.agreed(repo.head, repo.originSpex) : null,
       } : null,
       local: this.lists.local,
       incoming: this.lists.incoming,
@@ -886,6 +893,35 @@ class RepositorySync {
       sync: this.phase,
     };
     return state;
+  }
+
+  /** The last sync the clone holds, read from its own commits whatever
+   * this core ran (space-61, DR-111): the commit `spex` last shared with
+   * the host's `spex` as the clone last fetched or pushed it — `spex`
+   * itself where the two are one — with its commit time; none where the
+   * clone holds no host's `spex` or none sharing its history. A failed
+   * read says none and is read again next time. */
+  private async agreed(head: string, originSpex: string | null): Promise<Agreed | null> {
+    if (originSpex === null) return null;
+    const pair = `${head} ${originSpex}`;
+    if (this.agreedRead?.pair === pair) return this.agreedRead.agreed;
+    let shared: string | null = head;
+    if (head !== originSpex) {
+      const base = await this.git.run(["merge-base", head, originSpex]);
+      // Exit 1 is no common ancestor: unrelated histories hold no sync.
+      if (base.code === 1) shared = null;
+      else if (base.code === 0) shared = base.stdout.toString("utf8").trim();
+      else return null;
+    }
+    let agreed: Agreed | null = null;
+    if (shared !== null) {
+      const time = await this.git.run(["log", "-1", "--no-show-signature", "--format=%ct", shared]);
+      const seconds = time.code === 0 ? Number.parseInt(time.stdout.toString("utf8").trim(), 10) : Number.NaN;
+      if (!Number.isFinite(seconds)) return null;
+      agreed = { at: seconds * 1000, current: head === originSpex };
+    }
+    this.agreedRead = { pair, agreed };
+    return agreed;
   }
 
   /** The working tree's lists against the last check, kept as this
