@@ -3642,7 +3642,6 @@ msgstr "no items in active groups"
 msgid "no items match the search"
 msgstr "no items match the search"
 
-#: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
 #: src/components/ProjectGroup.tsx
 msgid "no messages yet"

@@ -35,6 +35,7 @@ import {
   queueOf,
   runningPlayer,
   sessionStatus,
+  sessionWorkTitle,
   turnStartedAt,
   useCaptureReveal,
   useForgeAge,
@@ -406,9 +407,9 @@ function RunningRow({
   const status = sessionStatus(view, session.turnActive ?? view?.turnActive);
   const player = runningPlayer(view);
   const startedAt = turnStartedAt(view);
-  // The sidebar's title rule: the session's own words, a plain
-  // stand-in until its first Boss turn lands.
-  const title = session.title ?? i18n._("no messages yet");
+  // The Now band's rule: the turn that opened the work the session is
+  // doing, never an answer to its run's question (dashboard-50, DR-119).
+  const title = sessionWorkTitle(session);
   return (
     <button
       type="button"

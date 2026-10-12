@@ -106,7 +106,7 @@ While a project's live session holds a turn in flight and no attention entry for
 | Row part | Content |
 | --- | --- |
 | Project | the session's project name |
-| Title | the session's own words — its first Boss turn, as the sidebar names it, and a plain stand-in while it has none |
+| Title | the Boss turn that opened the work it is doing [[core-service-32](core-service.md#core-service-32)] — never an answer to a question the run asked ([DR-119](../decisions/119-an-answer-continues-its-intent.md)) — and a plain stand-in while it has held no turn |
 | Doing | its human-readable engagement state label in the Now band's vocabulary [[dashboard-28](#dashboard-28)] — "deciding" or "working" while a turn is active with no leaf state — with the running player named beside it and the turn's elapsed span |
 
 - activating a row opens that session;
@@ -475,7 +475,7 @@ Where a fixture stream holds a live session serving an open intent and carrying 
 
 #### dashboard-66
 
-Where fixture state holds a project's current conversation serving no intent — its transcript an opening Boss turn, the question its run asked and the Boss's answer, its summary as the core folds them — the test suite shall assert that the Now band's text is the opening turn's while the answer's turn runs, never the answer's, and that once a later turn is sent with no question standing the text is that turn's [[dashboard-28](#dashboard-28)].
+Where fixture state holds a project's current conversation serving no intent — its transcript a first Boss turn of earlier work, the Boss turn opening the work it is doing, the question its run asked and the Boss's answer, its summary as the core folds them — the test suite shall assert that while the answer's turn runs the Now band's text [[dashboard-28](#dashboard-28)] and the Running band's title [[dashboard-50](#dashboard-50)] are the opening turn's, never the answer's or the first turn's, and that once a later turn is sent with no question standing both are that turn's [[dashboard-28](#dashboard-28)] [[dashboard-50](#dashboard-50)].
 
 ### Browser Journeys
 

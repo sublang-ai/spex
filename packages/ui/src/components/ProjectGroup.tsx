@@ -69,6 +69,18 @@ export function firstLine(text: string): string {
   return text.split(/\r?\n/, 1)[0] ?? text;
 }
 
+/** A session's work in its own words: the Boss turn that opened the
+ * work it is doing, as the core names it — never an answer sent while
+ * the run's question stood (core-service-32, DR-119) — its first turn
+ * from a core that names none, and a plain stand-in before any turn.
+ * The Now band and the Running band read this one rule, so the two
+ * never disagree (dashboard-28, dashboard-50). */
+export function sessionWorkTitle(session: SessionInfo): string {
+  return firstLine(
+    session.workTitle ?? session.title ?? i18n._("no messages yet"),
+  );
+}
+
 /** A project's queue in the order the core serves it: oldest first
  * (dashboard-29, core-service-107). */
 export function queueOf(
@@ -763,9 +775,7 @@ function NowBand({
   // Serving no intent, the row leads with the turn that opened the work
   // the session is doing, as the core names it — never an answer sent
   // while the run's question stood (dashboard-28, DR-119).
-  const title = served
-    ? contentTitle(served.intent)
-    : firstLine(session.workTitle ?? session.title ?? i18n._("no messages yet"));
+  const title = served ? contentTitle(served.intent) : sessionWorkTitle(session);
   const playbook = view?.frames[0]?.playbookId;
 
   const drop = async () => {
