@@ -121,6 +121,15 @@ async function openRepository(page: Page, key: string): Promise<void> {
   await expect(page.getByTestId("space-repository")).toBeVisible();
 }
 
+/** How the picker reads each of the stand-in's groups (space-58): as
+ * the list's headings do, by its name, then its path after the
+ * separator where the two differ (space-1). */
+const PICKED_AS: Record<string, string> = {
+  [HOST_LOGIN]: `Your own group · ${HOST_LOGIN}`,
+  [HOST_GROUP]: `Acme · ${HOST_GROUP}`,
+  [`${HOST_GROUP}/research`]: `Research · ${HOST_GROUP}/research`,
+};
+
 /** The step lines in their order (space-12). */
 const STEP_LINES = [
   "Saving changes…",
@@ -243,14 +252,15 @@ test.describe("first start", () => {
     await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
     await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
 
-    // Pick a group offers the stand-in's groups; picking the team's
-    // turns the row reachable with a sync time, the stand-in holding
-    // `<name>-spex` on its `spex` branch (space-58, space-12).
+    // Pick a group offers the stand-in's groups, each by its name and
+    // its path; picking the team's turns the row reachable with a sync
+    // time, the stand-in holding `<name>-spex` on its `spex` branch
+    // (space-58, space-12).
     await page.getByTestId(`space-row-pick-${projectKey}`).click();
     const picker = page.getByTestId(`space-picker-${projectKey}`);
     await expect(picker).toBeVisible();
     for (const group of [HOST_LOGIN, HOST_GROUP, `${HOST_GROUP}/research`]) {
-      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(group);
+      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(PICKED_AS[group]!);
     }
     await expect(picker.getByTestId(`space-pick-name-${projectKey}`)).toHaveValue("demo-project");
     await picker.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
@@ -346,7 +356,7 @@ test.describe("a folder added while signed in", () => {
     await expect(picker).toBeVisible();
     await expect(palette.getByTestId("palette-path")).toHaveCount(0);
     for (const group of [HOST_LOGIN, HOST_GROUP, `${HOST_GROUP}/research`]) {
-      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(group);
+      await expect(picker.getByTestId(`space-pick-group-${group}`)).toHaveText(PICKED_AS[group]!);
     }
     await expect(picker.getByTestId(`space-pick-name-${localKey}`)).toHaveValue("demo-project");
 
@@ -505,8 +515,9 @@ test.describe("organizing", () => {
     expect(standinGroup(SUBGROUP)?.name).toBe("Design Team");
 
     // A project added from the palette is offered your own group and
-    // then every group by its path, and picked into the new subgroup:
-    // `<name>-spex` stands there on the stand-in's `spex` (space-58).
+    // then every group by its name, its path after it where the two
+    // differ, and picked into the new subgroup: `<name>-spex` stands
+    // there on the stand-in's `spex` (space-58).
     seedDemoProject(app.projectDir);
     await page.getByRole("button", { name: "Switch or add a project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
@@ -515,7 +526,11 @@ test.describe("organizing", () => {
     const localKey = `${HOST_LOGIN}/demo-project-spex`;
     const picker = palette.getByTestId(`space-picker-${localKey}`);
     await expect(picker.locator('[data-testid^="space-pick-group-"]')).toHaveText([
-      HOST_LOGIN, HOST_GROUP, SUBGROUP, `${HOST_GROUP}/research`, "platform",
+      PICKED_AS[HOST_LOGIN]!,
+      PICKED_AS[HOST_GROUP]!,
+      `Design Team · ${SUBGROUP}`,
+      PICKED_AS[`${HOST_GROUP}/research`]!,
+      "Platform · platform",
     ]);
     await picker.getByTestId(`space-pick-group-${SUBGROUP}`).click();
     await expect(palette).toBeHidden();
