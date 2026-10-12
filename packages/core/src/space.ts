@@ -599,6 +599,10 @@ function countIssues(diagnostics: StorageDiagnostic[]): number {
 const repairPref = (key: string): string => `space:repair:${key}`;
 /** A repository's last completed sync (space-22, storage-5). */
 const lastSyncPref = (key: string): string => `sync:${key}:last`;
+/** Whether a listed repository may have members besides the account: a
+ * count above one, or none where the host's read lacked it (space-57,
+ * git-host-5). */
+const mayHaveOthers = (listing: HostListing): boolean => listing.members === null || listing.members > 1;
 /** The privacy notice seen for a repository (storage-5, space-57). */
 const noticedPref = (key: string): string => `sync:${key}:noticed`;
 
@@ -2784,7 +2788,7 @@ export class SpaceManager {
         // read: the notice is seen first (space-57).
         const store = this.host.store;
         if (noticed) store.setPref(noticedPref(key), true);
-        else if (!listing.readOnly && (listing.members ?? 0) > 1 && store.getPref<unknown>(noticedPref(key)) !== true) {
+        else if (!listing.readOnly && mayHaveOthers(listing) && store.getPref<unknown>(noticedPref(key)) !== true) {
           throw new CoreError("invalid_request", i18n._({
             id: "Read the sharing notice before joining {name}",
             values: { name: listing.repository.path },
@@ -3291,7 +3295,7 @@ export class SpaceManager {
     let view = this.view;
     if (!view) { try { view = await this.readHost(); } catch { return; } }
     const listing = listingFor(view, facts.id, facts.remote);
-    if (!listing || listing.readOnly || (listing.members ?? 0) <= 1) return;
+    if (!listing || listing.readOnly || !mayHaveOthers(listing)) return;
     throw new CoreError("invalid_request", i18n._({
       id: "Read the sharing notice before the first sync of {name}",
       values: { name: splitKey(machine.key).name },

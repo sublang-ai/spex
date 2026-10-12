@@ -73,7 +73,8 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
  * roles, the person, every group, every spex repository across its
  * pages — each as the host says what the person may do there — and for
  * each repository its read-only and branch state and its members'
- * count. Any failure fails the whole read, so a view is never half a
+ * count. A members read the host fails leaves that count unknown;
+ * any other failure fails the whole read, so a view is never half a
  * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
@@ -84,15 +85,29 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
     client.repositories(),
   ]);
   const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, async (repository): Promise<HostListing> => {
-    const [detail, members] = await Promise.all([client.repository(repository.id), client.members({ kind: "repository", id: repository.id })]);
+    const [detail, members] = await Promise.all([client.repository(repository.id), memberCount(client, repository.id)]);
     return {
       repository,
       readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
       branchPresent: detail.branch.present || detail.spexBranch,
-      members: members.members.length,
+      members,
     };
   });
   return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, listings };
+}
+
+/** A spex repository's members' count, the account among them, or null
+ * where the host fails to read its members — spex.pub fails every
+ * members read while its service identity's does (git-host-5). An
+ * answer that signs the device out, or a pair replaced meanwhile, fails
+ * the whole read as any other failure does. */
+async function memberCount(client: GitHostClient, id: string): Promise<number | null> {
+  try {
+    return (await client.members({ kind: "repository", id })).members.length;
+  } catch (error) {
+    if (error instanceof HostError && error.kind !== "reauth") return null;
+    throw error;
+  }
 }
 
 /** The key a listed repository's clone takes under `workspace/`: its

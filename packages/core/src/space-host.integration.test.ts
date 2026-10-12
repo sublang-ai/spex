@@ -642,6 +642,61 @@ test("space-37: a join pick and the first sync into a repository with other memb
   assert.equal(prefsOf(home.dataDir)["sync:acme/pal-spex:noticed"], true);
 });
 
+test("git-host-14, space-37: with every members route failing at the stand-in, a Refresh and a sync's Check stand with no count, and a pick joining or a first push waits for the notice", async (t) => {
+  const host = await startHost();
+  t.after(() => host.script.failMembers(false));
+  const code = codeRepository("solo");
+  const solo = host.script.addRepository({ group: "acme", name: "solo-spex", project: { format: 1, name: "solo", remote: code } });
+  const pal = host.script.addRepository({ group: "acme", name: "pal-spex" });
+  const home = await startHome("members-down", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signedIn = home.client.mark();
+  const signed = await signIn(home, host);
+  // Counted while the stand-in answers: the account alone (git-host-5).
+  assert.equal(repositoryOf(signed, "acme/solo-spex").members, 1);
+  assert.equal(repositoryOf(signed, "acme/pal-spex").members, 1);
+  await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+
+  // The stand-in fails every members route, every other answering, as
+  // spex.pub does while its service identity's read fails: a Refresh
+  // holds its read, each count unknown and the rest as listed
+  // (git-host-5).
+  host.script.failMembers(true);
+  const before = (await home.client.expectOk("space.get", {})).readAt ?? 0;
+  const fromRead = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  const read = await home.client.waitSpace(fromRead, (state) => (state.readAt ?? 0) > before, 30_000);
+  assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
+  assert.deepEqual([HOST_OWN, "acme/solo-spex", "acme/pal-spex"].map((key) => [key, repositoryOf(read, key).state, repositoryOf(read, key).members]), [
+    [HOST_OWN, "reachable", null],
+    ["acme/solo-spex", "absent", null],
+    ["acme/pal-spex", "absent", null],
+  ]);
+  assert.equal(repositoryOf(read, "acme/solo-spex").id, solo.id);
+  // A members read is the host's failure, relayed (git-host-11).
+  await home.client.expectError("space.members", { repository: HOST_OWN }, "invalid_request", new RegExp(`^Could not reach ${HOST_NAME}`));
+
+  // A sync's Check reads the host and goes on (git-host-5).
+  const synced = await home.client.settle("space.sync", { repository: HOST_OWN });
+  assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
+  assert.equal(synced.state, "reachable");
+
+  // An unknown count is taken to have other members (space-57): the first
+  // sync of a repository joined here waits for the notice, then goes on.
+  const folder = join(mkdtempSync(join(scratch, "solo-")), "solo");
+  const fromJoin = home.client.mark();
+  await home.client.expectOk("space.join", { hostId: solo.id, folder });
+  const joined = await home.client.waitRepository(fromJoin, "acme/solo-spex", (repository) => repository.state !== "absent" && repository.folder !== null && repository.sync.phase === "idle", 30_000);
+  assert.equal(joined.state, "reachable");
+  assert.equal(joined.members, null);
+  await home.client.expectError("space.sync", { repository: "acme/solo-spex" }, "invalid_request", /sharing notice/);
+  const noticed = await home.client.settle("space.sync", { repository: "acme/solo-spex", noticed: true });
+  assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
+  // And a pick joining one waits for it too.
+  const mine = await addFolder(home, gitFolder("pal"));
+  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", hostId: pal.id } }, "invalid_request", /sharing notice/);
+});
+
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {
   const host = await startHost();
   const code = codeRepository("held");

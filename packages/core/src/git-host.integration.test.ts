@@ -29,6 +29,7 @@ import {
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
+import { readHostView } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
 async function setup(options: { skew?: { ms: number } } = {}) {
@@ -792,6 +793,20 @@ test("git-host-8: members with the host's role names and no page", async () => {
     // No page of the host crosses (DR-120).
     assert.deepEqual(Object.keys(answer), ["members"]);
     assert.ok(members.every((m) => Object.keys(m).sort().join() === "direct,displayName,id,login,role,via"), JSON.stringify(members));
+
+    // Every members route failing, as spex.pub's do while its service
+    // identity's read fails, every other route answering (git-host-12):
+    // a read holds the rest of the view, the count unknown (git-host-5).
+    t.host.script.failMembers(true);
+    await assert.rejects(t.client.members({ kind: "repository", id: repo.id }), hostError("unreachable", { words: "The Git host could not be reached." }));
+    await assert.rejects(t.client.members({ kind: "group", id: "2002" }), hostError("unreachable"));
+    await assert.rejects(t.client.addMember({ kind: "repository", id: repo.id }, { login: "bob", role: "developer" }), hostError("unreachable"));
+    await assert.rejects(t.client.removeMember({ kind: "repository", id: repo.id }, "grace"), hostError("unreachable"));
+    const held = await readHostView(t.client);
+    assert.deepEqual(held.groups.map((group) => group.fullPath), ["ada", "acme", "acme/research"]);
+    assert.deepEqual(held.listings.map((listing) => [listing.repository.id, listing.branchPresent, listing.members]), [[repo.id, false, null]]);
+    t.host.script.failMembers(false);
+    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [3]);
   } finally {
     await t.dispose();
   }

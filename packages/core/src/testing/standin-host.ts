@@ -229,6 +229,11 @@ export interface StandinScript {
   /** While set, adding or removing a member answers 403 `host_refused`
    * with these words (host-27, host-28). */
   refuseMembers(message: string | null): void;
+  /** While set, every members route — a read, an addition or a removal,
+   * of a group or a spex repository — answers 502 `provider_unavailable`,
+   * as spex.pub does while its service identity's read of its container's
+   * members fails (host-8); every other route answers. */
+  failMembers(on: boolean): void;
   /** While set, renaming a group answers 403 `host_refused` with these
    * words (host-30). */
   refuseGroupRename(message: string | null): void;
@@ -491,6 +496,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   /** Groups created while the listing lags, left out of it. */
   const lagging = new Set<StandinGroup>();
   let membersRefusal: string | null = null;
+  let membersFailing = false;
   let groupRenameRefusal: string | null = null;
   let groupDeleteRefusal: string | null = null;
   let transferRefusal: string | null = null;
@@ -874,6 +880,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       if (!on) lagging.clear();
     },
     refuseMembers: (message) => { membersRefusal = message; },
+    failMembers: (on) => { membersFailing = on; },
     refuseGroupRename: (message) => { groupRenameRefusal = message; },
     refuseGroupDelete: (message) => { groupDeleteRefusal = message; },
     refuseTransfer: (message) => { transferRefusal = message; },
@@ -1111,6 +1118,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (groupMatch) {
       const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(groupMatch[1]));
       if (!group) return envelope(res, 404, "not_found", "The group is not known.");
+      if (membersFailing) return membersUnavailable(res);
       const login = groupMatch[2] === undefined ? undefined : decodeURIComponent(groupMatch[2]);
       const target: MembersPlace = {
         path: group.fullPath,
@@ -1150,6 +1158,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       if (!repo) return envelope(res, 404, "not_found", "The repository is not shared with this account.");
       if (match[2] === undefined && method === "GET") return json(res, 200, await detailWire(repo));
       if (match[2]?.startsWith("/members")) {
+        if (membersFailing) return membersUnavailable(res);
         const login = match[2] === "/members" ? undefined : decodeURIComponent(match[2].slice("/members/".length));
         const target: MembersPlace = {
           path: `${repo.group.fullPath}/${repo.path}`,
@@ -1175,6 +1184,12 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       }
     }
     return envelope(res, 404, "not_found", "Nothing is here.");
+  }
+
+  /** A members route while the service identity's read fails (host-8,
+   * host-11): spex.pub's relay of a call made as the instance. */
+  function membersUnavailable(res: ServerResponse): void {
+    envelope(res, 502, "provider_unavailable", "The Git host could not be reached.");
   }
 
   async function create(req: IncomingMessage, res: ServerResponse): Promise<void> {
