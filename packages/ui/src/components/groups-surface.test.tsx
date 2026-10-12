@@ -584,7 +584,9 @@ describe("GROUPS: Pick a group (space-58)", () => {
     const listed = within(picker).getAllByTestId(/^space-pick-repo-/);
     expect(listed.map((option) => option.dataset.testid)).toEqual(["space-pick-repo-acme/team/academy-spex"]);
     expect(listed[0]!.textContent).toContain("academy-spex");
-    expect(listed[0]!.textContent).toContain("acme/team");
+    // Its group reads as the group's heading reads: its name, then its
+    // path where the two differ (space-58).
+    expect(screen.getByTestId("space-pick-listed-group-acme/team/academy-spex").textContent).toBe("team · acme/team");
     expect(listed[0]!.textContent).toContain("3 members");
     expect(document.activeElement).toBe(listed[0]);
     // Below them, every group, with the folder's name to create, each

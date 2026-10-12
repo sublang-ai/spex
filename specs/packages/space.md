@@ -92,7 +92,7 @@ While a spex repository has other members and has never been pushed from this de
 
 #### space-58
 
-When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+When a working folder is added while signed in [[storage-6](storage.md#storage-6)], or the reader activates a local-only spex repository's "Pick a group", the surface shall offer, in one picker, the spex repositories the host lists whose `project.json` names the folder's remote — each with its group, read as the list reads it [[space-1](#space-1)], and its members' count — and, below them, each group the host lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - picking a listed spex repository clones it and pairs it with the folder, or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing notice is seen where that repository may have other members [[space-57](#space-57)];
 - picking a group creates `<name>-spex` there [[git-host-6](git-host.md#git-host-6)], the pick naming it by its host id and your own group by none, and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
@@ -185,7 +185,7 @@ When the reader activates "Delete" on a group's heading [[space-1](#space-1)], t
 
 #### space-78
 
-When the reader activates "Move to another group" on a project's spex repository's row [[space-1](#space-1)], the surface shall open beneath the row a picker of groups as in [[space-58](#space-58)] — "Your own group" first, then each group the host lists by its path in the instance, never another account's login, the group the row stands under left out — with Cancel, Escape cancelling, and on a pick shall send `space.repository.move` naming the spex repository and that group, or none for your own group [[git-host-20](git-host.md#git-host-20)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+When the reader activates "Move to another group" on a project's spex repository's row [[space-1](#space-1)], the surface shall open beneath the row a picker of groups as in [[space-58](#space-58)] — your own group first, then each group the host lists, each read by its name with its path in the instance after it where the path differs, as the list reads it [[space-1](#space-1)], never another account's login, the group the row stands under left out — with Cancel, Escape cancelling, and on a pick shall send `space.repository.move` naming the spex repository and that group, or none for your own group [[git-host-20](git-host.md#git-host-20)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
 
 - the row's control reads "Moving…" and the picker refuses a second pick while the command runs;
 - a success closes the picker, the row standing under its new group at once with its key unchanged, as the core holds it [[git-host-20](git-host.md#git-host-20)], and its clone moving on its next sync [[space-60](#space-60)];
@@ -887,7 +887,7 @@ Where the Groups surface renders over a home whose issues list holds three unans
 
 #### space-70
 
-Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other`, may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+Where the Groups surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other` named "Other team", may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
 - "New group" stands at the list's head, `acme`'s heading carries "New subgroup" and "Share", `other`'s and your own group's carry neither, and `a-spex`'s members panel carries Share while `b-spex`'s does not [[space-1](#space-1)] [[space-62](#space-62)];
 - rendered again over a read that says the person may not create a group, the list's head holds no "New group" but the phrase "Groups are made by the people who run <display name>", in English and in Chinese, with no link and no control, and neither before a read is held [[space-1](#space-1)];
@@ -897,7 +897,7 @@ Where the Groups surface renders over a signed-in home whose host read says the 
 - `acme`'s heading carries "Rename" and no "Delete", `a-spex` standing under it, `empty`'s carries both, `other`'s and your own group's neither, and `a-spex`'s row carries "Move…" named "Move to another group" while `b-spex`'s carries none, nor does your own group's own spex repository's, which the host lets the person move [[space-1](#space-1)];
 - "Rename" on `acme` opens the editor holding "acme" and its path, Save disabled until either changes and the path not following the name; Save sends `space.group.rename` naming `acme` with only what changed and reads "Saving…" until the reply, a refusal standing in the editor with the name kept, and a success closing it [[space-76](#space-76)];
 - "Delete" on `empty` asks "Delete empty?" with Keep focused, Escape keeping and sending nothing; Delete sends `space.group.delete` naming `empty` and reads "Deleting…" until the reply, a refusal standing beneath the heading with the group kept [[space-77](#space-77)];
-- "Move…" on `a-spex` opens the picker with "Your own group" first and then every group but `acme` by its path, Escape closing it; a pick sends `space.repository.move` naming `a-spex` and that group, or none for your own, the control reading "Moving…" until the reply, a refusal standing in the picker, and a success closing it [[space-78](#space-78)];
+- "Move…" on `a-spex` opens the picker with "Your own group · <its full path>" first and then every group but `acme`, `other` as "Other team · other" and `empty` by its name once, an option's accessible name holding the name before the path, Escape closing it; a pick sends `space.repository.move` naming `a-spex` and that group, or none for your own, the control reading "Moving…" until the reply, a refusal standing in the picker, and a success closing it [[space-78](#space-78)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-66
@@ -911,7 +911,7 @@ Where the Groups surface renders over a signed-out home, when the reader signs i
 - where the core reports that the host signed this device out, the card reads "<host name> signed this device out. Sign in again to continue as @<login>." before "Until you do, everything stays on this device and nothing is contacted.", with "Sign in again" as its control, in English and in Chinese [[space-3](#space-3)];
 - signed in, the header reads "Signed in as @<login> at <host>" with Sign out, the read time with Refresh, and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
 - signed in, your own group is headed "Your own group · <its full path>", a group whose name differs from its full path "<name> · <full path>", and one whose name is its full path by its name once [[space-1](#space-1)];
-- signed in, "Pick a group" on a local-only row offers your own group as "Your own group · <its full path>", a group whose name differs from its full path as "<name> · <full path>", and one whose name is its full path by its name once, each option's accessible name holding the name before the path [[space-58](#space-58)];
+- signed in, "Pick a group" on a local-only row offers your own group as "Your own group · <its full path>", a group whose name differs from its full path as "<name> · <full path>", and one whose name is its full path by its name once, each option's accessible name holding the name before the path, and a listed spex repository's group reads the same way [[space-58](#space-58)];
 - a group's own repository reads "Group records", a project's with no code remote "Code not on a remote", and a local-only one "On this device only" [[space-1](#space-1)] [[space-61](#space-61)];
 - a reachable row reads "Synced <age>" from its recorded sync, and with none recorded, from its clone: "Synced <age>" where the clone's `spex` is the host's, "Not synced since <moment>" where it is not, and "Never synced" where the clone holds no host's `spex` [[space-61](#space-61)].
 
@@ -953,7 +953,7 @@ Where the harness boots the served shell with the demo project registered and a 
 
 Where the harness boots the served shell signed in at the stand-in host holding in `acme` a project's spex repository a peer pushed with `bob` as its other member, when a folder holding the same code is added and Groups picks that repository on the folder's row, once with the stand-in counting the members and once with it failing every members route, the test suite shall assert through the page in each case:
 
-- the picker lists the repository with its group, and with "2 members" only where the stand-in counted them [[space-58](#space-58)];
+- the picker lists the repository with its group read as "Acme · acme", and with "2 members" only where the stand-in counted them [[space-58](#space-58)];
 - picking it says the notice in the picker beneath it with Cancel focused, and Escape closes the notice alone, the repository still local only and focus back on it [[space-57](#space-57)];
 - Continue closes the picker, and the row stands reachable in `acme` with a sync time, its notice recorded, its clone holding the peer's session and agreeing with the stand-in's `spex` [[space-57](#space-57)] [[space-58](#space-58)] [[space-13](#space-13)].
 
@@ -971,7 +971,7 @@ Where the harness boots the served shell signed in at the stand-in host, whose r
 
 - a group created at the list's head and renamed through its heading's "Rename" stands under its new name and path, and a rename the stand-in refuses stands in the editor with its words and the name kept [[space-76](#space-76)];
 - `acme`, holding the project, carries no "Delete", while the new group's "Delete" asks with Keep focused, a deletion the stand-in refuses stands beneath the heading with its words, and a second "Delete" leaves the list and the stand-in without the group [[space-1](#space-1)] [[space-77](#space-77)];
-- the project's "Move…" offers "Your own group" and every group but `acme`; a move the stand-in refuses stands in the picker with its words, and a move into `acme/research` lists the row under it at once with its key unchanged, the row's Sync then moving the clone under `workspace/acme/research/` [[space-78](#space-78)];
+- the project's "Move…" offers "Your own group · <login>" and every group but `acme`, each by its name with its path after it where the two differ; a move the stand-in refuses stands in the picker with its words, and a move into `acme/research` lists the row under it at once with its key unchanged, the row's Sync then moving the clone under `workspace/acme/research/` [[space-78](#space-78)];
 - with the editor, the confirm and the picker each open, and in Chinese with the picker open, the surface holds no link and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab` [[space-1](#space-1)];
 - the new controls fit at the 320-pixel floor [[space-28](#space-28)].
 

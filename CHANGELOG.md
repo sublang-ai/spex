@@ -860,6 +860,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   the sharing notice beneath it, and Continue joins (space-57, space-58).
 - An authoring session's Compile control no longer says "30 to 120 minutes" but "a few minutes, longer for many roles", as compiles now take.
 - "Pick a group" reads each group by its name, then its path (space-58).
+- The group pickers read each group by its name, then its path (space-58, space-78).
 
 ### Security
 

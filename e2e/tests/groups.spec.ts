@@ -121,9 +121,9 @@ async function openRepository(page: Page, key: string): Promise<void> {
   await expect(page.getByTestId("space-repository")).toBeVisible();
 }
 
-/** How the picker reads each of the stand-in's groups (space-58): as
- * the list's headings do, by its name, then its path after the
- * separator where the two differ (space-1). */
+/** How a picker reads each of the stand-in's groups (space-58,
+ * space-78): as the list's headings do, by its name, then its path
+ * after the separator where the two differ (space-1). */
 const PICKED_AS: Record<string, string> = {
   [HOST_LOGIN]: `Your own group · ${HOST_LOGIN}`,
   [HOST_GROUP]: `Acme · ${HOST_GROUP}`,
@@ -413,13 +413,13 @@ test.describe("a folder joining a team's project", () => {
       await expect(page.getByTestId(`space-repo-state-${localKey}`)).toHaveText("On this device only");
 
       // Pick a group lists the team's project for the same code, with
-      // its group and its members' count where the host read one
-      // (space-58).
+      // its group read as its heading reads and its members' count
+      // where the host read one (space-58).
       await page.getByTestId(`space-row-pick-${localKey}`).click();
       const picker = page.getByTestId(`space-picker-${localKey}`);
       const listed = picker.getByTestId(`space-pick-repo-${key}`);
       await expect(listed).toContainText("demo-project-spex");
-      await expect(listed).toContainText(HOST_GROUP);
+      await expect(picker.getByTestId(`space-pick-listed-group-${key}`)).toHaveText(PICKED_AS[HOST_GROUP]!);
       if (unknown) await expect(listed).not.toContainText("member");
       else await expect(listed).toContainText("2 members");
 
@@ -781,9 +781,9 @@ test.describe("undo", () => {
     expect(standinGroup("core-platform")).toBeUndefined();
 
     // The project's Move… offers your own group and every group but
-    // acme; a move the stand-in refuses stands in the picker, and a move
-    // into acme/research lists the row there at once, its key unchanged
-    // (space-78).
+    // acme, each read as the pick reads it; a move the stand-in refuses
+    // stands in the picker, and a move into acme/research lists the row
+    // there at once, its key unchanged (space-78).
     const RESEARCH = `${HOST_GROUP}/research`;
     host.script.refuseTransfer("Moves are paused for this project.");
     const move = list.getByTestId(`space-row-move-${TEAM_KEY}`);
@@ -791,7 +791,7 @@ test.describe("undo", () => {
     await expect(move).toHaveAttribute("aria-label", "Move to another group");
     await move.click();
     const picker = list.getByTestId(`space-move-${TEAM_KEY}`);
-    await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText(["Your own group", RESEARCH]);
+    await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText([PICKED_AS[HOST_LOGIN]!, PICKED_AS[RESEARCH]!]);
     await clean("the move picker");
     await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
     await expect(picker.getByRole("alert")).toContainText("Moves are paused for this project.");
@@ -837,7 +837,7 @@ test.describe("undo", () => {
     await expect(page.getByTestId("space-surface")).toBeVisible();
     await page.getByTestId(`space-row-move-${MOVED}`).click();
     const zhPicker = page.getByTestId(`space-move-${MOVED}`);
-    await expect(zhPicker.getByTestId("space-move-group-own")).toHaveText("你自己的群组");
+    await expect(zhPicker.getByTestId("space-move-group-own")).toHaveText(`你自己的群组 · ${HOST_LOGIN}`);
     await clean("the move picker in Chinese");
   });
 });
