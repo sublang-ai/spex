@@ -1080,6 +1080,9 @@ test("git-host-11: each failure the host answers is a kind with the host's words
     const s = t.host.script;
     s.rateLimit(1, "30");
     await assert.rejects(t.client.groups(), hostError("rate_limited", { retryAfter: "30", words: "Too many requests to the Git host." }));
+    // The hold passes before the next call, which would be refused
+    // while it stands (git-host-21).
+    await sleep(300);
     s.unavailable(1);
     await assert.rejects(t.client.groups(), hostError("unreachable", { words: "The Git host did not answer." }));
     s.refuseHost(1, "Your account is blocked: contact support.");
@@ -1108,7 +1111,7 @@ const rfc850 = (d: Date): string => `${WEEKDAYS[d.getUTCDay()]}, ${two(d.getUTCD
 /** An HTTP date in asctime's obsolete form. */
 const asctime = (d: Date): string => `${WEEKDAYS[d.getUTCDay()].slice(0, 3)} ${MONTH_NAMES[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2, " ")} ${clock(d)} ${d.getUTCFullYear()}`;
 
-test("git-host-21, git-host-11: a 429 holds every call until the instant it asks for — its number, its date, none without either — 120 s at most, a call's Stop ending its wait unsent", async () => {
+test("git-host-21, git-host-11: a 429 holds the calls that wait until the instant it asks for — its number, its date, none without either — 120 s at most, a call's Stop ending its wait unsent, and refuses any other with the seconds that remain", async () => {
   const t = await setup();
   try {
     await browserSignIn(t.client);
@@ -1126,17 +1129,29 @@ test("git-host-21, git-host-11: a 429 holds every call until the instant it asks
       });
       return { words, at: s.requests[s.requests.length - 1].at };
     };
-    /** When the next call reached the stand-in. */
+    /** When the next call that waits, as the host read's do, reached the
+     * stand-in. */
     const next = async (client: GitHostClient): Promise<number> => {
       const index = s.requests.length;
-      assert.equal((await client.groups()).length, 3);
+      assert.equal((await client.groups({ wait: true })).length, 3);
       return s.requests[index].at;
     };
 
-    // The header's number: the next call waits it out (git-host-11).
+    // The header's number (git-host-11): any call that does not wait is
+    // refused at once meanwhile, as the host asking to wait the seconds
+    // that remain, sending nothing; the next call that waits waits it out.
     const number = await limited(t.client, "2");
     assert.equal(number.words, "Host asks to wait 2 seconds");
-    assert.ok((await next(t.client)) - number.at >= 1_950, "the next call waits the 2 s out");
+    const held = s.requests.length;
+    const refusedAt = Date.now();
+    await assert.rejects(t.client.members({ kind: "repository", id: "1001" }), (error: unknown) => {
+      hostError("rate_limited", { retryAfter: "2" })(error);
+      assert.equal(relayHostError(error, "Host"), "Host asks to wait 2 seconds");
+      return true;
+    });
+    assert.ok(Date.now() - refusedAt < 500, "refused at once");
+    assert.equal(s.requests.length, held, "the refused call sent nothing");
+    assert.ok((await next(t.client)) - number.at >= 1_950, "the next call that waits waits the 2 s out");
 
     // Two calls in flight answered 3 and 1 seconds: the later instant
     // stands, whichever answer comes last.

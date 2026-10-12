@@ -1662,7 +1662,7 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   assert.ok(Date.now() - start < 12_000, "the shortened limit ends it");
 });
 
-test("space-38: a check the stand-in answers 429 stops throttled in the seconds it asks for, and a Retry waits them out before its step, a Stop ending that wait", async (t) => {
+test("space-38, git-host-14: a check the stand-in answers 429 stops throttled in the seconds it asks for, and a Retry waits them out before its step, a Stop ending that wait, while a members read meanwhile is refused at once", async (t) => {
   const host = await startHost();
   const home = await startHome("host-throttled", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1722,16 +1722,28 @@ test("space-38: a check the stand-in answers 429 stops throttled in the seconds 
   assert.equal(prompt.settled.sync.phase, "idle", JSON.stringify(prompt.settled.sync));
   assert.ok(prompt.at - moment.at < 1_000, `the Retry reached the stand-in ${Math.round(prompt.at - moment.at)} ms after its 429`);
 
+  // During the hold, a members read is refused at once with the seconds
+  // that remain, nothing reaching the stand-in, while a Check begun then
+  // waits (git-host-21).
+  const five = await throttle("5");
+  const membersAt = Date.now();
+  const beforeMembers = requests.length;
+  await home.client.expectError("space.members", { repository: HOST_OWN }, "invalid_request", new RegExp(`^${HOST_NAME} asks to wait [1-5] seconds?$`));
+  assert.ok(Date.now() - membersAt < 1_000, "the members read is refused at once");
+  assert.equal(requests.length, beforeMembers, "the refused members read sent nothing");
+
   // A Stop while the Retry waits ends that wait at once, nothing sent,
   // and the next Retry waits out what remains (space-16, space-15).
-  const five = await throttle("5");
   const mark = home.client.mark();
   const index = requests.length;
   const asked = Date.now();
   assert.deepEqual(await home.client.expectOk("space.fetch", { repository: HOST_OWN }), { accepted: true });
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
+  // A broadcast of the earlier stop may still arrive: the Stop's own
+  // ending is the one read after the step ran.
+  const stopMark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.cancel", { repository: HOST_OWN }), { stopped: true });
-  const ended = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "stopped");
+  const ended = await home.client.waitRepository(stopMark, HOST_OWN, (repository) => repository.sync.phase === "stopped" && repository.sync.cause !== "throttled");
   assert.ok(ended.sync.phase === "stopped" && ended.sync.step === "check" && ended.sync.cause === "stopped" && ended.sync.retry, JSON.stringify(ended.sync));
   assert.equal(ended.sync.message, `Stopped while waiting for ${HOST_NAME}`);
   assert.equal(ended.sync.guidance, "Retry waits, then runs the step.");

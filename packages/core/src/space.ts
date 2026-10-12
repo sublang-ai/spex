@@ -3465,8 +3465,8 @@ export class SpaceManager {
 
   /** The brokered credential for a transport to the host's Git origin
    * (git-host-9); none for any other origin. Asked for a sync's step,
-   * that step's Stop ends its wait for the host's rate limit
-   * (git-host-21). */
+   * it waits out the host's rate limit, which that step's Stop ends;
+   * asked otherwise, the limit refuses it (git-host-21). */
   async credentialFor(remote: string, step: SyncStep, machine?: RepositorySync): Promise<GitCredentialHandle | null> {
     const origin = this.knownOrigin();
     if (!origin || !underOrigin(remote, origin)) return null;

@@ -200,10 +200,10 @@ When the host answers a call with anything but success, the core shall relay it 
 
 #### git-host-21
 
-When the host answers a call 429, the core shall hold the instant that answer asks it to wait until — the answer's time plus its seconds [[git-host-11](#git-host-11)] — and shall send every call to the host begun before that instant only once it has passed:
+When the host answers a call 429, the core shall hold the instant that answer asks it to wait until — the answer's time plus its seconds [[git-host-11](#git-host-11)] — sending each call that waits only once that instant has passed and refusing every other call made before it at once, as the host asking to wait the seconds that remain [[git-host-11](#git-host-11)]:
 
-- the hold is 120 seconds at most and none where the answer's seconds are unknown, and an instant already held stands where it is the later;
-- a sync's Stop ends the wait of a call made for its step, which then sends nothing and stops that step [[space-16](space.md#space-16)].
+- the calls that wait are a sync step's, whose Stop ends that wait unsent and stops the step [[space-16](space.md#space-16)], and the host read's [[git-host-5](#git-host-5)];
+- the hold is 120 seconds at most and none where the answer's seconds are unknown, and an instant already held stands where it is the later.
 
 ## Internal Behavior
 
@@ -257,7 +257,8 @@ When an integration suite drives host reads and writes against the stand-in [[gi
 - a taken path — a known account's login at the root among them — and a taken name are refused as taken, a refusal the stand-in scripts for each of the three, and the stand-in's own refusal of what it says the person may not do, with its words kept whole in English and in Chinese; neither a name nor a path, a blank one, a group holding a spex repository or a group, a group held as colliding, your own group, and a group or spex repository the view does not list are refused before any request reaches the stand-in [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)];
 - each stand-in answer of the table is relayed in English and in Chinese with the stand-in's words kept whole [[git-host-11](#git-host-11)];
 - a 429 is relayed with `Retry-After: 2` as "asks to wait 2 seconds", with an HTTP date 3 s ahead "3 seconds", with a date past in RFC 850's or asctime's form "0 seconds", and with none "a moment" [[git-host-11](#git-host-11)]; a read the stand-in answers 429 keeps the previous view with its time, its rows reading unreachable with "<display name> asks to wait 30 seconds", in English and in Chinese [[git-host-5](#git-host-5)] [[git-host-11](#git-host-11)];
-- after a 429, the next call reaches the stand-in no sooner than 2 s after `Retry-After: 2`'s answer, no sooner than 3 s after two calls in flight are answered 3 and 1 seconds, no sooner than a date 3 s ahead, at once after a date past or none, and about 1 s after `Retry-After: 30`'s under a test-shortened bound of 1 s; a call whose Stop comes while it waits ends at once, nothing reaching the stand-in [[git-host-21](#git-host-21)].
+- after a 429, the next call that waits reaches the stand-in no sooner than 2 s after `Retry-After: 2`'s answer, no sooner than 3 s after two calls in flight are answered 3 and 1 seconds, no sooner than a date 3 s ahead, at once after a date past or none, and about 1 s after `Retry-After: 30`'s under a test-shortened bound of 1 s; a call whose Stop comes while it waits ends at once, nothing reaching the stand-in; a members read during `Retry-After: 2`'s hold is refused at once as asking to wait 2 seconds, nothing reaching the stand-in [[git-host-21](#git-host-21)];
+- a core asked for a spex repository's members during a hold refuses at once with "<display name> asks to wait N seconds", N the seconds that remain, nothing reaching the stand-in, while a Check begun then waits the hold out [[git-host-21](#git-host-21)].
 
 ## References
 
