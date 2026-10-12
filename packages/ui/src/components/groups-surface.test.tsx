@@ -602,6 +602,13 @@ describe("GROUPS: Pick a group (space-58)", () => {
     await waitFor(() =>
       expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", groupId: "2", name: "academy-notes" } }),
     );
+    // Your own group is named by none, never by its id.
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    await waitFor(() =>
+      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", groupId: null, name: "academy" } }),
+    );
   });
 
   test("a taken or malformed name is refused in place and the field asks for another; an empty one is never sent", async () => {

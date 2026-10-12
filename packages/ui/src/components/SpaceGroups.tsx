@@ -1312,7 +1312,8 @@ export function GroupPicker({
       nameRef.current?.focus();
       return;
     }
-    void pick(`group:${group.fullPath}`, { kind: "create", groupId: group.id, name: chosen });
+    // Your own group is named by none, never by its id (space-58).
+    void pick(`group:${group.fullPath}`, { kind: "create", groupId: group.own ? null : group.id, name: chosen });
   };
 
   const option =
