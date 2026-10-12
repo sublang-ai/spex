@@ -635,7 +635,10 @@ test.describe("daily sync", () => {
     app.rejectPushes(2);
     await sync.click();
     const stopped = tab.getByTestId("space-stopped");
-    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Push stopped — The host changed again");
+    // Two passes against the host: Save, Check, Compare and a push the
+    // host rejects, then the re-check's Check, Compare, Apply, Refresh
+    // and a second rejected push. Twice a sync's work, twice its budget.
+    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Push stopped — The host changed again", { timeout: 30_000 });
     await expect(stopped).toContainText(/Your changes are saved locally \([1-9]\d* commits? ahead\)/);
     await expect(stopped.getByTestId("space-retry")).toBeVisible();
     await expect(counts).toContainText(/[1-9]\d* ahead/);

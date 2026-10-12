@@ -897,9 +897,17 @@ test("space-58: a remote set while a pick asked the host is refused, never repla
   const shim = holdingGit(`${clone} config --get spex.repositoryId`);
   const home = await startHome("pick-origin", { host, dataDir, project: false, env: { PATH: shim.path }, extra: { signIn: "browser" } });
   t.after(() => { shim.release(); return home.stop(); });
+  const signedIn = home.client.mark();
   await signIn(home, host);
+  // The sign-in's set-up of your own group runs on after the sign-in
+  // reads idle; the pick starts only once that sync has settled, or its
+  // host reads race the pick's own.
+  await home.client.waitRepository(signedIn, HOST_OWN, (repository) => repository.sync.phase === "done" || repository.sync.phase === "stopped", 30_000);
+  const added = home.client.mark();
   assert.equal((await addFolder(home, gitFolder("raced"))).key, key);
-  await sleep(200);
+  // The Groups state the registration sets going reads the new clone
+  // after the reply; the hold waits for it, or that read takes the hold.
+  await home.client.waitRepository(added, key, () => true);
   shim.hold();
   const reply = home.client.command("space.pick", { repository: key, choice: { kind: "create", groupId: "2002", name: "raced" } });
   await shim.held();
