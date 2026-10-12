@@ -866,6 +866,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - "Pick a group" reads each group by its name, then its path (space-58).
 - The group pickers read each group by its name, then its path (space-58, space-78).
 - An expanded package's intent in the Specs outline renders its links as an item body does, a record's ID opening the reader, and the collapsed line reads each link by its text, no longer printing `[DR-001](…)` as typed (spec-view-2).
+- The authoring preamble says that a Boss's answer reaches only the role that asked unless a behavior names a later role as receiving it, so a reviewer that judges work shaped by an answer is written to hear it (playbook-library-35).
 
 ### Security
 
