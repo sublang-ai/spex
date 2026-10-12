@@ -454,6 +454,14 @@ export function linkItemTargets(text: string, href: string): string[] {
   return candidates;
 }
 
+/** Markdown read with each link by its text — the one line a
+ * collapsed package row gives its intent (spec-view-2), where
+ * "[DR-001](../decisions/001-x.md)" reads "DR-001" and an enclosed
+ * citation keeps its brackets as the rendered body shows them. */
+export function linksAsText(markdown: string): string {
+  return markdown.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+}
+
 /** The DR/IR record an inline link's relative href points at.
  * The href is resolved against the citing file's specs/-relative
  * path — hrefs are file-relative — and only an exact `record.path`

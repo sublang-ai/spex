@@ -861,6 +861,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - An authoring session's Compile control no longer says "30 to 120 minutes" but "a few minutes, longer for many roles", as compiles now take.
 - "Pick a group" reads each group by its name, then its path (space-58).
 - The group pickers read each group by its name, then its path (space-58, space-78).
+- An expanded package's intent in the Specs outline renders its links as an item body does, a record's ID opening the reader, and the collapsed line reads each link by its text, no longer printing `[DR-001](…)` as typed (spec-view-2).
 
 ### Security
 

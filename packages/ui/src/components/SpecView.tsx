@@ -46,6 +46,7 @@ import {
   isRecordPath,
   itemMatches,
   linkItemTargets,
+  linksAsText,
   normalizeSpecViewState,
   recordForHref,
   relativeReadTime,
@@ -193,6 +194,24 @@ const ORIGIN_NAMES: Record<RecordOrigin["surface"], () => string> = {
   dashboard: () => i18n._("Dashboard"),
   overview: () => i18n._({ id: "Overview", comment: "the project's Overview tab" }),
 };
+
+/** Where a rendered link sits (spec-view-6): the specs/-relative path
+ * its href resolves against, the item citing it — none for a
+ * package's intent, which leaves no return to walk — the DOM id that
+ * takes focus back from the reader, and the key its "not found" note
+ * and its preview ride. */
+type LinkSource = {
+  sourcePath: string;
+  itemId?: string;
+  focusId: string;
+  noteKey: string;
+};
+
+/** The DOM id of a package row's toggle, where focus returns from a
+ * record its intent opened (DR-010 §6). */
+function fileDomId(key: string): string {
+  return `specv-file-${key}`;
+}
 
 type ReaderState = {
   record: SpecRecordInfo;
@@ -511,8 +530,9 @@ export function SpecView(props: SpecViewProps) {
 
   /** Citation jump (DR-011): land on the target, remembering the
    * citing item so the floating chip can walk back — never navigate;
-   * a dead ID says "not found" next to the clicked link. */
-  function jumpTo(linkKey: string, targetId: string, originId: string) {
+   * a dead ID says "not found" next to the clicked link. A package's
+   * intent cites from no item, so its jump leaves no return. */
+  function jumpTo(linkKey: string, targetId: string, originId?: string) {
     // The jump answers the entry the card was previewing: the card
     // has nothing left to say (spec-view-61).
     preview.close();
@@ -521,7 +541,7 @@ export function SpecView(props: SpecViewProps) {
       setLiveNote(i18n._("{id} not found", { id: targetId }));
       return;
     }
-    setJumpOrigins((stack) => [...stack, originId]);
+    if (originId) setJumpOrigins((stack) => [...stack, originId]);
   }
 
   /** The floating chip pops one origin and lands back on it. */
@@ -655,11 +675,31 @@ export function SpecView(props: SpecViewProps) {
       ?.focus();
   }, [editorPath]);
 
-  /** Inline links in item bodies (META-20 citations): item IDs jump
-   * in-view, DR/IR and meta.md links open the records reader, external
-   * URLs pass through to the OS browser, and everything else is
-   * inert. */
-  function onBodyLinkClick(itemId: string, event: ReactMouseEvent) {
+  /** An item body's links resolve from its file and return to its row. */
+  function itemSource(itemId: string): LinkSource {
+    return {
+      sourcePath: itemIndex.get(itemId)?.sourcePath ?? "",
+      itemId,
+      focusId: itemDomId(itemId),
+      noteKey: `body:${itemId}`,
+    };
+  }
+
+  /** A package's intent is rendered as item bodies are (spec-view-2):
+   * its links resolve from its file and hand focus back to its row. */
+  function intentSource(fileKey: string): LinkSource {
+    return {
+      sourcePath: `packages/${fileKey}.md`,
+      focusId: fileDomId(fileKey),
+      noteKey: `intent:${fileKey}`,
+    };
+  }
+
+  /** Inline links in rendered prose (META-20 citations): item IDs
+   * jump in-view, DR/IR and meta.md links open the records reader,
+   * external URLs pass through to the OS browser, and everything else
+   * is inert. */
+  function followLink(source: LinkSource, event: ReactMouseEvent) {
     const anchor = (event.target as Element | null)?.closest?.("a");
     if (!anchor) return;
     const href = anchor.getAttribute("href") ?? "";
@@ -668,52 +708,56 @@ export function SpecView(props: SpecViewProps) {
     const candidates = linkItemTargets(anchor.textContent ?? "", href);
     const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (target && itemIndex.has(target)) {
-      jumpTo(`${itemId}:${target}`, target, itemId);
+      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
       return;
     }
     // The citing file's specs/-relative path anchors the href
     // resolution. An href resolving to exactly the tree's meta.md
-    // opens the synthetic meta record.
-    const sourcePath = itemIndex.get(itemId)?.sourcePath ?? "";
-    // Links inside a body — and inside the reader — reach every
-    // record the tree lists, plus the two tree-wide documents
-    // (spec-view-7).
-    const record = recordForHref(sourcePath, href, [
+    // opens the synthetic meta record. Links inside rendered prose —
+    // and inside the reader — reach every record the tree lists, plus
+    // the two tree-wide documents (spec-view-7).
+    const record = recordForHref(source.sourcePath, href, [
       ...tree.decisions,
       ...tree.intents,
       META_RECORD,
       MAP_RECORD,
     ]);
     if (record) {
-      openRecord(record, itemDomId(itemId));
+      openRecord(record, source.focusId);
       return;
     }
     // A citation-shaped link that is neither a live item nor a
     // record gets the SPECV-6 "not found" note; jumpTo owns that
     // path. Record links are tried first because their label ("DR-011")
-    // is citation-shaped too. The body: prefix keeps the note off
+    // is citation-shaped too. The source's prefix keeps the note off
     // the identically keyed citation rows.
     if (target) {
-      jumpTo(`body:${itemId}:${target}`, target, itemId);
+      jumpTo(`${source.noteKey}:${target}`, target, source.itemId);
       return;
     }
     // Anything else (sibling spec files, map.md) is inert: no
     // navigation ever happens inside the view.
   }
 
-  /** The item a body link cites, for the preview: the ID a click
+  function onBodyLinkClick(itemId: string, event: ReactMouseEvent) {
+    followLink(itemSource(itemId), event);
+  }
+
+  /** The item a rendered link cites, for the preview: the ID a click
    * would jump to, an ID absent from the tree included — and nothing
    * for a record link or a web URL, which a click sends elsewhere
    * (spec-view-6). */
-  function bodyCitation(itemId: string, anchor: Element): string | undefined {
+  function linkCitation(
+    source: LinkSource,
+    anchor: Element,
+  ): string | undefined {
     const href = anchor.getAttribute("href") ?? "";
     if (/^https?:\/\//.test(href)) return undefined;
     const candidates = linkItemTargets(anchor.textContent ?? "", href);
     const target = candidates.find((c) => itemIndex.has(c)) ?? candidates[0];
     if (!target) return undefined;
     if (itemIndex.has(target)) return target;
-    const sourcePath = itemIndex.get(itemId)?.sourcePath ?? "";
-    return recordForHref(sourcePath, href, [
+    return recordForHref(source.sourcePath, href, [
       ...tree.decisions,
       ...tree.intents,
       META_RECORD,
@@ -724,20 +768,28 @@ export function SpecView(props: SpecViewProps) {
   }
 
   /** An inline citation raises the same card as a citation row —
-   * settled hover, or focus at once (spec-view-61). A rendered body's
+   * settled hover, or focus at once (spec-view-61). Rendered prose's
    * anchors are the markdown's, not React's, so the handler is
-   * delegated from the body's container. */
-  function onBodyLinkPreview(
-    itemId: string,
+   * delegated from the prose's container. */
+  function previewLink(
+    source: LinkSource,
     event: ReactMouseEvent | ReactFocusEvent,
     immediate: boolean,
   ) {
     const anchor = (event.target as Element | null)?.closest?.("a");
     if (!(anchor instanceof HTMLElement)) return;
-    const target = bodyCitation(itemId, anchor);
+    const target = linkCitation(source, anchor);
     if (!target) return;
     const raise = immediate ? preview.focus : preview.hover;
-    raise(anchor, target, `body:${itemId}:${target}`);
+    raise(anchor, target, `${source.noteKey}:${target}`);
+  }
+
+  function onBodyLinkPreview(
+    itemId: string,
+    event: ReactMouseEvent | ReactFocusEvent,
+    immediate: boolean,
+  ) {
+    previewLink(itemSource(itemId), event, immediate);
   }
 
   // One persistent polite live region (DR-010 §7) narrates the
@@ -1128,6 +1180,7 @@ export function SpecView(props: SpecViewProps) {
           </span>
           <button
             type="button"
+            id={fileDomId(key)}
             data-testid={`file-toggle-${key}`}
             aria-expanded={expanded}
             aria-current={selected ? "true" : undefined}
@@ -1157,9 +1210,9 @@ export function SpecView(props: SpecViewProps) {
             {file.intent && !expanded ? (
               <span
                 className="min-w-0 flex-1 truncate text-xs text-neutral-500 dark:text-neutral-400"
-                title={file.intent}
+                title={linksAsText(file.intent)}
               >
-                {file.intent}
+                {linksAsText(file.intent)}
               </span>
             ) : null}
           </button>
@@ -1206,13 +1259,33 @@ export function SpecView(props: SpecViewProps) {
         </div>
         {expanded ? (
           <div className="ml-[7px] flex flex-col gap-1 border-l border-neutral-200 py-1 pl-4 dark:border-neutral-800">
+            {/* The intent reads as an item body does (spec-view-2): its
+                citations and record links route as theirs do and raise
+                the same card (spec-view-6, spec-view-61). */}
             {file.intent ? (
-              <p
+              <div
                 data-testid={`intent-${key}`}
-                className="max-w-prose text-xs text-neutral-500 dark:text-neutral-400"
+                className="relative max-w-prose overflow-x-auto text-neutral-500 dark:text-neutral-400"
+                onClick={(event) => followLink(intentSource(key), event)}
+                onMouseOver={(event) =>
+                  previewLink(intentSource(key), event, false)
+                }
+                onMouseOut={preview.close}
+                onFocus={(event) => previewLink(intentSource(key), event, true)}
+                onBlur={preview.close}
               >
-                {file.intent}
-              </p>
+                <Markdown text={file.intent} hideComments />
+              </div>
+            ) : null}
+            {notFoundKey?.startsWith(`intent:${key}:`) ? (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="font-mono text-neutral-500">
+                  {notFoundKey.slice(`intent:${key}:`.length)}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  {i18n._({ id: "not found", comment: "the cited item is not in this tree" })}
+                </span>
+              </div>
             ) : null}
             {file.notices.map((notice) => (
               <div
