@@ -277,6 +277,32 @@ export function pathTheGroup(): string {
   return i18n._({ id: "Give the group a path", comment: "Refusal of a new group whose path at the Git host is blank" });
 }
 
+/** Refusal: a rename that names neither a name nor a path
+ * (git-host-18). */
+export function renameNothing(): string {
+  return i18n._({ id: "Give the group a new name or path", comment: "Refusal of a group's rename naming neither a new name nor a new path" });
+}
+
+/** Refusal: a group the view lists something under is not deleted, since
+ * the host would delete what it holds with it (git-host-19). */
+export function groupNotEmpty(group: string): string {
+  return i18n._({
+    id: "{group} is not empty",
+    values: { group },
+    comment: "Refusal of a group's deletion: it still holds a spex repository or a group; {group} is the group's path in the instance",
+  });
+}
+
+/** A spex repository's name the host reports taken in the group it was
+ * to move into (git-host-20). */
+export function takenIn(name: string, group: string): string {
+  return i18n._({
+    id: "{group} already holds {name}",
+    values: { name, group },
+    comment: "Refusal of a spex repository's move: the group it was to move into holds one of that name; {group} is that group's path in the instance, {name} the repository's name",
+  });
+}
+
 /** Refusal: a share or an unshare names no account (git-host-16,
  * git-host-17). */
 export function nameTheLogin(host: string): string {

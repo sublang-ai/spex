@@ -21,7 +21,7 @@ import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
-  type HostMember, type MembersTarget,
+  type HostMember, type HostRepository, type MembersTarget,
 } from "./git-host.js";
 import { kebab, splitKey } from "./home.js";
 import { i18n } from "./i18n.js";
@@ -47,9 +47,9 @@ import {
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
-  callbackPages, collidingGroup, groupNameTaken, groupNamedLikeYourLogin, groupNotListed, hostKey, listingFor, namedLikeYourLogin, namedLogins,
-  nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostView, relayHostError,
-  repositoryDescription, sameLogin, signInFailure, underOrigin, userGroup, waitingPhrase,
+  callbackPages, collidingGroup, groupNameTaken, groupNamedLikeYourLogin, groupNotEmpty, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
+  namedLogins, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostView, relayHostError,
+  renameNothing, repositoryDescription, sameLogin, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
   type HostListing, type HostView,
 } from "./space-groups.js";
 import {
@@ -903,7 +903,7 @@ class RepositorySync {
     const state: RepositoryState = {
       key: this.key,
       name: splitKey(this.key).name,
-      can: { manageMembers: false },
+      can: { manageMembers: false, transfer: false },
       id: repo.root ? repo.id : null,
       own: this.key === store.home.own(),
       code,
@@ -3034,6 +3034,148 @@ export class SpaceManager {
     return { group: { id: created.id ?? "", fullPath: created.fullPath, name: created.name } };
   }
 
+  // -- undo in Spex (git-host-18..20, DR-120) ---------------------------------
+  //
+  // A misplacement is undone as the person: a group of the instance
+  // renamed or deleted, a spex repository moved to another group. The
+  // host is asked whatever the view said the person may do; only what it
+  // cannot be asked — a blank field, a place the view does not list, a
+  // group the view lists anything under — is refused before it is.
+
+  /** Rename a group of the instance at the host — its name, its path
+   * segment, or both (git-host-18) — holding it as the host answered,
+   * every group and spex repository inside it under its new path, until
+   * a read begun after the rename is held (git-host-5), announced before
+   * the reply. */
+  async renameGroup(id: string, input: { name?: string; path?: string }): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    if (input.name === undefined && input.path === undefined) throw new CoreError("invalid_request", renameNothing());
+    const name = input.name?.trim();
+    if (name !== undefined && name.length === 0) throw new CoreError("invalid_request", nameTheGroup());
+    const path = input.path?.trim();
+    if (path !== undefined && path.length === 0) throw new CoreError("invalid_request", pathTheGroup());
+    const listed = this.instanceGroup(id);
+    const from = listed.fullPath;
+    let renamed: HostGroup;
+    try {
+      renamed = await this.host.client.renameGroup(id, { ...(name !== undefined ? { name } : {}), ...(path !== undefined ? { path } : {}) });
+    } catch (error) {
+      if (error instanceof HostError && error.kind === "name_taken") {
+        const parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : null;
+        throw new CoreError("invalid_request", groupNameTaken(path ?? name ?? listed.name, parent, this.hostName()));
+      }
+      throw this.hostWriteRefusal(error);
+    }
+    const to = renamed.fullPath;
+    const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id === id || group.fullPath === from;
+    const inside = (fullPath: string): string => fullPath.startsWith(`${from}/`) ? `${to}${fullPath.slice(from.length)}` : fullPath;
+    this.holdChange({
+      group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : { ...group, fullPath: inside(group.fullPath) },
+      listing: (listing) => {
+        const group = listing.repository.group;
+        if (group.kind !== "group") return listing;
+        const next = here(group) ? { ...group, fullPath: to, name: renamed.name } : { ...group, fullPath: inside(group.fullPath) };
+        return { ...listing, repository: { ...listing.repository, group: next } };
+      },
+    });
+    await this.publish();
+    return { group: { id, fullPath: to, name: renamed.name } };
+  }
+
+  /** Delete a group of the instance at the host (git-host-19), only
+   * where the view lists nothing under it, since the host deletes
+   * whatever a group holds with it; the group is held as gone until a
+   * read begun after the deletion is held (git-host-5), announced before
+   * the reply. */
+  async deleteGroup(id: string): Promise<{ deleted: true }> {
+    if (!this.signedIn()) throw new CoreError("invalid_request", signInFirst());
+    const listed = this.instanceGroup(id);
+    if (this.holdsAnything(listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
+    try {
+      await this.host.client.deleteGroup(id);
+    } catch (error) {
+      throw this.hostWriteRefusal(error);
+    }
+    this.holdChange({ group: (group) => group.kind === "group" && (group.id === id || group.fullPath === listed.fullPath) ? null : group });
+    await this.publish();
+    return { deleted: true };
+  }
+
+  /** Move a spex repository, by its key, into a group of the instance or,
+   * where none is named, your own group (git-host-20), holding it as the
+   * host answered until a read begun after the move is held (git-host-5),
+   * announced before the reply; its clone moves on its next sync
+   * (space-60). */
+  async moveRepository(key: string, groupId: string | null): Promise<{ repository: { id: string; fullPath: string } }> {
+    const target = await this.membersTarget({ repository: key }, "invalid_request");
+    let into: HostGroup | null = null;
+    if (groupId !== null) {
+      into = this.instanceGroup(groupId);
+      if (this.collides(into)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(into.fullPath));
+    }
+    let moved: HostRepository;
+    try {
+      moved = await this.host.client.transferRepository(target.id, groupId);
+    } catch (error) {
+      if (error instanceof HostError && error.kind === "name_taken") {
+        throw new CoreError("invalid_request", takenIn(splitKey(key).name, into?.fullPath ?? userGroup(this.view)?.fullPath ?? this.host.store.home.ownName));
+      }
+      throw this.hostWriteRefusal(error);
+    }
+    this.holdChange({ listing: (listing) => listing.repository.id === moved.id ? { ...listing, repository: moved } : listing });
+    await this.publish();
+    return { repository: { id: moved.id, fullPath: `${moved.group.fullPath}/${moved.path}` } };
+  }
+
+  /** A group of the instance the current view lists, with those this
+   * core created since its read began, by its host id; your own group
+   * and another account's are none (git-host-18..20): `not_found`, the
+   * host not asked, where none is. */
+  private instanceGroup(id: string): HostGroup {
+    const group = this.listedGroups(this.view).find((entry) => entry.kind === "group" && entry.id === id);
+    if (!group) throw new CoreError("not_found", groupNotListed(id, this.hostName()));
+    return group;
+  }
+
+  /** Whether the view lists a spex repository or a group under a group
+   * of the instance (git-host-19), its paths compared ignoring case as
+   * the host's are. */
+  private holdsAnything(group: HostGroup): boolean {
+    const path = group.fullPath.toLowerCase();
+    const under = (fullPath: string, self: boolean): boolean => (self && fullPath.toLowerCase() === path) || fullPath.toLowerCase().startsWith(`${path}/`);
+    if (this.listedGroups(this.view).some((entry) => entry.kind === "group" && entry.id !== group.id && under(entry.fullPath, false))) return true;
+    return [...(this.view?.listings ?? []), ...this.attached.values()].some(({ repository }) =>
+      repository.group.kind === "group" && (repository.group.id === group.id || under(repository.group.fullPath, true)));
+  }
+
+  /**
+   * Hold a change this core made at the host (git-host-5): the view, and
+   * what was created or attached since its read began, read as the
+   * host's answer left them until a read begun after the change is held,
+   * a read begun before it made again before it is held. `group` maps
+   * each group to what the answer left of it, null where it is gone, and
+   * `listing` each listed spex repository.
+   */
+  private holdChange(change: { group?: (group: HostGroup) => HostGroup | null; listing?: (listing: HostListing) => HostListing }): void {
+    this.changedAfter = this.readsBegun;
+    const groups = (list: HostGroup[]): HostGroup[] => {
+      if (!change.group) return list;
+      const map = change.group;
+      return list.flatMap((group) => {
+        const next = map(group);
+        return next ? [next] : [];
+      });
+    };
+    const listings = (list: HostListing[]): HostListing[] => (change.listing ? list.map(change.listing) : list);
+    if (this.view) this.view = { ...this.view, groups: groups(this.view.groups), listings: listings(this.view.listings) };
+    if (change.group) {
+      const held = groups([...this.created.values()]);
+      this.created.clear();
+      for (const group of held) this.created.set(group.fullPath, group);
+    }
+    if (change.listing) for (const [id, listing] of [...this.attached]) this.attached.set(id, change.listing(listing));
+  }
+
   /** Add the account of a login to a group or spex repository at one of
    * the host's roles, and list the members the host holds afterwards
    * (git-host-16). `role` is a role's id from the view. */
@@ -3465,7 +3607,7 @@ export class SpaceManager {
     // What the host's listing says, the person's rights on it among it
     // (git-host-5, DR-114).
     const listed: RepositoryState = listing
-      ? { ...row, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers } }
+      ? { ...row, members: listing.members, visibility: listing.repository.visibility, can: { manageMembers: listing.repository.can.manageMembers, transfer: listing.repository.can.transfer } }
       : row;
     // A clone whose join still runs is not on this device yet: its code
     // may still be cloning (space-61, space-63).
@@ -3511,7 +3653,7 @@ export class SpaceManager {
         row: {
           key,
           name: repository.path,
-          can: { manageMembers: colliding ? false : repository.can.manageMembers },
+          can: colliding ? { manageMembers: false, transfer: false } : { manageMembers: repository.can.manageMembers, transfer: repository.can.transfer },
           id: repository.id,
           own: false,
           code,
@@ -3555,7 +3697,7 @@ export class SpaceManager {
     // What the host's last read lets the person do in each group
     // (DR-114); nothing in your own, which takes no subgroup or member,
     // nor in another account's, nor in a group the read did not list.
-    const noCan = (): Entry["can"] => ({ createSubgroup: false, manageMembers: false });
+    const noCan = (): Entry["can"] => ({ createSubgroup: false, manageMembers: false, rename: false, delete: false });
     const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, own: true, can: noCan(), repositories: [] };
     const entries: Entry[] = [];
     const byId = new Map<string, Entry>();
@@ -3563,7 +3705,8 @@ export class SpaceManager {
     const logins = new Map<string, Entry>();
     for (const group of view ? this.listedGroups(view) : []) {
       if (group.kind === "user") continue;
-      const entry: Entry = { id: group.id, fullPath: group.fullPath, name: group.name, own: false, can: { createSubgroup: group.can.createSubgroup, manageMembers: group.can.manageMembers }, repositories: [] };
+      const can = group.can;
+      const entry: Entry = { id: group.id, fullPath: group.fullPath, name: group.name, own: false, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, repositories: [] };
       entries.push(entry);
       if (group.id !== null) byId.set(group.id, entry);
       if (!byPath.has(group.fullPath)) byPath.set(group.fullPath, entry);

@@ -1211,6 +1211,20 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.members"), id, repository: repositoryKeySchema.optional(), group: z.string().min(1).optional() }).strict(),
   // Groups and sharing (DR-114, space-29).
   z.object({ type: z.literal("space.group.create"), id, name: z.string().min(1), path: z.string().min(1), parent: z.string().min(1).nullable() }).strict(),
+  // Undo in Spex (DR-120, space-29): a group of the instance renamed or
+  // deleted by its host id, a spex repository moved by its key into a
+  // group by its host id, or into your own group where none is named.
+  z
+    .object({
+      type: z.literal("space.group.rename"),
+      id,
+      group: z.string().min(1),
+      name: z.string().min(1).optional(),
+      path: z.string().min(1).optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal("space.group.delete"), id, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, groupId: z.string().min(1).nullable() }).strict(),
   z
     .object({
       type: z.literal("space.share"),
@@ -1437,6 +1451,10 @@ export interface CommandResults {
   "space.join": { accepted: true };
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };
+  "space.group.rename": { group: { id: string; fullPath: string; name: string } };
+  "space.group.delete": { deleted: true };
+  /** `fullPath`: the repository's path in the instance after the move. */
+  "space.repository.move": { repository: { id: string; fullPath: string } };
   "space.share": { members: HostMemberInfo[] };
   "space.unshare": { members: HostMemberInfo[] };
   "space.remote.set": GroupsState;
@@ -1866,8 +1884,9 @@ export interface RepositoryState {
   members: number | null;
   visibility: string | null;
   /** What the host's last read said the person may do on it (space-30,
-   * DR-114): false until a read is held. */
-  can: { manageMembers: boolean };
+   * DR-114, DR-120): manage its members, move it to another group; false
+   * until a read is held. */
+  can: { manageMembers: boolean; transfer: boolean };
   /** Null where no clone is here. */
   branch: {
     ahead: number | null;
@@ -1932,9 +1951,9 @@ export interface GroupsState {
     fullPath: string;
     name: string;
     own: boolean;
-    /** What the host's last read said the person may do there (DR-114):
-     * both false until a read is held, and for your own group. */
-    can: { createSubgroup: boolean; manageMembers: boolean };
+    /** What the host's last read said the person may do there (DR-114,
+     * DR-120): all false until a read is held, and for your own group. */
+    can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
     repositories: RepositoryState[];
   }[];
   /** The host's own roles in its order, empty until a read is held (DR-114). */

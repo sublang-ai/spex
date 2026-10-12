@@ -150,10 +150,20 @@ msgstr "{file}: {reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}: damaged transcript after record {seq}"
 
+#. Refusal of a spex repository's move: the group it was to move into holds one of that name; {group} is that group's path in the instance, {name} the repository's name
+#: src/space-groups.ts
+msgid "{group} already holds {name}"
+msgstr "{group} already holds {name}"
+
 #. Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path
 #: src/space-groups.ts
 msgid "{group} is a group named like your login"
 msgstr "{group} is a group named like your login"
+
+#. Refusal of a group's deletion: it still holds a spex repository or a group; {group} is the group's path in the instance
+#: src/space-groups.ts
+msgid "{group} is not empty"
+msgstr "{group} is not empty"
 
 #. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
 #: src/space-git.ts
@@ -1085,6 +1095,11 @@ msgstr "GitHub CLI (gh) is not installed. Install it and run `gh auth login`."
 #: src/forge.ts
 msgid "GitHub CLI is not authenticated. Run `gh auth login`."
 msgstr "GitHub CLI is not authenticated. Run `gh auth login`."
+
+#. Refusal of a group's rename naming neither a new name nor a new path
+#: src/space-groups.ts
+msgid "Give the group a new name or path"
+msgstr "Give the group a new name or path"
 
 #. Refusal of a new group whose path at the Git host is blank
 #: src/space-groups.ts

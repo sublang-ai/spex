@@ -66,22 +66,22 @@ const A_MEMBERS = [member("jane", "Owner", "acme", "Jane"), member("bob", "Devel
 function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
   const home = base();
   const repository = (key: string, id: string, manage: boolean): RepositoryState =>
-    repo({ key, name: key.split("/").pop()!, id, code: null, folder: null, can: { manageMembers: manage } });
+    repo({ key, name: key.split("/").pop()!, id, code: null, folder: null, can: { manageMembers: manage, transfer: false } });
   return {
     ...home,
     account: { ...home.account!, canCreateGroup: over.canCreateGroup ?? true },
     groups: [
       {
         ...home.groups[0]!,
-        can: { createSubgroup: true, manageMembers: true },
-        repositories: [{ ...OWN_REPO, can: { manageMembers: true } }],
+        can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
+        repositories: [{ ...OWN_REPO, can: { manageMembers: true, transfer: false } }],
       },
       {
         id: ACME,
         fullPath: "acme",
         name: "acme",
         own: false,
-        can: { createSubgroup: true, manageMembers: true },
+        can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
         repositories: [repository(A_SPEX, "60", true)],
       },
       {
@@ -89,7 +89,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         fullPath: "other",
         name: "other",
         own: false,
-        can: { createSubgroup: false, manageMembers: false },
+        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
         repositories: [repository(B_SPEX, "61", false)],
       },
     ],
@@ -324,7 +324,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
       groups: [
         own!,
         acme!,
-        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", own: false, can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
         other!,
       ],
     });
