@@ -42,7 +42,10 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useAutoGrow } from "../lib/useAutoGrow.js";
 import { usePopover } from "../lib/usePopover.js";
 import { activatedByKeyboard, useUndoLine } from "../lib/useUndoLine.js";
-import { currentSessionOf } from "../lib/sessions.js";
+import {
+  currentSessionOf,
+  hasUnservedFinishedConversation,
+} from "../lib/sessions.js";
 import { contentTitle } from "../lib/message-content.js";
 import { useComposerAttachments } from "../lib/useComposerAttachments.js";
 import { ComposerBox } from "./Composer.js";
@@ -539,11 +542,15 @@ const HISTORY_MAX = 24;
 function HistoryBand({
   project,
   tree,
+  chatFinished,
   now,
   onOpenIntent,
 }: {
   project: ProjectInfo;
   tree?: SpecTreeState;
+  /** The project holds a finished conversation serving no intent: its
+   * work is in the sidebar, not here (dashboard-8). */
+  chatFinished: boolean;
   now: number;
   onOpenIntent: (projectId: string, path: string, anchor: string) => void;
 }) {
@@ -614,7 +621,16 @@ function HistoryBand({
         >
           {inFlight
             ? i18n._({ id: "Loading…", comment: "a read is still in flight" })
-            : i18n._("Nothing done here yet.")}
+            : chatFinished
+              ? // Work sent as chat turns is no ledger work: one key
+                // phrase says where it is and what lands here
+                // (dashboard-8, DR-038, DR-069).
+                i18n._({
+                  id: "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here",
+                  comment:
+                    "History band, empty while the project's finished conversations served no intent: they list in the sidebar, and only work queued as an intent lists in History",
+                })
+              : i18n._("Nothing done here yet.")}
         </div>
       ) : (
         // The cut edges draw only where the frame overflows, so a short
@@ -1696,6 +1712,10 @@ export function ProjectGroup({
         <HistoryBand
           project={project}
           tree={tree}
+          chatFinished={
+            ledger !== undefined &&
+            hasUnservedFinishedConversation(sessions, intents, project.id)
+          }
           now={now}
           onOpenIntent={onOpenIntent}
         />

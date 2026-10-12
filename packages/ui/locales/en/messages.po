@@ -3789,7 +3789,9 @@ msgstr "Not enabled"
 
 #. the cited item is not in this tree
 #. the cited item is not in this tree
+#. the cited item is not in this tree
 #: src/components/SpecItemRows.tsx
+#: src/components/SpecView.tsx
 msgid "not found"
 msgstr "not found"
 
@@ -3844,6 +3846,11 @@ msgstr "Not synced since {moment}"
 #: src/lib/space.ts
 msgid "Not yet shared"
 msgstr "Not yet shared"
+
+#. History band, empty while the project's finished conversations served no intent: they list in the sidebar, and only work queued as an intent lists in History
+#: src/components/ProjectGroup.tsx
+msgid "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here"
+msgstr "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here"
 
 #: src/components/ProjectGroup.tsx
 msgid "Nothing done here yet."

@@ -613,6 +613,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   so queued text never answers by accident and stays queued.
 - A project's Now band, for a conversation serving no intent, reads the turn that opened the work it is doing, as the Dashboard's rows do ([DR-119](specs/decisions/119-an-answer-continues-its-intent.md)), not the Boss's answer to the run's question; a session's summary carries that text as the optional `workTitle`.
 - The Dashboard's Running band titles a session with the turn that opened the work it is doing, the summary's `workTitle` the Now band reads, no longer its first Boss turn, so the two bands agree in a conversation that has done several pieces of work (dashboard-50).
+- A project's History band, empty while the project holds a finished conversation serving no intent, reads "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here", so work sent as chat turns no longer reads as nothing done (dashboard-8).
 - A spex repository Spex creates on the host — by picking a group, say —
   no longer stops its first sync at Check with "<host> holds no default
   branch for it yet": the host answers a creation before the commit that

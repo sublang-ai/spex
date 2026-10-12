@@ -2982,6 +2982,51 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     );
   });
 
+  test("History with no done work points at the sidebar where a finished conversation served no intent", () => {
+    const CHAT_NOTE =
+      "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here";
+    const session = (
+      id: string,
+      projectId: string,
+      over: Record<string, unknown> = {},
+    ) => ({
+      id, projectId, projectPath: `/tmp/${projectId}`, title: `/code ${id}`,
+      createdAt: NOW - 20 * MIN, live: false, endedAt: NOW - 10 * MIN,
+      players: [], initialVisible: [], turns: 2, failed: false,
+      turnActive: false, ...over,
+    });
+    seed({
+      sessions: [
+        // alpha: work sent as chat turns, its last turn ended.
+        session("s-chat", "me/alpha-spex"),
+        // beta: one conversation still in its turn, and one finished
+        // conversation serving an open intent awaiting its verdict.
+        session("s-busy", "me/beta-spex", { live: true, endedAt: null, turnActive: true }),
+        session("s-served", "me/beta-spex"),
+      ],
+      ledger: {
+        intents: [{
+          intent: info({
+            id: "i-served", projectId: "me/beta-spex", text: "Ship docs",
+            dispatched: { sessionId: "s-served", turnId: 1, at: NOW - 20 * MIN },
+          }),
+          state: "finished",
+        }],
+        attention: [],
+        badge: 0,
+      },
+    });
+    renderSurface();
+    // A finished conversation serving no intent: the note says where
+    // that work is, and what lands here (dashboard-8).
+    expect(screen.getByTestId("history-empty-me/alpha-spex").textContent).toBe(CHAT_NOTE);
+    // A conversation in its turn, or one serving an open intent, leaves
+    // the note as it is (dashboard-8).
+    expect(screen.getByTestId("history-empty-me/beta-spex").textContent).toBe(
+      "Nothing done here yet.",
+    );
+  });
+
   test("a forge state not yet read is loading, never not connected (dashboard-20)", () => {
     commandMock.mockImplementation(async (type: string) => {
       if (type === "forge.items" || type === "project.status") {
