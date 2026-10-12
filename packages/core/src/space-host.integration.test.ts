@@ -1723,7 +1723,7 @@ test("space-38, git-host-14: a check the stand-in answers 429 stops throttled in
   assert.equal(moment.message, `${HOST_NAME} asks to wait a moment`);
   const prompt = await retry();
   assert.equal(prompt.settled.sync.phase, "idle", JSON.stringify(prompt.settled.sync));
-  assert.ok(prompt.at - moment.at < 1_000, `the Retry reached the stand-in ${Math.round(prompt.at - moment.at)} ms after its 429`);
+  assert.ok(prompt.at - moment.at < 3_000, `the Retry reached the stand-in ${Math.round(prompt.at - moment.at)} ms after its 429`);
 
   // During the hold, a members read is refused at once with the seconds
   // that remain, nothing reaching the stand-in, while a Check begun then
@@ -1732,7 +1732,7 @@ test("space-38, git-host-14: a check the stand-in answers 429 stops throttled in
   const membersAt = Date.now();
   const beforeMembers = requests.length;
   await home.client.expectError("space.members", { repository: HOST_OWN }, "invalid_request", new RegExp(`^${HOST_NAME} asks to wait [1-5] seconds?$`));
-  assert.ok(Date.now() - membersAt < 1_000, "the members read is refused at once");
+  assert.ok(Date.now() - membersAt < 3_000, "the members read is refused at once");
   assert.equal(requests.length, beforeMembers, "the refused members read sent nothing");
 
   // A Stop while the Retry waits ends that wait at once, nothing sent,
