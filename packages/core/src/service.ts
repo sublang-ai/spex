@@ -70,7 +70,7 @@ import {
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
 import { CoreError, SessionManager, currentSession, executionConfig, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
-import { closedStats, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
+import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import type { TurnControlKind } from "./control-record.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
@@ -3653,6 +3653,16 @@ export class CoreService {
       throw new CoreError("conflict", i18n._({
         id: "the intent is already dispatched",
         comment: "Refusal: this work was already sent to a turn",
+      }));
+    }
+    // An answer is a turn of the work that asked (DR-119): a dispatch is
+    // new work, so it waits while a run of this session stands parked on
+    // a Boss question — the fact the fold reads for an interrupted
+    // question — and queued text never answers it by accident (DR-085).
+    if (foldConditions(this.store.getRecords(sessionId)).question) {
+      throw new CoreError("conflict", i18n._({
+        id: "this conversation is waiting for your reply; answer it first",
+        comment: "Refusal: queued work cannot start while a run of this conversation waits on the Boss's answer to its question",
       }));
     }
   }

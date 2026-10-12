@@ -191,8 +191,16 @@ function captainOwn(trace: { playbookId?: unknown; depth?: unknown }): boolean {
 }
 
 export function foldConditions(records: StoredRecord[]): SessionConditions {
-  const { restoredFailures: _restored, ...conditions } = foldConditionsDetail(records);
+  const { restoredFailures: _restored, answers: _answers, ...conditions } = foldConditionsDetail(records);
   return conditions;
+}
+
+/** The turns that started while a run of the session stood parked on a
+ * Boss question (DR-119): an answer, or the Boss asking back — a turn of
+ * the work that asked, never work of its own. A turn's first start
+ * decides; a restore's report starting it again changes nothing. */
+export function answeringTurnIds(records: StoredRecord[]): Set<number> {
+  return foldConditionsDetail(records).answers;
 }
 
 /** Whether a session's failure still stands (core-service-32, DR-061),
@@ -236,8 +244,10 @@ export function failureStands(records: StoredRecord[]): boolean {
 
 function foldConditionsDetail(
   records: StoredRecord[],
-): SessionConditions & { restoredFailures: RestoredFailure[] } {
+): SessionConditions & { restoredFailures: RestoredFailure[]; answers: Set<number> } {
   const restoredFailures: RestoredFailure[] = [];
+  const answers = new Set<number>();
+  const started = new Set<number>();
   // The Captain shell's own move last traced, until the aggregate state
   // report that repeats it: that report is the shell's, not a run's.
   let captainMove: { from?: string; to?: string } | undefined;
@@ -297,7 +307,15 @@ function foldConditionsDetail(
   };
   for (const { seq, record } of records) {
     switch (record.type) {
-      case "turn_started":
+      case "turn_started": {
+        // A turn starting while a question stands answers it or asks
+        // back: a turn of the work that asked (DR-119).
+        const turnId = (record as { turn?: { id?: unknown } }).turn?.id ??
+          (record as { turnId?: unknown }).turnId;
+        if (typeof turnId === "number" && !started.has(turnId)) {
+          started.add(turnId);
+          if (parkedQuestions.size > 0 || fallbackQuestion !== undefined) answers.add(turnId);
+        }
         // A Boss turn starting leaves a standing question standing: a
         // clarification, or a turn dispatching another intent, answers
         // nothing; only the runtime reporting the question gone clears
@@ -314,6 +332,7 @@ function foldConditionsDetail(
             ? "fallback"
             : undefined;
         break;
+      }
       case "runtime_error": {
         if (abortErrors.has(seq)) break;
         const read: FailureCause | undefined = readFailureCause(record) ??
@@ -551,6 +570,7 @@ function foldConditionsDetail(
     ...(failure ? { failure } : {}),
     ...(unparkedFailureCause ? { failureCause: unparkedFailureCause } : {}),
     restoredFailures,
+    answers,
   };
 }
 
@@ -885,7 +905,19 @@ export function foldLedger(sources: LedgerSources): LedgerState {
     const owned = ownedTurns.get(lane.sessionId) ?? new Set<number>();
     const turns = sessionTurns(lane.sessionId);
     const lastTurn = turns[turns.length - 1];
-    const title = lastTurn?.prompt ?? "";
+    // The words are the turn that opened the work an entry stands for
+    // (DR-119): from the turn the entry points at, back over the turns
+    // that answered a question or asked it back, to the latest that
+    // started while none stood — never the answer sent since.
+    const answers = answeringTurnIds(store.getRecords(lane.sessionId));
+    const titleAt = (turnId: number | null | undefined): string => {
+      let index = typeof turnId === "number"
+        ? turns.findIndex((turn) => turn.turnId === turnId)
+        : -1;
+      if (index < 0) index = turns.length - 1;
+      while (index > 0 && answers.has(turns[index]!.turnId)) index -= 1;
+      return turns[index]?.prompt ?? "";
+    };
     const conditions = sessionConditions(lane.sessionId);
     const standsIn = (turnId: number | null): boolean =>
       turnId === null ? owned.size === 0 : !owned.has(turnId);
@@ -909,7 +941,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         kind: "failure",
         ...(parked ? { parked: true as const } : {}),
         ...(standInCause ? { cause: standInCause } : {}),
-        title,
+        title: titleAt(lastError.turnId),
         projectId: lane.projectId,
         sessionId: lane.sessionId,
         ...(lastError.turnId !== null ? { turnId: lastError.turnId } : {}),
@@ -919,7 +951,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
       attention.push({
         band: "interrupted",
         kind: "question",
-        title,
+        title: titleAt(conditions.question.turnId),
         projectId: lane.projectId,
         sessionId: lane.sessionId,
         ...(conditions.question.turnId !== null
@@ -942,7 +974,7 @@ export function foldLedger(sources: LedgerSources): LedgerState {
         attention.push({
           band: "finished",
           kind: "review",
-          title,
+          title: titleAt(lastTurn.turnId),
           projectId: lane.projectId,
           sessionId: lane.sessionId,
           turnId: lastTurn.turnId,
