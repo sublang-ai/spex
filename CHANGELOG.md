@@ -16,6 +16,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Undo a misplacement in Spex ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
+  Where the instance says you may, a group's heading carries Rename,
+  which opens its name and path in place, and, while nothing stands in
+  the group, Delete, asked with Keep focused; a project's row carries
+  "Move to another group", whose picker offers your own group and every
+  group of the instance. The row lists under its new group at once and
+  its clone moves on its next sync. Each act is yours at the instance,
+  and a refusal stands in place with the instance's words. The protocol
+  gains `space.group.rename`, `space.group.delete` and
+  `space.repository.move`; a group's `can` gains `rename` and `delete`,
+  a spex repository's `transfer`.
+
 - The root lease names the machine ([DR-108](specs/decisions/108-the-root-lease-names-the-machine.md)).
   The core and the storage Git tool record Playbook's machine identity
   in the home's `.lease/owner.json` instead of the host name the network

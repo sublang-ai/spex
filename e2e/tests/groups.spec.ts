@@ -10,8 +10,10 @@
 // (space-42); fit at every width in both sidebar states (space-43);
 // axe in both themes (space-44); a second device joining a project a
 // peer pushed (space-36); the organizer creating groups, picking a
-// project into one and sharing them (space-71); and the surface naming
-// nothing behind the instance, in English and in Chinese (space-75).
+// project into one and sharing them (space-71); the surface naming
+// nothing behind the instance, in English and in Chinese (space-75);
+// and undo in Spex — a group renamed and deleted, a project moved, each
+// refusal in place (space-80).
 // Every host is the in-process stand-in on
 // loopback, every peer plain Git on its bare repositories, and the
 // exploring journey's remote a bare path: hermetic, no network, no
@@ -581,6 +583,165 @@ test.describe("the instance alone", () => {
     await surfaceEntry(page, "Space").click();
     await expect(page.getByTestId("space-surface")).toBeVisible();
     await scan("Chinese");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// space-80: undo in Spex
+// ---------------------------------------------------------------------------
+
+/** Every text, title, accessible name and link target on the Groups
+ * surface that names something behind the instance (space-1): a URL
+ * under the stand-in's own, its storage group, or the Git system. */
+async function surfaceLeaks(page: Page, host: NonNullable<App["host"]>): Promise<string[]> {
+  const said = await page.getByTestId("space-surface").evaluate((root) => {
+    const out = [(root as HTMLElement).innerText];
+    for (const element of Array.from(root.querySelectorAll("*"))) {
+      for (const name of ["title", "aria-label", "href", "src"]) {
+        const value = element.getAttribute(name);
+        if (value) out.push(value);
+      }
+    }
+    return out;
+  });
+  return said.filter((text) => text.includes(`${host.url}/`) || text.includes(STANDIN_STORAGE) || /gitlab/i.test(text));
+}
+
+test.describe("undo", () => {
+  test.use({ appOptions: { host: true, project: true, signedIn: true } });
+
+  test("space-80: a group renamed, its deletion refused then done, the project moved and its clone moved by its Sync, each refusal in place, nothing behind the instance named", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const host = app.host!;
+    // The project's records pushed into acme over the protocol.
+    await pickGroup(app);
+    const standinGroup = (fullPath: string) => host.script.groups.find((group) => group.fullPath === fullPath);
+    /** No link, and nothing behind the instance, on the surface now. */
+    const clean = async (where: string): Promise<void> => {
+      await expect(page.getByTestId("space-surface").locator("a")).toHaveCount(0);
+      expect(await surfaceLeaks(page, host), where).toEqual([]);
+    };
+
+    await open(page, app);
+    await showGroups(page);
+    const list = page.getByTestId("space-groups");
+
+    // A group made at the list's head (space-68).
+    await list.getByTestId("space-new-group").click();
+    const top = list.getByTestId("space-new-group-editor");
+    await top.getByTestId("space-new-group-editor-name").fill("Platform");
+    await top.getByTestId("space-new-group-editor-create").click();
+    await expect(top).toBeHidden();
+    const platform = list.getByTestId("space-group-platform");
+    await expect(platform.getByRole("heading")).toContainText("Platform");
+
+    // Rename opens the editor holding its name and path; a rename the
+    // stand-in refuses stands in the editor with its words and the name
+    // kept, and the next one renames it (space-76).
+    host.script.refuseGroupRename("Renames are paused for this group.");
+    await platform.getByTestId("space-group-rename-platform").click();
+    const editor = platform.getByTestId("space-rename-platform");
+    const name = editor.getByTestId("space-rename-platform-name");
+    const path = editor.getByTestId("space-rename-platform-path");
+    await expect(name).toHaveValue("Platform");
+    await expect(path).toHaveValue("platform");
+    await name.fill("Core Platform");
+    await path.fill("core-platform");
+    await clean("the rename editor");
+    await editor.getByTestId("space-rename-platform-save").click();
+    await expect(editor.getByRole("alert")).toContainText("Renames are paused for this group.");
+    await expect(name).toHaveValue("Core Platform");
+    host.script.refuseGroupRename(null);
+    await editor.getByTestId("space-rename-platform-save").click();
+    const renamed = list.getByTestId("space-group-core-platform");
+    await expect(renamed.getByRole("heading")).toContainText("Core Platform");
+    await expect(renamed.getByRole("heading")).toContainText("core-platform");
+    await expect(list.getByTestId("space-group-platform")).toHaveCount(0);
+    expect(standinGroup("core-platform")?.name).toBe("Core Platform");
+
+    // acme, holding the project, carries no Delete; the renamed group's
+    // asks with Keep focused, a deletion the stand-in refuses stands
+    // beneath its heading, and a second Delete removes it (space-1,
+    // space-77).
+    await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
+    await expect(list.getByTestId(`space-group-delete-${HOST_GROUP}`)).toHaveCount(0);
+    host.script.refuseGroupDelete("Deletions are paused for this group.");
+    await renamed.getByTestId("space-group-delete-core-platform").click();
+    const confirm = renamed.getByTestId("space-group-confirm-core-platform");
+    await expect(confirm).toContainText("Delete core-platform?");
+    await expect(confirm.getByRole("button", { name: "Keep" })).toBeFocused();
+    await clean("the delete confirm");
+    await confirm.getByRole("button", { name: "Delete" }).click();
+    await expect(renamed.getByTestId("space-group-refusal-core-platform")).toContainText("Deletions are paused for this group.");
+    expect(standinGroup("core-platform")).toBeTruthy();
+    host.script.refuseGroupDelete(null);
+    await renamed.getByTestId("space-group-delete-core-platform").click();
+    await renamed.getByTestId("space-group-confirm-core-platform").getByRole("button", { name: "Delete" }).click();
+    await expect(renamed).toHaveCount(0);
+    expect(standinGroup("core-platform")).toBeUndefined();
+
+    // The project's Move… offers your own group and every group but
+    // acme; a move the stand-in refuses stands in the picker, and a move
+    // into acme/research lists the row there at once, its key unchanged
+    // (space-78).
+    const RESEARCH = `${HOST_GROUP}/research`;
+    host.script.refuseTransfer("Moves are paused for this project.");
+    const move = list.getByTestId(`space-row-move-${TEAM_KEY}`);
+    await expect(move).toHaveText("Move…");
+    await expect(move).toHaveAttribute("aria-label", "Move to another group");
+    await move.click();
+    const picker = list.getByTestId(`space-move-${TEAM_KEY}`);
+    await expect(picker.locator('[data-testid^="space-move-group-"]')).toHaveText(["Your own group", RESEARCH]);
+    await clean("the move picker");
+    await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
+    await expect(picker.getByRole("alert")).toContainText("Moves are paused for this project.");
+    await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
+    host.script.refuseTransfer(null);
+    await picker.getByTestId(`space-move-group-${RESEARCH}`).click();
+    const research = list.getByTestId(`space-group-${RESEARCH}`);
+    await expect(research.getByTestId(`space-row-${TEAM_KEY}`)).toBeVisible();
+    await expect(list.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${TEAM_KEY}`)).toHaveCount(0);
+    await expect(picker).toHaveCount(0);
+    expect(existsSync(clonePath(app.dataDir, TEAM_KEY))).toBe(true);
+
+    // The row's Sync then moves the clone under acme/research's folder
+    // (space-78).
+    await research.getByTestId(`space-row-sync-${TEAM_KEY}`).click();
+    const MOVED = `${RESEARCH}/demo-project-spex`;
+    await expect(research.getByTestId(`space-repo-state-${MOVED}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    expect(existsSync(clonePath(app.dataDir, MOVED))).toBe(true);
+    expect(existsSync(clonePath(app.dataDir, TEAM_KEY))).toBe(false);
+    await clean("after the move");
+
+    // The new controls fit at the 320-pixel floor with the sidebar
+    // collapsed, the rename editor and the move picker open (space-28).
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await research.getByTestId(`space-group-rename-${RESEARCH}`).click();
+    await expect(research.getByTestId(`space-rename-${RESEARCH}`)).toBeVisible();
+    await research.getByTestId(`space-row-move-${MOVED}`).click();
+    await expect(research.getByTestId(`space-move-${MOVED}`)).toBeVisible();
+    const defects: string[] = [];
+    record("Groups undo · 320", await measure(page, ['[data-testid^="space-group-"]']), defects);
+    expect(defects, defects.join("\n")).toEqual([]);
+    await research.getByTestId(`space-move-cancel-${MOVED}`).click();
+    await research.getByTestId(`space-rename-${RESEARCH}-cancel`).click();
+    await page.setViewportSize({ width: 1280, height: TALL });
+
+    // In Chinese, with the move picker open, the surface names nothing
+    // more (space-1, localization-10).
+    await surfaceEntry(page, "Settings").click();
+    await page.getByTestId("language-section").getByTestId("language-select").selectOption("zh");
+    await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+    await surfaceEntry(page, "Space").click();
+    await expect(page.getByTestId("space-surface")).toBeVisible();
+    await page.getByTestId(`space-row-move-${MOVED}`).click();
+    const zhPicker = page.getByTestId(`space-move-${MOVED}`);
+    await expect(zhPicker.getByTestId("space-move-group-own")).toHaveText("你自己的群组");
+    await clean("the move picker in Chinese");
   });
 });
 
