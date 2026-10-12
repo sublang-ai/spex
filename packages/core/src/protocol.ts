@@ -503,6 +503,11 @@ export interface SessionInfo {
   /** The session's own words: its first Boss turn, absent when the
    * session held no turn (core-service-32). */
   title?: string;
+  /** The text of the Boss turn that opened the work the session is
+   * doing — its latest turn, traced back past every answer sent while a
+   * question stood, as its stand-in entries are titled (core-service-32,
+   * DR-119) — absent when the session held no turn. */
+  workTitle?: string;
   /** Turns this session held. */
   turns: number;
   /** Whether a failure still stands (core-service-32, DR-061): a run

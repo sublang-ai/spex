@@ -2859,11 +2859,17 @@ test(
       ledger.attention
         .filter((entry) => entry.sessionId === session.id)
         .map((entry) => [entry.band, entry.kind, entry.title, entry.turnId]);
+    // The summary's work title: the turn that opened the work the
+    // session is doing, by the stand-ins' own rule (core-service-32).
+    const workTitle = async () =>
+      (await client.expectOk("session.list", {}))
+        .find((entry) => entry.id === session.id)?.workTitle;
 
     // Plain chat, no intent bound: the run parks on its question.
     const ask = "/release v1.2.0 at HEAD";
     await client.expectOk("turn.submit", { sessionId: session.id, text: ask });
     await settledTurns(client, harness, session.id, 1);
+    assert.equal(await workTitle(), ask);
     const asked = await client.ledgerUntil(
       (ledger) => ledger.attention.some(
         (entry) => entry.sessionId === session.id && entry.kind === "question",
@@ -2884,6 +2890,21 @@ test(
     );
     assert.deepEqual(own(answered), [["finished", "review", ask, 2]]);
     assert.deepEqual(answered.intents, [], "no answer becomes an intent");
+    // The summary reported once the answer's turn started, while it
+    // ran, and once it settled names the work that asked, never the
+    // answer (core-service-32, core-service-34).
+    const answering = await client.waitFor(
+      (m) =>
+        m.type === "session.state" &&
+        m.session.id === session.id &&
+        m.session.turns === 2 &&
+        m.session.turnActive === true,
+    );
+    assert.equal(
+      answering.type === "session.state" ? answering.session.workTitle : undefined,
+      ask,
+    );
+    assert.equal(await workTitle(), ask);
 
     // A turn sent once no question stands is new work, leading its own.
     await client.expectOk("turn.submit", {
@@ -2898,6 +2919,7 @@ test(
       "the new work's finished turn to summon",
     );
     assert.deepEqual(own(tagged), [["finished", "review", "Now tag the release", 3]]);
+    assert.equal(await workTitle(), "Now tag the release");
     assert.deepEqual(await turnPrompts(client, session.id), [
       ask,
       "Yes.",
