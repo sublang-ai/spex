@@ -1235,6 +1235,37 @@ describe("spec-view-7/45: records in their places", () => {
     expect(onReturn).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByTestId("record-DR-011"));
   });
+
+  test("spec-view-45: a package's intent links the record it cites; the collapsed line reads its text", async () => {
+    const onReadRecord = vi.fn().mockResolvedValue("# DR\n\nDecided there.");
+    const tree = structuredClone(TREE);
+    tree.files[0]!.intent =
+      "How users sign in, as [DR-011](../../decisions/011-project-workspace.md) decides.";
+    render(<Harness tree={tree} onReadRecord={onReadRecord} />);
+    // Collapsed, the one line reads the link by its text alone
+    // (spec-view-2).
+    const auth = screen.getByTestId(`file-${AUTH}`);
+    const line = within(auth).getByText("How users sign in, as DR-011 decides.");
+    expect(line.getAttribute("title")).toBe("How users sign in, as DR-011 decides.");
+    expect(auth.textContent).not.toContain("decisions/011");
+    // Expanded, the intent renders as an item body does: the record's
+    // ID is a link, and nothing of its path is printed (spec-view-2).
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    const intent = screen.getByTestId(`intent-${AUTH}`);
+    expect(intent.textContent).toBe("How users sign in, as DR-011 decides.");
+    const link = within(intent).getByRole("link", { name: "DR-011" });
+    // The link opens the record in the reader (spec-view-6), and Back
+    // hands focus to the package's row (DR-010 §6).
+    fireEvent.click(link);
+    expect(onReadRecord).toHaveBeenCalledWith(
+      "decisions/011-project-workspace.md",
+    );
+    await screen.findByText("Decided there.");
+    fireEvent.click(screen.getByTestId("reader-back"));
+    expect(document.activeElement).toBe(
+      screen.getByTestId(`file-toggle-${AUTH}`),
+    );
+  });
 });
 
 describe("SPECV-8: freshness and failure states", () => {
