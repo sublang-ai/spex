@@ -10,7 +10,8 @@
 // (space-42); fit at every width in both sidebar states (space-43);
 // axe in both themes (space-44); a second device joining a project a
 // peer pushed (space-36); and the organizer creating groups and
-// sharing them (space-71). Every host is the in-process stand-in on
+// sharing them, at the top where the host names no group of its own
+// (space-71) and inside the one it names, as on GitLab.com (space-75). Every host is the in-process stand-in on
 // loopback, every peer plain Git on its bare repositories, and the
 // exploring journey's remote a bare path: hermetic, no network, no
 // credential of the machine's.
@@ -23,6 +24,8 @@ import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
   HOST_GROUP,
+  HOST_INSTANCE_GROUP,
+  HOST_INSTANCE_NAME,
   HOST_LOGIN,
   LOCAL_MODEL,
   LOCAL_PROJECT_CONFIG,
@@ -170,7 +173,7 @@ test.describe("first start", () => {
     // its row with no control (space-1, space-3).
     await expect(header.getByTestId("space-account").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
     await expect(header.getByTestId("space-signin-body")).toHaveText(
-      "Sign in to see your groups and share each project's records with the people in them." +
+      "Sign in to make your groups and share each project's records with the people in them." +
         "Until you do, everything stays on this device and nothing is contacted.",
     );
     await expect(header.getByTestId("space-signin")).toHaveText("Sign in");
@@ -364,7 +367,9 @@ test.describe("a folder added while signed in", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("organizing", () => {
-  test.use({ appOptions: { host: true, signedIn: true } });
+  // A stand-in naming no group of its own that lets the person create
+  // groups at the top (DR-114, DR-118): set before the sign-in's read.
+  test.use({ appOptions: { host: { script: { instanceGroup: null, canCreateGroup: true } }, signedIn: true } });
 
   test("space-71: a group at the head and a subgroup in acme, a member added, refused twice and removed", async ({
     page,
@@ -375,7 +380,7 @@ test.describe("organizing", () => {
     // The stand-in lets the person create groups at the top, and
     // subgroups and members in `acme`, whose `can` it leaves unset
     // (git-host-12): what the sign-in's read already said.
-    host.script.canCreateGroup = true;
+    expect(host.script.canCreateGroup).toBe(true);
     const MEMBER = host.script.accounts.find((account) => account.login === "grace")!;
     const UNKNOWN = "zed";
     expect(host.script.accounts.some((account) => account.login === UNKNOWN)).toBe(false);
@@ -488,6 +493,112 @@ test.describe("organizing", () => {
     await expect(row).toHaveCount(0);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
     expect(standinMembers(SUBGROUP).some((entry) => entry.startsWith(`${MEMBER.login}:`))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// space-75: the organizer inside the host's own group, as on GitLab.com
+// ---------------------------------------------------------------------------
+
+test.describe("organizing inside the host's group", () => {
+  // The stand-in's defaults (git-host-12): it names `spex-internal` as
+  // its own group, the person a member who may create subgroups there,
+  // and lets nobody create a group at the top, as GitLab.com does.
+  test.use({ appOptions: { host: true, signedIn: true } });
+
+  test("space-75: New group inside the host's group, a team's group inside that, its representative shared, and a project picked into it", async ({
+    page,
+    app,
+  }) => {
+    test.setTimeout(150_000);
+    const host = app.host!;
+    expect(host.script.canCreateGroup).toBe(false);
+    expect(host.script.instanceGroup).toBe(HOST_INSTANCE_GROUP);
+    const MEMBER = host.script.accounts.find((account) => account.login === "grace")!;
+    const standinGroup = (fullPath: string) => host.script.groups.find((group) => group.fullPath === fullPath);
+    const standinMembers = (fullPath: string) => (standinGroup(fullPath)?.members ?? []).map((m) => `${m.login}:${m.role}`);
+    const PHRASE = `${HOST_INSTANCE_NAME} · this host's group`;
+    seedDemoProject(app.projectDir);
+
+    await open(page, app);
+    await showGroups(page);
+    const list = page.getByTestId("space-groups");
+    const headings = () => list.getByRole("heading", { level: 2 }).allTextContents();
+
+    // The head holds "New group" and no link to the host's site; the
+    // host's group stands after your own, headed by the key phrase, and
+    // its heading carries no "New subgroup" (space-1).
+    const newGroup = list.getByTestId("space-new-group");
+    await expect(newGroup).toHaveText("New group");
+    await expect(list.getByTestId("space-new-group-at-host")).toHaveCount(0);
+    const internal = list.getByTestId(`space-group-${HOST_INSTANCE_GROUP}`);
+    await expect(internal.getByRole("heading")).toHaveText(PHRASE);
+    expect((await headings()).slice(0, 2)).toEqual([`Your own group · ${HOST_LOGIN}`, PHRASE]);
+    await expect(internal.getByTestId(`space-group-subgroup-${HOST_INSTANCE_GROUP}`)).toHaveCount(0);
+
+    // "New group" creates the workshop's group inside the host's group,
+    // nothing at the top, and it stands right after it (space-68,
+    // space-1).
+    await newGroup.click();
+    const top = list.getByTestId("space-new-group-editor");
+    await top.getByTestId("space-new-group-editor-name").fill("Workshop 261011");
+    await top.getByTestId("space-new-group-editor-create").click();
+    await expect(top).toBeHidden();
+    const WORKSHOP = `${HOST_INSTANCE_GROUP}/workshop-261011`;
+    const workshop = list.getByTestId(`space-group-${WORKSHOP}`);
+    await expect(workshop.getByRole("heading")).toHaveText(`Workshop 261011 · ${WORKSHOP}`);
+    expect(standinGroup(WORKSHOP)?.name).toBe("Workshop 261011");
+    expect(standinGroup("workshop-261011")).toBeUndefined();
+    expect((await headings()).slice(1, 3)).toEqual([PHRASE, `Workshop 261011 · ${WORKSHOP}`]);
+
+    // "New subgroup" on the workshop's heading makes a team's group
+    // inside it (space-68).
+    await workshop.getByTestId(`space-group-subgroup-${WORKSHOP}`).click();
+    const sub = workshop.getByTestId(`space-subgroup-${WORKSHOP}`);
+    await sub.getByTestId(`space-subgroup-${WORKSHOP}-name`).fill("Team A");
+    await sub.getByTestId(`space-subgroup-${WORKSHOP}-create`).click();
+    await expect(sub).toBeHidden();
+    const TEAM = `${WORKSHOP}/team-a`;
+    const team = list.getByTestId(`space-group-${TEAM}`);
+    await expect(team.getByRole("heading")).toHaveText(`Team A · ${TEAM}`);
+    expect(standinGroup(TEAM)?.name).toBe("Team A");
+
+    // Share on the team's group adds its representative at Maintainer,
+    // the stand-in then listing them (space-69).
+    await team.getByTestId(`space-group-members-${TEAM}`).click();
+    const PANEL = `group:${TEAM}`;
+    const members = team.getByTestId(`space-members-${PANEL}`);
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
+    await members.getByTestId(`space-share-${PANEL}`).click();
+    const editor = members.getByTestId(`space-share-${PANEL}-editor`);
+    await editor.getByTestId(`space-share-${PANEL}-login`).fill(MEMBER.login);
+    await editor.getByTestId(`space-share-${PANEL}-role`).selectOption({ label: "Maintainer" });
+    await editor.getByTestId(`space-share-${PANEL}-add`).click();
+    await expect(editor).toBeHidden();
+    await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveText(`@${MEMBER.login} added as Maintainer`);
+    expect(standinMembers(TEAM)).toContain(`${MEMBER.login}:Maintainer`);
+
+    // A project added from the palette: its pick lists the host's
+    // group's groups first under the same phrase, and picking the
+    // team's lands the project's spex repository there, pushed
+    // (space-58).
+    await page.getByRole("button", { name: "Switch or add a project" }).click();
+    const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
+    await palette.getByTestId("palette-path").fill(app.projectDir);
+    await palette.getByTestId("palette-add").click();
+    const localKey = `${HOST_LOGIN}/demo-project-spex`;
+    const picker = palette.getByTestId(`space-picker-${localKey}`);
+    await expect(picker).toBeVisible();
+    const inside = picker.getByRole("group", { name: PHRASE });
+    await expect(inside.getByTestId(/^space-pick-group-/)).toHaveText([HOST_INSTANCE_GROUP, WORKSHOP, TEAM]);
+    await expect(picker.getByTestId(/^space-pick-group-/).first()).toHaveText(HOST_INSTANCE_GROUP);
+    await inside.getByTestId(`space-pick-group-${TEAM}`).click();
+    await expect(palette).toBeHidden();
+    const TEAM_KEY_HERE = `${TEAM}/demo-project-spex`;
+    await showGroups(page);
+    await expect(page.getByTestId(`space-repo-state-${TEAM_KEY_HERE}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    expect(headOf(bareOf(host, TEAM_KEY_HERE), "spex")).toMatch(/^[0-9a-f]{40}$/);
+    expect((await app.core.command("project.list", {})).map((project) => project.id)).toEqual([TEAM_KEY_HERE]);
   });
 });
 

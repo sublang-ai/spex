@@ -13,7 +13,8 @@
 // what the person may do per group and repository, group creation with
 // taken paths, refusals and a listing lagging behind it, and members
 // with their source, added and removed by login with unknown logins and
-// refusals.
+// refusals; and the group it names as its own (DR-120), `spex-internal`
+// by default, which a test may unname or leave the person out of.
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -39,6 +40,11 @@ export interface StandinGroup {
   /** The group's own members, the person among them where listed; its
    * subgroups and repositories inherit them. */
   members?: StandinMember[];
+  /** False leaves the group out of the person's listing, as a group they
+   * are not a member of: it still exists, may be the host's own group
+   * (`StandinScript.instanceGroup`), and lets them do nothing there.
+   * Unset, listed. */
+  listed?: boolean;
 }
 
 /** A member by the Git host's own role name (e.g. "Developer"). */
@@ -88,8 +94,14 @@ export interface StandinRequest {
 
 export interface StandinScript {
   person: StandinPerson;
-  /** Whether the person may create a group at the top (host-3). */
+  /** Whether the person may create a group at the top (host-3); false
+   * by default, as GitLab.com lets nobody through the API. */
   canCreateGroup: boolean;
+  /** The full path of the group, one of `groups`, the host names as its
+   * own (DR-120): described by `GET /api/v1/host` and marked `instance`
+   * on its row where the person's listing holds it; `spex-internal` by
+   * default, null naming none. */
+  instanceGroup: string | null;
   /** The roles the host grants, least first (host-1); a member's role
    * and whether it may push are read by `name`. */
   roles: StandinRole[];
@@ -466,12 +478,22 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   const groupWire = (group: StandinGroup) => ({ id: group.id, full_path: group.fullPath, name: group.name, url: groupUrl(group), kind: group.kind });
   const groupCan = (group: StandinGroup): StandinGroupCan =>
-    group.can ?? (group.kind === "user" ? { createSubgroup: false, manageMembers: false } : { createSubgroup: true, manageMembers: true });
+    group.listed === false
+      ? { createSubgroup: false, manageMembers: false }
+      : group.can ?? (group.kind === "user" ? { createSubgroup: false, manageMembers: false } : { createSubgroup: true, manageMembers: true });
+  /** The group the stand-in names as its own (DR-120), where it names one. */
+  const instance = (): StandinGroup | undefined =>
+    script.instanceGroup === null ? undefined : script.groups.find((g) => g.kind === "group" && g.fullPath === script.instanceGroup);
   /** A group as `GET /api/v1/host/groups` lists it, with what the person
-   * may do there (host-4). */
+   * may do there (host-4), and `instance` on the host's own group's row
+   * alone (DR-120). */
   const listedGroupWire = (group: StandinGroup) => {
     const can = groupCan(group);
-    return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers } };
+    return {
+      ...groupWire(group),
+      can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers },
+      ...(group === instance() ? { instance: true } : {}),
+    };
   };
   const repositoryCan = (repo: StandinRepository): { manageMembers: boolean } => repo.can ?? { manageMembers: MANAGING_ROLES.has(repo.role) };
 
@@ -678,7 +700,8 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
 
   const script: StandinScript = {
     person: { id: "1001", login: "ada", displayName: "Ada Lovelace" },
-    canCreateGroup: true,
+    canCreateGroup: false,
+    instanceGroup: "spex-internal",
     roles: DEFAULT_ROLES.map((role) => ({ ...role })),
     accounts: [
       { id: "1002", login: "bob", displayName: "Bob" },
@@ -687,6 +710,8 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     ],
     groups: [
       { id: "2001", fullPath: "ada", name: "ada", kind: "user" },
+      // The host's own group (DR-120), the person a member of it.
+      { id: "2000", fullPath: "spex-internal", name: "Spex Internal", kind: "group", members: [{ id: "1001", login: "ada", displayName: "Ada Lovelace", role: "Maintainer" }] },
       { id: "2002", fullPath: "acme", name: "Acme", kind: "group", members: [{ id: "1001", login: "ada", displayName: "Ada Lovelace", role: "Owner" }] },
       { id: "2003", fullPath: "acme/research", name: "Research", kind: "group" },
     ],
@@ -828,7 +853,11 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (path === "/api/v1/auth/revoke" && method === "POST") return revoke(req, res);
     if (path === "/api/v1/host" && method === "GET") {
       const roles = script.roles.map((role) => ({ id: role.id, name: role.name, may_push: role.mayPush }));
-      return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles });
+      // The host's own group, named whether or not the person is a
+      // member of it (DR-120).
+      const named = instance();
+      const group = named ? { id: named.id, full_path: named.fullPath, name: named.name, url: groupUrl(named) } : null;
+      return json(res, 200, { display_name: displayName, git_origin: gitOrigin, roles, group });
     }
     if (path.startsWith("/api/v1/host/")) return hostRoute(req, res, method, path, target);
     if (opts.registry && (path === "/api/v1/search" || path === "/api/v1/packages" || path.startsWith("/api/v1/packages/"))) {
@@ -1015,7 +1044,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         can_create_group: script.canCreateGroup,
       });
     }
-    if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.filter((g) => !lagging.has(g)).map(listedGroupWire) });
+    if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.filter((g) => !lagging.has(g) && g.listed !== false).map(listedGroupWire) });
     if (path === "/api/v1/host/groups" && method === "POST") return createGroup(req, res);
     const groupMatch = /^\/api\/v1\/host\/groups\/([^/]+)\/members(?:\/([^/]+))?$/.exec(path);
     if (groupMatch) {

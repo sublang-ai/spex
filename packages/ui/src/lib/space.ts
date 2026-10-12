@@ -108,6 +108,29 @@ export function isGroupRepository(group: { name: string }, repo: RepositoryState
   return repo.own || repo.name === `${group.name}-spex`;
 }
 
+type Groups = { host: { group?: { fullPath: string; name: string } | null }; groups: { fullPath: string; own: boolean; instance?: boolean }[] };
+
+/** The group the host names as its own, where every group is made
+ * (space-1, DR-120): as the core carries it, none from a core that
+ * carries no such field. */
+export function hostGroupOf(groups: Groups): { fullPath: string; name: string } | null {
+  return groups.host.group ?? null;
+}
+
+/** Whether a group is the host's own or lies inside it (space-1,
+ * space-58): the run the list and the pick put first. */
+export function inHostGroup(groups: Groups, group: { fullPath: string; own: boolean }): boolean {
+  const named = hostGroupOf(groups);
+  if (!named || group.own) return false;
+  return group.fullPath === named.fullPath || group.fullPath.startsWith(`${named.fullPath}/`);
+}
+
+/** The phrase heading the host's own group (space-1, space-58): what
+ * stands beside its name. */
+export function hostGroupPhrase(): string {
+  return i18n._({ id: "this host's group", comment: "beside the name of the group the Git host names as its own, where every group is made" });
+}
+
 /** Two code remotes name the same repository (space-58): compared as
  * the reader reads them, with no user part, no `.git` and no trailing
  * slash, the host's name in any case. */

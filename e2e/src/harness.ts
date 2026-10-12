@@ -60,6 +60,7 @@ import {
   type FakeScript,
   type StandinHost,
   type StandinRegistry,
+  type StandinScript,
   type StubSlcStep,
 } from "@sublang/spex-core/testing";
 import {
@@ -164,7 +165,17 @@ export interface AppOptions {
    * group's spex repository and follows it when sign-in renames it
    * (space-59), and the core's Git is the isolated one of `remote`.
    */
-  host?: boolean | { registry?: boolean; share?: { host: StandinHost; registry?: StandinRegistry } };
+  host?:
+    | boolean
+    | {
+        registry?: boolean;
+        share?: { host: StandinHost; registry?: StandinRegistry };
+        /** Set on the stand-in's script before the shell starts, so the
+         * sign-in's first read already says it: the group it names as
+         * its own (DR-120), none with null, and whether the person may
+         * create a group at the top. */
+        script?: Partial<Pick<StandinScript, "instanceGroup" | "canCreateGroup">>;
+      };
   /** Signed in at the stand-in before the page opens: the device flow
    * started over the protocol, its code approved through the script,
    * and the account's set-up awaited (space-4). Needs `host`. */
@@ -227,6 +238,10 @@ export const HOST_LOGIN = "ada";
 /** The stand-in's team group and its id (git-host-12). */
 export const HOST_GROUP = "acme";
 export const HOST_GROUP_ID = "2002";
+/** The group the stand-in names as its own by default, and its name
+ * (git-host-12, DR-120): where every group is made. */
+export const HOST_INSTANCE_GROUP = "spex-internal";
+export const HOST_INSTANCE_NAME = "Spex Internal";
 
 /** Your own group's name in a home: the one `home.yaml` records once
  * the home has written it — a sign-in renames it (space-59). */
@@ -706,6 +721,7 @@ async function arrangeApp(
       }
       host = await startStandinHost({ dir: join(scratch, "host"), ...(registry ? { registry: registry.url } : {}) });
       owned.push(host);
+      if (spec.script) Object.assign(host.script, spec.script);
     }
   }
   const closeOwned = async (): Promise<void> => {

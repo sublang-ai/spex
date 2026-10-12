@@ -2881,6 +2881,11 @@ msgstr "Group records"
 msgid "Groups"
 msgstr "Groups"
 
+#. the groups list's head where the Git host names a group of its own that the person is not a member of; {name} is that group's name
+#: src/components/SpaceGroups.tsx
+msgid "Groups are made in {name}; ask its owner to share it with you"
+msgstr "Groups are made in {name}; ask its owner to share it with you"
+
 #: src/components/CaptainHome.tsx
 msgid "Heads up — some agents aren't ready yet:"
 msgstr "Heads up — some agents aren't ready yet:"
@@ -5312,13 +5317,13 @@ msgstr "Sign in there and approve; you return here signed in."
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in to make your groups and share each project's records with the people in them."
+msgstr "Sign in to make your groups and share each project's records with the people in them."
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Sign in to publish"
 msgstr "Sign in to publish"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Sign in to see your groups and share each project's records with the people in them."
-msgstr "Sign in to see your groups and share each project's records with the people in them."
 
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
@@ -6030,6 +6035,11 @@ msgstr "This file changed on disk since you opened it."
 #: src/lib/media-client.ts
 msgid "This file is too large to preview."
 msgstr "This file is too large to preview."
+
+#. beside the name of the group the Git host names as its own, where every group is made
+#: src/lib/space.ts
+msgid "this host's group"
+msgstr "this host's group"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx

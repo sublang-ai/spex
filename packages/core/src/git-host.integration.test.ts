@@ -150,7 +150,7 @@ test("git-host-2: the browser flow signs in through the loopback and stores the 
     assert.equal(back.status, 200);
     assert.match(await back.text(), /may close this browser window/);
     const account = await flow.done;
-    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace", canCreateGroup: true });
+    assert.deepEqual(account, { id: "1001", login: "ada", displayName: "Ada Lovelace", canCreateGroup: false });
 
     const file = credentialsPath(t.home);
     assert.equal(mode(file), 0o600);
@@ -314,7 +314,7 @@ test("git-host-4: an access secret within a minute of expiring is refreshed once
     skew.ms = 3_600_000 - 30_000;
     const from = t.host.script.requests.length;
     const [groups, me] = await Promise.all([t.client.groups(), t.client.me()]);
-    assert.equal(groups.length, 3);
+    assert.equal(groups.length, 4);
     assert.equal(me.login, "ada");
     assert.equal(refreshGrants(t.host), 1, "two concurrent calls refresh once");
     const after = await store.read();
@@ -333,7 +333,7 @@ test("git-host-4: a token_expired answer refreshes once and retries; two concurr
     await browserSignIn(t.client);
     t.host.script.expireAccess();
     const [groups, repositories] = await Promise.all([t.client.groups(), t.client.repositories()]);
-    assert.equal(groups.length, 3);
+    assert.equal(groups.length, 4);
     assert.deepEqual(repositories, []);
     assert.equal(refreshGrants(t.host), 1);
     assert.equal(t.signedOut.length, 0);
@@ -675,7 +675,7 @@ test("git-host-5: groups and every spex repository across two pages, followed th
     await browserSignIn(t.client);
 
     const groups = await t.client.groups();
-    assert.deepEqual(groups.map((g) => [g.fullPath, g.kind]), [["ada", "user"], ["acme", "group"], ["acme/research", "group"]]);
+    assert.deepEqual(groups.map((g) => [g.fullPath, g.kind]), [["ada", "user"], ["spex-internal", "group"], ["acme", "group"], ["acme/research", "group"]]);
     assert.ok(groups.every((g) => typeof g.id === "string" && typeof g.name === "string"));
 
     const from = s.requests.length;
@@ -788,7 +788,7 @@ test("git-host-8: members with the host's role names and members page", async ()
   }
 });
 
-test("git-host-5, git-host-8: the host's roles, what it lets the person do per group and repository, and a group's members with their source", async () => {
+test("git-host-5, git-host-8: the host's roles and its own group, what it lets the person do per group and repository, and a group's members with their source", async () => {
   const t = await setup();
   try {
     const s = t.host.script;
@@ -808,15 +808,24 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
       { id: "maintainer", name: "Maintainer", mayPush: true },
       { id: "owner", name: "Owner", mayPush: true },
     ]);
-    assert.equal((await t.client.me()).canCreateGroup, true);
-    s.canCreateGroup = false;
     assert.equal((await t.client.me()).canCreateGroup, false);
+    s.canCreateGroup = true;
+    assert.equal((await t.client.me()).canCreateGroup, true);
     const groups = await t.client.groups();
     assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
       ["ada", { createSubgroup: false, manageMembers: false }],
+      ["spex-internal", { createSubgroup: true, manageMembers: true }],
       ["acme", { createSubgroup: true, manageMembers: true }],
       ["acme/research", { createSubgroup: false, manageMembers: true }],
     ]);
+    // The group the host names as its own, and the mark on its row alone
+    // (git-host-5, DR-120); a row the host leaves unmarked reads false.
+    assert.deepEqual(described.group, { id: "2000", fullPath: "spex-internal", name: "Spex Internal", url: `${t.host.url}/spex-internal` });
+    assert.deepEqual(groups.filter((group) => group.instance).map((group) => group.fullPath), ["spex-internal"]);
+    s.instanceGroup = null;
+    assert.equal((await t.client.describe()).group, null);
+    assert.deepEqual((await t.client.groups()).filter((group) => group.instance), []);
+    s.instanceGroup = "spex-internal";
     const repositories = await t.client.repositories();
     assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true }], [reader.id, { manageMembers: false }]]);
 
@@ -837,6 +846,8 @@ test("git-host-15, git-host-16, git-host-17: group creation and member writes an
   try {
     const s = t.host.script;
     const repo = s.addRepository({ group: "acme", name: "team-spex" });
+    // A host that lets the person create a group at the top.
+    s.canCreateGroup = true;
     await browserSignIn(t.client);
 
     // Creation at the top and inside a group, named as typed at the path
@@ -1042,7 +1053,7 @@ test("git-host-11: each failure the host answers is a kind with the host's words
     s.refuseHost(1, "Your account is blocked by GitLab.com: contact support.");
     await assert.rejects(t.client.groups(), hostError("host_refused", { words: "Your account is blocked by GitLab.com: contact support." }));
     await assert.rejects(t.client.repository("9999"), hostError("not_found", { words: "The repository is not shared with this account." }));
-    assert.equal((await t.client.groups()).length, 3, "a failure leaves the device signed in");
+    assert.equal((await t.client.groups()).length, 4, "a failure leaves the device signed in");
     assert.equal(t.signedOut.length, 0);
 
     await t.closeHost();
@@ -1088,6 +1099,7 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
         { id: "maintainer", name: "Maintainer", may_push: true },
         { id: "owner", name: "Owner", may_push: true },
       ],
+      group: { id: "2000", full_path: "spex-internal", name: "Spex Internal", url: `${host.url}/spex-internal` },
     });
     const unauth = await fetch(`${host.url}/api/v1/host/me`);
     assert.equal(unauth.status, 401);

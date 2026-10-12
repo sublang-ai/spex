@@ -285,7 +285,7 @@ export function SignInCard({
         <p data-testid="space-signin-caption">
           {hostSignedOut
             ? i18n._("{site} signed this device out. Sign in again to continue as @{login}.", { site, login: hostSignedOut.login })
-            : i18n._("Sign in to see your groups and share each project's records with the people in them.")}
+            : i18n._("Sign in to make your groups and share each project's records with the people in them.")}
         </p>
         <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
       </>

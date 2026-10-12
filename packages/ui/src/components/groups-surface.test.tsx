@@ -64,6 +64,7 @@ function teamGroup(repos?: RepositoryState[]): GroupsState["groups"][number] {
     name: "team",
     url: "https://gitlab.example/acme/team",
     own: false,
+    instance: false,
     can: NO_CAN,
     repositories: repos ?? [
       repo({ key: "acme/team/team-spex", name: "team-spex", id: "50", code: null, folder: null, members: 4 }),
@@ -86,7 +87,7 @@ function signedOut(over: Partial<GroupsState> = {}): GroupsState {
   const project = repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null });
   return {
     ...base({ account: null, readAt: null, ...over }),
-    groups: [{ id: null, fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [own, project] }],
+    groups: [{ id: null, fullPath: "jane", name: "jane", url: null, own: true, instance: false, can: NO_CAN, repositories: [own, project] }],
   };
 }
 
@@ -152,7 +153,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     const account = screen.getByTestId("space-account");
     expect(within(account).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
-      "Sign in to see your groups and share each project's records with the people in them." +
+      "Sign in to make your groups and share each project's records with the people in them." +
         "Until you do, everything stays on this device and nothing is contacted.",
     );
     // No home path, Copy path, read time or Refresh while signed out
@@ -270,7 +271,7 @@ describe("GROUPS: signing in (space-3, space-6)", () => {
         ? { flow: "device", userCode: "WDJB-MJHT", verificationUri: complete, expiresAt: NOW + 15 * MIN }
         : answer(type, fields),
     );
-    await renderGroups(signedOut({ host: { url: "https://spex.example", displayName: null } }), { open: false });
+    await renderGroups(signedOut({ host: { url: "https://spex.example", displayName: null, group: null } }), { open: false });
     fireEvent.click(screen.getByTestId("space-signin"));
     const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
     // The link names the page it opens by its host name.

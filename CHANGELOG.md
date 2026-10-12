@@ -226,6 +226,19 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Adding keeps you on Space. Before, the only remedy was the project
   palette, which registered a duplicate project and synced it to every
   other device.
+- Groups are made inside the host's own group ([DR-120](specs/decisions/120-groups-live-in-the-hosts-group.md)).
+  Where the Git host names a group of its own — spex.pub's internal
+  instance names `spex-internal` — Groups lists it right after your own,
+  headed "<name> · this host's group", with the groups inside it next;
+  **New group** at the list's head creates a private group inside it,
+  and nothing is made at the top. A person who is not yet a member reads
+  "Groups are made in <name>; ask its owner to share it with you" in
+  place of a link to the host's site, and **Pick a group** lists the
+  host's group's groups first under the same phrase. "New group at
+  <site>" stays only for a host that names no group. The sign-in card
+  now reads "Sign in to make your groups…". `space.get` and
+  `space.state` carry `host.group` and an `instance` mark on each
+  group; the protocol version is unchanged.
 - Each project's group on the Dashboard folds to its header from its
   Collapse control and stays folded across launches. A folded group
   keeps its most severe attention mark; the project's Overview always

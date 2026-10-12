@@ -74,6 +74,9 @@ function codeRepository(name: string): string {
 
 test("space-37: the browser sign-in renames your own group after the login, pushes its spex repository, and writes the account", async (t) => {
   const host = await startHost();
+  // A host that lets the person create a group at the top, so the
+  // restart below shows that right waiting for a read (DR-114).
+  host.script.canCreateGroup = true;
   const home = await startHome("signin-browser", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const { key } = await addFolder(home, home.projectDir);
@@ -102,8 +105,9 @@ test("space-37: the browser sign-in renames your own group after the login, push
   assert.deepEqual(signed.account, { id: "1001", login: LOGIN, displayName: "Ada Lovelace", canCreateGroup: true });
   assert.equal(signed.host.displayName, HOST_NAME);
   assert.equal(typeof signed.readAt, "number");
-  assert.deepEqual(signed.groups.map((group) => [group.fullPath, group.own]), [[LOGIN, true], ["acme", false], ["acme/research", false]]);
+  assert.deepEqual(signed.groups.map((group) => [group.fullPath, group.own]), [[LOGIN, true], ["spex-internal", false], ["acme", false], ["acme/research", false]]);
   assert.equal(signed.groups[0].id, "2001");
+  assert.equal(signed.host.group?.fullPath, "spex-internal");
   // Your own group's folder and every clone in it bear the login, and
   // every pair naming one is rewritten (space-59, storage-2).
   const moved = `${LOGIN}/${basename(home.projectDir)}-spex`;
@@ -144,6 +148,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   // start, as do its roles (DR-114).
   assert.deepEqual(reread.account, { ...signed.account, canCreateGroup: false });
   assert.deepEqual(reread.roles, []);
+  assert.equal(reread.host.group, null);
   assert.equal(reread.readAt, null);
   assert.equal(reread.host.url, host.url);
   assert.deepEqual(repositoryOf(reread, HOST_OWN).lastSync, own.lastSync);
@@ -152,9 +157,10 @@ test("space-37: the browser sign-in renames your own group after the login, push
   // the picker (space-1, git-host-5); a later ask begins none.
   const read = await again.client.waitSpace(fromStart, (state) => state.readAt !== null);
   assert.equal(typeof read.readAt, "number");
-  assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "acme", "acme/research"]);
+  assert.deepEqual(read.groups.map((group) => group.fullPath), [LOGIN, "spex-internal", "acme", "acme/research"]);
   assert.equal(repositoryOf(read, HOST_OWN).state, "reachable");
   assert.deepEqual(read.account, signed.account);
+  assert.deepEqual(read.host.group, signed.host.group);
   assert.deepEqual(read.roles, signed.roles);
   await again.client.expectOk("space.get", {});
   await sleep(300);
@@ -1649,6 +1655,15 @@ async function refreshRead(home: Awaited<ReturnType<typeof startHome>>, readAt: 
   }
 }
 
+/** Script the stand-in as a host naming no group of its own, that group
+ * gone, which lets the person create a group at the top (DR-114,
+ * DR-120). */
+function hostNamingNone(host: StandinHost): void {
+  host.script.groups = host.script.groups.filter((group) => group.fullPath !== host.script.instanceGroup);
+  host.script.instanceGroup = null;
+  host.script.canCreateGroup = true;
+}
+
 /** The full paths of a state's groups of the host, in its order. */
 const groupPaths = (state: GroupsState): string[] => state.groups.filter((group) => !group.own).map((group) => group.fullPath);
 
@@ -1672,6 +1687,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   research.can = { createSubgroup: false, manageMembers: false };
   host.script.addRepository({ group: "acme", name: "a-spex", role: "Maintainer" });
   host.script.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
+  hostNamingNone(host);
   const home = await startHome("groups-create", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   // Signed out: nothing is held of the host, and nothing is asked of it.
@@ -1763,6 +1779,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
 
 test("git-host-5, git-host-15: a group created while the stand-in's listing lags stands until a read begun after it drops it; a read begun before it is made again", async (t) => {
   const host = await startHost();
+  hostNamingNone(host);
   const home = await startHome("groups-lag", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const from = home.client.mark();
@@ -1814,6 +1831,74 @@ test("git-host-5, git-host-15: a group created while the stand-in's listing lags
   host.script.lagGroupListing(false);
   const found = await refreshRead(home, dropped.readAt);
   assert.deepEqual(groupPaths(found), ["acme", "acme/early", "acme/research", "late"]);
+});
+
+test("space-37, git-host-14: the host's own group stands after yours with the groups inside it before the others; named and unmarked where the person is no member; none where the host names none", async (t) => {
+  const host = await startHost();
+  // A workshop's group inside the host's own and a team's inside that
+  // (DR-120); acme sorts before them by path, and still follows.
+  host.script.groups.push(
+    { id: "2010", fullPath: "spex-internal/workshop", name: "Workshop", kind: "group" },
+    { id: "2011", fullPath: "spex-internal/workshop/team-a", name: "Team A", kind: "group" },
+  );
+  const home = await startHome("host-group", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  const signed = await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  // The read holds the group the stand-in names as its own — its id,
+  // full path, name and page — with the mark on its row alone
+  // (git-host-5), and the state lists your own group, that group, the
+  // groups inside it, then the others (space-1, space-30).
+  assert.deepEqual(signed.host.group, { id: "2000", fullPath: "spex-internal", name: "Spex Internal", url: `${host.url}/spex-internal` });
+  assert.deepEqual(signed.groups.map((group) => [group.fullPath, group.instance]), [
+    [LOGIN, false],
+    ["spex-internal", true],
+    ["spex-internal/workshop", false],
+    ["spex-internal/workshop/team-a", false],
+    ["acme", false],
+    ["acme/research", false],
+  ]);
+  // Nobody may create a group at the top; one created inside the host's
+  // own stands among the groups inside it (space-1).
+  assert.equal(signed.account?.canCreateGroup, false);
+  await home.client.expectError("space.group.create", { name: "Top", path: "top", parent: null }, "invalid_request", /You are not allowed to create groups\.$/);
+  const created = await createGroupHeld(home, { name: "Zeta Camp", path: "zeta-camp", parent: "2000" });
+  assert.equal(created.group.fullPath, "spex-internal/zeta-camp");
+  assert.deepEqual(groupPaths(created.announced), ["spex-internal", "spex-internal/workshop", "spex-internal/workshop/team-a", "spex-internal/zeta-camp", "acme", "acme/research"]);
+
+  // The person left out of the host's group: the read still names it,
+  // marks no row, and the groups inside it she belongs to still precede
+  // the others (git-host-5, space-1).
+  const internal = host.script.groups.find((group) => group.fullPath === "spex-internal");
+  assert.ok(internal);
+  internal.listed = false;
+  const outside = await refreshRead(home, (await home.client.expectOk("space.get", {})).readAt);
+  assert.deepEqual(outside.host.group, signed.host.group);
+  assert.deepEqual(outside.groups.map((group) => [group.fullPath, group.instance]), [
+    [LOGIN, false],
+    ["spex-internal/workshop", false],
+    ["spex-internal/workshop/team-a", false],
+    ["spex-internal/zeta-camp", false],
+    ["acme", false],
+    ["acme/research", false],
+  ]);
+
+  // A host naming none: no group, and every other group after your own
+  // in the order of full paths (git-host-5, space-1).
+  internal.listed = true;
+  host.script.instanceGroup = null;
+  const none = await refreshRead(home, outside.readAt);
+  assert.equal(none.host.group, null);
+  assert.deepEqual(none.groups.map((group) => [group.fullPath, group.instance]), [
+    [LOGIN, false],
+    ["acme", false],
+    ["acme/research", false],
+    ["spex-internal", false],
+    ["spex-internal/workshop", false],
+    ["spex-internal/workshop/team-a", false],
+    ["spex-internal/zeta-camp", false],
+  ]);
 });
 
 test("git-host-8, git-host-16, git-host-17: a group's members with their source; members added and removed in groups and spex repositories, the stand-in's members replied; its refusals in its words, in English and in Chinese", async (t) => {
@@ -1901,6 +1986,8 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   assert.equal(zhUnknown, `在 ${HOST_NAME} 上未找到：No account is named zed.`);
   const zhExisting = await home.client.expectError("space.share", { group: "2002", login: "alan", role: "developer" }, "invalid_request");
   assert.equal(zhExisting, `${HOST_NAME} 拒绝了：Member already exists`);
+  // A taken name at the top, where the stand-in lets the person create.
+  host.script.canCreateGroup = true;
   const zhTaken = await home.client.expectError("space.group.create", { name: "Acme", path: "acme", parent: null }, "invalid_request");
   assert.equal(zhTaken, `Acme 在 ${HOST_NAME} 上已被占用；请另选一个名称`);
 });

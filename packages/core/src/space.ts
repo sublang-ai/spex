@@ -3343,7 +3343,13 @@ export class SpaceManager {
     return {
       home: resolve(this.host.home),
       git: await this.probe.version(),
-      host: { url: host.url, displayName: this.view?.displayName ?? this.described?.displayName ?? null },
+      host: {
+        url: host.url,
+        displayName: this.view?.displayName ?? this.described?.displayName ?? null,
+        // The group the host names as its own, as its last read did
+        // (space-30, DR-120): nothing until a read is held.
+        group: ((g) => (g ? { id: g.id, fullPath: g.fullPath, name: g.name, url: g.url } : null))(this.signedIn() ? this.view?.group : undefined),
+      },
       // What the host's last read said the person may do, and the roles
       // it grants: nothing until a read is held (DR-114).
       account: ((a) => (a ? { ...a, canCreateGroup: this.view?.account.canCreateGroup ?? false } : null))(store.home.account()),
@@ -3442,9 +3448,11 @@ export class SpaceManager {
     return rows;
   }
 
-  /** Your own group first, then every group the host lists, each with
-   * its spex repositories, the group's own first (space-1); before
-   * sign-in, your own group with what this device holds. */
+  /** Your own group first, then the host's own group where its read
+   * names one, then the groups inside it, then every other group the
+   * host lists, each with its spex repositories, the group's own first
+   * (space-1, DR-120); before sign-in, your own group with what this
+   * device holds. */
   private groupsOf(rows: RepositoryState[]): GroupsState["groups"] {
     const store = this.host.store;
     const ownName = store.home.ownName;
@@ -3455,19 +3463,19 @@ export class SpaceManager {
     // (DR-114); nothing in your own, which takes no subgroup or member,
     // nor in a group the read did not list.
     const noCan = (): Entry["can"] => ({ createSubgroup: false, manageMembers: false });
-    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, can: noCan(), repositories: [] };
+    const own: Entry = { id: user?.id ?? null, fullPath: ownName, name: user?.name ?? ownName, url: user?.url ?? null, own: true, instance: false, can: noCan(), repositories: [] };
     const entries = new Map<string, Entry>([[ownName, own]]);
     for (const group of this.signedIn() ? this.listedGroups(view) : []) {
       if (group.kind === "user") continue;
       const can = { createSubgroup: group.can.createSubgroup, manageMembers: group.can.manageMembers };
-      entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, can, repositories: [] });
+      entries.set(group.fullPath, { id: group.id, fullPath: group.fullPath, name: group.name, url: group.url, own: false, instance: group.instance, can, repositories: [] });
     }
     for (const row of rows) {
       let path = splitKey(row.key).group;
       if (user && path === user.fullPath) path = ownName;
       let entry = entries.get(path);
       if (!entry) {
-        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, url: null, own: false, can: noCan(), repositories: [] };
+        entry = { id: null, fullPath: path, name: path.split("/").pop() ?? path, url: null, own: false, instance: false, can: noCan(), repositories: [] };
         entries.set(path, entry);
       }
       entry.repositories.push(row);
@@ -3476,7 +3484,13 @@ export class SpaceManager {
     for (const entry of entries.values()) {
       entry.repositories.sort((a, b) => Number(groupsOwn(entry, b)) - Number(groupsOwn(entry, a)) || a.key.localeCompare(b.key));
     }
-    return [own, ...[...entries.values()].filter((entry) => entry !== own).sort((a, b) => a.fullPath.localeCompare(b.fullPath))];
+    // The host's own group, where its read names one, and the groups
+    // inside it come before every other group (space-1, DR-120); the
+    // host's group itself stands only where the person is a member.
+    const hostPath = view?.group?.fullPath ?? [...entries.values()].find((entry) => entry.instance)?.fullPath;
+    const band = (entry: Entry): number =>
+      hostPath === undefined ? 1 : entry.fullPath === hostPath ? 0 : entry.fullPath.startsWith(`${hostPath}/`) ? 0.5 : 1;
+    return [own, ...[...entries.values()].filter((entry) => entry !== own).sort((a, b) => band(a) - band(b) || a.fullPath.localeCompare(b.fullPath))];
   }
 
   /** Broadcast the state after one machine moved, every clone read at

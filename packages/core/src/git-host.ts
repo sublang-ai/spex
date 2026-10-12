@@ -64,15 +64,23 @@ export interface HostAccount { id: string; login: string; displayName: string | 
  * the host says nothing, as for a repository's group or your own. */
 export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean }
 
-export interface HostGroup { id: string | null; fullPath: string; name: string; url: string | null; kind: "user" | "group"; can: HostGroupCan }
+/** A group as the host lists it; `instance` where the host marks it as
+ * the group it names as its own (git-host-5, DR-120), false where it
+ * says nothing. */
+export interface HostGroup { id: string | null; fullPath: string; name: string; url: string | null; kind: "user" | "group"; can: HostGroupCan; instance: boolean }
+
+/** The group the host names as its own (git-host-5, DR-120): where every
+ * group a person makes is created, whether or not she is a member. */
+export interface HostOwnGroup { id: string; fullPath: string; name: string; url: string | null }
 
 /** One of the host's own roles (git-host-16): the id a client sends
  * back, the host's name for it, and whether it may push. */
 export interface HostRole { id: string; name: string; mayPush: boolean }
 
-/** The host's description (git-host-5): its name, its Git origin, and
- * the roles it grants in its own order, empty where it lists none. */
-export interface HostDescription { displayName: string; gitOrigin: string; roles: HostRole[] }
+/** The host's description (git-host-5): its name, its Git origin, the
+ * roles it grants in its own order, empty where it lists none, and the
+ * group it names as its own, null where it names none (DR-120). */
+export interface HostDescription { displayName: string; gitOrigin: string; roles: HostRole[]; group: HostOwnGroup | null }
 
 /** A group or a spex repository at the host, by the host's id, whose
  * members are read, added or removed (git-host-8, git-host-16,
@@ -386,14 +394,15 @@ export class GitHostClient {
   }
 
   /** `GET /api/v1/host`: the host's display name, the Git origin its
-   * credentials are valid for, and the roles it grants (git-host-5). */
+   * credentials are valid for, the roles it grants, and the group it
+   * names as its own (git-host-5, DR-120). */
   async describe(): Promise<HostDescription> {
     const answer = await this.send("GET", "/api/v1/host", {});
     if (answer.status !== 200) throw answerError(answer);
     const body = record(answer.json);
     // A host that lists no roles grants none through Spex.
     const roles = body.roles === undefined || body.roles === null ? [] : list(body.roles).map(roleFrom);
-    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin), roles };
+    return { displayName: text(body.display_name), gitOrigin: text(body.git_origin), roles, group: ownGroupFrom(body.group) };
   }
 
   /** Whether this device holds an app token for the host. */
@@ -1010,7 +1019,18 @@ function groupFrom(value: unknown): HostGroup {
     url: optionalText(body.url),
     kind: body.kind === "user" ? "user" : "group",
     can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members) },
+    instance: flag(body.instance),
   };
+}
+
+/** The host's own group from its description, null where it names none
+ * or names one without an id or a full path (DR-120). */
+function ownGroupFrom(value: unknown): HostOwnGroup | null {
+  if (!isRecord(value)) return null;
+  const id = optionalText(value.id);
+  const fullPath = optionalText(value.full_path);
+  if (!id || !fullPath) return null;
+  return { id, fullPath, name: optionalText(value.name) || fullPath, url: optionalText(value.url) };
 }
 
 function roleFrom(value: unknown): HostRole {

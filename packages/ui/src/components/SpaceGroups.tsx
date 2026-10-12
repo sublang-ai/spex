@@ -12,9 +12,11 @@
 // (space-63), the members the host reports (space-62), the first-push
 // notice (space-57) and the joining of unrelated histories (space-13).
 // Signed in, "New group" heads the list where the host lets the person
-// create one, and a group of the host carries Members and, where the
-// host lets them, "New subgroup" on its heading (space-68, DR-114);
-// your own group's heading carries neither.
+// create one — inside the group the host names as its own, which stands
+// after yours headed "<name> · this host's group", or at the top where
+// it names none (DR-120) — and a group of the host carries Members and,
+// where the host lets them, "New subgroup" on its heading (space-68,
+// DR-114); your own group's heading carries neither.
 // Every act is a command whose outcome arrives as state (space-29).
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -27,6 +29,9 @@ import {
   STEP_LINES,
   STEP_NAMES,
   displayRemote,
+  hostGroupOf,
+  hostGroupPhrase,
+  inHostGroup,
   isGroupRepository,
   lastSegment,
   lastSyncOf,
@@ -141,11 +146,7 @@ export function GroupsList({
       aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
       className="flex flex-col gap-3"
     >
-      {groups.account?.canCreateGroup ? (
-        <NewGroup connected={connected} onNote={onNote} />
-      ) : groups.account ? (
-        <NewGroupAtHost groups={groups} />
-      ) : null}
+      {groups.account ? <ListHead groups={groups} connected={connected} onNote={onNote} /> : null}
       {groups.groups.map((group) => (
         <GroupSection
           key={group.fullPath}
@@ -163,9 +164,37 @@ export function GroupsList({
   );
 }
 
-/** "New group" at the list's head (space-1, space-68): a group at the
- * top of the host, named in place. */
-function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
+/** The list's head while signed in (space-1). Where the host names a
+ * group of its own, every group is made inside it (DR-120): "New group"
+ * creates there where the read lists it and lets the person create a
+ * subgroup in it, and where the read does not list it — the person is
+ * no member — one line says who can let her in, with no door to the
+ * host's site. Where the host names none: "New group" at the top where
+ * the read says she may, else the host's own site (DR-118). */
+function ListHead({ groups, connected, onNote }: { groups: GroupsState; connected: boolean; onNote: Note }) {
+  const named = hostGroupOf(groups);
+  if (named) {
+    const row = groups.groups.find((group) => group.instance && !group.own);
+    if (!row) {
+      return (
+        <p data-testid="space-host-group-ask" className="min-w-0 text-xs text-neutral-500">
+          {i18n._({
+            id: "Groups are made in {name}; ask its owner to share it with you",
+            comment: "the groups list's head where the Git host names a group of its own that the person is not a member of; {name} is that group's name",
+            values: { name: named.name },
+          })}
+        </p>
+      );
+    }
+    return row.id !== null && row.can.createSubgroup ? <NewGroup parent={row.id} connected={connected} onNote={onNote} /> : null;
+  }
+  return groups.account?.canCreateGroup ? <NewGroup parent={null} connected={connected} onNote={onNote} /> : <NewGroupAtHost groups={groups} />;
+}
+
+/** "New group" at the list's head (space-1, space-68): a group named
+ * in place, inside the host's own group where it names one (DR-120),
+ * else at the top of the host. */
+function NewGroup({ parent, connected, onNote }: { parent: string | null; connected: boolean; onNote: Note }) {
   const [open, setOpen] = useState(false);
   const controlRef = useRef<HTMLButtonElement>(null);
   return (
@@ -184,7 +213,7 @@ function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
       {open ? (
         <GroupNameEditor
           testId="space-new-group-editor"
-          parent={null}
+          parent={parent}
           connected={connected}
           onClose={() => {
             setOpen(false);
@@ -198,10 +227,11 @@ function NewGroup({ connected, onNote }: { connected: boolean; onNote: Note }) {
   );
 }
 
-/** Where the host's read says the person may not create a group, the
- * host's own site, where a group at the top is then made (space-1,
- * DR-118): the origin of your own group's page as the read gives it,
- * named by its host. Nothing stands before a read gives that page. */
+/** Where the host names no group of its own and its read says the
+ * person may not create one, the host's own site, where a group at the
+ * top is then made (space-1, DR-118): the origin of your own group's
+ * page as the read gives it, named by its host. Nothing stands before a
+ * read gives that page. */
 function NewGroupAtHost({ groups }: { groups: GroupsState }) {
   const page = groups.groups.find((group) => group.own)?.url ?? null;
   let site: string | null = null;
@@ -262,15 +292,19 @@ function GroupSection({
   // the key phrase says it will (space-1). A group's path stands beside
   // its name only where the two differ.
   const name = group.own ? i18n._("Your own group") : group.name;
+  // The host's own group is headed by the key phrase saying so, where
+  // every group is made (DR-120); its full path rides the name's title.
   const beside =
     group.own && !groups.account
       ? i18n._({
           id: "named after your login at sign-in",
           comment: "beside the heading 'Your own group' before sign-in: its name and path come from the login",
         })
-      : group.fullPath !== name
-        ? group.fullPath
-        : null;
+      : group.instance && !group.own
+        ? hostGroupPhrase()
+        : group.fullPath !== name
+          ? group.fullPath
+          : null;
   // Your own group takes no subgroup and no member: what is there is
   // shared on its spex repositories (DR-114).
   const hostGroup = groups.account !== null && !group.own && group.id !== null ? group.id : null;
@@ -328,7 +362,9 @@ function GroupSection({
             <Icon name="list" className="h-3.5 w-3.5 @md:hidden" />
           </button>
         ) : null}
-        {hostGroup !== null && group.can.createSubgroup ? (
+        {/* The host's own group takes its subgroups from the list's
+            head, whose "New group" is that act (DR-120). */}
+        {hostGroup !== null && group.can.createSubgroup && !group.instance ? (
           <button
             ref={subgroupRef}
             type="button"
@@ -1019,7 +1055,12 @@ export function GroupPicker({
   );
   // The host's own groups; GroupsState names no right to create, so
   // every group is offered and a refusal waits on the row (space-64).
+  // Those inside the group the host names as its own come first, under
+  // the phrase its heading reads (space-58, DR-120).
   const creatable = groups.groups.filter((group) => group.id !== null || group.own);
+  const named = hostGroupOf(groups);
+  const inside = creatable.filter((group) => inHostGroup(groups, group));
+  const others = creatable.filter((group) => !inHostGroup(groups, group));
   const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [name, setName] = useState(defaultName);
   const [busy, setBusy] = useState<string>();
@@ -1069,6 +1110,22 @@ export function GroupPicker({
     first = false;
     return firstRef;
   };
+  const groupOption = (group: GroupsState["groups"][number]) => (
+    <li key={group.fullPath} className="min-w-0">
+      <button
+        ref={takeFirst()}
+        type="button"
+        data-testid={`space-pick-group-${group.fullPath}`}
+        className={option}
+        disabled={disabled}
+        onClick={() => create(group)}
+      >
+        <span className="min-w-0 flex-1 truncate" title={group.fullPath}>
+          {group.fullPath}
+        </span>
+      </button>
+    </li>
+  );
 
   return (
     <div
@@ -1133,24 +1190,26 @@ export function GroupPicker({
           />
           <span className="shrink-0 font-mono text-neutral-500">-spex</span>
         </label>
-        <ul className="flex min-w-0 flex-col gap-1">
-          {creatable.map((group) => (
-            <li key={group.fullPath} className="min-w-0">
-              <button
-                ref={takeFirst()}
-                type="button"
-                data-testid={`space-pick-group-${group.fullPath}`}
-                className={option}
-                disabled={disabled}
-                onClick={() => create(group)}
-              >
-                <span className="min-w-0 flex-1 truncate" title={group.fullPath}>
-                  {group.fullPath}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {named && inside.length > 0 ? (
+          <div
+            role="group"
+            aria-label={`${named.name} · ${hostGroupPhrase()}`}
+            data-testid={`space-pick-host-group-${repo.key}`}
+            className="flex min-w-0 flex-col gap-1"
+          >
+            <h4 className="flex min-w-0 items-baseline gap-1 text-xs">
+              <span className="min-w-0 truncate font-medium" title={named.fullPath}>
+                {named.name}
+              </span>{" "}
+              <span className="min-w-0 truncate text-neutral-500">
+                <span aria-hidden>· </span>
+                {hostGroupPhrase()}
+              </span>
+            </h4>
+            <ul className="flex min-w-0 flex-col gap-1">{inside.map((group) => groupOption(group))}</ul>
+          </div>
+        ) : null}
+        <ul className="flex min-w-0 flex-col gap-1">{others.map((group) => groupOption(group))}</ul>
       </section>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>

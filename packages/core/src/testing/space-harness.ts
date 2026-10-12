@@ -201,8 +201,18 @@ export function assertGroupsState(state: GroupsState): void {
     assert.deepEqual(Object.keys(role).sort(), ["id", "mayPush", "name"]);
     assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
   }
+  // The group the host names as its own (DR-120): nothing until a read
+  // is held, and then its id, full path, name and page.
+  assert.deepEqual(Object.keys(state.host).sort(), ["displayName", "group", "url"]);
+  if (state.host.group !== null) {
+    assert.deepEqual(Object.keys(state.host.group).sort(), ["fullPath", "id", "name", "url"]);
+    assert.ok(typeof state.host.group.id === "string" && typeof state.host.group.fullPath === "string" && typeof state.host.group.name === "string", JSON.stringify(state.host.group));
+  }
+  assert.ok(state.groups.filter((group) => group.instance).length <= 1, "at most one group is the host's own");
   for (const group of state.groups) {
-    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories", "url"]);
+    assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "instance", "name", "own", "repositories", "url"]);
+    assert.equal(typeof group.instance, "boolean");
+    if (group.instance) assert.equal(group.fullPath, state.host.group?.fullPath, "the marked group is the one the host names");
     assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "manageMembers"]);
     assert.ok(typeof group.can.createSubgroup === "boolean" && typeof group.can.manageMembers === "boolean", JSON.stringify(group.can));
     if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false }, "your own group takes no subgroup or member");

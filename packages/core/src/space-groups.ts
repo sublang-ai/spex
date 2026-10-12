@@ -17,6 +17,7 @@ import {
   type GitHostClient,
   type HostAccount,
   type HostGroup,
+  type HostOwnGroup,
   type HostRepository,
   type HostRole,
   type SignInCause,
@@ -46,6 +47,10 @@ export interface HostView {
   displayName: string;
   gitOrigin: string;
   roles: HostRole[];
+  /** The group the host names as its own, null where it names none
+   * (DR-120); its row among `groups`, where the person is a member of
+   * it, is marked `instance`. */
+  group: HostOwnGroup | null;
   account: HostAccount;
   groups: HostGroup[];
   listings: HostListing[];
@@ -92,7 +97,7 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
       members: members.members.length,
     };
   });
-  return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, listings };
+  return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, group: described.group, account, groups, listings };
 }
 
 /** The key a listed repository's clone takes under `workspace/`: its

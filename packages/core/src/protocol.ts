@@ -1903,7 +1903,14 @@ export interface HostMemberInfo {
 export interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
-  host: { url: string; displayName: string | null };
+  host: {
+    url: string;
+    displayName: string | null;
+    /** The group the host names as its own (space-30, DR-120): where
+     * every group is made. As its last read named it; null until one is
+     * held, while signed out, or where it names none. */
+    group: { id: string; fullPath: string; name: string; url: string | null } | null;
+  };
   /** `canCreateGroup`: as the host's last read said (DR-114); false until one is held. */
   account: { id: string; login: string; displayName: string | null; canCreateGroup: boolean } | null;
   signIn:
@@ -1920,6 +1927,9 @@ export interface GroupsState {
     name: string;
     url: string | null;
     own: boolean;
+    /** The host's last read marked it as the host's own group (space-30,
+     * DR-120): listed only where the person is a member of it. */
+    instance: boolean;
     /** What the host's last read said the person may do there (DR-114):
      * both false until a read is held, and for your own group. */
     can: { createSubgroup: boolean; manageMembers: boolean };

@@ -83,6 +83,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         name: "acme",
         url: "https://gitlab.example/acme",
         own: false,
+        instance: false,
         can: { createSubgroup: true, manageMembers: true },
         repositories: [repository(A_SPEX, "60", true)],
       },
@@ -92,6 +93,7 @@ function sharingHome(over: { canCreateGroup?: boolean } = {}): GroupsState {
         name: "other",
         url: "https://gitlab.example/other",
         own: false,
+        instance: false,
         can: { createSubgroup: false, manageMembers: false },
         repositories: [repository(B_SPEX, "61", false)],
       },
@@ -338,7 +340,7 @@ describe("GROUPS: New group and New subgroup (space-68)", () => {
       groups: [
         own!,
         acme!,
-        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", url: null, own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", url: null, own: false, instance: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
         other!,
       ],
     });

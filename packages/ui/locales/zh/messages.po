@@ -2881,6 +2881,11 @@ msgstr "群组记录"
 msgid "Groups"
 msgstr "群组"
 
+#. the groups list's head where the Git host names a group of its own that the person is not a member of; {name} is that group's name
+#: src/components/SpaceGroups.tsx
+msgid "Groups are made in {name}; ask its owner to share it with you"
+msgstr "群组都建在 {name} 中；请让它的所有者与你共享"
+
 #: src/components/CaptainHome.tsx
 msgid "Heads up — some agents aren't ready yet:"
 msgstr "注意 — 部分智能体尚未就绪："
@@ -5312,13 +5317,13 @@ msgstr "请在那里登录并批准；完成后回到这里即已登录。"
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
+#: src/components/SpaceSignIn.tsx
+msgid "Sign in to make your groups and share each project's records with the people in them."
+msgstr "登录后即可创建你的群组，并与群组中的成员共享各项目的记录。"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Sign in to publish"
 msgstr "登录后发布"
-
-#: src/components/SpaceSignIn.tsx
-msgid "Sign in to see your groups and share each project's records with the people in them."
-msgstr "登录后即可查看你的群组，并与群组中的成员共享各项目的记录。"
 
 #. sign this device out of the Git host
 #: src/components/SpaceSignIn.tsx
@@ -6030,6 +6035,11 @@ msgstr "打开之后，此文件在磁盘上已更改。"
 #: src/lib/media-client.ts
 msgid "This file is too large to preview."
 msgstr "文件过大，无法预览。"
+
+#. beside the name of the group the Git host names as its own, where every group is made
+#: src/lib/space.ts
+msgid "this host's group"
+msgstr "本托管平台的群组"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/LibrarySurface.tsx

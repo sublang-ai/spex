@@ -569,7 +569,10 @@ function RepositoryPanel({
       id="space-repository"
       data-testid="space-repository"
       aria-label={repo.name}
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3"
+      // The explorer fills the pane and scrolls inside itself; the Sync
+      // tab keeps its whole height, so a long groups list scrolls the
+      // surface instead of laying the foot over its lists (space-28).
+      className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-0" : ""}`}
     >
       <div
         data-testid="space-repository-header"

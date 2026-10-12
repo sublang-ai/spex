@@ -217,12 +217,12 @@ export function base(over: Partial<GroupsState> = {}, repos: RepositoryState[] =
   return {
     home: HOME,
     git: { ok: true, version: "2.45.0" },
-    host: { url: "https://gitlab.example", displayName: "GitLab" },
+    host: { url: "https://gitlab.example", displayName: "GitLab", group: null },
     account: { id: "7", login: "jane", displayName: "Jane", canCreateGroup: false },
     signIn: { phase: "idle" },
     readAt: NOW - MIN,
     groups: [
-      { id: "1", fullPath: "jane", name: "jane", url: null, own: true, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
+      { id: "1", fullPath: "jane", name: "jane", url: null, own: true, instance: false, can: NO_CAN, repositories: [OWN_REPO, ...repos] },
     ],
     roles: ROLES,
     diagnostics: [],
