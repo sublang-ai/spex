@@ -565,11 +565,11 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 #### playbook-library-103
 
-When a client sends `draft.defaults` for a project, the authoring store shall reply with the `org` and `license` a new playbook of that project starts from, read at the reply:
+When a client sends `draft.defaults` for a project, the authoring store shall reply with the `org` and `license` a new playbook of that project starts from, read at the reply, the registry asked at most once:
 
 | Field | Default |
 | --- | --- |
-| `org` | the first `/`-separated segment of the project's spex repository key — `slbeta1` for `slbeta1/workshop/graph-crate-spex` |
+| `org` | where the registry lists orgs the signed-in person may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is signed out, or the registry gives no answer, the first `/`-separated segment of the project's spex repository key — `slbeta1` for `slbeta1/workshop/graph-crate-spex` |
 | `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
@@ -725,7 +725,7 @@ Where the core runs with the scripted fake adapter, when authoring sessions are 
 
 #### playbook-library-104
 
-Where the core runs with the scripted fake adapter, when `draft.defaults` is sent for a project whose working folder's `LICENSE` stands as each case below, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` replied per case and that each reply's `org` is the first segment of the project's key [[playbook-library-103](#playbook-library-103)]:
+Where the core runs with the scripted fake adapter on a home signed in to the stand-in registry, when `draft.defaults` is sent for a project of the home's own group whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` while the registry stands as each case of the second, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply while signed in having asked the registry once [[playbook-library-103](#playbook-library-103)]:
 
 | `LICENSE` | `license` replied |
 | --- | --- |
@@ -733,6 +733,15 @@ Where the core runs with the scripted fake adapter, when `draft.defaults` is sen
 | an MIT License text | `MIT` |
 | another license's text | none |
 | absent | none |
+
+| The registry | `org` for `tester/project-spex` | `org` for `acme/workshop/team/graph-spex` |
+| --- | --- | --- |
+| refusing the device's app token (`401`) | `tester` | `acme` |
+| out of service (`500`) | `tester` | `acme` |
+| listing no org | `tester` | `acme` |
+| listing `workshop-261011` alone | `workshop-261011` | `workshop-261011` |
+| listing `acme-work` at `acme/work`, `alpha` at `alpha`, and `workshop` at `acme/workshop` | `acme-work` | `workshop` |
+| not asked, the home signed out | `tester` | `acme` |
 
 - the session's `meta.yaml` names the org and the license `draft.create` gave, its package named under that org [[playbook-library-70](#playbook-library-70)];
 - the one-shot compile's `meta.yaml` names the project's defaults [[playbook-library-69](#playbook-library-69)].

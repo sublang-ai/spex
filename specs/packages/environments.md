@@ -164,6 +164,12 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 - to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry;
 - a working folder may hold any number of spec packages under development.
 
+#### environments-27
+
+While the home is signed in, when the core asks the registry for the orgs the signed-in person may publish to, it shall send one `GET /api/v1/account/orgs` presenting the device's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its Git host full `path` and the person's `role`, sorted by name, as the answer:
+
+- any status but `200`, a body not in that shape, a network failure, or no answer within two seconds is no answer.
+
 ### The Built-In Spec Package
 
 #### environments-11
@@ -234,7 +240,7 @@ The core shall expose environments through these commands and one message, each 
 
 #### environments-18
 
-The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, with scripted yank, suppression, private namespaces honouring the stand-in host's app tokens, and a publish endpoint that validates as the core does and stores the archive.
+The core package shall ship a stand-in registry for its own tests and the browser journeys: an in-process HTTP server serving the registry's version index, version resources, raw files and release archives from a directory of releases, with scripted yank, suppression, private namespaces honouring the stand-in host's app tokens, the orgs listed for an app token — any other token, or none, refused `401` — answered after a scripted delay, and a publish endpoint that validates as the core does and stores the archive.
 
 ## Verification
 
@@ -295,6 +301,10 @@ When an integration suite drives the environment commands over the protocol, it 
 - an operation held while its clone is renamed and the store and environment follow the move reads busy at the new address, and its end is announced there with busy cleared and no failure recorded, nothing written at the old [[environments-14](#environments-14)] [[environments-5](#environments-5)];
 - once the core stops, a request and an install awaited by the enabling path are refused `aborted` with `spex.yaml` unchanged [[environments-15](#environments-15)];
 - a conflict report reads while `spex.yaml` holds the bytes its resolution read and no longer after the file changes [[environments-14](#environments-14)].
+
+#### environments-28
+
+When an integration suite asks the stand-in registry [[environments-18](#environments-18)] for the orgs a person may publish to, it shall assert that one request presenting the app token the orgs are scripted for reads them sorted by name, and that another token, no token, an outage, and an answer delayed a second past the timeout each read as no answer, the last once two seconds have passed [[environments-27](#environments-27)].
 
 ## References
 
