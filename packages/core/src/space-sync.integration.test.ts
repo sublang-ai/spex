@@ -570,7 +570,9 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   );
   const start = Date.now();
   await expectStop("ssh://localhost/x", "timeout", /No answer from localhost/, true);
-  assert.ok(Date.now() - start < 5_000, "the shortened limit ends the sleeping transport");
+  // Well under the 20 s the harness's homes give a transport, and above
+  // what a loaded runner adds to the 500 ms limit's stop.
+  assert.ok(Date.now() - start < 10_000, "the shortened limit ends the sleeping transport");
   // The unreachable case runs the machine's ssh with BatchMode, as the core sets it where none is given.
   const plain = await startHome("transport-plain");
   t.after(() => plain.stop());

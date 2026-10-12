@@ -533,7 +533,9 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   const again = await startHome("created-uninitialized-again", { host, dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
   t.after(() => again.stop());
   asked = host.script.requests.length;
-  const resumed = await again.client.settle("space.sync", { repository: restartedKey });
+  // This sync holds the five 2 s re-reads by design, after the restarted
+  // core's own set-up, so its budget is the creation cases' 30 s and more.
+  const resumed = await again.client.settle("space.sync", { repository: restartedKey }, 60_000);
   assert.ok(resumed.sync.phase === "done" && resumed.sync.pushed, JSON.stringify(resumed.sync));
   assert.equal(rereads(asked, id), 5);
   assert.equal(git(restartedBare, "symbolic-ref", "HEAD"), "refs/heads/main");

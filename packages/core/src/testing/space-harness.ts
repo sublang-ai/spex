@@ -111,7 +111,7 @@ class Client {
    * reading that is not running settles the command only after one of
    * its own running readings, or where a read made after the reply
    * agrees the machine no longer runs. */
-  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<RepositoryState> {
+  async settle<T extends "space.sync" | "space.fetch">(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, timeoutMs = 20_000): Promise<RepositoryState> {
     const key = (fields as { repository: string }).repository;
     const from = this.messages.length;
     // The core runs in this process: its steps' `since` reads this clock.
@@ -132,7 +132,7 @@ class Client {
         const fresh = await this.repository(key);
         if (fresh.sync.phase !== "running") return fresh;
       }
-      if (Date.now() - start > 20_000) {
+      if (Date.now() - start > timeoutMs) {
         const seen = this.messages.slice(from).filter((m): m is SpaceStateMessage => m.type === "space.state").map((m) => describe(m.state));
         throw new Error(`timeout waiting for ${key} to settle; saw ${seen.join(" | ")}`);
       }

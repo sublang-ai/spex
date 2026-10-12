@@ -37,10 +37,12 @@ if (files.length === 0) {
 // whole as well as to each test (Node 24 to each test only), so the
 // budget must hold the longest file on the slowest runner: the core
 // integration file alone passed 180 s on the macOS runner, where this
-// suite takes about five times what it takes on Linux.
+// suite takes about five times what it takes on Linux, and the space-host
+// file, whose creation cases hold 2 s re-reads by design, passed 600 s
+// there once the restarted core's case joined it.
 execFileSync(
   process.execPath,
-  ["--test", "--test-timeout=600000", "--test-force-exit", ...files],
+  ["--test", "--test-timeout=1200000", "--test-force-exit", ...files],
   {
     stdio: "inherit",
     cwd: root,
