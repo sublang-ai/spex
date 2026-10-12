@@ -848,6 +848,16 @@ test("git-host-15, git-host-16, git-host-17: group creation and member writes an
     const top = await t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null });
     assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true }]);
     assert.equal(typeof top.id, "string");
+    // At the instance's root the service identity is an Owner beside the
+    // person, and no members listing shows it (git-host-8, DR-120): the
+    // group, and a repository made in it, list the person alone.
+    assert.ok(s.groups.find((group) => group.id === top.id)?.members?.some((member) => member.login === s.serviceAccount.login));
+    assert.deepEqual((await t.client.members({ kind: "group", id: top.id ?? "" })).members.map((m) => [m.login, m.role, m.direct]), [["ada", "Owner", true]]);
+    const inTop = await t.client.create({ groupId: top.id, name: "lumen-spex", description: "" });
+    assert.ok(inTop.status === "created");
+    assert.deepEqual((await t.client.members({ kind: "repository", id: inTop.repository.id })).members.map((m) => [m.login, m.direct, m.via]), [["ada", true, null]]);
+    // A root path an account holds is taken, unless the host admits it.
+    await assert.rejects(t.client.createGroup({ name: "Bob", path: "bob", parentId: null }), hostError("name_taken", { words: "This path is taken by an account." }));
     const named = await t.client.createGroup({ name: "华芯智造", path: "huaxin-mfg", parentId: null });
     assert.deepEqual([named.fullPath, named.name], ["huaxin-mfg", "华芯智造"]);
     const sub = await t.client.createGroup({ name: "Team One", path: "team-one", parentId: "2002" });
