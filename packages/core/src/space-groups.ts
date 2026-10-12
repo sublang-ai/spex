@@ -73,7 +73,8 @@ async function mapLimit<T, R>(items: T[], limit: number, work: (item: T) => Prom
  * roles, the person, every group, every spex repository across its
  * pages — each as the host says what the person may do there — and for
  * each repository its read-only and branch state and its members'
- * count. Any failure fails the whole read, so a view is never half a
+ * count. A members read the host fails leaves that count unknown;
+ * any other failure fails the whole read, so a view is never half a
  * host.
  */
 export async function readHostView(client: GitHostClient, now: () => number = Date.now): Promise<HostView> {
@@ -84,15 +85,29 @@ export async function readHostView(client: GitHostClient, now: () => number = Da
     client.repositories(),
   ]);
   const listings = await mapLimit(repositories, DETAIL_CONCURRENCY, async (repository): Promise<HostListing> => {
-    const [detail, members] = await Promise.all([client.repository(repository.id), client.members({ kind: "repository", id: repository.id })]);
+    const [detail, members] = await Promise.all([client.repository(repository.id), memberCount(client, repository.id)]);
     return {
       repository,
       readOnly: detail.readOnly ?? (detail.archived ? { reason: "archived", message: "" } : null),
       branchPresent: detail.branch.present || detail.spexBranch,
-      members: members.members.length,
+      members,
     };
   });
   return { readAt: now(), displayName: described.displayName, gitOrigin: described.gitOrigin, roles: described.roles, account, groups, listings };
+}
+
+/** A spex repository's members' count, the account among them, or null
+ * where the host fails to read its members — spex.pub fails every
+ * members read while its service identity's does (git-host-5). An
+ * answer that signs the device out, or a pair replaced meanwhile, fails
+ * the whole read as any other failure does. */
+async function memberCount(client: GitHostClient, id: string): Promise<number | null> {
+  try {
+    return (await client.members({ kind: "repository", id })).members.length;
+  } catch (error) {
+    if (error instanceof HostError && error.kind !== "reauth") return null;
+    throw error;
+  }
 }
 
 /** The key a listed repository's clone takes under `workspace/`: its
@@ -275,6 +290,32 @@ export function nameTheGroup(): string {
 /** Refusal: a new group needs a path (git-host-15). */
 export function pathTheGroup(): string {
   return i18n._({ id: "Give the group a path", comment: "Refusal of a new group whose path at the Git host is blank" });
+}
+
+/** Refusal: a rename that names neither a name nor a path
+ * (git-host-18). */
+export function renameNothing(): string {
+  return i18n._({ id: "Give the group a new name or path", comment: "Refusal of a group's rename naming neither a new name nor a new path" });
+}
+
+/** Refusal: a group the view lists something under is not deleted, since
+ * the host would delete what it holds with it (git-host-19). */
+export function groupNotEmpty(group: string): string {
+  return i18n._({
+    id: "{group} is not empty",
+    values: { group },
+    comment: "Refusal of a group's deletion: it still holds a spex repository or a group; {group} is the group's path in the instance",
+  });
+}
+
+/** A spex repository's name the host reports taken in the group it was
+ * to move into (git-host-20). */
+export function takenIn(name: string, group: string): string {
+  return i18n._({
+    id: "{group} already holds {name}",
+    values: { name, group },
+    comment: "Refusal of a spex repository's move: the group it was to move into holds one of that name; {group} is that group's path in the instance, {name} the repository's name",
+  });
 }
 
 /** Refusal: a share or an unshare names no account (git-host-16,

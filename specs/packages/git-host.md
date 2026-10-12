@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines how the core talks to the Git host under [DR-103](../decisions/103-the-home-and-its-groups.md): signing a person in as a public client, keeping the app token, reading groups and spex repositories, creating one, preparing its `spex` branch, reading members, handing Git a credential through a helper, and the stand-in host the test suites run against.
+This package defines how the core talks to the Git host under [DR-103](../decisions/103-the-home-and-its-groups.md): signing a person in as a public client, keeping the app token, reading groups and spex repositories, creating one, preparing its `spex` branch, reading members, renaming and deleting a group and moving a spex repository, handing Git a credential through a helper, and the stand-in host the test suites run against.
 The **Git host** is spex.pub, which brokers the Git credential and wraps the Git system behind it; its routes are JSON under `/api/v1` and its sign-in pages under `/login`, as spex.pub's own specs state [[1]].
 An **app token** is the credential the host issues to one signed-in device: a short-lived access secret and a rotating refresh secret [[storage-19](storage.md#storage-19)].
 The core reads the host only when a person signs in, activates Refresh, or starts a sync, and once when a client first asks for the Groups state after a signed-in start, never on a timer, and derives nothing from a cached list.
@@ -57,14 +57,16 @@ While the home holds an app token, when a call to the host is made, the core sha
 
 #### git-host-5
 
-When the home is signed in and a read of the host is due — at sign-in, on Refresh, before a sync's Check step, and at the first `space.get` after the core started signed in with no read begun since — the core shall read, in one pass, the host's description with the roles it grants [[git-host-16](#git-host-16)], the person with whether they may create a group, every group with whether the person may create a subgroup in it and manage its members, and every spex repository the host lists across its pages with whether the person may manage its members, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-114](../decisions/114-groups-and-sharing-from-spex.md)):
+When the home is signed in and a read of the host is due — at sign-in, on Refresh, before a sync's Check step, and at the first `space.get` after the core started signed in with no read begun since — the core shall read, in one pass, the host's description with the roles it grants [[git-host-16](#git-host-16)], the person with whether they may create a group, every group with whether the person may create a subgroup in it, manage its members, rename it and delete it, and every spex repository the host lists across its pages with whether the person may manage its members and move it to another group, and shall hold the answer as the home's current view until the next read ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-120](../decisions/120-the-instance-is-the-space.md)):
 
 - every path the host answers is taken as given, a path in the instance, and the view holds no URL but each repository's remote, which the core hands to Git alone ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - your own group is the listed group of kind `user` under the account's login; a listed spex repository's key is its group's path joined to its own [[storage-1](storage.md#storage-1)], none where that group is held as colliding — one of kind `group` whose path equals, ignoring case, your own group's folder name or the login of another account under which the host lists a spex repository, or lies beneath it ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - a listed spex repository is matched to a clone by the id stored in the clone's Git configuration, else by the remote URL, never by name alone;
 - a clone whose id the host no longer lists is marked unreachable with the cause, its files untouched;
 - a spex repository the core attaches a clone to, after creating it [[git-host-6](#git-host-6)] or from the view's own listing, and a group the core creates [[git-host-15](#git-host-15)], count as listed — each as that answer gave it, a created repository without its `spex` branch — until a read begun after the attachment or the creation is held, and a read begun before either is made again before it is held;
+- a group the core renames or deletes and a spex repository it moves [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)] stand as the host's answer left them — renamed, with every group and spex repository inside it under its new path; gone; or in its new group — until a read begun after the change is held, and a read begun before the change is made again before it is held;
 - the host's `project.json` for each listed repository is kept for the pickers [[space-58](space.md#space-58)], and its archived flag and the account's role, as the host reports them, decide read-only [[space-61](space.md#space-61)];
+- each listed repository is held with its members' count, the account among them, and one whose members the host fails to read — by any answer but one that signs the device out [[git-host-4](#git-host-4)] — with none, that failure failing nothing else, while any other failure fails the whole read;
 - the read due at the first `space.get` is begun once, however many clients ask, and that reply answers the state as it stands, never waiting for the read, whose outcome the core announces as any host read's [[space-2](space.md#space-2)];
 - a read that fails leaves the previous view with its time and reports the failure once.
 
@@ -78,6 +80,8 @@ When the core creates a spex repository in a group — for a pick [[space-58](sp
 | pending, with the host's words | leaves the clone local only and reports the step as waiting with those words [[space-64](space.md#space-64)] |
 | name taken | reports the name taken so the reader is asked for another [[space-58](space.md#space-58)] |
 
+- a group of the instance is named to the host by its id, and your own group by none, never by its id, which names no group of the instance there;
+- a pick naming a group the home's current view does not list as a group of the instance — your own group's id among them — is refused `not_found` before the host is asked;
 - a `<name>` is the working folder's name, or the group's, lower-cased to kebab-case where it is not one already, and never edited beyond that without the reader.
 
 #### git-host-7
@@ -121,6 +125,49 @@ When a client sends `space.unshare` [[space-72](space.md#space-72)], the core sh
 - `not_found` answering the removal — no account under the login, or no membership of its own there — is relayed `not_found` with the host's words, and `host_refused` — the person's rights, the host keeping its last owner — `invalid_request` with the host's words;
 - whatever the view said the person may do, the host is asked and its refusal is the answer.
 
+#### git-host-18
+
+When a client sends `space.group.rename` [[space-76](space.md#space-76)], the core shall ask the host to give the named group of the instance the name, the path segment, or both, that the command carries, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+| Answer | The core |
+| --- | --- |
+| renamed | holds the group as the host answered it [[git-host-5](#git-host-5)], beginning no read of its own; announces the state carrying it; then replies with the group's id, full path and name |
+| name taken | refuses `invalid_request` saying the path is taken there |
+| `not_found` | refuses `not_found` with the host's words |
+| any other | refuses `invalid_request` as [[git-host-11](#git-host-11)] relays it |
+
+- neither a name nor a path, a blank name or a blank path is refused `invalid_request` before the host is asked, and a group the home's current view does not list as a group of the instance — your own group among them — `not_found`;
+- the host is asked whatever the view said the person may do there: its refusal is the answer.
+
+#### git-host-19
+
+When a client sends `space.group.delete` [[space-77](space.md#space-77)], the core shall ask the host to delete the named group of the instance and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+| Answer | The core |
+| --- | --- |
+| deleted | holds the group as gone [[git-host-5](#git-host-5)], beginning no read of its own; announces the state without it; then replies |
+| `not_found` | refuses `not_found` with the host's words |
+| any other | refuses `invalid_request` as [[git-host-11](#git-host-11)] relays it |
+
+- a group under which the home's current view lists a spex repository or a group is refused `invalid_request` before the host is asked, since the host deletes whatever a group holds with it;
+- a group the view does not list as a group of the instance — your own group among them — is refused `not_found` before the host is asked;
+- the host is asked whatever the view said the person may do there: its refusal is the answer.
+
+#### git-host-20
+
+When a client sends `space.repository.move` [[space-78](space.md#space-78)], the core shall ask the host to move the named spex repository into the named group of the instance, or into the person's own group where the command names none, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md)):
+
+| Answer | The core |
+| --- | --- |
+| moved | holds the repository as the host answered it, in its new group [[git-host-5](#git-host-5)], beginning no read and moving no clone of its own; announces the state carrying it; then replies with its id and its path in the instance |
+| name taken | refuses `invalid_request` saying the name is taken in that group |
+| `not_found` | refuses `not_found` with the host's words |
+| any other | refuses `invalid_request` as [[git-host-11](#git-host-11)] relays it |
+
+- the repository is named by its key: a clone on this device alone is refused `invalid_request`, and a repository the view does not list `not_found`, before the host is asked;
+- a group of the instance the view does not list is refused `not_found`, and one held as colliding [[git-host-5](#git-host-5)] `invalid_request` with that cause, before the host is asked;
+- the host is asked whatever the view said the person may do on it: its refusal is the answer.
+
 #### git-host-9
 
 When the core runs a Git transport — clone, fetch, push or `ls-remote` — against the Git host's origin, it shall ask the host for a credential first and hand it to Git through a credential helper, never through the remote URL ([DR-103](../decisions/103-the-home-and-its-groups.md)):
@@ -158,7 +205,7 @@ When the host answers a call with anything but success, the core shall relay it 
 The core package shall ship a stand-in Git host for its own tests and the browser journeys ([DR-039](../decisions/039-browser-acceptance-journeys.md)): an in-process HTTP server that implements the host's sign-in and host routes over a directory of bare Git repositories, serves their Git transport over HTTP, and exposes a scripting interface:
 
 - sign-in: `/login/app` and `/login/device` pages, the device endpoint returning the verification URL completed with the user code as spex.pub does, and the token endpoint issuing app tokens, with scripted approval, denial and expiry; access secrets that expire on demand; revocation;
-- host routes: the person, who may create a group unless scripted otherwise; groups by their paths in the instance, with no group of the stand-in's own, the roles and spex repositories from a scripted fixture, one among them in another account's own group; the listing answered after a scripted sleep with what stood at its arrival; creation of a bare repository with a README on `main`, which a scripted hold keeps out of its first reads or until a push lands; creation of a group at the root, holding the person and a scripted service identity as its Owners, or under a listed parent, with a scripted taken name, a root path equal to a known account's login answered `name_taken` unless scripted to admit it, a scripted refusal and a scripted lag leaving the groups it creates out of its listing; a repository's and a group's members with their source, the service identity never among them, counted or named as a source; the addition of a member by login with scripted unknown logins and refusals, the removal of a member with a scripted refusal; what the person may do per group and repository; branch preparation with a scripted refusal; the credential for its own origin; and no page URL in any answer ([DR-120](../decisions/120-the-instance-is-the-space.md));
+- host routes: the description, whose `groups` says whether root groups can be made as the person's `can_create_group` does, and the person, who may create a group unless scripted otherwise; groups by their paths in the instance, with no group of the stand-in's own, the roles and spex repositories from a scripted fixture, one among them in another account's own group; the listing answered after a scripted sleep with what stood at its arrival; creation of a bare repository with a README on `main`, which a scripted hold keeps out of its first reads or until a push lands, in a group of the instance named by its id or in the person's own group where none is named, any other id — the person's own group's among them — answered `not_found` as spex.pub answers it, and each creation's body recorded; creation of a group at the root, holding the person and a scripted service identity as its Owners, or under a listed parent, with a scripted taken name, a root path equal to a known account's login answered `name_taken` unless scripted to admit it, a scripted refusal and a scripted lag leaving the groups it creates out of its listing; a repository's and a group's members with their source, the service identity never among them, counted or named as a source, and a scripted `provider_unavailable` answering every read, addition and removal of members while every other route answers, as spex.pub answers while its service identity's read fails; the addition of a member by login with scripted unknown logins and refusals, the removal of a member with a scripted refusal; the rename of a group of the instance, carrying the groups and repositories inside it to its new path, its deletion with everything inside it, and the move of a spex repository into a group of the instance or the person's own, each refused where what the person may do there says not, a path or name taken there answered `name_taken` — a root group's new path equal to a known account's login among them unless scripted to admit it, as at creation — with a scripted refusal of each; what the person may do per group — create a subgroup, manage its members, rename it, delete it — and per repository — manage its members, move it; branch preparation with a scripted refusal; the credential for its own origin; and no page URL in any answer ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - Git transport: every repository served over HTTP through Git's own backend at `<origin>/<login>/<name>-spex.git` in an account's own group and at `<origin>/<storage>/<group>/<name>-spex.git` in a group of the instance, `<storage>` a group no answer names, as a deployment's container, accepting the credentials the stand-in issued and refusing others with 401, with a scripted sleep, a scripted refusal in words that may carry URLs under its origin, a scripted answer of 500, a scripted refusal of a push to `main` alone in its words and a scripted archive, an empty repository taking the first branch pushed into it as its default;
 - a scripted rename, transfer, archive and membership removal, each visible on the next read.
 
@@ -187,16 +234,20 @@ When an integration suite drives host reads and writes against the stand-in [[gi
 - a read lists every group and every spex repository across two pages, matches clones by id and then by remote, marks a clone the stand-in stopped listing unreachable with its files intact, and keeps the previous view with its time when the stand-in answers 503 [[git-host-5](#git-host-5)];
 - a core restarted on a signed-in home answers its first `space.get` with no read time and begins one read of the stand-in however many `space.get` follow, its state announced with a read time [[git-host-5](#git-host-5)];
 - creating a spex repository records its id and remote in the clone's Git configuration, prepares the branch and pushes; a pending answer leaves the clone local only with the words; a taken name is reported as such [[git-host-6](#git-host-6)] [[git-host-7](#git-host-7)];
+- your own group's spex repository created at sign-in and a pick creating in your own group name no group to the stand-in, a pick naming your own group's id is refused `not_found` before any request reaches it, and the stand-in answers a creation naming that id `not_found` [[git-host-6](#git-host-6)] [[git-host-12](#git-host-12)];
 - from a creation, or a pick joining a listed repository, to its push's end no state reads the repository unreachable, also where a read begun before the creation answers after it without it, and the push lands with no Refresh [[git-host-5](#git-host-5)];
 - an empty repository on the stand-in is not pushed until its default branch exists [[git-host-7](#git-host-7)];
 - a repository whose README the stand-in holds out of its first reads is pushed by its creation's first sync with no stop; one whose README never comes gets from that sync, after reading it again, `main` holding the README as the stand-in's default branch and then `spex`; that push of `main` refused, the sync stops in the stand-in's words, a Retry stops with the stand-in holding no default branch for it without reading it again, and a Retry once the README lands pushes; a core stopped while such a first sync reads it again leaves the creation recorded on the clone, and the next core's sync reads it again and pushes `main` and then `spex`; no clone records its creation once such a sync has pushed [[git-host-7](#git-host-7)];
 - members are read with the stand-in's role names and sources, no URL and no service identity among them, and held nowhere after the reply [[git-host-8](#git-host-8)];
-- a read of the stand-in's defaults says the person may create a group, one scripted otherwise says not, and a group created at the root lists the person as its Owner and no one else [[git-host-5](#git-host-5)] [[git-host-15](#git-host-15)] [[git-host-8](#git-host-8)];
+- with the stand-in failing every members route, a read holds every listed spex repository with no members' count and the rest of the view as listed, a Refresh and a sync's Check succeed, and a members read is relayed as the host could not be reached [[git-host-5](#git-host-5)] [[git-host-11](#git-host-11)];
+- a read of the stand-in's defaults says the person may create a group, one scripted otherwise says not, the stand-in's description saying the same in `groups` [[git-host-12](#git-host-12)], and a group created at the root lists the person as its Owner and no one else [[git-host-5](#git-host-5)] [[git-host-15](#git-host-15)] [[git-host-8](#git-host-8)];
 - the read holds the stand-in's roles with its default, a group is created at the top and under a listed parent at the path given, a name in Chinese among them, with the reply naming its full path, a taken name is refused as taken there and a scripted refusal with the stand-in's words, and a blank name, a blank path and an unlisted parent are refused before any request reaches the stand-in [[git-host-5](#git-host-5)] [[git-host-15](#git-host-15)];
 - a created group stands, with what the stand-in says the person may do there, in a state broadcast before its reply and in the next `space.get`, after its parent where it has one, no read of the stand-in begun, and is taken as a parent and its members read before any read [[git-host-15](#git-host-15)] [[git-host-5](#git-host-5)]; a Refresh whose read lists it keeps it, one whose read the stand-in answers without it, its listing lagging, drops it, and a read begun before a creation that answers after it without the group is made again, no state from the creation to that read's end lacking it [[git-host-5](#git-host-5)];
 - a member is added to a group and to a spex repository by login at a role with the reply listing the stand-in's members afterwards, an unknown login is refused `not_found` with the stand-in's words, an existing member and a scripted refusal `invalid_request` with the words, and a role outside the view's and a blank login are refused before any request reaches the stand-in [[git-host-16](#git-host-16)];
 - a group's members are read with each one's source, a direct member is removed from a group and from a spex repository with the reply listing the stand-in's members afterwards, a login with no membership of its own there is refused `not_found` with the stand-in's words, a scripted refusal `invalid_request` with the words, and a blank login and an unlisted group before any request reaches the stand-in [[git-host-8](#git-host-8)] [[git-host-17](#git-host-17)];
 - a push runs with the helper and a credential file of mode `0600` in a directory removed after the child ends, the stand-in's transport receiving the issued credential and refusing a push attempted with none; a fetch from a bare path remote names no helper [[git-host-9](#git-host-9)];
+- a group of the instance is renamed — its name and its path, every group and spex repository inside it then standing under the new path — and an empty one deleted, and a spex repository is moved into a group and into the person's own group, each standing in a state broadcast before its reply with no read of the stand-in begun, until a read held after it lists the stand-in's answer [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)] [[git-host-5](#git-host-5)];
+- a taken path — a known account's login at the root among them — and a taken name are refused as taken, a refusal the stand-in scripts for each of the three, and the stand-in's own refusal of what it says the person may not do, with its words kept whole in English and in Chinese; neither a name nor a path, a blank one, a group holding a spex repository or a group, a group held as colliding, your own group, and a group or spex repository the view does not list are refused before any request reaches the stand-in [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)];
 - each stand-in answer of the table is relayed in English and in Chinese with the stand-in's words kept whole [[git-host-11](#git-host-11)].
 
 ## References

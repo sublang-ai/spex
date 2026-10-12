@@ -180,7 +180,7 @@ export function repo(over: Partial<RepositoryState> = {}): RepositoryState {
     lastSync: null,
     noticed: true,
     sync: { phase: "idle" },
-    can: { manageMembers: false },
+    can: { manageMembers: false, transfer: false },
     ...over,
   };
 }
@@ -210,7 +210,7 @@ export const ROLES: GroupsState["roles"] = [
 
 /** What the host's last read says the person may do in a group: nothing
  * unless a test says otherwise. */
-export const NO_CAN: GroupsState["groups"][number]["can"] = { createSubgroup: false, manageMembers: false };
+export const NO_CAN: GroupsState["groups"][number]["can"] = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
 
 /** A signed-in home: your own group with its own spex repository
  * first, then the given ones. */

@@ -2900,6 +2900,17 @@ export class CoreService {
       // and its answer is the reply.
       case "space.group.create":
         return this.requireSpace().createGroup(command.name, command.path, command.parent);
+      // Undo in Spex (git-host-18..20, DR-120): the host is asked, and its
+      // answer is the reply.
+      case "space.group.rename":
+        return this.requireSpace().renameGroup(command.group, {
+          ...(command.name !== undefined ? { name: command.name } : {}),
+          ...(command.path !== undefined ? { path: command.path } : {}),
+        });
+      case "space.group.delete":
+        return this.requireSpace().deleteGroup(command.group);
+      case "space.repository.move":
+        return this.requireSpace().moveRepository(command.repository, command.groupId);
       case "space.share":
         return this.requireSpace().share({ repository: command.repository, group: command.group, login: command.login, role: command.role });
       case "space.unshare":

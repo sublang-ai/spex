@@ -99,7 +99,7 @@ export function repository(over: Partial<RepositoryState> = {}): RepositoryState
     lastSync: null,
     noticed: true,
     sync: { phase: "idle" },
-    can: { manageMembers: false },
+    can: { manageMembers: false, transfer: false },
     ...over,
   };
 }
@@ -126,7 +126,7 @@ export function home(
         fullPath: "me",
         name: "me",
         own: true,
-        can: { createSubgroup: false, manageMembers: false },
+        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
         repositories: [
           repository({ key: OWN_KEY, name: "me-spex", own: true, folder: null, sync: sync(OWN_KEY) }),
           repository({ sync: sync(PROJECT_ID) }),

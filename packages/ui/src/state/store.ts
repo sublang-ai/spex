@@ -318,6 +318,17 @@ export interface AppState extends AttachmentState {
    * the group whose host id is `parent` (space-68); the state listing it
    * arrives before the reply. */
   spaceGroupCreate(name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Rename a group of the instance by its host id — its name, its path
+   * segment, or both (space-76); the state holding it renamed arrives
+   * before the reply. */
+  spaceGroupRename(group: string, change: { name?: string; path?: string }): Promise<CommandResults["space.group.rename"]>;
+  /** Delete a group of the instance by its host id (space-77); the state
+   * without it arrives before the reply. */
+  spaceGroupDelete(group: string): Promise<CommandResults["space.group.delete"]>;
+  /** Move a spex repository, by its key, into a group by its host id, or
+   * your own group where `groupId` is null (space-78); the state holding
+   * it in its new group arrives before the reply. */
+  spaceRepositoryMove(repository: string, groupId: string | null): Promise<CommandResults["space.repository.move"]>;
   /** Add the account of `login` to a group or a spex repository at one
    * of the host's roles, by its id (space-69); the reply lists the
    * members after the addition. */
@@ -1750,6 +1761,12 @@ export const useAppStore = create<AppState>((set, get) => {
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
     spaceGroupCreate: (name, path, parent) => getClient().command("space.group.create", { name, path, parent }),
+
+    spaceGroupRename: (group, change) => getClient().command("space.group.rename", { group, ...change }),
+
+    spaceGroupDelete: (group) => getClient().command("space.group.delete", { group }),
+
+    spaceRepositoryMove: (repository, groupId) => getClient().command("space.repository.move", { repository, groupId }),
 
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 

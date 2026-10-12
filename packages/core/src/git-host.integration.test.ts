@@ -29,6 +29,7 @@ import {
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
+import { readHostView } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
 async function setup(options: { skew?: { ms: number } } = {}) {
@@ -756,6 +757,10 @@ test("git-host-6, git-host-7: creation answers created, pending or name taken; b
 
     const own = await t.client.create({ groupId: null, name: "ada-spex", description: "Ada's own records" });
     assert.equal(own.status === "created" && own.repository.group.kind, "user");
+    // The own namespace's id names no group of the instance: the
+    // stand-in answers it 404, as spex.pub does (git-host-12).
+    await assert.rejects(t.client.create({ groupId: "2001", name: "mine-spex", description: "" }), hostError("not_found", { words: "The group is not known." }));
+    assert.deepEqual(t.host.script.creations.map((body) => (body as { group_id?: unknown }).group_id), ["2002", null, "2001"]);
 
     await assert.rejects(t.client.create({ groupId: "2002", name: "widget-spex", description: "" }), hostError("name_taken"));
     await assert.rejects(t.client.create({ groupId: "2002", name: "Widget", description: "" }), hostError("bad_request"));
@@ -788,6 +793,20 @@ test("git-host-8: members with the host's role names and no page", async () => {
     // No page of the host crosses (DR-120).
     assert.deepEqual(Object.keys(answer), ["members"]);
     assert.ok(members.every((m) => Object.keys(m).sort().join() === "direct,displayName,id,login,role,via"), JSON.stringify(members));
+
+    // Every members route failing, as spex.pub's do while its service
+    // identity's read fails, every other route answering (git-host-12):
+    // a read holds the rest of the view, the count unknown (git-host-5).
+    t.host.script.failMembers(true);
+    await assert.rejects(t.client.members({ kind: "repository", id: repo.id }), hostError("unreachable", { words: "The Git host could not be reached." }));
+    await assert.rejects(t.client.members({ kind: "group", id: "2002" }), hostError("unreachable"));
+    await assert.rejects(t.client.addMember({ kind: "repository", id: repo.id }, { login: "bob", role: "developer" }), hostError("unreachable"));
+    await assert.rejects(t.client.removeMember({ kind: "repository", id: repo.id }, "grace"), hostError("unreachable"));
+    const held = await readHostView(t.client);
+    assert.deepEqual(held.groups.map((group) => group.fullPath), ["ada", "acme", "acme/research"]);
+    assert.deepEqual(held.listings.map((listing) => [listing.repository.id, listing.branchPresent, listing.members]), [[repo.id, false, null]]);
+    t.host.script.failMembers(false);
+    assert.deepEqual((await readHostView(t.client)).listings.map((listing) => listing.members), [3]);
   } finally {
     await t.dispose();
   }
@@ -799,7 +818,7 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
     const s = t.host.script;
     const research = s.groups.find((group) => group.fullPath === "acme/research");
     assert.ok(research);
-    research.can = { createSubgroup: false, manageMembers: true };
+    research.can = { createSubgroup: false, manageMembers: true, rename: true, delete: false };
     research.members = [{ id: "1003", login: "grace", displayName: "Grace Hopper", role: "Developer" }];
     const managed = s.addRepository({ group: "acme", name: "a-spex", role: "Owner" });
     const reader = s.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
@@ -814,16 +833,21 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
       { id: "owner", name: "Owner", mayPush: true },
     ]);
     assert.equal((await t.client.me()).canCreateGroup, true);
+    // The description says whether root groups can be made, as spex.pub's
+    // does, and the person's ability says the same (git-host-12).
+    const description = async (): Promise<unknown> => (await fetch(`${t.host.url}/api/v1/host`)).json();
+    assert.equal((await description() as { groups?: unknown }).groups, true);
     s.canCreateGroup = false;
     assert.equal((await t.client.me()).canCreateGroup, false);
+    assert.equal((await description() as { groups?: unknown }).groups, false);
     const groups = await t.client.groups();
     assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
-      ["ada", { createSubgroup: false, manageMembers: false }],
-      ["acme", { createSubgroup: true, manageMembers: true }],
-      ["acme/research", { createSubgroup: false, manageMembers: true }],
+      ["ada", { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
+      ["acme", { createSubgroup: true, manageMembers: true, rename: true, delete: true }],
+      ["acme/research", { createSubgroup: false, manageMembers: true, rename: true, delete: false }],
     ]);
     const repositories = await t.client.repositories();
-    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true }], [reader.id, { manageMembers: false }]]);
+    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true, transfer: true }], [reader.id, { manageMembers: false, transfer: false }]]);
 
     // A group's members: its own first, then those it inherits, each
     // with the group it comes through (git-host-8).
@@ -846,7 +870,7 @@ test("git-host-15, git-host-16, git-host-17: group creation and member writes an
     // Creation at the top and inside a group, named as typed at the path
     // given (git-host-15).
     const top = await t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null });
-    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true }]);
+    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true, rename: true, delete: true }]);
     assert.equal(typeof top.id, "string");
     // At the instance's root the service identity is an Owner beside the
     // person, and no members listing shows it (git-host-8, DR-120): the
@@ -1102,6 +1126,7 @@ test("git-host-12: the stand-in serves its pages and refuses malformed sign-in r
         { id: "maintainer", name: "Maintainer", may_push: true },
         { id: "owner", name: "Owner", may_push: true },
       ],
+      groups: true,
     });
     const unauth = await fetch(`${host.url}/api/v1/host/me`);
     assert.equal(unauth.status, 401);

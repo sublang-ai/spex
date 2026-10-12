@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Git host client (git-host-1..17, DR-103, DR-114): signs a person
-// in as a public client — the browser flow with PKCE on the desktop, the
-// device flow on the server shell — keeps the app token current in
-// `local/credentials.yaml` (storage-19), and reads and writes the host's
-// JSON routes under `/api/v1`: groups, spex repositories and members,
-// with what the host says the person may do and the roles it grants. It composes no reader-facing prose: a
-// failure is a `HostError` carrying its kind and the host's own words,
-// which the core phrases where it speaks (git-host-11). No secret ever
-// enters an error message or a log line.
+// The Git host client (git-host-1..20, DR-103, DR-114, DR-120): signs a
+// person in as a public client — the browser flow with PKCE on the
+// desktop, the device flow on the server shell — keeps the app token
+// current in `local/credentials.yaml` (storage-19), and reads and writes
+// the host's JSON routes under `/api/v1`: groups, spex repositories and
+// members, with what the host says the person may do and the roles it
+// grants, and the undo writes — a group renamed or deleted, a spex
+// repository moved. It composes no reader-facing prose: a failure is a
+// `HostError` carrying its kind and the host's own words, which the core
+// phrases where it speaks (git-host-11). No secret ever enters an error
+// message or a log line.
 
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -59,10 +61,11 @@ function trimUrl(url: string): string {
  * where it says nothing. */
 export interface HostAccount { id: string; login: string; displayName: string | null; canCreateGroup: boolean }
 
-/** What the host lets the person do in a group (git-host-5, DR-114):
- * create a group inside it, and add and remove its members; false where
- * the host says nothing, as for a repository's group or your own. */
-export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean }
+/** What the host lets the person do in a group (git-host-5, DR-114,
+ * DR-120): create a group inside it, add and remove its members, rename
+ * it and delete it; false where the host says nothing, as for a
+ * repository's group or your own. */
+export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean }
 
 /** A group as the host answers it (git-host-5): `fullPath` its path in
  * the instance, taken as given (DR-120); `kind` `user` for an account's
@@ -96,8 +99,9 @@ export interface HostRepository {
   spexBranch: boolean;
   project: Record<string, unknown> | null;
   /** Whether the host lets the person add and remove its members
-   * (git-host-5, DR-114); false where it says nothing. */
-  can: { manageMembers: boolean };
+   * (git-host-5, DR-114) and move it to another group (DR-120); false
+   * where it says nothing. */
+  can: { manageMembers: boolean; transfer: boolean };
 }
 
 export interface HostRepositoryDetail extends HostRepository {
@@ -749,6 +753,40 @@ export class GitHostClient {
   }
 
   /**
+   * `PATCH /api/v1/host/groups/:id` (git-host-18): give a group of the
+   * instance the name, the path segment, or both, given. A path taken
+   * there throws `name_taken`, the host's refusal `host_refused` with
+   * its words.
+   */
+  async renameGroup(id: string, input: { name?: string; path?: string }): Promise<HostGroup> {
+    const fields: Record<string, string> = {};
+    if (input.name !== undefined) fields.name = input.name;
+    if (input.path !== undefined) fields.path = input.path;
+    const body = record((await this.call("PATCH", `/api/v1/host/groups/${encodeURIComponent(id)}`, fields)).json);
+    return groupFrom(body.group);
+  }
+
+  /**
+   * `DELETE /api/v1/host/groups/:id` (git-host-19): delete a group of the
+   * instance, with whatever it holds; the host's refusal throws
+   * `host_refused` with its words.
+   */
+  async deleteGroup(id: string): Promise<void> {
+    await this.call("DELETE", `/api/v1/host/groups/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * `POST /api/v1/host/repositories/:id/transfer` (git-host-20): move a
+   * spex repository into the group `groupId`, or the person's own group
+   * where it is null. A name taken there throws `name_taken`, the host's
+   * refusal `host_refused` with its words.
+   */
+  async transferRepository(id: string, groupId: string | null): Promise<HostRepository> {
+    const body = record((await this.call("POST", `/api/v1/host/repositories/${encodeURIComponent(id)}/transfer`, { group_id: groupId })).json);
+    return repositoryFrom(body.repository);
+  }
+
+  /**
    * `POST …/members` (git-host-16): add the account the host lists under
    * exactly `login` to the group or repository at the role whose id is
    * `role`. No such account throws `not_found` with the host's words
@@ -1011,7 +1049,7 @@ function groupFrom(value: unknown): HostGroup {
     fullPath: text(body.full_path),
     name: text(body.name),
     kind: body.kind === "user" ? "user" : "group",
-    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members) },
+    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete) },
   };
 }
 
@@ -1039,7 +1077,7 @@ function repositoryFrom(value: unknown): HostRepository {
     lfs: flag(body.lfs),
     spexBranch: flag(body.spex_branch),
     project: isRecord(body.project) ? body.project : null,
-    can: { manageMembers: isRecord(body.can) && flag(body.can.manage_members) },
+    can: { manageMembers: isRecord(body.can) && flag(body.can.manage_members), transfer: isRecord(body.can) && flag(body.can.transfer) },
   };
 }
 

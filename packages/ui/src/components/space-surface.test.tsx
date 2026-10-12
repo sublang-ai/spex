@@ -651,7 +651,13 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     cleanup();
     // Once seen it is not said again, and a repository whose only
     // member is the account says nothing.
-    for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }]) {
+    // One whose count the host's read lacks, never synced from here, may
+    // have others: it says so too.
+    await renderGroups(repoState({ members: null, noticed: false, lastSync: null }));
+    fireEvent.click(syncControl());
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Every session goes there whole");
+    cleanup();
+    for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }, { members: null, noticed: false }]) {
       commandMock.mockClear();
       await renderGroups(repoState(over));
       fireEvent.click(syncControl());

@@ -602,6 +602,13 @@ describe("GROUPS: Pick a group (space-58)", () => {
     await waitFor(() =>
       expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", groupId: "2", name: "academy-notes" } }),
     );
+    // Your own group is named by none, never by its id.
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
+    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+    fireEvent.click(screen.getByTestId("space-pick-group-jane"));
+    await waitFor(() =>
+      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", groupId: null, name: "academy" } }),
+    );
   });
 
   test("a taken or malformed name is refused in place and the field asks for another; an empty one is never sent", async () => {
@@ -710,21 +717,21 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
       ...home,
       groups: [
         home.groups[0]!,
-        { id: "3", fullPath: "acme", name: "Acme", own: false, can: { createSubgroup: true, manageMembers: true }, repositories: [] },
+        { id: "3", fullPath: "acme", name: "Acme", own: false, can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, repositories: [] },
         {
           id: null,
           fullPath: "bob",
           name: "bob",
           own: false,
           can: NO_CAN,
-          repositories: [repo({ key: "bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true } })],
+          repositories: [repo({ key: "bob/notes-spex", name: "notes-spex", id: "80", remote: "bob/notes-spex", code: null, folder: null, members: 2, can: { manageMembers: true, transfer: false } })],
         },
         {
           id: "9",
           fullPath: "jane",
           name: "Jane's team",
           own: false,
-          can: { createSubgroup: true, manageMembers: true },
+          can: { createSubgroup: true, manageMembers: true, rename: false, delete: false },
           repositories: [
             repo({ key: "jane/jane-spex@81", name: "jane-spex", id: "81", remote: "jane/jane-spex", code: null, folder: null, state: "unreachable", reason: "a group named like your login", branch: null }),
           ],

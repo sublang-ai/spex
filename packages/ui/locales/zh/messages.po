@@ -1369,6 +1369,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
+#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -2093,13 +2094,20 @@ msgstr "决策记录"
 msgid "Decisions, {count} records"
 msgstr "决策记录，共 {count} 条"
 
+#. confirm: delete the group on the Git host
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
+#. delete this empty group of the instance
 #. remove the authoring session for good
 #: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Delete"
 msgstr "删除"
+
+#: src/components/SpaceGroups.tsx
+msgid "Delete {group}?"
+msgstr "要删除 {group} 吗？"
 
 #: src/components/LibrarySurface.tsx
 msgid "Delete authoring session {id}"
@@ -2151,8 +2159,10 @@ msgstr "已删除 {id}；其规约包文件夹保留在 {path}"
 msgid "deleting…"
 msgstr "删除中…"
 
+#. the Delete control, while the host deletes the group
 #. the delete request is in flight
 #: src/components/LibrarySurface.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "删除中…"
 
@@ -3201,6 +3211,7 @@ msgstr "已跳转到 {id} — 已忽略筛选显示"
 msgid "just now"
 msgstr "刚刚"
 
+#. cancel a deletion: leave it as it is
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
 #. cancel a destructive confirm: leave things as they are
@@ -3222,6 +3233,7 @@ msgstr "刚刚"
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/components/WorkingLine.tsx
@@ -3441,9 +3453,28 @@ msgstr "由已安装的运行时报告的模型。"
 msgid "More details"
 msgstr "更多详情"
 
+#: src/components/SpaceGroups.tsx
+msgid "Move {name} to another group"
+msgstr "将 {name} 移到另一个群组"
+
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
+
+#. move a spex repository into another group of the instance, or your own
+#: src/components/SpaceGroups.tsx
+msgid "Move to another group"
+msgstr "移到另一个群组"
+
+#. open the groups a spex repository may move to; its full name is 'Move to another group'
+#: src/components/SpaceGroups.tsx
+msgid "Move…"
+msgstr "移动…"
+
+#. the Move control, while the host moves the spex repository
+#: src/components/SpaceGroups.tsx
+msgid "Moving…"
+msgstr "移动中…"
 
 #. the new spex repository's name
 #: src/components/SpaceGroups.tsx
@@ -4691,6 +4722,11 @@ msgstr "已移除“{title}”"
 msgid "Removing…"
 msgstr "移除中…"
 
+#. rename this group of the instance: its name and its path
+#: src/components/SpaceGroups.tsx
+msgid "Rename"
+msgstr "重命名"
+
 #: src/components/SpaceSync.tsx
 msgid "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading."
 msgstr "用托管平台的版本替换 {count, plural, other {# 个单元}}？另一版本仍保留在 Git 历史中；被替换的会话会丢失本地的续接提示和你读到的位置。"
@@ -4955,12 +4991,14 @@ msgstr "与 Captain 相同"
 #. commit the edits in this editor
 #. commit the edits in this editor
 #. commit the edits in this editor
+#. rename the group as the fields say on the Git host
 #. sync step: saving this device's changes
 #. write the draft to the file
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Save"
@@ -4990,10 +5028,12 @@ msgstr "正在保存更改…"
 #. a save is in flight
 #. a save is in flight
 #. a save is in flight
+#. the Save control, while the host renames the group
 #. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/SpaceMembers.tsx
 #: src/components/SpecEditor.tsx
 msgid "Saving…"
 msgstr "保存中…"
