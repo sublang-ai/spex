@@ -286,10 +286,34 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.deepEqual([ownClone, projectClone].map((clone) => readFileSync(join(clone, "spex.lock"), "utf8")), locks, "an app update changes no lock");
   const still = await core.client.expectOk("environment.get", { repository: project.id });
   assert.deepEqual(still.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
-  // A new environment takes the newer release.
+  // [environments-11] each state names the newer release beside the
+  // older its lock selects, the caret request admitting the newer.
+  assert.deepEqual(still.builtinUpdate, { shipped: newer.version, locked: shipped.version });
+  const ownBefore = await core.client.expectOk("environment.get", { repository: own });
+  assert.deepEqual(ownBefore.builtinUpdate, { shipped: newer.version, locked: shipped.version });
+  // A new environment takes the newer release, and its state names none.
   const later = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "later")) });
   const laterLock = parseYaml(readFileSync(join(clonePath(core.dataDir, later.id), "spex.lock"), "utf8")) as { packages: Record<string, { source: { version: string } }> };
   assert.equal(laterLock.packages["sublang/playbooks"]!.source.version, newer.version);
+  const laterState = await core.client.expectOk("environment.get", { repository: later.id });
+  assert.ok(!("builtinUpdate" in laterState), "[environments-11] a lock selecting the shipped release names no update");
+
+  // [environments-11] resolving again — what Update sends — moves the
+  // lock to the newer release, and the state names none.
+  let mark = core.client.mark();
+  await core.client.expectOk("environment.resolve", { repository: own });
+  const updated = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.version === newer.version);
+  assert.deepEqual(updated.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", newer.version, "builtin", true]]);
+  assert.ok(!("builtinUpdate" in updated), "[environments-11] the lock selects the shipped release");
+
+  // [environments-11] a request admitting only the older release names
+  // no update, its lock still selecting the older.
+  mark = core.client.mark();
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: shipped.version } });
+  const exact = await core.client.environment(project.id, mark, (state) => state.busy === null && state.stale === null
+    && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
+  assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
+  assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
 });
 
 // ---------------------------------------------------------------------------

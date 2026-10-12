@@ -230,6 +230,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
   Collapse control and stays folded across launches. A folded group
   keeps its most severe attention mark; the project's Overview always
   shows every band.
+- The Playbooks surface says when the app ships newer built-in
+  playbooks than an environment runs. An app update still changes no
+  environment by itself — the lock keeps the built-in release it
+  selected — but where the app ships a newer `sublang/playbooks` that
+  the environment's request admits, the environment reads "Built-in
+  playbooks 17.8.0 shipped with this app; this environment runs
+  17.7.0" with one **Update**, which resolves it again. `environment.get`
+  and `environment.state` carry it as the optional
+  `builtinUpdate: { shipped, locked }`; the protocol version is unchanged.
 
 ### Changed
 

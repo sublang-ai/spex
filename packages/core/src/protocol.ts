@@ -318,6 +318,11 @@ export interface EnvironmentState {
    * succeeded: what the registry now holds and its page there
    * (playbook-library-93). */
   published?: { name: string; version: string; url: string } | null;
+  /** The built-in spec package this app ships, where the lock selects an
+   * older release and the requirement `spex.yaml` requests it at admits
+   * the shipped one; absent otherwise. The lock stays until the reader
+   * resolves again (environments-11). */
+  builtinUpdate?: { shipped: string; locked: string };
 }
 export type EnvironmentRequest = (
   | { kind: "registry"; version: string }

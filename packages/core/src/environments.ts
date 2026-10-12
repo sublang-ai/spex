@@ -23,6 +23,7 @@ import {
   AGENT_FOLDERS,
   BUILTIN_PACKAGE_NAME,
   builtinRegistrySource,
+  compareVersions,
   compositeRegistry,
   ContentStore,
   exportEnvironment,
@@ -55,6 +56,7 @@ import {
   RequestsError,
   resolutionVersion,
   resolve,
+  satisfies,
   seedBuiltinPackage,
   setRequest,
   writeLock,
@@ -342,6 +344,23 @@ export class EnvironmentManager {
   prepare(dir: string): boolean {
     if (!this.options.builtin) return false;
     return prepareBuiltinEnvironment(dir, this.options.builtin, this.store.home.host.url);
+  }
+
+  /** The release this app ships beside the one a lock selects, where the
+   * lock selects an older built-in release and the requirement
+   * `spex.yaml` requests the built-in spec package at admits the shipped
+   * one (environments-11); the lock moves only when the reader resolves. */
+  private builtinUpdate(requests: Requests | null, lock: Lock | null): EnvironmentState["builtinUpdate"] {
+    const shipped = this.options.builtin?.version;
+    const request = requests?.packages[BUILTIN_PACKAGE_NAME];
+    const source = lock?.packages[BUILTIN_PACKAGE_NAME]?.source;
+    if (!shipped || !request || !isRegistryRequest(request) || !source || !isRegistrySource(source)) return undefined;
+    try {
+      if (compareVersions(shipped, source.version) <= 0 || !satisfies(shipped, request.version)) return undefined;
+    } catch {
+      return undefined;
+    }
+    return { shipped, locked: source.version };
   }
 
   /** At start: seed the built-in spec package, request it in your own
@@ -994,6 +1013,7 @@ export class EnvironmentManager {
     }
     const requestMap: Record<string, EnvironmentRequest> = {};
     for (const [name, request] of Object.entries(requests?.packages ?? {})) requestMap[name] = requestOf(request);
+    const builtinUpdate = this.builtinUpdate(requests, lock);
     return {
       repository: key,
       language: requests?.language ?? null,
@@ -1004,6 +1024,7 @@ export class EnvironmentManager {
       busy: this.busyOf(key),
       error,
       published: clone.published ? { ...clone.published } : null,
+      ...(builtinUpdate ? { builtinUpdate } : {}),
     };
   }
 

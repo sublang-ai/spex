@@ -7,10 +7,11 @@
 // what it requires nested under it, every selected artifact with its
 // language and a fallback mark, whether its files are installed, a
 // path source missing on this device — with the lock's staleness and
-// the conflict report, Resolve again and Install where they apply, and
-// Remove behind the inline confirm. The ways to add a spec package —
-// from the registry, a folder or Git — stand apart at the surface's
-// foot. A sync, a resolve or an install running beside them refuses
+// the conflict report, Resolve again and Install where they apply, the
+// built-in release this app ships where the lock runs an older one with
+// Update resolving again, and Remove behind the inline confirm. The
+// ways to add a spec package — from the registry, a folder or Git —
+// stand apart at the surface's foot. A sync, a resolve or an install running beside them refuses
 // nothing (DR-111): its progress shows by the heading, and a change the
 // core refuses shows its cause in place.
 
@@ -233,13 +234,14 @@ export function EnvironmentSection({
   const install = useAppStore((store) => store.installEnvironment);
   const remove = useAppStore((store) => store.removeSpecPackage);
   const [error, setError] = useState<string>();
-  const [pending, setPending] = useState<"resolve" | "install">();
+  const [pending, setPending] = useState<"resolve" | "update" | "install">();
   const progress = progressOf(state);
 
-  function act(kind: "resolve" | "install"): void {
+  function act(kind: "resolve" | "update" | "install"): void {
     setPending(kind);
     setError(undefined);
-    void (kind === "resolve" ? resolve(repository) : install(repository))
+    // Update resolves again as Resolve again does (environments-11).
+    void (kind === "install" ? install(repository) : resolve(repository))
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setPending(undefined));
   }
@@ -282,6 +284,31 @@ export function EnvironmentSection({
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {state.builtinUpdate ? (
+          <div
+            data-testid="environment-builtin-update"
+            className="flex flex-wrap items-center gap-2 rounded border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-700 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200"
+          >
+            <span data-testid="environment-builtin-update-line" className="min-w-0 flex-1">
+              {i18n._("Built-in playbooks {shipped} shipped with this app; this environment runs {locked}", {
+                shipped: state.builtinUpdate.shipped,
+                locked: state.builtinUpdate.locked,
+              })}
+            </span>
+            <button
+              type="button"
+              data-testid="environment-update"
+              disabled={pending !== undefined}
+              title={i18n._("Resolve the requests again to run {version}", { version: state.builtinUpdate.shipped })}
+              onClick={() => act("update")}
+              className={PRIMARY}
+            >
+              {pending === "update"
+                ? i18n._({ id: "Updating…", comment: "the environment is being resolved again to run the built-in playbooks this app ships" })
+                : i18n._({ id: "Update", comment: "resolve the environment again to run the built-in playbooks this app ships" })}
+            </button>
           </div>
         ) : null}
         {state.error ? (
