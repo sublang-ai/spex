@@ -545,6 +545,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- An authoring session's row on the Playbooks surface is titled by its
+  source's first `#` heading, so a source with a license comment above
+  that heading no longer reads as the comment; a source with no heading
+  still reads as its first line.
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a

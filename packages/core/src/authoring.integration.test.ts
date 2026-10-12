@@ -533,6 +533,17 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     ["triage", "Label new issues", ["Triager", "Verifier"], "path", "acme/triage", "0.1.0", ["project"]]);
   assert.equal(client.latest("triage")?.state, "enabled");
 
+  // playbook-library-70: the list titles the session by its source's
+  // first `#` heading, past a license comment written above it, else
+  // by the source's first non-empty line.
+  const titled = async (content: string) => {
+    await client.expectOk("draft.source.write", { projectId, draftId: "triage", content });
+    return (await client.expectOk("draft.list", {})).find((draft) => draft.id === "triage")?.firstLine;
+  };
+  assert.equal(listed[0]?.firstLine, "triage");
+  assert.equal(await titled(`<!-- SPDX-License-Identifier: Apache-2.0 -->\n${SOURCE}`), "triage");
+  assert.equal(await titled("Triage new issues\n\nRoles:\n\n- Triager\n"), "Triage new issues");
+
   client.close();
   await harness.service.stop();
 });

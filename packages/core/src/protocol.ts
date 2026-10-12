@@ -1538,7 +1538,8 @@ export interface DraftInfo {
   projectId: string;
   createdAt: number;
   touchedAt: number;
-  /** The source's first line, null with no source. */
+  /** The source's title: its first `#` heading's text, else its first
+   * non-empty line; null with no source (playbook-library-70). */
   firstLine: string | null;
   /** The spec package folder is gone; the row offers only Delete. */
   sourceMissing?: boolean;

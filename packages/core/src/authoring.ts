@@ -349,9 +349,23 @@ function agentSummaryOf(agent: ResolvedAgent): AgentSummary {
   };
 }
 
-function firstLineOf(markdown: string): string | null {
-  const line = markdown.split(/\r?\n/).find((entry) => entry.trim() !== "");
-  return line === undefined ? null : line.trim();
+/** The source's title, as a session's row names it (playbook-library-70):
+ * the text of its first `#` heading outside fenced code, closing hashes
+ * dropped — so a license comment above it is passed over — else its
+ * first non-empty line; null for an empty source. */
+function titleOf(markdown: string): string | null {
+  const lines = markdown.split(/\r?\n/).map((entry) => entry.trim());
+  let fenced = false;
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const heading = /^#\s+(.*?)(?:\s+#+)?$/.exec(line)?.[1]?.trim();
+    if (heading) return heading;
+  }
+  return lines.find((line) => line !== "") ?? null;
 }
 
 /** Whether a language tag is English, whose source needs no word kept. */
@@ -681,7 +695,7 @@ export class AuthorManager {
       projectId: this.drafts.projectOf(id) ?? "",
       createdAt: draft.createdAt,
       touchedAt: draft.touchedAt,
-      firstLine: source ? firstLineOf(source.markdown) : null,
+      firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, draft.package, draft.language ?? DEFAULT_AUTHORING_LANGUAGE, dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled,
@@ -743,7 +757,7 @@ export class AuthorManager {
       projectId: this.drafts.projectOf(id) ?? "",
       createdAt: at,
       touchedAt: at,
-      firstLine: source ? firstLineOf(source.markdown) : null,
+      firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, this.drafts.packagePath(id), this.drafts.language(id), dir),
       ...(dirExists ? {} : { sourceMissing: true }),
       enabled: this.options.enabled(id),
