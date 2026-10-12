@@ -22,7 +22,7 @@ The store shall persist core-owned data in Spex home using these locations:
 
 | Path | Contents | Git |
 | --- | --- | --- |
-| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named as on the host | — |
+| `workspace/<group>/` | a plain folder per group of the Git host, a subgroup's inside its parent's, named by the group's path in the instance ([DR-120](../decisions/120-the-instance-is-the-space.md)) | — |
 | `workspace/<group>/<name>-spex/` | the clone of one spex repository, on its `spex` branch | the clone |
 | `<clone>/project.json` | the code's remote [[storage-3](#storage-3)], present when the spex repository is a project's | Tracked |
 | `<clone>/config/playbook.config.yaml` | the spex repository's launcher configuration [[core-service-2](core-service.md#core-service-2)] | Tracked |

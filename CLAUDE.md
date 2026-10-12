@@ -7,3 +7,7 @@
 - Resolve conflicts spec-first, then iterate freely: an intended change that conflicts with existing spec items is resolved in the specs — or dropped — before coding against it; implementing first to explore an approach is fine, and implementation lessons update this intent's specs, but no intent completes until its specs and code agree.
 - Keep specs lawful per @specs/meta.md — the law itself, not this summary: complete and exact (meta-34), minimal (meta-23), one requirement per item (meta-29), cohesive packages for a shared intent (meta-13), sections per meta-30, relationships and test evidence only as inline citations (meta-14, meta-16, meta-20), integration/system tests only (meta-21, meta-32).
 - Run `npx @sublang/spex lint` (or `spex lint` where the CLI is installed) to check structure, item IDs, and citations after editing specs; never add trace lines to satisfy an older checker.
+
+## Architecture invariants
+
+- "End users should only see the workshop group, their own personal groups, and projects." — the owner's rule; a spex.pub instance is the one thing a person signs in to and the only name they see ([DR-120](specs/decisions/120-the-instance-is-the-space.md)). Never name, link or path the Git host, its groups or its pages in a surface, response, key, folder or document.

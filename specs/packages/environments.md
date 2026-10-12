@@ -166,7 +166,7 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 
 #### environments-27
 
-While the home is signed in, when the core asks the registry for the orgs the signed-in person may publish to, it shall send one `GET /api/v1/account/orgs` presenting the device's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its Git host full `path` and the person's `role`, sorted by name, as the answer:
+While the home is signed in, when the core asks the registry for the orgs the signed-in person may publish to, it shall send one `GET /api/v1/account/orgs` presenting the device's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its group's `path` in the instance and the person's `role`, sorted by name, as the answer ([DR-120](../decisions/120-the-instance-is-the-space.md)):
 
 - any status but `200`, a body not in that shape, a network failure, or no answer within two seconds is no answer.
 
