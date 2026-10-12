@@ -87,7 +87,7 @@ When the reader activates Sign out, the core shall revoke this device at the hos
 While a spex repository has other members and has never been pushed from this device, when a sync of it, or a pick joining it [[space-58](#space-58)], is admitted, the surface shall first say once that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - Continue records that this device's reader has seen it [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing;
-- a spex repository whose only member is the account says nothing.
+- a spex repository whose only member is the account says nothing, and one whose members' count the host's last read lacks [[git-host-5](git-host.md#git-host-5)] is taken to have other members.
 
 #### space-58
 
@@ -766,6 +766,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - `space.signin.start` in the device flow returns a verification URL carrying the user code, which the suite approves at the stand-in, with the same outcome; a denied code ends the sign-in `failed` with `denied` [[space-3](#space-3)] [[space-29](#space-29)];
 - `space.pick` with a group creates `<name>-spex` there, pushes `spex`, and the row turns reachable with its last sync, no state from the pick to that push reading it unreachable [[space-61](#space-61)]; one naming your own group's id is refused `not_found` [[space-29](#space-29)]; a taken name is refused in place; a stand-in refusal leaves the repository local only with its waiting phrase, and a later Refresh after the stand-in grants finds it created [[space-58](#space-58)] [[space-64](#space-64)];
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
+- with the stand-in failing every members route, a pick joining a repository whose only member is the account, and the first `space.sync` into another, are each refused until `noticed` [[space-57](#space-57)];
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)];
 - a core restarted on that home reads the same account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - a core restarted on a signed-in home whose own group's clone holds its pushed `spex` with no `sync:<repository>:last` recorded reads that row with no last sync but its `branch.agreed` current at `spex`'s commit time, then, after a commit on `spex` alone, not current at the same time, while a project's clone the host's `spex` never reached carries none [[space-61](#space-61)] [[space-30](#space-30)];
