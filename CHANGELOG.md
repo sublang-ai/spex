@@ -588,6 +588,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   makes its default branch lands, so that first sync reads the new
   repository again every 2 s, five times at most, before stopping; every
   later sync, a Retry among them, stops at once as before (git-host-7).
+- A spex repository Spex creates on the host for a person whose role
+  there is Developer no longer stops its first sync at Check for good:
+  GitLab's protected default branch refuses the README it would write,
+  leaving the repository empty, so once those re-reads still find it
+  empty, that first sync pushes `main` itself — one commit of the README
+  titled with the repository's name — and goes on to push `spex` beside
+  it. Where the host refuses that push too, the sync stops with the
+  host's words (git-host-7).
 - A playbook's exported skill no longer takes over the players Spex
   launches in the same working folder: its description says it starts
   the playbook through Spex and is not for an agent already playing a

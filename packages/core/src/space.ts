@@ -151,7 +151,7 @@ const TEXT_EXTENSIONS = /\.(?:json|jsonl|ya?ml|md|txt|ts|mts|cts|js|mjs|cjs|log|
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
 /** A repository this core just created and the host reports empty is
  * read again this many times, this far apart, before its first sync
- * stops (git-host-7). */
+ * pushes the default branch itself (git-host-7). */
 const CREATED_REREADS = 5;
 const CREATED_REREAD_MS = 2_000;
 
@@ -1606,6 +1606,26 @@ class RepositorySync {
     if (failure.cause === "refused") this.hostOverride = { state: "read-only", reason: failure.message };
     if (failure.cause === "gone") this.hostOverride = { state: "unreachable", reason: failure.message };
     return failure;
+  }
+
+  /** Give the host's empty repository the default branch it never
+   * committed (git-host-7): `main`, one commit of the README the host
+   * would have written, made in the object store alone — the clone's
+   * working tree, index and refs untouched — with the clone's commit
+   * identity, and pushed with the brokered credential. A refusal stops
+   * the Check step as any transport's does (space-15). */
+  async pushDefaultBranch(remote: string, name: string): Promise<void> {
+    const blob = await this.git.ok(["hash-object", "-w", "--stdin"], { input: `# ${name}\n` });
+    const tree = await this.git.ok(["mktree"], { input: `100644 blob ${blob}\tREADME.md\n` });
+    const commit = await this.git.ok([...(await this.git.committerArgs()), "commit-tree", tree, "-m", "Initial commit"]);
+    const credential = await this.owner.credentialFor(remote, "check");
+    let run: GitRun;
+    try {
+      run = await this.git.run(["push", "-q", "origin", `${commit}:refs/heads/main`], { transport: true, ...(credential ? { credential } : {}) });
+    } finally {
+      await credential?.dispose();
+    }
+    if (run.code !== 0) throw new SpaceStopped("check", this.classify(run, remote, true));
   }
 
   /** Step 3 — Compare: the plan of HEAD against the host's `spex` over
@@ -3070,8 +3090,15 @@ export class SpaceManager {
       // `spex` beside the default branch, never as it (git-host-7).
       const group = repository.group.fullPath;
       if (repository.empty && !(created && await this.defaultBranchArrives(repository.id))) {
-        this.waiting.set(machine.key, { step: "branch", group, message: "" });
-        throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+        if (!created || this.stopping) {
+          this.waiting.set(machine.key, { step: "branch", group, message: "" });
+          throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: this.hostName() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+        }
+        // Still empty: the host never committed its README — a protected
+        // default branch refusing a Developer's initial commit, say — so
+        // the core pushes that branch itself, and goes on as if the host
+        // had (git-host-7).
+        await machine.pushDefaultBranch(repository.remoteUrl, repository.name);
       }
       let answer: Awaited<ReturnType<GitHostClient["prepareBranch"]>>;
       try { answer = await this.host.client.prepareBranch(repository.id); }

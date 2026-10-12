@@ -416,7 +416,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   assert.equal((await home.client.repository("acme/delta-spex")).state, "reachable");
 });
 
-test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands stops after the re-reads, and a Retry stops with no read again until it does", async (t) => {
+test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words, a Retry stopping with no read again until the README lands", async (t) => {
   const host = await startHost();
   const home = await startHome("created-uninitialized", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -446,34 +446,63 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(git(soonBare, "ls-tree", "--name-only", "main"), "README.md");
   assert.equal(git(soonBare, "symbolic-ref", "HEAD"), "refs/heads/main");
   assert.equal(git(soonBare, "rev-parse", "spex"), git(clonePath(home.dataDir, "acme/soon-spex"), "rev-parse", "spex"));
-  // One whose README never lands stops that sync once it has read it
-  // again five times, the host holding no default branch for it, and
-  // nothing pushed (git-host-7).
+  // One whose README never lands gets it from that first sync once it has
+  // read it again five times: `main`, one commit of the README the
+  // stand-in would have written, made with the clone's identity and
+  // pushed first, so the stand-in takes it as its default, then `spex`
+  // beside it, with no stop and the clone's own branch and files
+  // untouched (git-host-7).
   host.script.holdInitialization(Infinity);
   const never = await addFolder(home, gitFolder("never"));
-  const key = "acme/never-spex";
+  const neverKey = "acme/never-spex";
   asked = host.script.requests.length;
   from = home.client.mark();
   await home.client.expectOk("space.pick", { repository: never.key, choice: { kind: "create", groupId: "2002", name: "never" } });
+  const made = await home.client.waitRepository(from, neverKey, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
+  assert.ok(made.sync.phase === "done" && made.sync.pushed, JSON.stringify(made.sync));
+  assert.deepEqual(home.client.readings(from, [never.key, neverKey]).filter((repository) => repository.sync.phase === "stopped").map((repository) => repository.sync), []);
+  assert.equal(rereads(asked, made.id ?? ""), 5);
+  const neverBare = bareOf(host, neverKey);
+  const neverClone = clonePath(home.dataDir, neverKey);
+  assert.equal(git(neverBare, "symbolic-ref", "HEAD"), "refs/heads/main");
+  assert.equal(git(neverBare, "ls-tree", "--name-only", "main"), "README.md");
+  assert.equal(git(neverBare, "show", "main:README.md"), "# never-spex");
+  assert.equal(git(neverBare, "rev-list", "--count", "main"), "1");
+  assert.equal(git(neverBare, "log", "-1", "--format=%an <%ae>", "main"), "Ada Lovelace <ada@users.noreply.127.0.0.1>");
+  assert.equal(git(neverBare, "rev-parse", "spex"), git(neverClone, "rev-parse", "spex"));
+  assert.equal(git(neverClone, "for-each-ref", "--format=%(refname)", "refs/heads/"), "refs/heads/spex");
+  assert.equal(git(neverClone, "status", "--porcelain"), "");
+  // That push refused, as a protected default branch refuses a member
+  // who may not push there, the sync stops after the re-reads in the
+  // stand-in's words, nothing pushed (git-host-7).
+  const protectedWords = "You are not allowed to push code to protected branches on this project.";
+  host.script.refuseDefaultBranch(protectedWords);
+  t.after(() => host.script.refuseDefaultBranch(null));
+  const refused = await addFolder(home, gitFolder("refused"));
+  const key = "acme/refused-spex";
+  asked = host.script.requests.length;
+  from = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: refused.key, choice: { kind: "create", groupId: "2002", name: "refused" } });
   const stopped = await home.client.waitRepository(from, key, (repository) => repository.sync.phase !== "idle" && repository.sync.phase !== "running", 30_000);
   assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "refused" && stopped.sync.retry, JSON.stringify(stopped.sync));
-  assert.equal(stopped.sync.message, `${HOST_NAME} holds no default branch for it yet`);
+  assert.equal(stopped.sync.message, `${HOST_NAME} refused: ${protectedWords}`);
   assert.equal(rereads(asked, stopped.id ?? ""), 5);
-  const neverBare = bareOf(host, key);
-  assert.equal(git(neverBare, "for-each-ref", "refs/heads/"), "");
-  // A Retry is no creation's first sync: it stops so at once, reading the
-  // repository no more; once the README lands, a Retry pushes beside it
-  // (git-host-7).
+  const refusedBare = bareOf(host, key);
+  assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
+  // A Retry is no creation's first sync: it stops at once, the host
+  // holding no default branch for it, reading the repository no more;
+  // once the README lands, a Retry pushes beside it, `main` alone being
+  // refused (git-host-7).
   asked = host.script.requests.length;
   const retried = await home.client.settle("space.sync", { repository: key });
-  assert.ok(retried.sync.phase === "stopped" && retried.sync.message === stopped.sync.message, JSON.stringify(retried.sync));
+  assert.ok(retried.sync.phase === "stopped" && retried.sync.message === `${HOST_NAME} holds no default branch for it yet`, JSON.stringify(retried.sync));
   assert.equal(rereads(asked, stopped.id ?? ""), 0);
-  assert.equal(git(neverBare, "for-each-ref", "refs/heads/"), "");
+  assert.equal(git(refusedBare, "for-each-ref", "refs/heads/"), "");
   host.script.holdInitialization(null);
   const synced = await home.client.settle("space.sync", { repository: key });
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));
-  assert.equal(git(neverBare, "ls-tree", "--name-only", "main"), "README.md");
-  assert.equal(git(neverBare, "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+  assert.equal(git(refusedBare, "ls-tree", "--name-only", "main"), "README.md");
+  assert.equal(git(refusedBare, "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
 });
 
 test("space-65: a working folder paired with a group's own spex repository brings it to that group on the host, pushed", async (t) => {
