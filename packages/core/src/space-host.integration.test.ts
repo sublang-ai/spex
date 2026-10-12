@@ -1662,9 +1662,91 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   assert.ok(Date.now() - start < 12_000, "the shortened limit ends it");
 });
 
+test("space-38: a check the stand-in answers 429 stops throttled in the seconds it asks for, and a Retry waits them out before its step, a Stop ending that wait", async (t) => {
+  const host = await startHost();
+  const home = await startHome("host-throttled", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done");
+  const requests = host.script.requests;
+  /** The stand-in's clock at the first host route a request at or after
+   * `index` reached — the one its scripted 429 answers. */
+  const firstHostRoute = (index: number): number => {
+    const found = requests.slice(index).find((request) => request.path.startsWith("/api/v1/host/"));
+    assert.ok(found, "a host route was asked");
+    return found.at;
+  };
+  /** A check the stand-in answers 429, stopped: its message, and when
+   * its 429's request reached the stand-in. */
+  const throttle = async (retryAfter: string | null): Promise<{ message: string; at: number }> => {
+    host.script.rateLimit(1, retryAfter);
+    const index = requests.length;
+    const stopped = await home.client.settle("space.fetch", { repository: HOST_OWN });
+    // Its own cause, the host's time in its words, and a Retry that
+    // waits (space-15): never the network.
+    assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check" && stopped.sync.cause === "throttled" && stopped.sync.retry, JSON.stringify(stopped.sync));
+    assert.equal(stopped.sync.guidance, "Retry waits, then runs the step.");
+    return { message: stopped.sync.message, at: firstHostRoute(index) };
+  };
+  /** A Retry, read running at its Check step, then settled: how it
+   * ended, and when its first request reached the stand-in. */
+  const retry = async (): Promise<{ settled: RepositoryState; at: number }> => {
+    const mark = home.client.mark();
+    const index = requests.length;
+    const settling = home.client.settle("space.fetch", { repository: HOST_OWN });
+    const running = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "running");
+    assert.ok(running.sync.phase === "running" && running.sync.step === "check", JSON.stringify(running.sync));
+    const settled = await settling;
+    return { settled, at: requests[index]?.at ?? Number.NaN };
+  };
+
+  // The header's number: the Retry reads running and completes once the
+  // 2 s are out, with no second 429 (space-15).
+  const two = await throttle("2");
+  assert.equal(two.message, `${HOST_NAME} asks to wait 2 seconds`);
+  const waited = await retry();
+  assert.equal(waited.settled.sync.phase, "idle", JSON.stringify(waited.settled.sync));
+  assert.ok(waited.at - two.at >= 1_950, `the Retry reached the stand-in ${Math.round(waited.at - two.at)} ms after its 429`);
+
+  // An HTTP date three seconds ahead: the seconds until it (space-15).
+  while (Date.now() % 1_000 > 50) await sleep(5);
+  const date = Math.floor(Date.now() / 1_000) * 1_000 + 3_000;
+  const dated = await throttle(new Date(date).toUTCString());
+  assert.equal(dated.message, `${HOST_NAME} asks to wait 3 seconds`);
+
+  // No time of its own: "a moment", and a Retry runs at once (space-15).
+  const moment = await throttle(null);
+  assert.equal(moment.message, `${HOST_NAME} asks to wait a moment`);
+  const prompt = await retry();
+  assert.equal(prompt.settled.sync.phase, "idle", JSON.stringify(prompt.settled.sync));
+  assert.ok(prompt.at - moment.at < 1_000, `the Retry reached the stand-in ${Math.round(prompt.at - moment.at)} ms after its 429`);
+
+  // A Stop while the Retry waits ends that wait at once, nothing sent,
+  // and the next Retry waits out what remains (space-16, space-15).
+  const five = await throttle("5");
+  const mark = home.client.mark();
+  const index = requests.length;
+  const asked = Date.now();
+  assert.deepEqual(await home.client.expectOk("space.fetch", { repository: HOST_OWN }), { accepted: true });
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "running" && repository.sync.step === "check" && repository.sync.cancelable);
+  assert.deepEqual(await home.client.expectOk("space.cancel", { repository: HOST_OWN }), { stopped: true });
+  const ended = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "stopped");
+  assert.ok(ended.sync.phase === "stopped" && ended.sync.step === "check" && ended.sync.cause === "stopped" && ended.sync.retry, JSON.stringify(ended.sync));
+  assert.equal(ended.sync.message, `Stopped while waiting for ${HOST_NAME}`);
+  assert.equal(ended.sync.guidance, "Retry waits, then runs the step.");
+  assert.ok(Date.now() - asked < 3_000, "the Stop ends the wait");
+  assert.equal(requests.length, index, "nothing reached the stand-in while it asked to wait");
+  const rest = await retry();
+  assert.equal(rest.settled.sync.phase, "idle", JSON.stringify(rest.settled.sync));
+  assert.ok(rest.at - five.at >= 4_950, `the next Retry reached the stand-in ${Math.round(rest.at - five.at)} ms after its 429`);
+});
+
 test("git-host-11: a read the stand-in refuses keeps the previous view and its time, phrased in English and in Chinese", async (t) => {
   const host = await startHost();
-  const home = await startHome("host-relay", { host, project: false, extra: { signIn: "browser" } });
+  // The stand-in's 30 seconds hold the next read 1 s at most here, a
+  // test-shortened bound (git-host-21).
+  const home = await startHome("host-relay", { host, project: false, extra: { signIn: "browser", hostHoldMaxMs: 1_000 } });
   t.after(() => home.stop());
   const from = home.client.mark();
   await signIn(home, host);
@@ -1682,13 +1764,15 @@ test("git-host-11: a read the stand-in refuses keeps the previous view and its t
   const words = "Your account is blocked.";
   host.script.refuseHost(1, words);
   await refresh(`${HOST_NAME} refused: ${words}`);
+  // A rate limit reads as the host asking to wait, in seconds, never as
+  // a network failure (git-host-11).
   host.script.rateLimit(1, "30");
-  await refresh(`${HOST_NAME} asks to wait; try again after 30`);
+  await refresh(`${HOST_NAME} asks to wait 30 seconds`);
   await home.client.expectOk("language.set", { language: "zh" });
   host.script.refuseHost(1, words);
   await refresh(`${HOST_NAME} 拒绝了：${words}`);
   host.script.rateLimit(1, "30");
-  await refresh(`${HOST_NAME} 要求稍候；请在 30 之后重试`);
+  await refresh(`${HOST_NAME} 要求等待 30 秒`);
   host.script.unavailable(1);
   await refresh(`无法连接 ${HOST_NAME}`);
   // A read that succeeds again ends the failure.

@@ -215,6 +215,9 @@ export interface CoreServiceOptions {
   systemLanguages?: readonly string[];
   /** Test seam (space-32): the Space transport limit; 120 s by default. */
   spaceTransportTimeoutMs?: number;
+  /** Test seam (git-host-21): the longest the Git host's rate limit
+   * holds its calls; 120 s by default. */
+  hostHoldMaxMs?: number;
   /** Test seam: awaited before each Space step runs, and inside Save
    * between its validation and its commit (`at: "commit"`), so a suite can
    * act between them deterministically. */
@@ -515,14 +518,17 @@ export class CoreService {
     this.configState = { status: "missing", path: this.configPath };
     // One client of the Git host the home records (git-host-1): its
     // credential in `local/credentials.yaml`, this device and app as its
-    // label, and a refusal that signs the device out marking the home so
-    // (git-host-4).
+    // label, a refusal that signs the device out marking the home so
+    // (git-host-4), and a rate limit holding its calls offering Stop on
+    // the steps that wait (git-host-21).
     const host = store.home.host;
     this.hostClient = new GitHostClient({
       url: host.url,
       label: `Spex on ${hostname()}`,
       credentials: fileCredentialStore(store.dir, host.url),
       onSignedOut: () => this.space.signedOutByHost(),
+      onHold: () => this.space.holdBegan(),
+      ...(options.hostHoldMaxMs !== undefined ? { holdMaxMs: options.hostHoldMaxMs } : {}),
     });
     this.hostRuntime = options.hostRuntime ?? currentRuntime();
     this.sessions = new SessionManager({

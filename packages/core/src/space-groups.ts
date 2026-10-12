@@ -14,6 +14,7 @@
 import {
   CredentialChanged,
   HostError,
+  retryAfterSeconds,
   type GitHostClient,
   type HostAccount,
   type HostGroup,
@@ -380,10 +381,12 @@ export function relayHostError(error: unknown, host: string): string {
       return hostRefused(host, error.words);
     case "not_found":
       return noLongerShared();
-    case "rate_limited":
-      return error.retryAfter
-        ? i18n._({ id: "{host} asks to wait; try again after {retry}", values: { host, retry: error.retryAfter }, comment: "The Git host's rate limit; {retry} is its own Retry-After value, kept as given" })
-        : i18n._({ id: "{host} asks to wait; try again later", values: { host }, comment: "The Git host's rate limit, with no retry time of its own" });
+    case "rate_limited": {
+      const seconds = retryAfterSeconds(error.retryAfter);
+      return seconds !== null
+        ? i18n._({ id: "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}", values: { host, seconds }, comment: "The Git host's rate limit; {seconds} is how long it asks to wait, read from its Retry-After" })
+        : i18n._({ id: "{host} asks to wait a moment", values: { host }, comment: "The Git host's rate limit, with no time of its own to wait" });
+    }
     case "reauth":
       return signInAgain();
     case "unreachable":

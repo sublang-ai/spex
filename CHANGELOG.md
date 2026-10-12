@@ -586,6 +586,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- A host's rate limit is its own cause, no longer a network failure: a sync stops "⟨host⟩ asks to wait N seconds" (or "a moment") with "Retry waits, then runs the step.", and every call to the host waits out the time asked, 120 s at most, a Stop ending the wait.
 - The authoring agent learns before its first compile that a prompt's
   text stands where its instruction stands, in the source's order: text
   two instructions need, such as a checklist, is written out at both,

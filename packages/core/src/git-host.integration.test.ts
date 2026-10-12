@@ -12,12 +12,14 @@ import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml } from "yaml";
 import {
   CredentialChanged,
   DEFAULT_HOST_URL,
   GitHostClient,
   HostError,
+  HostWaitStopped,
   SignInBusyError,
   credentialsPath,
   fileCredentialStore,
@@ -29,10 +31,10 @@ import {
 } from "./git-host.js";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
-import { readHostView } from "./space-groups.js";
+import { readHostView, relayHostError } from "./space-groups.js";
 import { STANDIN_STORAGE, startStandinHost, type StandinHost } from "./testing/standin-host.js";
 
-async function setup(options: { skew?: { ms: number } } = {}) {
+async function setup(options: { skew?: { ms: number }; holdMaxMs?: number } = {}) {
   const scratch = mkdtempSync(join(tmpdir(), "spex-git-host-"));
   const home = join(scratch, "home");
   const host = await startStandinHost({ dir: join(scratch, "host") });
@@ -46,6 +48,7 @@ async function setup(options: { skew?: { ms: number } } = {}) {
     fetch: holds.fetch,
     ...(skew ? { now: () => Date.now() + skew.ms } : {}),
     onSignedOut: (kind) => signedOut.push(kind),
+    ...(options.holdMaxMs !== undefined ? { holdMaxMs: options.holdMaxMs } : {}),
   });
   let closed = false;
   return {
@@ -1069,7 +1072,9 @@ test("git-host-9: the helper names the runtime and refuses what the shell cannot
 // git-host-11: failures relayed with the host's words
 
 test("git-host-11: each failure the host answers is a kind with the host's words kept whole", async () => {
-  const t = await setup();
+  // The 30 s the rate limit asks for hold the next call 0.2 s at most
+  // here, a test-shortened bound (git-host-21).
+  const t = await setup({ holdMaxMs: 200 });
   try {
     await browserSignIn(t.client);
     const s = t.host.script;
@@ -1086,6 +1091,98 @@ test("git-host-11: each failure the host answers is a kind with the host's words
     await t.closeHost();
     await assert.rejects(t.client.groups(), hostError("unreachable", { words: undefined }));
     assert.equal(await t.client.signedIn(), true, "no answer signs nobody out");
+  } finally {
+    await t.dispose();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// git-host-21: the host's rate limit holds every call
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const two = (n: number): string => String(n).padStart(2, "0");
+const clock = (d: Date): string => `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
+/** An HTTP date in RFC 850's obsolete form. */
+const rfc850 = (d: Date): string => `${WEEKDAYS[d.getUTCDay()]}, ${two(d.getUTCDate())}-${MONTH_NAMES[d.getUTCMonth()]}-${two(d.getUTCFullYear() % 100)} ${clock(d)} GMT`;
+/** An HTTP date in asctime's obsolete form. */
+const asctime = (d: Date): string => `${WEEKDAYS[d.getUTCDay()].slice(0, 3)} ${MONTH_NAMES[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2, " ")} ${clock(d)} ${d.getUTCFullYear()}`;
+
+test("git-host-21, git-host-11: a 429 holds every call until the instant it asks for — its number, its date, none without either — 120 s at most, a call's Stop ending its wait unsent", async () => {
+  const t = await setup();
+  try {
+    await browserSignIn(t.client);
+    const s = t.host.script;
+    /** A call the stand-in answers 429: the words it is relayed in, and
+     * when its request reached the stand-in. */
+    const limited = async (client: GitHostClient, retryAfter: string | null): Promise<{ words: string; at: number }> => {
+      s.rateLimit(1, retryAfter);
+      let words = "";
+      await assert.rejects(client.groups(), (error: unknown) => {
+        hostError("rate_limited", { words: "Too many requests to the Git host." })(error);
+        assert.equal((error as HostError).retryAfter, retryAfter, "the host's Retry-After is kept raw");
+        words = relayHostError(error, "Host");
+        return true;
+      });
+      return { words, at: s.requests[s.requests.length - 1].at };
+    };
+    /** When the next call reached the stand-in. */
+    const next = async (client: GitHostClient): Promise<number> => {
+      const index = s.requests.length;
+      assert.equal((await client.groups()).length, 3);
+      return s.requests[index].at;
+    };
+
+    // The header's number: the next call waits it out (git-host-11).
+    const number = await limited(t.client, "2");
+    assert.equal(number.words, "Host asks to wait 2 seconds");
+    assert.ok((await next(t.client)) - number.at >= 1_950, "the next call waits the 2 s out");
+
+    // Two calls in flight answered 3 and 1 seconds: the later instant
+    // stands, whichever answer comes last.
+    s.rateLimit(1, "3");
+    s.rateLimit(1, "1");
+    const pair = s.requests.length;
+    const answers = await Promise.allSettled([t.client.groups(), t.client.groups()]);
+    assert.deepEqual(answers.map((answer) => answer.status), ["rejected", "rejected"]);
+    assert.ok((await next(t.client)) - s.requests[pair].at >= 2_950, "the next call waits the 3 s out");
+
+    // An HTTP date three seconds ahead: the seconds until it.
+    while (Date.now() % 1_000 > 50) await sleep(5);
+    const date = Math.floor(Date.now() / 1_000) * 1_000 + 3_000;
+    const dated = await limited(t.client, new Date(date).toUTCString());
+    assert.equal(dated.words, "Host asks to wait 3 seconds");
+    await next(t.client);
+    assert.ok(Date.now() >= date, "the next call waits for the date");
+
+    // A date past, in either obsolete form, reads no seconds below zero
+    // and holds nothing; no time of its own reads "a moment" and holds
+    // nothing either.
+    const past = new Date(Date.now() - 10_000);
+    for (const [retryAfter, words] of [[rfc850(past), "Host asks to wait 0 seconds"], [asctime(past), "Host asks to wait 0 seconds"], [null, "Host asks to wait a moment"]] as const) {
+      const answered = await limited(t.client, retryAfter);
+      assert.equal(answered.words, words);
+      assert.ok((await next(t.client)) - answered.at < 1_000, `${retryAfter ?? "no Retry-After"} holds nothing`);
+    }
+
+    // 120 s at most: a test-shortened bound of 1 s holds the 30 s asked
+    // for 1 s.
+    const bounded = new GitHostClient({ url: t.host.url, label: "Spex on test", credentials: fileCredentialStore(t.home, t.host.url), holdMaxMs: 1_000 });
+    const capped = await limited(bounded, "30");
+    assert.equal(capped.words, "Host asks to wait 30 seconds");
+    const cappedNext = (await next(bounded)) - capped.at;
+    assert.ok(cappedNext >= 950 && cappedNext < 10_000, `the bound held the next call ${Math.round(cappedNext)} ms`);
+
+    // A call's Stop ends its wait at once, the call sending nothing.
+    await limited(t.client, "30");
+    const index = s.requests.length;
+    const stop = new AbortController();
+    const asked = Date.now();
+    const pending = t.client.prepareBranch("1001", { signal: stop.signal });
+    setTimeout(() => stop.abort(), 200);
+    await assert.rejects(pending, HostWaitStopped);
+    assert.ok(Date.now() - asked < 5_000, "the Stop ends the wait");
+    assert.equal(s.requests.length, index, "nothing reached the stand-in");
   } finally {
     await t.dispose();
   }
