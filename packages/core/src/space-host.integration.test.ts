@@ -47,6 +47,13 @@ function bareOf(host: StandinHost, key: string): string {
   return join(host.dir, ...parts.slice(0, -1), `${parts[parts.length - 1]}.git`);
 }
 
+/** The host's id of the repository whose creation by the core a clone's
+ * own Git configuration records (git-host-7), if any. */
+function createdOn(clone: string): string | null {
+  const read = spawnSync("git", ["-C", clone, "config", "--local", "--get", "spex.created"], { encoding: "utf8" });
+  return read.status === 0 ? read.stdout.trim() : null;
+}
+
 /** A repository's readings up to its first sync's end: they reach the
  * sync and its end, and none reads unreachable (space-61). */
 function assertNeverUnreachable(readings: RepositoryState[]): void {
@@ -416,7 +423,7 @@ test("git-host-14: a repository created while a read begun before it is in fligh
   assert.equal((await home.client.repository("acme/delta-spex")).state, "reachable");
 });
 
-test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words, a Retry stopping with no read again until the README lands", async (t) => {
+test("git-host-14: a creation's first sync reads the stand-in again until the README it held lands; one that never lands gets `main` from that sync before `spex`, or, that push refused, stops in the stand-in's words, a Retry stopping with no read again until the README lands; a core stopped during those reads leaves the creation on the clone for the next core's sync", async (t) => {
   const host = await startHost();
   const home = await startHome("created-uninitialized", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -472,6 +479,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(git(neverBare, "rev-parse", "spex"), git(neverClone, "rev-parse", "spex"));
   assert.equal(git(neverClone, "for-each-ref", "--format=%(refname)", "refs/heads/"), "refs/heads/spex");
   assert.equal(git(neverClone, "status", "--porcelain"), "");
+  assert.equal(createdOn(neverClone), null, "the clone records the creation no more");
   // That push refused, as a protected default branch refuses a member
   // who may not push there, the sync stops after the re-reads in the
   // stand-in's words, nothing pushed (git-host-7).
@@ -503,6 +511,35 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.ok(synced.sync.phase === "done" && synced.sync.pushed, JSON.stringify(synced.sync));
   assert.equal(git(refusedBare, "ls-tree", "--name-only", "main"), "README.md");
   assert.equal(git(refusedBare, "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+  // A core stopped while a creation's first sync reads it again — the app
+  // closed — leaves the creation recorded on the clone, so the next core
+  // on the home reads it again and pushes `main`, then `spex` (git-host-7).
+  host.script.refuseDefaultBranch(null);
+  host.script.holdInitialization(Infinity);
+  const restarted = await addFolder(home, gitFolder("restarted"));
+  const restartedKey = "acme/restarted-spex";
+  asked = host.script.requests.length;
+  await home.client.expectOk("space.pick", { repository: restarted.key, choice: { kind: "create", groupId: "2002", name: "restarted" } });
+  const createdId = (): string => host.script.repositories.find((repository) => repository.path === "restarted-spex")?.id ?? "";
+  for (let i = 0; i < 400 && rereads(asked, createdId()) < 1; i += 1) await sleep(25);
+  const id = createdId();
+  assert.ok(rereads(asked, id) >= 1, "the first sync reads the repository again");
+  await home.stop();
+  assert.ok(rereads(asked, id) < 5, "the core stopped before the reads ended");
+  const restartedClone = clonePath(home.dataDir, restartedKey);
+  const restartedBare = bareOf(host, restartedKey);
+  assert.equal(createdOn(restartedClone), id);
+  assert.equal(git(restartedBare, "for-each-ref", "refs/heads/"), "");
+  const again = await startHome("created-uninitialized-again", { host, dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => again.stop());
+  asked = host.script.requests.length;
+  const resumed = await again.client.settle("space.sync", { repository: restartedKey });
+  assert.ok(resumed.sync.phase === "done" && resumed.sync.pushed, JSON.stringify(resumed.sync));
+  assert.equal(rereads(asked, id), 5);
+  assert.equal(git(restartedBare, "symbolic-ref", "HEAD"), "refs/heads/main");
+  assert.equal(git(restartedBare, "show", "main:README.md"), "# restarted-spex");
+  assert.equal(git(restartedBare, "rev-parse", "spex"), git(restartedClone, "rev-parse", "spex"));
+  assert.equal(createdOn(restartedClone), null, "the clone records the creation no more");
 });
 
 test("space-65: a working folder paired with a group's own spex repository brings it to that group on the host, pushed", async (t) => {
