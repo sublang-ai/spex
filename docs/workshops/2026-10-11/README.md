@@ -31,6 +31,7 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-27 a role's prompt carrying the procedure's later rounds | spex PR 118 (the preamble's rule) |
 | W-29 a repository moved into a team group reading "Never synced" | spex PR 119, space-5/space-73 |
 | W-34 a playbook's exported skill derailing its own player | spex PR 120, environments-16 |
+| W-31 an unreadable directive block relayed to no one | spex PR 121, playbook-library-53/65/66 |
 
 ## What is still open
 
