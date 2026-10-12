@@ -32,13 +32,22 @@ The aim was to find what stops a real team or makes the app hard to use, and to 
 | W-29 a repository moved into a team group reading "Never synced" | spex PR 119, space-5/space-73 |
 | W-34 a playbook's exported skill derailing its own player | spex PR 120, environments-16 |
 | W-31 an unreadable directive block relayed to no one | spex PR 121, playbook-library-53/65/66 |
+| W-30 an upgraded app keeping the lock's older built-ins with nothing saying so | spex PR 123 (the line and its Update control) |
+| W-32 the Captain rewording a playbook's question and dropping the facts its ending reports | Playbook 17.8.1 (PR 75) |
+| W-33 a structured-question tool the Captain cannot use, shown as a refused call | cligent 0.33.4 (PRs 74, 75) |
+| W-35 a finished row titled with the Boss's last answer | spex PR 126, DR-119 |
+| W-36 the Org default under a nested group | spex PR 125 with spex-pub PR 7 (the orgs API) |
+| W-37 a source's first line as the Library title; W-38 the source-order rule learned only from a failed compile | spex PR 124 |
 
 ## What is still open
 
-- Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects; W-32 (the Captain rewords a playbook's one question and drops the facts its ending reports) and W-33 (a structured-question tool the Captain cannot use) are the Captain's prompt and adapter.
-- Playbooks surface: W-30 (an upgraded app keeps the lock's older built-ins with nothing saying a newer release is seeded; a resolve moves them), W-36 (the Org default under a nested group), W-37 (a source's first line as the Library title; minor).
-- Dashboard: W-35 (a finished row titled with the Boss's last answer; a design question under DR-035).
-- Authoring: W-38 (the source-order rule learned only from a failed compile; minor).
+- Playbook: W-10 is settled, not fixed — DR-088 §4 declines an uncommitted-draft outcome with its reasons, drafts travel as text or each drafting step commits, and the preamble teaches the three effects.
+- Groups: W-39 (no "Move to another group" on the surface; the eleven moves below went through the protocol) and W-40 (host reads that stopped completing after one failure; to confirm on the next restart).
+
+## Where the records live
+
+Every team's spex repository now sits under the workshop's top-level group, `claude-workshop-261011/<team>/<name>-spex`, the same group that is the registry org the teams publish to, with each team's subgroup created from the organizer's Spex home.
+They were first created under `slbeta1/claude-workshop-2026-10-11/<team>`, a wrong placement corrected on the owner's instruction by moving every repository with its full history; the copies left under the old path are orphans the owner may delete.
 
 ## By the numbers
 
