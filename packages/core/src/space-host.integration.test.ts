@@ -1674,7 +1674,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   const host = await startHost();
   const research = host.script.groups.find((group) => group.fullPath === "acme/research");
   assert.ok(research);
-  research.can = { createSubgroup: false, manageMembers: false };
+  research.can = { createSubgroup: false, manageMembers: false, rename: false, delete: false };
   host.script.addRepository({ group: "acme", name: "a-spex", role: "Maintainer" });
   host.script.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
   const home = await startHome("groups-create", { host, project: false, extra: { signIn: "browser" } });
@@ -1697,13 +1697,13 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   ]);
   assert.equal(signed.account?.canCreateGroup, true);
   assert.deepEqual(signed.groups.map((group) => [group.fullPath, group.own, group.can]), [
-    [LOGIN, true, { createSubgroup: false, manageMembers: false }],
-    ["acme", false, { createSubgroup: true, manageMembers: true }],
-    ["acme/research", false, { createSubgroup: false, manageMembers: false }],
+    [LOGIN, true, { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
+    ["acme", false, { createSubgroup: true, manageMembers: true, rename: true, delete: true }],
+    ["acme/research", false, { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
   ]);
-  assert.deepEqual(repositoryOf(signed, "acme/a-spex").can, { manageMembers: true });
-  assert.deepEqual(repositoryOf(signed, "acme/b-spex").can, { manageMembers: false });
-  assert.deepEqual((await home.client.repository(HOST_OWN)).can, { manageMembers: true });
+  assert.deepEqual(repositoryOf(signed, "acme/a-spex").can, { manageMembers: true, transfer: false });
+  assert.deepEqual(repositoryOf(signed, "acme/b-spex").can, { manageMembers: false, transfer: false });
+  assert.deepEqual((await home.client.repository(HOST_OWN)).can, { manageMembers: true, transfer: true });
 
   // A group at the top and one in acme, each named as typed at the path
   // given, replied with its full path (git-host-15), and standing — in a
@@ -1713,7 +1713,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   const unread = host.script.requests.length;
   const top = await createGroupHeld(home, { name: "Lumen Labs", path: "lumen-labs", parent: null });
   assert.deepEqual([top.group.fullPath, top.group.name], ["lumen-labs", "Lumen Labs"]);
-  assert.deepEqual(top.announced.groups.find((group) => group.id === top.group.id)?.can, { createSubgroup: true, manageMembers: true });
+  assert.deepEqual(top.announced.groups.find((group) => group.id === top.group.id)?.can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   const named = await createGroupHeld(home, { name: "华芯智造", path: "huaxin-mfg", parent: null });
   assert.deepEqual([named.group.fullPath, named.group.name], ["huaxin-mfg", "华芯智造"]);
   const sub = await createGroupHeld(home, { name: "Team One", path: "team-one", parent: "2002" });
@@ -1721,7 +1721,7 @@ test("git-host-5, git-host-15: the read holds the stand-in's roles and what it l
   assert.ok(host.script.groups.some((group) => group.id === sub.group.id), "the stand-in holds it");
   const held = await home.client.expectOk("space.get", {});
   assert.deepEqual(groupPaths(held), ["acme", "acme/research", "acme/team-one", "huaxin-mfg", "lumen-labs"]);
-  assert.deepEqual(held.groups.find((group) => group.id === sub.group.id)?.can, { createSubgroup: true, manageMembers: true });
+  assert.deepEqual(held.groups.find((group) => group.id === sub.group.id)?.can, { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   // A held group is taken as a parent, and its members are read, before
   // any read (git-host-15, git-host-5).
   const nested = await createGroupHeld(home, { name: "Studio", path: "studio", parent: top.group.id });
@@ -1862,7 +1862,7 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   const refusedAdd = await home.client.expectError("space.share", { group: "2003", login: "bob", role: "developer" }, "invalid_request");
   assert.equal(refusedAdd, `${HOST_NAME} refused: You need the Owner role to add members.`);
   host.script.refuseMembers(null);
-  assert.deepEqual(repositoryOf(signed, "acme/b-spex").can, { manageMembers: false });
+  assert.deepEqual(repositoryOf(signed, "acme/b-spex").can, { manageMembers: false, transfer: false });
   const notAllowed = await home.client.expectError("space.share", { repository: "acme/b-spex", login: "bob", role: "developer" }, "invalid_request");
   assert.equal(notAllowed, `${HOST_NAME} refused: You are not allowed to manage the members of acme/b-spex.`);
 

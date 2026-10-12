@@ -799,7 +799,7 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
     const s = t.host.script;
     const research = s.groups.find((group) => group.fullPath === "acme/research");
     assert.ok(research);
-    research.can = { createSubgroup: false, manageMembers: true };
+    research.can = { createSubgroup: false, manageMembers: true, rename: true, delete: false };
     research.members = [{ id: "1003", login: "grace", displayName: "Grace Hopper", role: "Developer" }];
     const managed = s.addRepository({ group: "acme", name: "a-spex", role: "Owner" });
     const reader = s.addRepository({ group: "acme", name: "b-spex", role: "Developer" });
@@ -818,12 +818,12 @@ test("git-host-5, git-host-8: the host's roles, what it lets the person do per g
     assert.equal((await t.client.me()).canCreateGroup, false);
     const groups = await t.client.groups();
     assert.deepEqual(groups.map((group) => [group.fullPath, group.can]), [
-      ["ada", { createSubgroup: false, manageMembers: false }],
-      ["acme", { createSubgroup: true, manageMembers: true }],
-      ["acme/research", { createSubgroup: false, manageMembers: true }],
+      ["ada", { createSubgroup: false, manageMembers: false, rename: false, delete: false }],
+      ["acme", { createSubgroup: true, manageMembers: true, rename: true, delete: true }],
+      ["acme/research", { createSubgroup: false, manageMembers: true, rename: true, delete: false }],
     ]);
     const repositories = await t.client.repositories();
-    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true }], [reader.id, { manageMembers: false }]]);
+    assert.deepEqual(repositories.map((repository) => [repository.id, repository.can]), [[managed.id, { manageMembers: true, transfer: true }], [reader.id, { manageMembers: false, transfer: false }]]);
 
     // A group's members: its own first, then those it inherits, each
     // with the group it comes through (git-host-8).
@@ -846,7 +846,7 @@ test("git-host-15, git-host-16, git-host-17: group creation and member writes an
     // Creation at the top and inside a group, named as typed at the path
     // given (git-host-15).
     const top = await t.client.createGroup({ name: "Lumen Labs", path: "lumen-labs", parentId: null });
-    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true }]);
+    assert.deepEqual([top.fullPath, top.name, top.kind, top.can], ["lumen-labs", "Lumen Labs", "group", { createSubgroup: true, manageMembers: true, rename: true, delete: true }]);
     assert.equal(typeof top.id, "string");
     // At the instance's root the service identity is an Owner beside the
     // person, and no members listing shows it (git-host-8, DR-120): the

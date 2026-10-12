@@ -216,13 +216,13 @@ export function assertGroupsState(state: GroupsState): void {
   assert.deepEqual(leaks, [], "the Groups state names nothing behind the instance");
   for (const group of state.groups) {
     assert.deepEqual(Object.keys(group).sort(), ["can", "fullPath", "id", "name", "own", "repositories"]);
-    assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "manageMembers"]);
-    assert.ok(typeof group.can.createSubgroup === "boolean" && typeof group.can.manageMembers === "boolean", JSON.stringify(group.can));
-    if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false }, "your own group takes no subgroup or member");
+    assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
+    assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
+    if (group.own) assert.deepEqual(group.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false }, "your own group takes no subgroup, member, rename or deletion");
     for (const repository of group.repositories) {
       assert.deepEqual(Object.keys(repository).sort(), REPOSITORY_KEYS);
-      assert.deepEqual(Object.keys(repository.can), ["manageMembers"]);
-      assert.equal(typeof repository.can.manageMembers, "boolean");
+      assert.deepEqual(Object.keys(repository.can), ["manageMembers", "transfer"]);
+      assert.ok(typeof repository.can.manageMembers === "boolean" && typeof repository.can.transfer === "boolean", JSON.stringify(repository.can));
       assert.ok(PHASES.has(repository.sync.phase), `phase ${JSON.stringify(repository.sync)}`);
       assert.ok(["local-only", "reachable", "read-only", "unreachable", "absent"].includes(repository.state));
       if (repository.branch !== null) assert.deepEqual(Object.keys(repository.branch).sort(), BRANCH_KEYS);

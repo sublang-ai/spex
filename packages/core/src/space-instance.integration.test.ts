@@ -65,7 +65,7 @@ test("space-74: nothing behind the instance is named; another login's repository
     [LOGIN, true, "2001"], ["acme", false, "2002"], ["acme/research", false, "2003"], ["bob", false, null],
   ]);
   const bob = entry(state, "bob");
-  assert.deepEqual([bob.name, bob.can], ["bob", { createSubgroup: false, manageMembers: false }], "another login's entry has no abilities");
+  assert.deepEqual([bob.name, bob.can], ["bob", { createSubgroup: false, manageMembers: false, rename: false, delete: false }], "another login's entry has no abilities");
   assert.deepEqual(bob.repositories.map((repository) => [repository.key, repository.state, repository.remote]), [["bob/notes-spex", "absent", "bob/notes-spex"]]);
   const listedTeam = repositoryOf(state, "acme/team-spex");
   assert.deepEqual([listedTeam.id, listedTeam.remote], [team.id, "acme/team-spex"], "a listed remote reads as its path in the instance");

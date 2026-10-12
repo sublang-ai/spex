@@ -13,13 +13,17 @@
 // what the person may do per group and repository, group creation with
 // taken paths, refusals and a listing lagging behind it, and members
 // with their source, added and removed by login with unknown logins and
-// refusals. Like spex.pub (DR-120) it answers every path relative to the
-// instance's root, keeps no group of its own, hides the service identity
-// a root creation adds as an Owner, and answers no page URL.
+// refusals; and, for undo (host-30..32, DR-120), a group renamed —
+// everything inside it carried to its new path — or deleted, and a spex
+// repository moved to another group or the person's own, each as the
+// person may, with taken paths and scripted refusals. Like spex.pub
+// (DR-120) it answers every path relative to the instance's root, keeps
+// no group of its own, hides the service identity a root creation adds
+// as an Owner, and answers no page URL.
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -27,8 +31,9 @@ import { performance } from "node:perf_hooks";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 
-/** What the stand-in lets the person do in a group (host-4). */
-export interface StandinGroupCan { createSubgroup: boolean; manageMembers: boolean }
+/** What the stand-in lets the person do in a group (host-4): create a
+ * subgroup, manage its members, rename it, delete it. */
+export interface StandinGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean }
 
 export interface StandinGroup {
   id: string;
@@ -36,8 +41,8 @@ export interface StandinGroup {
   fullPath: string;
   name: string;
   kind: "user" | "group";
-  /** What the person may do there; unset, a group lets them do both and
-   * the person's own group neither, as spex.pub reports it. */
+  /** What the person may do there; unset, a group lets them do all four
+   * and the person's own group none, as spex.pub reports it. */
   can?: StandinGroupCan;
   /** The group's own members, the person among them where listed; its
    * subgroups and repositories inherit them. */
@@ -74,8 +79,9 @@ export interface StandinRepository {
   /** The bare repository's absolute path. */
   bare: string;
   /** What the person may do on it (host-5): unset, manage its members
-   * where their role is Maintainer or Owner. */
-  can?: { manageMembers: boolean };
+   * where their role is Maintainer or Owner, and move it to another
+   * group where it is Owner. */
+  can?: { manageMembers: boolean; transfer: boolean };
 }
 
 export interface StandinRequest {
@@ -220,6 +226,15 @@ export interface StandinScript {
   /** While set, adding or removing a member answers 403 `host_refused`
    * with these words (host-27, host-28). */
   refuseMembers(message: string | null): void;
+  /** While set, renaming a group answers 403 `host_refused` with these
+   * words (host-30). */
+  refuseGroupRename(message: string | null): void;
+  /** While set, deleting a group answers 403 `host_refused` with these
+   * words (host-31). */
+  refuseGroupDelete(message: string | null): void;
+  /** While set, moving a spex repository answers 403 `host_refused` with
+   * these words (host-32). */
+  refuseTransfer(message: string | null): void;
 }
 
 export interface StandinHost {
@@ -251,8 +266,9 @@ const DEFAULT_ROLES: StandinRole[] = [
   { id: "owner", name: "Owner", mayPush: true },
 ];
 /** The roles that manage a repository's members where its `can` is not
- * scripted. */
+ * scripted; Owner alone moves it to another group. */
 const MANAGING_ROLES = new Set(["Maintainer", "Owner"]);
+const MOVING_ROLE = "Owner";
 const USER_CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
 const CODE_TTL_MS = 10 * 60_000;
 const POLL_TOLERANCE_MS = 50;
@@ -472,6 +488,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   /** Groups created while the listing lags, left out of it. */
   const lagging = new Set<StandinGroup>();
   let membersRefusal: string | null = null;
+  let groupRenameRefusal: string | null = null;
+  let groupDeleteRefusal: string | null = null;
+  let transferRefusal: string | null = null;
   const hostFaults: ({ kind: "rate"; retryAfter: string } | { kind: "unavailable" } | { kind: "refused"; message: string })[] = [];
 
   await new Promise<void>((resolveListen, rejectListen) => {
@@ -518,14 +537,17 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
   // No page URL in any answer (DR-120).
   const groupWire = (group: StandinGroup) => ({ id: group.id, full_path: group.fullPath, name: group.name, kind: group.kind });
   const groupCan = (group: StandinGroup): StandinGroupCan =>
-    group.can ?? (group.kind === "user" ? { createSubgroup: false, manageMembers: false } : { createSubgroup: true, manageMembers: true });
+    group.can ?? (group.kind === "user"
+      ? { createSubgroup: false, manageMembers: false, rename: false, delete: false }
+      : { createSubgroup: true, manageMembers: true, rename: true, delete: true });
   /** A group as `GET /api/v1/host/groups` lists it, with what the person
    * may do there (host-4). */
   const listedGroupWire = (group: StandinGroup) => {
     const can = groupCan(group);
-    return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers } };
+    return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers, rename: can.rename, delete: can.delete } };
   };
-  const repositoryCan = (repo: StandinRepository): { manageMembers: boolean } => repo.can ?? { manageMembers: MANAGING_ROLES.has(repo.role) };
+  const repositoryCan = (repo: StandinRepository): { manageMembers: boolean; transfer: boolean } =>
+    repo.can ?? { manageMembers: MANAGING_ROLES.has(repo.role), transfer: repo.role === MOVING_ROLE };
 
   // ---- members (host-8, host-27, host-28) ------------------------------------
 
@@ -635,7 +657,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       lfs: repo.lfs,
       spex_branch: spex,
       project: spex ? await projectOf(repo.bare) : null,
-      can: { manage_members: repositoryCan(repo).manageMembers },
+      can: { manage_members: repositoryCan(repo).manageMembers, transfer: repositoryCan(repo).transfer },
     };
   }
 
@@ -848,6 +870,9 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       if (!on) lagging.clear();
     },
     refuseMembers: (message) => { membersRefusal = message; },
+    refuseGroupRename: (message) => { groupRenameRefusal = message; },
+    refuseGroupDelete: (message) => { groupDeleteRefusal = message; },
+    refuseTransfer: (message) => { transferRefusal = message; },
   };
 
   function decideDevice(code: string, status: "approved" | "denied"): void {
@@ -1072,6 +1097,12 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     }
     if (path === "/api/v1/host/groups" && method === "GET") return json(res, 200, { groups: script.groups.filter((g) => !lagging.has(g)).map(listedGroupWire) });
     if (path === "/api/v1/host/groups" && method === "POST") return createGroup(req, res);
+    const groupOnly = /^\/api\/v1\/host\/groups\/([^/]+)$/.exec(path);
+    if (groupOnly && (method === "PATCH" || method === "DELETE")) {
+      const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(groupOnly[1]));
+      if (!group) return envelope(res, 404, "not_found", "The group is not known.");
+      return method === "PATCH" ? renameGroup(req, res, group) : deleteGroup(res, group);
+    }
     const groupMatch = /^\/api\/v1\/host\/groups\/([^/]+)\/members(?:\/([^/]+))?$/.exec(path);
     if (groupMatch) {
       const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(groupMatch[1]));
@@ -1109,7 +1140,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       return json(res, 200, { repositories, next_cursor: next });
     }
     if (path === "/api/v1/host/repositories" && method === "POST") return create(req, res);
-    const match = /^\/api\/v1\/host\/repositories\/([^/]+)(\/members(?:\/[^/]+)?|\/spex-branch)?$/.exec(path);
+    const match = /^\/api\/v1\/host\/repositories\/([^/]+)(\/members(?:\/[^/]+)?|\/spex-branch|\/transfer)?$/.exec(path);
     if (match) {
       const repo = visible(decodeURIComponent(match[1]));
       if (!repo) return envelope(res, 404, "not_found", "The repository is not shared with this account.");
@@ -1132,6 +1163,7 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
         if (login === undefined && method === "POST") return addMember(req, res, target);
         if (login !== undefined && method === "DELETE") return removeMember(res, target, login);
       }
+      if (match[2] === "/transfer" && method === "POST") return transferRepository(req, res, repo);
       if (match[2] === "/spex-branch" && method === "POST") {
         if (branchRefusal !== null) return json(res, 202, { status: "pending", message: branchRefusal });
         repo.blocked = false;
@@ -1198,16 +1230,11 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
     if (parent === null && !script.canCreateGroup) return envelope(res, 403, "host_refused", "You are not allowed to create groups.");
     if (parent !== null && !groupCan(parent).createSubgroup) return envelope(res, 403, "host_refused", `You are not allowed to create subgroups in ${parent.fullPath}.`);
     const fullPath = parent ? `${parent.fullPath}/${segment}` : segment;
-    const taken = (path: string): boolean => path.toLowerCase() === fullPath.toLowerCase();
     // A root path an account holds as its login is refused (host-26),
     // unless a test admits it as a later sign-up would leave it.
-    const logins = [script.person, ...script.accounts].map((account) => account.login);
-    if (parent === null && !script.admitLoginGroups && logins.some(taken)) {
-      return envelope(res, 409, "name_taken", "This path is taken by an account.");
-    }
-    if (script.groups.some((g) => (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) {
-      return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
-    }
+    const taken = groupPathTaken(fullPath, null);
+    if (taken === "account") return envelope(res, 409, "name_taken", "This path is taken by an account.");
+    if (taken === "group") return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
     // A root group holds the person and the service identity as its
     // Owners; a subgroup, the person (DR-120).
     const service: StandinMember = { ...script.serviceAccount, role: "Owner" };
@@ -1216,12 +1243,94 @@ export async function startStandinHost(opts: { dir: string; displayName?: string
       fullPath,
       name: name.trim(),
       kind: "group",
-      can: { createSubgroup: true, manageMembers: true },
+      can: { createSubgroup: true, manageMembers: true, rename: true, delete: true },
       members: parent === null ? [service, personMember("Owner")] : [personMember("Owner")],
     };
     script.groups.push(group);
     if (groupListingLag) lagging.add(group);
     json(res, 201, { group: listedGroupWire(group) });
+  }
+
+  /** Whether a path at the instance's root or inside a group is taken
+   * for a group (host-26, host-30): a group's there, one beyond the
+   * person's sight, or, at the root, an account's login unless a test
+   * admits it; `except` is the group being renamed. */
+  function groupPathTaken(fullPath: string, except: StandinGroup | null): "group" | "account" | null {
+    const taken = (other: string): boolean => other.toLowerCase() === fullPath.toLowerCase();
+    if (!fullPath.includes("/") && !script.admitLoginGroups && [script.person, ...script.accounts].some((account) => taken(account.login))) return "account";
+    if (script.groups.some((g) => g !== except && (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) return "group";
+    return null;
+  }
+
+  /** `PATCH /api/v1/host/groups/:id` (host-30): a group of the instance
+   * given the name, the path, or both, the body carries, the groups and
+   * repositories inside it carried to its new path with their bare
+   * repositories. */
+  async function renameGroup(req: IncomingMessage, res: ServerResponse, group: StandinGroup): Promise<void> {
+    const body = await readJson(req);
+    if (!isRecord(body)) return envelope(res, 400, "bad_request", "The body must be a JSON object.");
+    const { name, path } = body;
+    if (name === undefined && path === undefined) return envelope(res, 400, "bad_request", "A name or a path is required.");
+    if (name !== undefined && (typeof name !== "string" || name.trim().length === 0 || name.length > 255)) return envelope(res, 400, "bad_request", "A name of at most 255 characters is required.");
+    if (path !== undefined && (typeof path !== "string" || !GROUP_PATH.test(path) || path.length > 255)) {
+      return envelope(res, 400, "bad_request", "The path must be letters, digits, \"_\", \".\" and \"-\", not starting with \"-\" or \".\", at most 255 characters.");
+    }
+    if (groupRenameRefusal !== null) return envelope(res, 403, "host_refused", groupRenameRefusal);
+    if (!groupCan(group).rename) return envelope(res, 403, "host_refused", `You are not allowed to rename ${group.fullPath}.`);
+    const from = group.fullPath;
+    const slash = from.lastIndexOf("/");
+    const to = typeof path === "string" ? (slash < 0 ? path : `${from.slice(0, slash)}/${path}`) : from;
+    if (to !== from) {
+      const taken = groupPathTaken(to, group);
+      if (taken === "account") return envelope(res, 409, "name_taken", "This path is taken by an account.");
+      if (taken === "group") return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
+      // Everything inside moves with it, on the Git system as at the host.
+      const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${from}/`)));
+      const store = (fullPath: string): string => join(dir, STANDIN_STORAGE, ...fullPath.split("/"));
+      if (existsSync(store(from))) {
+        mkdirSync(dirname(store(to)), { recursive: true });
+        renameSync(store(from), store(to));
+      }
+      for (const g of inside) g.fullPath = g === group ? to : `${to}${g.fullPath.slice(from.length)}`;
+      for (const repo of script.repositories) if (inside.includes(repo.group)) repo.bare = bareFor(repo.group, repo.path);
+    }
+    if (typeof name === "string") group.name = name.trim();
+    json(res, 200, { group: listedGroupWire(group) });
+  }
+
+  /** `DELETE /api/v1/host/groups/:id` (host-31): a group of the instance
+   * deleted with everything inside it, as the Git system deletes it. */
+  function deleteGroup(res: ServerResponse, group: StandinGroup): void {
+    if (groupDeleteRefusal !== null) return envelope(res, 403, "host_refused", groupDeleteRefusal);
+    if (!groupCan(group).delete) return envelope(res, 403, "host_refused", `You are not allowed to delete ${group.fullPath}.`);
+    const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${group.fullPath}/`)));
+    for (const g of inside) {
+      script.groups.splice(script.groups.indexOf(g), 1);
+      lagging.delete(g);
+    }
+    for (const repo of script.repositories) if (inside.includes(repo.group)) repo.listed = false;
+    rmSync(join(dir, STANDIN_STORAGE, ...group.fullPath.split("/")), { recursive: true, force: true });
+    res.writeHead(204, { "cache-control": "no-store" }).end();
+  }
+
+  /** `POST /api/v1/host/repositories/:id/transfer` (host-32): a spex
+   * repository moved into a group of the instance, or the person's own
+   * group where `group_id` is null, its bare repository with it. */
+  async function transferRepository(req: IncomingMessage, res: ServerResponse, repo: StandinRepository): Promise<void> {
+    const body = await readJson(req);
+    if (!isRecord(body) || !("group_id" in body)) return envelope(res, 400, "bad_request", "The body must be a JSON object naming group_id.");
+    const groupId = body.group_id;
+    if (groupId !== null && typeof groupId !== "string") return envelope(res, 400, "bad_request", "The group_id must be a string or null.");
+    const target = groupId === null ? own() : script.groups.find((g) => g.kind === "group" && g.id === groupId);
+    if (!target) return envelope(res, 404, "not_found", "The group is not known.");
+    if (transferRefusal !== null) return envelope(res, 403, "host_refused", transferRefusal);
+    if (!repositoryCan(repo).transfer) return envelope(res, 403, "host_refused", `You are not allowed to transfer ${repo.group.fullPath}/${repo.path}.`);
+    if (target === repo.group) return envelope(res, 403, "host_refused", `The project is already in ${target.fullPath}.`);
+    if (existsSync(bareFor(target, repo.path)) || script.repositories.some((r) => r !== repo && r.group === target && r.path === repo.path)) {
+      return envelope(res, 409, "name_taken", "A repository of that name exists in the group.");
+    }
+    script.rename(repo.id, { group: target.id });
+    json(res, 200, { repository: await repositoryWire(repo) });
   }
 
   /** `POST …/members` (host-27): the account under exactly `login`, added
