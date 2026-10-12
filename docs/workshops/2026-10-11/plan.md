@@ -6,6 +6,9 @@
 Ten fictional teams go through Day 2 (one procedure per SDLC stage, shared across teams) and Day 3 (a project delivered with those procedures, spec packages reused across teams) on the Spex stack as it stands on `main` today.
 The aim is to find and fix what stops a real team or makes the app hard to use; every finding is recorded in [issues.md](issues.md), every team in its own file.
 
+> **Corrected on the owner's instruction (2026-10-12).** The workshop's group and its team subgroups are groups of the internal instance, `claude-workshop-261011/<team>` on it, made from the organizer's Spex home, and a person sees only them, their own group and the projects in them, never the Git host the instance keeps its records on.
+> Setting the groups up on that Git host directly, as this plan says, was a mistake, and the placements it led to, their root cause and what prevents it are recorded in the README ("Where the records live" and the section after it) and in issues W-39 to W-46.
+
 ## The model
 
 | Thing in the course | Thing in the stack |
